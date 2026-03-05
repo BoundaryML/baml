@@ -23,6 +23,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "data"
+        COLON ":"
         TYPE_EXPR "JsonData"
           WORD "JsonData"
       R_PAREN ")"

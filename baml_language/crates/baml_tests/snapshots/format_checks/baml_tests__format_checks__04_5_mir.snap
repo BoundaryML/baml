@@ -4922,26 +4922,6 @@ fn DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback
     }
 }
 
-fn NoColonParams(x: int, y: int) -> int {
-    // Locals:
-    let _0: int // return
-    let _1: int // x // param
-    let _2: int // y // param
-    let _3: int
-    let _4: int
-
-    bb0: {
-        _3 = copy _1;
-        _4 = copy _2;
-        _0 = copy _3 + copy _4;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
     // Locals:
     let _0: int | string | bool | null // return

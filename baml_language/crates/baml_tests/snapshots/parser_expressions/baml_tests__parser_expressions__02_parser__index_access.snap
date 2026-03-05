@@ -29,6 +29,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "users"
+        COLON ":"
         TYPE_EXPR "IndexUser[]"
           WORD "IndexUser"
           L_BRACKET "["

@@ -10,7 +10,7 @@ class RawStrings {
   "###)
 }
 
-function ProcessText(input string) -> string {
+function ProcessText(input: string) -> string {
   client GPT4
   prompt #"
     Process the following text:

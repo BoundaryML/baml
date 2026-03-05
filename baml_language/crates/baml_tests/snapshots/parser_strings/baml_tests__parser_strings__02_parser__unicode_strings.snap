@@ -243,6 +243,7 @@ SOURCE_FILE
       PARAMETER
   ERROR_TOKEN "输"
   ERROR_TOKEN "入"
+  COLON ":"
   WORD "string"
   R_PAREN ")"
   ARROW "->"
@@ -278,81 +279,92 @@ SOURCE_FILE
 
 === ERRORS ===
 Error: Expected function name, found error
-    ╭─[ unicode_strings.baml:29:1 ]
+    ╭─[ unicode_strings.baml:28:31 ]
     │
- 29 │     Return result with emojis: ✅ or ❌
-    │ ─┬─  
-    │  ╰─── Expected function name, found error
-    │ 
-    │ Note: Error code: E0010
+ 28 │ ╭─▶     Process the text: {{ 输入 }}
+ 29 │ ├─▶     Return result with emojis: ✅ or ❌
+    │ │                                             
+    │ ╰───────────────────────────────────────────── Expected function name, found error
+    │     
+    │     Note: Error code: E0010
 ────╯
 
 Error: Expected parameter name, found error
-    ╭─[ unicode_strings.baml:29:14 ]
+    ╭─[ unicode_strings.baml:29:13 ]
     │
  29 │     Return result with emojis: ✅ or ❌
-    │              ─┬─  
-    │               ╰─── Expected parameter name, found error
+    │             ─┬─  
+    │              ╰─── Expected parameter name, found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected type annotation, found error
-    ╭─[ unicode_strings.baml:29:14 ]
+    ╭─[ unicode_strings.baml:29:13 ]
     │
  29 │     Return result with emojis: ✅ or ❌
-    │              ─┬─  
-    │               ╰─── Expected type annotation, found error
+    │             ─┬─  
+    │              ╰─── Expected type annotation, found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected ')', found error
-    ╭─[ unicode_strings.baml:29:14 ]
+    ╭─[ unicode_strings.baml:29:13 ]
     │
  29 │     Return result with emojis: ✅ or ❌
-    │              ─┬─  
-    │               ╰─── Expected ')', found error
+    │             ─┬─  
+    │              ╰─── Expected ')', found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected return type (->), found error
-    ╭─[ unicode_strings.baml:29:14 ]
+    ╭─[ unicode_strings.baml:29:13 ]
     │
  29 │     Return result with emojis: ✅ or ❌
-    │              ─┬─  
-    │               ╰─── Expected return type (->), found error
+    │             ─┬─  
+    │              ╰─── Expected return type (->), found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected function body, found error
-    ╭─[ unicode_strings.baml:29:14 ]
+    ╭─[ unicode_strings.baml:29:13 ]
     │
  29 │     Return result with emojis: ✅ or ❌
-    │              ─┬─  
-    │               ╰─── Expected function body, found error
+    │             ─┬─  
+    │              ╰─── Expected function body, found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:29:14 ]
+    ╭─[ unicode_strings.baml:29:13 ]
     │
  29 │     Return result with emojis: ✅ or ❌
-    │              ─┬─  
-    │               ╰─── Expected top-level declaration, found error
+    │             ─┬─  
+    │              ╰─── Expected top-level declaration, found error
     │ 
     │ Note: Error code: E0010
 ────╯
 
 Error: Expected top-level declaration, found error
-    ╭─[ unicode_strings.baml:29:17 ]
+    ╭─[ unicode_strings.baml:29:16 ]
     │
  29 │     Return result with emojis: ✅ or ❌
-    │                 ─┬─  
-    │                  ╰─── Expected top-level declaration, found error
+    │                ─┬─  
+    │                 ╰─── Expected top-level declaration, found error
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found ':'
+    ╭─[ unicode_strings.baml:29:19 ]
+    │
+ 29 │     Return result with emojis: ✅ or ❌
+    │                   ┬  
+    │                   ╰── Expected top-level declaration, found ':'
     │ 
     │ Note: Error code: E0010
 ────╯

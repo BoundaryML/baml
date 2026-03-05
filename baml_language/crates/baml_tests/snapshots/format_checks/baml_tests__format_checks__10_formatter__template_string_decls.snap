@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: first
+source: crates/baml_tests/src/generated_tests.rs
 ---
 // Testing all the formatter cases for template string declarations
 // as well as any special cases inside the template string
@@ -38,11 +37,6 @@ template_string ManyParams(first_parameter: string, second_parameter: string, th
 // ===== Very long param list =====
 template_string VeryLongParams(extremely_long_parameter_name: string, another_very_long_parameter_name: int) #"
     {{ extremely_long_parameter_name }} {{ another_very_long_parameter_name }}
-"#
-
-// ===== Params without colons =====
-template_string NoColonParams(name: string, age: int) #"
-    {{ name }} is {{ age }}
 "#
 
 // ===== Template with template comments =====

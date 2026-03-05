@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -74,32 +73,6 @@ SOURCE_FILE
           WORD "a"
           PLUS "+"
           WORD "b"
-        R_BRACE "}"
-  FUNCTION_DEF
-    KW_FUNCTION "function"
-    WORD "NoColonParams"
-    PARAMETER_LIST
-      L_PAREN "("
-      PARAMETER
-        WORD "x"
-        TYPE_EXPR "int"
-          WORD "int"
-      COMMA ","
-      PARAMETER
-        WORD "y"
-        TYPE_EXPR "int"
-          WORD "int"
-      R_PAREN ")"
-    ARROW "->"
-    TYPE_EXPR "int"
-      WORD "int"
-    EXPR_FUNCTION_BODY
-      BLOCK_EXPR
-        L_BRACE "{"
-        BINARY_EXPR "x + y"
-          WORD "x"
-          PLUS "+"
-          WORD "y"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"

@@ -8,7 +8,7 @@ class Partial {
 }
 
 function Incomplete(  // Missing parameters closing
-  param1 string
+  param1: string
 
 function NextFunction() -> string {  // Should still parse this
   return "parsed"

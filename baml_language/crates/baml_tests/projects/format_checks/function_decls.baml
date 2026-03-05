@@ -19,11 +19,6 @@ function MultipleParams(a: int, b: int, c: string) -> int {
     a + b
 }
 
-// ===== Params without colons =====
-function NoColonParams(x int, y int) -> int {
-    x + y
-}
-
 // ===== Many params wrapping =====
 function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     "result"

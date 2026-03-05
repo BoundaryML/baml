@@ -126,6 +126,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "name"
+        COLON ":"
         TYPE_EXPR "string"
           WORD "string"
       R_PAREN ")"

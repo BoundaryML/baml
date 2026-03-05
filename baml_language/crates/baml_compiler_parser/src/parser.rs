@@ -2119,16 +2119,16 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("parameter name".to_string());
             }
 
-            // Type annotation - supports both "name: type" and "name type" syntax
+            // Type annotation - requires "name: type" syntax
             // 'self' parameter does not have a type annotation
             if is_self {
                 // No type annotation for self
             } else if p.eat(TokenKind::Colon) {
-                // With colon: "name: type"
                 p.parse_type();
-            } else if p.at(TokenKind::Word) {
-                // Without colon: "name type" (whitespace-separated)
-                p.parse_type();
+            } else if p.at(TokenKind::Word) || p.at(TokenKind::LParen) {
+                // Heuristic for if they're trying to do a type annotation without a colon
+                p.error_unexpected_token("':'".to_string());
+                p.parse_type(); // Parse the type anyway, so errors don't cascade
             } else {
                 p.error_unexpected_token("type annotation".to_string());
             }
@@ -4381,6 +4381,76 @@ mod tests {
         assert!(
             errors.is_empty(),
             "expected no parse errors, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn error_on_parameter_type_without_colon() {
+        // When the user writes `x int` instead of `x: int`, the parser should
+        // report a missing ':' error but still parse the type to avoid cascading errors.
+        let source = r#"
+function Demo(x int) -> int {
+  x
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+
+        // Should report a missing ':' error
+        assert!(
+            errors.iter().any(|error| {
+                matches!(
+                    error,
+                    ParseError::UnexpectedToken { expected, .. }
+                        if expected == "':'"
+                )
+            }),
+            "expected an error about missing ':', got: {errors:#?}"
+        );
+
+        // The parameter node should still contain the type
+        let param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            .expect("expected PARAMETER node");
+        let param_text = param.text().to_string();
+        assert!(
+            param_text.contains("int"),
+            "parameter should still contain the type 'int', got: {param_text:?}"
+        );
+    }
+
+    #[test]
+    fn error_on_parameter_parenthesized_type_without_colon() {
+        // When the user writes `x (int | string)` instead of `x: (int | string)`,
+        // the LParen heuristic should trigger the same error recovery.
+        let source = r#"
+function Demo(x (int | string)) -> int {
+  1
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+
+        assert!(
+            errors.iter().any(|error| {
+                matches!(
+                    error,
+                    ParseError::UnexpectedToken { expected, .. }
+                        if expected == "':'"
+                )
+            }),
+            "expected an error about missing ':', got: {errors:#?}"
+        );
+
+        let param = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER)
+            .expect("expected PARAMETER node");
+        let param_text = param.text().to_string();
+        assert!(
+            param_text.contains("int"),
+            "parameter should still contain parsed type, got: {param_text:?}"
         );
     }
 

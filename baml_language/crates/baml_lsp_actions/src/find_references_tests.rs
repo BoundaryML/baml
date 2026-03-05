@@ -28,7 +28,7 @@ function Test() -> string {
     fn test_find_refs_parameter() {
         let test = CursorTest::new(
             r#"
-function Process(<[CURSOR]input string) -> string {
+function Process(<[CURSOR]input: string) -> string {
     let a = input
     let b = input + "!"
     match (input) {
@@ -86,7 +86,7 @@ function CreatePerson() -> Person {
     Person { name: "Alice", age: 30 }
 }
 
-function ProcessPerson(p Person) -> string {
+function ProcessPerson(p: Person) -> string {
     p.name
 }
 "#,
@@ -139,7 +139,7 @@ enum Result {
     Err { message string }
 }
 
-function HandleResult(r Result) -> string {
+function HandleResult(r: Result) -> string {
     match (r) {
         Ok(<[CURSOR]o) => o.value + o.value
         Err(e) => e.message
@@ -165,11 +165,11 @@ class Person {
     age int
 }
 
-function GetName(p Person) -> string {
+function GetName(p: Person) -> string {
     p.name
 }
 
-function SetName(p Person, n string) -> Person {
+function SetName(p: Person, n: string) -> Person {
     Person { name: n, age: p.age }
 }
 "#,
@@ -242,7 +242,7 @@ function CreatePerson() -> Person {
     Person { name: "Alice" }
 }
 
-function ProcessPerson(p Person) -> string {
+function ProcessPerson(p: Person) -> string {
     p.name
 }
 "#,

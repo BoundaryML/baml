@@ -10,6 +10,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "text"
+        COLON ":"
         TYPE_EXPR "string"
           WORD "string"
       R_PAREN ")"
@@ -77,6 +78,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "analysis"
+        COLON ":"
         TYPE_EXPR "Analysis"
           WORD "Analysis"
       R_PAREN ")"
@@ -188,6 +190,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "input"
+        COLON ":"
         TYPE_EXPR "string"
           WORD "string"
       R_PAREN ")"
@@ -240,11 +243,13 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "a"
+        COLON ":"
         TYPE_EXPR "int"
           WORD "int"
       COMMA ","
       PARAMETER
         WORD "b"
+        COLON ":"
         TYPE_EXPR "int"
           WORD "int"
       R_PAREN ")"

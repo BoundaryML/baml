@@ -1,5 +1,5 @@
 // Mix of LLM and expression functions in one file
-function LLMAnalyze(text string) -> Analysis {
+function LLMAnalyze(text: string) -> Analysis {
   client GPT4
   prompt #"
     Analyze the following text:
@@ -15,7 +15,7 @@ class Analysis {
   score float
 }
 
-function ProcessAnalysis(analysis Analysis) -> string {
+function ProcessAnalysis(analysis: Analysis) -> string {
   let score = analysis.score
   if score > 0.8 {
     return "Very positive: " + analysis.sentiment
@@ -28,7 +28,7 @@ function ProcessAnalysis(analysis Analysis) -> string {
   }
 }
 
-function ChainedProcess(input string) -> string {
+function ChainedProcess(input: string) -> string {
   client GPT4
   prompt #"
     Process this through multiple steps:
@@ -38,6 +38,6 @@ function ChainedProcess(input string) -> string {
   "#
 }
 
-function SimpleCalc(a int, b int) -> int {
+function SimpleCalc(a: int, b: int) -> int {
   return a + b * 2
 }

@@ -482,7 +482,7 @@ async fn match_jump_table_large() {
 async fn match_jump_table_dense_four_arms_param() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int) -> int {
+            function classify(x: int) -> int {
                 match (x) {
                     0 => 100,
                     1 => 101,
@@ -1078,7 +1078,7 @@ async fn match_binary_search_large_values() {
 async fn match_binary_search_sparse_four_arms_param() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int) -> int {
+            function classify(x: int) -> int {
                 match (x) {
                     0 => 100,
                     30 => 130,
@@ -1167,7 +1167,7 @@ async fn match_binary_search_sparse_four_arms_param() {
 async fn match_if_else_chain_three_arms() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int) -> int {
+            function classify(x: int) -> int {
                 match (x) {
                     0 => 100,
                     1 => 101,
@@ -1606,7 +1606,7 @@ async fn match_negative_jump_table() {
     // Dense negative range should use jump table: -3, -2, -1, 0
     let output = baml_test!(
         r#"
-        function classify(x int) -> string {
+        function classify(x: int) -> string {
             match (x) {
                 -3 => "neg three",
                 -2 => "neg two",
@@ -1667,7 +1667,7 @@ async fn match_negative_jump_table() {
 async fn match_negative_jump_table_fallback() {
     let output = baml_test!(
         r#"
-        function classify(x int) -> string {
+        function classify(x: int) -> string {
             match (x) {
                 -3 => "neg three",
                 -2 => "neg two",
@@ -1731,7 +1731,7 @@ async fn match_negative_jump_table_fallback() {
 async fn match_spanning_zero_jump_table() {
     let output = baml_test!(
         r#"
-        function classify(x int) -> string {
+        function classify(x: int) -> string {
             match (x) {
                 -2 => "neg two",
                 -1 => "neg one",
@@ -1796,7 +1796,7 @@ async fn match_spanning_zero_jump_table() {
 async fn match_spanning_zero_negative_hit() {
     let output = baml_test!(
         r#"
-        function classify(x int) -> string {
+        function classify(x: int) -> string {
             match (x) {
                 -2 => "neg two",
                 -1 => "neg one",
@@ -1866,7 +1866,7 @@ async fn match_spanning_zero_negative_hit() {
 async fn match_binary_search_negative_sparse() {
     let output = baml_test!(
         r#"
-        function classify(x int) -> string {
+        function classify(x: int) -> string {
             match (x) {
                 -100 => "a",
                 -50 => "b",
@@ -1958,7 +1958,7 @@ async fn match_binary_search_negative_sparse() {
 async fn match_binary_search_spanning_zero_sparse() {
     let output = baml_test!(
         r#"
-        function classify(x int) -> string {
+        function classify(x: int) -> string {
             match (x) {
                 -100 => "neg hundred",
                 -1 => "neg one",
@@ -2057,7 +2057,7 @@ async fn match_binary_search_spanning_zero_sparse() {
 async fn match_union_aggregated_jump_table() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int) -> string {
+            function classify(x: int) -> string {
                 match (x) {
                     0 | 1 => "a",
                     2 | 3 => "b",
@@ -2112,7 +2112,7 @@ async fn match_union_aggregated_jump_table() {
 async fn match_range_at_limit_uses_jump_table() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int) -> int {
+            function classify(x: int) -> int {
                 match (x) {
                     252 => 1,
                     253 => 2,
@@ -2163,7 +2163,7 @@ async fn match_range_at_limit_uses_jump_table() {
 async fn match_range_exceeds_limit_uses_binary_search() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int) -> int {
+            function classify(x: int) -> int {
                 match (x) {
                     0 => 1,
                     100 => 2,
@@ -2252,7 +2252,7 @@ async fn match_range_exceeds_limit_uses_binary_search() {
 async fn match_large_jump_table() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int) -> int {
+            function classify(x: int) -> int {
                 match (x) {
                     0 => 100,
                     1 => 101,
@@ -2336,7 +2336,7 @@ async fn match_large_jump_table() {
 async fn match_binary_search_eight_arms() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int) -> int {
+            function classify(x: int) -> int {
                 match (x) {
                     0 => 0,
                     10 => 1,

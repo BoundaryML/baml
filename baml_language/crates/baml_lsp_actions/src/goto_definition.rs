@@ -408,7 +408,7 @@ mod tests {
     Sad { reason string }
 }
 
-function Foo(r SentimentResponse, s string) -> string {
+function Foo(r: SentimentResponse, s: string) -> string {
     match (r) {
         Happy => s.data
         Sad(f) => f.reason

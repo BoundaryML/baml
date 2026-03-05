@@ -45,9 +45,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] Error: Duplicate function `ExtraWhitespace`
-     ╭─[ function_decls.baml:509:13 ]
+     ╭─[ function_decls.baml:504:13 ]
      │
- 509 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
+ 504 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
      │             ───────┬───────  
      │                    ╰───────── function `ExtraWhitespace` redefined here
      │
@@ -93,15 +93,15 @@ source: crates/baml_tests/src/generated_tests.rs
 ───╯
 
   [validation] Error: Duplicate function `SixLongParams`
-     ╭─[ function_decls.baml:42:10 ]
+     ╭─[ function_decls.baml:37:10 ]
      │
-  42 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+  37 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
      │          ──────┬──────  
      │                ╰──────── function `SixLongParams` redefined here
      │
-     ├─[ template_string_decls.baml:181:17 ]
+     ├─[ template_string_decls.baml:176:17 ]
      │
- 181 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
+ 176 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
      │                 ──────┬──────  
      │                       ╰──────── `SixLongParams` first defined in template_string_decls.baml
      │ 
@@ -109,15 +109,15 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] Error: Duplicate template_string `SixLongParams`
-     ╭─[ template_string_decls.baml:181:17 ]
+     ╭─[ template_string_decls.baml:176:17 ]
      │
- 181 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
+ 176 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
      │                 ──────┬──────  
      │                       ╰──────── template_string `SixLongParams` redefined here
      │
-     ├─[ function_decls.baml:42:10 ]
+     ├─[ function_decls.baml:37:10 ]
      │
-  42 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+  37 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
      │          ──────┬──────  
      │                ╰──────── `SixLongParams` first defined in function_decls.baml
      │ 
@@ -125,15 +125,15 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] Error: Duplicate function `MultiParamTrivia`
-     ╭─[ function_decls.baml:147:10 ]
+     ╭─[ function_decls.baml:142:10 ]
      │
- 147 │ function MultiParamTrivia(
+ 142 │ function MultiParamTrivia(
      │          ────────┬───────  
      │                  ╰───────── function `MultiParamTrivia` redefined here
      │
-     ├─[ template_string_decls.baml:94:17 ]
+     ├─[ template_string_decls.baml:89:17 ]
      │
-  94 │ template_string MultiParamTrivia(
+  89 │ template_string MultiParamTrivia(
      │                 ────────┬───────  
      │                         ╰───────── `MultiParamTrivia` first defined in template_string_decls.baml
      │ 
@@ -141,15 +141,15 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] Error: Duplicate template_string `MultiParamTrivia`
-     ╭─[ template_string_decls.baml:94:17 ]
+     ╭─[ template_string_decls.baml:89:17 ]
      │
-  94 │ template_string MultiParamTrivia(
+  89 │ template_string MultiParamTrivia(
      │                 ────────┬───────  
      │                         ╰───────── template_string `MultiParamTrivia` redefined here
      │
-     ├─[ function_decls.baml:147:10 ]
+     ├─[ function_decls.baml:142:10 ]
      │
- 147 │ function MultiParamTrivia(
+ 142 │ function MultiParamTrivia(
      │          ────────┬───────  
      │                  ╰───────── `MultiParamTrivia` first defined in function_decls.baml
      │ 
@@ -157,15 +157,15 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] Error: Duplicate function `ConstrainedParams`
-     ╭─[ function_decls.baml:90:10 ]
+     ╭─[ function_decls.baml:85:10 ]
      │
-  90 │ function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
+  85 │ function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
      │          ────────┬────────  
      │                  ╰────────── function `ConstrainedParams` redefined here
      │
-     ├─[ template_string_decls.baml:156:17 ]
+     ├─[ template_string_decls.baml:151:17 ]
      │
- 156 │ template_string ConstrainedParams(value: int @check("positive", {{ this > 0 }}), name: string) #"
+ 151 │ template_string ConstrainedParams(value: int @check("positive", {{ this > 0 }}), name: string) #"
      │                 ────────┬────────  
      │                         ╰────────── `ConstrainedParams` first defined in template_string_decls.baml
      │ 
@@ -173,15 +173,15 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] Error: Duplicate template_string `ConstrainedParams`
-     ╭─[ template_string_decls.baml:156:17 ]
+     ╭─[ template_string_decls.baml:151:17 ]
      │
- 156 │ template_string ConstrainedParams(value: int @check("positive", {{ this > 0 }}), name: string) #"
+ 151 │ template_string ConstrainedParams(value: int @check("positive", {{ this > 0 }}), name: string) #"
      │                 ────────┬────────  
      │                         ╰────────── template_string `ConstrainedParams` redefined here
      │
-     ├─[ function_decls.baml:90:10 ]
+     ├─[ function_decls.baml:85:10 ]
      │
-  90 │ function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
+  85 │ function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
      │          ────────┬────────  
      │                  ╰────────── `ConstrainedParams` first defined in function_decls.baml
      │ 
@@ -189,9 +189,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] Error: Duplicate template_string `ExtraWhitespace`
-     ╭─[ template_string_decls.baml:374:20 ]
+     ╭─[ template_string_decls.baml:369:20 ]
      │
- 374 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
+ 369 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
      │                    ───────┬───────  
      │                           ╰───────── template_string `ExtraWhitespace` redefined here
      │
@@ -204,42 +204,10 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0011
 ─────╯
 
-  [validation] Error: Duplicate function `NoColonParams`
+  [validation] Error: Duplicate function `ManyParams`
     ╭─[ function_decls.baml:23:10 ]
     │
- 23 │ function NoColonParams(x int, y int) -> int {
-    │          ──────┬──────  
-    │                ╰──────── function `NoColonParams` redefined here
-    │
-    ├─[ template_string_decls.baml:40:17 ]
-    │
- 40 │ template_string NoColonParams(name string, age int) #"
-    │                 ──────┬──────  
-    │                       ╰──────── `NoColonParams` first defined in template_string_decls.baml
-    │ 
-    │ Note: Error code: E0011
-────╯
-
-  [validation] Error: Duplicate template_string `NoColonParams`
-    ╭─[ template_string_decls.baml:40:17 ]
-    │
- 40 │ template_string NoColonParams(name string, age int) #"
-    │                 ──────┬──────  
-    │                       ╰──────── template_string `NoColonParams` redefined here
-    │
-    ├─[ function_decls.baml:23:10 ]
-    │
- 23 │ function NoColonParams(x int, y int) -> int {
-    │          ──────┬──────  
-    │                ╰──────── `NoColonParams` first defined in function_decls.baml
-    │ 
-    │ Note: Error code: E0011
-────╯
-
-  [validation] Error: Duplicate function `ManyParams`
-    ╭─[ function_decls.baml:28:10 ]
-    │
- 28 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+ 23 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     │          ─────┬────  
     │               ╰────── function `ManyParams` redefined here
     │
@@ -259,9 +227,9 @@ source: crates/baml_tests/src/generated_tests.rs
     │                 ─────┬────  
     │                      ╰────── template_string `ManyParams` redefined here
     │
-    ├─[ function_decls.baml:28:10 ]
+    ├─[ function_decls.baml:23:10 ]
     │
- 28 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+ 23 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     │          ─────┬────  
     │               ╰────── `ManyParams` first defined in function_decls.baml
     │ 
@@ -269,15 +237,15 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [validation] Error: Duplicate function `MultiParamTriviaBlock`
-     ╭─[ function_decls.baml:164:10 ]
+     ╭─[ function_decls.baml:159:10 ]
      │
- 164 │ function MultiParamTriviaBlock(
+ 159 │ function MultiParamTriviaBlock(
      │          ──────────┬──────────  
      │                    ╰──────────── function `MultiParamTriviaBlock` redefined here
      │
-     ├─[ template_string_decls.baml:111:17 ]
+     ├─[ template_string_decls.baml:106:17 ]
      │
- 111 │ template_string MultiParamTriviaBlock(
+ 106 │ template_string MultiParamTriviaBlock(
      │                 ──────────┬──────────  
      │                           ╰──────────── `MultiParamTriviaBlock` first defined in template_string_decls.baml
      │ 
@@ -285,15 +253,15 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] Error: Duplicate template_string `MultiParamTriviaBlock`
-     ╭─[ template_string_decls.baml:111:17 ]
+     ╭─[ template_string_decls.baml:106:17 ]
      │
- 111 │ template_string MultiParamTriviaBlock(
+ 106 │ template_string MultiParamTriviaBlock(
      │                 ──────────┬──────────  
      │                           ╰──────────── template_string `MultiParamTriviaBlock` redefined here
      │
-     ├─[ function_decls.baml:164:10 ]
+     ├─[ function_decls.baml:159:10 ]
      │
- 164 │ function MultiParamTriviaBlock(
+ 159 │ function MultiParamTriviaBlock(
      │          ──────────┬──────────  
      │                    ╰──────────── `MultiParamTriviaBlock` first defined in function_decls.baml
      │ 
@@ -317,9 +285,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [validation] Error: Duplicate template_string `T`
-     ╭─[ template_string_decls.baml:128:17 ]
+     ╭─[ template_string_decls.baml:123:17 ]
      │
- 128 │ template_string T(x: int) #"{{ x }}"#
+ 123 │ template_string T(x: int) #"{{ x }}"#
      │                 ┬  
      │                 ╰── template_string `T` redefined here
      │
@@ -339,9 +307,9 @@ source: crates/baml_tests/src/generated_tests.rs
      │      ┬  
      │      ╰── type alias `T` redefined here
      │
-     ├─[ template_string_decls.baml:128:17 ]
+     ├─[ template_string_decls.baml:123:17 ]
      │
- 128 │ template_string T(x: int) #"{{ x }}"#
+ 123 │ template_string T(x: int) #"{{ x }}"#
      │                 ┬  
      │                 ╰── `T` first defined in template_string_decls.baml
      │ 
@@ -2261,9 +2229,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: Expected `(x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>`, found `int`
-    ╭─[ function_decls.baml:78:5 ]
+    ╭─[ function_decls.baml:73:5 ]
     │
- 78 │     1
+ 73 │     1
     │     ┬  
     │     ╰── Expected `(x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>`, found `int`
     │ 

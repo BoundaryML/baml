@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -43,6 +42,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "param1"
+        COLON ":"
         TYPE_EXPR "string"
           WORD "string"
   FUNCTION_DEF

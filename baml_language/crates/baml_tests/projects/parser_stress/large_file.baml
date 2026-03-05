@@ -6598,502 +6598,502 @@ enum Status100 {
   PENDING_100
 }
 
-function Process1(input string) -> string {
+function Process1(input: string) -> string {
   client GPT4
   prompt "Process input 1: {{ input }}"
 }
 
-function Process2(input string) -> string {
+function Process2(input: string) -> string {
   client GPT4
   prompt "Process input 2: {{ input }}"
 }
 
-function Process3(input string) -> string {
+function Process3(input: string) -> string {
   client GPT4
   prompt "Process input 3: {{ input }}"
 }
 
-function Process4(input string) -> string {
+function Process4(input: string) -> string {
   client GPT4
   prompt "Process input 4: {{ input }}"
 }
 
-function Process5(input string) -> string {
+function Process5(input: string) -> string {
   client GPT4
   prompt "Process input 5: {{ input }}"
 }
 
-function Process6(input string) -> string {
+function Process6(input: string) -> string {
   client GPT4
   prompt "Process input 6: {{ input }}"
 }
 
-function Process7(input string) -> string {
+function Process7(input: string) -> string {
   client GPT4
   prompt "Process input 7: {{ input }}"
 }
 
-function Process8(input string) -> string {
+function Process8(input: string) -> string {
   client GPT4
   prompt "Process input 8: {{ input }}"
 }
 
-function Process9(input string) -> string {
+function Process9(input: string) -> string {
   client GPT4
   prompt "Process input 9: {{ input }}"
 }
 
-function Process10(input string) -> string {
+function Process10(input: string) -> string {
   client GPT4
   prompt "Process input 10: {{ input }}"
 }
 
-function Process11(input string) -> string {
+function Process11(input: string) -> string {
   client GPT4
   prompt "Process input 11: {{ input }}"
 }
 
-function Process12(input string) -> string {
+function Process12(input: string) -> string {
   client GPT4
   prompt "Process input 12: {{ input }}"
 }
 
-function Process13(input string) -> string {
+function Process13(input: string) -> string {
   client GPT4
   prompt "Process input 13: {{ input }}"
 }
 
-function Process14(input string) -> string {
+function Process14(input: string) -> string {
   client GPT4
   prompt "Process input 14: {{ input }}"
 }
 
-function Process15(input string) -> string {
+function Process15(input: string) -> string {
   client GPT4
   prompt "Process input 15: {{ input }}"
 }
 
-function Process16(input string) -> string {
+function Process16(input: string) -> string {
   client GPT4
   prompt "Process input 16: {{ input }}"
 }
 
-function Process17(input string) -> string {
+function Process17(input: string) -> string {
   client GPT4
   prompt "Process input 17: {{ input }}"
 }
 
-function Process18(input string) -> string {
+function Process18(input: string) -> string {
   client GPT4
   prompt "Process input 18: {{ input }}"
 }
 
-function Process19(input string) -> string {
+function Process19(input: string) -> string {
   client GPT4
   prompt "Process input 19: {{ input }}"
 }
 
-function Process20(input string) -> string {
+function Process20(input: string) -> string {
   client GPT4
   prompt "Process input 20: {{ input }}"
 }
 
-function Process21(input string) -> string {
+function Process21(input: string) -> string {
   client GPT4
   prompt "Process input 21: {{ input }}"
 }
 
-function Process22(input string) -> string {
+function Process22(input: string) -> string {
   client GPT4
   prompt "Process input 22: {{ input }}"
 }
 
-function Process23(input string) -> string {
+function Process23(input: string) -> string {
   client GPT4
   prompt "Process input 23: {{ input }}"
 }
 
-function Process24(input string) -> string {
+function Process24(input: string) -> string {
   client GPT4
   prompt "Process input 24: {{ input }}"
 }
 
-function Process25(input string) -> string {
+function Process25(input: string) -> string {
   client GPT4
   prompt "Process input 25: {{ input }}"
 }
 
-function Process26(input string) -> string {
+function Process26(input: string) -> string {
   client GPT4
   prompt "Process input 26: {{ input }}"
 }
 
-function Process27(input string) -> string {
+function Process27(input: string) -> string {
   client GPT4
   prompt "Process input 27: {{ input }}"
 }
 
-function Process28(input string) -> string {
+function Process28(input: string) -> string {
   client GPT4
   prompt "Process input 28: {{ input }}"
 }
 
-function Process29(input string) -> string {
+function Process29(input: string) -> string {
   client GPT4
   prompt "Process input 29: {{ input }}"
 }
 
-function Process30(input string) -> string {
+function Process30(input: string) -> string {
   client GPT4
   prompt "Process input 30: {{ input }}"
 }
 
-function Process31(input string) -> string {
+function Process31(input: string) -> string {
   client GPT4
   prompt "Process input 31: {{ input }}"
 }
 
-function Process32(input string) -> string {
+function Process32(input: string) -> string {
   client GPT4
   prompt "Process input 32: {{ input }}"
 }
 
-function Process33(input string) -> string {
+function Process33(input: string) -> string {
   client GPT4
   prompt "Process input 33: {{ input }}"
 }
 
-function Process34(input string) -> string {
+function Process34(input: string) -> string {
   client GPT4
   prompt "Process input 34: {{ input }}"
 }
 
-function Process35(input string) -> string {
+function Process35(input: string) -> string {
   client GPT4
   prompt "Process input 35: {{ input }}"
 }
 
-function Process36(input string) -> string {
+function Process36(input: string) -> string {
   client GPT4
   prompt "Process input 36: {{ input }}"
 }
 
-function Process37(input string) -> string {
+function Process37(input: string) -> string {
   client GPT4
   prompt "Process input 37: {{ input }}"
 }
 
-function Process38(input string) -> string {
+function Process38(input: string) -> string {
   client GPT4
   prompt "Process input 38: {{ input }}"
 }
 
-function Process39(input string) -> string {
+function Process39(input: string) -> string {
   client GPT4
   prompt "Process input 39: {{ input }}"
 }
 
-function Process40(input string) -> string {
+function Process40(input: string) -> string {
   client GPT4
   prompt "Process input 40: {{ input }}"
 }
 
-function Process41(input string) -> string {
+function Process41(input: string) -> string {
   client GPT4
   prompt "Process input 41: {{ input }}"
 }
 
-function Process42(input string) -> string {
+function Process42(input: string) -> string {
   client GPT4
   prompt "Process input 42: {{ input }}"
 }
 
-function Process43(input string) -> string {
+function Process43(input: string) -> string {
   client GPT4
   prompt "Process input 43: {{ input }}"
 }
 
-function Process44(input string) -> string {
+function Process44(input: string) -> string {
   client GPT4
   prompt "Process input 44: {{ input }}"
 }
 
-function Process45(input string) -> string {
+function Process45(input: string) -> string {
   client GPT4
   prompt "Process input 45: {{ input }}"
 }
 
-function Process46(input string) -> string {
+function Process46(input: string) -> string {
   client GPT4
   prompt "Process input 46: {{ input }}"
 }
 
-function Process47(input string) -> string {
+function Process47(input: string) -> string {
   client GPT4
   prompt "Process input 47: {{ input }}"
 }
 
-function Process48(input string) -> string {
+function Process48(input: string) -> string {
   client GPT4
   prompt "Process input 48: {{ input }}"
 }
 
-function Process49(input string) -> string {
+function Process49(input: string) -> string {
   client GPT4
   prompt "Process input 49: {{ input }}"
 }
 
-function Process50(input string) -> string {
+function Process50(input: string) -> string {
   client GPT4
   prompt "Process input 50: {{ input }}"
 }
 
-function Process51(input string) -> string {
+function Process51(input: string) -> string {
   client GPT4
   prompt "Process input 51: {{ input }}"
 }
 
-function Process52(input string) -> string {
+function Process52(input: string) -> string {
   client GPT4
   prompt "Process input 52: {{ input }}"
 }
 
-function Process53(input string) -> string {
+function Process53(input: string) -> string {
   client GPT4
   prompt "Process input 53: {{ input }}"
 }
 
-function Process54(input string) -> string {
+function Process54(input: string) -> string {
   client GPT4
   prompt "Process input 54: {{ input }}"
 }
 
-function Process55(input string) -> string {
+function Process55(input: string) -> string {
   client GPT4
   prompt "Process input 55: {{ input }}"
 }
 
-function Process56(input string) -> string {
+function Process56(input: string) -> string {
   client GPT4
   prompt "Process input 56: {{ input }}"
 }
 
-function Process57(input string) -> string {
+function Process57(input: string) -> string {
   client GPT4
   prompt "Process input 57: {{ input }}"
 }
 
-function Process58(input string) -> string {
+function Process58(input: string) -> string {
   client GPT4
   prompt "Process input 58: {{ input }}"
 }
 
-function Process59(input string) -> string {
+function Process59(input: string) -> string {
   client GPT4
   prompt "Process input 59: {{ input }}"
 }
 
-function Process60(input string) -> string {
+function Process60(input: string) -> string {
   client GPT4
   prompt "Process input 60: {{ input }}"
 }
 
-function Process61(input string) -> string {
+function Process61(input: string) -> string {
   client GPT4
   prompt "Process input 61: {{ input }}"
 }
 
-function Process62(input string) -> string {
+function Process62(input: string) -> string {
   client GPT4
   prompt "Process input 62: {{ input }}"
 }
 
-function Process63(input string) -> string {
+function Process63(input: string) -> string {
   client GPT4
   prompt "Process input 63: {{ input }}"
 }
 
-function Process64(input string) -> string {
+function Process64(input: string) -> string {
   client GPT4
   prompt "Process input 64: {{ input }}"
 }
 
-function Process65(input string) -> string {
+function Process65(input: string) -> string {
   client GPT4
   prompt "Process input 65: {{ input }}"
 }
 
-function Process66(input string) -> string {
+function Process66(input: string) -> string {
   client GPT4
   prompt "Process input 66: {{ input }}"
 }
 
-function Process67(input string) -> string {
+function Process67(input: string) -> string {
   client GPT4
   prompt "Process input 67: {{ input }}"
 }
 
-function Process68(input string) -> string {
+function Process68(input: string) -> string {
   client GPT4
   prompt "Process input 68: {{ input }}"
 }
 
-function Process69(input string) -> string {
+function Process69(input: string) -> string {
   client GPT4
   prompt "Process input 69: {{ input }}"
 }
 
-function Process70(input string) -> string {
+function Process70(input: string) -> string {
   client GPT4
   prompt "Process input 70: {{ input }}"
 }
 
-function Process71(input string) -> string {
+function Process71(input: string) -> string {
   client GPT4
   prompt "Process input 71: {{ input }}"
 }
 
-function Process72(input string) -> string {
+function Process72(input: string) -> string {
   client GPT4
   prompt "Process input 72: {{ input }}"
 }
 
-function Process73(input string) -> string {
+function Process73(input: string) -> string {
   client GPT4
   prompt "Process input 73: {{ input }}"
 }
 
-function Process74(input string) -> string {
+function Process74(input: string) -> string {
   client GPT4
   prompt "Process input 74: {{ input }}"
 }
 
-function Process75(input string) -> string {
+function Process75(input: string) -> string {
   client GPT4
   prompt "Process input 75: {{ input }}"
 }
 
-function Process76(input string) -> string {
+function Process76(input: string) -> string {
   client GPT4
   prompt "Process input 76: {{ input }}"
 }
 
-function Process77(input string) -> string {
+function Process77(input: string) -> string {
   client GPT4
   prompt "Process input 77: {{ input }}"
 }
 
-function Process78(input string) -> string {
+function Process78(input: string) -> string {
   client GPT4
   prompt "Process input 78: {{ input }}"
 }
 
-function Process79(input string) -> string {
+function Process79(input: string) -> string {
   client GPT4
   prompt "Process input 79: {{ input }}"
 }
 
-function Process80(input string) -> string {
+function Process80(input: string) -> string {
   client GPT4
   prompt "Process input 80: {{ input }}"
 }
 
-function Process81(input string) -> string {
+function Process81(input: string) -> string {
   client GPT4
   prompt "Process input 81: {{ input }}"
 }
 
-function Process82(input string) -> string {
+function Process82(input: string) -> string {
   client GPT4
   prompt "Process input 82: {{ input }}"
 }
 
-function Process83(input string) -> string {
+function Process83(input: string) -> string {
   client GPT4
   prompt "Process input 83: {{ input }}"
 }
 
-function Process84(input string) -> string {
+function Process84(input: string) -> string {
   client GPT4
   prompt "Process input 84: {{ input }}"
 }
 
-function Process85(input string) -> string {
+function Process85(input: string) -> string {
   client GPT4
   prompt "Process input 85: {{ input }}"
 }
 
-function Process86(input string) -> string {
+function Process86(input: string) -> string {
   client GPT4
   prompt "Process input 86: {{ input }}"
 }
 
-function Process87(input string) -> string {
+function Process87(input: string) -> string {
   client GPT4
   prompt "Process input 87: {{ input }}"
 }
 
-function Process88(input string) -> string {
+function Process88(input: string) -> string {
   client GPT4
   prompt "Process input 88: {{ input }}"
 }
 
-function Process89(input string) -> string {
+function Process89(input: string) -> string {
   client GPT4
   prompt "Process input 89: {{ input }}"
 }
 
-function Process90(input string) -> string {
+function Process90(input: string) -> string {
   client GPT4
   prompt "Process input 90: {{ input }}"
 }
 
-function Process91(input string) -> string {
+function Process91(input: string) -> string {
   client GPT4
   prompt "Process input 91: {{ input }}"
 }
 
-function Process92(input string) -> string {
+function Process92(input: string) -> string {
   client GPT4
   prompt "Process input 92: {{ input }}"
 }
 
-function Process93(input string) -> string {
+function Process93(input: string) -> string {
   client GPT4
   prompt "Process input 93: {{ input }}"
 }
 
-function Process94(input string) -> string {
+function Process94(input: string) -> string {
   client GPT4
   prompt "Process input 94: {{ input }}"
 }
 
-function Process95(input string) -> string {
+function Process95(input: string) -> string {
   client GPT4
   prompt "Process input 95: {{ input }}"
 }
 
-function Process96(input string) -> string {
+function Process96(input: string) -> string {
   client GPT4
   prompt "Process input 96: {{ input }}"
 }
 
-function Process97(input string) -> string {
+function Process97(input: string) -> string {
   client GPT4
   prompt "Process input 97: {{ input }}"
 }
 
-function Process98(input string) -> string {
+function Process98(input: string) -> string {
   client GPT4
   prompt "Process input 98: {{ input }}"
 }
 
-function Process99(input string) -> string {
+function Process99(input: string) -> string {
   client GPT4
   prompt "Process input 99: {{ input }}"
 }
 
-function Process100(input string) -> string {
+function Process100(input: string) -> string {
   client GPT4
   prompt "Process input 100: {{ input }}"
 }

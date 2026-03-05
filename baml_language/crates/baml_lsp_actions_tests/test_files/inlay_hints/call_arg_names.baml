@@ -1,4 +1,4 @@
-function greet(name string, age int) -> string {
+function greet(name: string, age: int) -> string {
   name
 }
 
@@ -27,19 +27,19 @@ function qux() -> string {
 }
 
 // Hint suppressed when arg name matches param name.
-function same_name(name string) -> string {
+function same_name(name: string) -> string {
   let name = "Alice";
   greet(name, 30)
 }
 
 // Hint suppressed when arg's final path segment contains param name.
-function contains_name(my_name string) -> string {
+function contains_name(my_name: string) -> string {
   let my_name = "Bob";
   greet(my_name, 30)
 }
 
 // Hint NOT suppressed when arg name doesn't match.
-function different_name(x string) -> string {
+function different_name(x: string) -> string {
   let x = "Charlie";
   greet(x, 30)
 }
@@ -50,7 +50,7 @@ class Info {
 }
 
 // Hint suppressed when final segment of field access matches param name.
-function field_access(info Info) -> string {
+function field_access(info: Info) -> string {
   greet(info.name, info.age)
 }
 
@@ -68,7 +68,7 @@ class Info2 {
 }
 
 // Multi-line call with field access args.
-function multiline_field(info Info2) -> string {
+function multiline_field(info: Info2) -> string {
   greet(
     info.n,
     info.a

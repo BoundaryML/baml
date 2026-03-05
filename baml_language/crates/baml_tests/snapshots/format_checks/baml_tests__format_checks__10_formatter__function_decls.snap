@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: first
+source: crates/baml_tests/src/generated_tests.rs
 ---
 // Testing all the formatter cases for function declarations
 // both expression functions and llm functions
@@ -18,11 +17,6 @@ function SingleParam(x: int) -> int {
 // ===== Multiple params =====
 function MultipleParams(a: int, b: int, c: string) -> int {
     a + b
-}
-
-// ===== Params without colons =====
-function NoColonParams(x: int, y: int) -> int {
-    x + y
 }
 
 // ===== Many params wrapping =====

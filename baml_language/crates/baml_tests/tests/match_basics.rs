@@ -1084,7 +1084,7 @@ async fn match_nested() {
 async fn match_string_literal_first_arm() {
     let output = baml_test!(
         r#"
-        function classify(s string) -> int {
+        function classify(s: string) -> int {
             match (s) {
                 "hello" => 100,
                 "world" => 200,
@@ -1141,7 +1141,7 @@ async fn match_string_literal_first_arm() {
 async fn match_string_literal_second_arm() {
     let output = baml_test!(
         r#"
-        function classify(s string) -> int {
+        function classify(s: string) -> int {
             match (s) {
                 "hello" => 100,
                 "world" => 200,
@@ -1198,7 +1198,7 @@ async fn match_string_literal_second_arm() {
 async fn match_string_literal_fallback() {
     let output = baml_test!(
         r#"
-        function classify(s string) -> int {
+        function classify(s: string) -> int {
             match (s) {
                 "hello" => 100,
                 "world" => 200,
@@ -1256,7 +1256,7 @@ async fn match_string_four_arms() {
     // 4+ string arms should NOT use jump table (strings can't be hashed efficiently)
     let output = baml_test!(
         r#"
-        function classify(s string) -> int {
+        function classify(s: string) -> int {
             match (s) {
                 "a" => 1,
                 "b" => 2,
@@ -1337,7 +1337,7 @@ async fn match_string_four_arms() {
 async fn match_string_literal_with_typed_fallback() {
     let output = baml_test!(
         r#"
-        function classify(s string) -> int {
+        function classify(s: string) -> int {
             match (s) {
                 "ok" => 200,
                 "error" => 500,
@@ -1916,7 +1916,7 @@ async fn match_negative_in_union_pattern() {
 async fn match_three_levels_nested() {
     let output = baml_test!(
         r#"
-        function classify(x int, y int, z int) -> string {
+        function classify(x: int, y: int, z: int) -> string {
             match (x) {
                 0 => match (y) {
                     0 => match (z) {
@@ -2003,7 +2003,7 @@ async fn match_three_levels_nested() {
 async fn match_three_levels_nested_middle() {
     let output = baml_test!(
         r#"
-        function classify(x int, y int, z int) -> string {
+        function classify(x: int, y: int, z: int) -> string {
             match (x) {
                 0 => match (y) {
                     0 => match (z) {
@@ -2094,7 +2094,7 @@ async fn match_three_levels_nested_middle() {
 async fn match_optional_null_pattern() {
     let output = baml_test!(
         r#"
-        function process(x int?) -> string {
+        function process(x: int?) -> string {
             match (x) {
                 null => "none",
                 n: int => "some"
@@ -2142,7 +2142,7 @@ async fn match_optional_null_pattern() {
 async fn match_optional_value_pattern() {
     let output = baml_test!(
         r#"
-        function process(x int?) -> string {
+        function process(x: int?) -> string {
             match (x) {
                 null => "none",
                 n: int => "some"
@@ -2190,7 +2190,7 @@ async fn match_optional_value_pattern() {
 async fn match_optional_with_literal_and_typed() {
     let output = baml_test!(
         r#"
-        function process(x int?) -> string {
+        function process(x: int?) -> string {
             match (x) {
                 null => "none",
                 0 => "zero",
@@ -2254,7 +2254,7 @@ async fn match_optional_with_literal_and_typed() {
 async fn match_arithmetic_scrutinee() {
     let output = baml_test!(
         r#"
-        function classify(a int, b int) -> string {
+        function classify(a: int, b: int) -> string {
             match (a + b) {
                 0 => "zero",
                 1 => "one",
@@ -2529,7 +2529,7 @@ async fn match_in_loop() {
 async fn match_dense_with_catch_all_via_call() {
     let output = baml_test!(
         r#"
-        function classify(n int) -> int {
+        function classify(n: int) -> int {
             match (n) {
                 0 => 0,
                 1 => 1,
@@ -2626,7 +2626,7 @@ async fn match_mixed_instanceof_and_literal() {
 async fn match_bool_variable_exhaustive() {
     let output = baml_test! {
         baml: r#"
-            function check(flag bool) -> string {
+            function check(flag: bool) -> string {
                 match (flag) {
                     true => "yes",
                     false => "no"
@@ -2672,7 +2672,7 @@ async fn match_bool_variable_exhaustive() {
 async fn match_string_many_arms() {
     let output = baml_test! {
         baml: r#"
-            function classify(s string) -> int {
+            function classify(s: string) -> int {
                 match (s) {
                     "alpha" => 1,
                     "beta" => 2,

@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
@@ -265,40 +264,6 @@ SOURCE_FILE
         L_BRACE "{"
         L_BRACE "{"
         WORD "another_very_long_parameter_name"
-        R_BRACE "}"
-        R_BRACE "}"
-      QUOTE """
-      HASH "#"
-  TEMPLATE_STRING_DEF
-    KW_TEMPLATE_STRING "template_string"
-    WORD "NoColonParams"
-    PARAMETER_LIST
-      L_PAREN "("
-      PARAMETER
-        WORD "name"
-        TYPE_EXPR "string"
-          WORD "string"
-      COMMA ","
-      PARAMETER
-        WORD "age"
-        TYPE_EXPR "int"
-          WORD "int"
-      R_PAREN ")"
-    RAW_STRING_LITERAL
-      HASH "#"
-      QUOTE """
-      TEMPLATE_INTERPOLATION "{{ name }}"
-        L_BRACE "{"
-        L_BRACE "{"
-        WORD "name"
-        R_BRACE "}"
-        R_BRACE "}"
-      PROMPT_TEXT "is"
-        WORD "is"
-      TEMPLATE_INTERPOLATION "{{ age }}"
-        L_BRACE "{"
-        L_BRACE "{"
-        WORD "age"
         R_BRACE "}"
         R_BRACE "}"
       QUOTE """

@@ -8,7 +8,7 @@ mod tests {
     fn test_goto_def_parameter() {
         let test = CursorTest::new(
             r#"
-function Foo(r SentimentResponse) -> string {
+function Foo(r: SentimentResponse) -> string {
     match (<[CURSOR]r) {
         Happy => "happy"
         Sad => "sad"
@@ -117,7 +117,7 @@ class Person {
     age int
 }
 
-function GetName(p Person) -> string {
+function GetName(p: Person) -> string {
     p.<[CURSOR]name
 }
 "#,
@@ -160,7 +160,7 @@ enum Result {
     Err { message string }
 }
 
-function HandleResult(r Result) -> string {
+function HandleResult(r: Result) -> string {
     match (r) {
         Ok(o) => o.value
         Err(e) => <[CURSOR]e.message

@@ -899,10 +899,6 @@ function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, ca
     "done"
 }
 
-function NoColonParams(x: int, y: int) -> int {
-    x + y
-}
-
 function TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
     x
 }
@@ -1789,7 +1785,6 @@ template_string TriviaTemplateBlock(x: string)
 template_string ExtremelyLongNamePlusComplexParameters(first_very_long_parameter_name: map<string, int | string | bool>, second_very_long_parameter_name: (int | string | bool | float | null)[])
 template_string ComplexParams(items: string[], config: map<string, int>)
 template_string FnTypeParams(transform: (x: int) -> int, combine: (a: string, b: string) -> string)
-template_string NoColonParams(name: string, age: int)
 template_string ThisIsAnExtremelyLongTemplateStringNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns(x: int)
 template_string VeryLongParams(extremely_long_parameter_name: string, another_very_long_parameter_name: int)
 template_string OptionalParams(name: string?, age: int?, items: string[]?)

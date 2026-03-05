@@ -22,7 +22,7 @@ class UnicodeStrings {
 }
 
 // Test Unicode in function names and prompts
-function 处理文本(输入 string) -> string {
+function 处理文本(输入: string) -> string {
   client GPT4
   prompt #"
     Process the text: {{ 输入 }}

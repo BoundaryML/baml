@@ -1,4 +1,4 @@
-function FieldAccess(user User) -> string {
+function FieldAccess(user: User) -> string {
   // Simple field access
   let name = user.name;
 

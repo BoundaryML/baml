@@ -310,8 +310,6 @@ source: crates/baml_tests/src/generated_tests.rs
     Return: String { attr: TyAttr(None) }
   Function DeepParamTypes:
     Return: Literal(String("done"), TyAttr(None))
-  Function NoColonParams:
-    Return: Int { attr: TyAttr(None) }
   Function TriviaWrapReturnTypeBlock:
     Return: Int { attr: TyAttr(None) }
   Function LlmWithLongSignature:

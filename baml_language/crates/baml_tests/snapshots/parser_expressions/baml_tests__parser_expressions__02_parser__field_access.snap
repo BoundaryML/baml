@@ -10,6 +10,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "user"
+        COLON ":"
         TYPE_EXPR "User"
           WORD "User"
       R_PAREN ")"

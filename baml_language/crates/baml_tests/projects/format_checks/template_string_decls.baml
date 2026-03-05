@@ -36,11 +36,6 @@ template_string VeryLongParams(extremely_long_parameter_name: string, another_ve
     {{ extremely_long_parameter_name }} {{ another_very_long_parameter_name }}
 "#
 
-// ===== Params without colons =====
-template_string NoColonParams(name string, age int) #"
-    {{ name }} is {{ age }}
-"#
-
 // ===== Template with template comments =====
 template_string WithComment(x: string) #"
     {# This is a template comment #}

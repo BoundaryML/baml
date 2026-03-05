@@ -4977,13 +4977,6 @@ function NestedLoops(matrix: int[][]) -> int {
     jump L3
 }
 
-function NoColonParams(x: int, y: int) -> int {
-    load_var x
-    load_var y
-    bin_op +
-    return
-}
-
 function OtherExprs(a: int, b: int) -> int {
     load_var a
     load_var b

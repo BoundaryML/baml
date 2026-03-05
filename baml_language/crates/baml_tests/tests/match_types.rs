@@ -201,7 +201,7 @@ async fn match_typed_pattern_with_field_access() {
 async fn match_typed_discard_patterns_typetag_switch_path() {
     let output = baml_test!(
         r#"
-        function classify(x int | string | bool | float) -> int {
+        function classify(x: int | string | bool | float) -> int {
             match (x) {
                 _: int => 1,
                 _: string => 2,
@@ -479,7 +479,7 @@ async fn match_guard_all_fail() {
 async fn match_guarded_int_literal_guard_true() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int, flag bool) -> string {
+            function classify(x: int, flag: bool) -> string {
                 match (x) {
                     1 if flag => "one with flag",
                     1 => "one without flag",
@@ -556,7 +556,7 @@ async fn match_guarded_int_literal_guard_true() {
 async fn match_guarded_int_literal_guard_false() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int, flag bool) -> string {
+            function classify(x: int, flag: bool) -> string {
                 match (x) {
                     1 if flag => "one with flag",
                     1 => "one without flag",
@@ -633,7 +633,7 @@ async fn match_guarded_int_literal_guard_false() {
 async fn match_all_arms_guarded_all_fail() {
     let output = baml_test! {
         baml: r#"
-            function classify(x int, flag bool) -> string {
+            function classify(x: int, flag: bool) -> string {
                 match (x) {
                     0 if flag => "zero",
                     1 if flag => "one",
@@ -718,7 +718,7 @@ async fn match_all_arms_guarded_all_fail() {
 async fn match_mixed_literal_typed_guard() {
     let output = baml_test!(
         r#"
-        function classify(x int, flag bool) -> string {
+        function classify(x: int, flag: bool) -> string {
             match (x) {
                 0 => "zero",
                 1 if flag => "one with flag",
@@ -781,7 +781,7 @@ async fn match_mixed_literal_typed_guard() {
 async fn match_mixed_literal_typed_guard_fallthrough() {
     let output = baml_test!(
         r#"
-        function classify(x int, flag bool) -> string {
+        function classify(x: int, flag: bool) -> string {
             match (x) {
                 0 => "zero",
                 1 if flag => "one with flag",
@@ -847,7 +847,7 @@ async fn match_guard_on_typed_pattern_field_access() {
         class Success { data string }
         class Failure { reason string }
 
-        function classify(result Success | Failure) -> string {
+        function classify(result: Success | Failure) -> string {
             match (result) {
                 s: Success if s.data != "" => "success with data",
                 s: Success => "empty success",
@@ -919,7 +919,7 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
         class Success { data string }
         class Failure { reason string }
 
-        function classify(result Success | Failure) -> string {
+        function classify(result: Success | Failure) -> string {
             match (result) {
                 s: Success if s.data != "" => "success with data",
                 s: Success => "empty success",
@@ -998,7 +998,7 @@ async fn match_enum_variant_first() {
             Pending
         }
 
-        function classify(s Status) -> string {
+        function classify(s: Status) -> string {
             match (s) {
                 Status.Active => "active",
                 Status.Inactive => "inactive",
@@ -1070,7 +1070,7 @@ async fn match_enum_variant_last() {
             Pending
         }
 
-        function classify(s Status) -> string {
+        function classify(s: Status) -> string {
             match (s) {
                 Status.Active => "active",
                 Status.Inactive => "inactive",
@@ -1146,7 +1146,7 @@ async fn match_enum_variant_with_wildcard() {
             Pending
         }
 
-        function classify(s Status) -> string {
+        function classify(s: Status) -> string {
             match (s) {
                 Status.Active => "active",
                 Status.Inactive => "inactive",
@@ -1218,7 +1218,7 @@ async fn match_enum_variant_with_wildcard_matched() {
             Pending
         }
 
-        function classify(s Status) -> string {
+        function classify(s: Status) -> string {
             match (s) {
                 Status.Active => "active",
                 Status.Inactive => "inactive",
@@ -1292,7 +1292,7 @@ async fn match_enum_four_variants_jump_table() {
                 West
             }
 
-            function compass(d Direction) -> string {
+            function compass(d: Direction) -> string {
                 match (d) {
                     Direction.North => "N",
                     Direction.East => "E",
@@ -1360,7 +1360,7 @@ async fn match_class_types_exhaustive_first() {
         class Dog { name string }
         class Bird { name string }
 
-        function classify(animal Cat | Dog | Bird) -> string {
+        function classify(animal: Cat | Dog | Bird) -> string {
             match (animal) {
                 c: Cat => "cat: " + c.name,
                 d: Dog => "dog: " + d.name,
@@ -1436,7 +1436,7 @@ async fn match_class_types_exhaustive_last() {
         class Dog { name string }
         class Bird { name string }
 
-        function classify(animal Cat | Dog | Bird) -> string {
+        function classify(animal: Cat | Dog | Bird) -> string {
             match (animal) {
                 c: Cat => "cat: " + c.name,
                 d: Dog => "dog: " + d.name,
@@ -1512,7 +1512,7 @@ async fn match_class_types_non_exhaustive_wildcard() {
         class Dog { name string }
         class Bird { name string }
 
-        function classify(animal Cat | Dog | Bird) -> string {
+        function classify(animal: Cat | Dog | Bird) -> string {
             match (animal) {
                 c: Cat => "cat: " + c.name,
                 d: Dog => "dog: " + d.name,
@@ -1585,7 +1585,7 @@ async fn match_class_types_non_exhaustive_matched() {
         class Dog { name string }
         class Bird { name string }
 
-        function classify(animal Cat | Dog | Bird) -> string {
+        function classify(animal: Cat | Dog | Bird) -> string {
             match (animal) {
                 c: Cat => "cat: " + c.name,
                 d: Dog => "dog: " + d.name,
@@ -1659,7 +1659,7 @@ async fn match_class_types_non_exhaustive_matched() {
 async fn match_union_type_four_patterns_type_tag() {
     let output = baml_test! {
         baml: r#"
-            function identify(x int | string | bool | float) -> string {
+            function identify(x: int | string | bool | float) -> string {
                 match (x) {
                     n: int => "integer",
                     s: string => "text",
@@ -1718,7 +1718,7 @@ async fn match_multiple_typed_patterns_with_guards() {
         class Success { code int }
         class Failure { code int }
 
-        function classify(result Success | Failure, strict bool) -> string {
+        function classify(result: Success | Failure, strict: bool) -> string {
             match (result) {
                 s: Success if s.code > 200 => "redirect",
                 s: Success if strict => "strict success",

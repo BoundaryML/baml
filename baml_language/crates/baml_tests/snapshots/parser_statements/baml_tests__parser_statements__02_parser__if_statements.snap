@@ -10,6 +10,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "age"
+        COLON ":"
         TYPE_EXPR "int"
           WORD "int"
       R_PAREN ")"

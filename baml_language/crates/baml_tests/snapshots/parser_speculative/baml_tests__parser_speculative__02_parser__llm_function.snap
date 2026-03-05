@@ -10,6 +10,7 @@ SOURCE_FILE
       L_PAREN "("
       PARAMETER
         WORD "text"
+        COLON ":"
         TYPE_EXPR "string"
           WORD "string"
       R_PAREN ")"
