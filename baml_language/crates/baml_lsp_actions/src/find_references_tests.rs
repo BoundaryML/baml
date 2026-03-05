@@ -94,7 +94,7 @@ function ProcessPerson(p: Person) -> string {
 
         let references = test.find_all_references();
         // We can find: Person { ... } object literals and p.name field access
-        // Type annotations (-> Person, p Person) are not tracked
+        // Type annotations (-> Person, p: Person) are not tracked
         assert!(
             !references.is_empty(),
             "Should find at least 1 reference to 'Person', found: {references:?}"
@@ -251,7 +251,7 @@ function ProcessPerson(p: Person) -> string {
 
         let references = test.find_all_references();
         // Should find: Person { ... } object literal and p.name field access
-        // Type annotations (-> Person, p Person) are not tracked
+        // Type annotations (-> Person, p: Person) are not tracked
         assert!(
             !references.is_empty(),
             "Should find references across files, found: {references:?}"
