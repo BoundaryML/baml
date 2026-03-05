@@ -51,7 +51,7 @@ function Process(<[CURSOR]input: string) -> string {
     fn test_find_refs_function() {
         let test = CursorTest::new(
             r#"
-function <[CURSOR]Helper(x string) -> string {
+function <[CURSOR]Helper(x: string) -> string {
     x + "!"
 }
 
