@@ -1,7 +1,7 @@
 //! Per-function signature queries.
 //!
 //! Reads from the `ItemTree` (full AST data stored in Phase 1) — no CST access
-//! needed. The semantic data (TypeExpr, no spans) and the source map (spans
+//! needed. The semantic data (`TypeExpr`, no spans) and the source map (spans
 //! only) are split into separate queries for Salsa early-cutoff: whitespace
 //! changes re-run the source map query but NOT the signature query.
 
@@ -12,7 +12,7 @@ use text_size::TextRange;
 
 use crate::loc::FunctionLoc;
 
-/// Compiler2 function signature — param names + unresolved TypeExpr.
+/// Compiler2 function signature — param names + unresolved `TypeExpr`.
 ///
 /// No spans — those live in `SignatureSourceMap`.
 /// `TypeExpr` is already span-free (spans live in `SpannedTypeExpr` at the
@@ -44,7 +44,7 @@ pub struct SignatureSourceMap {
 }
 
 /// Shared implementation — reads from the `ItemTree` (full AST data),
-/// splits into semantic (TypeExpr, no spans) + source map (spans only).
+/// splits into semantic (`TypeExpr`, no spans) + source map (spans only).
 fn function_signature_with_source_map<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,

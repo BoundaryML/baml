@@ -507,61 +507,61 @@ pub(crate) mod support {
                 match &scope.kind {
                     ScopeKind::Class => {
                         for (name, c) in &contrib.types {
-                            if scope.name.as_ref() == Some(name) {
-                                if let Definition::Class(class_loc) = c.definition {
-                                    let resolved = resolve_class_fields(db, class_loc);
-                                    writeln!(output, "{kind_str} {fqn} {{").ok();
-                                    for (fname, fty) in &resolved.fields {
-                                        writeln!(output, "  {fname}: {fty}").ok();
-                                    }
-                                    writeln!(output, "}}").ok();
-                                    // Render class cycle diagnostic if applicable
-                                    let qn = baml_compiler2_tir::lower_type_expr::qualify(
-                                        pkg_info.package.as_str(),
-                                        name,
-                                    );
-                                    if let Some(cycle_path) = class_cycle_map.get(&qn) {
-                                        let start = u32::from(scope.range.start());
-                                        let end = u32::from(scope.range.end());
-                                        writeln!(
-                                            output,
-                                            "  !! {start}..{end}: class cycle: {cycle_path}"
-                                        )
-                                        .ok();
-                                    }
-                                    break;
+                            if scope.name.as_ref() == Some(name)
+                                && let Definition::Class(class_loc) = c.definition
+                            {
+                                let resolved = resolve_class_fields(db, class_loc);
+                                writeln!(output, "{kind_str} {fqn} {{").ok();
+                                for (fname, fty) in &resolved.fields {
+                                    writeln!(output, "  {fname}: {fty}").ok();
                                 }
+                                writeln!(output, "}}").ok();
+                                // Render class cycle diagnostic if applicable
+                                let qn = baml_compiler2_tir::lower_type_expr::qualify(
+                                    pkg_info.package.as_str(),
+                                    name,
+                                );
+                                if let Some(cycle_path) = class_cycle_map.get(&qn) {
+                                    let start = u32::from(scope.range.start());
+                                    let end = u32::from(scope.range.end());
+                                    writeln!(
+                                        output,
+                                        "  !! {start}..{end}: class cycle: {cycle_path}"
+                                    )
+                                    .ok();
+                                }
+                                break;
                             }
                         }
                     }
                     ScopeKind::TypeAlias => {
                         for (name, c) in &contrib.types {
-                            if scope.name.as_ref() == Some(name) {
-                                if let Definition::TypeAlias(alias_loc) = c.definition {
-                                    let resolved = resolve_type_alias(db, alias_loc);
-                                    writeln!(output, "{kind_str} {fqn} = {}", resolved.ty).ok();
-                                    // Render type-lowering diagnostics
-                                    for (diag, span) in &resolved.diagnostics {
-                                        let start = u32::from(span.start());
-                                        let end = u32::from(span.end());
-                                        writeln!(output, "  !! {start}..{end}: {diag}").ok();
-                                    }
-                                    // Render cycle diagnostic if this alias is in an invalid cycle
-                                    let qn = baml_compiler2_tir::lower_type_expr::qualify(
-                                        pkg_info.package.as_str(),
-                                        name,
-                                    );
-                                    if invalid_cycles.contains(&qn) {
-                                        let start = u32::from(scope.range.start());
-                                        let end = u32::from(scope.range.end());
-                                        writeln!(
-                                            output,
-                                            "  !! {start}..{end}: recursive type alias cycle: {name}"
-                                        )
-                                        .ok();
-                                    }
-                                    break;
+                            if scope.name.as_ref() == Some(name)
+                                && let Definition::TypeAlias(alias_loc) = c.definition
+                            {
+                                let resolved = resolve_type_alias(db, alias_loc);
+                                writeln!(output, "{kind_str} {fqn} = {}", resolved.ty).ok();
+                                // Render type-lowering diagnostics
+                                for (diag, span) in &resolved.diagnostics {
+                                    let start = u32::from(span.start());
+                                    let end = u32::from(span.end());
+                                    writeln!(output, "  !! {start}..{end}: {diag}").ok();
                                 }
+                                // Render cycle diagnostic if this alias is in an invalid cycle
+                                let qn = baml_compiler2_tir::lower_type_expr::qualify(
+                                    pkg_info.package.as_str(),
+                                    name,
+                                );
+                                if invalid_cycles.contains(&qn) {
+                                    let start = u32::from(scope.range.start());
+                                    let end = u32::from(scope.range.end());
+                                    writeln!(
+                                        output,
+                                        "  !! {start}..{end}: recursive type alias cycle: {name}"
+                                    )
+                                    .ok();
+                                }
+                                break;
                             }
                         }
                     }
@@ -590,7 +590,7 @@ pub(crate) mod support {
                             .iter()
                             .map(|(pname, ptype)| {
                                 let mut diags = Vec::new();
-                                let ty = lower_type_expr(db, ptype, &pkg_items, &mut diags);
+                                let ty = lower_type_expr(db, ptype, pkg_items, &mut diags);
                                 format!("{}: {}", pname, ty)
                             })
                             .collect();
@@ -599,7 +599,7 @@ pub(crate) mod support {
                             .as_ref()
                             .map(|t| {
                                 let mut diags = Vec::new();
-                                lower_type_expr(db, t, &pkg_items, &mut diags).to_string()
+                                lower_type_expr(db, t, pkg_items, &mut diags).to_string()
                             })
                             .unwrap_or_else(|| "?".into());
                         let throws = sig
@@ -607,7 +607,7 @@ pub(crate) mod support {
                             .as_ref()
                             .map(|t| {
                                 let mut diags = Vec::new();
-                                lower_type_expr(db, t, &pkg_items, &mut diags).to_string()
+                                lower_type_expr(db, t, pkg_items, &mut diags).to_string()
                             })
                             .map(|t| format!(" throws {t}"))
                             .unwrap_or_default();
@@ -639,10 +639,10 @@ pub(crate) mod support {
                 }
             });
 
-            if let Some(body) = expr_body {
-                if let Some(root) = body.root_expr {
-                    render_expr(root, body, &inference, 2, &mut output);
-                }
+            if let Some(body) = expr_body
+                && let Some(root) = body.root_expr
+            {
+                render_expr(root, body, inference, 2, &mut output);
             }
 
             // Per-scope diagnostics

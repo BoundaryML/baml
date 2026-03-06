@@ -1,4 +1,4 @@
-//! Per-file semantic index — the central data structure of compiler2_hir.
+//! Per-file semantic index — the central data structure of `compiler2_hir`.
 //!
 //! Built by `SemanticIndexBuilder`, stored as a Salsa tracked query result
 //! with `no_eq` (always re-runs on file change). Projection queries extract
@@ -84,7 +84,7 @@ pub struct FileSemanticIndex<'db> {
     /// `FileScopeId` of its innermost containing scope. Built during the
     /// `SemanticIndexBuilder` walk.
     ///
-    /// Sorted by `ExprId` for binary search (more compact than HashMap).
+    /// Sorted by `ExprId` for binary search (more compact than `HashMap`).
     pub expr_scopes: Vec<(ExprId, FileScopeId)>,
 
     /// Per-scope local bindings, indexed by `FileScopeId`.
@@ -120,7 +120,7 @@ pub struct FileSemanticIndex<'db> {
 /// semantics. The `*old_pointer = new_value` write is safe because `old_pointer`
 /// points to valid allocated memory that Salsa owns.
 #[allow(unsafe_code)]
-unsafe impl<'db> salsa::Update for FileSemanticIndex<'db> {
+unsafe impl salsa::Update for FileSemanticIndex<'_> {
     #[allow(unsafe_code)]
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         // SAFETY: `old_pointer` is valid, aligned, and points to memory Salsa
@@ -134,7 +134,7 @@ unsafe impl<'db> salsa::Update for FileSemanticIndex<'db> {
     }
 }
 
-impl<'db> FileSemanticIndex<'db> {
+impl FileSemanticIndex<'_> {
     /// Find the innermost scope containing `offset`.
     ///
     /// Scopes are in DFS pre-order. We walk in reverse (deepest first)

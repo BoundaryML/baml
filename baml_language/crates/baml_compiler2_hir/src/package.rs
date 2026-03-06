@@ -54,7 +54,7 @@ impl<'db> PackageItems<'db> {
 ///
 /// `maybe_update` uses `PartialEq` for proper Salsa early-cutoff.
 #[allow(unsafe_code)]
-unsafe impl<'db> salsa::Update for PackageItems<'db> {
+unsafe impl salsa::Update for PackageItems<'_> {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
         #[allow(unsafe_code)]

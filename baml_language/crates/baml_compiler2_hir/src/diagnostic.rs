@@ -48,11 +48,11 @@ impl Hir2Diagnostic {
 
                 let use_dot = first.kind.is_member();
                 let qualified = match (scope, use_dot) {
-                    (Some(s), true) => format!("{}.{}", s, name),
+                    (Some(s), true) => format!("{s}.{name}"),
                     _ => name.to_string(),
                 };
                 let in_scope = match (scope, use_dot) {
-                    (Some(s), false) => format!(" in `{}`", s),
+                    (Some(s), false) => format!(" in `{s}`"),
                     _ => String::new(),
                 };
 
