@@ -516,6 +516,32 @@ client<llm> MyClient {
 }
 ```
 
+  <Accordion title="Gemini Thinking Configuration">
+  
+  For Gemini models (2.5-pro and later), you can enable thinking mode using `thinkingConfig`:
+
+  ```baml BAML
+  client<llm> GeminiThinking {
+    provider vertex-ai
+    options {
+      model gemini-2.5-pro
+      project_id my-project-id
+      location us-central1
+      generationConfig {
+        thinkingConfig {
+          thinkingBudget 1024
+          includeThoughts true
+        }
+      }
+    }
+  }
+  ```
+
+  <Warning>
+    **`thinkingConfig` is only for Gemini models.** For Claude models on Vertex AI, use the `thinking` parameter instead. See [Extended Thinking for Claude on Vertex AI](#extended-thinking-for-claude-on-vertex-ai).
+  </Warning>
+  </Accordion>
+
 </ParamField>
 
 For all other options, see the [official Vertex AI documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/start/quickstarts/quickstart-multimodal).
@@ -529,21 +555,80 @@ Meta, use your project endpoint as the `base_url` in BAML:
 client<llm> VertexLlama {
   provider vertex-ai
   options {
-    base_url "https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/endpoints/"
+    base_url "https://us-central1-aiplatform.googleapis.com/v1/projects/my-project-id/locations/us-central1/endpoints/"
     location us-central1
   }
 }
 ```
 
-For anthropic  
+### Anthropic Claude Models on Vertex AI
+
+For Anthropic Claude models, you can use the simplified configuration with `location` and `project_id`:
 
 ```baml
 client<llm> VertexClaudeSonnet {
   provider vertex-ai
   options {
-    model "claude-sonnet-4"
-    anthropic_version "${ANTHROPIC_VERSION}"
-    base_url "https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/anthropic/models"
+    model "claude-sonnet-4-5@20250929"
+    location us-east5
+    project_id my-project-id
+    anthropic_version "vertex-2023-10-16"
+    credentials env.GOOGLE_APPLICATION_CREDENTIALS
   }
 }
 ```
+
+<Note>
+  **Claude Model Names on Vertex AI**: Use the format `model-name@version` (e.g., `claude-sonnet-4-5@20250929`).
+  Available models include `claude-sonnet-4`, `claude-opus-4`, `claude-sonnet-4-5`, `claude-opus-4-5`, `claude-sonnet-4-6`, and `claude-opus-4-6`.
+  Check [Google Cloud's Claude documentation](https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude) for the latest model names and regional availability.
+</Note>
+
+Alternatively, you can use a custom `base_url` with environment variables:
+
+```baml
+client<llm> VertexClaudeWithBaseUrl {
+  provider vertex-ai
+  options {
+    model "claude-sonnet-4-5@20250929"
+    anthropic_version "vertex-2023-10-16"
+    base_url env.VERTEX_CLAUDE_BASE_URL
+  }
+}
+```
+
+Where `VERTEX_CLAUDE_BASE_URL` would be set to something like:
+```bash
+VERTEX_CLAUDE_BASE_URL="https://us-east5-aiplatform.googleapis.com/v1/projects/your-project-id/locations/us-east5/publishers/anthropic/models"
+```
+
+<Warning>
+  When using a custom `base_url`, do NOT include the model name at the end. BAML will automatically append `/{model}:rawPredict` (or `:streamRawPredict` for streaming) to the base URL.
+</Warning>
+
+### Extended Thinking for Claude on Vertex AI
+
+To enable extended thinking for Claude models on Vertex AI, use the `thinking` parameter:
+
+```baml
+client<llm> VertexClaudeThinking {
+  provider vertex-ai
+  options {
+    model "claude-sonnet-4-5@20250929"
+    location us-east5
+    project_id my-project-id
+    anthropic_version "vertex-2023-10-16"
+    credentials env.GOOGLE_APPLICATION_CREDENTIALS
+    max_tokens 4096
+    thinking {
+      type "enabled"
+      budget_tokens 2048
+    }
+  }
+}
+```
+
+<Note>
+  Extended thinking is available on Claude Sonnet 4.5+, Claude Opus 4.5+, and later models.
+  For Claude Opus 4.6, Anthropic recommends using adaptive thinking (`type: "adaptive"`) with an `effort` parameter instead of manual mode.
+</Note>
