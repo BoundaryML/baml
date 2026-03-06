@@ -44,14 +44,9 @@ pub struct AstSignatureWrapper {
     pub source_code: HashMap<PathBuf, CowStr>,
     pub functions: HashMap<String, FunctionSignatureWithDependencies>,
     pub types: HashMap<String, TypeWithDependencies>,
-    pub env_vars: HashMap<String, String>,
 }
 
 impl AstSignatureWrapper {
-    pub fn env_var(&self, key: &str) -> Option<&String> {
-        self.env_vars.get(key)
-    }
-
     pub fn baml_src_hash(&self) -> Option<String> {
         let mut hasher = DefaultHasher::new();
 
@@ -83,12 +78,10 @@ impl TypeLookup for AstSignatureWrapper {
     }
 }
 
-impl TryFrom<(Arc<crate::BamlRuntime>, HashMap<String, String>)> for AstSignatureWrapper {
+impl TryFrom<Arc<crate::BamlRuntime>> for AstSignatureWrapper {
     type Error = anyhow::Error;
 
-    fn try_from(
-        (runtime, env_vars): (Arc<crate::BamlRuntime>, HashMap<String, String>),
-    ) -> Result<Self, Self::Error> {
+    fn try_from(runtime: Arc<crate::BamlRuntime>) -> Result<Self, Self::Error> {
         let ir_signature = ir_hasher::IRSignature::new_from_ir(runtime.ir())?;
 
         let name_to_baml_type_id_map: HashMap<String, Arc<BamlTypeId>> = ir_signature
@@ -232,7 +225,6 @@ impl TryFrom<(Arc<crate::BamlRuntime>, HashMap<String, String>)> for AstSignatur
             .collect();
 
         Ok(Self {
-            env_vars,
             functions,
             types,
             source_code,
@@ -367,7 +359,6 @@ enum Status {
             source_code,
             functions: HashMap::new(),
             types: HashMap::new(),
-            env_vars: HashMap::new(),
         };
 
         // Warm up - run hash a few times to get consistent timing
@@ -442,14 +433,12 @@ enum Status {
             source_code: HashMap::new(),
             functions: HashMap::new(),
             types: HashMap::new(),
-            env_vars: HashMap::new(),
         };
 
         let mut wrapper2 = AstSignatureWrapper {
             source_code: HashMap::new(),
             functions: HashMap::new(),
             types: HashMap::new(),
-            env_vars: HashMap::new(),
         };
 
         // Insert in different orders
@@ -587,7 +576,6 @@ enum ProcessingStatus {
             source_code,
             functions: HashMap::new(),
             types: HashMap::new(),
-            env_vars: HashMap::new(),
         };
 
         // Warmup phase

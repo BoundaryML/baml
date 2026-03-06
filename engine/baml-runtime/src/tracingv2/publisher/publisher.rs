@@ -2,7 +2,7 @@ use core::time::Duration;
 use std::{
     any::type_name,
     borrow::Cow,
-    collections::hash_map::DefaultHasher,
+    collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
     io::Write,
     sync::Arc,
@@ -65,34 +65,40 @@ static PUBLISHING_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::n
 static BLOB_UPLOADER_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
 static BLOB_UPLOADER_CHANNEL: OnceCell<mpsc::Sender<BlobUploaderMessage>> = OnceCell::new();
 
-fn get_publish_channel(allow_missing: bool) -> Option<&'static mpsc::Sender<PublisherMessage>> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let Some(join_handle) = PUBLISHING_TASK.get() else {
-            if !allow_missing {
-                // baml_log::fatal_once!(
-                //     "Tracing publisher not started. Report this bug to the BAML team."
-                // );
-                // TODO: redo this logic -- we dont start the publisher if there's no api key for example.
-            }
-            return None;
-        };
-        if join_handle.is_finished() {
-            baml_log::fatal_once!(
-                "Tracing publisher ended unexpectedly. Report this bug to the BAML team."
-            );
-            return None;
-        }
+/// Shared mutable env vars, updated at each BAML function call.
+#[derive(Clone)]
+pub struct PublisherEnvVars(Arc<std::sync::RwLock<HashMap<String, String>>>);
+
+impl PublisherEnvVars {
+    pub fn new(env_vars: HashMap<String, String>) -> Self {
+        Self(Arc::new(std::sync::RwLock::new(env_vars)))
     }
-    {
-        let channel = PUBLISHING_CHANNEL.get();
-        channel
+
+    pub fn get(&self, key: &str) -> Option<String> {
+        self.0.read().unwrap().get(key).cloned()
+    }
+
+    pub fn update(&self, env_vars: HashMap<String, String>) {
+        *self.0.write().unwrap() = env_vars;
     }
 }
+
+/// Stored at init time for deferred publisher construction.
+/// Contains the AstSignatureWrapper and tokio runtime needed to start the publisher.
+struct PublisherConfig {
+    ast: Arc<AstSignatureWrapper>,
+    env_vars: PublisherEnvVars,
+    #[cfg(not(target_arch = "wasm32"))]
+    rt: Arc<tokio::runtime::Runtime>,
+}
+
+static PUBLISHER_CONFIG: std::sync::OnceLock<PublisherConfig> = std::sync::OnceLock::new();
 
 #[derive(Serialize)]
 struct RuntimeAST {
     ast: Arc<AstSignatureWrapper>,
+    #[serde(skip)]
+    env_vars: PublisherEnvVars,
     #[serde(skip)]
     pub client: reqwest::Client,
     #[serde(skip)]
@@ -104,18 +110,15 @@ impl RuntimeAST {
         // const SAM_API_URL: &str = "https://abe8c5ez29.execute-api.us-east-1.amazonaws.com";
         // const CHRIS_API_URL: &str = "https://o2em3sulde.execute-api.us-east-1.amazonaws.com";
         // return SAM_API_URL.to_string();
-        let url = match self.ast.env_var("BOUNDARY_API_URL") {
-            Some(url) if !url.is_empty() => url.clone(),
+        match self.env_vars.get("BOUNDARY_API_URL") {
+            Some(url) if !url.is_empty() => url,
             _ => "https://api.boundaryml.com".to_string(),
-        };
-        url
+        }
     }
 
     pub fn api_key(&self) -> Option<String> {
-        // const CHRIS_API_KEY: &str = "7fc9adc617ed731ba6048daffe0e0de2ec168283624d07a94c2ed520183ea3f722633aa2a5eee9109098254e294f995e";
-        // return CHRIS_API_KEY.to_string();
-        match self.ast.env_var("BOUNDARY_API_KEY") {
-            Some(key) if !key.is_empty() => Some(key.clone()),
+        match self.env_vars.get("BOUNDARY_API_KEY") {
+            Some(key) if !key.is_empty() => Some(key),
             _ => None,
         }
     }
@@ -219,31 +222,66 @@ impl BlobStorage for RuntimeAST {
     }
 }
 
-pub fn start_publisher(
-    lookup: Arc<AstSignatureWrapper>,
+/// Register the publisher config for deferred construction.
+/// The publisher will be started lazily on first publish_trace_event()
+/// call where BOUNDARY_API_KEY is present.
+pub fn register_publisher(
+    ast: Arc<AstSignatureWrapper>,
+    env_vars: PublisherEnvVars,
     #[cfg(not(target_arch = "wasm32"))] rt: Arc<tokio::runtime::Runtime>,
 ) {
-    if lookup.env_var("BAML_GENERATE").is_some() {
-        log::debug!("Skipping publisher because BAML_GENERATE is set");
+    if env_vars.get("BAML_GENERATE").is_some() {
+        log::debug!("Skipping publisher registration because BAML_GENERATE is set");
         return;
     }
-    if lookup.env_var("BOUNDARY_API_KEY").is_none() {
-        log::debug!("Skipping publisher because BOUNDARY_API_KEY is not set");
-        return;
+    let _ = PUBLISHER_CONFIG.set(PublisherConfig {
+        ast,
+        env_vars,
+        #[cfg(not(target_arch = "wasm32"))]
+        rt,
+    });
+}
+
+/// Lazily start the publisher if BOUNDARY_API_KEY is now available.
+/// Returns the publish channel if the publisher is running.
+fn ensure_publisher_started() -> Option<&'static mpsc::Sender<PublisherMessage>> {
+    // Fast path: publisher already running
+    if let Some(channel) = PUBLISHING_CHANNEL.get() {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(handle) = PUBLISHING_TASK.get() {
+                if handle.is_finished() {
+                    baml_log::fatal_once!(
+                        "Tracing publisher ended unexpectedly. Report this bug to the BAML team."
+                    );
+                    return None;
+                }
+            }
+        }
+        return Some(channel);
     }
-    log::debug!("Starting publisher");
+
+    // Check if we have a registered config
+    let config = PUBLISHER_CONFIG.get()?;
+
+    // Check if BOUNDARY_API_KEY is now available
+    config.env_vars.get("BOUNDARY_API_KEY")?;
+
+    log::debug!("Starting publisher (lazy init)");
 
     // Read batch sizes early to calculate channel capacities
-    let trace_batch_size = lookup
-        .env_var("BAML_TRACE_BATCH_SIZE")
+    let trace_batch_size = config
+        .env_vars
+        .get("BAML_TRACE_BATCH_SIZE")
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(500);
-    let blob_batch_size = lookup
-        .env_var("BAML_BLOB_BATCH_SIZE")
+    let blob_batch_size = config
+        .env_vars
+        .get("BAML_BLOB_BATCH_SIZE")
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(10);
 
-    // Limit to 10 batches worth of capacity
+    // Limit to 4 batches worth of capacity
     let trace_queue_capacity = 4 * trace_batch_size;
     let blob_queue_capacity = 4 * blob_batch_size;
 
@@ -268,63 +306,65 @@ pub fn start_publisher(
         }
     };
 
-    let lookup = Arc::new(RuntimeAST {
-        ast: lookup,
+    let runtime_ast = Arc::new(RuntimeAST {
+        ast: config.ast.clone(),
+        env_vars: config.env_vars.clone(),
         client: reqwest::Client::new(),
         blob_cache: BlobRefCache::with_upload_channel(blob_tx.clone()),
     });
 
-    let channel = if let Some(existing) = PUBLISHING_CHANNEL.get() {
-        existing
-    } else {
-        let Some(blob_rx) = blob_rx_holder.take() else {
-            // Another thread is handling initialization; we'll pick up the update next time.
-            return;
-        };
+    // Use get_or_init to avoid TOCTOU race if two threads call simultaneously
+    let channel = PUBLISHING_CHANNEL.get_or_init(|| {
+        let blob_rx = blob_rx_holder.take().unwrap_or_else(|| {
+            // If another thread already set the blob channel, create a dummy receiver
+            // that will never receive anything. The real receiver is already in use.
+            let (_tx, rx) = mpsc::channel::<BlobUploaderMessage>(1);
+            rx
+        });
 
         #[cfg(not(target_arch = "wasm32"))]
-        let rt_clone = rt.clone();
+        let rt_clone = config.rt.clone();
 
-        let lookup_for_publisher = lookup.clone();
-        let lookup_for_blob = lookup.clone();
+        let lookup_for_publisher = runtime_ast.clone();
+        let lookup_for_blob = runtime_ast.clone();
         let blob_tx_for_publisher = blob_tx.clone();
 
-        PUBLISHING_CHANNEL.get_or_init(move || {
-            let (tx, rx) = mpsc::channel::<PublisherMessage>(trace_queue_capacity);
+        let (tx, rx) = mpsc::channel::<PublisherMessage>(trace_queue_capacity);
 
-            let mut publisher = TracePublisher::new(
-                rx,
-                lookup_for_publisher,
-                blob_tx_for_publisher,
-                trace_batch_size,
-            );
-            let mut blob_uploader = BlobUploader::new(blob_rx, lookup_for_blob, blob_batch_size);
+        let mut publisher = TracePublisher::new(
+            rx,
+            lookup_for_publisher,
+            blob_tx_for_publisher,
+            trace_batch_size,
+        );
+        let mut blob_uploader = BlobUploader::new(blob_rx, lookup_for_blob, blob_batch_size);
 
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                // Spawn the main publisher task
-                let handle = rt_clone.spawn(async move { publisher.run().await });
-                PUBLISHING_TASK.get_or_init(|| Arc::new(handle));
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Spawn the main publisher task
+            let handle = rt_clone.spawn(async move { publisher.run().await });
+            PUBLISHING_TASK.get_or_init(|| Arc::new(handle));
 
-                // Spawn the blob uploader task
-                let blob_handle = rt_clone.spawn(async move { blob_uploader.run().await });
-                BLOB_UPLOADER_TASK.get_or_init(|| Arc::new(blob_handle));
-            }
+            // Spawn the blob uploader task
+            let blob_handle = rt_clone.spawn(async move { blob_uploader.run().await });
+            BLOB_UPLOADER_TASK.get_or_init(|| Arc::new(blob_handle));
+        }
 
-            #[cfg(target_arch = "wasm32")]
-            {
-                wasm_bindgen_futures::spawn_local(async move {
-                    publisher.run().await;
-                });
+        #[cfg(target_arch = "wasm32")]
+        {
+            wasm_bindgen_futures::spawn_local(async move {
+                publisher.run().await;
+            });
 
-                wasm_bindgen_futures::spawn_local(async move {
-                    blob_uploader.run().await;
-                });
-            }
+            wasm_bindgen_futures::spawn_local(async move {
+                blob_uploader.run().await;
+            });
+        }
 
-            tx
-        })
-    };
+        tx
+    });
+
+    Some(channel)
 }
 
 struct TracePublisher {
@@ -677,8 +717,8 @@ impl TracePublisher {
         // Compress if payload is larger than threshold (default 2 MB)
         let compression_threshold_mb = self
             .lookup
-            .ast
-            .env_var("BAML_TRACE_COMPRESSION_THRESHOLD_MB")
+            .env_vars
+            .get("BAML_TRACE_COMPRESSION_THRESHOLD_MB")
             .and_then(|s| s.parse::<f64>().ok())
             .unwrap_or(2.0);
 
@@ -709,8 +749,8 @@ impl TracePublisher {
         // Check size limit after compression
         let max_upload_mb = self
             .lookup
-            .ast
-            .env_var("BAML_MAX_TRACE_UPLOAD_MB")
+            .env_vars
+            .get("BAML_MAX_TRACE_UPLOAD_MB")
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(10);
 
@@ -1080,7 +1120,7 @@ async fn flush_blob_uploader_channel(timeout_duration: Duration) -> anyhow::Resu
 }
 
 pub fn publish_trace_event(event: Arc<TraceEventWithMeta>) -> anyhow::Result<()> {
-    let Some(channel) = get_publish_channel(false) else {
+    let Some(channel) = ensure_publisher_started() else {
         return Ok(());
     };
     match channel.try_send(PublisherMessage::Trace(event)) {
@@ -1108,7 +1148,7 @@ pub async fn flush() -> anyhow::Result<()> {
 
     // First try to flush the trace publisher (which should also flush blobs internally)
     let mut publisher_result: Option<anyhow::Result<()>> = None;
-    if let Some(channel) = get_publish_channel(false) {
+    if let Some(channel) = ensure_publisher_started() {
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
         let send_res = channel
             .send(PublisherMessage::Flush(ack_tx))

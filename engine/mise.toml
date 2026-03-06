@@ -1,0 +1,24 @@
+# Mise tasks for baml_language
+# Ordering between tasks is enforced by .pre-commit-config.yaml priorities, not here
+
+[tasks.fmt]
+description = "Run cargo fmt"
+run = "cargo fmt --all -- --config imports_granularity=Crate --config group_imports=StdExternalCrate"
+sources = ["**/*.rs"]
+
+# Note that clippy-fix and clippy are separate tasks because clippy-fix is substantially slower.
+[tasks.clippy-fix]
+description = "Auto-fix clippy warnings"
+run = "cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged --allow-no-vcs -- -D warnings"
+sources = ["**/*.rs", "**/Cargo.toml"]
+
+[tasks.clippy]
+description = "Run cargo clippy (matches rust-lint CI job)"
+run = "RUSTFLAGS=\"-A unused -D warnings\" cargo clippy --workspace -- -D clippy::print_stdout"
+sources = ["**/*.rs", "**/Cargo.toml"]
+
+[tasks.clippy-wasm]
+description = "Run cargo clippy for WASM target (matches rust-lint-wasm CI job)"
+run = "RUSTFLAGS=\"-A unused -D warnings\" cargo clippy --target wasm32-unknown-unknown"
+dir = "baml-schema-wasm"
+sources = ["**/*.rs", "**/Cargo.toml"]
