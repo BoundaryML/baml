@@ -1,53 +1,6 @@
 [workspace]
 members = [
-  "crates/baml_base",
-  "crates/baml_builtins",
-  "crates/baml_builtins_macros",
-  "crates/baml_cli",
-  "crates/baml_codegen_python",
-  "crates/baml_codegen_tests",
-  "crates/baml_codegen_types",
-  "crates/baml_compiler_analysis",
-  "crates/baml_compiler_diagnostics",
-  "crates/baml_compiler_emit",
-  "crates/baml_compiler_hir",
-  "crates/baml_compiler_lexer",
-  "crates/baml_compiler_mir",
-  "crates/baml_compiler_parser",
-  "crates/baml_compiler_syntax",
-  "crates/baml_compiler_tir",
-  "crates/baml_compiler_vir",
-  "crates/baml_db",
-  "crates/baml_fmt",
-  "crates/baml_lsp_actions",
-  "crates/baml_lsp_actions_tests",
-  "crates/baml_lsp_server",
-  "crates/baml_lsp_types",
-  "crates/baml_playground_wasm",
-  "crates/baml_project",
-  "crates/baml_tests",
-  "crates/baml_type",
-  "crates/baml_workspace",
-  "crates/bex_engine",
-  "crates/bex_events",
-  "crates/bex_events_native",
-  "crates/bex_external_types",
-  "crates/bex_heap",
-  "crates/bex_project",
-  "crates/bex_resource_types",
-  "crates/bex_vm",
-  "crates/bex_vm_types",
-  "crates/bridge_cffi",
-  "crates/bridge_ctypes",
-  "crates/bridge_python",
-  "crates/bridge_wasm",
-  "crates/sys_llm",
-  "crates/sys_native",
-  "crates/sys_types",
-  "crates/tools_onionskin",
-  "crates/tools_rig",
-  "crates/tools_size_gate",
-  "crates/tools_stow",
+  "crates/*",
   "rig_tests/crates/*",
 ]
 resolver = "2"
@@ -70,11 +23,16 @@ version = "0.0.0-beta"
 baml_base = { path = "crates/baml_base" }
 baml_type = { path = "crates/baml_type" }
 baml_builtins = { path = "crates/baml_builtins" }
+baml_builtins2 = { path = "crates/baml_builtins2" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
 baml_codegen_python = { path = "crates/baml_codegen_python" }
 baml_codegen_tests = { path = "crates/baml_codegen_tests" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler_analysis = { path = "crates/baml_compiler_analysis" }
+baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
+baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
+baml_compiler2_tir = { path = "crates/baml_compiler2_tir" }
+baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
 baml_compiler_emit = { path = "crates/baml_compiler_emit" }
 baml_compiler_hir = { path = "crates/baml_compiler_hir" }
@@ -92,6 +50,7 @@ sys_native = { path = "crates/sys_native" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
 baml_lsp_actions = { path = "crates/baml_lsp_actions" }
+baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
 baml_lsp_server = { path = "crates/baml_lsp_server" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }
 baml_project = { path = "crates/baml_project" }

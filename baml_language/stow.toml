@@ -66,15 +66,15 @@ reason = "Use thiserror for proper error types in library crates."
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["compiler", "builtins", "codegen"]
+approved_prefixes = ["compiler", "builtins", "builtins2", "codegen", "compiler2", "lsp2"]
 test_crate_exceptions = ["baml_tests", "baml_codegen_tests"]
 embed_crates = ["tools_onionskin", "bex_project"]
 
 # baml-specific dependency rules
 [[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
-allowed_prefixes = ["compiler"]
-allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type"]
+allowed_prefixes = ["compiler", "compiler2"]
+allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions"]
 reason = "Use baml_db or baml_project to access compiler interfaces."
 
 [[namespaces.dependency_rules]]

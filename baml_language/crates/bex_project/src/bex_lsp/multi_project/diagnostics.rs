@@ -162,64 +162,66 @@ pub(super) trait WithDiagnostics {
 }
 
 impl WithDiagnostics for crate::project::BexProject {
-    /// Collect diagnostics for all files in the project using the centralized `check()` method.
+    /// Collect diagnostics for all files in the project (compiler2 only).
     fn diagnostics_by_file(
         &self,
         position_encoding: PositionEncoding,
     ) -> std::collections::HashMap<std::path::PathBuf, Vec<lsp_types::Diagnostic>> {
-        let diagnostics = match self.db.try_lock() {
-            Ok(db) => db.check(),
-            Err(_) => {
-                log::warn!("diagnostics_by_file: db mutex already locked, skipping");
-                return HashMap::new();
-            }
+        let Ok(db) = self.db.try_lock() else {
+            log::warn!("diagnostics_by_file: db mutex already locked, skipping");
+            return HashMap::new();
         };
 
-        // Build file_sources map with line_starts for LSP conversion
-        let file_sources: HashMap<baml_base::FileId, (String, Vec<u32>)> = diagnostics
-            .sources
-            .iter()
-            .map(|(file_id, text)| {
-                let line_starts = compute_line_starts(text);
-                (*file_id, (text.clone(), line_starts))
-            })
-            .collect();
+        let source_files = db.get_source_files();
 
-        let config = crate::bex_lsp::multi_project::diagnostics::LspConversionConfig {
-            file_paths: &diagnostics.file_paths,
+        let mut file_sources: HashMap<baml_base::FileId, (String, Vec<u32>)> = HashMap::new();
+        let mut file_paths: HashMap<baml_base::FileId, std::path::PathBuf> = HashMap::new();
+        let mut diags_by_file: Vec<(
+            std::path::PathBuf,
+            Vec<baml_compiler_diagnostics::Diagnostic>,
+        )> = Vec::new();
+
+        for file in &source_files {
+            let file_id = file.file_id(&*db);
+            let Some(path) = db.file_id_to_path(file_id).cloned() else {
+                continue;
+            };
+
+            let text = file.text(&*db).clone();
+            let line_starts = compute_line_starts(&text);
+            file_sources.insert(file_id, (text, line_starts));
+            file_paths.insert(file_id, path.clone());
+
+            let diags = baml_lsp2_actions::check_file(&*db, *file);
+            diags_by_file.push((path, diags));
+        }
+
+        let config = LspConversionConfig {
+            file_paths: &file_paths,
             file_sources: &file_sources,
         };
 
-        // Seed every known file with an empty vec so files whose diagnostics
-        // have been resolved still get an empty publish (clearing stale markers).
-        let mut grouped_diagnostics: HashMap<std::path::PathBuf, Vec<_>> = diagnostics
-            .file_paths
+        // Seed every known file with an empty vec so cleared diagnostics
+        // get an empty publish (removing stale markers).
+        let mut grouped: HashMap<std::path::PathBuf, Vec<lsp_types::Diagnostic>> = file_paths
             .values()
             .map(|p| (p.clone(), Vec::new()))
             .collect();
 
-        for diagnostic in diagnostics.diagnostics {
-            let path = diagnostic
-                .file_id()
-                .and_then(|fid| diagnostics.file_paths.get(&fid).cloned());
-            if let Some(path) = path {
-                grouped_diagnostics
-                    .entry(path)
-                    .or_default()
-                    .push(diagnostic);
+        let mut total_converted = 0usize;
+        let mut total_dropped = 0usize;
+        for (path, diags) in diags_by_file {
+            for diag in diags {
+                if let Some(lsp_diag) = to_lsp_diagnostic(diag, &config, position_encoding) {
+                    grouped.entry(path.clone()).or_default().push(lsp_diag);
+                    total_converted += 1;
+                } else {
+                    total_dropped += 1;
+                }
             }
         }
 
-        grouped_diagnostics
-            .into_iter()
-            .map(|(path, diags)| {
-                let diags = diags
-                    .into_iter()
-                    .filter_map(|d| to_lsp_diagnostic(d, &config, position_encoding))
-                    .collect();
-                (path, diags)
-            })
-            .collect()
+        grouped
     }
 }
 
@@ -228,7 +230,7 @@ impl WithDiagnostics for crate::project::BexProject {
 /// Returns byte offsets of each line start. Uses `char_indices()` to get
 /// byte positions rather than character indices, which is essential for
 /// files containing multi-byte UTF-8 characters.
-fn compute_line_starts(source: &str) -> Vec<u32> {
+pub(super) fn compute_line_starts(source: &str) -> Vec<u32> {
     let mut line_starts = vec![0];
     for (byte_offset, c) in source.char_indices() {
         if c == '\n' {

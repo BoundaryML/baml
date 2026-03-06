@@ -343,6 +343,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_builtins2"
+version = "0.0.0-beta"
+
+[[package]]
 name = "baml_builtins_macros"
 version = "0.0.0-beta"
 dependencies = [
@@ -398,6 +402,64 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "baml_base",
+]
+
+[[package]]
+name = "baml_compiler2_ast"
+version = "0.1.0"
+dependencies = [
+ "baml_base",
+ "baml_compiler_diagnostics",
+ "baml_compiler_lexer",
+ "baml_compiler_parser",
+ "baml_compiler_syntax",
+ "la-arena",
+ "rowan 0.16.1",
+ "rustc-hash 2.1.1",
+ "smol_str",
+ "text-size",
+]
+
+[[package]]
+name = "baml_compiler2_hir"
+version = "0.1.0"
+dependencies = [
+ "baml_base",
+ "baml_compiler2_ast",
+ "baml_compiler_diagnostics",
+ "baml_compiler_parser",
+ "baml_workspace",
+ "la-arena",
+ "rustc-hash 2.1.1",
+ "salsa",
+ "text-size",
+]
+
+[[package]]
+name = "baml_compiler2_tir"
+version = "0.1.0"
+dependencies = [
+ "baml_base",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler_analysis",
+ "baml_compiler_diagnostics",
+ "baml_workspace",
+ "indexmap",
+ "la-arena",
+ "rustc-hash 2.1.1",
+ "salsa",
+ "smol_str",
+ "text-size",
+]
+
+[[package]]
+name = "baml_compiler2_visualization"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_compiler2_ast",
+ "indexmap",
+ "la-arena",
 ]
 
 [[package]]
@@ -528,6 +590,7 @@ name = "baml_compiler_vir"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
+ "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_compiler_hir",
  "baml_compiler_tir",
@@ -569,6 +632,22 @@ dependencies = [
  "rowan 0.16.1",
  "salsa",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "baml_lsp2_actions"
+version = "0.1.0"
+dependencies = [
+ "baml_base",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler2_tir",
+ "baml_compiler_diagnostics",
+ "baml_compiler_parser",
+ "baml_compiler_syntax",
+ "rowan 0.16.1",
+ "salsa",
+ "text-size",
 ]
 
 [[package]]
@@ -660,6 +739,9 @@ name = "baml_project"
 version = "0.0.0-beta"
 dependencies = [
  "baml_builtins",
+ "baml_builtins2",
+ "baml_compiler2_hir",
+ "baml_compiler2_tir",
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_compiler_hir",
@@ -667,6 +749,7 @@ dependencies = [
  "baml_compiler_tir",
  "baml_compiler_vir",
  "baml_db",
+ "baml_lsp2_actions",
  "baml_workspace",
  "bex_vm_types",
  "lsp-types",
@@ -680,6 +763,9 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "baml_base",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler2_tir",
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_compiler_hir",
@@ -834,7 +920,7 @@ dependencies = [
  "baml_compiler_emit",
  "baml_db",
  "baml_fmt",
- "baml_lsp_actions",
+ "baml_lsp2_actions",
  "baml_project",
  "baml_workspace",
  "bex_engine",
@@ -4868,6 +4954,10 @@ dependencies = [
  "anyhow",
  "arboard",
  "baml_base",
+ "baml_compiler2_ast",
+ "baml_compiler2_hir",
+ "baml_compiler2_tir",
+ "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_compiler_hir",
@@ -4891,6 +4981,7 @@ dependencies = [
  "rowan 0.16.1",
  "salsa",
  "similar",
+ "text-size",
 ]
 
 [[package]]

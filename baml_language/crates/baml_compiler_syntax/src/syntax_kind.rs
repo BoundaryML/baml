@@ -257,6 +257,10 @@ pub enum SyntaxKind {
     // Expression components
     CALL_ARGS,
     GENERIC_ARGS,
+    /// Declaration-site generic type parameter list: `<T>` or `<K, V>` on class/function defs.
+    GENERIC_PARAM_LIST,
+    /// A single type parameter name inside a `GENERIC_PARAM_LIST`.
+    GENERIC_PARAM,
     OBJECT_LITERAL,
     OBJECT_FIELD,
     SPREAD_ELEMENT, // ...expr in object/array literals

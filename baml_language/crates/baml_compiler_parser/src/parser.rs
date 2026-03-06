@@ -1954,6 +1954,11 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("class name".to_string());
             }
 
+            // Optional generic parameters: <T> or <K, V>
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
+            }
+
             // Opening brace
             if !p.expect(TokenKind::LBrace) {
                 return;
@@ -1984,6 +1989,35 @@ impl<'a> Parser<'a> {
 
             // Closing brace
             p.expect(TokenKind::RBrace);
+        });
+    }
+
+    /// Parse declaration-site generic parameter list: `<T>` or `<K, V>`.
+    ///
+    /// This is different from `GENERIC_ARGS` (call-site: `fetch<Response>(url)`).
+    /// This produces `GENERIC_PARAM_LIST` containing `GENERIC_PARAM` children.
+    fn parse_generic_param_list(&mut self) {
+        self.with_node(SyntaxKind::GENERIC_PARAM_LIST, |p| {
+            p.expect(TokenKind::Less); // <
+
+            // Parse comma-separated type parameter names
+            loop {
+                if p.at(TokenKind::Greater) || p.at_end() {
+                    break;
+                }
+                p.with_node(SyntaxKind::GENERIC_PARAM, |p| {
+                    if p.at(TokenKind::Word) {
+                        p.bump(); // type parameter name
+                    } else {
+                        p.error_unexpected_token("type parameter name".to_string());
+                    }
+                });
+                if !p.eat(TokenKind::Comma) {
+                    break;
+                }
+            }
+
+            p.expect(TokenKind::Greater); // >
         });
     }
 

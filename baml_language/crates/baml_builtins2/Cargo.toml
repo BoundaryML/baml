@@ -1,0 +1,19 @@
+[package]
+name = "baml_builtins2"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Builtin .baml stub files for the compiler2 pipeline"
+
+[lib]
+doctest = false
+path = "baml_std/env/src/lib.rs"
+
+[lints]
+workspace = true

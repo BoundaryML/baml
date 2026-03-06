@@ -114,6 +114,17 @@ pub enum Literal {
     Bool(bool),
 }
 
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Literal::String(s) => write!(f, "\"{s}\""),
+            Literal::Int(i) => write!(f, "{i}"),
+            Literal::Float(s) => write!(f, "{s}"),
+            Literal::Bool(b) => write!(f, "{b}"),
+        }
+    }
+}
+
 /// Module identifier (for multi-file support)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(u32);

@@ -19,6 +19,9 @@ workspace = true
 
 [dependencies]
 baml_builtins = { workspace = true }
+baml_builtins2 = { workspace = true }
+baml_compiler2_hir = { workspace = true }
+baml_compiler2_tir = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_emit = { workspace = true }
 baml_compiler_hir = { workspace = true }
@@ -26,6 +29,7 @@ baml_compiler_mir = { workspace = true }
 baml_compiler_tir = { workspace = true }
 baml_compiler_vir = { workspace = true }
 baml_db = { workspace = true }
+baml_lsp2_actions = { workspace = true }
 baml_workspace = { workspace = true }
 bex_vm_types = { workspace = true }
 lsp-types = { workspace = true }

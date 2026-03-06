@@ -14,7 +14,7 @@ use std::{
 
 use baml_compiler_emit::CompileOptions;
 use baml_db::{FileId, SourceFile};
-use baml_workspace::Project;
+use baml_workspace::{Compiler2ExtraFiles, Project};
 use salsa::Setter;
 
 // Note: Builtin BAML files (like llm.baml) are loaded in set_project_root().
@@ -52,9 +52,18 @@ pub struct ProjectDatabase {
     next_file_id: Arc<AtomicU32>,
     /// The current project. Set via `set_project_root()`.
     project: Option<Project>,
-    /// Maps file paths to their `SourceFile` handles.
+    /// Compiler2-only extra files (baml_builtins2 stubs). Held separately so
+    /// they are NOT added to `project.files()` — the v1 compiler must not see
+    /// them because it cannot parse compiler2-specific syntax.
+    compiler2_extra_files: Option<Compiler2ExtraFiles>,
+    /// Maps file paths to their `SourceFile` handles (user files + v1 builtins only).
+    /// v2 builtin stubs are stored in `compiler2_file_map` instead to prevent them
+    /// from appearing in `get_source_files()` which feeds the v1 compiler pipeline.
     file_map: HashMap<std::path::PathBuf, SourceFile>,
-    /// Maps `FileId` to file path for reverse lookup.
+    /// Maps file paths to compiler2-only SourceFile handles.
+    /// These files are NOT returned by `get_source_files()`.
+    compiler2_file_map: HashMap<std::path::PathBuf, SourceFile>,
+    /// Maps `FileId` to file path for reverse lookup (all files including v2 stubs).
     file_id_to_path: HashMap<FileId, std::path::PathBuf>,
 }
 
@@ -68,6 +77,19 @@ impl baml_workspace::Db for ProjectDatabase {
             .expect("project must be set before querying - call set_project_root first")
     }
 }
+
+#[salsa::db]
+impl baml_compiler2_hir::Db for ProjectDatabase {
+    fn compiler2_extra_files(&self) -> Option<baml_workspace::Compiler2ExtraFiles> {
+        self.compiler2_extra_files
+    }
+}
+
+#[salsa::db]
+impl baml_compiler2_tir::Db for ProjectDatabase {}
+
+#[salsa::db]
+impl baml_lsp2_actions::Db for ProjectDatabase {}
 
 #[salsa::db]
 impl baml_compiler_hir::Db for ProjectDatabase {}
@@ -91,7 +113,9 @@ impl ProjectDatabase {
             storage: salsa::Storage::default(),
             next_file_id: Arc::new(AtomicU32::new(0)),
             project: None,
+            compiler2_extra_files: None,
             file_map: HashMap::new(),
+            compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
         }
     }
@@ -108,7 +132,9 @@ impl ProjectDatabase {
             storage: salsa::Storage::new(Some(callback)),
             next_file_id: Arc::new(AtomicU32::new(0)),
             project: None,
+            compiler2_extra_files: None,
             file_map: HashMap::new(),
+            compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
         }
     }
@@ -245,44 +271,42 @@ impl ProjectDatabase {
             .map(|(_, f)| *f)
             .collect();
 
-        // Load builtin BAML files after user files (matches production order)
-        let builtin_files = self.load_builtin_baml_files();
+        // Load v1 builtin BAML files (for the shared project.files() list).
+        // v2 builtin stubs are loaded separately into compiler2_extra_files.
+        let (v1_builtin_files, v2_builtin_files) = self.load_builtin_baml_files();
 
-        // Combine user files with builtin files (user first, then builtins)
+        // Combine user files with v1 builtin files (user first, then builtins)
         let mut all_files = user_files;
-        all_files.extend(builtin_files);
+        all_files.extend(v1_builtin_files);
 
-        // Create and set the project
+        // Create and set the project (v1 compiler only sees this)
         let project = Project::new(self, canonical_root, all_files);
         self.project = Some(project);
+
+        // Create the compiler2 extra files Salsa input (separate from project.files)
+        let compiler2_extra = Compiler2ExtraFiles::new(self, v2_builtin_files);
+        self.compiler2_extra_files = Some(compiler2_extra);
+
         project
     }
 
     /// Load builtin BAML source files into the database.
     ///
-    /// These files provide implementations for builtin namespaces like `baml.llm`.
-    /// They are loaded once when the project is set up and included in the
-    /// compilation pipeline from the start.
-    ///
-    /// Builtin files use the normal `FileId` allocation just like user files.
-    /// They are registered in both `file_id_to_path` (for diagnostic filename
-    /// display) and `file_map` (so builtins are included in `files()` iteration
-    /// and `check()` diagnostics).
+    /// Returns two lists:
+    /// - `(v1_files, v2_files)` where `v1_files` are for the shared `project.files()`
+    ///   (visible to both compilers) and `v2_files` are compiler2-only stubs that must
+    ///   NOT be added to `project.files()` because the v1 parser cannot handle
+    ///   compiler2-specific syntax (generic type parameters, `$rust_type`, etc.).
     ///
     /// ## Note on goto-definition
     ///
     /// Builtin files use virtual paths like `<builtin>/baml/llm.baml`. These paths
     /// are embedded in the compiler binary, not present on the user's filesystem.
     /// As a result, goto-definition to builtins won't work in editors.
-    ///
-    /// Future enhancement: To support goto-definition for builtins, we could:
-    /// 1. Extract builtin files to a cache directory (e.g., `~/.cache/baml/builtins/`)
-    /// 2. Register the real filesystem paths instead of virtual paths
-    /// 3. Ensure the cache is updated when the compiler version changes
-    fn load_builtin_baml_files(&mut self) -> Vec<SourceFile> {
-        let mut builtin_files = Vec::new();
+    fn load_builtin_baml_files(&mut self) -> (Vec<SourceFile>, Vec<SourceFile>) {
+        let mut v1_builtin_files = Vec::new();
 
-        // Load all builtin BAML sources (disk read on native, embedded on WASM)
+        // Load all v1 builtin BAML sources (disk read on native, embedded on WASM)
         for builtin_source in baml_builtins::baml_sources() {
             let path = PathBuf::from(builtin_source.path);
             let file = self.add_file_internal(&path, builtin_source.source());
@@ -290,15 +314,42 @@ impl ProjectDatabase {
 
             // Register in file_id_to_path for diagnostic filename display
             // and in file_map so builtins are included in check() diagnostics.
-            // Builtin signatures use fully qualified type names (e.g., baml.http.Request)
-            // which resolve through the builtin class_names registry.
             self.file_id_to_path.insert(file_id, path.clone());
             self.file_map.insert(path, file);
 
-            builtin_files.push(file);
+            v1_builtin_files.push(file);
         }
 
-        builtin_files
+        // Load compiler2-only builtin stub files (Array<T>, Map<K,V>, String, Media, etc.)
+        // These flow through the compiler2 HIR pipeline: package_items(db, "baml")
+        // will contain Array, Map, String, Media, and the baml.env / baml.http /
+        // baml.math / baml.sys namespaces.
+        //
+        // IMPORTANT: These are stored in `compiler2_file_map` (NOT `file_map`) so
+        // that `get_source_files()` does NOT return them and they are never passed
+        // to the v1 parser. The v1 parser cannot handle compiler2-specific syntax:
+        // generic type parameters, `$rust_type`, void functions without explicit
+        // return types, `root.sys.xxx` qualified calls, etc.
+        let mut v2_builtin_files = Vec::new();
+        for builtin in baml_builtins2::ALL {
+            // Use the BuiltinFile's virtual_path() to get the correct path.
+            // Root files: "<builtin>/baml/containers.baml"
+            // Namespaced files: "<builtin>/baml/env/env.baml"
+            let virtual_path = builtin.virtual_path();
+            let path = PathBuf::from(&virtual_path);
+            let file = self.add_file_internal(&path, builtin.contents);
+            let file_id = file.file_id(self);
+
+            // Register in file_id_to_path for diagnostic filename display
+            // but in compiler2_file_map (not file_map!) so the v1 compiler
+            // never sees these files.
+            self.file_id_to_path.insert(file_id, path.clone());
+            self.compiler2_file_map.insert(path, file);
+
+            v2_builtin_files.push(file);
+        }
+
+        (v1_builtin_files, v2_builtin_files)
     }
 
     /// Add a file to the database.
@@ -341,9 +392,12 @@ impl ProjectDatabase {
 
     /// Get a `SourceFile` by its `FileId`.
     pub fn get_file_by_id(&self, file_id: FileId) -> Option<SourceFile> {
-        self.file_id_to_path
-            .get(&file_id)
-            .and_then(|path| self.file_map.get(path).copied())
+        self.file_id_to_path.get(&file_id).and_then(|path| {
+            self.file_map
+                .get(path)
+                .or_else(|| self.compiler2_file_map.get(path))
+                .copied()
+        })
     }
 
     /// Build the control flow visualization graph for a function.

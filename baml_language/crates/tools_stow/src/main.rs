@@ -924,14 +924,16 @@ fn check_crate_naming_convention(
 
     match parts.len() {
         1 => {
-            // namespace_word (e.g., baml_cli)
-            if !parts[0].chars().all(|c| c.is_ascii_lowercase()) {
+            // namespace_word (e.g., baml_cli, baml_builtins2)
+            let word = parts[0];
+            let simple_lowercase = word.chars().all(|c| c.is_ascii_lowercase());
+            let approved_prefix = namespace.approved_prefixes.iter().any(|p| *p == word);
+            if !simple_lowercase && !approved_prefix {
                 errors.push(ValidationError {
                     crate_name: crate_name.to_string(),
                     file_path: cargo_path.to_path_buf(),
                     message: format!(
-                        "Crate suffix '{}' should be a simple lowercase word",
-                        parts[0]
+                        "Crate suffix '{word}' should be a simple lowercase word or an approved prefix",
                     ),
                 });
             }

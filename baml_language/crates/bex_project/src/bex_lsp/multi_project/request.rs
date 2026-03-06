@@ -1,16 +1,14 @@
 use lsp_types::{
-    CodeLens, CodeLensOptions, CompletionOptions, DiagnosticOptions, DiagnosticServerCapabilities,
-    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, SaveOptions,
-    SemanticTokensFullOptions, SemanticTokensLegend, SemanticTokensOptions,
-    SemanticTokensServerCapabilities, ServerCapabilities, TextDocumentSyncCapability,
-    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions,
-    WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
+    CodeLens, CodeLensOptions, CompletionOptions, HoverProviderCapability, InlayHintOptions,
+    InlayHintServerCapabilities, SaveOptions, SemanticTokensFullOptions, SemanticTokensLegend,
+    SemanticTokensOptions, SemanticTokensServerCapabilities, ServerCapabilities,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+    TextDocumentSyncSaveOptions, WorkDoneProgressOptions, WorkspaceFoldersServerCapabilities,
+    WorkspaceServerCapabilities,
 };
 
 use super::{BexMulitProject, LspError, WithDiagnostics, commands, wasm_helpers};
 use crate::bex_lsp::{multi_project::commands::BexLspCommand, request::BexLspRequest};
-
-const DIAGNOSTIC_NAME: &str = "BAML";
 
 /// Server capabilities advertised during the LSP `initialize` handshake.
 ///
@@ -18,10 +16,10 @@ const DIAGNOSTIC_NAME: &str = "BAML";
 /// share a single source of truth for what the LSP implementation supports.
 pub(super) fn server_capabilities() -> ServerCapabilities {
     ServerCapabilities {
-        diagnostic_provider: Some(DiagnosticServerCapabilities::Options(DiagnosticOptions {
-            identifier: Some(DIAGNOSTIC_NAME.into()),
-            ..Default::default()
-        })),
+        // Diagnostics are delivered via push (`publishDiagnostics`) only.
+        // Pull diagnostics (`textDocument/diagnostic`) is disabled to avoid
+        // the editor showing each diagnostic twice.
+        diagnostic_provider: None,
         completion_provider: Some(CompletionOptions {
             resolve_provider: Some(false),
             trigger_characters: Some(vec!['@'.to_string(), '"'.to_string(), '.'.to_string()]),
@@ -42,37 +40,9 @@ pub(super) fn server_capabilities() -> ServerCapabilities {
         semantic_tokens_provider: Some(SemanticTokensServerCapabilities::SemanticTokensOptions(
             SemanticTokensOptions {
                 legend: SemanticTokensLegend {
-                    token_types: baml_lsp_actions::TOKEN_TYPES
+                    token_types: baml_lsp2_actions::TOKEN_TYPES
                         .iter()
-                        .map(|t| {
-                            lsp_types::SemanticTokenType::new(match t {
-                                baml_lsp_actions::SemanticTokenType::Namespace => "namespace",
-                                baml_lsp_actions::SemanticTokenType::Type => "type",
-                                baml_lsp_actions::SemanticTokenType::Class => "class",
-                                baml_lsp_actions::SemanticTokenType::Enum => "enum",
-                                baml_lsp_actions::SemanticTokenType::Interface => "interface",
-                                baml_lsp_actions::SemanticTokenType::Struct => "struct",
-                                baml_lsp_actions::SemanticTokenType::TypeParameter => {
-                                    "typeParameter"
-                                }
-                                baml_lsp_actions::SemanticTokenType::Parameter => "parameter",
-                                baml_lsp_actions::SemanticTokenType::Variable => "variable",
-                                baml_lsp_actions::SemanticTokenType::Property => "property",
-                                baml_lsp_actions::SemanticTokenType::EnumMember => "enumMember",
-                                baml_lsp_actions::SemanticTokenType::Event => "event",
-                                baml_lsp_actions::SemanticTokenType::Function => "function",
-                                baml_lsp_actions::SemanticTokenType::Method => "method",
-                                baml_lsp_actions::SemanticTokenType::Macro => "macro",
-                                baml_lsp_actions::SemanticTokenType::Keyword => "keyword",
-                                baml_lsp_actions::SemanticTokenType::Modifier => "modifier",
-                                baml_lsp_actions::SemanticTokenType::Comment => "comment",
-                                baml_lsp_actions::SemanticTokenType::String => "string",
-                                baml_lsp_actions::SemanticTokenType::Number => "number",
-                                baml_lsp_actions::SemanticTokenType::Regexp => "regexp",
-                                baml_lsp_actions::SemanticTokenType::Operator => "operator",
-                                baml_lsp_actions::SemanticTokenType::Decorator => "decorator",
-                            })
-                        })
+                        .map(|t| lsp_types::SemanticTokenType::new(t.as_str()))
                         .collect(),
                     token_modifiers: vec![],
                 },
@@ -180,34 +150,52 @@ impl BexLspRequest for BexMulitProject {
     ) -> Result<lsp_request_result!("textDocument/codeLens"), LspError> {
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
-        let project = self.get_or_create_project(root_path.clone())?;
+        let project_handle = self.get_or_create_project(root_path.clone())?;
 
         let lenses = {
-            let project = project.project.try_lock_db()?;
+            let project = project_handle.project.try_lock_db()?;
             let lsp_db = project.db();
-            let Some(project) = project.project() else {
+            let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
                 return Ok(None);
             };
-            let functions = baml_project::list_functions(lsp_db, project);
-            functions
-                .into_iter()
-                .filter_map(|func| {
-                    let source_file = lsp_db.get_file(&func.file_path)?;
-                    let text = source_file.text(lsp_db.db());
-                    // TODO: we use two different span_to_lsp_range functions here (we should reduce to use the same one)
-                    let range = baml_project::position::span_to_lsp_range(text, &func.span);
+            let text = source_file.text(lsp_db);
+            let line_starts = compute_line_starts(text);
+            let encoding = self.position_encoding;
 
-                    Some(CodeLens {
-                        range,
-                        command: Some(
+            // Use compiler2 file_actions — finds functions + tests via
+            // file_symbol_contributions (Salsa-cached, no type inference needed).
+            let file_actions = baml_lsp2_actions::file_actions(lsp_db, source_file);
+
+            file_actions
+                .into_iter()
+                .map(|action| {
+                    let range = super::diagnostics::span_to_lsp_range(
+                        action.name_span,
+                        text,
+                        &line_starts,
+                        encoding,
+                    );
+                    let command = match action.kind {
+                        baml_lsp2_actions::FileActionKind::RunInPlayground => {
                             super::commands::OpenBamlPanel {
                                 project_path: Some(root_path.as_str().to_string()),
-                                function_name: Some(func.name),
+                                function_name: Some(action.name),
                             }
-                            .to_lsp_command(),
-                        ),
+                            .to_lsp_command()
+                        }
+                        baml_lsp2_actions::FileActionKind::RunTest => {
+                            super::commands::OpenBamlPanel {
+                                project_path: Some(root_path.as_str().to_string()),
+                                function_name: Some(action.name),
+                            }
+                            .to_lsp_command()
+                        }
+                    };
+                    CodeLens {
+                        range,
+                        command: Some(command),
                         data: None,
-                    })
+                    }
                 })
                 .collect()
         };
@@ -225,16 +213,13 @@ impl BexLspRequest for BexMulitProject {
 
         let project = project_handle.project.try_lock_db()?;
         let lsp_db = project.db();
-        let Some(baml_project) = project.project() else {
-            return Ok(None);
-        };
         let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
             return Ok(None);
         };
 
-        // Get hints and filter to the requested range before converting to LSP types.
-        let hints = baml_lsp_actions::inlay_hints::inlay_hints(lsp_db, source_file, baml_project);
         let text = source_file.text(lsp_db);
+
+        // Compute the byte-offset bounds of the requested range.
         let range_start = text_size::TextSize::from(
             u32::try_from(baml_project::position::lsp_position_to_offset(
                 text,
@@ -249,75 +234,38 @@ impl BexLspRequest for BexMulitProject {
             ))
             .unwrap_or(u32::MAX),
         );
-        let lsp_hints = hints
-            .into_iter()
-            .filter(|h| h.offset >= range_start && h.offset < range_end) // Constrict to the requested range
-            .map(|h| {
-                let label = lsp_types::InlayHintLabel::LabelParts(
-                    h.label
-                        .into_iter()
-                        .map(|part| {
-                            let location = part.target.and_then(|t| {
-                                let uri = wasm_helpers::from_file_path(&t.file_path).ok()?;
-                                let target_file_id = lsp_db.path_to_file_id(&t.file_path)?;
-                                let target_source = lsp_db.get_file_by_id(target_file_id)?;
-                                let target_text = target_source.text(lsp_db);
-                                let range =
-                                    baml_project::position::span_to_lsp_range(target_text, &t.span);
-                                Some(lsp_types::Location { uri, range })
-                            });
 
-                            lsp_types::InlayHintLabelPart {
-                                value: part.value,
-                                tooltip: None, // Nothing here at least for now
-                                location,
-                                command: None,
-                            }
-                        })
-                        .collect(),
-                );
-                lsp_types::InlayHint {
-                    position: baml_project::position::offset_to_lsp_position(
-                        text,
-                        usize::from(h.offset),
-                    ),
-                    label,
-                    kind: h.kind.map(|k| match k {
-                        baml_lsp_actions::inlay_hints::InlayHintKind::Parameter => {
-                            lsp_types::InlayHintKind::PARAMETER
-                        }
-                        baml_lsp_actions::inlay_hints::InlayHintKind::Type => {
-                            lsp_types::InlayHintKind::TYPE
-                        }
-                    }),
-                    padding_left: Some(h.padding_left),
-                    padding_right: Some(h.padding_right),
-                    text_edits: if h.text_edits.is_empty() {
-                        None
-                    } else {
-                        Some(
-                            h.text_edits
-                                .iter()
-                                .map(|edit| {
-                                    let pos = baml_project::position::offset_to_lsp_position(
-                                        text,
-                                        usize::from(edit.offset),
-                                    );
-                                    lsp_types::TextEdit {
-                                        range: lsp_types::Range::new(pos, pos),
-                                        new_text: edit.new_text.clone(),
-                                    }
-                                })
-                                .collect(),
-                        )
-                    },
-                    tooltip: None,
-                    data: None,
-                }
+        // Compute inline annotations using compiler2 (type hints + param hints).
+        let hints = baml_lsp2_actions::annotations(lsp_db, source_file);
+
+        let lsp_hints: Vec<lsp_types::InlayHint> = hints
+            .into_iter()
+            .filter(|h| h.offset >= range_start && h.offset < range_end)
+            .map(|h| lsp_types::InlayHint {
+                position: baml_project::position::offset_to_lsp_position(
+                    text,
+                    usize::from(h.offset),
+                ),
+                label: lsp_types::InlayHintLabel::String(h.label),
+                kind: Some(match h.kind {
+                    baml_lsp2_actions::AnnotationKind::Type => lsp_types::InlayHintKind::TYPE,
+                    baml_lsp2_actions::AnnotationKind::Parameter => {
+                        lsp_types::InlayHintKind::PARAMETER
+                    }
+                }),
+                padding_left: Some(h.padding_left),
+                padding_right: Some(h.padding_right),
+                text_edits: None,
+                tooltip: None,
+                data: None,
             })
             .collect();
 
-        Ok(Some(lsp_hints))
+        if lsp_hints.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(lsp_hints))
+        }
     }
 
     fn on_request_text_document_semantic_tokens_full(
@@ -335,8 +283,9 @@ impl BexLspRequest for BexMulitProject {
         };
         let text = source_file.text(lsp_db);
 
-        // Get the semantic tokens, this function always returns tokens in document order.
-        let tokens = baml_lsp_actions::semantic_tokens(lsp_db, source_file);
+        // Get the semantic tokens using compiler2 (hybrid CST + type-aware).
+        // Always returns tokens in document order.
+        let tokens = baml_lsp2_actions::semantic_tokens(lsp_db, source_file);
 
         // Convert to LSP delta-encoded format
         let line_index = baml_project::position::LineIndex::new(text);
@@ -386,25 +335,58 @@ impl BexLspRequest for BexMulitProject {
     ) -> Result<lsp_request_result!("textDocument/codeAction"), LspError> {
         let path = self.get_path_from_uri(&params.text_document.uri)?;
         let root_path = Self::get_baml_project_root(&path)?;
-        let project = self.get_or_create_project(root_path.clone())?;
+        let project_handle = self.get_or_create_project(root_path.clone())?;
 
-        let first_function = {
-            let project = project.project.try_lock_db()?;
+        let actions: Vec<lsp_types::CodeActionOrCommand> = {
+            let project = project_handle.project.try_lock_db()?;
             let lsp_db = project.db();
-            let Some(project) = project.project() else {
+            let Some(source_file) = lsp_db.get_file(std::path::Path::new(path.as_str())) else {
                 return Ok(None);
             };
-            let functions = baml_project::list_functions(lsp_db, project);
-            functions.into_iter().take(1).map(|f| f.name).next()
+            let text = source_file.text(lsp_db);
+
+            // Convert the LSP range to a byte range for fixes_at.
+            let start_offset = text_size::TextSize::from(
+                u32::try_from(baml_project::position::lsp_position_to_offset(
+                    text,
+                    &params.range.start,
+                ))
+                .unwrap_or(0),
+            );
+            let end_offset = text_size::TextSize::from(
+                u32::try_from(baml_project::position::lsp_position_to_offset(
+                    text,
+                    &params.range.end,
+                ))
+                .unwrap_or(u32::MAX),
+            );
+            let range = text_size::TextRange::new(start_offset, end_offset);
+
+            // Use compiler2 fixes_at — currently returns "Open in Playground".
+            let fixes = baml_lsp2_actions::fixes_at(lsp_db, source_file, range);
+
+            fixes
+                .into_iter()
+                .map(|fix| {
+                    let command = match fix.kind {
+                        baml_lsp2_actions::FixKind::OpenInPlayground { function_name } => {
+                            super::commands::OpenBamlPanel {
+                                project_path: Some(root_path.as_str().to_string()),
+                                function_name,
+                            }
+                            .to_lsp_code_action()
+                        }
+                    };
+                    lsp_types::CodeActionOrCommand::CodeAction(command)
+                })
+                .collect()
         };
 
-        Ok(Some(vec![lsp_types::CodeActionOrCommand::CodeAction(
-            super::commands::OpenBamlPanel {
-                project_path: Some(root_path.as_str().to_string()),
-                function_name: first_function,
-            }
-            .to_lsp_code_action(),
-        )]))
+        if actions.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(actions))
+        }
     }
 
     fn on_request_workspace_execute_command(
@@ -470,44 +452,47 @@ impl BexLspRequest for BexMulitProject {
     ) -> Result<lsp_request_result!("textDocument/completion"), LspError> {
         use lsp_types::CompletionItemKind;
 
+        // Use compiler2 completions_at — context-aware completions from CST + HIR/TIR.
         let completions = self.compute_on_position(
             &params.text_document_position,
-            |db, source_file, project, offset| {
-                baml_lsp_actions::complete(db, source_file, project, offset)
+            |db, source_file, _project, offset| {
+                baml_lsp2_actions::completions_at(db, source_file, offset)
             },
         )?;
 
-        // Convert to LSP types
+        // Convert domain Completion → LSP CompletionItem.
         let items: Vec<_> = completions
             .into_iter()
             .map(|item| lsp_types::CompletionItem {
                 label: item.label,
                 kind: Some(match item.kind {
-                    baml_lsp_actions::CompletionKind::Keyword => CompletionItemKind::KEYWORD,
-                    baml_lsp_actions::CompletionKind::Function => CompletionItemKind::FUNCTION,
-                    baml_lsp_actions::CompletionKind::Class => CompletionItemKind::CLASS,
-                    baml_lsp_actions::CompletionKind::Enum => CompletionItemKind::ENUM,
-                    baml_lsp_actions::CompletionKind::EnumVariant => {
+                    baml_lsp2_actions::CompletionKind::Keyword => CompletionItemKind::KEYWORD,
+                    baml_lsp2_actions::CompletionKind::Function => CompletionItemKind::FUNCTION,
+                    baml_lsp2_actions::CompletionKind::Class => CompletionItemKind::CLASS,
+                    baml_lsp2_actions::CompletionKind::Enum => CompletionItemKind::ENUM,
+                    baml_lsp2_actions::CompletionKind::EnumVariant => {
                         CompletionItemKind::ENUM_MEMBER
                     }
-                    baml_lsp_actions::CompletionKind::Field => CompletionItemKind::FIELD,
-                    baml_lsp_actions::CompletionKind::Client => CompletionItemKind::MODULE,
-                    baml_lsp_actions::CompletionKind::TypeAlias => {
+                    baml_lsp2_actions::CompletionKind::Field => CompletionItemKind::FIELD,
+                    baml_lsp2_actions::CompletionKind::Variable => CompletionItemKind::VARIABLE,
+                    baml_lsp2_actions::CompletionKind::Primitive => {
                         CompletionItemKind::TYPE_PARAMETER
                     }
-                    baml_lsp_actions::CompletionKind::Property => CompletionItemKind::PROPERTY,
-                    baml_lsp_actions::CompletionKind::Snippet => CompletionItemKind::SNIPPET,
-                    baml_lsp_actions::CompletionKind::Generator => CompletionItemKind::MODULE,
-                    baml_lsp_actions::CompletionKind::Test => CompletionItemKind::METHOD,
-                    baml_lsp_actions::CompletionKind::Type => CompletionItemKind::TYPE_PARAMETER,
-                    baml_lsp_actions::CompletionKind::TemplateString => {
+                    baml_lsp2_actions::CompletionKind::TypeAlias => {
+                        CompletionItemKind::TYPE_PARAMETER
+                    }
+                    baml_lsp2_actions::CompletionKind::TemplateString => {
                         CompletionItemKind::FUNCTION
                     }
+                    baml_lsp2_actions::CompletionKind::Client => CompletionItemKind::MODULE,
+                    baml_lsp2_actions::CompletionKind::Generator => CompletionItemKind::MODULE,
+                    baml_lsp2_actions::CompletionKind::Test => CompletionItemKind::METHOD,
+                    baml_lsp2_actions::CompletionKind::RetryPolicy => CompletionItemKind::MODULE,
+                    baml_lsp2_actions::CompletionKind::Method => CompletionItemKind::METHOD,
                 }),
                 detail: item.detail,
                 insert_text: item.insert_text,
                 sort_text: item.sort_text,
-                documentation: item.documentation.map(lsp_types::Documentation::String),
                 ..Default::default()
             })
             .collect();
@@ -528,16 +513,14 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/hover"),
     ) -> Result<lsp_request_result!("textDocument/hover"), LspError> {
-        let hover_result = self.compute_on_position(
+        let type_info = self.compute_on_position(
             &params.text_document_position_params,
-            |db, source_file, project, offset| {
-                baml_lsp_actions::hover::hover(db, source_file, project, offset)
-            },
+            |db, source_file, _project, offset| baml_lsp2_actions::type_at(db, source_file, offset),
         )?;
 
-        match hover_result {
-            Some(hover) => {
-                let content = hover.display(baml_lsp_actions::MarkupKind::Markdown);
+        match type_info {
+            Some(info) => {
+                let content = info.to_hover_markdown();
                 Ok(Some(lsp_types::Hover {
                     contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
                         kind: lsp_types::MarkupKind::Markdown,
@@ -554,95 +537,71 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/definition"),
     ) -> Result<lsp_request_result!("textDocument/definition"), LspError> {
-        let definition = self.compute_on_position(
+        let position_encoding = self.position_encoding;
+        self.compute_on_position(
             &params.text_document_position_params,
             |db, source_file, _, offset| {
-                baml_lsp_actions::goto_definition::goto_definition(
-                    db,
-                    source_file.file_id(db),
-                    offset,
-                )
-                .map(|def| {
-                    let Ok(target_uri) = wasm_helpers::from_file_path(&def.file_path) else {
-                        return Err(LspError::UnknownErrorCode(
-                            "Failed to convert path to URI".to_string(),
-                        ));
-                    };
-                    let Some(target_file_id) = db.path_to_file_id(&def.file_path) else {
-                        return Err(LspError::InvalidPath {
-                            path: def.file_path,
-                            message: "File not found".to_string(),
-                        });
-                    };
-                    let Some(target_source) = db.get_file_by_id(target_file_id) else {
-                        return Err(LspError::InvalidPath {
-                            path: def.file_path,
-                            message: "File not found".to_string(),
-                        });
-                    };
-                    let target_text = target_source.text(db);
-
-                    let target_range =
-                        baml_project::position::span_to_lsp_range(target_text, &def.span);
-                    Ok(lsp_types::GotoDefinitionResponse::Scalar(
-                        lsp_types::Location {
-                            uri: target_uri,
-                            range: target_range,
-                        },
-                    ))
-                })
+                let loc = baml_lsp2_actions::definition_at(db, source_file, offset)?;
+                let file_id = loc.file.file_id(db);
+                let path = db.file_id_to_path(file_id)?;
+                let target_uri = wasm_helpers::from_file_path(path).ok()?;
+                let target_text = loc.file.text(db);
+                let line_starts = compute_line_starts(target_text);
+                let range = super::diagnostics::span_to_lsp_range(
+                    loc.range,
+                    target_text,
+                    &line_starts,
+                    position_encoding,
+                );
+                Some(Ok(lsp_types::GotoDefinitionResponse::Scalar(
+                    lsp_types::Location {
+                        uri: target_uri,
+                        range,
+                    },
+                )))
             },
-        )?;
-
-        definition.transpose()
+        )?
+        .transpose()
     }
 
     fn on_request_text_document_references(
         &self,
         params: lsp_request_params!("textDocument/references"),
     ) -> Result<lsp_request_result!("textDocument/references"), LspError> {
-        let references = self.compute_on_position(
+        let position_encoding = self.position_encoding;
+        let references: Vec<lsp_types::Location> = self.compute_on_position(
             &params.text_document_position,
             |db, source_file, _, offset| {
-                baml_lsp_actions::find_all_references(db, source_file.file_id(db), offset)
+                // Use compiler2 usages_at — returns Vec<Location> (file + TextRange).
+                let usages = baml_lsp2_actions::usages_at(db, source_file, offset);
+
+                usages
                     .into_iter()
-                    .map(|reference| {
-                        let Ok(target_uri) = wasm_helpers::from_file_path(&reference.file_path)
-                        else {
-                            return Err(LspError::UnknownErrorCode(
-                                "Failed to convert path to URI".to_string(),
-                            ));
-                        };
-                        let Some(target_file_id) = db.path_to_file_id(&reference.file_path) else {
-                            return Err(LspError::InvalidPath {
-                                path: reference.file_path,
-                                message: "File not found".to_string(),
-                            });
-                        };
-                        let Some(target_source) = db.get_file_by_id(target_file_id) else {
-                            return Err(LspError::InvalidPath {
-                                path: reference.file_path,
-                                message: "File not found".to_string(),
-                            });
-                        };
-                        let target_text = target_source.text(db);
-
-                        let target_range =
-                            baml_project::position::span_to_lsp_range(target_text, &reference.span);
-
-                        Ok(lsp_types::Location {
+                    .filter_map(|loc| {
+                        let file_id = loc.file.file_id(db);
+                        let path = db.file_id_to_path(file_id)?;
+                        let target_uri = wasm_helpers::from_file_path(path).ok()?;
+                        let target_text = loc.file.text(db);
+                        let line_starts = compute_line_starts(target_text);
+                        let range = super::diagnostics::span_to_lsp_range(
+                            loc.range,
+                            target_text,
+                            &line_starts,
+                            position_encoding,
+                        );
+                        Some(lsp_types::Location {
                             uri: target_uri,
-                            range: target_range,
+                            range,
                         })
                     })
-                    .collect::<Result<Vec<_>, LspError>>()
+                    .collect()
             },
         )?;
 
-        match references {
-            Ok(references) if !references.is_empty() => Ok(Some(references)),
-            Ok(_) => Ok(None),
-            Err(e) => Err(e),
+        if references.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(references))
         }
     }
 
@@ -677,7 +636,7 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("workspace/symbol"),
     ) -> Result<lsp_request_result!("workspace/symbol"), LspError> {
-        let query = params.query.to_lowercase();
+        let query = &params.query;
         let mut symbols = Vec::new();
 
         let projects = self.projects.lock().unwrap();
@@ -686,39 +645,34 @@ impl BexLspRequest for BexMulitProject {
                 continue;
             };
             let lsp_db = db_guard.db();
-            let Some(project) = db_guard.project() else {
-                continue;
-            };
 
-            let all_symbols = std::iter::empty()
-                .chain(baml_project::list_functions(lsp_db, project))
-                .chain(baml_project::list_classes(lsp_db, project))
-                .chain(baml_project::list_enums(lsp_db, project))
-                .chain(baml_project::list_type_aliases(lsp_db, project))
-                .chain(baml_project::list_clients(lsp_db, project))
-                .chain(baml_project::list_tests(lsp_db, project))
-                .chain(baml_project::list_generators(lsp_db, project));
+            // Use compiler2 search_symbols — iterates all user source files and
+            // filters by the query string. file_outline is Salsa-cached per file,
+            // so repeat calls for unchanged files are free.
+            let source_files = lsp_db.get_source_files();
+            let results = baml_lsp2_actions::search_symbols(lsp_db, &source_files, query);
 
-            for sym in all_symbols {
-                if !query.is_empty() && !sym.name.to_lowercase().contains(&query) {
-                    continue;
-                }
-                let Ok(uri) = wasm_helpers::from_file_path(&sym.file_path) else {
+            for sym in results {
+                let file_id = sym.file.file_id(lsp_db);
+                let Some(path) = lsp_db.file_id_to_path(file_id) else {
                     continue;
                 };
-                let range = lsp_db
-                    .get_file(&sym.file_path)
-                    .map(|source_file| {
-                        let text = source_file.text(lsp_db.db());
-                        baml_project::position::span_to_lsp_range(text, &sym.span)
-                    })
-                    .unwrap_or_default();
+                let Ok(uri) = wasm_helpers::from_file_path(path) else {
+                    continue;
+                };
+                let text = sym.file.text(lsp_db);
+                let range = super::diagnostics::span_to_lsp_range(
+                    sym.name_span,
+                    text,
+                    &compute_line_starts(text),
+                    super::diagnostics::PositionEncoding::UTF16,
+                );
 
                 symbols.push(lsp_types::WorkspaceSymbol {
                     name: sym.name,
-                    kind: to_lsp_symbol_kind(sym.kind),
+                    kind: definition_kind_to_lsp_symbol_kind(sym.kind),
                     tags: None,
-                    container_name: None,
+                    container_name: sym.container_name,
                     location: lsp_types::OneOf::Left(lsp_types::Location { uri, range }),
                     data: None,
                 });
@@ -736,34 +690,35 @@ impl BexLspRequest for BexMulitProject {
         &self,
         params: lsp_request_params!("textDocument/documentSymbol"),
     ) -> Result<lsp_request_result!("textDocument/documentSymbol"), LspError> {
-        fn convert_symbol(
-            sym: &baml_db::baml_compiler_hir::FileSymbol,
+        fn convert_outline_item(
+            item: &baml_lsp2_actions::OutlineItem,
             text: &str,
+            line_starts: &[u32],
+            encoding: super::diagnostics::PositionEncoding,
         ) -> lsp_types::DocumentSymbol {
-            let range = baml_project::position::text_range_to_lsp_range(text, sym.range);
-            let selection_range =
-                baml_project::position::text_range_to_lsp_range(text, sym.selection_range);
+            let range =
+                super::diagnostics::span_to_lsp_range(item.name_span, text, line_starts, encoding);
 
-            let children = if sym.children.is_empty() {
+            let children = if item.children.is_empty() {
                 None
             } else {
                 Some(
-                    sym.children
+                    item.children
                         .iter()
-                        .map(|child| convert_symbol(child, text))
+                        .map(|child| convert_outline_item(child, text, line_starts, encoding))
                         .collect(),
                 )
             };
 
             #[allow(deprecated)]
             lsp_types::DocumentSymbol {
-                name: sym.name.clone(),
-                kind: to_lsp_symbol_kind(sym.kind),
+                name: item.name.clone(),
+                kind: definition_kind_to_lsp_symbol_kind(item.kind),
                 detail: None,
                 tags: None,
                 deprecated: None,
                 range,
-                selection_range,
+                selection_range: range,
                 children,
             }
         }
@@ -779,11 +734,13 @@ impl BexLspRequest for BexMulitProject {
         };
 
         let text = source_file.text(lsp_db);
-        let file_symbols = baml_db::baml_compiler_hir::list_file_symbols(lsp_db, source_file);
+        let line_starts = compute_line_starts(text);
+        let encoding = self.position_encoding;
+        let outline = baml_lsp2_actions::file_outline(lsp_db, source_file);
 
-        let symbols: Vec<_> = file_symbols
+        let symbols: Vec<_> = outline
             .iter()
-            .map(|sym| convert_symbol(sym, text))
+            .map(|item| convert_outline_item(item, text, &line_starts, encoding))
             .collect();
 
         if symbols.is_empty() {
@@ -856,21 +813,36 @@ impl BexLspRequest for BexMulitProject {
     }
 }
 
-fn to_lsp_symbol_kind(kind: baml_project::SymbolKind) -> lsp_types::SymbolKind {
-    use baml_project::SymbolKind;
+/// Convert a compiler2 `DefinitionKind` to an LSP `SymbolKind`.
+///
+/// Used by the `textDocument/documentSymbol` and `workspace/symbol` handlers
+/// that call `baml_lsp2_actions::file_outline` / `search_symbols`.
+fn definition_kind_to_lsp_symbol_kind(
+    kind: baml_lsp2_actions::DefinitionKind,
+) -> lsp_types::SymbolKind {
+    use baml_lsp2_actions::DefinitionKind;
     match kind {
-        SymbolKind::Function => lsp_types::SymbolKind::FUNCTION,
-        SymbolKind::Class => lsp_types::SymbolKind::CLASS,
-        SymbolKind::Enum => lsp_types::SymbolKind::ENUM,
-        SymbolKind::TypeAlias => lsp_types::SymbolKind::CLASS,
-        SymbolKind::Client => lsp_types::SymbolKind::STRUCT,
-        SymbolKind::Test => lsp_types::SymbolKind::METHOD,
-        SymbolKind::Generator => lsp_types::SymbolKind::INTERFACE,
-        SymbolKind::TemplateString => lsp_types::SymbolKind::FUNCTION,
-        SymbolKind::RetryPolicy => lsp_types::SymbolKind::STRUCT,
-        SymbolKind::Field => lsp_types::SymbolKind::FIELD,
-        SymbolKind::EnumVariant => lsp_types::SymbolKind::ENUM_MEMBER,
+        DefinitionKind::Function => lsp_types::SymbolKind::FUNCTION,
+        DefinitionKind::Class => lsp_types::SymbolKind::CLASS,
+        DefinitionKind::Enum => lsp_types::SymbolKind::ENUM,
+        DefinitionKind::TypeAlias => lsp_types::SymbolKind::CLASS,
+        DefinitionKind::Client => lsp_types::SymbolKind::STRUCT,
+        DefinitionKind::Test => lsp_types::SymbolKind::METHOD,
+        DefinitionKind::Generator => lsp_types::SymbolKind::INTERFACE,
+        DefinitionKind::TemplateString => lsp_types::SymbolKind::FUNCTION,
+        DefinitionKind::RetryPolicy => lsp_types::SymbolKind::STRUCT,
+        DefinitionKind::Field => lsp_types::SymbolKind::FIELD,
+        DefinitionKind::Method => lsp_types::SymbolKind::METHOD,
+        DefinitionKind::Variant => lsp_types::SymbolKind::ENUM_MEMBER,
+        // Locals don't appear in the outline but handle them gracefully.
+        DefinitionKind::Binding | DefinitionKind::Parameter => lsp_types::SymbolKind::VARIABLE,
     }
+}
+
+/// Alias for the `compute_line_starts` helper from the diagnostics module.
+#[inline]
+fn compute_line_starts(source: &str) -> Vec<u32> {
+    super::diagnostics::compute_line_starts(source)
 }
 
 impl BexMulitProject {

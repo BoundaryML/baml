@@ -57,6 +57,22 @@ pub struct Project {
     pub files: Vec<SourceFile>,
 }
 
+/// Input: compiler2-only extra source files.
+///
+/// Holds builtin stub files (`.baml`) for the compiler2 pipeline that must NOT
+/// be visible to the v1 compiler. These are files like `containers.baml`,
+/// `env.baml`, etc. that use compiler2-specific syntax (generic type parameters,
+/// `$rust_type`, etc.) which the v1 parser cannot handle.
+///
+/// `baml_compiler2_hir` queries (`namespace_items`, `package_items`) use a
+/// combined view: `project.files()` (user + v1 builtins) ∪ `compiler2_extra_files.files()`.
+#[salsa::input]
+pub struct Compiler2ExtraFiles {
+    /// Compiler2-only source files (e.g., `baml_builtins2` stubs).
+    #[returns(ref)]
+    pub files: Vec<SourceFile>,
+}
+
 /// Helper to create a source file in the database
 pub fn create_source_file(
     db: &dyn salsa::Database,

@@ -24,7 +24,7 @@ baml_compiler_diagnostics = { workspace = true }
 baml_compiler_emit = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
-baml_lsp_actions = { workspace = true }
+baml_lsp2_actions = { workspace = true }
 baml_project = { workspace = true }
 baml_workspace = { workspace = true }
 bex_engine = { workspace = true }

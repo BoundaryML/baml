@@ -65,7 +65,7 @@ pub(crate) fn draw(frame: &mut Frame, app: &App) {
     }
 
     constraints.push(Constraint::Min(0)); // Content
-    constraints.push(Constraint::Length(3)); // Status bar
+    constraints.push(Constraint::Length(6)); // Status bar (4 text lines + 2 border rows)
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -193,26 +193,20 @@ fn draw_phase_tabs(frame: &mut Frame, area: Rect, app: &App) {
 fn draw_rebuild_banner(frame: &mut Frame, area: Rect, app: &App) {
     let (message, style) = match app.rebuild_state() {
         RebuildState::Idle => ("".to_string(), Style::default()),
-        RebuildState::Pending => (
-            "⚡ Compiler source changed! Press [Enter] to rebuild, [Esc] to dismiss".to_string(),
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        ),
         RebuildState::Building => (
             "🔨 Building... (this may take a moment)".to_string(),
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         ),
-        RebuildState::Success => (
-            "✓ Build successful! Restarting...".to_string(),
+        RebuildState::ReadyToSwap => (
+            "✓ Build successful! Press [Enter] to swap to new binary, [Esc] to dismiss".to_string(),
             Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
         ),
         RebuildState::Failed(error) => (
-            format!("✗ Build failed: {}", error),
+            format!("✗ Build failed: {}  [Esc] to dismiss", error),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ),
     };
@@ -273,6 +267,18 @@ fn draw_single_view(frame: &mut Frame, area: Rect, app: &App) {
     // Special handling for THIR interactive mode
     if phase == CompilerPhase::Thir && app.thir_display_mode() == ThirDisplayMode::Interactive {
         draw_thir_interactive_view(frame, area, app);
+        return;
+    }
+
+    // HIR2 column browser
+    if phase == CompilerPhase::Hir2 && app.hir2_column_active() {
+        draw_hir2_column_view(frame, area, app);
+        return;
+    }
+
+    // TIR2 column browser
+    if phase == CompilerPhase::Tir2 && app.tir2_column_active() {
+        draw_tir2_column_view(frame, area, app);
         return;
     }
 
@@ -364,6 +370,391 @@ fn draw_thir_interactive_view(frame: &mut Frame, area: Rect, app: &App) {
         .scroll((app.scroll_offset(), 0));
 
     frame.render_widget(paragraph, area);
+}
+
+/// Draw the HIR2 column browser (macOS Finder-style Miller columns).
+fn draw_tir2_column_view(frame: &mut Frame, area: Rect, app: &App) {
+    let data = app.tir2_column_data();
+    let state = app.tir2_column_state();
+    let view = ColumnView::from_tir2(data, state);
+    draw_column_browser(frame, area, "TIR2", &view);
+}
+
+fn draw_hir2_column_view(frame: &mut Frame, area: Rect, app: &App) {
+    let data = app.hir2_column_data();
+    let state = app.hir2_column_state();
+    let view = ColumnView::from_hir2(data, state);
+    draw_column_browser(frame, area, "HIR2", &view);
+}
+
+// ── Generic Column Browser ──────────────────────────────────────────────────
+
+/// Type-erased column browser view. Built from either HIR2 or TIR2 data.
+struct ColumnView<'a> {
+    packages: Vec<ColPkgView<'a>>,
+    active_column: usize,
+    selected: [usize; 3],
+    detail_scroll: usize,
+}
+
+struct ColPkgView<'a> {
+    name: &'a str,
+    namespace: &'a str,
+    files: Vec<ColFileView<'a>>,
+    namespace_summary: &'a [String],
+}
+
+struct ColFileView<'a> {
+    name: &'a str,
+    summary: &'a str,
+    items: Vec<ColItemView<'a>>,
+    detail_lines: &'a [String],
+    error_count: usize,
+}
+
+struct ColItemView<'a> {
+    name: &'a str,
+    kind: &'a str,
+    signature: &'a str,
+    detail_lines: Vec<crate::compiler::DetailLine>,
+    has_errors: bool,
+}
+
+impl<'a> ColumnView<'a> {
+    fn from_hir2(
+        data: &'a crate::compiler::Hir2ColumnData,
+        state: &'a crate::compiler::Hir2ColumnState,
+    ) -> Self {
+        Self {
+            packages: data
+                .packages
+                .iter()
+                .map(|p| ColPkgView {
+                    name: &p.name,
+                    namespace: &p.namespace,
+                    namespace_summary: &p.namespace_summary,
+                    files: p
+                        .files
+                        .iter()
+                        .map(|f| ColFileView {
+                            name: &f.name,
+                            summary: &f.summary,
+                            detail_lines: &f.detail_lines,
+                            error_count: f.error_count,
+                            items: f
+                                .items
+                                .iter()
+                                .map(|i| ColItemView {
+                                    name: &i.name,
+                                    kind: &i.kind,
+                                    signature: &i.signature,
+                                    detail_lines: i
+                                        .detail_lines
+                                        .iter()
+                                        .map(|s| crate::compiler::plain(s.clone()))
+                                        .collect(),
+                                    has_errors: i.has_errors,
+                                })
+                                .collect(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+            active_column: state.active_column,
+            selected: state.selected,
+            detail_scroll: state.detail_scroll,
+        }
+    }
+
+    fn from_tir2(
+        data: &'a crate::compiler::Tir2ColumnData,
+        state: &'a crate::compiler::Tir2ColumnState,
+    ) -> Self {
+        Self {
+            packages: data
+                .packages
+                .iter()
+                .map(|p| ColPkgView {
+                    name: &p.name,
+                    namespace: &p.namespace,
+                    namespace_summary: &p.namespace_summary,
+                    files: p
+                        .files
+                        .iter()
+                        .map(|f| ColFileView {
+                            name: &f.name,
+                            summary: &f.summary,
+                            detail_lines: &f.detail_lines,
+                            error_count: f.error_count,
+                            items: f
+                                .items
+                                .iter()
+                                .map(|i| ColItemView {
+                                    name: &i.name,
+                                    kind: &i.kind,
+                                    signature: &i.signature,
+                                    detail_lines: i.detail_lines.clone(),
+                                    has_errors: i.has_errors,
+                                })
+                                .collect(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+            active_column: state.active_column,
+            selected: state.selected,
+            detail_scroll: state.detail_scroll,
+        }
+    }
+}
+
+fn draw_column_browser(frame: &mut Frame, area: Rect, phase_label: &str, view: &ColumnView) {
+    if view.packages.is_empty() {
+        let paragraph = Paragraph::new("No packages found").block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!("{phase_label} Browser")),
+        );
+        frame.render_widget(paragraph, area);
+        return;
+    }
+
+    // Layout: 3 list columns + 1 detail pane
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(22), // packages
+            Constraint::Length(28), // files
+            Constraint::Length(30), // items
+            Constraint::Min(20),    // detail
+        ])
+        .split(area);
+
+    let selected_fg = Color::Black;
+    let selected_bg = Color::Cyan;
+    let active_border = Style::default().fg(Color::Yellow);
+    let normal_border = Style::default().fg(Color::DarkGray);
+
+    // ── Column 0: Packages ──────────────────────────────────────
+    {
+        let mut lines: Vec<Line> = Vec::new();
+        for (i, pkg) in view.packages.iter().enumerate() {
+            let is_selected = i == view.selected[0];
+            let has_errors = pkg.files.iter().any(|f| f.error_count > 0);
+            let label = format!("{} {}", pkg.name, pkg.namespace);
+            let style = if is_selected {
+                Style::default()
+                    .fg(selected_fg)
+                    .bg(selected_bg)
+                    .add_modifier(Modifier::BOLD)
+            } else if has_errors {
+                Style::default().fg(Color::Red)
+            } else {
+                Style::default()
+            };
+            let mut spans = vec![Span::styled(label, style)];
+            if has_errors && !is_selected {
+                let total: usize = pkg.files.iter().map(|f| f.error_count).sum();
+                spans.push(Span::styled(
+                    format!(" ({total})"),
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ));
+            }
+            lines.push(Line::from(spans));
+        }
+        let border = if view.active_column == 0 {
+            active_border
+        } else {
+            normal_border
+        };
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title("Package")
+            .border_style(border);
+        let paragraph = Paragraph::new(lines).block(block);
+        frame.render_widget(paragraph, chunks[0]);
+    }
+
+    // ── Column 1: Files ─────────────────────────────────────────
+    let pkg = &view.packages[view.selected[0]];
+    {
+        let mut lines: Vec<Line> = Vec::new();
+        for (i, file) in pkg.files.iter().enumerate() {
+            let is_selected = i == view.selected[1];
+            let has_errors = file.error_count > 0;
+            let name_style = if is_selected {
+                Style::default()
+                    .fg(selected_fg)
+                    .bg(selected_bg)
+                    .add_modifier(Modifier::BOLD)
+            } else if has_errors {
+                Style::default().fg(Color::Red)
+            } else {
+                Style::default()
+            };
+            let mut spans = vec![Span::styled(file.name.to_string(), name_style)];
+            if has_errors {
+                let err_style = if is_selected {
+                    Style::default()
+                        .fg(Color::Red)
+                        .bg(selected_bg)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                };
+                spans.push(Span::styled(format!(" ({})", file.error_count), err_style));
+            }
+            lines.push(Line::from(spans));
+            if is_selected {
+                lines.push(Line::from(Span::styled(
+                    format!("  {}", file.summary),
+                    Style::default().fg(Color::DarkGray),
+                )));
+            }
+        }
+        let border = if view.active_column == 1 {
+            active_border
+        } else {
+            normal_border
+        };
+        let title = format!("Files ({})", pkg.files.len());
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(title)
+            .border_style(border);
+        let paragraph = Paragraph::new(lines).block(block);
+        frame.render_widget(paragraph, chunks[1]);
+    }
+
+    // ── Column 2: Items ─────────────────────────────────────────
+    let file = if !pkg.files.is_empty() {
+        Some(&pkg.files[view.selected[1]])
+    } else {
+        None
+    };
+    {
+        let mut lines: Vec<Line> = Vec::new();
+        if let Some(f) = file {
+            for (i, item) in f.items.iter().enumerate() {
+                let is_selected = i == view.selected[2];
+                let kind_style = if is_selected {
+                    Style::default().fg(selected_fg).bg(selected_bg)
+                } else if item.has_errors {
+                    Style::default().fg(Color::Red)
+                } else {
+                    Style::default().fg(Color::Green)
+                };
+                let name_style = if is_selected {
+                    Style::default()
+                        .fg(selected_fg)
+                        .bg(selected_bg)
+                        .add_modifier(Modifier::BOLD)
+                } else if item.has_errors {
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+                let sig_style = if is_selected {
+                    Style::default().fg(selected_fg).bg(selected_bg)
+                } else if item.has_errors {
+                    Style::default().fg(Color::Red)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                };
+                let mut spans = vec![
+                    Span::styled(format!("{:<5} ", item.kind), kind_style),
+                    Span::styled(item.name.to_string(), name_style),
+                ];
+                if !item.signature.is_empty() {
+                    spans.push(Span::styled(format!(" {}", item.signature), sig_style));
+                }
+                lines.push(Line::from(spans));
+            }
+        }
+        let border = if view.active_column == 2 {
+            active_border
+        } else {
+            normal_border
+        };
+        let item_count = file.map(|f| f.items.len()).unwrap_or(0);
+        let title = format!("Items ({})", item_count);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(title)
+            .border_style(border);
+        let paragraph = Paragraph::new(lines).block(block);
+        frame.render_widget(paragraph, chunks[2]);
+    }
+
+    // ── Column 3: Detail (scrollable) ───────────────────────────
+    {
+        use crate::compiler::DetailSpan;
+
+        let rich_lines: Vec<crate::compiler::DetailLine> = match view.active_column {
+            0 => pkg
+                .namespace_summary
+                .iter()
+                .map(|s| crate::compiler::plain(s.clone()))
+                .collect(),
+            1 => file
+                .map(|f| {
+                    f.detail_lines
+                        .iter()
+                        .map(|s| crate::compiler::plain(s.clone()))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            _ => file
+                .and_then(|f| f.items.get(view.selected[2]))
+                .map(|item| item.detail_lines.clone())
+                .unwrap_or_default(),
+        };
+
+        let total = rich_lines.len();
+        let visible_height = chunks[3].height.saturating_sub(2) as usize;
+        let scroll = view.detail_scroll.min(total.saturating_sub(1));
+
+        let title = if total > visible_height {
+            format!(
+                "Detail [{}-{}/{}]",
+                scroll + 1,
+                (scroll + visible_height).min(total),
+                total
+            )
+        } else {
+            "Detail".to_string()
+        };
+
+        let lines: Vec<Line> = rich_lines
+            .iter()
+            .skip(scroll)
+            .take(visible_height)
+            .map(|detail_line| {
+                let spans: Vec<Span> = detail_line
+                    .iter()
+                    .map(|span| match span {
+                        DetailSpan::Code(s) => Span::raw(s.clone()),
+                        DetailSpan::TypeAnnotation(s) => {
+                            Span::styled(s.clone(), Style::default().fg(Color::DarkGray))
+                        }
+                        DetailSpan::Error(s) => {
+                            Span::styled(s.clone(), Style::default().fg(Color::Red))
+                        }
+                    })
+                    .collect();
+                Line::from(spans)
+            })
+            .collect();
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(title)
+            .border_style(Style::default().fg(Color::DarkGray));
+        let paragraph = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, chunks[3]);
+    }
 }
 
 fn draw_diff_view(frame: &mut Frame, area: Rect, app: &App) {
@@ -509,8 +900,13 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         ""
     };
 
-    // Show THIR-specific navigation help when in interactive mode
-    let line2 = if app.current_phase() == CompilerPhase::Thir
+    // Show context-specific navigation help
+    let in_column_browser = (app.current_phase() == CompilerPhase::Hir2
+        && app.hir2_column_active())
+        || (app.current_phase() == CompilerPhase::Tir2 && app.tir2_column_active());
+    let line2 = if in_column_browser {
+        "[jk/↑↓] Select  [hl/←→] Column  [PgUp/PgDn/Wheel] Scroll detail  [t] Text view  [Esc] Exit  |  [q] Quit"
+    } else if app.current_phase() == CompilerPhase::Thir
         && app.thir_display_mode() == ThirDisplayMode::Interactive
     {
         if app.thir_interactive_active() {
@@ -518,6 +914,10 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         } else {
             "Navigate: [←→] Phases  [↑↓] Scroll  [t] Activate cursor  [PgUp/PgDn] Page  |  [q/Ctrl+C] Quit"
         }
+    } else if app.current_phase() == CompilerPhase::Hir2
+        || app.current_phase() == CompilerPhase::Tir2
+    {
+        "Navigate: [←→] Phases  [↑↓] Scroll  [t] Column browser  |  [q/Ctrl+C] Quit"
     } else {
         "Navigate: [←→] Phases  [↑↓] Scroll  [PgUp/PgDn] Page  [Home] Top  [Wheel] Mouse  |  [q/Ctrl+C] Quit"
     };
@@ -570,10 +970,16 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App) {
         ))]
     };
 
+    let watcher_line = Line::from(Span::styled(
+        app.watcher_diagnostic_summary(),
+        Style::default().fg(Color::DarkGray),
+    ));
+
     let text = vec![
         Line::from(line1_parts),
         Line::from(line2.to_string()),
         Line::from(line3_parts),
+        watcher_line,
     ];
 
     let paragraph = Paragraph::new(text)

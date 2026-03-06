@@ -39,12 +39,10 @@ const REBUILD_STATUS_DURATION: Duration = Duration::from_secs(5);
 pub(crate) enum RebuildState {
     /// No rebuild in progress
     Idle,
-    /// Rebuild detected, waiting for user confirmation or auto-rebuild
-    Pending,
-    /// Currently rebuilding
+    /// Currently rebuilding (auto-triggered on source change)
     Building,
-    /// Rebuild completed successfully, will restart
-    Success,
+    /// Build succeeded, waiting for user to press Enter to swap to new binary
+    ReadyToSwap,
     /// Rebuild failed with error
     Failed(String),
 }
@@ -71,6 +69,10 @@ pub(crate) struct App {
     last_compiled_files: HashMap<PathBuf, String>,
     /// Whether we are in THIR interactive sub-mode (cursor navigation active)
     thir_interactive_active: bool,
+    /// Whether the HIR2 column browser is active (default: true when on HIR2 tab)
+    hir2_column_active: bool,
+    /// Whether the TIR2 column browser is active (default: true when on TIR2 tab)
+    tir2_column_active: bool,
     /// Timestamp when content was last copied to clipboard (for visual feedback)
     last_copy_time: Option<Instant>,
     /// Error message from last clipboard operation
@@ -125,6 +127,8 @@ impl App {
             visualization_mode: VisualizationMode::Diff, // Start in Diff mode
             last_compiled_files: initial_files,
             thir_interactive_active: false,
+            hir2_column_active: true,
+            tir2_column_active: true,
             last_copy_time: None,
             clipboard_error: None,
             rebuild_state: RebuildState::Idle,
@@ -146,9 +150,7 @@ impl App {
                         self.reload_file()?;
                     }
                     ChangeKind::CompilerSource => {
-                        // Compiler source changed - trigger rebuild
-                        self.rebuild_state = RebuildState::Pending;
-                        self.rebuild_state_time = Some(Instant::now());
+                        self.trigger_rebuild();
                     }
                 }
             }
@@ -159,15 +161,9 @@ impl App {
             {
                 match result {
                     BuildResult::Success => {
-                        self.rebuild_state = RebuildState::Success;
+                        self.rebuild_state = RebuildState::ReadyToSwap;
                         self.rebuild_state_time = Some(Instant::now());
                         self.build_result_rx = None;
-
-                        // Draw one more frame to show success, then restart
-                        terminal.draw(|frame| ui::draw(frame, self))?;
-
-                        // Restart by exec'ing into the new binary
-                        self.exec_restart();
                     }
                     BuildResult::Failed(error) => {
                         self.rebuild_state = RebuildState::Failed(error);
@@ -336,11 +332,15 @@ impl App {
             && self.compiler.thir_display_mode() == ThirDisplayMode::Interactive
             && self.thir_interactive_active;
 
+        // Check if we're in HIR2 or TIR2 column browser
+        let in_hir2_columns = self.current_phase == CompilerPhase::Hir2 && self.hir2_column_active;
+        let in_tir2_columns = self.current_phase == CompilerPhase::Tir2 && self.tir2_column_active;
+        let in_column_browser = in_hir2_columns || in_tir2_columns;
+
         // Check if we're on the VM Runner tab
         let in_vm_runner = self.current_phase == CompilerPhase::VmRunner;
 
-        // Check if rebuild is pending
-        let rebuild_pending = matches!(self.rebuild_state, RebuildState::Pending);
+        let ready_to_swap = matches!(self.rebuild_state, RebuildState::ReadyToSwap);
 
         match (key.code, key.modifiers) {
             // Quit on Ctrl+C or 'q'
@@ -365,49 +365,58 @@ impl App {
             (KeyCode::Char('r'), KeyModifiers::NONE) => {
                 self.recompile();
             }
-            // Trigger compiler rebuild on 'R' (Shift+R) or Enter when rebuild pending
+            // Trigger compiler rebuild on 'R' (Shift+R)
             (KeyCode::Char('R'), KeyModifiers::SHIFT) => {
                 if self.watcher.is_watching_compiler() {
                     self.trigger_rebuild();
                 }
             }
-            (KeyCode::Enter, KeyModifiers::NONE) if rebuild_pending => {
-                self.trigger_rebuild();
+            // Enter to swap to new binary when build is ready
+            (KeyCode::Enter, KeyModifiers::NONE) if ready_to_swap => {
+                self.exec_restart();
             }
-            // Dismiss rebuild pending with Escape
+            // Dismiss failed/ready-to-swap with Escape
             (KeyCode::Esc, KeyModifiers::NONE) => {
-                if rebuild_pending {
+                if ready_to_swap || matches!(self.rebuild_state, RebuildState::Failed(_)) {
                     self.rebuild_state = RebuildState::Idle;
                     self.rebuild_state_time = None;
                 } else if self.thir_interactive_active {
                     self.thir_interactive_active = false;
+                } else if in_hir2_columns {
+                    self.hir2_column_active = false;
+                } else if in_tir2_columns {
+                    self.tir2_column_active = false;
                 }
             }
-            // Navigate phases with left/right arrow keys (only when not in THIR interactive mode)
+            // Navigate phases with left/right arrow keys (only when not in interactive modes)
             (KeyCode::Left, _) => {
                 if in_thir_interactive {
                     self.thir_cursor_left();
+                } else if in_column_browser {
+                    self.column_browser_left();
                 } else {
                     self.current_phase = self.current_phase.prev();
                     self.scroll_offset = 0;
-                    // Exit interactive mode when switching tabs
                     self.thir_interactive_active = false;
                 }
             }
             (KeyCode::Right, _) => {
                 if in_thir_interactive {
                     self.thir_cursor_right();
+                } else if in_column_browser {
+                    self.column_browser_right();
                 } else {
                     self.current_phase = self.current_phase.next();
                     self.scroll_offset = 0;
-                    // Exit interactive mode when switching tabs
                     self.thir_interactive_active = false;
                 }
             }
-            // Up/Down: scroll normally, or move cursor in THIR interactive mode, or select function in VM Runner
+            // Up/Down: scroll or navigate in interactive modes
             (KeyCode::Up, _) => {
                 if in_thir_interactive {
                     self.thir_cursor_up();
+                } else if in_column_browser {
+                    self.column_browser_up();
                 } else if in_vm_runner {
                     self.vm_runner_select_prev();
                 } else {
@@ -417,43 +426,61 @@ impl App {
             (KeyCode::Down, _) => {
                 if in_thir_interactive {
                     self.thir_cursor_down();
+                } else if in_column_browser {
+                    self.column_browser_down();
                 } else if in_vm_runner {
                     self.vm_runner_select_next();
                 } else {
                     self.scroll_offset = self.scroll_offset.saturating_add(1);
                 }
             }
-            // Page up/down
+            // Page up/down — scroll detail pane when in column browser
             (KeyCode::PageUp, _) => {
-                self.scroll_offset = self.scroll_offset.saturating_sub(10);
+                if in_column_browser {
+                    self.column_browser_detail_scroll(-10);
+                } else {
+                    self.scroll_offset = self.scroll_offset.saturating_sub(10);
+                }
             }
             (KeyCode::PageDown, _) => {
-                self.scroll_offset = self.scroll_offset.saturating_add(10);
+                if in_column_browser {
+                    self.column_browser_detail_scroll(10);
+                } else {
+                    self.scroll_offset = self.scroll_offset.saturating_add(10);
+                }
             }
             // Home/End
             (KeyCode::Home, _) => {
-                self.scroll_offset = 0;
+                if in_column_browser {
+                    self.column_browser_detail_scroll_home();
+                } else {
+                    self.scroll_offset = 0;
+                }
             }
             (KeyCode::Char('m'), _) => {
                 self.toggle_visualization_mode();
             }
-            // THIR: 't' enters interactive mode when on THIR tab with Interactive display
+            // 't' toggles interactive modes
             (KeyCode::Char('t'), KeyModifiers::NONE) => {
-                if self.current_phase == CompilerPhase::Thir {
+                if self.current_phase == CompilerPhase::Hir2 {
+                    self.hir2_column_active = !self.hir2_column_active;
+                } else if self.current_phase == CompilerPhase::Tir2 {
+                    self.tir2_column_active = !self.tir2_column_active;
+                } else if self.current_phase == CompilerPhase::Thir {
                     if self.compiler.thir_display_mode() == ThirDisplayMode::Interactive {
-                        // Toggle interactive sub-mode
                         self.thir_interactive_active = !self.thir_interactive_active;
                     } else {
-                        // Switch to Interactive display mode and activate it
                         self.toggle_thir_display_mode();
                         self.thir_interactive_active = true;
                     }
                 }
             }
-            // Vim-style cursor navigation in THIR interactive mode and VM Runner
+            // Vim-style cursor navigation
             (KeyCode::Char('j'), KeyModifiers::NONE) => {
                 if in_thir_interactive {
                     self.thir_cursor_down();
+                } else if in_column_browser {
+                    self.column_browser_down();
                 } else if in_vm_runner {
                     self.vm_runner_select_next();
                 }
@@ -461,6 +488,8 @@ impl App {
             (KeyCode::Char('k'), KeyModifiers::NONE) => {
                 if in_thir_interactive {
                     self.thir_cursor_up();
+                } else if in_column_browser {
+                    self.column_browser_up();
                 } else if in_vm_runner {
                     self.vm_runner_select_prev();
                 }
@@ -468,16 +497,20 @@ impl App {
             (KeyCode::Char('h'), KeyModifiers::NONE) => {
                 if in_thir_interactive {
                     self.thir_cursor_left();
+                } else if in_column_browser {
+                    self.column_browser_left();
                 }
             }
             (KeyCode::Char('l'), KeyModifiers::NONE) => {
                 if in_thir_interactive {
                     self.thir_cursor_right();
+                } else if in_column_browser {
+                    self.column_browser_right();
                 }
             }
-            // Execute function on Enter when on VM Runner tab (and not rebuild pending)
+            // Execute function on Enter when on VM Runner tab
             (KeyCode::Enter, KeyModifiers::NONE) => {
-                if in_vm_runner && !rebuild_pending {
+                if in_vm_runner {
                     self.vm_runner_execute();
                 }
             }
@@ -505,12 +538,23 @@ impl App {
     }
 
     fn handle_mouse_event(&mut self, mouse: crossterm::event::MouseEvent) {
+        let in_column_browser = (self.current_phase == CompilerPhase::Hir2
+            && self.hir2_column_active)
+            || (self.current_phase == CompilerPhase::Tir2 && self.tir2_column_active);
         match mouse.kind {
             MouseEventKind::ScrollUp => {
-                self.scroll_offset = self.scroll_offset.saturating_sub(3);
+                if in_column_browser {
+                    self.column_browser_detail_scroll(-3);
+                } else {
+                    self.scroll_offset = self.scroll_offset.saturating_sub(3);
+                }
             }
             MouseEventKind::ScrollDown => {
-                self.scroll_offset = self.scroll_offset.saturating_add(3);
+                if in_column_browser {
+                    self.column_browser_detail_scroll(3);
+                } else {
+                    self.scroll_offset = self.scroll_offset.saturating_add(3);
+                }
             }
             _ => {}
         }
@@ -607,6 +651,30 @@ impl App {
         self.thir_interactive_active
     }
 
+    pub(crate) fn hir2_column_active(&self) -> bool {
+        self.hir2_column_active
+    }
+
+    pub(crate) fn hir2_column_data(&self) -> &crate::compiler::Hir2ColumnData {
+        self.compiler.hir2_column_data()
+    }
+
+    pub(crate) fn hir2_column_state(&self) -> &crate::compiler::Hir2ColumnState {
+        self.compiler.hir2_column_state()
+    }
+
+    pub(crate) fn tir2_column_active(&self) -> bool {
+        self.tir2_column_active
+    }
+
+    pub(crate) fn tir2_column_data(&self) -> &crate::compiler::Tir2ColumnData {
+        self.compiler.tir2_column_data()
+    }
+
+    pub(crate) fn tir2_column_state(&self) -> &crate::compiler::Tir2ColumnState {
+        self.compiler.tir2_column_state()
+    }
+
     /// Get the THIR interactive state for rendering
     pub(crate) fn thir_interactive_state(&self) -> &crate::compiler::ThirInteractiveState {
         self.compiler.thir_interactive_state()
@@ -662,6 +730,205 @@ impl App {
             .unwrap_or(0);
         if state.cursor_col + 1 < max_col {
             state.cursor_col += 1;
+        }
+    }
+
+    // ── HIR2 Column Navigation ─────────────────────────────────────
+
+    fn hir2_column_up(&mut self) {
+        let state = self.compiler.hir2_column_state_mut();
+        let col = state.active_column;
+        if state.selected[col] > 0 {
+            state.selected[col] -= 1;
+            state.detail_scroll = 0;
+            // Reset downstream selections when changing upstream
+            for i in (col + 1)..3 {
+                state.selected[i] = 0;
+            }
+        }
+    }
+
+    fn hir2_column_down(&mut self) {
+        let data = self.compiler.hir2_column_data().clone();
+        let state = self.compiler.hir2_column_state_mut();
+        let col = state.active_column;
+        let max = match col {
+            0 => data.packages.len(),
+            1 => data
+                .packages
+                .get(state.selected[0])
+                .map(|p| p.files.len())
+                .unwrap_or(0),
+            2 => data
+                .packages
+                .get(state.selected[0])
+                .and_then(|p| p.files.get(state.selected[1]))
+                .map(|f| f.items.len())
+                .unwrap_or(0),
+            _ => 0,
+        };
+        if max > 0 && state.selected[col] + 1 < max {
+            state.selected[col] += 1;
+            state.detail_scroll = 0;
+            for i in (col + 1)..3 {
+                state.selected[i] = 0;
+            }
+        }
+    }
+
+    fn hir2_column_left(&mut self) {
+        let state = self.compiler.hir2_column_state_mut();
+        if state.active_column > 0 {
+            state.active_column -= 1;
+            state.detail_scroll = 0;
+        }
+    }
+
+    fn hir2_column_right(&mut self) {
+        let data = self.compiler.hir2_column_data().clone();
+        let state = self.compiler.hir2_column_state_mut();
+        let can_go_right = match state.active_column {
+            0 => !data.packages.is_empty() && !data.packages[state.selected[0]].files.is_empty(),
+            1 => data
+                .packages
+                .get(state.selected[0])
+                .and_then(|p| p.files.get(state.selected[1]))
+                .map(|f| !f.items.is_empty())
+                .unwrap_or(false),
+            _ => false,
+        };
+        if can_go_right && state.active_column < 2 {
+            state.active_column += 1;
+            state.detail_scroll = 0;
+        }
+    }
+
+    // ── Unified column browser helpers (delegates to HIR2 or TIR2) ──────────
+
+    fn column_browser_up(&mut self) {
+        if self.current_phase == CompilerPhase::Hir2 {
+            self.hir2_column_up();
+        } else {
+            self.tir2_column_up();
+        }
+    }
+
+    fn column_browser_down(&mut self) {
+        if self.current_phase == CompilerPhase::Hir2 {
+            self.hir2_column_down();
+        } else {
+            self.tir2_column_down();
+        }
+    }
+
+    fn column_browser_left(&mut self) {
+        if self.current_phase == CompilerPhase::Hir2 {
+            self.hir2_column_left();
+        } else {
+            self.tir2_column_left();
+        }
+    }
+
+    fn column_browser_right(&mut self) {
+        if self.current_phase == CompilerPhase::Hir2 {
+            self.hir2_column_right();
+        } else {
+            self.tir2_column_right();
+        }
+    }
+
+    fn column_browser_detail_scroll(&mut self, delta: i32) {
+        if self.current_phase == CompilerPhase::Hir2 {
+            let state = self.compiler.hir2_column_state_mut();
+            if delta > 0 {
+                state.detail_scroll = state.detail_scroll.saturating_add(delta as usize);
+            } else {
+                state.detail_scroll = state.detail_scroll.saturating_sub((-delta) as usize);
+            }
+        } else {
+            let state = self.compiler.tir2_column_state_mut();
+            if delta > 0 {
+                state.detail_scroll = state.detail_scroll.saturating_add(delta as usize);
+            } else {
+                state.detail_scroll = state.detail_scroll.saturating_sub((-delta) as usize);
+            }
+        }
+    }
+
+    fn column_browser_detail_scroll_home(&mut self) {
+        if self.current_phase == CompilerPhase::Hir2 {
+            self.compiler.hir2_column_state_mut().detail_scroll = 0;
+        } else {
+            self.compiler.tir2_column_state_mut().detail_scroll = 0;
+        }
+    }
+
+    // ── TIR2 column browser navigation ──────────────────────────────────────
+
+    fn tir2_column_up(&mut self) {
+        let state = self.compiler.tir2_column_state_mut();
+        let col = state.active_column;
+        if state.selected[col] > 0 {
+            state.selected[col] -= 1;
+            state.detail_scroll = 0;
+            for i in (col + 1)..3 {
+                state.selected[i] = 0;
+            }
+        }
+    }
+
+    fn tir2_column_down(&mut self) {
+        let data = self.compiler.tir2_column_data().clone();
+        let state = self.compiler.tir2_column_state_mut();
+        let col = state.active_column;
+        let max = match col {
+            0 => data.packages.len(),
+            1 => data
+                .packages
+                .get(state.selected[0])
+                .map(|p| p.files.len())
+                .unwrap_or(0),
+            2 => data
+                .packages
+                .get(state.selected[0])
+                .and_then(|p| p.files.get(state.selected[1]))
+                .map(|f| f.items.len())
+                .unwrap_or(0),
+            _ => 0,
+        };
+        if max > 0 && state.selected[col] + 1 < max {
+            state.selected[col] += 1;
+            state.detail_scroll = 0;
+            for i in (col + 1)..3 {
+                state.selected[i] = 0;
+            }
+        }
+    }
+
+    fn tir2_column_left(&mut self) {
+        let state = self.compiler.tir2_column_state_mut();
+        if state.active_column > 0 {
+            state.active_column -= 1;
+            state.detail_scroll = 0;
+        }
+    }
+
+    fn tir2_column_right(&mut self) {
+        let data = self.compiler.tir2_column_data().clone();
+        let state = self.compiler.tir2_column_state_mut();
+        let can_go_right = match state.active_column {
+            0 => !data.packages.is_empty() && !data.packages[state.selected[0]].files.is_empty(),
+            1 => data
+                .packages
+                .get(state.selected[0])
+                .and_then(|p| p.files.get(state.selected[1]))
+                .map(|f| !f.items.is_empty())
+                .unwrap_or(false),
+            _ => false,
+        };
+        if can_go_right && state.active_column < 2 {
+            state.active_column += 1;
+            state.detail_scroll = 0;
         }
     }
 
@@ -811,5 +1078,10 @@ impl App {
     /// Get debug messages collected from the compiler
     pub(crate) fn debug_messages(&self) -> &[DebugMessage] {
         &self.debug_messages
+    }
+
+    /// Get watcher diagnostic summary for display in the UI
+    pub(crate) fn watcher_diagnostic_summary(&self) -> String {
+        self.watcher.diagnostic_summary()
     }
 }

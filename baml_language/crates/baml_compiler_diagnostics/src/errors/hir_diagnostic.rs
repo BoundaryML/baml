@@ -19,6 +19,21 @@ pub enum HirDiagnostic {
         second_span: Span,
     },
 
+    /// Duplicate method in a class.
+    DuplicateMethod {
+        class_name: String,
+        method_name: String,
+        first_span: Span,
+        second_span: Span,
+    },
+
+    /// Duplicate let-binding in the same scope.
+    DuplicateBinding {
+        name: String,
+        first_span: Span,
+        second_span: Span,
+    },
+
     /// Duplicate variant in an enum.
     DuplicateVariant {
         enum_name: String,

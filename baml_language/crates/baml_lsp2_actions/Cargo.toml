@@ -1,0 +1,19 @@
+[package]
+name = "baml_lsp2_actions"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_compiler2_ast = { workspace = true }
+baml_compiler2_hir = { workspace = true }
+baml_compiler2_tir = { workspace = true }
+baml_compiler_diagnostics = { workspace = true }
+baml_compiler_parser = { workspace = true }
+baml_compiler_syntax = { workspace = true }
+rowan = { workspace = true }
+salsa = { workspace = true }
+text-size = { workspace = true }

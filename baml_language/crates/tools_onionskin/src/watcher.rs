@@ -2,6 +2,7 @@ use std::{
     collections::HashSet,
     path::{Path, PathBuf},
     sync::mpsc::{Receiver, channel},
+    time::Instant,
 };
 
 use anyhow::Result;
@@ -35,6 +36,18 @@ pub(crate) enum ChangeKind {
     CompilerSource,
 }
 
+/// Diagnostic counters for debugging watcher issues
+#[derive(Debug, Default)]
+pub(crate) struct WatcherDiagnostics {
+    pub(crate) total_raw_events: usize,
+    pub(crate) baml_events: usize,
+    pub(crate) compiler_events: usize,
+    pub(crate) filtered_events: usize,
+    pub(crate) error_events: usize,
+    pub(crate) last_event_time: Option<Instant>,
+    pub(crate) last_event_paths: Vec<String>,
+}
+
 pub(crate) struct FileWatcher {
     #[allow(dead_code)]
     watcher: RecommendedWatcher,
@@ -43,6 +56,10 @@ pub(crate) struct FileWatcher {
     compiler_paths: HashSet<PathBuf>,
     /// Whether we're watching compiler sources
     watching_compiler: bool,
+    /// The path being watched (for diagnostics)
+    watched_path: PathBuf,
+    /// Diagnostic counters
+    pub(crate) diagnostics: WatcherDiagnostics,
 }
 
 impl FileWatcher {
@@ -99,29 +116,45 @@ impl FileWatcher {
             receiver: rx,
             compiler_paths,
             watching_compiler,
+            watched_path: path.as_ref().to_path_buf(),
+            diagnostics: WatcherDiagnostics::default(),
         })
     }
 
     /// Check for changes and return the type of change (if any)
-    pub(crate) fn check_for_changes(&self) -> Option<ChangeKind> {
-        // Collect all pending events
+    pub(crate) fn check_for_changes(&mut self) -> Option<ChangeKind> {
         let mut baml_changed = false;
         let mut compiler_changed = false;
 
         while let Ok(result) = self.receiver.try_recv() {
-            if let Ok(event) = result {
-                // Check if any affected path is a compiler source
-                for path in &event.paths {
-                    if self.is_compiler_path(path) {
-                        compiler_changed = true;
-                    } else if path.extension().is_some_and(|ext| ext == "baml") {
-                        baml_changed = true;
+            match result {
+                Ok(event) => {
+                    self.diagnostics.total_raw_events += 1;
+                    self.diagnostics.last_event_time = Some(Instant::now());
+                    self.diagnostics.last_event_paths = event
+                        .paths
+                        .iter()
+                        .map(|p| p.display().to_string())
+                        .collect();
+
+                    for path in &event.paths {
+                        if self.is_compiler_path(path) {
+                            compiler_changed = true;
+                            self.diagnostics.compiler_events += 1;
+                        } else if path.extension().is_some_and(|ext| ext == "baml") {
+                            baml_changed = true;
+                            self.diagnostics.baml_events += 1;
+                        } else {
+                            self.diagnostics.filtered_events += 1;
+                        }
                     }
+                }
+                Err(_) => {
+                    self.diagnostics.error_events += 1;
                 }
             }
         }
 
-        // Compiler changes take priority (trigger rebuild)
         if compiler_changed {
             Some(ChangeKind::CompilerSource)
         } else if baml_changed {
@@ -147,5 +180,27 @@ impl FileWatcher {
     /// Returns true if we're watching compiler sources for hot-reload
     pub(crate) fn is_watching_compiler(&self) -> bool {
         self.watching_compiler
+    }
+
+    pub(crate) fn watched_path(&self) -> &Path {
+        &self.watched_path
+    }
+
+    /// One-line diagnostic summary for the status bar
+    pub(crate) fn diagnostic_summary(&self) -> String {
+        let d = &self.diagnostics;
+        let age = d
+            .last_event_time
+            .map(|t| format!("{:.1}s ago", t.elapsed().as_secs_f64()))
+            .unwrap_or_else(|| "never".into());
+        format!(
+            "watch: {} | raw:{} baml:{} filt:{} err:{} | last:{}",
+            self.watched_path.display(),
+            d.total_raw_events,
+            d.baml_events,
+            d.filtered_events,
+            d.error_events,
+            age,
+        )
     }
 }

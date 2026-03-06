@@ -595,6 +595,29 @@ impl ToDiagnostic for HirDiagnostic {
             .with_primary(*second_span, "duplicate definition")
             .with_secondary(*first_span, "first definition here"),
 
+            HirDiagnostic::DuplicateMethod {
+                class_name,
+                method_name,
+                first_span,
+                second_span,
+            } => Diagnostic::error(
+                DiagnosticId::DuplicateMethod,
+                format!("Duplicate method `{method_name}` in class `{class_name}`"),
+            )
+            .with_primary(*second_span, "duplicate definition")
+            .with_secondary(*first_span, "first definition here"),
+
+            HirDiagnostic::DuplicateBinding {
+                name,
+                first_span,
+                second_span,
+            } => Diagnostic::error(
+                DiagnosticId::DuplicateBinding,
+                format!("Duplicate binding `{name}` in the same scope"),
+            )
+            .with_primary(*second_span, "duplicate binding")
+            .with_secondary(*first_span, "first binding here"),
+
             HirDiagnostic::DuplicateVariant {
                 enum_name,
                 variant_name,

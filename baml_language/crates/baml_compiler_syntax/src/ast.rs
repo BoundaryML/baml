@@ -169,6 +169,22 @@ impl UnionMemberParts {
         collect_postfix_modifiers(self.tokens.iter().map(SyntaxToken::kind))
     }
 
+    /// Count the number of `[]` array modifiers on this union member.
+    ///
+    /// For `int` returns 0, for `int[]` returns 1, for `int[][]` returns 2.
+    pub fn array_depth(&self) -> usize {
+        self.postfix_modifiers()
+            .iter()
+            .filter(|m| **m == TypePostFixModifier::Array)
+            .count()
+    }
+
+    /// Check if this union member has a trailing `?` (optional modifier).
+    pub fn is_optional(&self) -> bool {
+        self.postfix_modifiers()
+            .contains(&TypePostFixModifier::Optional)
+    }
+
     /// Check if this member contains a `STRING_LITERAL` child node.
     pub fn has_string_literal(&self) -> bool {
         self.child_nodes
@@ -233,6 +249,14 @@ impl UnionMemberParts {
             .iter()
             .find(|t| t.kind() == SyntaxKind::INTEGER_LITERAL)
             .and_then(|t| t.text().parse().ok())
+    }
+
+    /// Check if this member has a `FLOAT_LITERAL` token and return its text.
+    pub fn float_literal(&self) -> Option<String> {
+        self.tokens
+            .iter()
+            .find(|t| t.kind() == SyntaxKind::FLOAT_LITERAL)
+            .map(|t| t.text().to_string())
     }
 }
 
@@ -495,6 +519,15 @@ impl TypeExpr {
             .filter_map(rowan::NodeOrToken::into_token)
             .find(|t| t.kind() == SyntaxKind::INTEGER_LITERAL)
             .and_then(|t| t.text().parse().ok())
+    }
+
+    /// Check if this is a float literal type like `3.14`.
+    pub fn float_literal(&self) -> Option<String> {
+        self.syntax
+            .children_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::FLOAT_LITERAL)
+            .map(|t| t.text().to_string())
     }
 
     /// Check if this is a boolean literal (`true` or `false`).

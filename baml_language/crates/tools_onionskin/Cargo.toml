@@ -16,6 +16,10 @@ path = "src/main.rs"
 
 [dependencies]
 baml_base = { workspace = true }
+baml_compiler2_ast = { workspace = true }
+baml_compiler2_hir = { workspace = true }
+baml_compiler2_tir = { workspace = true }
+baml_compiler2_visualization = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_emit = { workspace = true }
 baml_compiler_hir = { workspace = true }
@@ -41,6 +45,7 @@ regex = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
 similar = { workspace = true, features = [ "inline" ] }
+text-size = { workspace = true }
 
 [lints.clippy]
 print_stdout = "allow"
