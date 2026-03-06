@@ -538,15 +538,15 @@ function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml
     load_field .name
     dispatch_future baml.llm.round_robin_next
     await
-    store_var _99
+    store_var _100
     load_var llm_client
     load_field .sub_clients
     call baml.Array.length
-    store_var _104
+    store_var _105
     load_var llm_client
     load_field .sub_clients
-    load_var _99
-    load_var _104
+    load_var _100
+    load_var _105
     bin_op %
     call baml.Array.at
     load_var context
@@ -608,11 +608,17 @@ function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml
     await
     call_indirect
     store_var primitive
+    load_var context
+    load_field .function_name
+    dispatch_future baml.llm.get_return_type
+    await
+    store_var return_type
     load_var primitive
     load_var context
     load_field .jinja_string
     load_var context
     load_field .args
+    load_var return_type
     dispatch_future baml.llm.PrimitiveClient.render_prompt
     await
     store_var prompt
@@ -661,23 +667,18 @@ function baml.llm.execute_client_once(llm_client: baml.llm.Client, context: baml
     dispatch_future baml.http.Response.text
     await
     store_var body
-    load_var context
-    load_field .function_name
-    dispatch_future baml.llm.get_return_type
-    await
-    store_var return_type
     load_var primitive
     load_var body
     load_var return_type
     dispatch_future baml.llm.PrimitiveClient.parse
     await
-    store_var _52
+    store_var _53
     alloc_instance baml.llm.ExecutionResult
     copy 0
     load_const true
     store_field .ok
     copy 0
-    load_var _52
+    load_var _53
     store_field .value
     return
 }
@@ -690,9 +691,14 @@ function baml.llm.render_prompt(function_name: string, args: map<string, unknown
     load_var function_name
     call baml.llm.resolve_primitive
     store_var primitive_client
+    load_var function_name
+    dispatch_future baml.llm.get_return_type
+    await
+    store_var return_type
     load_var primitive_client
     load_var jinja_string
     load_var args
+    load_var return_type
     dispatch_future baml.llm.PrimitiveClient.render_prompt
     await
     store_var prompt

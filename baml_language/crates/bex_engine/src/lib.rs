@@ -339,10 +339,10 @@ pub struct BexEngine {
     globals: GlobalPool,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
-    /// Resolved class names for instance allocation
-    resolved_class_names: HashMap<String, HeapPtr>,
-    /// Resolved enum names for variant allocation
-    resolved_enum_names: HashMap<String, HeapPtr>,
+    /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
+    resolved_class_names: indexmap::IndexMap<String, HeapPtr>,
+    /// Resolved enum names for variant allocation (`IndexMap` preserves definition order)
+    resolved_enum_names: indexmap::IndexMap<String, HeapPtr>,
     /// System operations provider.
     sys_ops: std::sync::Arc<sys_types::SysOps>,
     /// Context passed to `sys_ops` that need engine-level information.
@@ -456,13 +456,13 @@ impl BexEngine {
             .collect();
 
         // Build class name lookup table from pre-computed indices.
-        let resolved_class_names: HashMap<String, HeapPtr> = class_indices
+        let resolved_class_names: indexmap::IndexMap<String, HeapPtr> = class_indices
             .into_iter()
             .map(|(name, idx)| (name, heap.compile_time_ptr(idx)))
             .collect();
 
         // Build enum name lookup table from pre-computed indices.
-        let resolved_enum_names: HashMap<String, HeapPtr> = enum_indices
+        let resolved_enum_names: indexmap::IndexMap<String, HeapPtr> = enum_indices
             .into_iter()
             .map(|(name, idx)| (name, heap.compile_time_ptr(idx)))
             .collect();
@@ -539,6 +539,10 @@ impl BexEngine {
             })
             .collect();
 
+        // Extract class and enum definitions for output format rendering.
+        let class_definitions = Self::extract_class_definitions(&resolved_class_names);
+        let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
+
         let sys_op_ctx = sys_types::SysOpContext {
             llm_functions: Arc::new(llm_functions),
             function_global_indices: Arc::new(bytecode.function_global_indices),
@@ -546,6 +550,9 @@ impl BexEngine {
             client_metadata: Arc::new(client_metadata),
             round_robin_counters: Arc::new(round_robin_counters),
             cancel: CancellationToken::new(),
+            class_definitions: Arc::new(class_definitions),
+            enum_definitions: Arc::new(enum_definitions),
+            type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
         };
 
         Ok(Self {
@@ -611,6 +618,71 @@ impl BexEngine {
             }
         }
         llm_functions
+    }
+
+    /// Extract class definitions from the heap for output format rendering.
+    fn extract_class_definitions(
+        resolved_class_names: &indexmap::IndexMap<String, HeapPtr>,
+    ) -> indexmap::IndexMap<String, sys_types::ClassDefinition> {
+        let mut defs = indexmap::IndexMap::new();
+        for (name, ptr) in resolved_class_names {
+            // SAFETY: ptr is from resolved_class_names, a compile-time object
+            let obj = unsafe { ptr.get() };
+            if let Object::Class(cls) = obj {
+                defs.insert(
+                    name.clone(),
+                    sys_types::ClassDefinition {
+                        name: cls.name.clone(),
+                        description: cls.description.clone(),
+                        alias: cls.alias.clone(),
+                        fields: cls
+                            .fields
+                            .iter()
+                            .map(|f| sys_types::ClassFieldDefinition {
+                                name: f.name.clone(),
+                                field_type: f.field_type.clone(),
+                                description: f.description.clone(),
+                                alias: f.alias.clone(),
+                                skip: f.skip,
+                            })
+                            .collect(),
+                    },
+                );
+            }
+        }
+        defs
+    }
+
+    /// Extract enum definitions from the heap for output format rendering.
+    fn extract_enum_definitions(
+        resolved_enum_names: &indexmap::IndexMap<String, HeapPtr>,
+    ) -> indexmap::IndexMap<String, sys_types::EnumDefinition> {
+        let mut defs = indexmap::IndexMap::new();
+        for (name, ptr) in resolved_enum_names {
+            // SAFETY: ptr is from resolved_enum_names, a compile-time object
+            let obj = unsafe { ptr.get() };
+            if let Object::Enum(enm) = obj {
+                defs.insert(
+                    name.clone(),
+                    sys_types::EnumDefinition {
+                        name: enm.name.clone(),
+                        description: enm.description.clone(),
+                        alias: enm.alias.clone(),
+                        variants: enm
+                            .variants
+                            .iter()
+                            .filter(|v| !v.skip)
+                            .map(|v| sys_types::EnumVariantDefinition {
+                                name: v.name.clone(),
+                                description: v.description.clone(),
+                                alias: v.alias.clone(),
+                            })
+                            .collect(),
+                    },
+                );
+            }
+        }
+        defs
     }
 
     /// Get a reference to the shared heap.

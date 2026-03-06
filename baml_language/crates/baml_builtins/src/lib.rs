@@ -398,7 +398,8 @@ macro_rules! with_builtins {
                         /// Returns a structured PromptAst that can be sent to an LLM.
                         #[sys_op]
                         #[throws(RenderPrompt)]
-                        fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Unknown>) -> PromptAst;
+                        #[uses(engine_ctx)]
+                        fn render_prompt(self: PrimitiveClient, template: String, args: Map<String, Unknown>, return_type: Type) -> PromptAst;
 
                         /// Specialize a prompt for this client's provider.
                         /// Applies provider-specific transformations (message merging, system prompt

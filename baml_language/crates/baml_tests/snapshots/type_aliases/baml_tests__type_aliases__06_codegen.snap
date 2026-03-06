@@ -6,12 +6,12 @@ function Bar() -> int {
     return
 }
 
-function Baz() -> null {
+function Baz() -> Json {
     load_const "hello"
     return
 }
 
-function EchoJSON(i: null) -> null {
+function EchoJSON(i: JSON) -> JSON {
     alloc_instance NotJSON
     copy 0
     load_const "Whoops"
@@ -24,7 +24,7 @@ function Foo() -> int {
     return
 }
 
-function MakeJSON(i: NotJSON) -> null {
+function MakeJSON(i: NotJSON) -> JSON {
     load_var i
     load_field .inner
     return

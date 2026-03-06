@@ -37,6 +37,7 @@ sys_llm = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http" ] }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
+insta = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }

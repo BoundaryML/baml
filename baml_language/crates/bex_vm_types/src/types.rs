@@ -51,6 +51,11 @@ pub struct Program {
 
     /// Compiled test cases.
     pub test_cases: Vec<TestCase>,
+
+    /// Recursive type alias definitions for output format rendering.
+    /// Only recursive aliases are stored (non-recursive ones are expanded inline).
+    /// Maps alias name → target type.
+    pub recursive_type_alias_defs: IndexMap<String, Ty>,
 }
 
 /// Metadata for building a client tree at runtime.
@@ -396,6 +401,7 @@ pub struct ClassField {
     pub field_type: Ty,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub skip: bool,
     pub field_attr: baml_type::FieldAttr,
 }
 

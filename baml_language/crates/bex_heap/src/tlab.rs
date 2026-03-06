@@ -464,6 +464,7 @@ mod tests {
                     },
                     description: None,
                     alias: None,
+                    skip: false,
                     field_attr: Default::default(),
                 },
                 bex_vm_types::ClassField {
@@ -473,6 +474,7 @@ mod tests {
                     },
                     description: None,
                     alias: None,
+                    skip: false,
                     field_attr: Default::default(),
                 },
             ],

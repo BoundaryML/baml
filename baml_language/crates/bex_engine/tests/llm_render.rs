@@ -118,7 +118,7 @@ You are a helpful assistant.
                     assert_eq!(role, "system");
                     match content.as_ref() {
                         PromptAstSimple::String(s) => {
-                            assert!(s.contains("helpful assistant"));
+                            assert_eq!(s, "You are a helpful assistant.");
                         }
                         _ => panic!("Expected string content"),
                     }
@@ -132,7 +132,7 @@ You are a helpful assistant.
                     assert_eq!(role, "user");
                     match content.as_ref() {
                         PromptAstSimple::String(s) => {
-                            assert!(s.contains("What is 2+2?"));
+                            assert_eq!(s, "What is 2+2?");
                         }
                         _ => panic!("Expected string content"),
                     }
@@ -200,12 +200,11 @@ async fn test_render_prompt_with_enums() {
 
 mod common;
 
+// ============================================================================
+// Full Engine Pipeline Tests (render_prompt, build_request, call_llm)
+// ============================================================================
+
 /// Test the full `render_prompt` flow through the engine.
-///
-/// This test:
-/// 1. Compiles BAML source with an LLM function
-/// 2. Calls a BAML function that internally calls `baml.llm.render_prompt`
-/// 3. Verifies the call succeeds (`PromptAst` is an internal type, can't return it directly)
 #[tokio::test]
 async fn test_render_prompt_e2e() {
     use bex_engine::{BexEngine, BexExternalValue};
@@ -226,14 +225,9 @@ function Greet(name: string) -> string {
     "#
 }
 
-// Test wrapper that calls render_prompt and returns something we can check
-// Since PromptAst isn't a user-facing type, we just verify the call succeeds
 function test_render() -> int {
-    // Pass an empty map for args - the Greet function expects a 'name' param
-    // but for this test we just want to verify the render_prompt flow works
     let args = {};
     let result = baml.llm.render_prompt("Greet", args);
-    // If we got here without crashing, the call worked
     42
 }
 "##;
@@ -261,9 +255,6 @@ function test_render() -> int {
 }
 
 /// Test that `render_prompt` returns a `PromptAst` value.
-///
-/// This test calls `render_prompt` and verifies the result is a `PromptAst`
-/// containing the expected rendered content.
 #[tokio::test]
 async fn test_render_prompt_returns_prompt_ast() {
     use bex_engine::{BexEngine, BexExternalValue};
@@ -284,8 +275,6 @@ function Greet(name: string) -> string {
     "#
 }
 
-// Function that returns the PromptAst type - this should work since
-// PromptAst is now a visible builtin type
 function get_prompt() -> baml.llm.PromptAst {
     let args = { "name": "World" };
     baml.llm.render_prompt("Greet", args)
@@ -305,36 +294,27 @@ function get_prompt() -> baml.llm.PromptAst {
         .await;
 
     match result {
-        Ok(value) => {
-            // Verify it's a PromptAst (wrapped in Adt)
-            match &value {
-                BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => {
-                    // The template "Hello, {{ name }}!" with name="World" should render to PromptAst::String
-                    match ast.as_ref() {
-                        BuiltinPromptAst::Simple(s) => {
-                            let PromptAstSimple::String(s) = s.as_ref() else {
-                                panic!("Expected string content");
-                            };
-                            assert_eq!(s, "Hello, World!");
-                        }
-                        _ => panic!("Expected simple content"),
-                    }
+        Ok(value) => match &value {
+            BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => match ast.as_ref() {
+                BuiltinPromptAst::Simple(s) => {
+                    let PromptAstSimple::String(s) = s.as_ref() else {
+                        panic!("Expected string content");
+                    };
+                    assert_eq!(s, "Hello, World!");
                 }
-                other => {
-                    panic!("Expected Adt(PromptAst), got {other:?}");
-                }
+                _ => panic!("Expected simple content"),
+            },
+            other => {
+                panic!("Expected Adt(PromptAst), got {other:?}");
             }
-        }
+        },
         Err(e) => {
             panic!("get_prompt failed: {e}");
         }
     }
 }
 
-/// Test that `build_request` succeeds and returns an `int` result.
-///
-/// This test verifies the `baml.llm.build_request` entry point is callable
-/// and the underlying `LlmBuildRequest` `SysOp` is implemented.
+/// Test that `build_request` succeeds.
 #[tokio::test]
 async fn test_build_request_returns() {
     use bex_engine::BexEngine;
@@ -406,8 +386,6 @@ function test_call_llm() -> unknown {
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
         .expect("Failed to create engine");
 
-    // build_request now succeeds; this should panic at the next unimplemented
-    // step: "LlmParseResponse SysOp not yet implemented"
     let result = engine
         .call_function(
             "test_call_llm",
@@ -416,10 +394,6 @@ function test_call_llm() -> unknown {
         )
         .await;
 
-    // Without a valid API key, the orchestration loop will either:
-    // - Get a non-2xx response from OpenAI (ok() == false)
-    // - Get a network error (synthetic response with status_code=0)
-    // Either way, all steps fail and we hit `assert false`.
     assert!(result.is_err(), "Expected error without valid API key");
 }
 
@@ -452,8 +426,6 @@ function test_call_llm() -> string {
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
         .expect("Failed to create engine");
 
-    // build_request now succeeds; this should panic at the next unimplemented
-    // step: "LlmParseResponse SysOp not yet implemented"
     let result = engine
         .call_function(
             "test_call_llm",
@@ -462,10 +434,6 @@ function test_call_llm() -> string {
         )
         .await;
 
-    // Without a valid API key, the orchestration loop will either:
-    // - Get a non-2xx response from OpenAI (ok() == false)
-    // - Get a network error (synthetic response with status_code=0)
-    // Either way, all steps fail and we hit `assert false`.
     assert!(result.is_err(), "Expected error without valid API key");
 }
 
@@ -499,8 +467,6 @@ function test_call_llm() -> unknown {
     let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
         .expect("Failed to create engine");
 
-    // build_request now succeeds; this should panic at the next unimplemented
-    // step: "LlmParseResponse SysOp not yet implemented"
     let result = engine
         .call_function(
             "test_call_llm",
@@ -509,11 +475,606 @@ function test_call_llm() -> unknown {
         )
         .await;
 
-    // Without a valid API key, the orchestration loop will either:
-    // - Get a non-2xx response from OpenAI (ok() == false)
-    // - Get a network error (synthetic response with status_code=0)
-    // Either way, all steps fail and we hit `assert false`.
     assert!(result.is_err(), "Expected error without valid API key");
+}
+
+// ============================================================================
+// Output Format Tests (ctx.output_format)
+// ============================================================================
+
+#[tokio::test]
+async fn test_output_format_class_return_type() {
+    let actual = common::render_output_format(
+        r#"
+class Person {
+    name string
+    age int @description("Age in years")
+}
+"#,
+        "Person",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Answer in JSON using this schema:
+{
+  name: string,
+  age: int, // Age in years
+}"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_enum_return_type() {
+    let actual = common::render_output_format(
+        r#"
+enum Sentiment {
+    POSITIVE @description("Happy or pleased")
+    NEGATIVE
+    NEUTRAL
+}
+"#,
+        "Sentiment",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Answer with any of the categories:
+Sentiment
+----
+- POSITIVE: Happy or pleased
+- NEGATIVE
+- NEUTRAL"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_nested_class() {
+    let actual = common::render_output_format(
+        r#"
+class Address {
+    city string
+    country string
+}
+
+class Person {
+    name string
+    address Address
+}
+"#,
+        "Person",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Answer in JSON using this schema:
+{
+  name: string,
+  address: {
+    city: string,
+    country: string,
+  },
+}"#
+    );
+}
+
+/// Test that `{{ ctx.output_format }}` renders nothing for string return type.
+/// This test uses a custom template with markers to verify the format is truly empty.
+#[tokio::test]
+async fn test_output_format_string_return_type_is_empty() {
+    use bex_engine::BexEngine;
+    use sys_native::SysOpsExt;
+
+    let source = r##"
+client TestClient {
+    provider openai
+    options {
+        model "gpt-4"
+    }
+}
+
+function Greet(name: string) -> string {
+    client TestClient
+    prompt #"
+        Hello {{ name }}!OUTPUT_FORMAT_START{{ ctx.output_format }}OUTPUT_FORMAT_END
+    "#
+}
+
+function get_prompt() -> baml.llm.PromptAst {
+    let args = { "name": "World" };
+    baml.llm.render_prompt("Greet", args)
+}
+"##;
+
+    let snapshot = common::compile_for_engine(source);
+    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+        .expect("Failed to create engine");
+
+    let result = engine
+        .call_function(
+            "get_prompt",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        )
+        .await
+        .expect("render_prompt with string return type failed");
+
+    let actual = common::prompt_ast_to_string(&result);
+    assert_eq!(actual, "Hello World!OUTPUT_FORMAT_STARTOUTPUT_FORMAT_END");
+}
+
+#[tokio::test]
+async fn test_output_format_int_return_type() {
+    let actual = common::render_output_format("", "int").await;
+    assert_eq!(actual, "test\nAnswer as an int");
+}
+
+#[tokio::test]
+async fn test_output_format_with_alias() {
+    let actual = common::render_output_format(
+        r#"
+class User {
+    first_name string @alias("firstName")
+    last_name string @alias("lastName")
+    age int
+}
+"#,
+        "User",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Answer in JSON using this schema:
+{
+  firstName: string,
+  lastName: string,
+  age: int,
+}"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_enum_skip_variant() {
+    let actual = common::render_output_format(
+        r#"
+enum Status {
+    ACTIVE
+    INACTIVE
+    DELETED @skip
+}
+"#,
+        "Status",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Answer with any of the categories:
+Status
+----
+- ACTIVE
+- INACTIVE"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_mutually_recursive_classes() {
+    let actual = common::render_output_format(
+        r#"
+class Tree {
+    data int
+    children Forest
+}
+
+class Forest {
+    trees Tree[]
+}
+"#,
+        "Tree",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Forest {
+  trees: Tree[],
+}
+
+Tree {
+  data: int,
+  children: Forest,
+}
+
+Answer in JSON using this schema: Tree"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_recursive_alias_cycle() {
+    let actual = common::render_output_format(
+        r#"
+type RecAliasOne = RecAliasTwo
+type RecAliasTwo = RecAliasThree
+type RecAliasThree = RecAliasOne[]
+"#,
+        "RecAliasOne",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+RecAliasOne = RecAliasTwo
+RecAliasTwo = RecAliasThree
+RecAliasThree = RecAliasOne[]
+
+Answer in JSON using this schema: RecAliasOne"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_recursive_map_alias() {
+    let actual = common::render_output_format(
+        "type RecursiveMapAlias = map<string, RecursiveMapAlias>",
+        "RecursiveMapAlias",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+RecursiveMapAlias = map<string, RecursiveMapAlias>
+
+Answer in JSON using this schema: RecursiveMapAlias"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_recursive_list_alias() {
+    let actual = common::render_output_format(
+        "type RecursiveListAlias = RecursiveListAlias[]",
+        "RecursiveListAlias",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+RecursiveListAlias = RecursiveListAlias[]
+
+Answer in JSON using this schema: RecursiveListAlias"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_recursive_union() {
+    let actual = common::render_output_format(
+        "type RecursiveUnion = string | map<string, RecursiveUnion>",
+        "RecursiveUnion",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+RecursiveUnion = string or map<string, RecursiveUnion>
+
+Answer in JSON using this schema: RecursiveUnion"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_alias_to_recursive_class() {
+    let actual = common::render_output_format(
+        r#"
+class LinkedListNode {
+    data int
+    next LinkedListNode?
+}
+
+type LinkedListAlias = LinkedListNode
+"#,
+        "LinkedListAlias",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+LinkedListNode {
+  data: int,
+  next: LinkedListNode or null,
+}
+
+Answer in JSON using this schema: LinkedListNode"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_json_type_alias_cycle() {
+    let actual = common::render_output_format(
+        r#"
+type JsonValue = int | float | string | bool | JsonObject | JsonArray
+type JsonObject = map<string, JsonValue>
+type JsonArray = JsonValue[]
+"#,
+        "JsonValue",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+JsonValue = int or float or string or bool or JsonObject or JsonArray
+JsonArray = JsonValue[]
+JsonObject = map<string, JsonValue>
+
+Answer in JSON using this schema: JsonValue"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_union_fields() {
+    let actual = common::render_output_format(
+        r#"
+class TestUnion {
+    value string | int | bool
+    items (float | bool)[]
+}
+"#,
+        "TestUnion",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Answer in JSON using this schema:
+{
+  value: string or int or bool,
+  items: (float or bool)[],
+}"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_class_description() {
+    let actual = common::render_output_format(
+        r#"
+class Education {
+    school string
+    degree string
+    year int
+
+    @@description("Educational background of a person")
+}
+"#,
+        "Education",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Answer in JSON using this schema:
+{
+  // Educational background of a person
+
+  school: string,
+  degree: string,
+  year: int,
+}"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_literal_int() {
+    let actual = common::render_output_format("", "5").await;
+    assert_eq!(actual, "test\nAnswer using this specific value:\n5");
+}
+
+#[tokio::test]
+async fn test_output_format_literal_string() {
+    let actual = common::render_output_format("", r#""hello""#).await;
+    assert_eq!(actual, "test\nAnswer using this specific value:\n\"hello\"");
+}
+
+#[tokio::test]
+async fn test_output_format_literal_bool() {
+    let actual = common::render_output_format("", "true").await;
+    assert_eq!(actual, "test\nAnswer using this specific value:\ntrue");
+}
+
+#[tokio::test]
+async fn test_output_format_literal_union() {
+    let actual = common::render_output_format("", r#"1 | true | "output""#).await;
+    assert_eq!(
+        actual,
+        "test\nAnswer in JSON using any of these schemas:\n1 or true or \"output\""
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_primitive_alias() {
+    let actual =
+        common::render_output_format("type Primitive = int | string | bool | float", "Primitive")
+            .await;
+
+    assert_eq!(
+        actual,
+        "test\nAnswer in JSON using any of these schemas:\nint or string or bool or float"
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_map_alias() {
+    let actual = common::render_output_format("type Graph = map<string, string[]>", "Graph").await;
+
+    assert_eq!(
+        actual,
+        "test\nAnswer in JSON using this schema:\nmap<string, string[]>"
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_optional_class() {
+    let actual = common::render_output_format(
+        r#"
+class OptionalResult {
+    name string
+    value int?
+}
+"#,
+        "OptionalResult?",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+{
+  name: string,
+  value: int or null,
+} or null"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_class_list() {
+    let actual = common::render_output_format(
+        r#"
+class Item {
+    name string
+    price float
+}
+"#,
+        "Item[]",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Answer with a JSON Array using this schema:
+{
+  name: string,
+  price: float,
+}[]"#
+    );
+}
+
+// ============================================================================
+// ctx.output_format Kwargs
+// ============================================================================
+
+#[tokio::test]
+async fn test_output_format_prefix_null() {
+    let actual = common::render_output_format_with_opts(
+        r#"
+enum Sentiment {
+    POSITIVE
+    NEGATIVE
+    NEUTRAL
+}
+"#,
+        "Sentiment",
+        "prefix=null",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Sentiment
+----
+- POSITIVE
+- NEGATIVE
+- NEUTRAL"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_map_style_type_parameters() {
+    let actual = common::render_output_format_with_opts(
+        r#"
+class Recipe {
+    name string
+    ingredients map<string, string>
+}
+"#,
+        "Recipe",
+        "map_style='type_parameters'",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Answer in JSON using this schema:
+{
+  name: string,
+  ingredients: map<string, string>,
+}"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_or_splitter() {
+    let actual = common::render_output_format_with_opts(
+        r#"
+class Result {
+    value string | int
+}
+"#,
+        "Result",
+        "or_splitter=' | '",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+Answer in JSON using this schema:
+{
+  value: string | int,
+}"#
+    );
+}
+
+#[tokio::test]
+async fn test_output_format_hoisted_class_prefix() {
+    let actual = common::render_output_format_with_opts(
+        r#"
+class Node {
+    data int
+    next Node?
+}
+"#,
+        "Node",
+        "hoisted_class_prefix='type'",
+    )
+    .await;
+
+    assert_eq!(
+        actual,
+        r#"test
+type Node {
+  data: int,
+  next: Node or null,
+}
+
+Answer in JSON using this type: Node"#
+    );
 }
 
 // ============================================================================
@@ -527,7 +1088,6 @@ fn prompt_ast_string(s: &str) -> BexExternalValue {
     )))
 }
 
-/// Test that a `template_string` is expanded as a Jinja macro in `render_prompt`.
 #[tokio::test]
 async fn test_template_string_in_prompt() {
     use bex_engine::BexEngine;
@@ -571,7 +1131,6 @@ function get_prompt() -> baml.llm.PromptAst {
     assert_eq!(result, prompt_ast_string("Hello, Alice!"));
 }
 
-/// Test that nested `template_strings` expand correctly.
 #[tokio::test]
 async fn test_nested_template_strings() {
     use bex_engine::BexEngine;
@@ -614,7 +1173,6 @@ function get_prompt() -> baml.llm.PromptAst {
     assert_eq!(result, prompt_ast_string("before INNER after"));
 }
 
-/// Test a `template_string` with two args, one of which is a class (struct).
 #[tokio::test]
 async fn test_template_string_with_struct_arg() {
     use bex_engine::BexEngine;
@@ -663,7 +1221,6 @@ function get_prompt() -> baml.llm.PromptAst {
     assert_eq!(result, prompt_ast_string("User: Bob (age 42)"));
 }
 
-/// Test that parameterless `template_strings` work.
 #[tokio::test]
 async fn test_parameterless_template_string() {
     use bex_engine::BexEngine;

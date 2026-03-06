@@ -184,6 +184,7 @@ pub fn compile_files(
                 field_type: field_ty,
                 description: None,
                 alias: None,
+                skip: false,
                 field_attr: FieldAttr::default(),
             });
 
@@ -232,13 +233,7 @@ pub fn compile_files(
                 let mut field_indices = HashMap::new();
                 let mut field_types = HashMap::new();
                 let mut fields = Vec::new();
-                // Filter @skip fields to match schema_map.rs behavior
-                let non_skip_fields: Vec<_> = class
-                    .fields
-                    .iter()
-                    .filter(|f| !f.skip.is_explicit())
-                    .collect();
-                for (idx, field) in non_skip_fields.iter().enumerate() {
+                for (idx, field) in class.fields.iter().enumerate() {
                     field_indices.insert(field.name.to_string(), idx);
                     // Lower TypeRef to Ty for type inference
                     let (ty, _) = resolution_ctx.lower_type_ref(&field.type_ref, Span::default());
@@ -257,6 +252,7 @@ pub fn compile_files(
                         field_type: runtime_ty,
                         description: field.description.value().cloned(),
                         alias: field.alias.value().cloned(),
+                        skip: field.skip.is_explicit(),
                         field_attr: FieldAttr::default(),
                     });
                 }
@@ -736,6 +732,22 @@ pub fn compile_files(
                         args,
                     });
                 }
+            }
+        }
+    }
+
+    // Extract recursive type alias definitions for output format rendering.
+    // Non-recursive aliases are already expanded inline by convert_tir_ty,
+    // so only recursive aliases remain as Ty::TypeAlias in return types.
+    for alias_name in &recursive_aliases {
+        if let Some(tir_target) = type_aliases.get(alias_name) {
+            if let Ok(target_ty) =
+                baml_type::convert_tir_ty(tir_target, &type_aliases, &recursive_aliases)
+                    .and_then(baml_type::sanitize_for_runtime)
+            {
+                program
+                    .recursive_type_alias_defs
+                    .insert(alias_name.to_string(), target_ty);
             }
         }
     }

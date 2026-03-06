@@ -204,11 +204,10 @@ pub fn sanitize_for_runtime(ty: Ty) -> Result<Ty, String> {
             Box::new(sanitize_for_runtime(*inner)?),
             attr,
         )),
-        // Recursive TypeAlias → error
-        Ty::TypeAlias(ref tn, _) => Err(format!(
-            "Recursive type alias '{}' cannot be used in class fields or function return types",
-            tn.display_name
-        )),
+        // Recursive TypeAlias — pass through to runtime.
+        // These are preserved intentionally for output format rendering
+        // (cycle detection requires the alias name at runtime).
+        Ty::TypeAlias(_, _) => Ok(ty),
         // Recurse into containers
         Ty::Optional(inner, attr) => {
             Ok(Ty::Optional(Box::new(sanitize_for_runtime(*inner)?), attr))

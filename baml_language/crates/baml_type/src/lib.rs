@@ -448,8 +448,7 @@ impl Ty {
     pub fn is_compiler_only(&self) -> bool {
         matches!(
             self,
-            Ty::TypeAlias(..)
-                | Ty::Function { .. }
+            Ty::Function { .. }
                 | Ty::Void { .. }
                 | Ty::WatchAccessor(..)
                 | Ty::BuiltinUnknown { .. }
@@ -460,10 +459,9 @@ impl Ty {
     /// variants are found.
     pub fn validate_runtime(&self) -> Result<(), String> {
         match self {
-            Ty::TypeAlias(tn, _) => Err(format!(
-                "TypeAlias '{}' should be expanded before reaching runtime",
-                tn.display_name
-            )),
+            // Recursive type aliases are intentionally preserved at runtime
+            // for output format rendering (cycle detection needs the alias name).
+            Ty::TypeAlias(_, _) => Ok(()),
             Ty::Void { .. } => Err("Void type should not reach runtime".to_string()),
             Ty::WatchAccessor(inner, _) => inner.validate_runtime(),
             Ty::BuiltinUnknown { .. } => Ok(()),
@@ -691,10 +689,11 @@ mod tests {
             .validate_runtime()
             .is_err()
         );
+        // TypeAlias is now allowed at runtime for recursive type alias rendering
         assert!(
             Ty::TypeAlias(TypeName::local(Name::new("MyAlias")), TyAttr::default())
                 .validate_runtime()
-                .is_err()
+                .is_ok()
         );
     }
 }

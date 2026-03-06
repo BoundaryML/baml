@@ -332,6 +332,8 @@ pub struct BytecodeProgram {
     pub client_metadata: HashMap<String, bex_vm_types::ClientBuildMeta>,
     /// Compiled test cases.
     pub test_cases: Vec<bex_vm_types::TestCase>,
+    /// Recursive type alias definitions for output format rendering.
+    pub recursive_type_alias_defs: indexmap::IndexMap<String, baml_type::Ty>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -378,6 +380,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         template_strings_macros: program.template_strings_macros,
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,
+        recursive_type_alias_defs: program.recursive_type_alias_defs,
     })
 }
 

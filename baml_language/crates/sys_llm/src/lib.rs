@@ -29,8 +29,11 @@ pub(crate) use model_features::{AllowedMetadata, ModelFeatures};
 pub(crate) use provider::LlmProvider;
 // --- Public API: only what sys_types and bex_engine tests actually use ---
 
-// Used by sys_types (From<LlmOpError> for OpErrorKind)
-pub use types::LlmOpError;
+// Used by sys_types (From<LlmOpError> for OpErrorKind, and output format building)
+pub use types::{
+    Class as OutputClass, ClassField as OutputClassField, Enum as OutputEnum,
+    EnumValue as OutputEnumValue, LlmOpError, RenderOptions,
+};
 
 // ============================================================================
 // Clean (owned-type) entry points for trait-based dispatch
@@ -39,10 +42,13 @@ pub use types::LlmOpError;
 /// Render a Jinja template given already-extracted owned types.
 ///
 /// `args` is expected to be `BexExternalValue::Map { entries, .. }`.
+/// `output_format` contains the return type and any class/enum definitions
+/// needed for `{{ ctx.output_format }}` rendering.
 pub fn execute_render_prompt_from_owned(
     client: &builtin_types::owned::LlmPrimitiveClient,
     template: &str,
     args: &BexExternalValue,
+    output_format: types::OutputFormatContent,
 ) -> Result<bex_vm_types::PromptAst, LlmOpError> {
     let BexExternalValue::Map {
         entries: template_args,
@@ -62,9 +68,7 @@ pub fn execute_render_prompt_from_owned(
             default_role: client.default_role.clone(),
             allowed_roles: client.allowed_roles.clone(),
         },
-        output_format: types::OutputFormatContent::new(bex_external_types::Ty::String {
-            attr: baml_type::TyAttr::default(),
-        }),
+        output_format,
         tags: indexmap::IndexMap::new(),
         enums: std::collections::HashMap::new(),
     };

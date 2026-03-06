@@ -1281,6 +1281,25 @@ SOURCE_FILE
                 SEMICOLON ";"
               LET_STMT
                 KW_LET "let"
+                WORD "return_type"
+                EQUALS "="
+                CALL_EXPR
+                  PATH_EXPR "baml.llm.get_return_type"
+                    WORD "baml"
+                    DOT "."
+                    WORD "llm"
+                    DOT "."
+                    WORD "get_return_type"
+                  CALL_ARGS
+                    L_PAREN "("
+                    PATH_EXPR "context.function_name"
+                      WORD "context"
+                      DOT "."
+                      WORD "function_name"
+                    R_PAREN ")"
+                SEMICOLON ";"
+              LET_STMT
+                KW_LET "let"
                 WORD "prompt"
                 EQUALS "="
                 CALL_EXPR
@@ -1299,6 +1318,8 @@ SOURCE_FILE
                       WORD "context"
                       DOT "."
                       WORD "args"
+                    COMMA ","
+                    WORD "return_type"
                     R_PAREN ")"
                 SEMICOLON ";"
               LET_STMT
@@ -1371,25 +1392,6 @@ SOURCE_FILE
                         WORD "text"
                       CALL_ARGS "()"
                         L_PAREN "("
-                        R_PAREN ")"
-                    SEMICOLON ";"
-                  LET_STMT
-                    KW_LET "let"
-                    WORD "return_type"
-                    EQUALS "="
-                    CALL_EXPR
-                      PATH_EXPR "baml.llm.get_return_type"
-                        WORD "baml"
-                        DOT "."
-                        WORD "llm"
-                        DOT "."
-                        WORD "get_return_type"
-                      CALL_ARGS
-                        L_PAREN "("
-                        PATH_EXPR "context.function_name"
-                          WORD "context"
-                          DOT "."
-                          WORD "function_name"
                         R_PAREN ")"
                     SEMICOLON ";"
                   RETURN_STMT
@@ -1758,6 +1760,22 @@ SOURCE_FILE
           SEMICOLON ";"
         LET_STMT
           KW_LET "let"
+          WORD "return_type"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "baml.llm.get_return_type"
+              WORD "baml"
+              DOT "."
+              WORD "llm"
+              DOT "."
+              WORD "get_return_type"
+            CALL_ARGS "(function_name)"
+              L_PAREN "("
+              WORD "function_name"
+              R_PAREN ")"
+          SEMICOLON ";"
+        LET_STMT
+          KW_LET "let"
           WORD "prompt"
           EQUALS "="
           CALL_EXPR
@@ -1765,11 +1783,13 @@ SOURCE_FILE
               WORD "primitive_client"
               DOT "."
               WORD "render_prompt"
-            CALL_ARGS "(jinja_string, args)"
+            CALL_ARGS "(jinja_string, args, return_type)"
               L_PAREN "("
               WORD "jinja_string"
               COMMA ","
               WORD "args"
+              COMMA ","
+              WORD "return_type"
               R_PAREN ")"
           SEMICOLON ";"
         RETURN_STMT

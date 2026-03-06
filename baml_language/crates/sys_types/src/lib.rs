@@ -384,6 +384,19 @@ pub struct SysOpContext {
     /// Defaults to a never-cancelled token for the shared engine context.
     /// In `execute_sys_op`, a per-call clone is created with the real token.
     pub cancel: CancellationToken,
+
+    /// Pre-extracted class definitions for output format rendering.
+    /// Keyed by class name (e.g., "Person").
+    pub class_definitions: Arc<indexmap::IndexMap<String, ClassDefinition>>,
+
+    /// Pre-extracted enum definitions for output format rendering.
+    /// Keyed by enum name (e.g., "Color").
+    pub enum_definitions: Arc<indexmap::IndexMap<String, EnumDefinition>>,
+
+    /// Recursive type alias definitions for output format rendering.
+    /// Only recursive aliases are stored (non-recursive ones are expanded inline).
+    /// Maps alias name → target type.
+    pub type_alias_definitions: Arc<indexmap::IndexMap<String, baml_type::Ty>>,
 }
 
 /// Pre-extracted metadata for building a Client tree at runtime.
@@ -415,6 +428,42 @@ pub struct LlmFunctionInfo {
     pub return_type: baml_type::Ty,
 }
 
+/// Pre-extracted class definition for output format rendering.
+#[derive(Clone, Debug)]
+pub struct ClassDefinition {
+    pub name: String,
+    pub description: Option<String>,
+    pub alias: Option<String>,
+    pub fields: Vec<ClassFieldDefinition>,
+}
+
+/// A field in a pre-extracted class definition.
+#[derive(Clone, Debug)]
+pub struct ClassFieldDefinition {
+    pub name: String,
+    pub field_type: baml_type::Ty,
+    pub description: Option<String>,
+    pub alias: Option<String>,
+    pub skip: bool,
+}
+
+/// Pre-extracted enum definition for output format rendering.
+#[derive(Clone, Debug)]
+pub struct EnumDefinition {
+    pub name: String,
+    pub description: Option<String>,
+    pub alias: Option<String>,
+    pub variants: Vec<EnumVariantDefinition>,
+}
+
+/// A variant in a pre-extracted enum definition.
+#[derive(Clone, Debug)]
+pub struct EnumVariantDefinition {
+    pub name: String,
+    pub description: Option<String>,
+    pub alias: Option<String>,
+}
+
 impl SysOpContext {
     /// Create an empty context (for testing or when no LLM functions exist).
     pub fn empty() -> Self {
@@ -425,6 +474,9 @@ impl SysOpContext {
             client_metadata: Arc::new(std::collections::HashMap::new()),
             round_robin_counters: Arc::new(std::collections::HashMap::new()),
             cancel: CancellationToken::new(),
+            class_definitions: Arc::new(indexmap::IndexMap::new()),
+            enum_definitions: Arc::new(indexmap::IndexMap::new()),
+            type_alias_definitions: Arc::new(indexmap::IndexMap::new()),
         }
     }
 
@@ -612,10 +664,23 @@ impl<T> SysOpLlm for T {
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         template: String,
         args: BexExternalValue,
+        return_type: baml_type::Ty,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<bex_vm_types::PromptAst> {
+        let output_format = build_output_format(
+            &return_type,
+            &ctx.class_definitions,
+            &ctx.enum_definitions,
+            &ctx.type_alias_definitions,
+        );
         SysOpOutput::Ready(
-            sys_llm::execute_render_prompt_from_owned(&primitive_client, &template, &args)
-                .map_err(OpErrorKind::from),
+            sys_llm::execute_render_prompt_from_owned(
+                &primitive_client,
+                &template,
+                &args,
+                output_format,
+            )
+            .map_err(OpErrorKind::from),
         )
     }
 
@@ -813,6 +878,267 @@ impl<T> SysOpLlm for T {
         #[allow(clippy::cast_possible_wrap)]
         SysOpOutput::ok(val as i64)
     }
+}
+
+// ============================================================================
+// Cycle Detection for Recursive Classes
+// ============================================================================
+
+/// Find all classes that participate in cycles using Tarjan's SCC algorithm.
+/// Returns the set of class names that are recursive (part of any cycle).
+fn find_recursive_classes(
+    classes: &indexmap::IndexMap<String, sys_llm::OutputClass>,
+) -> std::collections::HashSet<String> {
+    use std::collections::{HashMap, HashSet};
+
+    // Build dependency graph: for each class, find which other collected classes
+    // its fields reference.
+    let class_names: HashSet<&str> = classes.keys().map(String::as_str).collect();
+    let mut graph: HashMap<&str, HashSet<&str>> = HashMap::new();
+
+    for (name, cls) in classes {
+        let mut deps = HashSet::new();
+        for field in &cls.fields {
+            collect_class_refs(&field.field_type, &class_names, &mut deps);
+        }
+        graph.insert(name.as_str(), deps);
+    }
+
+    // Run Tarjan's SCC
+    let sccs = tarjan_scc(&graph);
+
+    // Collect all classes in any non-trivial SCC (size > 1 or self-referencing)
+    let mut recursive = HashSet::new();
+    for scc in sccs {
+        if scc.len() > 1 {
+            for name in scc {
+                recursive.insert(name.to_string());
+            }
+        } else if scc.len() == 1 {
+            let name = scc[0];
+            // Single-node SCC: check for self-edge
+            if let Some(deps) = graph.get(name) {
+                if deps.contains(name) {
+                    recursive.insert(name.to_string());
+                }
+            }
+        }
+    }
+
+    recursive
+}
+
+/// Extract class name references from a type, filtering to only collected classes.
+fn collect_class_refs<'a>(
+    ty: &'a baml_type::Ty,
+    known_classes: &std::collections::HashSet<&str>,
+    refs: &mut std::collections::HashSet<&'a str>,
+) {
+    match ty {
+        baml_type::Ty::Class(tn, _) => {
+            let name = tn.display_name.as_str();
+            if known_classes.contains(name) {
+                refs.insert(name);
+            }
+        }
+        baml_type::Ty::Optional(inner, _) | baml_type::Ty::List(inner, _) => {
+            collect_class_refs(inner, known_classes, refs);
+        }
+        baml_type::Ty::Map { key, value, .. } => {
+            collect_class_refs(key, known_classes, refs);
+            collect_class_refs(value, known_classes, refs);
+        }
+        baml_type::Ty::Union(variants, _) => {
+            for v in variants {
+                collect_class_refs(v, known_classes, refs);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Tarjan's strongly connected components algorithm.
+/// Returns all SCCs (including trivial single-node ones).
+fn tarjan_scc<'a>(
+    graph: &std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>>,
+) -> Vec<Vec<&'a str>> {
+    use std::collections::HashMap;
+
+    struct TarjanState<'a> {
+        index_counter: usize,
+        stack: Vec<&'a str>,
+        on_stack: HashMap<&'a str, bool>,
+        index: HashMap<&'a str, usize>,
+        lowlink: HashMap<&'a str, usize>,
+        result: Vec<Vec<&'a str>>,
+    }
+
+    fn strongconnect<'a>(
+        v: &'a str,
+        graph: &HashMap<&'a str, std::collections::HashSet<&'a str>>,
+        state: &mut TarjanState<'a>,
+    ) {
+        state.index.insert(v, state.index_counter);
+        state.lowlink.insert(v, state.index_counter);
+        state.index_counter += 1;
+        state.stack.push(v);
+        state.on_stack.insert(v, true);
+
+        if let Some(neighbors) = graph.get(v) {
+            for &w in neighbors {
+                if !state.index.contains_key(w) {
+                    strongconnect(w, graph, state);
+                    let w_low = state.lowlink[w];
+                    let v_low = state.lowlink[v];
+                    if w_low < v_low {
+                        state.lowlink.insert(v, w_low);
+                    }
+                } else if state.on_stack.get(w).copied().unwrap_or(false) {
+                    let w_idx = state.index[w];
+                    let v_low = state.lowlink[v];
+                    if w_idx < v_low {
+                        state.lowlink.insert(v, w_idx);
+                    }
+                }
+            }
+        }
+
+        if state.lowlink[v] == state.index[v] {
+            let mut scc = Vec::new();
+            loop {
+                let w = state.stack.pop().unwrap();
+                state.on_stack.insert(w, false);
+                scc.push(w);
+                if w == v {
+                    break;
+                }
+            }
+            state.result.push(scc);
+        }
+    }
+
+    let mut state = TarjanState {
+        index_counter: 0,
+        stack: Vec::new(),
+        on_stack: HashMap::new(),
+        index: HashMap::new(),
+        lowlink: HashMap::new(),
+        result: Vec::new(),
+    };
+
+    for &v in graph.keys() {
+        if !state.index.contains_key(v) {
+            strongconnect(v, graph, &mut state);
+        }
+    }
+
+    state.result
+}
+
+// ============================================================================
+// Output Format Builder
+// ============================================================================
+
+/// Walk the type graph and build an `OutputFormatContent` with all referenced
+/// class and enum definitions populated.
+fn build_output_format(
+    return_type: &baml_type::Ty,
+    class_defs: &indexmap::IndexMap<String, ClassDefinition>,
+    enum_defs: &indexmap::IndexMap<String, EnumDefinition>,
+    type_alias_defs: &indexmap::IndexMap<String, baml_type::Ty>,
+) -> sys_llm::OutputFormatContent {
+    let mut content = sys_llm::OutputFormatContent::new(return_type.clone());
+
+    let mut visited = std::collections::HashSet::new();
+    let mut stack = vec![return_type.clone()];
+
+    while let Some(ty) = stack.pop() {
+        match &ty {
+            baml_type::Ty::Class(tn, _) => {
+                let name = tn.display_name.as_str();
+                if visited.insert(name.to_string()) {
+                    if let Some(cls_def) = class_defs.get(name) {
+                        for field in &cls_def.fields {
+                            if !field.skip {
+                                stack.push(field.field_type.clone());
+                            }
+                        }
+                        content = content.with_class(sys_llm::OutputClass {
+                            name: cls_def.name.clone(),
+                            alias: cls_def.alias.clone(),
+                            description: cls_def.description.clone(),
+                            fields: cls_def
+                                .fields
+                                .iter()
+                                .filter(|f| !f.skip)
+                                .map(|f| sys_llm::OutputClassField {
+                                    name: f.name.clone(),
+                                    alias: f.alias.clone(),
+                                    field_type: f.field_type.clone(),
+                                    description: f.description.clone(),
+                                })
+                                .collect(),
+                        });
+                    }
+                }
+            }
+            baml_type::Ty::Enum(tn, _) => {
+                let name = tn.display_name.as_str();
+                if visited.insert(name.to_string()) {
+                    if let Some(enum_def) = enum_defs.get(name) {
+                        content = content.with_enum(sys_llm::OutputEnum {
+                            name: enum_def.name.clone(),
+                            alias: enum_def.alias.clone(),
+                            description: enum_def.description.clone(),
+                            values: enum_def
+                                .variants
+                                .iter()
+                                .map(|v| sys_llm::OutputEnumValue {
+                                    name: v.name.clone(),
+                                    alias: v.alias.clone(),
+                                    description: v.description.clone(),
+                                })
+                                .collect(),
+                        });
+                    }
+                }
+            }
+            baml_type::Ty::TypeAlias(tn, _) => {
+                let name = tn.display_name.as_str();
+                if visited.insert(name.to_string()) {
+                    if let Some(target) = type_alias_defs.get(name) {
+                        // Walk into the target type to collect referenced classes/enums
+                        stack.push(target.clone());
+                        // Register as recursive type alias for hoisted rendering
+                        content =
+                            content.with_recursive_type_alias(name.to_string(), target.clone());
+                    }
+                }
+            }
+            baml_type::Ty::List(inner, _) | baml_type::Ty::Optional(inner, _) => {
+                stack.push(*inner.clone());
+            }
+            baml_type::Ty::Map { key, value, .. } => {
+                stack.push(*key.clone());
+                stack.push(*value.clone());
+            }
+            baml_type::Ty::Union(variants, _) => {
+                stack.extend(variants.iter().cloned());
+            }
+            _ => {}
+        }
+    }
+
+    // Detect recursive classes and mark them for hoisting.
+    // Sort alphabetically for deterministic output order.
+    let recursive = find_recursive_classes(&content.classes);
+    let mut recursive_ordered: Vec<String> = recursive.into_iter().collect();
+    recursive_ordered.sort();
+    for name in recursive_ordered {
+        content = content.with_recursive_class(name);
+    }
+
+    content
 }
 
 // ============================================================================
@@ -1071,6 +1397,566 @@ mod tests {
         ];
         for v in &variants {
             let _ = v.category();
+        }
+    }
+
+    // ========================================================================
+    // build_output_format tests
+    // ========================================================================
+
+    fn make_class_defs(defs: Vec<ClassDefinition>) -> indexmap::IndexMap<String, ClassDefinition> {
+        defs.into_iter().map(|d| (d.name.clone(), d)).collect()
+    }
+
+    fn make_enum_defs(defs: Vec<EnumDefinition>) -> indexmap::IndexMap<String, EnumDefinition> {
+        defs.into_iter().map(|d| (d.name.clone(), d)).collect()
+    }
+
+    #[test]
+    fn output_format_primitive_int() {
+        let ty = baml_type::Ty::Int {
+            attr: baml_type::TyAttr::default(),
+        };
+        let content = build_output_format(
+            &ty,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        );
+        let rendered = content.render(&sys_llm::RenderOptions::default()).unwrap();
+        assert_eq!(rendered, Some("Answer as an int".to_string()));
+    }
+
+    #[test]
+    fn output_format_string_returns_none() {
+        let ty = baml_type::Ty::String {
+            attr: baml_type::TyAttr::default(),
+        };
+        let content = build_output_format(
+            &ty,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        );
+        let rendered = content.render(&sys_llm::RenderOptions::default()).unwrap();
+        assert_eq!(rendered, None);
+    }
+
+    #[test]
+    fn output_format_class_renders_schema() {
+        let class_defs = make_class_defs(vec![ClassDefinition {
+            name: "Person".to_string(),
+            description: None,
+            alias: None,
+            fields: vec![
+                ClassFieldDefinition {
+                    name: "name".to_string(),
+                    field_type: baml_type::Ty::String {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    description: None,
+                    alias: None,
+                    skip: false,
+                },
+                ClassFieldDefinition {
+                    name: "age".to_string(),
+                    field_type: baml_type::Ty::Int {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    description: None,
+                    alias: None,
+                    skip: false,
+                },
+            ],
+        }]);
+
+        let ty = baml_type::Ty::Class(
+            baml_type::TypeName::local("Person".into()),
+            baml_type::TyAttr::default(),
+        );
+        let content = build_output_format(
+            &ty,
+            &class_defs,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        );
+        let rendered = content.render(&sys_llm::RenderOptions::default()).unwrap();
+        assert!(rendered.is_some());
+        let text = rendered.unwrap();
+        assert!(text.contains("name: string"), "got: {text}");
+        assert!(text.contains("age: int"), "got: {text}");
+    }
+
+    #[test]
+    fn output_format_enum_renders_values() {
+        let enum_defs = make_enum_defs(vec![EnumDefinition {
+            name: "Color".to_string(),
+            description: None,
+            alias: None,
+            variants: vec![
+                EnumVariantDefinition {
+                    name: "Red".to_string(),
+                    description: None,
+                    alias: None,
+                },
+                EnumVariantDefinition {
+                    name: "Green".to_string(),
+                    description: Some("Like grass".to_string()),
+                    alias: None,
+                },
+                EnumVariantDefinition {
+                    name: "Blue".to_string(),
+                    description: None,
+                    alias: None,
+                },
+            ],
+        }]);
+
+        let ty = baml_type::Ty::Enum(
+            baml_type::TypeName::local("Color".into()),
+            baml_type::TyAttr::default(),
+        );
+        let content = build_output_format(
+            &ty,
+            &indexmap::IndexMap::new(),
+            &enum_defs,
+            &indexmap::IndexMap::new(),
+        );
+        let rendered = content.render(&sys_llm::RenderOptions::default()).unwrap();
+        assert!(rendered.is_some());
+        let text = rendered.unwrap();
+        assert!(text.contains("Red"), "got: {text}");
+        assert!(text.contains("- Green: Like grass"), "got: {text}");
+        assert!(text.contains("Blue"), "got: {text}");
+    }
+
+    #[test]
+    fn output_format_nested_class_resolves() {
+        let class_defs = make_class_defs(vec![
+            ClassDefinition {
+                name: "Address".to_string(),
+                description: None,
+                alias: None,
+                fields: vec![ClassFieldDefinition {
+                    name: "city".to_string(),
+                    field_type: baml_type::Ty::String {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    description: None,
+                    alias: None,
+                    skip: false,
+                }],
+            },
+            ClassDefinition {
+                name: "Person".to_string(),
+                description: None,
+                alias: None,
+                fields: vec![ClassFieldDefinition {
+                    name: "address".to_string(),
+                    field_type: baml_type::Ty::Class(
+                        baml_type::TypeName::local("Address".into()),
+                        baml_type::TyAttr::default(),
+                    ),
+                    description: None,
+                    alias: None,
+                    skip: false,
+                }],
+            },
+        ]);
+
+        let ty = baml_type::Ty::List(
+            Box::new(baml_type::Ty::Class(
+                baml_type::TypeName::local("Person".into()),
+                baml_type::TyAttr::default(),
+            )),
+            baml_type::TyAttr::default(),
+        );
+        let content = build_output_format(
+            &ty,
+            &class_defs,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        );
+        // Both Person and Address should be resolved
+        assert!(content.find_class("Person").is_some());
+        assert!(content.find_class("Address").is_some());
+    }
+
+    #[test]
+    fn output_format_self_referencing_class_no_infinite_loop() {
+        let class_defs = make_class_defs(vec![ClassDefinition {
+            name: "Node".to_string(),
+            description: None,
+            alias: None,
+            fields: vec![
+                ClassFieldDefinition {
+                    name: "value".to_string(),
+                    field_type: baml_type::Ty::Int {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    description: None,
+                    alias: None,
+                    skip: false,
+                },
+                ClassFieldDefinition {
+                    name: "child".to_string(),
+                    field_type: baml_type::Ty::Optional(
+                        Box::new(baml_type::Ty::Class(
+                            baml_type::TypeName::local("Node".into()),
+                            baml_type::TyAttr::default(),
+                        )),
+                        baml_type::TyAttr::default(),
+                    ),
+                    description: None,
+                    alias: None,
+                    skip: false,
+                },
+            ],
+        }]);
+
+        let ty = baml_type::Ty::Class(
+            baml_type::TypeName::local("Node".into()),
+            baml_type::TyAttr::default(),
+        );
+        // Should not infinite loop
+        let content = build_output_format(
+            &ty,
+            &class_defs,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        );
+        assert!(content.find_class("Node").is_some());
+    }
+
+    // ========================================================================
+    // Cycle detection unit tests
+    // ========================================================================
+
+    fn mk_output_class(name: &str, fields: Vec<(&str, baml_type::Ty)>) -> sys_llm::OutputClass {
+        sys_llm::OutputClass {
+            name: name.to_string(),
+            description: None,
+            alias: None,
+            fields: fields
+                .into_iter()
+                .map(|(n, t)| sys_llm::OutputClassField {
+                    name: n.to_string(),
+                    alias: None,
+                    field_type: t,
+                    description: None,
+                })
+                .collect(),
+        }
+    }
+
+    fn ty_int() -> baml_type::Ty {
+        baml_type::Ty::Int {
+            attr: baml_type::TyAttr::default(),
+        }
+    }
+    fn ty_class(name: &str) -> baml_type::Ty {
+        baml_type::Ty::Class(
+            baml_type::TypeName::local(name.into()),
+            baml_type::TyAttr::default(),
+        )
+    }
+    fn ty_optional(inner: baml_type::Ty) -> baml_type::Ty {
+        baml_type::Ty::Optional(Box::new(inner), baml_type::TyAttr::default())
+    }
+
+    #[test]
+    fn test_find_recursive_classes_non_recursive() {
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert("A".to_string(), mk_output_class("A", vec![("x", ty_int())]));
+        classes.insert("B".to_string(), mk_output_class("B", vec![("y", ty_int())]));
+        let recursive = find_recursive_classes(&classes);
+        assert!(recursive.is_empty());
+    }
+
+    #[test]
+    fn test_find_recursive_classes_self_referential() {
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            "Node".to_string(),
+            mk_output_class(
+                "Node",
+                vec![("data", ty_int()), ("next", ty_optional(ty_class("Node")))],
+            ),
+        );
+        let recursive = find_recursive_classes(&classes);
+        assert_eq!(recursive.len(), 1);
+        assert!(recursive.contains("Node"));
+    }
+
+    #[test]
+    fn test_find_recursive_classes_mutual() {
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            "A".to_string(),
+            mk_output_class("A", vec![("b", ty_class("B"))]),
+        );
+        classes.insert(
+            "B".to_string(),
+            mk_output_class("B", vec![("a", ty_class("A"))]),
+        );
+        let recursive = find_recursive_classes(&classes);
+        assert_eq!(recursive.len(), 2);
+        assert!(recursive.contains("A"));
+        assert!(recursive.contains("B"));
+    }
+
+    #[test]
+    fn test_find_recursive_classes_referencing_recursive() {
+        // LinkedList references Node, but LinkedList itself is not recursive
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            "Node".to_string(),
+            mk_output_class(
+                "Node",
+                vec![("data", ty_int()), ("next", ty_optional(ty_class("Node")))],
+            ),
+        );
+        classes.insert(
+            "LinkedList".to_string(),
+            mk_output_class("LinkedList", vec![("head", ty_optional(ty_class("Node")))]),
+        );
+        let recursive = find_recursive_classes(&classes);
+        assert_eq!(recursive.len(), 1);
+        assert!(recursive.contains("Node"));
+        assert!(!recursive.contains("LinkedList"));
+    }
+
+    #[test]
+    fn test_find_recursive_classes_chain_no_cycle() {
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            "A".to_string(),
+            mk_output_class("A", vec![("b", ty_class("B"))]),
+        );
+        classes.insert(
+            "B".to_string(),
+            mk_output_class("B", vec![("c", ty_class("C"))]),
+        );
+        classes.insert("C".to_string(), mk_output_class("C", vec![("x", ty_int())]));
+        let recursive = find_recursive_classes(&classes);
+        assert!(recursive.is_empty());
+    }
+
+    // ========================================================================
+    // Integration test: build_output_format detects recursive classes
+    // ========================================================================
+
+    #[test]
+    fn test_build_output_format_detects_self_referential() {
+        let class_defs = indexmap::IndexMap::from([(
+            "Node".to_string(),
+            ClassDefinition {
+                name: "Node".to_string(),
+                description: None,
+                alias: None,
+                fields: vec![
+                    ClassFieldDefinition {
+                        name: "data".to_string(),
+                        field_type: ty_int(),
+                        description: None,
+                        alias: None,
+                        skip: false,
+                    },
+                    ClassFieldDefinition {
+                        name: "next".to_string(),
+                        field_type: ty_optional(ty_class("Node")),
+                        description: None,
+                        alias: None,
+                        skip: false,
+                    },
+                ],
+            },
+        )]);
+
+        let ty = ty_class("Node");
+        let content = build_output_format(
+            &ty,
+            &class_defs,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        );
+        assert!(content.recursive_classes.contains("Node"));
+    }
+
+    #[test]
+    fn test_build_output_format_detects_mutual_recursion() {
+        let class_defs = indexmap::IndexMap::from([
+            (
+                "Tree".to_string(),
+                ClassDefinition {
+                    name: "Tree".to_string(),
+                    description: None,
+                    alias: None,
+                    fields: vec![
+                        ClassFieldDefinition {
+                            name: "data".to_string(),
+                            field_type: ty_int(),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                        ClassFieldDefinition {
+                            name: "children".to_string(),
+                            field_type: ty_class("Forest"),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                    ],
+                },
+            ),
+            (
+                "Forest".to_string(),
+                ClassDefinition {
+                    name: "Forest".to_string(),
+                    description: None,
+                    alias: None,
+                    fields: vec![ClassFieldDefinition {
+                        name: "trees".to_string(),
+                        field_type: baml_type::Ty::List(
+                            Box::new(ty_class("Tree")),
+                            baml_type::TyAttr::default(),
+                        ),
+                        description: None,
+                        alias: None,
+                        skip: false,
+                    }],
+                },
+            ),
+        ]);
+
+        let ty = ty_class("Tree");
+        let content = build_output_format(
+            &ty,
+            &class_defs,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        );
+        assert!(content.recursive_classes.contains("Tree"));
+        assert!(content.recursive_classes.contains("Forest"));
+    }
+
+    #[test]
+    fn test_build_output_format_full_pipeline_renders_hoisted() {
+        let class_defs = indexmap::IndexMap::from([
+            (
+                "Node".to_string(),
+                ClassDefinition {
+                    name: "Node".to_string(),
+                    description: None,
+                    alias: None,
+                    fields: vec![
+                        ClassFieldDefinition {
+                            name: "data".to_string(),
+                            field_type: ty_int(),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                        ClassFieldDefinition {
+                            name: "next".to_string(),
+                            field_type: ty_optional(ty_class("Node")),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                    ],
+                },
+            ),
+            (
+                "LinkedList".to_string(),
+                ClassDefinition {
+                    name: "LinkedList".to_string(),
+                    description: None,
+                    alias: None,
+                    fields: vec![
+                        ClassFieldDefinition {
+                            name: "head".to_string(),
+                            field_type: ty_optional(ty_class("Node")),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                        ClassFieldDefinition {
+                            name: "len".to_string(),
+                            field_type: ty_int(),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                    ],
+                },
+            ),
+        ]);
+
+        let ty = ty_class("LinkedList");
+        let content = build_output_format(
+            &ty,
+            &class_defs,
+            &indexmap::IndexMap::new(),
+            &indexmap::IndexMap::new(),
+        );
+        let rendered = content.render(&sys_llm::RenderOptions::default()).unwrap();
+
+        let rendered = rendered.unwrap();
+        // Node should be hoisted (defined at top, referenced by name)
+        assert!(rendered.contains("Node {"));
+        assert!(rendered.contains("head: Node or null,"));
+        // LinkedList should be inline (not hoisted)
+        assert!(!rendered.contains("LinkedList {"));
+    }
+
+    // ========================================================================
+    // Tarjan SCC unit tests
+    // ========================================================================
+
+    #[test]
+    fn test_tarjan_self_cycle() {
+        use std::collections::{HashMap, HashSet};
+        let mut graph: HashMap<&str, HashSet<&str>> = HashMap::new();
+        graph.insert("A", HashSet::from(["A"]));
+        let sccs = tarjan_scc(&graph);
+        assert_eq!(sccs.len(), 1);
+        assert_eq!(sccs[0], vec!["A"]);
+    }
+
+    #[test]
+    fn test_tarjan_multi_scc() {
+        use std::collections::{HashMap, HashSet};
+        let mut graph: HashMap<&str, HashSet<&str>> = HashMap::new();
+        graph.insert("A", HashSet::from(["B"]));
+        graph.insert("B", HashSet::from(["A", "C"]));
+        graph.insert("C", HashSet::from(["D"]));
+        graph.insert("D", HashSet::from(["C"]));
+        let sccs = tarjan_scc(&graph);
+        // Should have 2 SCCs: {A, B} and {C, D}
+        assert_eq!(sccs.len(), 2);
+        let mut scc_sets: Vec<HashSet<&str>> = sccs
+            .iter()
+            .map(|scc| scc.iter().copied().collect::<HashSet<&str>>())
+            .collect();
+        scc_sets.sort_by_key(std::collections::HashSet::len);
+        assert_eq!(scc_sets[0], HashSet::from(["C", "D"]));
+        assert_eq!(scc_sets[1], HashSet::from(["A", "B"]));
+    }
+
+    #[test]
+    fn test_tarjan_no_cycles() {
+        use std::collections::{HashMap, HashSet};
+        let mut graph: HashMap<&str, HashSet<&str>> = HashMap::new();
+        graph.insert("A", HashSet::from(["B"]));
+        graph.insert("B", HashSet::from(["C"]));
+        graph.insert("C", HashSet::new());
+        let sccs = tarjan_scc(&graph);
+        // All SCCs should be trivial (size 1)
+        assert_eq!(sccs.len(), 3);
+        for scc in &sccs {
+            assert_eq!(scc.len(), 1);
         }
     }
 }

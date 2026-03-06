@@ -2,4 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === STRONG AST ERROR ===
-Expected token/node of kind LLM_FUNCTION_BODY or EXPR_FUNCTION_BODY, but found THROWS_CLAUSE at llm.baml:293:89
+Expected token/node of kind LLM_FUNCTION_BODY or EXPR_FUNCTION_BODY, but found THROWS_CLAUSE at llm.baml:294:89

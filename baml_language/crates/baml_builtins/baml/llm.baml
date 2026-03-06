@@ -213,15 +213,15 @@ function execute_client_once(
         baml.llm.ClientType.Primitive => {
             let resolve_fn = baml.llm.resolve_client(llm_client.name);
             let primitive = resolve_fn();
+            let return_type = baml.llm.get_return_type(context.function_name);
 
-            let prompt = primitive.render_prompt(context.jinja_string, context.args);
+            let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type);
             let specialized = primitive.specialize_prompt(prompt);
             let http_request = primitive.build_request(specialized);
             let http_response = baml.http.send(http_request);
 
             if (http_response.ok()) {
                 let body = http_response.text();
-                let return_type = baml.llm.get_return_type(context.function_name);
                 return baml.llm.ExecutionResult {
                     ok: true,
                     value: primitive.parse(body, return_type),
@@ -271,7 +271,8 @@ function resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient {
 function render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
     let jinja_string = baml.llm.get_jinja_template(function_name);
     let primitive_client = baml.llm.resolve_primitive(function_name);
-    let prompt = primitive_client.render_prompt(jinja_string, args);
+    let return_type = baml.llm.get_return_type(function_name);
+    let prompt = primitive_client.render_prompt(jinja_string, args, return_type);
 
     return primitive_client.specialize_prompt(prompt);
 }
