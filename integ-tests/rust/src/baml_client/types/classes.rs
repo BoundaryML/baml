@@ -220,6 +220,7 @@ impl ::std::convert::AsRef<ClassWithImage> for ClassWithImage {
 pub struct ClassWithoutDone {
     pub i_16_digits: i64,
     pub s_20_words: String,
+    pub literal_status: String,
 }
 
 impl ::std::convert::AsRef<ClassWithoutDone> for ClassWithoutDone {

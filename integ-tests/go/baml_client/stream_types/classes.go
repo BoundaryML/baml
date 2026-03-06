@@ -779,8 +779,9 @@ func (c ClassWithImage) BamlTypeName() string {
 }
 
 type ClassWithoutDone struct {
-	I_16_digits *int64                    `json:"i_16_digits"`
-	S_20_words  baml.StreamState[*string] `json:"s_20_words"`
+	I_16_digits    *int64                    `json:"i_16_digits"`
+	S_20_words     baml.StreamState[*string] `json:"s_20_words"`
+	Literal_status baml.StreamState[*string] `json:"literal_status"`
 }
 
 func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.TypeMap) {
@@ -803,6 +804,9 @@ func (c *ClassWithoutDone) Decode(holder *cffi.CFFIValueClass, typeMap baml.Type
 		case "s_20_words":
 			c.S_20_words = baml.Decode(valueHolder).Interface().(baml.StreamState[*string])
 
+		case "literal_status":
+			c.Literal_status = baml.Decode(valueHolder).Interface().(baml.StreamState[*string])
+
 		default:
 
 			panic(fmt.Sprintf("unexpected field: %s in class ClassWithoutDone", key))
@@ -818,6 +822,8 @@ func (c ClassWithoutDone) Encode() (*cffi.HostValue, error) {
 	fields["i_16_digits"] = c.I_16_digits
 
 	fields["s_20_words"] = c.S_20_words
+
+	fields["literal_status"] = c.Literal_status
 
 	return baml.EncodeClass("ClassWithoutDone", fields, nil)
 }

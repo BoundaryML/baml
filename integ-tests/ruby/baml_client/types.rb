@@ -326,6 +326,7 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :i_16_digits, Integer
       const :s_20_words, String
+      const :literal_status, String
   end
 
 

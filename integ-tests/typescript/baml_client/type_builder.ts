@@ -57,7 +57,7 @@ export default class TypeBuilder {
     
     ClassWithImage: ClassViewer<'ClassWithImage', "myImage" | "param2" | "fake_image">;
     
-    ClassWithoutDone: ClassViewer<'ClassWithoutDone', "i_16_digits" | "s_20_words">;
+    ClassWithoutDone: ClassViewer<'ClassWithoutDone', "i_16_digits" | "s_20_words" | "literal_status">;
     
     ClientDetails1559: ClassViewer<'ClientDetails1559', "client_name" | "client_address" | "client_postal_code" | "client_city" | "client_country" | "client_phone" | "client_email">;
     
@@ -359,7 +359,7 @@ export default class TypeBuilder {
         ]);
         
         this.ClassWithoutDone = this.tb.classViewer("ClassWithoutDone", [
-          "i_16_digits","s_20_words",
+          "i_16_digits","s_20_words","literal_status",
         ]);
         
         this.ClientDetails1559 = this.tb.classViewer("ClientDetails1559", [

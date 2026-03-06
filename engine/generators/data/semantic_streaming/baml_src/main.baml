@@ -12,6 +12,7 @@ class SemanticContainer {
 class ClassWithoutDone {
     i_16_digits int
     s_20_words string @description("A string with 20 words in it") @stream.with_state
+    literal_status "active" @stream.with_state
 }
 
 class ClassWithBlockDone {

@@ -225,6 +225,7 @@ class ClassWithImage(BaseModel):
 class ClassWithoutDone(BaseModel):
     i_16_digits: int
     s_20_words: str = Field(description='A string with 20 words in it')
+    literal_status: typing_extensions.Literal['active']
 
 class ClientDetails1559(BaseModel):
     client_name: typing.Optional[str] = None

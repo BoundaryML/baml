@@ -282,6 +282,7 @@ export interface ClassWithImage {
 export interface ClassWithoutDone {
   i_16_digits: number
   s_20_words: string
+  literal_status: "active"
   
 }
 

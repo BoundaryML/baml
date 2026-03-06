@@ -95,6 +95,7 @@ class ClassWithImage(BaseModel):
 class ClassWithoutDone(BaseModel):
     i_16_digits: typing.Optional[int] = None
     s_20_words: StreamState[typing.Optional[str]] = Field(description='A string with 20 words in it')
+    literal_status: StreamState[typing.Optional[typing_extensions.Literal['active']]]
 
 class ClientDetails1559(BaseModel):
     client_name: typing.Optional[str] = None

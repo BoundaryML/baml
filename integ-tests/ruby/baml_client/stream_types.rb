@@ -145,6 +145,7 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :i_16_digits, T.nilable(Integer)
       const :s_20_words, StreamState[T.nilable(String)]
+      const :literal_status, StreamState[T.nilable(String)]
   end
 
 

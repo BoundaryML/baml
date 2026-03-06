@@ -105,6 +105,7 @@ export namespace partial_types {
     export interface ClassWithoutDone {
       i_16_digits?: number | null
       s_20_words: StreamState<string | null>
+      literal_status: StreamState<"active" | null>
     }
     export interface ClientDetails1559 {
       client_name?: string | null

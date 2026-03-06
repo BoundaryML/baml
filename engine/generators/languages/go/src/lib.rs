@@ -194,8 +194,8 @@ impl LanguageFeatures for GoLanguageFeatures {
                     (t.to_union_name(true), go_type)
                 })
                 .collect::<Vec<_>>();
-            checked_types.sort_by_key(|(_, t)| t.serialize_type(&pkg));
-            checked_types.dedup_by_key(|(_, t)| t.serialize_type(&pkg));
+            checked_types.sort_by(|(n1, _), (n2, _)| n1.cmp(n2));
+            checked_types.dedup_by(|(n1, _), (n2, _)| n1 == n2);
             checked_types
         };
 
@@ -208,8 +208,8 @@ impl LanguageFeatures for GoLanguageFeatures {
                     (t.to_union_name(true), go_type)
                 })
                 .collect::<Vec<_>>();
-            stream_state_types.sort_by_key(|(_, t)| t.serialize_type(&pkg));
-            stream_state_types.dedup_by_key(|(_, t)| t.serialize_type(&pkg));
+            stream_state_types.sort_by(|(n1, _), (n2, _)| n1.cmp(n2));
+            stream_state_types.dedup_by(|(n1, _), (n2, _)| n1 == n2);
             stream_state_types
         };
 
@@ -300,5 +300,66 @@ mod tests {
         let gen_type = baml_types::GeneratorOutputType::from_str(crate::GoLanguageFeatures::name())
             .expect("GoLanguageFeatures name should be a valid GeneratorOutputType");
         assert_eq!(gen_type, baml_types::GeneratorOutputType::Go);
+    }
+
+    /// Regression test: when a class has a literal string field and a plain
+    /// string field both with @stream.with_state, the generated type_map.go
+    /// must contain entries for both stream state type names.
+    #[test]
+    fn test_stream_state_type_map_includes_all_names() {
+        use std::collections::BTreeMap;
+
+        use dir_writer::LanguageFeatures;
+        use internal_baml_core::ir::repr::make_test_ir;
+
+        let ir = make_test_ir(
+            r##"
+            class Foo {
+                plain_str string @stream.with_state
+                literal_str "active" @stream.with_state
+            }
+            function MakeFoo() -> Foo {
+                client "openai/gpt-4o"
+                prompt #"{{ ctx.output_format }}"#
+            }
+            "##,
+        )
+        .expect("Valid BAML");
+
+        let generator = crate::GoLanguageFeatures::default();
+        let args = dir_writer::GeneratorArgs {
+            output_dir_relative_to_baml_src: std::path::PathBuf::from(
+                "/tmp/test_output/baml_client",
+            ),
+            baml_src_dir: std::path::PathBuf::from("/tmp/test_output/baml_src"),
+            inlined_file_map: BTreeMap::new(),
+            version: "0.0.0-test".to_string(),
+            no_version_check: true,
+            default_client_mode: baml_types::GeneratorDefaultClientMode::Async,
+            on_generate: vec![],
+            client_type: baml_types::GeneratorOutputType::Go,
+            client_package_name: Some("test_pkg".to_string()),
+            module_format: None,
+            is_pydantic_2: None,
+        };
+
+        let files = generator
+            .generate_sdk_files_for_test(std::sync::Arc::new(ir), &args)
+            .expect("codegen should succeed");
+
+        let type_map = files
+            .iter()
+            .find(|(path, _)| path.to_string_lossy().contains("type_map.go"))
+            .map(|(_, content)| content.as_str())
+            .expect("type_map.go should be generated");
+
+        assert!(
+            type_map.contains("STREAM_STATE_TYPES.Optional__string\""),
+            "type_map.go should contain Optional__string, got:\n{type_map}",
+        );
+        assert!(
+            type_map.contains("STREAM_STATE_TYPES.Optional__string_active\""),
+            "type_map.go should contain Optional__string_active, got:\n{type_map}",
+        );
     }
 }

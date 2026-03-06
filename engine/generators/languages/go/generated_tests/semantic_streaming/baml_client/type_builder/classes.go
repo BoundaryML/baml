@@ -75,6 +75,10 @@ func (t *ClassWithoutDoneClassView) PropertyS_20_words() (ClassPropertyView, err
 	return t.inner.Property("s_20_words")
 }
 
+func (t *ClassWithoutDoneClassView) PropertyLiteral_status() (ClassPropertyView, error) {
+	return t.inner.Property("literal_status")
+}
+
 func (t *TypeBuilder) ClassWithoutDone() (*ClassWithoutDoneClassView, error) {
 	bld, err := t.inner.Class("ClassWithoutDone")
 	if err != nil {

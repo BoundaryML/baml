@@ -20,6 +20,7 @@ func TestParseStream(t *testing.T) {
 	"class_1": {
 	"i_16_digits": 1234567890,
 	"s_20_words": "Hello, world!",
+	"literal_status": "active"
 	},
 	"class_2": {
 	"i_16_digits": 1234567890,
@@ -32,6 +33,7 @@ func TestParseStream(t *testing.T) {
 	"class_needed": {
 	"i_16_digits": 1234567890,
 	"s_20_words": "Hello, world!",
+	"literal_status": "active"
 	},
 	`
 	// parse every raw_text[:i]
