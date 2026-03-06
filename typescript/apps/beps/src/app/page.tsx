@@ -47,7 +47,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-[1600px] mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold">BAML Enhancement Proposals</h1>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">
@@ -59,7 +59,7 @@ export default function Home() {
           </div>
         </div>
       </header>
-      <main className="max-w-6xl mx-auto px-4 py-8">
+      <main className="max-w-[1600px] mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-semibold">All Proposals</h2>
           <BepCreateModal userId={userId} />
