@@ -38,6 +38,7 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
         TypeExpr::String => "string".into(),
         TypeExpr::Bool => "bool".into(),
         TypeExpr::Null => "null".into(),
+        TypeExpr::Never => "never".into(),
         TypeExpr::Media(k) => format!("{:?}", k).to_lowercase(),
         TypeExpr::Optional(inner) => format!("{}?", hir2_type_expr_to_string(inner)),
         TypeExpr::List(inner) => format!("{}[]", hir2_type_expr_to_string(inner)),
@@ -467,6 +468,14 @@ fn assignop_sym(op: &baml_compiler2_ast::AssignOp) -> &'static str {
     }
 }
 
+fn catch_clause_kind_sym(kind: baml_compiler2_ast::CatchClauseKind) -> &'static str {
+    match kind {
+        baml_compiler2_ast::CatchClauseKind::Catch => "catch",
+        baml_compiler2_ast::CatchClauseKind::CatchAll => "catch_all",
+        baml_compiler2_ast::CatchClauseKind::CatchAllPanics => "catch_all_panics",
+    }
+}
+
 /// Render an expression as rich `DetailSpan`s with inline type annotations on
 /// every sub-expression. E.g. `Add1(Add2(x: int): int): int`.
 fn expr_desc_spans<'db>(
@@ -593,6 +602,19 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("match (".into()));
             spans.extend(expr_desc_spans(*scrutinee, body, inference));
             spans.push(DetailSpan::Code(") { ... }".into()));
+        }
+        Expr::Catch { base, clauses } => {
+            spans.extend(expr_desc_spans(*base, body, inference));
+            for clause in clauses {
+                spans.push(DetailSpan::Code(format!(
+                    " {}(...)",
+                    catch_clause_kind_sym(clause.kind)
+                )));
+            }
+        }
+        Expr::Throw { value } => {
+            spans.push(DetailSpan::Code("throw ".into()));
+            spans.extend(expr_desc_spans(*value, body, inference));
         }
         Expr::Missing => {
             spans.push(DetailSpan::Code("<missing>".into()));
@@ -1917,6 +1939,8 @@ impl CompilerRunner {
                     .join("."),
                 Expr::If { .. } => "if ...".into(),
                 Expr::Match { .. } => "match ...".into(),
+                Expr::Catch { .. } => "catch ...".into(),
+                Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
                 Expr::Binary { op, .. } => format!("... {op:?} ..."),
                 Expr::Unary { op, expr: inner } => format!("{op:?} {}", expr_desc(*inner, body)),
                 Expr::Call { callee, args } => {
@@ -2333,6 +2357,27 @@ impl CompilerRunner {
                             let line = format!("{pad}return");
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
+                        }
+                        Stmt::Throw { value } => {
+                            let ty = inference
+                                .expression_type(*value)
+                                .map(|t| t.to_string())
+                                .unwrap_or_else(|| "unknown".into());
+                            let desc = expr_desc(*value, body);
+                            let line = format!("{pad}throw {desc} : {ty}");
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            if matches!(&body.exprs[*value], Expr::Block { .. }) {
+                                render_expr(
+                                    *value,
+                                    body,
+                                    inference,
+                                    indent + 2,
+                                    output,
+                                    output_annotated,
+                                    status,
+                                );
+                            }
                         }
                         Stmt::Expr(expr_id) => {
                             render_expr(
@@ -2989,6 +3034,25 @@ impl CompilerRunner {
                         }
                         Stmt::Return(None) => {
                             lines.push(plain(format!("{pad}  return")));
+                        }
+                        Stmt::Throw { value } => {
+                            if matches!(
+                                &body.exprs[*value],
+                                Expr::Block { .. } | Expr::If { .. } | Expr::Match { .. }
+                            ) {
+                                lines.push(plain(format!("{pad}  throw")));
+                                Self::render_expr_to_lines(
+                                    *value,
+                                    body,
+                                    inference,
+                                    indent + 2,
+                                    lines,
+                                );
+                            } else {
+                                let mut line = vec![DetailSpan::Code(format!("{pad}  throw "))];
+                                line.extend(expr_desc_spans(*value, body, inference));
+                                lines.push(line);
+                            }
                         }
                         Stmt::Expr(e) => {
                             if matches!(

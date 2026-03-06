@@ -52,7 +52,7 @@ pub struct ProjectDatabase {
     next_file_id: Arc<AtomicU32>,
     /// The current project. Set via `set_project_root()`.
     project: Option<Project>,
-    /// Compiler2-only extra files (baml_builtins2 stubs). Held separately so
+    /// Compiler2-only extra files (`baml_builtins2` stubs). Held separately so
     /// they are NOT added to `project.files()` — the v1 compiler must not see
     /// them because it cannot parse compiler2-specific syntax.
     compiler2_extra_files: Option<Compiler2ExtraFiles>,
@@ -60,7 +60,7 @@ pub struct ProjectDatabase {
     /// v2 builtin stubs are stored in `compiler2_file_map` instead to prevent them
     /// from appearing in `get_source_files()` which feeds the v1 compiler pipeline.
     file_map: HashMap<std::path::PathBuf, SourceFile>,
-    /// Maps file paths to compiler2-only SourceFile handles.
+    /// Maps file paths to compiler2-only `SourceFile` handles.
     /// These files are NOT returned by `get_source_files()`.
     compiler2_file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps `FileId` to file path for reverse lookup (all files including v2 stubs).

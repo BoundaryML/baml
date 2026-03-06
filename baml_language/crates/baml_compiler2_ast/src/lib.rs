@@ -91,7 +91,7 @@ class Array<T> {
         // Verify the param name is "T"
         let param_name = params[0]
             .children_with_tokens()
-            .filter_map(|e| e.into_token())
+            .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
             .find(|t| t.kind() == SyntaxKind::WORD)
             .expect("expected WORD token in GENERIC_PARAM")
             .text()
@@ -125,7 +125,7 @@ class Map<K, V> {
             .iter()
             .map(|p| {
                 p.children_with_tokens()
-                    .filter_map(|e| e.into_token())
+                    .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
                     .find(|t| t.kind() == SyntaxKind::WORD)
                     .expect("expected WORD token")
                     .text()

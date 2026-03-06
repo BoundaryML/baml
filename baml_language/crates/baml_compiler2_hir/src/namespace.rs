@@ -127,7 +127,7 @@ impl<'db> NamespaceItems<'db> {
 /// `maybe_update` uses `PartialEq` to determine whether the value changed,
 /// providing proper Salsa early-cutoff for downstream queries.
 #[allow(unsafe_code)]
-unsafe impl<'db> salsa::Update for NamespaceItems<'db> {
+unsafe impl salsa::Update for NamespaceItems<'_> {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
         #[allow(unsafe_code)]
@@ -170,7 +170,7 @@ pub fn namespace_items<'db>(
             pkg_info.package == *package && pkg_info.namespace_path == *ns_path
         })
         .collect();
-    matching_files.sort_by(|a, b| a.path(db).cmp(&b.path(db)));
+    matching_files.sort_by_key(|a| a.path(db));
 
     // Accumulate all contributions per name (preserving file order).
     let mut type_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();

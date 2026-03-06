@@ -141,7 +141,7 @@ pub struct FileSymbolContributions<'db> {
     pub values: Vec<(Name, Contribution<'db>)>,
 }
 
-impl<'db> FileSymbolContributions<'db> {
+impl FileSymbolContributions<'_> {
     pub fn new() -> Self {
         Self {
             types: Vec::new(),
@@ -150,7 +150,7 @@ impl<'db> FileSymbolContributions<'db> {
     }
 }
 
-impl<'db> Default for FileSymbolContributions<'db> {
+impl Default for FileSymbolContributions<'_> {
     fn default() -> Self {
         Self::new()
     }

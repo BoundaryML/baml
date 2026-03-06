@@ -39,7 +39,7 @@ pub(crate) struct SemanticIndexBuilder<'db> {
     /// contribute to top-level symbols — they belong to the class scope).
     class_depth: u32,
 
-    /// Expression → scope mappings, sorted by ExprId at the end.
+    /// Expression → scope mappings, sorted by `ExprId` at the end.
     expr_scopes: Vec<(ast::ExprId, FileScopeId)>,
 
     item_tree: ItemTree,
@@ -71,7 +71,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     /// Project/Package/Namespace/File scopes).
     pub(crate) fn build(
         mut self,
-        items: Vec<ast::Item>,
+        items: &[ast::Item],
         file_range: TextRange,
     ) -> FileSemanticIndex<'db> {
         let pkg_info = file_package(self.db, self.file);
@@ -94,7 +94,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.push_scope(ScopeKind::File, file_name, file_range);
 
         // Walk AST items
-        for item in &items {
+        for item in items {
             self.lower_item(item);
         }
 
@@ -187,7 +187,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     | ScopeKind::Package
                     | ScopeKind::Namespace
                     | ScopeKind::File => None,
-                    _ => scope.name.as_ref().map(|n| n.as_str()),
+                    _ => scope.name.as_ref().map(Name::as_str),
                 }
             })
             .collect();

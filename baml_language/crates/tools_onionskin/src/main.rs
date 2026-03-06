@@ -1,3 +1,12 @@
+#![allow(
+    clippy::collapsible_if,
+    clippy::for_kv_map,
+    clippy::len_zero,
+    clippy::needless_borrow,
+    clippy::redundant_closure,
+    dead_code
+)]
+
 mod app;
 mod compiler;
 mod ui;

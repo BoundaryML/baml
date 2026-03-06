@@ -208,15 +208,10 @@ impl WithDiagnostics for crate::project::BexProject {
             .map(|p| (p.clone(), Vec::new()))
             .collect();
 
-        let mut total_converted = 0usize;
-        let mut total_dropped = 0usize;
         for (path, diags) in diags_by_file {
             for diag in diags {
                 if let Some(lsp_diag) = to_lsp_diagnostic(diag, &config, position_encoding) {
                     grouped.entry(path.clone()).or_default().push(lsp_diag);
-                    total_converted += 1;
-                } else {
-                    total_dropped += 1;
                 }
             }
         }

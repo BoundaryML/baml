@@ -39,7 +39,7 @@ use crate::{
 
 // ── Db trait ─────────────────────────────────────────────────────────────────
 
-/// Database trait for compiler2_hir queries.
+/// Database trait for `compiler2_hir` queries.
 ///
 /// Extends `baml_workspace::Db`. Use `file_semantic_index` for HIR queries.
 ///
@@ -71,7 +71,7 @@ pub trait Db: baml_workspace::Db {
 /// The v1 compiler only sees `project.files()`, while compiler2 HIR queries
 /// (`namespace_items`, `package_items`) use this combined view.
 pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
-    let mut files: Vec<baml_base::SourceFile> = db.project().files(db).to_vec();
+    let mut files: Vec<baml_base::SourceFile> = db.project().files(db).clone();
     if let Some(extra) = db.compiler2_extra_files() {
         files.extend_from_slice(extra.files(db));
     }
@@ -85,11 +85,11 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
 /// Projection queries (`file_symbol_contributions`, `file_item_tree`,
 /// `scope_bindings`) provide Salsa early-cutoff via `Arc` equality.
 #[salsa::tracked(returns(ref), no_eq)]
-pub fn file_semantic_index<'db>(db: &'db dyn Db, file: SourceFile) -> FileSemanticIndex<'db> {
+pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
     let (items, _ast_diagnostics) = baml_compiler2_ast::lower_file(&tree);
-    SemanticIndexBuilder::new(db, file).build(items, file_range)
+    SemanticIndexBuilder::new(db, file).build(&items, file_range)
 }
 
 // ── Projection helpers ────────────────────────────────────────────────────────
@@ -102,10 +102,10 @@ pub fn file_semantic_index<'db>(db: &'db dyn Db, file: SourceFile) -> FileSemant
 ///
 /// Not tracked — callers that need Salsa cut-off should use the
 /// `namespace_items` query which re-reads this and uses `PartialEq`.
-pub fn file_symbol_contributions<'db>(
-    db: &'db dyn Db,
+pub fn file_symbol_contributions(
+    db: &dyn Db,
     file: SourceFile,
-) -> Arc<FileSymbolContributions<'db>> {
+) -> Arc<FileSymbolContributions<'_>> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.symbol_contributions)
 }
