@@ -1,31 +1,62 @@
 ---
 source: crates/baml_tests/src/compiler2_tir/phase5.rs
-assertion_line: 391
+assertion_line: 402
 expression: output
 ---
 namespace baml:
   class Array<T> { methods: [length, at, push, pop, concat, reverse, slice, join] }
+  class Map<K, V> { methods: [length, has, keys, values, set, get] }
+  class String { methods: [length, toLowerCase, toUpperCase, trim, includes, startsWith, endsWith, split, substring, replace, indexOf, charAt, matches, replaceAll] }
+  function deep_copy<T>
+  function deep_equals<T>
+namespace baml.env:
+  function get
+namespace baml.errors:
+  class AccessError { methods: [] }
+  class DevOther { methods: [] }
+  class HostPanic { methods: [] }
+  class InvalidArgument { methods: [] }
+  class Io { methods: [] }
+  class LlmClient { methods: [] }
+  class NotImplemented { methods: [] }
+  class RenderPrompt { methods: [] }
+  class Timeout { methods: [] }
+  class Unsupported { methods: [] }
+namespace baml.fs:
+  class File { methods: [read, close] }
+  function open
+namespace baml.http:
+  class Request { methods: [] }
+  class Response { methods: [text, ok] }
+  function fetch
+  function send
+namespace baml.llm:
+  class Client { methods: [] }
+  enum ClientType
   class ExecutionContext { methods: [] }
   class ExecutionResult { methods: [] }
-  class Map<K, V> { methods: [length, has, keys, values, set, get] }
   class OrchestrationStep { methods: [] }
   class PlannerState { methods: [rr_local_offset, rr_pick_index] }
-  class String { methods: [length, toLowerCase, toUpperCase, trim, includes, startsWith, endsWith, split, substring, replace, indexOf, charAt, matches, replaceAll] }
+  class PrimitiveClient { methods: [render_prompt, specialize_prompt, build_request, parse] }
+  class PromptAst { methods: [] }
+  class RetryPolicy { methods: [] }
   function build_attempt
   function build_attempt_with_state
   function build_plan
   function build_plan_with_state
+  function build_primitive_client
   function build_request
   function call_llm_function
   function execute_client
   function execute_client_once
+  function get_client
+  function get_jinja_template
+  function get_return_type
   function render_prompt
+  function resolve_client
   function resolve_primitive
-namespace baml.env:
-  function get
-namespace baml.http:
-  class Request { methods: [] }
-  class Response { methods: [text, ok] }
+  function round_robin_next
+  function round_robin_peek
 namespace baml.math:
   function trunc
 namespace baml.media:
@@ -33,7 +64,12 @@ namespace baml.media:
   class Image { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
   class Pdf { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
   class Video { methods: [url, file, base64, mime_type, from_url, from_file, from_base64] }
+namespace baml.net:
+  class Socket { methods: [read, close] }
+  function connect
 namespace baml.sys:
   function panic
   function shell
   function sleep
+namespace baml.unstable:
+  function string<T>

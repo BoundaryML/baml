@@ -62,6 +62,54 @@ mod tests {
             .expect("expected a FunctionDef")
     }
 
+    #[test]
+    fn ast_function_def_has_generic_params() {
+        let source = r#"
+function deep_copy<T>(value: T) -> T {
+  $rust_function
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+
+        assert_eq!(function.generic_params.len(), 1);
+        assert_eq!(function.generic_params[0].as_str(), "T");
+    }
+
+    #[test]
+    fn ast_lowers_method_block_attributes() {
+        let source = r#"
+class Response {
+  @@internal.uses(engine_ctx)
+  function text(self) -> string throws baml.errors.Io {
+    $rust_io_function
+  }
+}
+"#;
+        let items = parse_and_lower(source);
+        let class = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Class(class) => Some(class),
+                _ => None,
+            })
+            .expect("expected ClassDef");
+        let method = class.methods.first().expect("expected method");
+
+        assert_eq!(method.attributes.len(), 1);
+        assert_eq!(method.attributes[0].name.as_str(), "internal.uses");
+        assert_eq!(method.attributes[0].args.len(), 1);
+        assert_eq!(method.attributes[0].args[0].value, "engine_ctx");
+        let throws = method.throws.as_ref().expect("expected throws contract");
+        assert_eq!(
+            throws.expr,
+            TypeExpr::Path(vec![
+                baml_base::Name::new("baml"),
+                baml_base::Name::new("errors"),
+                baml_base::Name::new("Io"),
+            ])
+        );
+    }
+
     // ── 4.1/4.2: Parser produces GENERIC_PARAM_LIST / GENERIC_PARAM CST nodes ──
 
     #[test]

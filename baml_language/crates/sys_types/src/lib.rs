@@ -537,7 +537,7 @@ baml_builtins::for_all_sys_ops!(define_sys_ops_struct);
 
 // Generates: SysOpFs, SysOpSys, SysOpNet, SysOpHttp, SysOpLlm traits
 // and SysOps::from_impl<T>() constructor.
-baml_builtins::with_builtins!(baml_builtins_macros::generate_sys_op_traits);
+baml_builtins::generate_sys_op_traits!();
 
 // ============================================================================
 // SysOpsBuilder — Compose a SysOps table by overriding modules independently

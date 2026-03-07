@@ -29,8 +29,8 @@ pub type NativeFunctionResult = Result<Value, VmError>;
 /// Native function type alias.
 pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeFunctionResult;
 
-// Generate the NativeFunctions trait from builtin definitions
-baml_builtins::with_builtins!(baml_builtins_macros::generate_native_trait);
+// Generate the NativeFunctions trait from builtin definitions.
+baml_builtins::generate_native_trait!();
 
 /// The VM's native function implementations.
 pub struct VmNatives;

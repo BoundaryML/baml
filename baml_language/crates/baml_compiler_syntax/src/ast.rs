@@ -1563,7 +1563,15 @@ impl BlockAttribute {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC))
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_DYNAMIC
+                        | SyntaxKind::KW_ASSERT
+                        | SyntaxKind::KW_THROWS
+                )
+            })
     }
 
     /// Get the full attribute name including dot-separated modifiers.
@@ -1573,7 +1581,15 @@ impl BlockAttribute {
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC))
+            .filter(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_DYNAMIC
+                        | SyntaxKind::KW_ASSERT
+                        | SyntaxKind::KW_THROWS
+                )
+            })
             .map(|token| token.text().to_string())
             .collect();
 
@@ -1593,7 +1609,11 @@ impl BlockAttribute {
             .filter(|token| {
                 matches!(
                     token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::DOT
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_DYNAMIC
+                        | SyntaxKind::KW_ASSERT
+                        | SyntaxKind::KW_THROWS
+                        | SyntaxKind::DOT
                 )
             })
             .collect();

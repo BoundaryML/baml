@@ -33,6 +33,27 @@ pub enum Hir2Diagnostic {
         scope: Option<Name>,
         sites: Vec<MemberSite>,
     },
+    /// Unknown builtin-internal attribute.
+    UnknownAttribute {
+        attr_name: Name,
+        span: TextRange,
+        valid_attributes: Vec<&'static str>,
+    },
+    /// Builtin-internal attribute used in the wrong place.
+    InvalidAttributeContext {
+        attr_name: Name,
+        context: &'static str,
+        allowed_contexts: &'static str,
+        span: TextRange,
+    },
+    /// Builtin-only syntax used outside builtin stdlib files.
+    BuiltinOnlySyntax { feature: String, span: TextRange },
+    /// Generic single-span diagnostic for builtin contract validation.
+    DiagnosticMessage {
+        diagnostic_id: DiagnosticId,
+        message: String,
+        span: TextRange,
+    },
 }
 
 impl Hir2Diagnostic {
@@ -86,6 +107,65 @@ impl Hir2Diagnostic {
                 }
                 diag.with_phase(DiagnosticPhase::Hir)
             }
+            Hir2Diagnostic::UnknownAttribute {
+                attr_name,
+                span,
+                valid_attributes,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownAttribute,
+                format!(
+                    "Unknown attribute `@@{}`. Valid builtin internal attributes are: {}",
+                    attr_name,
+                    valid_attributes.join(", ")
+                ),
+            )
+            .with_primary(Span { file_id, range: *span }, "unknown attribute")
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::InvalidAttributeContext {
+                attr_name,
+                context,
+                allowed_contexts,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::InvalidAttributeContext,
+                format!(
+                    "Attribute `@@{}` is not valid on {context}. Allowed contexts: {allowed_contexts}",
+                    attr_name
+                ),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "invalid attribute context",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::BuiltinOnlySyntax { feature, span } => Diagnostic::error(
+                DiagnosticId::InvalidAttributeContext,
+                format!("Builtin-only syntax `{feature}` is only allowed in builtin stdlib files"),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "builtin-only syntax",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::DiagnosticMessage {
+                diagnostic_id,
+                message,
+                span,
+            } => Diagnostic::error(*diagnostic_id, message.clone())
+                .with_primary(
+                    Span {
+                        file_id,
+                        range: *span,
+                    },
+                    "invalid builtin declaration",
+                )
+                .with_phase(DiagnosticPhase::Hir),
         }
     }
 }

@@ -64,14 +64,23 @@ pub trait Db: baml_workspace::Db {
 /// Returns all files visible to compiler2 HIR queries.
 ///
 /// This is the union of:
-/// - `db.project().files()` — user files and v1 builtin stubs
-/// - `db.compiler2_extra_files().files()` — compiler2-only builtin stubs
+/// - `db.project().files()` excluding legacy `<builtin>/...` v1 builtin files
+/// - `db.compiler2_extra_files().files()` — compiler2-owned builtin sources
 ///   (e.g., `Array<T>`, `Map<K,V>`, `String`, `Media` from `baml_builtins2`)
 ///
-/// The v1 compiler only sees `project.files()`, while compiler2 HIR queries
-/// (`namespace_items`, `package_items`) use this combined view.
+/// The v1 compiler continues to see `project.files()` including the legacy
+/// builtin BAML sources. Compiler2 HIR queries (`namespace_items`,
+/// `package_items`) intentionally ignore those legacy builtin files once the
+/// compiler2-owned builtin stdlib is present, so there is only one builtin
+/// source of truth in the compiler2 package graph.
 pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
-    let mut files: Vec<baml_base::SourceFile> = db.project().files(db).to_vec();
+    let mut files: Vec<baml_base::SourceFile> = db
+        .project()
+        .files(db)
+        .iter()
+        .copied()
+        .filter(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/"))
+        .collect();
     if let Some(extra) = db.compiler2_extra_files() {
         files.extend_from_slice(extra.files(db));
     }

@@ -27,6 +27,7 @@ class String {
     $rust_function
   }
 
+  @@internal.uses(vm)
   function split(self, delimiter: string) -> string[] {
     $rust_function
   }

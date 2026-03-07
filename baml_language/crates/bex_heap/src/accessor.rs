@@ -780,6 +780,6 @@ pub trait BuiltinClass<'a>: Sized + From<BexClass<'a>> {
 #[allow(unreachable_code)]
 mod _builtin_accessors {
     use super::*;
-    baml_builtins::with_builtins!(baml_builtins_macros::generate_builtin_accessors);
+    baml_builtins::generate_builtin_accessors!();
 }
 pub use _builtin_accessors::*;

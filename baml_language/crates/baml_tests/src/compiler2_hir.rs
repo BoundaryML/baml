@@ -399,7 +399,9 @@ mod tests {
             .collect();
         assert_eq!(dups.len(), 1, "Expected 1 duplicate diagnostic for 'Bar'");
 
-        let Hir2Diagnostic::DuplicateDefinition { name, scope, sites } = dups[0];
+        let Hir2Diagnostic::DuplicateDefinition { name, scope, sites } = dups[0] else {
+            panic!("expected DuplicateDefinition diagnostic");
+        };
         assert_eq!(name, &Name::new("Bar"));
         assert_eq!(scope.as_ref().unwrap(), &Name::new("Foo"));
         assert_eq!(sites.len(), 2);
@@ -426,7 +428,9 @@ mod tests {
             .collect();
         assert_eq!(dups.len(), 1);
 
-        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0];
+        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
+            panic!("expected DuplicateDefinition diagnostic");
+        };
         assert_eq!(scope.as_ref().unwrap(), &Name::new("Foo"));
         assert_eq!(sites.len(), 2);
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Field));
@@ -449,7 +453,9 @@ mod tests {
             .collect();
         assert_eq!(dups.len(), 1);
 
-        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0];
+        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
+            panic!("expected DuplicateDefinition diagnostic");
+        };
         assert_eq!(scope.as_ref().unwrap(), &Name::new("Color"));
         assert_eq!(sites.len(), 2);
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Variant));
@@ -475,7 +481,9 @@ mod tests {
             .collect();
         assert_eq!(dups.len(), 1);
 
-        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0];
+        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
+            panic!("expected DuplicateDefinition diagnostic");
+        };
         assert_eq!(scope.as_ref().unwrap(), &Name::new("foo"));
         assert_eq!(sites.len(), 2);
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Binding));
@@ -501,12 +509,87 @@ mod tests {
             .collect();
         assert_eq!(dups.len(), 1, "Expected cross-kind duplicate for 'bar'");
 
-        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0];
+        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
+            panic!("expected DuplicateDefinition diagnostic");
+        };
         assert_eq!(scope.as_ref().unwrap(), &Name::new("Foo"));
         assert_eq!(sites.len(), 2);
         let kinds: Vec<_> = sites.iter().map(|s| s.kind).collect();
         assert!(kinds.contains(&DefinitionKind::Field));
         assert!(kinds.contains(&DefinitionKind::Method));
+    }
+
+    #[test]
+    fn builtin_only_rust_function_is_rejected_in_user_file() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "user_rust_fn.baml",
+            "function deep_copy<T>(value: T) -> T {\n  $rust_function\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        assert!(index.diagnostics().iter().any(|diag| {
+            matches!(
+                diag,
+                Hir2Diagnostic::BuiltinOnlySyntax { feature, .. } if feature == "$rust_function"
+            )
+        }));
+    }
+
+    #[test]
+    fn builtin_only_internal_attribute_is_rejected_in_user_file() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "user_internal_attr.baml",
+            "@@internal.uses(vm)\nfunction helper(value: string) -> string {\n  value\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        assert!(index.diagnostics().iter().any(|diag| {
+            matches!(
+                diag,
+                Hir2Diagnostic::BuiltinOnlySyntax { feature, .. } if feature == "@@internal.uses"
+            )
+        }));
+    }
+
+    #[test]
+    fn builtin_only_rust_type_is_rejected_in_user_file() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "user_rust_type.baml",
+            "class Response {\n  _body $rust_type\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        assert!(index.diagnostics().iter().any(|diag| {
+            matches!(
+                diag,
+                Hir2Diagnostic::BuiltinOnlySyntax { feature, .. } if feature == "$rust_type"
+            )
+        }));
+    }
+
+    #[test]
+    fn builtin_http_file_has_no_phase1_contract_diagnostics() {
+        let db = make_db();
+        let builtin = baml_compiler2_hir::compiler2_all_files(&db)
+            .into_iter()
+            .find(|file| file.path(&db) == std::path::Path::new("<builtin>/baml/http/http.baml"))
+            .expect("expected builtin http file");
+
+        let index = file_semantic_index(&db, builtin);
+        assert!(
+            index.diagnostics().is_empty(),
+            "expected builtin http file to be phase1-clean, got: {:?}",
+            index.diagnostics()
+        );
     }
 
     // ── 9. Early-cutoff: comment-only change ──────────────────────────────────

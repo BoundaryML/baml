@@ -347,6 +347,122 @@ impl<'a> Parser<'a> {
         false
     }
 
+    /// Skip trivia and comments starting from an arbitrary token index.
+    fn skip_trivia_and_comments_from(&self, mut i: usize) -> usize {
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
+            if self.is_basic_trivia(self.tokens[i].kind) {
+                i += 1;
+                continue;
+            }
+
+            break;
+        }
+
+        i
+    }
+
+    /// Skip a parenthesized argument list starting at `(`, returning the index after it.
+    fn skip_parenthesized_from(&self, mut i: usize) -> Option<usize> {
+        i = self.skip_trivia_and_comments_from(i);
+        if self.tokens.get(i)?.kind != TokenKind::LParen {
+            return Some(i);
+        }
+
+        let mut depth = 0_u32;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
+            let token = &self.tokens[i];
+            if self.is_basic_trivia(token.kind) {
+                i += 1;
+                continue;
+            }
+
+            match token.kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return Some(i + 1);
+                    }
+                }
+                _ => {}
+            }
+
+            i += 1;
+        }
+
+        None
+    }
+
+    /// Skip one block attribute (`@@foo(...)`) starting at `@@`, returning the index after it.
+    fn skip_block_attribute_from(&self, mut i: usize) -> Option<usize> {
+        i = self.skip_trivia_and_comments_from(i);
+        if self.tokens.get(i)?.kind != TokenKind::AtAt {
+            return None;
+        }
+        i += 1;
+
+        i = self.skip_trivia_and_comments_from(i);
+        let name_kind = self.tokens.get(i)?.kind;
+        if !matches!(
+            name_kind,
+            TokenKind::Word | TokenKind::Dynamic | TokenKind::Assert | TokenKind::Throws
+        ) {
+            return None;
+        }
+        i += 1;
+
+        loop {
+            i = self.skip_trivia_and_comments_from(i);
+            if self.tokens.get(i).map(|t| t.kind) != Some(TokenKind::Dot) {
+                break;
+            }
+            i += 1;
+
+            i = self.skip_trivia_and_comments_from(i);
+            let segment_kind = self.tokens.get(i)?.kind;
+            if !matches!(
+                segment_kind,
+                TokenKind::Word | TokenKind::Dynamic | TokenKind::Assert | TokenKind::Throws
+            ) {
+                return None;
+            }
+            i += 1;
+        }
+
+        i = self.skip_trivia_and_comments_from(i);
+        if self.tokens.get(i).map(|t| t.kind) == Some(TokenKind::LParen) {
+            i = self.skip_parenthesized_from(i)?;
+        }
+
+        Some(i)
+    }
+
+    /// Look ahead past any leading block attributes and return the next item keyword.
+    fn item_keyword_after_leading_block_attributes(&self) -> Option<TokenKind> {
+        let mut i = self.current;
+
+        loop {
+            i = self.skip_trivia_and_comments_from(i);
+            let token = self.tokens.get(i)?;
+            if token.kind != TokenKind::AtAt {
+                return Some(token.kind);
+            }
+            i = self.skip_block_attribute_from(i)?;
+        }
+    }
+
     /// Check if position i starts a line comment (//) but NOT a header comment (//#)
     fn is_line_comment_at(&self, i: usize) -> bool {
         if i + 1 < self.tokens.len()
@@ -1490,12 +1606,19 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::AtAt);
 
             // Attribute name (can be dotted like @@stream.done)
-            if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Assert) {
+            if p.at(TokenKind::Word)
+                || p.at(TokenKind::Dynamic)
+                || p.at(TokenKind::Assert)
+                || p.at(TokenKind::Throws)
+            {
                 p.bump();
                 // Handle dotted attribute names like @@stream.done
                 while p.at(TokenKind::Dot) {
                     p.bump(); // consume dot
-                    if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Assert)
+                    if p.at(TokenKind::Word)
+                        || p.at(TokenKind::Dynamic)
+                        || p.at(TokenKind::Assert)
+                        || p.at(TokenKind::Throws)
                     {
                         p.bump(); // consume next segment
                     } else {
@@ -1823,6 +1946,10 @@ impl<'a> Parser<'a> {
     /// Parse an enum declaration
     pub(crate) fn parse_enum(&mut self) {
         self.with_node(SyntaxKind::ENUM_DEF, |p| {
+            while p.at(TokenKind::AtAt) {
+                p.parse_block_attribute();
+            }
+
             // 'enum' keyword
             p.expect(TokenKind::Enum);
 
@@ -1944,6 +2071,10 @@ impl<'a> Parser<'a> {
     /// Parse a class declaration
     pub(crate) fn parse_class(&mut self) {
         self.with_node(SyntaxKind::CLASS_DEF, |p| {
+            while p.at(TokenKind::AtAt) {
+                p.parse_block_attribute();
+            }
+
             // 'class' keyword
             p.expect(TokenKind::Class);
 
@@ -1971,7 +2102,12 @@ impl<'a> Parser<'a> {
                     break;
                 }
 
-                if p.at(TokenKind::AtAt) {
+                if p.at(TokenKind::AtAt)
+                    && p.item_keyword_after_leading_block_attributes() == Some(TokenKind::Function)
+                {
+                    // Method definition with leading block attributes.
+                    p.parse_function();
+                } else if p.at(TokenKind::AtAt) {
                     // Block attribute: @@dynamic
                     p.parse_block_attribute();
                 } else if p.at(TokenKind::Function) {
@@ -2061,6 +2197,10 @@ impl<'a> Parser<'a> {
     /// Parse a function declaration with speculative parsing for body type
     pub(crate) fn parse_function(&mut self) {
         self.with_node(SyntaxKind::FUNCTION_DEF, |p| {
+            while p.at(TokenKind::AtAt) {
+                p.parse_block_attribute();
+            }
+
             // 'function' keyword
             p.expect(TokenKind::Function);
 
@@ -2071,12 +2211,18 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("function name".to_string());
                 // Recovery: skip until we see '(', '{', or '->'
                 while !p.at(TokenKind::LParen)
+                    && !p.at(TokenKind::Less)
                     && !p.at(TokenKind::LBrace)
                     && !p.at(TokenKind::Arrow)
                     && !p.at_end()
                 {
                     p.bump();
                 }
+            }
+
+            // Optional generic parameters: <T> or <K, V>
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
             }
 
             // Check for old-style function syntax: `function Name {` (without parens and return type)
@@ -4338,11 +4484,17 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
 
     // Parse top-level declarations
     while !parser.at_end() {
-        if parser.at(TokenKind::Enum) {
+        let attributed_item = if parser.at(TokenKind::AtAt) {
+            parser.item_keyword_after_leading_block_attributes()
+        } else {
+            None
+        };
+
+        if parser.at(TokenKind::Enum) || attributed_item == Some(TokenKind::Enum) {
             parser.parse_enum();
-        } else if parser.at(TokenKind::Class) {
+        } else if parser.at(TokenKind::Class) || attributed_item == Some(TokenKind::Class) {
             parser.parse_class();
-        } else if parser.at(TokenKind::Function) {
+        } else if parser.at(TokenKind::Function) || attributed_item == Some(TokenKind::Function) {
             parser.parse_function();
         } else if parser.at(TokenKind::Client) {
             parser.parse_client();
@@ -4452,6 +4604,61 @@ function Demo(x int) -> int {
             param_text.contains("int"),
             "parameter should still contain the type 'int', got: {param_text:?}"
         );
+    }
+
+    #[test]
+    fn parses_top_level_function_with_leading_block_attributes() {
+        let source = r#"
+@@internal.uses(engine_ctx)
+@@internal.panics(HostPanic)
+function fetch(url: string) -> string throws baml.errors.Io | baml.errors.Timeout {
+  $rust_io_function
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .children()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        let attrs: Vec<_> = func
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_ATTRIBUTE)
+            .collect();
+
+        assert_eq!(attrs.len(), 2, "expected two function block attributes");
+    }
+
+    #[test]
+    fn parses_method_with_leading_block_attributes() {
+        let source = r#"
+class Response {
+  @@internal.uses(engine_ctx)
+  function text(self) -> string throws baml.errors.Io {
+    $rust_io_function
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let class = root
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CLASS_DEF)
+            .expect("expected CLASS_DEF");
+        let func = class
+            .children()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF in class");
+        let attrs: Vec<_> = func
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_ATTRIBUTE)
+            .collect();
+
+        assert_eq!(attrs.len(), 1, "expected method block attribute");
     }
 
     #[test]

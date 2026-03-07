@@ -338,13 +338,28 @@ name = "baml_builtins"
 version = "0.0.0-beta"
 dependencies = [
  "baml_base",
- "baml_builtins_macros",
+ "baml_builtins_codegen",
  "serde_json",
 ]
 
 [[package]]
 name = "baml_builtins2"
 version = "0.0.0-beta"
+
+[[package]]
+name = "baml_builtins_codegen"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_builtins2",
+ "baml_compiler2_ast",
+ "baml_compiler_lexer",
+ "baml_compiler_parser",
+ "baml_compiler_syntax",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.116",
+]
 
 [[package]]
 name = "baml_builtins_macros"
@@ -900,7 +915,6 @@ name = "bex_heap"
 version = "0.0.0-beta"
 dependencies = [
  "baml_builtins",
- "baml_builtins_macros",
  "baml_type",
  "bex_external_types",
  "bex_resource_types",
@@ -957,7 +971,6 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "baml_builtins",
- "baml_builtins_macros",
  "baml_compiler_emit",
  "baml_tests",
  "baml_type",
@@ -4612,7 +4625,6 @@ name = "sys_types"
 version = "0.0.0-beta"
 dependencies = [
  "baml_builtins",
- "baml_builtins_macros",
  "baml_type",
  "bex_external_types",
  "bex_heap",

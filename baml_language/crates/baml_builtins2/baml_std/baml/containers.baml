@@ -49,7 +49,7 @@ class Map<K, V> {
     $rust_function
   }
 
-  function set(self, key: K, value: V) {
+  function set(self, key: K, value: V) -> null {
     $rust_function
   }
 

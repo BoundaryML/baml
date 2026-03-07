@@ -5,9 +5,10 @@ import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { BepCard } from "./bep-card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search } from "lucide-react";
+import { ArrowUpDown, Search } from "lucide-react";
 
 type BepStatus =
   | "draft"
@@ -30,20 +31,25 @@ const STATUS_OPTIONS: { value: BepStatus | "all"; label: string }[] = [
 export function BepList() {
   const [statusFilter, setStatusFilter] = useState<BepStatus | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [showOldestFirst, setShowOldestFirst] = useState(false);
 
   const beps = useQuery(api.beps.list, {
     status: statusFilter === "all" ? undefined : statusFilter,
   });
 
-  const filteredBeps = beps?.filter((bep) => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      bep.title.toLowerCase().includes(query) ||
-      `bep-${bep.number}`.includes(query) ||
-      bep.shepherdNames.some((name) => name.toLowerCase().includes(query))
+  const filteredBeps = beps
+    ?.filter((bep) => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        bep.title.toLowerCase().includes(query) ||
+        `bep-${bep.number}`.includes(query) ||
+        bep.shepherdNames.some((name) => name.toLowerCase().includes(query))
+      );
+    })
+    .sort((a, b) =>
+      showOldestFirst ? a.number - b.number : b.number - a.number
     );
-  });
 
   return (
     <div className="space-y-6">
@@ -61,14 +67,26 @@ export function BepList() {
             </Badge>
           ))}
         </div>
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search BEPs..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex w-full sm:w-auto items-center gap-2">
+          <div className="relative flex-1 sm:flex-none sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search BEPs..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowOldestFirst((prev) => !prev)}
+            className="shrink-0"
+          >
+            <ArrowUpDown className="h-4 w-4" />
+            {showOldestFirst ? "Newest first" : "Oldest first"}
+          </Button>
         </div>
       </div>
 

@@ -85,6 +85,18 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!(
         "baml",
         root,
+        "core.baml",
+        "../../../baml_std/baml/core.baml"
+    ),
+    builtin!(
+        "baml",
+        ["errors"],
+        "errors.baml",
+        "../../../baml_std/baml/errors.baml"
+    ),
+    builtin!(
+        "baml",
+        root,
         "string.baml",
         "../../../baml_std/baml/string.baml"
     ),
@@ -112,11 +124,36 @@ pub const ALL: &[BuiltinFile] = &[
         "sys.baml",
         "../../../baml_std/baml/sys.baml"
     ),
+    builtin!("baml", ["fs"], "fs.baml", "../../../baml_std/baml/fs.baml"),
+    builtin!(
+        "baml",
+        ["net"],
+        "net.baml",
+        "../../../baml_std/baml/net.baml"
+    ),
     builtin!(
         "baml",
         ["media"],
         "media.baml",
         "../../../baml_std/baml/media.baml"
+    ),
+    builtin!(
+        "baml",
+        ["unstable"],
+        "unstable.baml",
+        "../../../baml_std/baml/unstable.baml"
+    ),
+    builtin!(
+        "baml",
+        ["llm"],
+        "llm_types.baml",
+        "../../../baml_std/baml/llm_types.baml"
+    ),
+    builtin!(
+        "baml",
+        ["llm"],
+        "llm.baml",
+        "../../../baml_std/baml/llm.baml"
     ),
     // --- baml_std/env/ ---
     builtin!("env", root, "env.baml", "../../../baml_std/env/env.baml"),
