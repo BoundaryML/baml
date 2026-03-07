@@ -277,8 +277,14 @@ test_partial_failing_deserializer!(
         "pay
     "#,
     union_of(vec![
-        annotated(literal_string("pay")),
-        annotated(literal_string("pay_without_credit_card")),
+        annotated_with(
+            literal_string("pay"),
+            TypeAnnotations { in_progress: Some(AttrLiteral::Never), ..Default::default() },
+        ),
+        annotated_with(
+            literal_string("pay_without_credit_card"),
+            TypeAnnotations { in_progress: Some(AttrLiteral::Never), ..Default::default() },
+        ),
     ]),
     empty_db()
 );
@@ -360,7 +366,7 @@ test_failing_deserializer!(
 
 test_partial_deserializer!(
     test_partial_class_with_null_literal,
-    r#"{}"#,
+    r#"{"#,
     class_ty("Foo", vec![
         field("bar", literal_string("hello")),
     ]),

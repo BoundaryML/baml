@@ -1,6 +1,6 @@
 #![cfg(test)]
 #[macro_use]
-pub mod macros;
+mod macros;
 
 mod test_aliases;
 mod test_basics;

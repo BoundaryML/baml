@@ -290,6 +290,22 @@ where
                 }
             }
         };
+        // Post-check: reject top-level InferedObject(String) coercion.
+        // When a bare string is wrapped into a single-field class via implied-key
+        // at the top level, the result is likely wrong. Only reject at root scope
+        // so that nested implied-key coercion (e.g. {"item": "hello"} → Inner { value: string })
+        // is still allowed.
+        if ctx.scope.is_empty() {
+            if result
+                .conditions()
+                .flags
+                .iter()
+                .any(|f| matches!(f, Flag::InferedObject(Cow::Borrowed(crate::jsonish::Value::String(..)))))
+            {
+                return Err(ctx.error_unexpected_type(&target.ty, &"string (inferred object)"));
+            }
+        }
+
         Ok(Some(result))
     }
 }

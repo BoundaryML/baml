@@ -76,7 +76,7 @@ pub(super) fn pick_best<'s, 'v, 't, 'a, N: TypeIdent>(
         .collect::<Vec<_>>();
 
     // Sort by (false, score, index)
-    let best = all_valid_scores.into_iter().max_by(
+    let best = all_valid_scores.into_iter().min_by(
         |&(a, a_score, a_default, a_val), &(b, b_score, b_default, b_val)| {
             // TODO: This is a bit of a hack. We should likely use some is_subtype_of logic here
             // to ensure that we're accepting the "best" type.
@@ -146,6 +146,30 @@ pub(super) fn pick_best<'s, 'v, 't, 'a, N: TypeIdent>(
                 }
             }
 
+            // When one candidate is a non-array and the other is an array
+            // created via SingleToArray, prefer the non-array (the array was
+            // artificially constructed by wrapping a single value).
+            if !matches!(&a_val.value, BamlValue::Array(..))
+                && matches!(&b_val.value, BamlValue::Array(..))
+                && b_val
+                    .conditions()
+                    .flags
+                    .iter()
+                    .any(|f| matches!(f, Flag::SingleToArray))
+            {
+                return std::cmp::Ordering::Less;
+            }
+            if matches!(&a_val.value, BamlValue::Array(..))
+                && !matches!(&b_val.value, BamlValue::Array(..))
+                && a_val
+                    .conditions()
+                    .flags
+                    .iter()
+                    .any(|f| matches!(f, Flag::SingleToArray))
+            {
+                return std::cmp::Ordering::Greater;
+            }
+
             // De-value default values when comparing
             if let (BamlValue::Class(cls_a), BamlValue::Class(cls_b)) = (&a_val.value, &b_val.value)
             {
@@ -181,12 +205,12 @@ pub(super) fn pick_best<'s, 'v, 't, 'a, N: TypeIdent>(
                     .conditions()
                     .flags
                     .iter()
-                    .any(|f| matches!(f, Flag::DefaultFromNoValue));
+                    .any(|f| matches!(f, Flag::DefaultFromNoValue | Flag::DefaultFromInProgress(..)));
                 let b_is_default = b_val
                     .conditions()
                     .flags
                     .iter()
-                    .any(|f| matches!(f, Flag::DefaultFromNoValue));
+                    .any(|f| matches!(f, Flag::DefaultFromNoValue | Flag::DefaultFromInProgress(..)));
 
                 match (a_is_default, b_is_default) {
                     // Return B
@@ -218,6 +242,28 @@ pub(super) fn pick_best<'s, 'v, 't, 'a, N: TypeIdent>(
                     .any(|f| matches!(f, Flag::JsonToString(..) | Flag::FirstMatch(_, _)))
             {
                 return std::cmp::Ordering::Less;
+            }
+
+            // Prefer Complete candidates over Incomplete ones.
+            // Incomplete candidates come from truncated parse spans (e.g.
+            // multi_json_parser producing overlapping bracket-balanced
+            // regions) and may have missing fields filled with defaults.
+            let a_is_incomplete = a_val
+                .conditions()
+                .flags
+                .iter()
+                .any(|f| matches!(f, Flag::Incomplete));
+            let b_is_incomplete = b_val
+                .conditions()
+                .flags
+                .iter()
+                .any(|f| matches!(f, Flag::Incomplete));
+            match (a_is_incomplete, b_is_incomplete) {
+                // Return B
+                (true, false) => return std::cmp::Ordering::Greater,
+                // Return A
+                (false, true) => return std::cmp::Ordering::Less,
+                _ => {}
             }
 
             match a_default.cmp(&b_default) {

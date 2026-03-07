@@ -99,6 +99,9 @@ where
                 .resolve_with_meta(ty.as_ref())
                 .map_err(|ident| ctx.error_type_resolution(ident))
                 .ok()?;
+            // try_cast is the strict path — if from_literal fails (e.g.
+            // AttrLiteral::Null on a non-nullable type), we return None so the
+            // lenient coerce path can handle it instead.
             let value = field_ty.ty.from_literal(replacement, ctx).ok()?;
             let value = BamlValueWithFlags::new(
                 value,
@@ -192,12 +195,17 @@ where
                     let Some(field) = class_ty
                         .fields
                         .iter()
-                        .find(|f| matches_string_to_string(ctx, key, &f.name))
+                        .find(|f| {
+                            if f.aliases.is_empty() {
+                                matches_string_to_string(ctx, key, &f.name)
+                            } else {
+                                f.aliases.iter().any(|a| matches_string_to_string(ctx, key, a))
+                            }
+                        })
                     else {
                         extra_keys.insert(key.clone(), v);
                         continue;
                     };
-                    // TODO: aliases
 
                     let scope = ctx.enter_scope(&field.name);
                     let resolved = scope
@@ -211,7 +219,7 @@ where
                         continue;
                     };
 
-                    match entries.entry(key.clone()) {
+                    match entries.entry(field.name.clone()) {
                         hash_map::Entry::Occupied(_) => {
                             log::trace!("Duplicate field: {key}");
                         }

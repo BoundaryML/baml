@@ -16,16 +16,19 @@ use crate::deserializer::{
     deserialize_flags::Flag,
 };
 
-/// Produces a list of (name, aliases) tuples for each enum variant (name is included in aliases).
-///
+/// Produces a list of (name, candidates) tuples for each enum variant.
+/// When aliases exist, only aliases are used as candidates (original name excluded).
+/// When no aliases, the name itself is the sole candidate.
 fn enum_match_candidates<'t, N: TypeIdent>(ty: &'t EnumTy<'t, N>) -> Vec<(&'t str, Vec<&'t str>)> {
     ty.variants
         .iter()
         .map(|v| {
-            let aliases = std::iter::once(v.name.trim())
-                .chain(v.aliases.iter().map(|a| a.trim()))
-                .collect();
-            (v.name.as_ref(), aliases)
+            let candidates = if v.aliases.is_empty() {
+                vec![v.name.trim()]
+            } else {
+                v.aliases.iter().map(|a| a.trim()).collect()
+            };
+            (v.name.as_ref(), candidates)
         })
         .collect()
 }
@@ -66,8 +69,14 @@ where
         }
 
         // assumes no name or alias can have the same value as another name or alias
-        for AnnotatedEnumVariant { name, .. } in enum_ty.variants.iter() {
-            if name == s {
+        // When aliases exist, only aliases are valid for matching (name is excluded)
+        for AnnotatedEnumVariant { name, aliases, .. } in enum_ty.variants.iter() {
+            let matches = if aliases.is_empty() {
+                name == s
+            } else {
+                aliases.iter().any(|a| a == s)
+            };
+            if matches {
                 let value = BamlEnum {
                     name: &enum_ty.name,
                     value: &*name,

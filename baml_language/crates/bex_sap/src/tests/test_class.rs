@@ -323,8 +323,20 @@ test_partial_deserializer!(
         optional_field("email", string_ty()),
         optional_field("phone", string_ty()),
         field("experience", array_of(annotated(string_ty()))),
-        field("education", array_of(annotated(string_ty()))),
-        field("skills", array_of(annotated(string_ty()))),
+        AnnotatedField {
+            name: Cow::Borrowed("education"),
+            ty: annotated(array_of(annotated(string_ty()))),
+            class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+            class_completed_field_missing: AttrLiteral::Never,
+            aliases: vec![],
+        },
+        AnnotatedField {
+            name: Cow::Borrowed("skills"),
+            ty: annotated(array_of(annotated(string_ty()))),
+            class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+            class_completed_field_missing: AttrLiteral::Never,
+            aliases: vec![],
+        },
     ]),
     empty_db(),
     {
@@ -351,8 +363,20 @@ test_partial_deserializer!(
         optional_field("email", string_ty()),
         optional_field("phone", string_ty()),
         field("experience", array_of(annotated(string_ty()))),
-        field("education", array_of(annotated(string_ty()))),
-        field("skills", array_of(annotated(string_ty()))),
+        AnnotatedField {
+            name: Cow::Borrowed("education"),
+            ty: annotated(array_of(annotated(string_ty()))),
+            class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+            class_completed_field_missing: AttrLiteral::Never,
+            aliases: vec![],
+        },
+        AnnotatedField {
+            name: Cow::Borrowed("skills"),
+            ty: annotated(array_of(annotated(string_ty()))),
+            class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+            class_completed_field_missing: AttrLiteral::Never,
+            aliases: vec![],
+        },
     ]),
     empty_db(),
     {
@@ -935,7 +959,13 @@ fn test_ekinsdrow() {
         "ParagraphBody",
         vec![
             field("rich_text", array_of(annotated(Ty::Unresolved("RichText")))),
-            field("children", array_of(annotated(string_ty()))),
+            AnnotatedField {
+                name: Cow::Borrowed("children"),
+                ty: annotated(array_of(annotated(string_ty()))),
+                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+                class_completed_field_missing: AttrLiteral::Array(vec![]),
+                aliases: vec![],
+            },
         ],
     );
     let paragraph_cls = class_ty(
@@ -950,7 +980,13 @@ fn test_ekinsdrow() {
         vec![
             field("rich_text", array_of(annotated(Ty::Unresolved("RichText")))),
             optional_field("checked", bool_ty()),
-            field("children", array_of(annotated(Ty::Unresolved("Paragraph")))),
+            AnnotatedField {
+                name: Cow::Borrowed("children"),
+                ty: annotated(array_of(annotated(Ty::Unresolved("Paragraph")))),
+                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+                class_completed_field_missing: AttrLiteral::Array(vec![]),
+                aliases: vec![],
+            },
         ],
     );
     let todo_cls = class_ty(
@@ -1059,7 +1095,7 @@ fn test_ekinsdrow() {
     let raw = r#"{
   "object": "page",
   "icon": {
-    "emoji": "\u{1F4DA}"
+    "emoji": "📚"
   },
   "children": [
     {

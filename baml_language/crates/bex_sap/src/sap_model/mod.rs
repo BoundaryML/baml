@@ -562,13 +562,17 @@ pub struct TypeAnnotations<'t, N: TypeIdent> {
     /// Represents the behavior when streaming and incomplete.
     ///
     /// - If `None`, the partial value will be used.
-    /// - If `Some(never)`, the value should be excluded until done.
+    /// - If `Some(never)`, the value should be excluded until done
+    ///   (will be handled by the parent, such as [`AnnotatedField::class_in_progress_field_missing`]).
     /// - If `Some(<value>)`, this is the value to use when streaming and the value is incomplete.
     ///
     /// Example:
     /// If `Some("Loading...")`, then `"Loading..."` should be used until done.
     pub in_progress: Option<AttrLiteral<'t, N>>,
 
+    /// The set of assertions that should be run on the value.
+    /// Note that if the value is filled by some default (such as [`TypeAnnotations::in_progress`]),
+    /// the assertions may or may not be run on the default value (TODO: make this behavior consistent).
     pub asserts: Vec<Assertion<'t, N>>,
 }
 impl<N: TypeIdent> Default for TypeAnnotations<'_, N> {
@@ -618,39 +622,55 @@ pub struct AnnotatedField<'t, N: TypeIdent> {
     /// If the parent object is complete and this field is missing, use this value instead.
     /// If it is `never` then this causes an error.
     pub class_completed_field_missing: AttrLiteral<'t, N>,
-
+    /// Aliases for the field name.
+    /// If any are present, the real name is not used for matching.
     pub aliases: Vec<Cow<'t, str>>,
 }
 impl<'t, N: TypeIdent> AnnotatedField<'t, N> {
+    /// Checks if an input key matches the field exactly (including aliases).
+    /// Does not do fuzzy matching.
     pub fn key_matches(&self, key: &str) -> bool {
-        self.name == key || self.aliases.iter().any(|a| a == key)
+        if self.aliases.is_empty() {
+            self.name == key
+        } else {
+            self.aliases.iter().any(|a| a == key)
+        }
     }
 }
 
 #[derive(Clone)]
 pub struct AnnotatedEnumVariant<'t> {
     pub name: Cow<'t, str>,
+    /// Aliases for the variant name.
+    /// If any are present, the real name is not used for matching.
     pub aliases: Vec<Cow<'t, str>>,
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 ///
 /// Used in attributes like `@sap.in_progress(...)` and `@sap.class_completed_field_missing(...)`
-#[derive(Clone)]
+#[derive(Clone, From)]
 pub enum AttrLiteral<'t, N: TypeIdent> {
     /// the `never` bottom type.
+    /// Generally used to indicate that the value should be excluded,
+    /// and if it is required then parent should return an error.
     Never,
     /// the `null` type
     Null,
+    #[from(i64)]
     Int(i64),
+    #[from(f64)]
     Float(f64),
+    #[from(&'t str, String, Cow<'t, str>)]
     String(Cow<'t, str>),
+    #[from(bool)]
     Bool(bool),
     Array(Vec<AttrLiteral<'t, N>>),
     Object {
         name: &'t N,
         data: IndexMap<Cow<'t, str>, AttrLiteral<'t, N>>,
     },
+    
     Map(IndexMap<Cow<'t, str>, AttrLiteral<'t, N>>),
     EnumVariant {
         enum_name: &'t N,

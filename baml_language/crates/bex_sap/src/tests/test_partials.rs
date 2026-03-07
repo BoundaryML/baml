@@ -14,7 +14,13 @@ fn book_analysis_schema() -> (
         "PopularityOverTime",
         vec![
             field("bookName", string_ty()),
-            field("scores", array_of(annotated(Ty::Unresolved("Score")))),
+            AnnotatedField {
+                name: Cow::Borrowed("scores"),
+                ty: annotated(array_of(annotated(Ty::Unresolved("Score")))),
+                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+                class_completed_field_missing: AttrLiteral::Never,
+                aliases: vec![],
+            },
         ],
     );
     let word_count_cls = class_ty(
@@ -28,20 +34,34 @@ fn book_analysis_schema() -> (
     let book_analysis = class_ty(
         "BookAnalysis",
         vec![
-            field("bookNames", array_of(annotated(string_ty()))),
-            field_with_aliases(
-                "popularityOverTime",
-                array_of(annotated(Ty::Unresolved("PopularityOverTime"))),
-                vec!["popularityData"],
-            ),
-            field(
-                "popularityRankings",
-                array_of(annotated(Ty::Unresolved("Ranking"))),
-            ),
-            field(
-                "wordCounts",
-                array_of(annotated(Ty::Unresolved("WordCount"))),
-            ),
+            AnnotatedField {
+                name: Cow::Borrowed("bookNames"),
+                ty: annotated(array_of(annotated(string_ty()))),
+                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+                class_completed_field_missing: AttrLiteral::Never,
+                aliases: vec![],
+            },
+            AnnotatedField {
+                name: Cow::Borrowed("popularityOverTime"),
+                ty: annotated(array_of(annotated(Ty::Unresolved("PopularityOverTime")))),
+                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+                class_completed_field_missing: AttrLiteral::Never,
+                aliases: vec![Cow::Borrowed("popularityData")],
+            },
+            AnnotatedField {
+                name: Cow::Borrowed("popularityRankings"),
+                ty: annotated(array_of(annotated(Ty::Unresolved("Ranking")))),
+                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+                class_completed_field_missing: AttrLiteral::Never,
+                aliases: vec![],
+            },
+            AnnotatedField {
+                name: Cow::Borrowed("wordCounts"),
+                ty: annotated(array_of(annotated(Ty::Unresolved("WordCount")))),
+                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+                class_completed_field_missing: AttrLiteral::Never,
+                aliases: vec![],
+            },
         ],
     );
 
@@ -66,10 +86,13 @@ fn choppy_schema() -> TypeRefDb<'static, &'static str> {
         "Vertex",
         vec![
             field("id", string_ty()),
-            field(
-                "metadata",
-                map_of(annotated(string_ty()), annotated(string_ty())),
-            ),
+            AnnotatedField {
+                name: Cow::Borrowed("metadata"),
+                ty: annotated(map_of(annotated(string_ty()), annotated(string_ty()))),
+                class_in_progress_field_missing: AttrLiteral::Map(IndexMap::new()),
+                class_completed_field_missing: AttrLiteral::Never,
+                aliases: vec![],
+            },
         ],
     );
     let edge_cls = class_ty(
@@ -83,8 +106,20 @@ fn choppy_schema() -> TypeRefDb<'static, &'static str> {
     let graph_json_cls = class_ty(
         "GraphJson",
         vec![
-            field("vertices", array_of(annotated(Ty::Unresolved("Vertex")))),
-            field("edges", array_of(annotated(Ty::Unresolved("Edge")))),
+            AnnotatedField {
+                name: Cow::Borrowed("vertices"),
+                ty: annotated(array_of(annotated(Ty::Unresolved("Vertex")))),
+                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+                class_completed_field_missing: AttrLiteral::Never,
+                aliases: vec![],
+            },
+            AnnotatedField {
+                name: Cow::Borrowed("edges"),
+                ty: annotated(array_of(annotated(Ty::Unresolved("Edge")))),
+                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+                class_completed_field_missing: AttrLiteral::Never,
+                aliases: vec![],
+            },
         ],
     );
 
@@ -347,8 +382,20 @@ test_partial_deserializer!(
     test_partial_choppy,
     TRIMMED_CHOPPY_RESULT,
     class_ty("GraphJson", vec![
-        field("vertices", array_of(annotated(Ty::Unresolved("Vertex")))),
-        field("edges", array_of(annotated(Ty::Unresolved("Edge")))),
+        AnnotatedField {
+            name: Cow::Borrowed("vertices"),
+            ty: annotated(array_of(annotated(Ty::Unresolved("Vertex")))),
+            class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+            class_completed_field_missing: AttrLiteral::Never,
+            aliases: vec![],
+        },
+        AnnotatedField {
+            name: Cow::Borrowed("edges"),
+            ty: annotated(array_of(annotated(Ty::Unresolved("Edge")))),
+            class_in_progress_field_missing: AttrLiteral::Array(vec![]),
+            class_completed_field_missing: AttrLiteral::Never,
+            aliases: vec![],
+        },
     ]),
     choppy_schema(),
     {

@@ -27,33 +27,25 @@ use crate::{
 pub(super) fn matches_string_to_string<'t, N: TypeIdent>(
     _parsing_context: &ParsingContext<'_, '_, 't, N>,
     raw_value: &str,
-    parse_into: &str,
+    target: &str,
 ) -> bool {
     let value_str = raw_value.trim();
-    let target = parse_into;
 
     // Exact match
     if target == value_str {
         return true;
     }
     // Unaccented match
-    if remove_accents(target) == remove_accents(value_str) {
+    let unaccented_value_str = remove_accents(value_str);
+    let unaccented_target = remove_accents(target);
+    if unaccented_target == unaccented_value_str {
         return true;
     }
 
     // Strip punctuation and try again
-    let stripped_value = strip_punctuation(value_str);
-    let stripped_target = strip_punctuation(target);
-
-    if stripped_target == stripped_value {
-        return true;
-    }
-    if remove_accents(&stripped_target) == remove_accents(&stripped_value) {
-        return true;
-    }
-
-    // Case insensitive match
-    stripped_target.to_lowercase() == stripped_value.to_lowercase()
+    let stripped_value = without_punctuation(&unaccented_value_str);
+    let stripped_target = without_punctuation(&unaccented_target);
+    std::iter::zip(stripped_value, stripped_target).all(|(a, b)| a.eq_ignore_ascii_case(&b))
 }
 
 /// Heuristic match of different possible values against an input string.
@@ -99,7 +91,7 @@ where
     }
 
     // Strip punctuation and try again.
-    let match_context = strip_punctuation(match_context.as_ref());
+    let match_context: String = without_punctuation(match_context.as_ref()).collect();
 
     // TODO: If the candidates don't contain any punctuation themselves there's
     // no point in removing the punctuation from the input string and running
@@ -108,7 +100,7 @@ where
     let mut candidates = Vec::from_iter(candidates.iter().map(|(candidate, valid_values)| {
         let stripped_valid_values = valid_values
             .iter()
-            .map(|v| strip_punctuation(v.as_ref()))
+            .map(|v| without_punctuation(v.as_ref()).collect::<String>())
             .collect();
         (*candidate, stripped_valid_values)
     }));
@@ -158,10 +150,9 @@ where
     Err(ctx.error_unexpected_type(&target, &value))
 }
 
-fn strip_punctuation(s: &str) -> String {
+fn without_punctuation<'a>(s: &'a str) -> impl Iterator<Item = char> + 'a {
     s.chars()
         .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
-        .collect::<String>()
 }
 
 /// Remove accents from characters to enable fuzzy matching of unaccented input

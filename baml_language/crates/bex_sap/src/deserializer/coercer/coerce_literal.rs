@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use crate::baml_value::{BamlInt, BamlString, BamlValue};
+use crate::baml_value::{BamlBool, BamlInt, BamlString, BamlValue};
 use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
 use crate::jsonish::CompletionState;
@@ -187,38 +187,74 @@ where
             current = value.r#type()
         );
 
-        if matches!(value, jsonish::Value::Null) {
-            return Err(ctx.error_unexpected_null(&target));
-        }
-
-        if let jsonish::Value::Object(obj, _completion_state) = value {
-            if obj.len() == 1 {
-                let (_key, inner_value) = obj.iter().next().unwrap();
-                match inner_value {
-                    jsonish::Value::Number(_, _)
-                    | jsonish::Value::Boolean(_)
-                    | jsonish::Value::String(_, _) => {
-                        return Self::coerce(ctx, target, inner_value).map(|opt| {
-                            opt.map(|v| v.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
+        let ret = match value {
+            jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
+            jsonish::Value::Object(_, CompletionState::Incomplete) => {
+                match &target.meta.in_progress {
+                    Some(AttrLiteral::Never) => return Ok(None),
+                    Some(lit) => {
+                        let ret = target.ty.from_literal(lit, ctx).map(|ret| {
+                            ValueWithFlags::new(
+                                ret,
+                                DeserializerMeta {
+                                    flags: DeserializerConditions::new().with_flag(
+                                        Flag::DefaultFromInProgress(Cow::Borrowed(value)),
+                                    ),
+                                    ty: target.clone().map_ty(|_| TyResolvedRef::Bool(BoolTy)),
+                                },
+                            )
                         });
+                        ret.map(Some)
                     }
-                    _ => {}
+                    None => {
+                        let flags = DeserializerConditions::new()
+                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
+                            .with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value)));
+                        Ok(Some(ValueWithFlags::new(
+                            BamlBool {
+                                value: target.ty.0,
+                            },
+                            DeserializerMeta {
+                                flags,
+                                ty: target.clone().map_ty(|_| TyResolvedRef::Bool(BoolTy)),
+                            },
+                        )))
+                    }
                 }
             }
-        }
+            jsonish::Value::Object(obj, CompletionState::Complete) => match obj.as_slice() {
+                [
+                    (
+                        _,
+                        v @ (jsonish::Value::Number(_, _)
+                        | jsonish::Value::Boolean(_)
+                        | jsonish::Value::String(_, _)),
+                    ),
+                ] => Self::coerce(ctx, target.clone(), v).map(|ret| {
+                    ret.map(|ret| ret.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
+                }),
+                _ => Err(ctx.error_unexpected_type(target.ty, value)),
+            },
+            _ => {
+                let bool_target = TyWithMeta::new(&BoolTy, target.meta);
+                match BoolTy::coerce(ctx, bool_target, value) {
+                    Ok(Some(ret)) if ret.value.value == target.ty.0 => Ok(Some(ret)),
+                    Ok(Some(_ret)) => Err(ctx.error_unexpected_type(&target, value)),
+                    Ok(None) => Ok(None),
+                    Err(e) => Err(e),
+                }
+            }
+        };
 
-        let bool_target = TyWithMeta::new(&BoolTy, target.meta);
-        let coerced_bool = BoolTy::coerce(ctx, bool_target, value)?;
-
-        match coerced_bool {
-            Some(coerced_bool) if coerced_bool.value.value == target.ty.0 => {
+        match ret {
+            Ok(Some(ret)) => {
                 target
                     .meta
-                    .expect_asserts(&BamlValue::Bool(coerced_bool.value), ctx)?;
-                Ok(Some(coerced_bool))
+                    .expect_asserts(&BamlValue::Bool(ret.value), ctx)?;
+                Ok(Some(ret))
             }
-            Some(_) => Err(ctx.error_unexpected_type(&target, &value)),
-            None => Ok(None),
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
         }
     }
 }
@@ -272,42 +308,81 @@ where
             current = value.r#type()
         );
 
-        if matches!(value, jsonish::Value::Null) {
-            return Err(ctx.error_unexpected_null(&target));
-        }
-
-        if let jsonish::Value::Object(obj, _completion_state) = value {
-            if obj.len() == 1 {
-                let (_key, inner_value) = obj.iter().next().unwrap();
-                match inner_value {
-                    jsonish::Value::Number(_, _)
-                    | jsonish::Value::Boolean(_)
-                    | jsonish::Value::String(_, _) => {
-                        return Self::coerce(ctx, target, inner_value).map(|opt| {
-                            opt.map(|v| v.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
+        let ret = match value {
+            jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
+            jsonish::Value::Object(_, CompletionState::Incomplete) => {
+                match &target.meta.in_progress {
+                    Some(AttrLiteral::Never) => return Ok(None),
+                    Some(lit) => {
+                        let ret = target.ty.from_literal(lit, ctx).map(|ret| {
+                            ValueWithFlags::new(
+                                ret,
+                                DeserializerMeta {
+                                    flags: DeserializerConditions::new().with_flag(
+                                        Flag::DefaultFromInProgress(Cow::Borrowed(value)),
+                                    ),
+                                    ty: target
+                                        .clone()
+                                        .map_ty(|_| TyResolvedRef::String(StringTy)),
+                                },
+                            )
                         });
+                        ret.map(Some)
                     }
-                    _ => {}
+                    None => {
+                        let flags = DeserializerConditions::new()
+                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
+                            .with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value)));
+                        Ok(Some(ValueWithFlags::new(
+                            BamlString {
+                                value: target.ty.0.clone(),
+                            },
+                            DeserializerMeta {
+                                flags,
+                                ty: target
+                                    .clone()
+                                    .map_ty(|_| TyResolvedRef::String(StringTy)),
+                            },
+                        )))
+                    }
                 }
             }
+            jsonish::Value::Object(obj, CompletionState::Complete) => match obj.as_slice() {
+                [
+                    (
+                        _,
+                        v @ (jsonish::Value::Number(_, _)
+                        | jsonish::Value::Boolean(_)
+                        | jsonish::Value::String(_, _)),
+                    ),
+                ] => Self::coerce(ctx, target.clone(), v).map(|ret| {
+                    ret.map(|ret| ret.with_flag(Flag::ObjectToPrimitive(Cow::Borrowed(value))))
+                }),
+                _ => Err(ctx.error_unexpected_type(target.ty, value)),
+            },
+            _ => {
+                let candidates = vec![(target.ty.0.as_ref(), vec![&*target.ty.0])];
+                let literal_match = match_string(
+                    ctx,
+                    target.clone().map_ty(TyResolvedRef::LiteralString),
+                    Cow::Borrowed(value),
+                    &candidates,
+                    true,
+                )?;
+                Ok(Some(literal_match.map_value(|s| BamlString { value: s.into() })))
+            }
+        };
+
+        match ret {
+            Ok(Some(ret)) => {
+                target
+                    .meta
+                    .expect_asserts(&BamlValue::String(ret.value.clone()), ctx)?;
+                Ok(Some(ret))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e),
         }
-
-        let candidates = vec![(target.ty.0.as_ref(), vec![&*target.ty.0])];
-        // Can't construct TyResolvedRef::Literal(&LiteralTy) without a persistent reference,
-        // so use Primitive(String) which is semantically close for error messages.
-        let literal_match = match_string(
-            ctx,
-            target.clone().map_ty(TyResolvedRef::LiteralString),
-            Cow::Borrowed(value),
-            &candidates,
-            true,
-        )?;
-
-        let result = literal_match.map_value(|s| BamlString { value: s.into() });
-        target
-            .meta
-            .expect_asserts(&BamlValue::String(result.value.clone()), ctx)?;
-        Ok(Some(result))
     }
 }
 

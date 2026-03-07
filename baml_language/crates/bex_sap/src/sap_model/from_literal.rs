@@ -271,7 +271,7 @@ where
         literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
-        let AttrLiteral::Object { name: _, data } = literal else {
+        let AttrLiteral::Map(data) = literal else {
             return Err(ctx.error_internal(format!(
                 "attribute literal must match the type: {}",
                 self.type_name()
