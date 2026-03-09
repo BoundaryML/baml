@@ -31,10 +31,10 @@ function FormatMessage.render_prompt(name: string) -> baml.llm.PromptAst {
 function GPT4.resolve() -> baml.llm.PrimitiveClient {
     load_const "GPT4"
     load_const "unknown"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     alloc_map 0
     dispatch_future baml.llm.build_primitive_client

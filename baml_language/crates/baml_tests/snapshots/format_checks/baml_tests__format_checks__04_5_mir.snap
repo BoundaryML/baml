@@ -2679,11 +2679,11 @@ fn ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "ManyOptionsClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -2719,10 +2719,10 @@ fn ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "ManyOptionsClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -2804,11 +2804,11 @@ fn TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TriviaDeeplyNestedClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -2820,10 +2820,10 @@ fn TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TriviaDeeplyNestedClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -2852,11 +2852,11 @@ fn LongArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "LongArrayOfObjectsClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -2882,10 +2882,10 @@ fn LongArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "LongArrayOfObjectsClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -2951,11 +2951,11 @@ fn StringProviderClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "StringProviderClient"
     let _3: "unknown"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "base_url"
     let _11: "https://openrouter.ai/api/v1"
@@ -2967,10 +2967,10 @@ fn StringProviderClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "StringProviderClient";
         _3 = const "unknown";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "base_url";
         _11 = const "https://openrouter.ai/api/v1";
@@ -2999,11 +2999,11 @@ fn TriviaClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TriviaClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3013,10 +3013,10 @@ fn TriviaClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TriviaClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3043,11 +3043,11 @@ fn TypedValuesClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TypedValuesClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3063,10 +3063,10 @@ fn TypedValuesClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TypedValuesClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3099,11 +3099,11 @@ fn FullClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "FullClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3119,10 +3119,10 @@ fn FullClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "FullClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3155,11 +3155,11 @@ fn SameLineClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "SameLineClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3169,10 +3169,10 @@ fn SameLineClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "SameLineClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3199,11 +3199,11 @@ fn LongArrayClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "LongArrayClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3220,10 +3220,10 @@ fn LongArrayClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "LongArrayClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3257,11 +3257,11 @@ fn TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TriviaLongValueClientBlock"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
@@ -3273,10 +3273,10 @@ fn TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TriviaLongValueClientBlock";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit";
@@ -3305,11 +3305,11 @@ fn EnvClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "EnvClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "api_key"
     let _11: string
@@ -3324,10 +3324,10 @@ fn EnvClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "EnvClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "api_key";
         _12 = const fn env.get_or_panic;
@@ -3365,11 +3365,11 @@ fn LongNestedValuesClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "LongNestedValuesClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
@@ -3383,10 +3383,10 @@ fn LongNestedValuesClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "LongNestedValuesClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily";
@@ -3417,11 +3417,11 @@ fn DeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "DeeplyNestedClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3445,10 +3445,10 @@ fn DeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "DeeplyNestedClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3489,11 +3489,11 @@ fn TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TriviaLongValueClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
@@ -3505,10 +3505,10 @@ fn TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TriviaLongValueClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit";
@@ -3537,11 +3537,11 @@ fn BasicClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "BasicClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3551,10 +3551,10 @@ fn BasicClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "BasicClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3581,11 +3581,11 @@ fn ExtraWhitespaceClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "ExtraWhitespaceClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3595,10 +3595,10 @@ fn ExtraWhitespaceClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "ExtraWhitespaceClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3625,11 +3625,11 @@ fn CommaClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "CommaClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3641,10 +3641,10 @@ fn CommaClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "CommaClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3673,11 +3673,11 @@ fn C.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "C"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3687,10 +3687,10 @@ fn C.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "C";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3717,11 +3717,11 @@ fn RawStringConfigClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "RawStringConfigClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3736,10 +3736,10 @@ fn RawStringConfigClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "RawStringConfigClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3768,11 +3768,11 @@ fn ArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "ArrayOfObjectsClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3796,10 +3796,10 @@ fn ArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "ArrayOfObjectsClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3840,11 +3840,11 @@ fn NestedConfigClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "NestedConfigClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3856,10 +3856,10 @@ fn NestedConfigClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "NestedConfigClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3888,11 +3888,11 @@ fn TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TriviaDeeplyNestedClientBlock"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3904,10 +3904,10 @@ fn TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TriviaDeeplyNestedClientBlock";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3936,11 +3936,11 @@ fn ArrayConfigClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "ArrayConfigClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -3955,10 +3955,10 @@ fn ArrayConfigClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "ArrayConfigClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -3990,11 +3990,11 @@ fn MixedValuesClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "MixedValuesClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -4015,10 +4015,10 @@ fn MixedValuesClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "MixedValuesClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -4079,11 +4079,11 @@ fn ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneH
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -4093,10 +4093,10 @@ fn ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneH
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";
@@ -4123,11 +4123,11 @@ fn LongOptionClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "LongOptionClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
@@ -4139,10 +4139,10 @@ fn LongOptionClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "LongOptionClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit";
@@ -4171,11 +4171,11 @@ fn TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TriviaClientBlock"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -4185,10 +4185,10 @@ fn TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TriviaClientBlock";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";

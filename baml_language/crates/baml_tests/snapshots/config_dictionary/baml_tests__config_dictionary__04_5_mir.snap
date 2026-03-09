@@ -8,11 +8,11 @@ fn MyClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "MyClient"
     let _3: "baml-openai-chat"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "max_tokens"
     let _11: 100
@@ -92,10 +92,10 @@ fn MyClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "MyClient";
         _3 = const "baml-openai-chat";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "max_tokens";
         _11 = const 100_i64;

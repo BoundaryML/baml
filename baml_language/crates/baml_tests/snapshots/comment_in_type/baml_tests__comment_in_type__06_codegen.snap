@@ -58,10 +58,10 @@ function FunctionWithComments.render_prompt(a: string, b: int) -> baml.llm.Promp
 function TestClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "TestClient"
     load_const "baml-openai-chat"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     alloc_map 0
     dispatch_future baml.llm.build_primitive_client

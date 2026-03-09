@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 function ArrayConfigClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "ArrayConfigClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "END"
@@ -25,10 +25,10 @@ function ArrayConfigClient.resolve() -> baml.llm.PrimitiveClient {
 function ArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "ArrayOfObjectsClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "web_search"
@@ -593,10 +593,10 @@ function AssertStmts(x: int, y: int) -> int {
 function BasicClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "BasicClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "model"
@@ -1063,10 +1063,10 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
 function C.resolve() -> baml.llm.PrimitiveClient {
     load_const "C"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "model"
@@ -1397,10 +1397,10 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
 function CommaClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "CommaClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const 100
@@ -1583,10 +1583,10 @@ function DeeplyNestedBody(a: int, b: int, c: int) -> int {
 function DeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "DeeplyNestedClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const true
@@ -1617,10 +1617,10 @@ function EnvClient.resolve() -> baml.llm.PrimitiveClient {
     store_var _11
     load_const "EnvClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_var _11
     load_const "gpt-4"
@@ -1649,10 +1649,10 @@ function ExtraWhitespace(a: int, b: int) -> int {
 function ExtraWhitespaceClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "ExtraWhitespaceClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "model"
@@ -1677,10 +1677,10 @@ function FinalExpr(a: int, b: int) -> int {
 function FullClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "FullClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const 100
@@ -1852,10 +1852,10 @@ function LlmWithLongSignature.render_prompt(first_context: string, second_contex
 function LongArrayClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "LongArrayClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "STOP_GENERATION_NOW"
@@ -1875,10 +1875,10 @@ function LongArrayClient.resolve() -> baml.llm.PrimitiveClient {
 function LongArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "LongArrayOfObjectsClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation"
@@ -1921,10 +1921,10 @@ function LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: str
 function LongNestedValuesClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "LongNestedValuesClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
     load_const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
@@ -1941,10 +1941,10 @@ function LongNestedValuesClient.resolve() -> baml.llm.PrimitiveClient {
 function LongOptionClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "LongOptionClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
@@ -3987,10 +3987,10 @@ function ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
     store_var _32
     load_const "ManyOptionsClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const 4096
@@ -4751,10 +4751,10 @@ function Minimal() -> int {
 function MixedValuesClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "MixedValuesClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const 100
@@ -4842,10 +4842,10 @@ function MyFunction(a: int, b: int) -> int {
 function NestedConfigClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "NestedConfigClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     alloc_map 0
@@ -5034,10 +5034,10 @@ function OtherExprs(a: int, b: int) -> int {
 function RawStringConfigClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "RawStringConfigClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "\n            You are a helpful assistant.\n            Always be concise.\n        "
@@ -5052,10 +5052,10 @@ function RawStringConfigClient.resolve() -> baml.llm.PrimitiveClient {
 function SameLineClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "SameLineClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "model"
@@ -5078,10 +5078,10 @@ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_
 function StringProviderClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "StringProviderClient"
     load_const "unknown"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "https://openrouter.ai/api/v1"
     load_const "mistralai/mistral-small-3.1-24b-instruct"
@@ -5117,10 +5117,10 @@ function TestTarget.render_prompt() -> baml.llm.PromptAst {
 function ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns.resolve() -> baml.llm.PrimitiveClient {
     load_const "ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "model"
@@ -5138,10 +5138,10 @@ function ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItsel
 function TriviaClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "TriviaClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "model"
@@ -5154,10 +5154,10 @@ function TriviaClient.resolve() -> baml.llm.PrimitiveClient {
 function TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
     load_const "TriviaClientBlock"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "model"
@@ -5170,10 +5170,10 @@ function TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
 function TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "TriviaDeeplyNestedClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     alloc_map 0
@@ -5188,10 +5188,10 @@ function TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
 function TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
     load_const "TriviaDeeplyNestedClientBlock"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     alloc_map 0
@@ -5230,10 +5230,10 @@ function TriviaFuncBlock(x: int) -> int {
 function TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "TriviaLongValueClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
@@ -5248,10 +5248,10 @@ function TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
 function TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
     load_const "TriviaLongValueClientBlock"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
@@ -5286,10 +5286,10 @@ function TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
 function TypedValuesClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "TypedValuesClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const 0.5

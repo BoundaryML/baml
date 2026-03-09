@@ -197,10 +197,10 @@ function SimpleFunction() -> int {
 function TestClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "TestClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "gpt-4"
     load_const "model"

@@ -6,7 +6,7 @@ function Foo() -> <unknown> {
 }
 
 function GPT4.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("GPT4", "unknown", "user", ["user", "assistant", "system"], {  })
+    baml.llm.build_primitive_client("GPT4", "unknown", "system", ["system", "user", "assistant"], {  })
 }
 
 enum Status {

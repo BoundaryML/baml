@@ -1435,19 +1435,19 @@ fn build_function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Func
             let client_data = item_tree.clients.values().find(|c| c.name == *client_name);
 
             let (provider, default_role, allowed_roles) = if let Some(c) = client_data {
-                (
-                    c.provider.as_str().to_string(),
-                    c.default_role.clone().unwrap_or_else(|| "user".to_string()),
-                    if c.allowed_roles.is_empty() {
-                        vec![
-                            "system".to_string(),
-                            "user".to_string(),
-                            "assistant".to_string(),
-                        ]
-                    } else {
-                        c.allowed_roles.clone()
-                    },
-                )
+                let allowed_roles = if c.allowed_roles.is_empty() {
+                    vec![
+                        "system".to_string(),
+                        "user".to_string(),
+                        "assistant".to_string(),
+                    ]
+                } else {
+                    c.allowed_roles.clone()
+                };
+                let default_role = c.default_role.clone().unwrap_or_else(|| {
+                    allowed_roles.first().cloned().unwrap_or_else(|| "user".to_string())
+                });
+                (c.provider.as_str().to_string(), default_role, allowed_roles)
             } else {
                 (
                     "unknown".to_string(),

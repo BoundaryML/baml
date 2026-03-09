@@ -8,10 +8,10 @@ function OpenRouterMistralSmall3_1_24b.resolve() -> baml.llm.PrimitiveClient {
     store_var _13
     load_const "OpenRouterMistralSmall3_1_24b"
     load_const "unknown"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const "https://openrouter.ai/api/v1"
     load_var _13

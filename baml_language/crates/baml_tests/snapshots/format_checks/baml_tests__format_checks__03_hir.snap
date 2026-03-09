@@ -589,7 +589,7 @@ class stream_WithMethod {
 }
 
 function ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("ManyOptionsClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "max_tokens": 4096, "temperature": 0.7, "top_p": 0.95, "frequency_penalty": 0.5, "presence_penalty": 0.3, "stream": true, "stop_sequences": ["END", "STOP", "DONE", "COMPLETE", "FINISHED"], "api_key": env.get_or_panic("OPENAI_API_KEY"), "base_url": "https://api.openai.com/v1" })
+    baml.llm.build_primitive_client("ManyOptionsClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "max_tokens": 4096, "temperature": 0.7, "top_p": 0.95, "frequency_penalty": 0.5, "presence_penalty": 0.3, "stream": true, "stop_sequences": ["END", "STOP", "DONE", "COMPLETE", "FINISHED"], "api_key": env.get_or_panic("OPENAI_API_KEY"), "base_url": "https://api.openai.com/v1" })
 }
 
 function TestTarget() -> string {
@@ -597,11 +597,11 @@ function TestTarget() -> string {
 }
 
 function TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("TriviaDeeplyNestedClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "headers": {  } })
+    baml.llm.build_primitive_client("TriviaDeeplyNestedClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "headers": {  } })
 }
 
 function LongArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("LongArrayOfObjectsClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "tools": [{ "server_label": "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation", "server_url": "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2", "type": "mcp", "description": "A very long description of the tool server that explains what it does and how it should be used by the model" }, { "server_label": "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects", "server_url": "https://another-long-domain.internal.staging.example.com/tools/v1" }] })
+    baml.llm.build_primitive_client("LongArrayOfObjectsClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "tools": [{ "server_label": "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation", "server_url": "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2", "type": "mcp", "description": "A very long description of the tool server that explains what it does and how it should be used by the model" }, { "server_label": "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects", "server_url": "https://another-long-domain.internal.staging.example.com/tools/v1" }] })
 }
 
 function TestTarget.build_request() -> baml.http.Request {
@@ -609,90 +609,90 @@ function TestTarget.build_request() -> baml.http.Request {
 }
 
 function StringProviderClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("StringProviderClient", "unknown", "user", ["user", "assistant", "system"], { "base_url": "https://openrouter.ai/api/v1", "model": "mistralai/mistral-small-3.1-24b-instruct" })
+    baml.llm.build_primitive_client("StringProviderClient", "unknown", "system", ["system", "user", "assistant"], { "base_url": "https://openrouter.ai/api/v1", "model": "mistralai/mistral-small-3.1-24b-instruct" })
 }
 
 function TriviaClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("TriviaClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+    baml.llm.build_primitive_client("TriviaClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4" })
 }
 
 function TypedValuesClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("TypedValuesClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "temperature": 0.5, "max_tokens": 2048, "stream": true })
+    baml.llm.build_primitive_client("TypedValuesClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "temperature": 0.5, "max_tokens": 2048, "stream": true })
 }
 
 function FullClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("FullClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "max_tokens": 100, "temperature": 0.7, "top_p": 0.9 })
+    baml.llm.build_primitive_client("FullClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "max_tokens": 100, "temperature": 0.7, "top_p": 0.9 })
 }
 
 function SameLineClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("SameLineClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+    baml.llm.build_primitive_client("SameLineClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4" })
 }
 
 function LongArrayClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("LongArrayClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "stop_sequences": ["STOP_GENERATION_NOW", "END_OF_RESPONSE_MARKER", "COMPLETION_FINISHED_SIGNAL", "TERMINATE_OUTPUT_HERE", "FINAL_ANSWER_DELIMITER"] })
+    baml.llm.build_primitive_client("LongArrayClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "stop_sequences": ["STOP_GENERATION_NOW", "END_OF_RESPONSE_MARKER", "COMPLETION_FINISHED_SIGNAL", "TERMINATE_OUTPUT_HERE", "FINAL_ANSWER_DELIMITER"] })
 }
 
 function TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("TriviaLongValueClientBlock", "openai", "user", ["user", "assistant", "system"], { "model": "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", "base_url": "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" })
+    baml.llm.build_primitive_client("TriviaLongValueClientBlock", "openai", "system", ["system", "user", "assistant"], { "model": "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", "base_url": "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" })
 }
 
 function EnvClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("EnvClient", "openai", "user", ["user", "assistant", "system"], { "api_key": env.get_or_panic("OPENAI_API_KEY"), "model": "gpt-4" })
+    baml.llm.build_primitive_client("EnvClient", "openai", "system", ["system", "user", "assistant"], { "api_key": env.get_or_panic("OPENAI_API_KEY"), "model": "gpt-4" })
 }
 
 function LongNestedValuesClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("LongNestedValuesClient", "openai", "user", ["user", "assistant", "system"], { "model": "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily", "base_url": "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming", "headers": {  } })
+    baml.llm.build_primitive_client("LongNestedValuesClient", "openai", "system", ["system", "user", "assistant"], { "model": "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily", "base_url": "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming", "headers": {  } })
 }
 
 function DeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("DeeplyNestedClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "headers": { "custom_config": { "retry_on_failure": true, "timeout_ms": 30000, "metadata": { "team": "platform", "environment": "production" } } } })
+    baml.llm.build_primitive_client("DeeplyNestedClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "headers": { "custom_config": { "retry_on_failure": true, "timeout_ms": 30000, "metadata": { "team": "platform", "environment": "production" } } } })
 }
 
 function TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("TriviaLongValueClient", "openai", "user", ["user", "assistant", "system"], { "model": "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", "base_url": "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" })
+    baml.llm.build_primitive_client("TriviaLongValueClient", "openai", "system", ["system", "user", "assistant"], { "model": "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", "base_url": "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" })
 }
 
 function BasicClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("BasicClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+    baml.llm.build_primitive_client("BasicClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4" })
 }
 
 function ExtraWhitespaceClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("ExtraWhitespaceClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+    baml.llm.build_primitive_client("ExtraWhitespaceClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4" })
 }
 
 function CommaClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("CommaClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "max_tokens": 100 })
+    baml.llm.build_primitive_client("CommaClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "max_tokens": 100 })
 }
 
 function C.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("C", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+    baml.llm.build_primitive_client("C", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4" })
 }
 
 function RawStringConfigClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("RawStringConfigClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "system_prompt": "
+    baml.llm.build_primitive_client("RawStringConfigClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "system_prompt": "
                 You are a helpful assistant.
                 Always be concise.
             " })
 }
 
 function ArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("ArrayOfObjectsClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "tools": [{ "server_label": "web_search", "server_url": "https://example.com", "type": "mcp" }, { "server_label": "calculator", "server_url": "https://calc.example.com" }] })
+    baml.llm.build_primitive_client("ArrayOfObjectsClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "tools": [{ "server_label": "web_search", "server_url": "https://example.com", "type": "mcp" }, { "server_label": "calculator", "server_url": "https://calc.example.com" }] })
 }
 
 function NestedConfigClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("NestedConfigClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "headers": {  } })
+    baml.llm.build_primitive_client("NestedConfigClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "headers": {  } })
 }
 
 function TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("TriviaDeeplyNestedClientBlock", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "headers": {  } })
+    baml.llm.build_primitive_client("TriviaDeeplyNestedClientBlock", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "headers": {  } })
 }
 
 function ArrayConfigClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("ArrayConfigClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "stop_sequences": ["END", "STOP", "DONE"] })
+    baml.llm.build_primitive_client("ArrayConfigClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "stop_sequences": ["END", "STOP", "DONE"] })
 }
 
 function MixedValuesClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("MixedValuesClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "max_tokens": 100, "temperature": 0.7, "stream": true, "stop": ["END"], "inline_string": "inline raw" })
+    baml.llm.build_primitive_client("MixedValuesClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4", "max_tokens": 100, "temperature": 0.7, "stream": true, "stop": ["END"], "inline_string": "inline raw" })
 }
 
 function TestTarget.render_prompt() -> baml.llm.PromptAst {
@@ -700,15 +700,15 @@ function TestTarget.render_prompt() -> baml.llm.PromptAst {
 }
 
 function ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+    baml.llm.build_primitive_client("ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4" })
 }
 
 function LongOptionClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("LongOptionClient", "openai", "user", ["user", "assistant", "system"], { "model": "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", "base_url": "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" })
+    baml.llm.build_primitive_client("LongOptionClient", "openai", "system", ["system", "user", "assistant"], { "model": "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", "base_url": "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions" })
 }
 
 function TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("TriviaClientBlock", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+    baml.llm.build_primitive_client("TriviaClientBlock", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4" })
 }
 
 client LongArrayOfObjectsClient {

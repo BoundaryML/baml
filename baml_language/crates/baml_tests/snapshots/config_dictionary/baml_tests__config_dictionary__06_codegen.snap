@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 function MyClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "MyClient"
     load_const "baml-openai-chat"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     load_const 100
     load_const "abc"

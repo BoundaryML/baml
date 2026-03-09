@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 function Foo() -> null {
     load_const null
@@ -10,10 +9,10 @@ function Foo() -> null {
 function GPT4.resolve() -> baml.llm.PrimitiveClient {
     load_const "GPT4"
     load_const "unknown"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    load_const "system"
     alloc_array 3
     alloc_map 0
     dispatch_future baml.llm.build_primitive_client

@@ -7,7 +7,7 @@ function FetchDatax(user_id: string) -> Hi {
 }
 
 function VertexGCP.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("VertexGCP", "vertex-ai", "user", ["user", "assistant", "system"], { "model": "gemini-2", "flash": <missing> })
+    baml.llm.build_primitive_client("VertexGCP", "vertex-ai", "system", ["system", "user", "assistant"], { "model": "gemini-2", "flash": <missing> })
 }
 
 function FetchDatax.build_request(user_id: string) -> baml.http.Request {

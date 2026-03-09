@@ -320,7 +320,7 @@ fn validate_http_config_fields(
 }
 
 /// Default allowed roles when none are specified.
-const DEFAULT_ALLOWED_ROLES: &[&str] = &["user", "assistant", "system"];
+const DEFAULT_ALLOWED_ROLES: &[&str] = &["system", "user", "assistant"];
 
 /// Validate `allowed_roles` and `remap_roles` fields.
 fn validate_roles(ctx: &mut LoweringContext, client_name: &str, options_block: &ConfigBlock) {

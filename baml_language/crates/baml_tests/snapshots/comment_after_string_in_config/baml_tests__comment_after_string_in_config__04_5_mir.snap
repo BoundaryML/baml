@@ -8,11 +8,11 @@ fn OpenRouterMistralSmall3_1_24b.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "OpenRouterMistralSmall3_1_24b"
     let _3: "unknown"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "base_url"
     let _11: "https://openrouter.ai/api/v1"
@@ -33,10 +33,10 @@ fn OpenRouterMistralSmall3_1_24b.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "OpenRouterMistralSmall3_1_24b";
         _3 = const "unknown";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "base_url";
         _11 = const "https://openrouter.ai/api/v1";

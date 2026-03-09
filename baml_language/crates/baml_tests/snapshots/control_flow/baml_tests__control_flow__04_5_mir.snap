@@ -450,11 +450,11 @@ fn TestClient.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "TestClient"
     let _3: "openai"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: "model"
     let _11: "gpt-4"
@@ -464,10 +464,10 @@ fn TestClient.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "TestClient";
         _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _10 = const "model";
         _11 = const "gpt-4";

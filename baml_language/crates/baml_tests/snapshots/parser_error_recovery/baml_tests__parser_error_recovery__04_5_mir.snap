@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn Foo() -> null {
@@ -23,11 +22,11 @@ fn GPT4.resolve() -> baml.llm.PrimitiveClient {
     let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
     let _2: "GPT4"
     let _3: "unknown"
-    let _4: "user"
+    let _4: "system"
     let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
     let _9: map<string, unknown>
     let _10: null
 
@@ -35,10 +34,10 @@ fn GPT4.resolve() -> baml.llm.PrimitiveClient {
         _1 = const fn baml.llm.build_primitive_client;
         _2 = const "GPT4";
         _3 = const "unknown";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
         _5 = [copy _6, copy _7, copy _8];
         _9 = {  };
         _10 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;

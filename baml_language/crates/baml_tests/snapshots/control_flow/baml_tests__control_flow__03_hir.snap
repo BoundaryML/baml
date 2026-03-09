@@ -102,7 +102,7 @@ function LlmFunction.build_request(input: string) -> baml.http.Request {
 }
 
 function TestClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("TestClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
+    baml.llm.build_primitive_client("TestClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4" })
 }
 
 client TestClient {

@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function MyClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("MyClient", "baml-openai-chat", "user", ["user", "assistant", "system"], { "max_tokens": 100, "array_key_with_quoted_unquoted": ["abc", "abc", "ccc"], "key2": "some random value", "hello": "world", "thing": "hello", "block_string": "hello there my frien
+    baml.llm.build_primitive_client("MyClient", "baml-openai-chat", "system", ["system", "user", "assistant"], { "max_tokens": 100, "array_key_with_quoted_unquoted": ["abc", "abc", "ccc"], "key2": "some random value", "hello": "world", "thing": "hello", "block_string": "hello there my frien
                     d", "inline_raw_string": "inline "raw" string,,", "booleanValue": true, "stringKey": "true", "array1": ["one", "two"], "array2": ["one", "two"], "array3Numbers": [1, 2, 3], "nestedKey": { "key": "value", "key2": "value2", "nestedArray": ["yes", "queen"], "number": 10 }, "oneMoreValueToTestBrokenness": "value", "myInteger": 100, "tools": [{ "server_label": "parallel_web_search", "server_url": "https://example.com", "headers": { "authorization": "Bearer token" }, "type": "mcp" }, { "another_tool": "value" }], "block_string": "
           hello there my friend
           {# a comment in a prompt #}
