@@ -73,7 +73,8 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
 
     fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError> {
         let base_url = get_string_option(client, "base_url")
-            .unwrap_or_else(|| "https://api.openai.com".to_string());
+            .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+        let base_url = base_url.trim_end_matches('/');
 
         // Azure uses a different URL pattern
         if *self.provider == LlmProvider::AzureOpenAi {
@@ -81,14 +82,16 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
                 .ok_or_else(|| BuildRequestError::MissingOption("resource_name".into()))?;
             let model = get_string_option(client, "model")
                 .ok_or_else(|| BuildRequestError::MissingOption("model".into()))?;
-            let api_version = get_string_option(client, "api_version")
-                .unwrap_or_else(|| "2024-02-15-preview".to_string());
-            return Ok(format!(
-                "https://{deployment}.openai.azure.com/openai/deployments/{model}/chat/completions?api-version={api_version}"
-            ));
+            let mut url = format!(
+                "https://{deployment}.openai.azure.com/openai/deployments/{model}/chat/completions"
+            );
+            if let Some(api_version) = get_string_option(client, "api_version") {
+                url.push_str(&format!("?api-version={api_version}"));
+            }
+            return Ok(url);
         }
 
-        Ok(format!("{base_url}/v1/chat/completions"))
+        Ok(format!("{base_url}/chat/completions"))
     }
 
     fn build_auth_headers(&self, client: &LlmPrimitiveClient) -> IndexMap<String, String> {
@@ -403,6 +406,7 @@ impl LlmRequestBuilder for OpenAiResponsesBuilder {
     fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError> {
         let base_url = get_string_option(client, "base_url")
             .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+        let base_url = base_url.trim_end_matches('/');
         Ok(format!("{base_url}/responses"))
     }
 
@@ -891,10 +895,34 @@ mod tests {
         );
         let builder = OpenAiBuilder::new(&LlmProvider::AzureOpenAi);
         let url = builder.build_url(&client).unwrap();
-        assert!(url.starts_with(
+        assert_eq!(
+            url,
             "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions"
-        ));
-        assert!(url.contains("api-version="));
+        );
+    }
+
+    #[test]
+    fn azure_url_with_api_version() {
+        let client = make_client(
+            "azure-openai",
+            vec![
+                ("model", BexExternalValue::String("gpt-4o".into())),
+                (
+                    "resource_name",
+                    BexExternalValue::String("my-resource".into()),
+                ),
+                (
+                    "api_version",
+                    BexExternalValue::String("2024-02-15-preview".into()),
+                ),
+            ],
+        );
+        let builder = OpenAiBuilder::new(&LlmProvider::AzureOpenAi);
+        let url = builder.build_url(&client).unwrap();
+        assert_eq!(
+            url,
+            "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview"
+        );
     }
 
     #[test]

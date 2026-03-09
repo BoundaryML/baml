@@ -420,7 +420,7 @@ mod tests {
         );
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
-        assert_eq!(result.url, "https://custom.api.com/v1/chat/completions");
+        assert_eq!(result.url, "https://custom.api.com/chat/completions");
     }
 
     #[test]
