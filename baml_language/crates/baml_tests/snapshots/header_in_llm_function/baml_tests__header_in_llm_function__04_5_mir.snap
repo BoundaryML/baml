@@ -31,7 +31,7 @@ fn FetchDatax(user_id: string) -> Hi {
 }
 
 fn VertexGCP.resolve:
-  (no MIR due to errors: missing expression at file 9:121..121)
+  (no MIR due to errors: missing expression at file 16:121..121)
 
 fn FetchDatax.build_request(user_id: string) -> baml.http.Request {
     // Locals:

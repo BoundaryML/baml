@@ -230,25 +230,19 @@ fn emit_glue_method(out: &mut String, b: &NativeBuiltin) {
     // Emit the call.
     let call_args = call_arg_list(b);
     let has_mut_receiver = b.receiver.as_ref().is_some_and(|r| r.is_mut);
+    let returns_null = matches!(b.return_type, BamlType::Null);
+
+    // For void/null returns, don't bind to `result` — avoids unused variable warning.
+    let binding = if returns_null { "        " } else { "        let result = " };
+    let suffix = if fallible { "?;\n" } else { ";\n" };
+
     if has_mut_receiver {
-        // Mutable receiver methods don't get `vm` — the mutable borrow of the
-        // receiver already ties it up, so we can't pass it a second time.
-        if fallible {
-            out.push_str(&format!(
-                "        let result = Self::baml_{fn_name}({call_args})?;\n"
-            ));
-        } else {
-            out.push_str(&format!(
-                "        let result = Self::baml_{fn_name}({call_args});\n"
-            ));
-        }
-    } else if fallible {
         out.push_str(&format!(
-            "        let result = Self::baml_{fn_name}(vm, {call_args})?;\n"
+            "{binding}Self::baml_{fn_name}({call_args}){suffix}"
         ));
     } else {
         out.push_str(&format!(
-            "        let result = Self::baml_{fn_name}(vm, {call_args});\n"
+            "{binding}Self::baml_{fn_name}(vm, {call_args}){suffix}"
         ));
     }
 

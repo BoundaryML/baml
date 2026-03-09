@@ -3,4 +3,4 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR ===
 fn GetTodo:
-  (no MIR due to errors: missing expression at file 9:106..130)
+  (no MIR due to errors: missing expression at file 16:106..130)
