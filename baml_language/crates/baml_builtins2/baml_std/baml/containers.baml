@@ -7,10 +7,12 @@ class Array<T> {
     $rust_function
   }
 
+  //baml:mut_self
   function push(self, item: T) -> int {
     $rust_function
   }
 
+  //baml:mut_self
   function pop(self) -> T? {
     $rust_function
   }
@@ -49,6 +51,7 @@ class Map<K, V> {
     $rust_function
   }
 
+  //baml:mut_self
   function set(self, key: K, value: V) -> null {
     $rust_function
   }

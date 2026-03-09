@@ -1,0 +1,26 @@
+[package]
+name = "baml_builtins2_codegen"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Build-time code generation for BAML builtins from compiler2 .baml stdlib"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_builtins2 = { workspace = true }
+baml_base = { workspace = true }
+baml_compiler_lexer = { workspace = true }
+baml_compiler_parser = { workspace = true }
+baml_compiler_syntax = { workspace = true }
+baml_compiler2_ast = { workspace = true }

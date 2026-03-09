@@ -1,0 +1,6 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11251
+---
+=== NO CODEGEN DUE TO ERRORS ===
+Error: InFunction { function_name: "VertexGCP.resolve", error: MissingExpression { span: Span { file_id: FileId(16), range: 121..121 } } }

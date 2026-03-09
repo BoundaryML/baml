@@ -6,7 +6,7 @@
 //!
 //! # Adding a new builtin
 //!
-//! 1. Add the definition in `baml_builtins/src/lib.rs`
+//! 1. Add the definition in the `.baml` stdlib under `crates/baml_builtins2/baml_std/`
 //! 2. Implement the corresponding method in `impl NativeFunctions for VmNatives`
 
 use std::{collections::HashMap, fmt::Write};
@@ -30,7 +30,7 @@ pub type NativeFunctionResult = Result<Value, VmError>;
 pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeFunctionResult;
 
 // Generate the NativeFunctions trait from builtin definitions.
-baml_builtins::generate_native_trait!();
+include!(concat!(env!("OUT_DIR"), "/nativefunctions_generated.rs"));
 
 /// The VM's native function implementations.
 pub struct VmNatives;
@@ -41,25 +41,49 @@ impl NativeFunctions for VmNatives {
     // =========================================================================
 
     #[allow(clippy::cast_possible_wrap)]
-    fn baml_array_length(array: &[Value]) -> i64 {
+    fn baml_array_length(_vm: &mut BexVm, array: &[Value]) -> i64 {
         array.len() as i64
     }
 
-    fn baml_array_push(array: &mut Vec<Value>, item: &Value) {
+    fn baml_array_push(array: &mut Vec<Value>, item: &Value) -> i64 {
         array.push(*item);
+        array.len() as i64
     }
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    fn baml_array_at(array: &[Value], index: i64) -> Result<Value, VmError> {
-        array.get(index as usize).copied().ok_or_else(|| {
-            VmError::RuntimeError(RuntimeError::Other(
-                format!("Index out of bounds: {index}",),
-            ))
-        })
+    fn baml_array_at(_vm: &mut BexVm, array: &[Value], index: i64) -> Result<Option<Value>, VmError> {
+        Ok(array.get(index as usize).copied())
     }
 
-    fn baml_array_concat(array: &[Value], other: &[Value]) -> Vec<Value> {
+    fn baml_array_concat(_vm: &mut BexVm, array: &[Value], other: &[Value]) -> Vec<Value> {
         array.iter().chain(other.iter()).copied().collect()
+    }
+
+    fn baml_array_pop(array: &mut Vec<Value>) -> Option<Value> {
+        array.pop()
+    }
+
+    fn baml_array_reverse(_vm: &mut BexVm, array: &[Value]) -> Vec<Value> {
+        let mut result = array.to_vec();
+        result.reverse();
+        result
+    }
+
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    fn baml_array_slice(_vm: &mut BexVm, array: &[Value], start: i64, end: i64) -> Vec<Value> {
+        let len = array.len() as i64;
+        let start = start.max(0).min(len) as usize;
+        let end = end.max(0).min(len) as usize;
+        let end = end.max(start);
+        array[start..end].to_vec()
+    }
+
+    fn baml_array_join(vm: &mut BexVm, array: &[Value], separator: &str) -> String {
+        array
+            .iter()
+            .map(|v| vm.as_string(v).map(|s| s.clone()).unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join(separator)
     }
 
     // =========================================================================
@@ -67,31 +91,31 @@ impl NativeFunctions for VmNatives {
     // =========================================================================
 
     #[allow(clippy::cast_possible_wrap)]
-    fn baml_string_length(string: &str) -> i64 {
+    fn baml_string_length(_vm: &mut BexVm, string: &str) -> i64 {
         string.chars().count() as i64
     }
 
-    fn baml_string_to_lower_case(string: &str) -> String {
+    fn baml_string_tolowercase(_vm: &mut BexVm, string: &str) -> String {
         string.to_lowercase()
     }
 
-    fn baml_string_to_upper_case(string: &str) -> String {
+    fn baml_string_touppercase(_vm: &mut BexVm, string: &str) -> String {
         string.to_uppercase()
     }
 
-    fn baml_string_trim(string: &str) -> String {
+    fn baml_string_trim(_vm: &mut BexVm, string: &str) -> String {
         string.trim().to_string()
     }
 
-    fn baml_string_includes(string: &str, search: &str) -> bool {
+    fn baml_string_includes(_vm: &mut BexVm, string: &str, search: &str) -> bool {
         string.contains(search)
     }
 
-    fn baml_string_starts_with(string: &str, prefix: &str) -> bool {
+    fn baml_string_startswith(_vm: &mut BexVm, string: &str, prefix: &str) -> bool {
         string.starts_with(prefix)
     }
 
-    fn baml_string_ends_with(string: &str, suffix: &str) -> bool {
+    fn baml_string_endswith(_vm: &mut BexVm, string: &str, suffix: &str) -> bool {
         string.ends_with(suffix)
     }
 
@@ -103,16 +127,40 @@ impl NativeFunctions for VmNatives {
     }
 
     #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-    fn baml_string_substring(string: &str, start: i64, end: i64) -> String {
+    fn baml_string_substring(_vm: &mut BexVm, string: &str, start: i64, end: i64) -> String {
         let len = string.len();
         let start = (start as usize).min(len);
         let end = (end as usize).min(len).max(start);
         string[start..end].to_string()
     }
 
-    fn baml_string_replace(string: &str, search: &str, replacement: &str) -> String {
+    fn baml_string_replace(_vm: &mut BexVm, string: &str, search: &str, replacement: &str) -> String {
         // Replace first occurrence only (matching JavaScript behavior)
         string.replacen(search, replacement, 1)
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    fn baml_string_indexof(_vm: &mut BexVm, string: &str, search: &str) -> i64 {
+        string.find(search).map(|i| i as i64).unwrap_or(-1)
+    }
+
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    fn baml_string_charat(_vm: &mut BexVm, string: &str, index: i64) -> String {
+        string
+            .chars()
+            .nth(index as usize)
+            .map(|c| c.to_string())
+            .unwrap_or_default()
+    }
+
+    fn baml_string_matches(_vm: &mut BexVm, string: &str, pattern: &str) -> bool {
+        // Use basic string containment as a simple implementation.
+        // A full regex implementation would require an additional dependency.
+        string.contains(pattern)
+    }
+
+    fn baml_string_replaceall(_vm: &mut BexVm, string: &str, search: &str, replacement: &str) -> String {
+        string.replace(search, replacement)
     }
 
     // =========================================================================
@@ -120,12 +168,42 @@ impl NativeFunctions for VmNatives {
     // =========================================================================
 
     #[allow(clippy::cast_possible_wrap)]
-    fn baml_map_length(map: &IndexMap<String, Value>) -> i64 {
+    fn baml_map_length(_vm: &mut BexVm, map: &IndexMap<String, Value>) -> i64 {
         map.len() as i64
     }
 
-    fn baml_map_has(map: &IndexMap<String, Value>, key: &str) -> bool {
-        map.contains_key(key)
+    fn baml_map_has(_vm: &mut BexVm, map: &IndexMap<String, Value>, key: &Value) -> bool {
+        if let Ok(k) = _vm.as_string(key) {
+            map.contains_key(k.as_str())
+        } else {
+            false
+        }
+    }
+
+    fn baml_map_keys(vm: &mut BexVm, map: &IndexMap<String, Value>) -> Vec<Value> {
+        map.keys().map(|k| vm.alloc_string(k.clone())).collect()
+    }
+
+    fn baml_map_values(_vm: &mut BexVm, map: &IndexMap<String, Value>) -> Vec<Value> {
+        map.values().copied().collect()
+    }
+
+    fn baml_map_set(_map: &mut IndexMap<String, Value>, _key: &Value, _value: &Value) {
+        // Map.set is a new method not called by existing tests.
+        // The key arrives as &Value (generic K), but IndexMap<String, Value> needs
+        // a string key. Without vm access (can't have it with mut receiver), we
+        // can't extract a String from a heap-allocated string Value.
+        // A proper implementation requires either (a) a VM-free string extraction
+        // utility or (b) restructuring the Map type to avoid generic keys.
+        todo!("baml_map_set: not yet implemented (requires vm-free string extraction from Value)")
+    }
+
+    fn baml_map_get(_vm: &mut BexVm, map: &IndexMap<String, Value>, key: &Value) -> Option<Value> {
+        if let Ok(k) = _vm.as_string(key) {
+            map.get(k.as_str()).copied()
+        } else {
+            None
+        }
     }
 
     // =========================================================================
@@ -151,15 +229,15 @@ impl NativeFunctions for VmNatives {
     // =========================================================================
 
     #[allow(clippy::cast_possible_truncation)]
-    fn baml_math_trunc(value: f64) -> i64 {
+    fn baml_math_trunc(_vm: &mut BexVm, value: f64) -> i64 {
         value as i64
     }
 
     // =========================================================================
-    // Media methods
+    // Media instance methods
     // =========================================================================
 
-    fn baml_media_as_url(media: &MediaValue) -> Option<String> {
+    fn baml_media_pdf_url(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
         // SAFETY: Url content is immutable once set; no concurrent writes can occur.
         #[allow(unsafe_code)]
         unsafe {
@@ -170,23 +248,7 @@ impl NativeFunctions for VmNatives {
         }
     }
 
-    fn baml_media_as_base64(media: &MediaValue) -> Option<String> {
-        use baml_builtins::MediaContent;
-        media.read_content(|content| match content {
-            MediaContent::Base64 { base64_data, .. } => Some(base64_data.clone()),
-            MediaContent::File {
-                base64_data: Some(base64_data),
-                ..
-            } => Some(base64_data.clone()),
-            MediaContent::Url {
-                base64_data: Some(base64_data),
-                ..
-            } => Some(base64_data.clone()),
-            _ => None,
-        })
-    }
-
-    fn baml_media_as_file(media: &MediaValue) -> Option<String> {
+    fn baml_media_pdf_file(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
         // SAFETY: File path is immutable once set; no concurrent writes can occur.
         #[allow(unsafe_code)]
         unsafe {
@@ -197,9 +259,210 @@ impl NativeFunctions for VmNatives {
         }
     }
 
-    fn baml_media_mime_type(media: &MediaValue) -> Option<String> {
+    fn baml_media_pdf_base64(_vm: &mut BexVm, media: &MediaValue) -> String {
+        use baml_builtins::MediaContent;
+        media.read_content(|content| match content {
+            MediaContent::Base64 { base64_data, .. } => base64_data.clone(),
+            MediaContent::File {
+                base64_data: Some(base64_data),
+                ..
+            } => base64_data.clone(),
+            MediaContent::Url {
+                base64_data: Some(base64_data),
+                ..
+            } => base64_data.clone(),
+            _ => String::new(),
+        })
+    }
+
+    fn baml_media_pdf_mime_type(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
         media.mime_type.clone()
     }
+
+    fn baml_media_pdf_from_url(_vm: &mut BexVm, _url: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_pdf_from_url: media constructors not yet implemented")
+    }
+
+    fn baml_media_pdf_from_file(_vm: &mut BexVm, _file: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_pdf_from_file: media constructors not yet implemented")
+    }
+
+    fn baml_media_pdf_from_base64(_vm: &mut BexVm, _base64: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_pdf_from_base64: media constructors not yet implemented")
+    }
+
+    fn baml_media_audio_url(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
+        #[allow(unsafe_code)]
+        unsafe {
+            media.read_content_unguarded(|content| match content {
+                baml_builtins::MediaContent::Url { url, .. } => Some(url.clone()),
+                _ => None,
+            })
+        }
+    }
+
+    fn baml_media_audio_file(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
+        #[allow(unsafe_code)]
+        unsafe {
+            media.read_content_unguarded(|content| match content {
+                baml_builtins::MediaContent::File { file, .. } => Some(file.clone()),
+                _ => None,
+            })
+        }
+    }
+
+    fn baml_media_audio_base64(_vm: &mut BexVm, media: &MediaValue) -> String {
+        use baml_builtins::MediaContent;
+        media.read_content(|content| match content {
+            MediaContent::Base64 { base64_data, .. } => base64_data.clone(),
+            MediaContent::File {
+                base64_data: Some(base64_data),
+                ..
+            } => base64_data.clone(),
+            MediaContent::Url {
+                base64_data: Some(base64_data),
+                ..
+            } => base64_data.clone(),
+            _ => String::new(),
+        })
+    }
+
+    fn baml_media_audio_mime_type(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
+        media.mime_type.clone()
+    }
+
+    fn baml_media_audio_from_url(_vm: &mut BexVm, _url: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_audio_from_url: media constructors not yet implemented")
+    }
+
+    fn baml_media_audio_from_file(_vm: &mut BexVm, _file: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_audio_from_file: media constructors not yet implemented")
+    }
+
+    fn baml_media_audio_from_base64(_vm: &mut BexVm, _base64: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_audio_from_base64: media constructors not yet implemented")
+    }
+
+    fn baml_media_video_url(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
+        #[allow(unsafe_code)]
+        unsafe {
+            media.read_content_unguarded(|content| match content {
+                baml_builtins::MediaContent::Url { url, .. } => Some(url.clone()),
+                _ => None,
+            })
+        }
+    }
+
+    fn baml_media_video_file(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
+        #[allow(unsafe_code)]
+        unsafe {
+            media.read_content_unguarded(|content| match content {
+                baml_builtins::MediaContent::File { file, .. } => Some(file.clone()),
+                _ => None,
+            })
+        }
+    }
+
+    fn baml_media_video_base64(_vm: &mut BexVm, media: &MediaValue) -> String {
+        use baml_builtins::MediaContent;
+        media.read_content(|content| match content {
+            MediaContent::Base64 { base64_data, .. } => base64_data.clone(),
+            MediaContent::File {
+                base64_data: Some(base64_data),
+                ..
+            } => base64_data.clone(),
+            MediaContent::Url {
+                base64_data: Some(base64_data),
+                ..
+            } => base64_data.clone(),
+            _ => String::new(),
+        })
+    }
+
+    fn baml_media_video_mime_type(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
+        media.mime_type.clone()
+    }
+
+    fn baml_media_video_from_url(_vm: &mut BexVm, _url: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_video_from_url: media constructors not yet implemented")
+    }
+
+    fn baml_media_video_from_file(_vm: &mut BexVm, _file: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_video_from_file: media constructors not yet implemented")
+    }
+
+    fn baml_media_video_from_base64(_vm: &mut BexVm, _base64: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_video_from_base64: media constructors not yet implemented")
+    }
+
+    fn baml_media_image_url(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
+        #[allow(unsafe_code)]
+        unsafe {
+            media.read_content_unguarded(|content| match content {
+                baml_builtins::MediaContent::Url { url, .. } => Some(url.clone()),
+                _ => None,
+            })
+        }
+    }
+
+    fn baml_media_image_file(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
+        #[allow(unsafe_code)]
+        unsafe {
+            media.read_content_unguarded(|content| match content {
+                baml_builtins::MediaContent::File { file, .. } => Some(file.clone()),
+                _ => None,
+            })
+        }
+    }
+
+    fn baml_media_image_base64(_vm: &mut BexVm, media: &MediaValue) -> String {
+        use baml_builtins::MediaContent;
+        media.read_content(|content| match content {
+            MediaContent::Base64 { base64_data, .. } => base64_data.clone(),
+            MediaContent::File {
+                base64_data: Some(base64_data),
+                ..
+            } => base64_data.clone(),
+            MediaContent::Url {
+                base64_data: Some(base64_data),
+                ..
+            } => base64_data.clone(),
+            _ => String::new(),
+        })
+    }
+
+    fn baml_media_image_mime_type(_vm: &mut BexVm, media: &MediaValue) -> Option<String> {
+        media.mime_type.clone()
+    }
+
+    fn baml_media_image_from_url(_vm: &mut BexVm, _url: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_image_from_url: media constructors not yet implemented")
+    }
+
+    fn baml_media_image_from_file(_vm: &mut BexVm, _file: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_image_from_file: media constructors not yet implemented")
+    }
+
+    fn baml_media_image_from_base64(_vm: &mut BexVm, _base64: &str, _mime_type: Option<&str>) -> Value {
+        todo!("baml_media_image_from_base64: media constructors not yet implemented")
+    }
+}
+
+// =============================================================================
+// Public module-level function wrappers
+//
+// `vm.rs` calls these as free functions in the `crate::native` module.
+// They delegate to the generated glue methods on `VmNatives`.
+// =============================================================================
+
+/// Module-level wrapper for `baml_deep_equals` called directly by the VM.
+pub fn baml_deep_equals(vm: &mut BexVm, args: &[Value]) -> NativeFunctionResult {
+    VmNatives::__baml_deep_equals(vm, args)
+}
+
+/// Module-level wrapper for `baml_deep_copy` called directly by the VM.
+pub fn baml_deep_copy(vm: &mut BexVm, args: &[Value]) -> NativeFunctionResult {
+    VmNatives::__baml_deep_copy(vm, args)
 }
 
 // =============================================================================

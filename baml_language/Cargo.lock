@@ -347,6 +347,18 @@ name = "baml_builtins2"
 version = "0.0.0-beta"
 
 [[package]]
+name = "baml_builtins2_codegen"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_builtins2",
+ "baml_compiler2_ast",
+ "baml_compiler_lexer",
+ "baml_compiler_parser",
+ "baml_compiler_syntax",
+]
+
+[[package]]
 name = "baml_builtins_codegen"
 version = "0.0.0-beta"
 dependencies = [
@@ -971,6 +983,7 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "baml_builtins",
+ "baml_builtins2_codegen",
  "baml_compiler_emit",
  "baml_tests",
  "baml_type",
@@ -980,7 +993,6 @@ dependencies = [
  "codspeed-divan-compat",
  "colored",
  "indexmap",
- "paste",
  "thiserror 2.0.18",
  "tokio",
 ]

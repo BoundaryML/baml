@@ -25,6 +25,7 @@ baml_type = { path = "crates/baml_type" }
 baml_builtins = { path = "crates/baml_builtins" }
 baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
+baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
 baml_codegen_python = { path = "crates/baml_codegen_python" }
 baml_codegen_tests = { path = "crates/baml_codegen_tests" }
