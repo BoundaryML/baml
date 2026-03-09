@@ -3,6 +3,8 @@
 //! Supports: `OpenAi`, `OpenAiGeneric`, `AzureOpenAi`, Ollama, `OpenRouter`,
 //! and `OpenAiResponses` (Responses API).
 
+use std::fmt::Write;
+
 use baml_builtins::{PromptAst, PromptAstSimple};
 use indexmap::IndexMap;
 use serde::Serialize;
@@ -86,7 +88,7 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
                 "https://{deployment}.openai.azure.com/openai/deployments/{model}/chat/completions"
             );
             if let Some(api_version) = get_string_option(client, "api_version") {
-                url.push_str(&format!("?api-version={api_version}"));
+                write!(url, "?api-version={api_version}").unwrap();
             }
             return Ok(url);
         }
