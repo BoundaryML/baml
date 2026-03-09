@@ -10,6 +10,8 @@ use baml_compiler_syntax::SyntaxNode;
 use rowan::ast::AstNode as _;
 use smol_str::SmolStr;
 
+use crate::{StreamAttrKind, parse_stream_attr};
+
 //
 // ──────────────────────────────────────────────── TYPE ATTRS ─────
 //
@@ -303,25 +305,32 @@ impl PpirTy {
         // Parse the type structure
         let mut result = Self::from_ast_structure(type_expr);
 
-        // Capture type-level annotations from ATTRIBUTE children
+        // Capture type-level annotations from ATTRIBUTE children.
+        // Validation of target legality and argument shape happens in `validate.rs`;
+        // PPIR only consumes the subset of stream attrs that affect desugaring.
         for attr in type_expr.attributes() {
-            if let Some(attr_name) = attr.full_name() {
-                match attr_name.as_str() {
-                    "stream.done" => {
-                        result.attrs_mut().stream_done = true;
+            let Some(attr_name) = attr.full_name() else {
+                continue;
+            };
+            let Some(kind) = parse_stream_attr(attr_name.as_str()) else {
+                continue;
+            };
+
+            match kind {
+                StreamAttrKind::Done => {
+                    result.attrs_mut().stream_done = true;
+                }
+                StreamAttrKind::Type => {
+                    if let Some(type_arg) = attr.string_arg() {
+                        result.attrs_mut().stream_type =
+                            Some(Box::new(Self::from_type_name(&type_arg)));
                     }
-                    "stream.type" => {
-                        if let Some(type_arg) = attr.string_arg() {
-                            result.attrs_mut().stream_type =
-                                Some(Box::new(Self::from_type_name(&type_arg)));
-                        }
-                    }
-                    "stream.with_state" => {
-                        result.attrs_mut().stream_with_state = true;
-                    }
-                    _ => {
-                        // Other type-level attrs (e.g., @assert, @check) ignored by PPIR
-                    }
+                }
+                StreamAttrKind::WithState => {
+                    result.attrs_mut().stream_with_state = true;
+                }
+                StreamAttrKind::NotNull | StreamAttrKind::StartsAs => {
+                    // Field-level stream attrs are handled in `desugar::build_ppir_fields`.
                 }
             }
         }

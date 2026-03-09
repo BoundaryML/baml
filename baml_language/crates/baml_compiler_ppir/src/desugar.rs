@@ -9,7 +9,7 @@ use baml_compiler_syntax::{GreenNode, SyntaxNode};
 use smol_str::SmolStr;
 
 use crate::{
-    PpirNames,
+    PpirNames, StreamAttrKind, parse_stream_attr,
     ty::{PpirField, PpirTy, PpirTypeAttrs},
 };
 
@@ -256,11 +256,17 @@ pub(crate) fn build_ppir_fields(class_def: &baml_compiler_syntax::ast::ClassDef)
             // ones (@stream.starts_as, @stream.not_null).
             if let Some(type_expr) = field_node.ty() {
                 for attr in type_expr.attributes() {
-                    if let Some(attr_name) = attr.full_name() {
-                        match attr_name.as_str() {
-                            "stream.starts_as" => starts_as = attr.arg_syntax_node(),
-                            "stream.not_null" => not_null = true,
-                            _ => {}
+                    let Some(attr_name) = attr.full_name() else {
+                        continue;
+                    };
+                    let Some(kind) = parse_stream_attr(attr_name.as_str()) else {
+                        continue;
+                    };
+
+                    match kind {
+                        StreamAttrKind::StartsAs => starts_as = attr.arg_syntax_node(),
+                        StreamAttrKind::NotNull => not_null = true,
+                        StreamAttrKind::Done | StreamAttrKind::Type | StreamAttrKind::WithState => {
                         }
                     }
                 }
@@ -311,7 +317,7 @@ pub(crate) fn desugar_field(
                 attrs: PpirTypeAttrs::default(),
             });
         PpirStreamStartsAs::Explicit { green, typeof_s }
-    } else if type_has_block_attr(&pf.ty, "stream.not_null", names, db) {
+    } else if type_has_block_attr(&pf.ty, StreamAttrKind::NotNull, names, db) {
         PpirStreamStartsAs::Never
     } else {
         default_sap_starts_as(&stream_type)
@@ -330,11 +336,17 @@ pub(crate) fn desugar_field(
 ///
 /// Only matches bare named types (e.g., `Foo`). Does NOT match `Foo[]`, `Foo?`,
 /// `Foo | Bar`, etc. — those use their own default `starts_as` behavior.
-fn type_has_block_attr(ty: &PpirTy, attr: &str, names: PpirNames<'_>, db: &dyn crate::Db) -> bool {
+fn type_has_block_attr(
+    ty: &PpirTy,
+    attr: StreamAttrKind,
+    names: PpirNames<'_>,
+    db: &dyn crate::Db,
+) -> bool {
     let PpirTy::Named { name, .. } = ty else {
         return false;
     };
-    let has_attr = |attrs: &Vec<Name>| attrs.iter().any(|a| a == attr);
+    let attr_name = attr.name();
+    let has_attr = |attrs: &Vec<Name>| attrs.iter().any(|a| a == attr_name);
     names
         .class_names(db)
         .get(name.as_str())

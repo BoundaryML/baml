@@ -7,17 +7,12 @@ use baml_compiler_syntax::{
 };
 use rowan::{TextRange, ast::AstNode as _};
 
-/// Valid `@stream.*` type-level attributes (used in diagnostic hints).
-const STREAM_TYPE_ATTRS: &[&str] = &[
-    "stream.done",
-    "stream.not_null",
-    "stream.starts_as",
-    "stream.type",
-    "stream.with_state",
-];
+use crate::{
+    StreamAttrArgRule, StreamAttrKind, StreamAttrTarget, parse_stream_attr, valid_stream_attr_names,
+};
 
-/// Valid `@@stream.*` block-level attributes (used in diagnostic hints).
-const STREAM_BLOCK_ATTRS: &[&str] = &["stream.done", "stream.not_null"];
+const STREAM_TYPE_ATTRS: &[&str] = valid_stream_attr_names(StreamAttrTarget::Type);
+const STREAM_BLOCK_ATTRS: &[&str] = valid_stream_attr_names(StreamAttrTarget::Block);
 
 // ── local trait to unify Attribute / BlockAttribute span queries ──────────────
 
@@ -138,7 +133,18 @@ fn validate_stream_type_expr(type_expr: &TypeExpr, file_id: FileId, out: &mut Ve
             continue;
         }
 
-        if !STREAM_TYPE_ATTRS.contains(&key) {
+        let Some(kind) = parse_stream_attr(key) else {
+            if let Some(span) = name_span(&attr, file_id) {
+                out.push(HirDiagnostic::UnknownAttribute {
+                    attr_name: key.to_owned(),
+                    span,
+                    valid_attributes: STREAM_TYPE_ATTRS,
+                });
+            }
+            continue;
+        };
+
+        if !kind.supports_target(StreamAttrTarget::Type) {
             if let Some(span) = name_span(&attr, file_id) {
                 out.push(HirDiagnostic::UnknownAttribute {
                     attr_name: key.to_owned(),
@@ -151,42 +157,40 @@ fn validate_stream_type_expr(type_expr: &TypeExpr, file_id: FileId, out: &mut Ve
 
         let span = name_span(&attr, file_id);
 
-        match key {
-            "stream.type" => {
-                require_single_arg(&attr, key, file_id, out);
+        match kind.arg_rule() {
+            StreamAttrArgRule::None => forbid_args(&attr, kind.name(), file_id, out),
+            StreamAttrArgRule::ExactlyOne => require_single_arg(&attr, kind.name(), file_id, out),
+        }
+
+        match kind {
+            StreamAttrKind::Type => {
                 if type_span.is_none() {
                     type_span = span;
                 }
             }
-            "stream.starts_as" => {
-                require_single_arg(&attr, key, file_id, out);
+            StreamAttrKind::StartsAs => {
                 if starts_as_span.is_none() {
                     starts_as_span = span;
                 }
             }
-            "stream.not_null" => {
-                forbid_args(&attr, key, file_id, out);
+            StreamAttrKind::NotNull => {
                 if not_null_span.is_none() {
                     not_null_span = span;
                 }
             }
-            "stream.done" => {
-                forbid_args(&attr, key, file_id, out);
+            StreamAttrKind::Done => {
                 if done_span.is_none() {
                     done_span = span;
                 }
             }
-            "stream.with_state" => {
-                forbid_args(&attr, key, file_id, out);
-            }
-            _ => {}
+            StreamAttrKind::WithState => {}
         }
     }
 
     if let (Some(first), Some(second)) = (not_null_span, starts_as_span) {
         out.push(HirDiagnostic::ConflictingStreamAttributes {
-            first_attr: "stream.not_null",
-            second_attr: "stream.starts_as",
+            first_attr: StreamAttrKind::NotNull.name(),
+            second_attr: StreamAttrKind::StartsAs.name(),
             first_span: first,
             second_span: second,
         });
@@ -194,8 +198,8 @@ fn validate_stream_type_expr(type_expr: &TypeExpr, file_id: FileId, out: &mut Ve
 
     if let (Some(first), Some(second)) = (done_span, type_span) {
         out.push(HirDiagnostic::ConflictingStreamAttributes {
-            first_attr: "stream.done",
-            second_attr: "stream.type",
+            first_attr: StreamAttrKind::Done.name(),
+            second_attr: StreamAttrKind::Type.name(),
             first_span: first,
             second_span: second,
         });
@@ -217,7 +221,18 @@ fn validate_block_stream_attrs(
             continue;
         }
 
-        if !STREAM_BLOCK_ATTRS.contains(&key) {
+        let Some(kind) = parse_stream_attr(key) else {
+            if let Some(span) = name_span(&attr, file_id) {
+                out.push(HirDiagnostic::UnknownAttribute {
+                    attr_name: key.to_owned(),
+                    span,
+                    valid_attributes: STREAM_BLOCK_ATTRS,
+                });
+            }
+            continue;
+        };
+
+        if !kind.supports_target(StreamAttrTarget::Block) {
             if let Some(span) = name_span(&attr, file_id) {
                 out.push(HirDiagnostic::UnknownAttribute {
                     attr_name: key.to_owned(),
@@ -228,10 +243,10 @@ fn validate_block_stream_attrs(
             continue;
         }
 
-        if attr.has_args() {
+        if kind.arg_rule() == StreamAttrArgRule::None && attr.has_args() {
             if let Some(span) = best_span(&attr, file_id) {
                 out.push(HirDiagnostic::UnexpectedAttributeArg {
-                    attr_name: key.to_owned(),
+                    attr_name: kind.name().to_owned(),
                     span,
                 });
             }

@@ -24,6 +24,7 @@ use smol_str::SmolStr;
 mod desugar;
 pub mod expand_cst;
 pub mod normalize;
+mod stream_attrs;
 mod ty;
 mod validate;
 
@@ -33,6 +34,9 @@ pub use desugar::{
 };
 pub use normalize::{
     StartsAs, StartsAsLiteral, default_starts_as_semantic, infer_typeof_s, parse_starts_as_value,
+};
+pub use stream_attrs::{
+    StreamAttrArgRule, StreamAttrKind, StreamAttrTarget, parse_stream_attr, valid_stream_attr_names,
 };
 pub use ty::{PpirField, PpirTy, PpirTypeAttrs};
 pub use validate::ppir_stream_diagnostics;
