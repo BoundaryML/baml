@@ -646,43 +646,61 @@ mod tests {
     fn chat_image_url() {
         let media = make_media(
             MediaKind::Image,
-            MediaContent::Url { url: "https://example.com/cat.png".into(), base64_data: None },
+            MediaContent::Url {
+                url: "https://example.com/cat.png".into(),
+                base64_data: None,
+            },
             Some("image/png"),
         );
         let parts = media.read_content(|c| openai_media_part(&media, c));
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json, serde_json::json!({"type": "image_url", "image_url": {"url": "https://example.com/cat.png"}}));
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "image_url", "image_url": {"url": "https://example.com/cat.png"}})
+        );
     }
 
     #[test]
     fn chat_image_base64() {
         let media = make_media(
             MediaKind::Image,
-            MediaContent::Base64 { base64_data: "iVBORw0KGgo=".into() },
+            MediaContent::Base64 {
+                base64_data: "iVBORw0KGgo=".into(),
+            },
             Some("image/png"),
         );
         let parts = media.read_content(|c| openai_media_part(&media, c));
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json, serde_json::json!({"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="}}));
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="}})
+        );
     }
 
     #[test]
     fn chat_audio_base64_wav() {
         let media = make_media(
             MediaKind::Audio,
-            MediaContent::Base64 { base64_data: "AAAA".into() },
+            MediaContent::Base64 {
+                base64_data: "AAAA".into(),
+            },
             Some("audio/wav"),
         );
         let parts = media.read_content(|c| openai_media_part(&media, c));
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json, serde_json::json!({"type": "input_audio", "input_audio": {"data": "AAAA", "format": "wav"}}));
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_audio", "input_audio": {"data": "AAAA", "format": "wav"}})
+        );
     }
 
     #[test]
     fn chat_audio_mpeg_becomes_mp3() {
         let media = make_media(
             MediaKind::Audio,
-            MediaContent::Base64 { base64_data: "AAAA".into() },
+            MediaContent::Base64 {
+                base64_data: "AAAA".into(),
+            },
             Some("audio/mpeg"),
         );
         let parts = media.read_content(|c| openai_media_part(&media, c));
@@ -694,43 +712,63 @@ mod tests {
     fn chat_audio_url() {
         let media = make_media(
             MediaKind::Audio,
-            MediaContent::Url { url: "https://example.com/speech.wav".into(), base64_data: None },
+            MediaContent::Url {
+                url: "https://example.com/speech.wav".into(),
+                base64_data: None,
+            },
             Some("audio/wav"),
         );
         let parts = media.read_content(|c| openai_media_part(&media, c));
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json, serde_json::json!({"type": "input_audio", "input_audio": {"data": "https://example.com/speech.wav", "format": "wav"}}));
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_audio", "input_audio": {"data": "https://example.com/speech.wav", "format": "wav"}})
+        );
     }
 
     #[test]
     fn chat_pdf_url() {
         let media = make_media(
             MediaKind::Pdf,
-            MediaContent::Url { url: "https://example.com/doc.pdf".into(), base64_data: None },
+            MediaContent::Url {
+                url: "https://example.com/doc.pdf".into(),
+                base64_data: None,
+            },
             Some("application/pdf"),
         );
         let parts = media.read_content(|c| openai_media_part(&media, c));
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json, serde_json::json!({"type": "file", "file": {"file_url": "https://example.com/doc.pdf", "filename": "document.pdf"}}));
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "file", "file": {"file_url": "https://example.com/doc.pdf", "filename": "document.pdf"}})
+        );
     }
 
     #[test]
     fn chat_pdf_base64() {
         let media = make_media(
             MediaKind::Pdf,
-            MediaContent::Base64 { base64_data: "JVBERi0=".into() },
+            MediaContent::Base64 {
+                base64_data: "JVBERi0=".into(),
+            },
             Some("application/pdf"),
         );
         let parts = media.read_content(|c| openai_media_part(&media, c));
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json, serde_json::json!({"type": "file", "file": {"file_data": "data:application/pdf;base64,JVBERi0=", "filename": "document.pdf"}}));
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "file", "file": {"file_data": "data:application/pdf;base64,JVBERi0=", "filename": "document.pdf"}})
+        );
     }
 
     #[test]
     fn chat_video_unsupported() {
         let media = make_media(
             MediaKind::Video,
-            MediaContent::Url { url: "https://example.com/clip.mp4".into(), base64_data: None },
+            MediaContent::Url {
+                url: "https://example.com/clip.mp4".into(),
+                base64_data: None,
+            },
             Some("video/mp4"),
         );
         let parts = media.read_content(|c| openai_media_part(&media, c));
@@ -774,7 +812,10 @@ mod tests {
         let messages = prompt_to_openai_messages(&prompt, "user");
         assert_eq!(messages.len(), 3);
         assert_eq!(messages[0]["role"], "system");
-        assert_eq!(messages[0]["content"][0]["text"], "You are a helpful assistant.");
+        assert_eq!(
+            messages[0]["content"][0]["text"],
+            "You are a helpful assistant."
+        );
         assert_eq!(messages[1]["role"], "user");
         assert_eq!(messages[1]["content"][0]["text"], "What is 2+2?");
         assert_eq!(messages[2]["role"], "assistant");
@@ -841,13 +882,18 @@ mod tests {
             "azure-openai",
             vec![
                 ("model", BexExternalValue::String("gpt-4o".into())),
-                ("resource_name", BexExternalValue::String("my-resource".into())),
+                (
+                    "resource_name",
+                    BexExternalValue::String("my-resource".into()),
+                ),
                 ("api_key", BexExternalValue::String("sk-test".into())),
             ],
         );
         let builder = OpenAiBuilder::new(&LlmProvider::AzureOpenAi);
         let url = builder.build_url(&client).unwrap();
-        assert!(url.starts_with("https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions"));
+        assert!(url.starts_with(
+            "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions"
+        ));
         assert!(url.contains("api-version="));
     }
 
@@ -936,19 +982,27 @@ mod tests {
     fn responses_image_url() {
         let media = make_media(
             MediaKind::Image,
-            MediaContent::Url { url: "https://example.com/cat.png".into(), base64_data: None },
+            MediaContent::Url {
+                url: "https://example.com/cat.png".into(),
+                base64_data: None,
+            },
             Some("image/png"),
         );
         let parts = media.read_content(|c| responses_media_part(&media, c));
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json, serde_json::json!({"type": "input_image", "detail": "auto", "image_url": "https://example.com/cat.png"}));
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_image", "detail": "auto", "image_url": "https://example.com/cat.png"})
+        );
     }
 
     #[test]
     fn responses_image_base64() {
         let media = make_media(
             MediaKind::Image,
-            MediaContent::Base64 { base64_data: "iVBORw0KGgo=".into() },
+            MediaContent::Base64 {
+                base64_data: "iVBORw0KGgo=".into(),
+            },
             Some("image/png"),
         );
         let parts = media.read_content(|c| responses_media_part(&media, c));
@@ -961,31 +1015,44 @@ mod tests {
     fn responses_audio_base64() {
         let media = make_media(
             MediaKind::Audio,
-            MediaContent::Base64 { base64_data: "AAAA".into() },
+            MediaContent::Base64 {
+                base64_data: "AAAA".into(),
+            },
             Some("audio/wav"),
         );
         let parts = media.read_content(|c| responses_media_part(&media, c));
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json, serde_json::json!({"type": "input_audio", "input_audio": {"data": "AAAA", "format": "wav"}}));
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_audio", "input_audio": {"data": "AAAA", "format": "wav"}})
+        );
     }
 
     #[test]
     fn responses_pdf_url() {
         let media = make_media(
             MediaKind::Pdf,
-            MediaContent::Url { url: "https://example.com/doc.pdf".into(), base64_data: None },
+            MediaContent::Url {
+                url: "https://example.com/doc.pdf".into(),
+                base64_data: None,
+            },
             Some("application/pdf"),
         );
         let parts = media.read_content(|c| responses_media_part(&media, c));
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json, serde_json::json!({"type": "input_file", "file_url": "https://example.com/doc.pdf", "filename": "document.pdf"}));
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_file", "file_url": "https://example.com/doc.pdf", "filename": "document.pdf"})
+        );
     }
 
     #[test]
     fn responses_pdf_base64() {
         let media = make_media(
             MediaKind::Pdf,
-            MediaContent::Base64 { base64_data: "JVBERi0=".into() },
+            MediaContent::Base64 {
+                base64_data: "JVBERi0=".into(),
+            },
             Some("application/pdf"),
         );
         let parts = media.read_content(|c| responses_media_part(&media, c));
@@ -999,7 +1066,10 @@ mod tests {
     fn responses_video_unsupported() {
         let media = make_media(
             MediaKind::Video,
-            MediaContent::Url { url: "https://example.com/clip.mp4".into(), base64_data: None },
+            MediaContent::Url {
+                url: "https://example.com/clip.mp4".into(),
+                base64_data: None,
+            },
             Some("video/mp4"),
         );
         let parts = media.read_content(|c| responses_media_part(&media, c));
@@ -1014,14 +1084,18 @@ mod tests {
 
     #[test]
     fn responses_assistant_uses_output_text() {
-        let parts = responses_content_parts(&baml_builtins::PromptAstSimple::String("hi".into()), "assistant");
+        let parts = responses_content_parts(
+            &baml_builtins::PromptAstSimple::String("hi".into()),
+            "assistant",
+        );
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(json["type"], "output_text");
     }
 
     #[test]
     fn responses_user_uses_input_text() {
-        let parts = responses_content_parts(&baml_builtins::PromptAstSimple::String("hi".into()), "user");
+        let parts =
+            responses_content_parts(&baml_builtins::PromptAstSimple::String("hi".into()), "user");
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(json["type"], "input_text");
     }
@@ -1086,7 +1160,10 @@ mod tests {
     fn responses_url_custom_base() {
         let client = make_client(
             "openai-responses",
-            vec![("base_url", BexExternalValue::String("https://custom.api.com/v1".into()))],
+            vec![(
+                "base_url",
+                BexExternalValue::String("https://custom.api.com/v1".into()),
+            )],
         );
         let url = OpenAiResponsesBuilder.build_url(&client).unwrap();
         assert_eq!(url, "https://custom.api.com/v1/responses");

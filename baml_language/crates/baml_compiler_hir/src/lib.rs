@@ -1445,7 +1445,10 @@ fn build_function_body<'db>(db: &'db dyn Db, function: FunctionLoc<'db>) -> Func
                     c.allowed_roles.clone()
                 };
                 let default_role = c.default_role.clone().unwrap_or_else(|| {
-                    allowed_roles.first().cloned().unwrap_or_else(|| "user".to_string())
+                    allowed_roles
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "user".to_string())
                 });
                 (c.provider.as_str().to_string(), default_role, allowed_roles)
             } else {

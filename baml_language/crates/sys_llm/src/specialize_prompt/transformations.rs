@@ -68,7 +68,8 @@ pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_ty
 
 /// Consolidate system prompts based on provider capabilities.
 ///
-/// When `system_role_allowed` is false (e.g. o1/o3 models):
+/// When `system_role_allowed` is false (e.g. o1 models, or clients whose
+/// `allowed_roles` excludes "system"):
 /// - ALL system messages are converted to "user"
 ///
 /// When `max_one_system_prompt` is true:
@@ -80,9 +81,10 @@ pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_ty
 pub(super) fn consolidate_system_prompts(
     prompt: bex_vm_types::PromptAst,
     features: &ModelFeatures,
+    system_role_allowed: bool,
 ) -> bex_vm_types::PromptAst {
-    if !features.system_role_allowed {
-        // o1/o3 models: convert ALL system messages to user
+    if !system_role_allowed {
+        // System role not in allowed_roles: convert ALL system messages to user
         return convert_all_system_to_user(prompt);
     }
 
@@ -355,11 +357,11 @@ mod tests {
     fn test_consolidate_single_system_to_user() {
         let features = ModelFeatures {
             max_one_system_prompt: true,
-            system_role_allowed: true,
+
             allowed_metadata: AllowedMetadata::All,
         };
         let prompt = msg("system", "You are helpful");
-        let result = consolidate_system_prompts(prompt, &features);
+        let result = consolidate_system_prompts(prompt, &features, true);
         assert_eq!(result, msg("user", "You are helpful"));
     }
 
@@ -367,7 +369,7 @@ mod tests {
     fn test_consolidate_keeps_first_system() {
         let features = ModelFeatures {
             max_one_system_prompt: true,
-            system_role_allowed: true,
+
             allowed_metadata: AllowedMetadata::All,
         };
         let prompt = Arc::new(PromptAst::Vec(vec![
@@ -375,7 +377,7 @@ mod tests {
             msg("user", "Hello"),
             msg("system", "Second system"),
         ]));
-        let result = consolidate_system_prompts(prompt, &features);
+        let result = consolidate_system_prompts(prompt, &features, true);
         let expected = Arc::new(PromptAst::Vec(vec![
             msg("system", "First system"),
             msg("user", "Hello"),
@@ -388,14 +390,14 @@ mod tests {
     fn test_consolidate_noop_when_disabled() {
         let features = ModelFeatures {
             max_one_system_prompt: false,
-            system_role_allowed: true,
+
             allowed_metadata: AllowedMetadata::All,
         };
         let prompt = Arc::new(PromptAst::Vec(vec![
             msg("system", "First"),
             msg("system", "Second"),
         ]));
-        let result = consolidate_system_prompts(prompt, &features);
+        let result = consolidate_system_prompts(prompt, &features, true);
         let expected = Arc::new(PromptAst::Vec(vec![
             msg("system", "First"),
             msg("system", "Second"),
@@ -409,7 +411,7 @@ mod tests {
     fn test_filter_metadata_all_allowed() {
         let features = ModelFeatures {
             max_one_system_prompt: false,
-            system_role_allowed: true,
+
             allowed_metadata: AllowedMetadata::All,
         };
         let prompt = msg("user", "Hello");
@@ -421,7 +423,7 @@ mod tests {
     fn test_filter_metadata_none_allowed() {
         let features = ModelFeatures {
             max_one_system_prompt: false,
-            system_role_allowed: true,
+
             allowed_metadata: AllowedMetadata::None,
         };
         let prompt = msg("user", "Hello");
@@ -433,7 +435,7 @@ mod tests {
     fn test_filter_metadata_only_specific() {
         let features = ModelFeatures {
             max_one_system_prompt: false,
-            system_role_allowed: true,
+
             allowed_metadata: AllowedMetadata::Only(vec!["cache_control".to_string()]),
         };
         let prompt = msg("user", "Hello");
@@ -456,7 +458,7 @@ mod tests {
         let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &IndexMap::new());
 
         let result = merge_adjacent_roles(prompt);
-        let result = consolidate_system_prompts(result, &features);
+        let result = consolidate_system_prompts(result, &features, true);
         let result = filter_metadata(result, &features);
 
         let expected = Arc::new(PromptAst::Vec(vec![

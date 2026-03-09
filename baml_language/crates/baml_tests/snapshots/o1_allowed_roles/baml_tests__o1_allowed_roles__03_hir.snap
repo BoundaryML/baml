@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+function Gpt4oClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("Gpt4oClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4o", "api_key": "sk-test" })
+}
+
+function O1MiniClient.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("O1MiniClient", "openai", "user", ["user", "assistant"], { "model": "o1-mini", "api_key": "sk-test" })
+}
+
+function O1WithExplicitRoles.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("O1WithExplicitRoles", "openai", "system", ["system", "user", "assistant"], { "model": "o1", "api_key": "sk-test", "allowed_roles": ["system", "user", "assistant"] })
+}
+
+function O1Client.resolve() -> baml.llm.PrimitiveClient {
+    baml.llm.build_primitive_client("O1Client", "openai", "user", ["user", "assistant"], { "model": "o1", "api_key": "sk-test" })
+}
+
+client O1WithExplicitRoles {
+  provider: openai
+}
+
+client O1Client {
+  provider: openai
+}
+
+client O1MiniClient {
+  provider: openai
+}
+
+client Gpt4oClient {
+  provider: openai
+}

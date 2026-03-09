@@ -26,9 +26,12 @@ pub(crate) fn specialize_prompt_from_owned(
 ) -> bex_vm_types::PromptAst {
     let provider = LlmProvider::from_str(&client.provider).unwrap_or(LlmProvider::OpenAiGeneric);
 
+    let system_role_allowed = client.allowed_roles.iter().any(|r| r == "system");
+
     let features = ModelFeatures::for_provider(provider, &client.options);
     let prompt = transformations::merge_adjacent_roles(prompt);
-    let prompt = transformations::consolidate_system_prompts(prompt, &features);
+    let prompt =
+        transformations::consolidate_system_prompts(prompt, &features, system_role_allowed);
 
     transformations::filter_metadata(prompt, &features)
 }

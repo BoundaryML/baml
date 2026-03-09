@@ -1,0 +1,77 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function Gpt4oClient.resolve() -> baml.llm.PrimitiveClient {
+    load_const "Gpt4oClient"
+    load_const "openai"
+    load_const "system"
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
+    load_const "gpt-4o"
+    load_const "sk-test"
+    load_const "model"
+    load_const "api_key"
+    alloc_map 2
+    dispatch_future baml.llm.build_primitive_client
+    await
+    return
+}
+
+function O1Client.resolve() -> baml.llm.PrimitiveClient {
+    load_const "O1Client"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 2
+    load_const "o1"
+    load_const "sk-test"
+    load_const "model"
+    load_const "api_key"
+    alloc_map 2
+    dispatch_future baml.llm.build_primitive_client
+    await
+    return
+}
+
+function O1MiniClient.resolve() -> baml.llm.PrimitiveClient {
+    load_const "O1MiniClient"
+    load_const "openai"
+    load_const "user"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 2
+    load_const "o1-mini"
+    load_const "sk-test"
+    load_const "model"
+    load_const "api_key"
+    alloc_map 2
+    dispatch_future baml.llm.build_primitive_client
+    await
+    return
+}
+
+function O1WithExplicitRoles.resolve() -> baml.llm.PrimitiveClient {
+    load_const "O1WithExplicitRoles"
+    load_const "openai"
+    load_const "system"
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
+    load_const "o1"
+    load_const "sk-test"
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
+    load_const "model"
+    load_const "api_key"
+    load_const "allowed_roles"
+    alloc_map 3
+    dispatch_future baml.llm.build_primitive_client
+    await
+    return
+}

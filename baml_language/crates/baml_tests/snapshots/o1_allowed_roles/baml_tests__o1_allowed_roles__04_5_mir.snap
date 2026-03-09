@@ -1,0 +1,201 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR ===
+fn Gpt4oClient.resolve() -> baml.llm.PrimitiveClient {
+    // Locals:
+    let _0: baml.llm.PrimitiveClient // return
+    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
+    let _2: "Gpt4oClient"
+    let _3: "openai"
+    let _4: "system"
+    let _5: string[]
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
+    let _9: map<string, unknown>
+    let _10: "model"
+    let _11: "gpt-4o"
+    let _12: "api_key"
+    let _13: "sk-test"
+    let _14: null
+
+    bb0: {
+        _1 = const fn baml.llm.build_primitive_client;
+        _2 = const "Gpt4oClient";
+        _3 = const "openai";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
+        _5 = [copy _6, copy _7, copy _8];
+        _10 = const "model";
+        _11 = const "gpt-4o";
+        _12 = const "api_key";
+        _13 = const "sk-test";
+        _9 = { copy _10: copy _11, copy _12: copy _13 };
+        _14 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _14 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+}
+
+fn O1MiniClient.resolve() -> baml.llm.PrimitiveClient {
+    // Locals:
+    let _0: baml.llm.PrimitiveClient // return
+    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
+    let _2: "O1MiniClient"
+    let _3: "openai"
+    let _4: "user"
+    let _5: string[]
+    let _6: "user"
+    let _7: "assistant"
+    let _8: map<string, unknown>
+    let _9: "model"
+    let _10: "o1-mini"
+    let _11: "api_key"
+    let _12: "sk-test"
+    let _13: null
+
+    bb0: {
+        _1 = const fn baml.llm.build_primitive_client;
+        _2 = const "O1MiniClient";
+        _3 = const "openai";
+        _4 = const "user";
+        _6 = const "user";
+        _7 = const "assistant";
+        _5 = [copy _6, copy _7];
+        _9 = const "model";
+        _10 = const "o1-mini";
+        _11 = const "api_key";
+        _12 = const "sk-test";
+        _8 = { copy _9: copy _10, copy _11: copy _12 };
+        _13 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _8) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _13 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+}
+
+fn O1WithExplicitRoles.resolve() -> baml.llm.PrimitiveClient {
+    // Locals:
+    let _0: baml.llm.PrimitiveClient // return
+    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
+    let _2: "O1WithExplicitRoles"
+    let _3: "openai"
+    let _4: "system"
+    let _5: string[]
+    let _6: "system"
+    let _7: "user"
+    let _8: "assistant"
+    let _9: map<string, unknown>
+    let _10: "model"
+    let _11: "o1"
+    let _12: "api_key"
+    let _13: "sk-test"
+    let _14: "allowed_roles"
+    let _15: string[]
+    let _16: "system"
+    let _17: "user"
+    let _18: "assistant"
+    let _19: null
+
+    bb0: {
+        _1 = const fn baml.llm.build_primitive_client;
+        _2 = const "O1WithExplicitRoles";
+        _3 = const "openai";
+        _4 = const "system";
+        _6 = const "system";
+        _7 = const "user";
+        _8 = const "assistant";
+        _5 = [copy _6, copy _7, copy _8];
+        _10 = const "model";
+        _11 = const "o1";
+        _12 = const "api_key";
+        _13 = const "sk-test";
+        _14 = const "allowed_roles";
+        _16 = const "system";
+        _17 = const "user";
+        _18 = const "assistant";
+        _15 = [copy _16, copy _17, copy _18];
+        _9 = { copy _10: copy _11, copy _12: copy _13, copy _14: copy _15 };
+        _19 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _19 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+}
+
+fn O1Client.resolve() -> baml.llm.PrimitiveClient {
+    // Locals:
+    let _0: baml.llm.PrimitiveClient // return
+    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
+    let _2: "O1Client"
+    let _3: "openai"
+    let _4: "user"
+    let _5: string[]
+    let _6: "user"
+    let _7: "assistant"
+    let _8: map<string, unknown>
+    let _9: "model"
+    let _10: "o1"
+    let _11: "api_key"
+    let _12: "sk-test"
+    let _13: null
+
+    bb0: {
+        _1 = const fn baml.llm.build_primitive_client;
+        _2 = const "O1Client";
+        _3 = const "openai";
+        _4 = const "user";
+        _6 = const "user";
+        _7 = const "assistant";
+        _5 = [copy _6, copy _7];
+        _9 = const "model";
+        _10 = const "o1";
+        _11 = const "api_key";
+        _12 = const "sk-test";
+        _8 = { copy _9: copy _10, copy _11: copy _12 };
+        _13 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _8) -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = await _13 -> [bb3];
+    }
+
+    bb3: {
+        goto -> bb1;
+    }
+}

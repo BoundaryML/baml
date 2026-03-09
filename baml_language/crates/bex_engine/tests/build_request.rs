@@ -189,40 +189,6 @@ function get_body() -> string {
 }
 
 #[tokio::test]
-async fn test_o3_converts_system_to_user() {
-    let source = r##"
-client C {
-    provider openai
-    options {
-        model "o3-mini"
-        api_key "sk-test"
-    }
-}
-function F() -> string {
-    client C
-    prompt #"
-        {{ _.role("system") }}
-        System prompt.
-        {{ _.role("user") }}
-        User prompt.
-    "#
-}
-function get_body() -> string {
-    baml.llm.build_request("F", {}).body
-}
-"##;
-
-    let body = body_json(&run_baml(source, "get_body").await);
-    let messages = body["messages"].as_array().unwrap();
-    for msg in messages {
-        assert_eq!(
-            msg["role"], "user",
-            "o3-mini should not have system messages"
-        );
-    }
-}
-
-#[tokio::test]
 async fn test_non_o_series_keeps_system() {
     let source = r##"
 client C {

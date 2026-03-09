@@ -1,0 +1,163 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "O1Client"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "o1"
+                QUOTE """
+                WORD "o1"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "api_key"
+            CONFIG_VALUE
+              STRING_LITERAL "sk-test"
+                QUOTE """
+                WORD "sk-test"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "O1MiniClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "o1-mini"
+                QUOTE """
+                WORD "o1-mini"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "api_key"
+            CONFIG_VALUE
+              STRING_LITERAL "sk-test"
+                QUOTE """
+                WORD "sk-test"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "Gpt4oClient"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "gpt-4o"
+                QUOTE """
+                WORD "gpt-4o"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "api_key"
+            CONFIG_VALUE
+              STRING_LITERAL "sk-test"
+                QUOTE """
+                WORD "sk-test"
+                QUOTE """
+          R_BRACE "}"
+      R_BRACE "}"
+  CLIENT_DEF
+    KW_CLIENT "client"
+    CLIENT_TYPE "<llm>"
+      LESS "<"
+      WORD "llm"
+      GREATER ">"
+    WORD "O1WithExplicitRoles"
+    CONFIG_BLOCK
+      L_BRACE "{"
+      CONFIG_ITEM
+        WORD "provider"
+        CONFIG_VALUE "openai"
+          WORD "openai"
+      CONFIG_ITEM
+        WORD "options"
+        CONFIG_BLOCK
+          L_BRACE "{"
+          CONFIG_ITEM
+            WORD "model"
+            CONFIG_VALUE
+              STRING_LITERAL "o1"
+                QUOTE """
+                WORD "o1"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "api_key"
+            CONFIG_VALUE
+              STRING_LITERAL "sk-test"
+                QUOTE """
+                WORD "sk-test"
+                QUOTE """
+          CONFIG_ITEM
+            WORD "allowed_roles"
+            CONFIG_VALUE
+              ARRAY_LITERAL
+                L_BRACKET "["
+                CONFIG_VALUE
+                  STRING_LITERAL "system"
+                    QUOTE """
+                    WORD "system"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "user"
+                    QUOTE """
+                    WORD "user"
+                    QUOTE """
+                COMMA ","
+                CONFIG_VALUE
+                  STRING_LITERAL "assistant"
+                    QUOTE """
+                    WORD "assistant"
+                    QUOTE """
+                R_BRACKET "]"
+          R_BRACE "}"
+      R_BRACE "}"
+
+=== ERRORS ===
+None
