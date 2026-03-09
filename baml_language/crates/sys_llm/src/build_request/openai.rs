@@ -22,7 +22,7 @@ struct ChatMessage {
 /// A content part within a Chat Completions message.
 ///
 /// Serializes with `{"type": "<variant>", ...}` via `#[serde(tag = "type")]`.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ContentPart {
     Text { text: String },
@@ -32,20 +32,20 @@ enum ContentPart {
 }
 
 /// URL wrapper for image content parts.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct ImageUrl {
     url: String,
 }
 
 /// Base64-encoded audio data with its format (e.g. "mp3", "wav").
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct InputAudio {
     data: String,
     format: String,
 }
 
 /// A file reference that can be specified by URL, inline base64 data, or file ID.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct FileRef {
     #[serde(skip_serializing_if = "Option::is_none")]
     file_url: Option<String>,
@@ -117,7 +117,7 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         if let Some(model) = get_string_option(client, "model") {
             body.insert("model".to_string(), serde_json::Value::String(model));
         }
-        body.extend(self.build_prompt_body(client, prompt));
+        body.extend(self.build_prompt_body(client, prompt)?);
         self.forward_options(client, &mut body);
 
         // Azure OpenAI: default max_tokens to 4096 if neither max_tokens nor
@@ -143,14 +143,14 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
-    ) -> serde_json::Map<String, serde_json::Value> {
+    ) -> Result<serde_json::Map<String, serde_json::Value>, BuildRequestError> {
         let mut map = serde_json::Map::new();
-        let messages = prompt_to_openai_messages(&prompt, &client.default_role);
+        let messages = prompt_to_openai_messages(&prompt, &client.default_role)?;
         map.insert(
             "messages".to_string(),
             serde_json::to_value(messages).expect("infallible"),
         );
-        map
+        Ok(map)
     }
 }
 
@@ -158,27 +158,30 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
 fn prompt_to_openai_messages(
     prompt: &bex_vm_types::PromptAst,
     default_role: &str,
-) -> Vec<serde_json::Value> {
+) -> Result<Vec<serde_json::Value>, BuildRequestError> {
     match prompt.as_ref() {
         PromptAst::Vec(items) => items
             .iter()
             .map(|node| prompt_node_to_message(node, default_role))
             .collect(),
-        _ => vec![prompt_node_to_message(prompt, default_role)],
+        _ => Ok(vec![prompt_node_to_message(prompt, default_role)?]),
     }
 }
 
 /// Converts a single [`PromptAst`] node into an `OpenAI` Chat Completions message JSON value.
 ///
 /// Metadata (e.g. `cache_control`) is merged into the last content part.
-fn prompt_node_to_message(node: &bex_vm_types::PromptAst, default_role: &str) -> serde_json::Value {
+fn prompt_node_to_message(
+    node: &bex_vm_types::PromptAst,
+    default_role: &str,
+) -> Result<serde_json::Value, BuildRequestError> {
     match node.as_ref() {
         PromptAst::Message {
             role,
             content,
             metadata,
         } => {
-            let parts = openai_content_parts(content.as_ref());
+            let parts = openai_content_parts(content.as_ref())?;
             let mut value = serde_json::to_value(ChatMessage {
                 role: role.clone(),
                 content: parts,
@@ -201,31 +204,32 @@ fn prompt_node_to_message(node: &bex_vm_types::PromptAst, default_role: &str) ->
                 }
             }
 
-            value
+            Ok(value)
         }
         PromptAst::Simple(content) => {
-            let parts = openai_content_parts(content.as_ref());
-            serde_json::to_value(ChatMessage {
+            let parts = openai_content_parts(content.as_ref())?;
+            Ok(serde_json::to_value(ChatMessage {
                 role: default_role.to_string(),
                 content: parts,
             })
-            .expect("infallible")
+            .expect("infallible"))
         }
         PromptAst::Vec(_) => unreachable!("Nested vecs should not appear after specialization"),
     }
 }
 
 /// Converts a [`PromptAstSimple`] content node into Chat Completions content parts.
-fn openai_content_parts(content: &PromptAstSimple) -> Vec<ContentPart> {
+fn openai_content_parts(content: &PromptAstSimple) -> Result<Vec<ContentPart>, BuildRequestError> {
     match content {
-        PromptAstSimple::String(s) => {
-            vec![ContentPart::Text { text: s.clone() }]
-        }
+        PromptAstSimple::String(s) => Ok(vec![ContentPart::Text { text: s.clone() }]),
         PromptAstSimple::Media(media) => media.read_content(|c| openai_media_part(media, c)),
-        PromptAstSimple::Multiple(multiple) => multiple
-            .iter()
-            .flat_map(|i| openai_content_parts(i))
-            .collect(),
+        PromptAstSimple::Multiple(multiple) => {
+            let mut parts = Vec::new();
+            for item in multiple {
+                parts.extend(openai_content_parts(item)?);
+            }
+            Ok(parts)
+        }
     }
 }
 
@@ -233,36 +237,27 @@ fn openai_content_parts(content: &PromptAstSimple) -> Vec<ContentPart> {
 fn openai_media_part(
     media: &baml_builtins::MediaValue,
     content: &baml_builtins::MediaContent,
-) -> Vec<ContentPart> {
+) -> Result<Vec<ContentPart>, BuildRequestError> {
     use baml_base::MediaKind;
     use baml_builtins::MediaContent;
 
     match media.kind {
         MediaKind::Image | MediaKind::Generic => match content {
-            MediaContent::Url { url, .. } => {
-                vec![ContentPart::ImageUrl {
-                    image_url: ImageUrl { url: url.clone() },
-                }]
-            }
+            MediaContent::Url { url, .. } => Ok(vec![ContentPart::ImageUrl {
+                image_url: ImageUrl { url: url.clone() },
+            }]),
             MediaContent::Base64 { base64_data, .. } => {
                 let data_url = format!(
                     "data:{};base64,{}",
                     media.mime_type.as_deref().unwrap_or("image/png"),
                     base64_data
                 );
-                vec![ContentPart::ImageUrl {
+                Ok(vec![ContentPart::ImageUrl {
                     image_url: ImageUrl { url: data_url },
-                }]
+                }])
             }
-            MediaContent::File { file, .. } => {
-                vec![ContentPart::File {
-                    file: FileRef {
-                        file_id: Some(file.clone()),
-                        file_url: None,
-                        file_data: None,
-                        filename: None,
-                    },
-                }]
+            MediaContent::File { .. } => {
+                unreachable!("image file should have been resolved before request building")
             }
         },
         MediaKind::Audio => match content {
@@ -273,89 +268,69 @@ fn openai_media_part(
                     .and_then(|m| m.strip_prefix("audio/"))
                     .map(|ext| if ext == "mpeg" { "mp3" } else { ext })
                     .unwrap_or("mp3");
-                vec![ContentPart::InputAudio {
+                Ok(vec![ContentPart::InputAudio {
                     input_audio: InputAudio {
                         data: base64_data.clone(),
                         format: format.to_string(),
                     },
-                }]
+                }])
             }
             MediaContent::Url { url, .. } => {
-                let extension = url
-                    .rsplit('.')
-                    .next()
+                // Prefer mime_type, fall back to URL extension
+                let format = media
+                    .mime_type
+                    .as_deref()
+                    .and_then(|m| m.strip_prefix("audio/"))
+                    .or_else(|| url.rsplit('.').next())
                     .map(|ext| if ext == "mpeg" { "mp3" } else { ext })
-                    .or(media
-                        .mime_type
-                        .as_deref()
-                        .and_then(|m| m.strip_prefix("audio/")))
                     .unwrap_or("mp3");
-                vec![ContentPart::InputAudio {
+                Ok(vec![ContentPart::InputAudio {
                     input_audio: InputAudio {
                         data: url.clone(),
-                        format: extension.to_string(),
+                        format: format.to_string(),
                     },
-                }]
+                }])
             }
-            MediaContent::File { file, .. } => {
-                vec![ContentPart::File {
-                    file: FileRef {
-                        file_id: Some(file.clone()),
-                        file_url: None,
-                        file_data: None,
-                        filename: None,
-                    },
-                }]
+            MediaContent::File { .. } => {
+                unreachable!("audio file should have been resolved before request building")
             }
         },
         MediaKind::Pdf => match content {
-            MediaContent::Url { url, .. } => {
-                vec![ContentPart::File {
-                    file: FileRef {
-                        file_url: Some(url.clone()),
-                        filename: Some("document.pdf".to_string()),
-                        file_data: None,
-                        file_id: None,
-                    },
-                }]
-            }
+            MediaContent::Url { url, .. } => Ok(vec![ContentPart::File {
+                file: FileRef {
+                    file_url: Some(url.clone()),
+                    filename: Some("document.pdf".to_string()),
+                    file_data: None,
+                    file_id: None,
+                },
+            }]),
             MediaContent::Base64 { base64_data, .. } => {
                 let data_url = format!(
                     "data:{};base64,{}",
                     media.mime_type.as_deref().unwrap_or("application/pdf"),
                     base64_data
                 );
-                vec![ContentPart::File {
+                Ok(vec![ContentPart::File {
                     file: FileRef {
                         file_data: Some(data_url),
                         filename: Some("document.pdf".to_string()),
                         file_url: None,
                         file_id: None,
                     },
-                }]
+                }])
             }
-            MediaContent::File { file, .. } => {
-                vec![ContentPart::File {
-                    file: FileRef {
-                        file_id: Some(file.clone()),
-                        file_url: None,
-                        file_data: None,
-                        filename: None,
-                    },
-                }]
+            MediaContent::File { .. } => {
+                unreachable!("PDF file should have been resolved before request building")
             }
         },
-        MediaKind::Video => {
-            vec![ContentPart::Text {
-                text: "[unsupported: video input is not supported on OpenAI chat completions]"
-                    .to_string(),
-            }]
-        }
+        MediaKind::Video => Err(BuildRequestError::UnsupportedMedia(
+            "video input is not supported on OpenAI chat completions".into(),
+        )),
     }
 }
 
 /// A single message in the `OpenAI` Responses API format.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct ResponsesMessage {
     role: String,
     content: Vec<ResponsesContentPart>,
@@ -365,7 +340,7 @@ struct ResponsesMessage {
 ///
 /// Uses `input_text`/`output_text` instead of just `text`, and `input_image`/`input_audio`/`input_file`
 /// instead of `image_url`/`input_audio`/`file`.
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ResponsesContentPart {
     InputText {
@@ -424,14 +399,14 @@ impl LlmRequestBuilder for OpenAiResponsesBuilder {
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
-    ) -> serde_json::Map<String, serde_json::Value> {
+    ) -> Result<serde_json::Map<String, serde_json::Value>, BuildRequestError> {
         let mut map = serde_json::Map::new();
-        let input = prompt_to_responses_input(&prompt, &client.default_role);
+        let input = prompt_to_responses_input(&prompt, &client.default_role)?;
         map.insert(
             "input".to_string(),
             serde_json::to_value(input).expect("infallible"),
         );
-        map
+        Ok(map)
     }
 }
 
@@ -439,13 +414,13 @@ impl LlmRequestBuilder for OpenAiResponsesBuilder {
 fn prompt_to_responses_input(
     prompt: &bex_vm_types::PromptAst,
     default_role: &str,
-) -> Vec<ResponsesMessage> {
+) -> Result<Vec<ResponsesMessage>, BuildRequestError> {
     match prompt.as_ref() {
         PromptAst::Vec(items) => items
             .iter()
             .map(|node| responses_node_to_message(node, default_role))
             .collect(),
-        _ => vec![responses_node_to_message(prompt, default_role)],
+        _ => Ok(vec![responses_node_to_message(prompt, default_role)?]),
     }
 }
 
@@ -453,21 +428,21 @@ fn prompt_to_responses_input(
 fn responses_node_to_message(
     node: &bex_vm_types::PromptAst,
     default_role: &str,
-) -> ResponsesMessage {
+) -> Result<ResponsesMessage, BuildRequestError> {
     match node.as_ref() {
         PromptAst::Message { role, content, .. } => {
-            let parts = responses_content_parts(content.as_ref(), role);
-            ResponsesMessage {
+            let parts = responses_content_parts(content.as_ref(), role)?;
+            Ok(ResponsesMessage {
                 role: role.clone(),
                 content: parts,
-            }
+            })
         }
         PromptAst::Simple(content) => {
-            let parts = responses_content_parts(content.as_ref(), default_role);
-            ResponsesMessage {
+            let parts = responses_content_parts(content.as_ref(), default_role)?;
+            Ok(ResponsesMessage {
                 role: default_role.to_string(),
                 content: parts,
-            }
+            })
         }
         PromptAst::Vec(_) => unreachable!("Nested vecs should not appear after specialization"),
     }
@@ -476,20 +451,26 @@ fn responses_node_to_message(
 /// Converts a [`PromptAstSimple`] content node into Responses API content parts.
 ///
 /// Assistant-role text uses `output_text`; all other roles use `input_text`.
-fn responses_content_parts(content: &PromptAstSimple, role: &str) -> Vec<ResponsesContentPart> {
+fn responses_content_parts(
+    content: &PromptAstSimple,
+    role: &str,
+) -> Result<Vec<ResponsesContentPart>, BuildRequestError> {
     match content {
         PromptAstSimple::String(s) => {
             if role == "assistant" {
-                vec![ResponsesContentPart::OutputText { text: s.clone() }]
+                Ok(vec![ResponsesContentPart::OutputText { text: s.clone() }])
             } else {
-                vec![ResponsesContentPart::InputText { text: s.clone() }]
+                Ok(vec![ResponsesContentPart::InputText { text: s.clone() }])
             }
         }
         PromptAstSimple::Media(media) => media.read_content(|c| responses_media_part(media, c)),
-        PromptAstSimple::Multiple(multiple) => multiple
-            .iter()
-            .flat_map(|i| responses_content_parts(i, role))
-            .collect(),
+        PromptAstSimple::Multiple(multiple) => {
+            let mut parts = Vec::new();
+            for item in multiple {
+                parts.extend(responses_content_parts(item, role)?);
+            }
+            Ok(parts)
+        }
     }
 }
 
@@ -497,7 +478,7 @@ fn responses_content_parts(content: &PromptAstSimple, role: &str) -> Vec<Respons
 fn responses_media_part(
     media: &baml_builtins::MediaValue,
     content: &baml_builtins::MediaContent,
-) -> Vec<ResponsesContentPart> {
+) -> Result<Vec<ResponsesContentPart>, BuildRequestError> {
     use baml_base::MediaKind;
     use baml_builtins::MediaContent;
 
@@ -512,12 +493,14 @@ fn responses_media_part(
                         base64_data
                     )
                 }
-                MediaContent::File { file, .. } => file.clone(),
+                MediaContent::File { .. } => {
+                    unreachable!("image file should have been resolved before request building")
+                }
             };
-            vec![ResponsesContentPart::InputImage {
+            Ok(vec![ResponsesContentPart::InputImage {
                 detail: Some("auto".to_string()),
                 image_url,
-            }]
+            }])
         }
         MediaKind::Audio => match content {
             MediaContent::Base64 { base64_data, .. } => {
@@ -527,76 +510,47 @@ fn responses_media_part(
                     .and_then(|m| m.strip_prefix("audio/"))
                     .map(|ext| if ext == "mpeg" { "mp3" } else { ext })
                     .unwrap_or("mp3");
-                vec![ResponsesContentPart::InputAudio {
+                Ok(vec![ResponsesContentPart::InputAudio {
                     input_audio: InputAudio {
                         data: base64_data.clone(),
                         format: format.to_string(),
                     },
-                }]
+                }])
             }
-            MediaContent::Url { url, .. } => {
-                let format = url
-                    .rsplit('.')
-                    .next()
-                    .map(|ext| if ext == "mpeg" { "mp3" } else { ext })
-                    .or(media
-                        .mime_type
-                        .as_deref()
-                        .and_then(|m| m.strip_prefix("audio/")))
-                    .unwrap_or("mp3");
-                vec![ResponsesContentPart::InputAudio {
-                    input_audio: InputAudio {
-                        data: url.clone(),
-                        format: format.to_string(),
-                    },
-                }]
-            }
-            MediaContent::File { file, .. } => {
-                vec![ResponsesContentPart::InputFile {
-                    file_id: Some(file.clone()),
-                    file_url: None,
-                    file_data: None,
-                    filename: None,
-                }]
+            MediaContent::Url { .. } => Err(BuildRequestError::UnsupportedMedia(
+                "audio URL is not supported on OpenAI Responses API; use base64-encoded audio instead".into(),
+            )),
+            MediaContent::File { .. } => {
+                unreachable!("audio file should have been resolved before request building")
             }
         },
         MediaKind::Pdf => match content {
-            MediaContent::Url { url, .. } => {
-                vec![ResponsesContentPart::InputFile {
-                    file_url: Some(url.clone()),
-                    filename: Some("document.pdf".to_string()),
-                    file_data: None,
-                    file_id: None,
-                }]
-            }
+            MediaContent::Url { url, .. } => Ok(vec![ResponsesContentPart::InputFile {
+                file_url: Some(url.clone()),
+                filename: Some("document.pdf".to_string()),
+                file_data: None,
+                file_id: None,
+            }]),
             MediaContent::Base64 { base64_data, .. } => {
                 let data_url = format!(
                     "data:{};base64,{}",
                     media.mime_type.as_deref().unwrap_or("application/pdf"),
                     base64_data
                 );
-                vec![ResponsesContentPart::InputFile {
+                Ok(vec![ResponsesContentPart::InputFile {
                     file_data: Some(data_url),
                     filename: Some("document.pdf".to_string()),
                     file_url: None,
                     file_id: None,
-                }]
+                }])
             }
-            MediaContent::File { file, .. } => {
-                vec![ResponsesContentPart::InputFile {
-                    file_id: Some(file.clone()),
-                    file_url: None,
-                    file_data: None,
-                    filename: None,
-                }]
+            MediaContent::File { .. } => {
+                unreachable!("PDF file should have been resolved before request building")
             }
         },
-        MediaKind::Video => {
-            vec![ResponsesContentPart::InputText {
-                text: "[unsupported: video input is not supported on OpenAI Responses API]"
-                    .to_string(),
-            }]
-        }
+        MediaKind::Video => Err(BuildRequestError::UnsupportedMedia(
+            "video input is not supported on OpenAI Responses API".into(),
+        )),
     }
 }
 
@@ -658,7 +612,9 @@ mod tests {
             },
             Some("image/png"),
         );
-        let parts = media.read_content(|c| openai_media_part(&media, c));
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -675,7 +631,9 @@ mod tests {
             },
             Some("image/png"),
         );
-        let parts = media.read_content(|c| openai_media_part(&media, c));
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -692,7 +650,9 @@ mod tests {
             },
             Some("audio/wav"),
         );
-        let parts = media.read_content(|c| openai_media_part(&media, c));
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -709,7 +669,9 @@ mod tests {
             },
             Some("audio/mpeg"),
         );
-        let parts = media.read_content(|c| openai_media_part(&media, c));
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(json["input_audio"]["format"], "mp3");
     }
@@ -724,7 +686,9 @@ mod tests {
             },
             Some("audio/wav"),
         );
-        let parts = media.read_content(|c| openai_media_part(&media, c));
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -742,7 +706,9 @@ mod tests {
             },
             Some("application/pdf"),
         );
-        let parts = media.read_content(|c| openai_media_part(&media, c));
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -759,7 +725,9 @@ mod tests {
             },
             Some("application/pdf"),
         );
-        let parts = media.read_content(|c| openai_media_part(&media, c));
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -777,10 +745,10 @@ mod tests {
             },
             Some("video/mp4"),
         );
-        let parts = media.read_content(|c| openai_media_part(&media, c));
-        let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json["type"], "text");
-        assert!(json["text"].as_str().unwrap().contains("unsupported"));
+        let err = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap_err();
+        assert!(err.to_string().contains("video"));
     }
 
     // ========================================================================
@@ -790,7 +758,7 @@ mod tests {
     #[test]
     fn chat_single_message() {
         let prompt = msg("user", "hello");
-        let messages = prompt_to_openai_messages(&prompt, "user");
+        let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0]["role"], "user");
         assert_eq!(messages[0]["content"][0]["text"], "hello");
@@ -802,7 +770,7 @@ mod tests {
             msg("system", "Be helpful."),
             msg("user", "Hi"),
         ]));
-        let messages = prompt_to_openai_messages(&prompt, "user");
+        let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0]["role"], "system");
         assert_eq!(messages[1]["role"], "user");
@@ -815,7 +783,7 @@ mod tests {
             msg("user", "What is 2+2?"),
             msg("assistant", "4"),
         ]));
-        let messages = prompt_to_openai_messages(&prompt, "user");
+        let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
         assert_eq!(messages.len(), 3);
         assert_eq!(messages[0]["role"], "system");
         assert_eq!(
@@ -838,7 +806,7 @@ mod tests {
             msg("assistant", "Good, thanks!"),
             msg("user", "Goodbye"),
         ]));
-        let messages = prompt_to_openai_messages(&prompt, "user");
+        let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
         assert_eq!(messages.len(), 6);
         assert_eq!(messages[0]["role"], "system");
         assert_eq!(messages[1]["role"], "user");
@@ -856,7 +824,7 @@ mod tests {
             Arc::new(PromptAst::Simple(Arc::new("bare text".to_string().into()))),
             msg("user", "User msg."),
         ]));
-        let messages = prompt_to_openai_messages(&prompt, "user");
+        let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
         assert_eq!(messages.len(), 3);
         assert_eq!(messages[0]["role"], "system");
         assert_eq!(messages[1]["role"], "user");
@@ -871,7 +839,7 @@ mod tests {
             content: Arc::new("hello".to_string().into()),
             metadata: serde_json::json!({"cache_control": {"type": "ephemeral"}}),
         });
-        let messages = prompt_to_openai_messages(&prompt, "user");
+        let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
         assert_eq!(
             messages[0]["content"][0]["cache_control"],
             serde_json::json!({"type": "ephemeral"})
@@ -1018,7 +986,9 @@ mod tests {
             },
             Some("image/png"),
         );
-        let parts = media.read_content(|c| responses_media_part(&media, c));
+        let parts = media
+            .read_content(|c| responses_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -1035,7 +1005,9 @@ mod tests {
             },
             Some("image/png"),
         );
-        let parts = media.read_content(|c| responses_media_part(&media, c));
+        let parts = media
+            .read_content(|c| responses_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(json["type"], "input_image");
         assert_eq!(json["image_url"], "data:image/png;base64,iVBORw0KGgo=");
@@ -1050,7 +1022,9 @@ mod tests {
             },
             Some("audio/wav"),
         );
-        let parts = media.read_content(|c| responses_media_part(&media, c));
+        let parts = media
+            .read_content(|c| responses_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -1068,7 +1042,9 @@ mod tests {
             },
             Some("application/pdf"),
         );
-        let parts = media.read_content(|c| responses_media_part(&media, c));
+        let parts = media
+            .read_content(|c| responses_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(
             json,
@@ -1085,7 +1061,9 @@ mod tests {
             },
             Some("application/pdf"),
         );
-        let parts = media.read_content(|c| responses_media_part(&media, c));
+        let parts = media
+            .read_content(|c| responses_media_part(&media, c))
+            .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(json["type"], "input_file");
         assert_eq!(json["file_data"], "data:application/pdf;base64,JVBERi0=");
@@ -1102,10 +1080,10 @@ mod tests {
             },
             Some("video/mp4"),
         );
-        let parts = media.read_content(|c| responses_media_part(&media, c));
-        let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json["type"], "input_text");
-        assert!(json["text"].as_str().unwrap().contains("unsupported"));
+        let err = media
+            .read_content(|c| responses_media_part(&media, c))
+            .unwrap_err();
+        assert!(matches!(err, BuildRequestError::UnsupportedMedia(_)));
     }
 
     // ========================================================================
@@ -1117,7 +1095,8 @@ mod tests {
         let parts = responses_content_parts(
             &baml_builtins::PromptAstSimple::String("hi".into()),
             "assistant",
-        );
+        )
+        .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(json["type"], "output_text");
     }
@@ -1125,7 +1104,8 @@ mod tests {
     #[test]
     fn responses_user_uses_input_text() {
         let parts =
-            responses_content_parts(&baml_builtins::PromptAstSimple::String("hi".into()), "user");
+            responses_content_parts(&baml_builtins::PromptAstSimple::String("hi".into()), "user")
+                .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
         assert_eq!(json["type"], "input_text");
     }
@@ -1137,7 +1117,7 @@ mod tests {
             msg("user", "What is 2+2?"),
             msg("assistant", "4"),
         ]));
-        let messages = prompt_to_responses_input(&prompt, "user");
+        let messages = prompt_to_responses_input(&prompt, "user").unwrap();
         assert_eq!(messages.len(), 3);
         assert_eq!(messages[0].role, "system");
         assert_eq!(messages[1].role, "user");
@@ -1161,7 +1141,7 @@ mod tests {
             msg("assistant", "Good, thanks!"),
             msg("user", "Goodbye"),
         ]));
-        let messages = prompt_to_responses_input(&prompt, "user");
+        let messages = prompt_to_responses_input(&prompt, "user").unwrap();
         assert_eq!(messages.len(), 6);
         assert_eq!(messages[0].role, "system");
         assert_eq!(messages[1].role, "user");

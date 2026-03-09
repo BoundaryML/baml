@@ -45,7 +45,7 @@ pub(crate) trait LlmRequestBuilder {
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
-    ) -> serde_json::Map<String, serde_json::Value>;
+    ) -> Result<serde_json::Map<String, serde_json::Value>, BuildRequestError>;
 
     // --- Default methods (shared logic) ---
 
@@ -92,7 +92,7 @@ pub(crate) trait LlmRequestBuilder {
         if let Some(model) = get_string_option(client, "model") {
             body.insert("model".to_string(), serde_json::Value::String(model));
         }
-        body.extend(self.build_prompt_body(client, prompt));
+        body.extend(self.build_prompt_body(client, prompt)?);
         self.forward_options(client, &mut body);
         serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
             key: "body".into(),
@@ -186,6 +186,8 @@ pub(crate) enum BuildRequestError {
     MissingOption(String),
     #[error("Invalid option value for '{key}': {reason}")]
     InvalidOption { key: String, reason: String },
+    #[error("Unsupported media: {0}")]
+    UnsupportedMedia(String),
 }
 
 /// Helper to extract a string option from client.options.

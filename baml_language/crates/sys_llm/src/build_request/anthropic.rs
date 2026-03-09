@@ -37,14 +37,14 @@ impl LlmRequestBuilder for AnthropicBuilder {
         &self,
         _client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
-    ) -> serde_json::Map<String, serde_json::Value> {
+    ) -> Result<serde_json::Map<String, serde_json::Value>, super::BuildRequestError> {
         let mut map = serde_json::Map::new();
         let (system_parts, messages) = extract_system_and_messages(prompt);
         if !system_parts.is_empty() {
             map.insert("system".to_string(), serde_json::Value::Array(system_parts));
         }
         map.insert("messages".to_string(), serde_json::Value::Array(messages));
-        map
+        Ok(map)
     }
 }
 
