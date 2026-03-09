@@ -13,6 +13,10 @@ pub(crate) struct ModelFeatures {
     /// are converted to user messages.
     pub max_one_system_prompt: bool,
 
+    /// If false, system messages are not supported at all (e.g. o1/o3 models).
+    /// All system messages will be converted to user messages.
+    pub system_role_allowed: bool,
+
     /// Controls which metadata keys are allowed on messages.
     pub allowed_metadata: AllowedMetadata,
 }
@@ -48,7 +52,7 @@ impl ModelFeatures {
         provider: LlmProvider,
         options: &IndexMap<String, BexExternalValue>,
     ) -> Self {
-        let mut features = Self::defaults_for_provider(provider);
+        let mut features = Self::defaults_for_provider(provider, options);
         features.apply_overrides(options);
         features
     }
@@ -56,7 +60,8 @@ impl ModelFeatures {
     /// Hardcoded defaults per provider.
     ///
     /// Source: engine/baml-runtime/src/internal/llm_client/primitive/*/
-    fn defaults_for_provider(provider: LlmProvider) -> Self {
+    fn defaults_for_provider(provider: LlmProvider, options: &IndexMap<String, BexExternalValue>) -> Self {
+        let system_role_allowed = !is_o_series_model(options);
         match provider {
             // OpenAI variants: multiple system prompts allowed
             LlmProvider::OpenAi
@@ -66,21 +71,25 @@ impl ModelFeatures {
             | LlmProvider::OpenRouter
             | LlmProvider::OpenAiResponses => Self {
                 max_one_system_prompt: false,
+                system_role_allowed,
                 allowed_metadata: AllowedMetadata::All,
             },
             // Anthropic: single system prompt only
             LlmProvider::Anthropic => Self {
                 max_one_system_prompt: true,
+                system_role_allowed: true,
                 allowed_metadata: AllowedMetadata::All,
             },
             // AWS Bedrock, Google AI, Vertex AI: single system prompt only
             LlmProvider::AwsBedrock | LlmProvider::GoogleAi | LlmProvider::VertexAi => Self {
                 max_one_system_prompt: true,
+                system_role_allowed: true,
                 allowed_metadata: AllowedMetadata::All,
             },
             // Strategy providers — shouldn't reach here, but conservative defaults
             LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => Self {
                 max_one_system_prompt: true,
+                system_role_allowed: true,
                 allowed_metadata: AllowedMetadata::All,
             },
         }
@@ -90,6 +99,10 @@ impl ModelFeatures {
     fn apply_overrides(&mut self, options: &IndexMap<String, BexExternalValue>) {
         if let Some(BexExternalValue::Bool(v)) = options.get("max_one_system_prompt") {
             self.max_one_system_prompt = *v;
+        }
+
+        if let Some(BexExternalValue::Bool(v)) = options.get("system_role_allowed") {
+            self.system_role_allowed = *v;
         }
 
         if let Some(val) = options.get("allowed_role_metadata") {
@@ -116,5 +129,18 @@ impl ModelFeatures {
                 _ => {}
             }
         }
+    }
+}
+
+/// Detect o1/o3 "reasoning" models that don't support the system role.
+fn is_o_series_model(options: &IndexMap<String, BexExternalValue>) -> bool {
+    match options.get("model") {
+        Some(BexExternalValue::String(model)) => {
+            model == "o1"
+                || model.starts_with("o1-")
+                || model == "o3"
+                || model.starts_with("o3-")
+        }
+        _ => false,
     }
 }

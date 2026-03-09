@@ -866,6 +866,7 @@ dependencies = [
  "bex_vm_types",
  "futures",
  "indexmap",
+ "serde_json",
  "sys_llm",
  "sys_native",
  "sys_types",

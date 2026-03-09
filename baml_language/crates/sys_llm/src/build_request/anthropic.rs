@@ -35,6 +35,7 @@ impl LlmRequestBuilder for AnthropicBuilder {
 
     fn build_prompt_body(
         &self,
+        _client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
     ) -> serde_json::Map<String, serde_json::Value> {
         let mut map = serde_json::Map::new();

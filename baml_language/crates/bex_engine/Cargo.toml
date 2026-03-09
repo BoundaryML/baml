@@ -38,6 +38,7 @@ sys_native = { workspace = true, features = [ "bundle-http" ] }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
 tempfile = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
 wiremock = { workspace = true }
 

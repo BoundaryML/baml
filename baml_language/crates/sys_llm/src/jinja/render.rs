@@ -212,8 +212,9 @@ fn parse_rendered_output(
     if rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) {
         parse_chat_prompt(rendered, ctx, media_handles)
     } else {
-        // Simple completion prompt
-        rendered.to_string().into()
+        // Simple completion prompt — still parse media magic strings
+        let content = parse_message_content(rendered, media_handles);
+        PromptAst::Simple(std::sync::Arc::new(content))
     }
 }
 
