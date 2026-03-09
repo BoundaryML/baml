@@ -668,8 +668,14 @@ mod tests {
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
         let body = parse_body(&result);
-        assert!(body.get("input").is_some(), "Responses API should use 'input' key");
-        assert!(body.get("messages").is_none(), "Responses API should not have 'messages' key");
+        assert!(
+            body.get("input").is_some(),
+            "Responses API should use 'input' key"
+        );
+        assert!(
+            body.get("messages").is_none(),
+            "Responses API should not have 'messages' key"
+        );
     }
 
     #[test]

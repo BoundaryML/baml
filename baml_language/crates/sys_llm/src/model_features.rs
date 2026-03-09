@@ -60,7 +60,10 @@ impl ModelFeatures {
     /// Hardcoded defaults per provider.
     ///
     /// Source: engine/baml-runtime/src/internal/llm_client/primitive/*/
-    fn defaults_for_provider(provider: LlmProvider, options: &IndexMap<String, BexExternalValue>) -> Self {
+    fn defaults_for_provider(
+        provider: LlmProvider,
+        options: &IndexMap<String, BexExternalValue>,
+    ) -> Self {
         let system_role_allowed = !is_o_series_model(options);
         match provider {
             // OpenAI variants: multiple system prompts allowed
@@ -136,10 +139,7 @@ impl ModelFeatures {
 fn is_o_series_model(options: &IndexMap<String, BexExternalValue>) -> bool {
     match options.get("model") {
         Some(BexExternalValue::String(model)) => {
-            model == "o1"
-                || model.starts_with("o1-")
-                || model == "o3"
-                || model.starts_with("o3-")
+            model == "o1" || model.starts_with("o1-") || model == "o3" || model.starts_with("o3-")
         }
         _ => false,
     }

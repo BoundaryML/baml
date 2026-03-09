@@ -71,7 +71,6 @@ client C {
 }
 "#;
 
-
 // ============================================================================
 // Schema shape tests — verify the JSON body structure
 // ============================================================================
@@ -288,7 +287,10 @@ function get_method() -> string {
 "##;
 
     let url = run_baml(source, "get_url").await;
-    assert_eq!(as_string(&url), "https://api.openai.com/v1/chat/completions");
+    assert_eq!(
+        as_string(&url),
+        "https://api.openai.com/v1/chat/completions"
+    );
 
     let method = run_baml(source, "get_method").await;
     assert_eq!(as_string(&method), "POST");
@@ -314,7 +316,10 @@ function get_url() -> string {
 "##;
 
     let url = run_baml(source, "get_url").await;
-    assert_eq!(as_string(&url), "https://custom.api.com/v1/chat/completions");
+    assert_eq!(
+        as_string(&url),
+        "https://custom.api.com/v1/chat/completions"
+    );
 }
 
 // ============================================================================
@@ -412,7 +417,10 @@ function get_body(img: image) -> string {{
     );
     let img = media_value(
         MediaKind::Image,
-        MediaContent::Url { url: "https://example.com/cat.png".into(), base64_data: None },
+        MediaContent::Url {
+            url: "https://example.com/cat.png".into(),
+            base64_data: None,
+        },
         Some("image/png"),
     );
     let body = body_json(&run_baml_with_args(&source, "get_body", vec![img]).await);
@@ -438,7 +446,9 @@ function get_body(img: image) -> string {{
     );
     let img = media_value(
         MediaKind::Image,
-        MediaContent::Base64 { base64_data: "iVBORw0KGgo=".into() },
+        MediaContent::Base64 {
+            base64_data: "iVBORw0KGgo=".into(),
+        },
         Some("image/png"),
     );
     let body = body_json(&run_baml_with_args(&source, "get_body", vec![img]).await);
@@ -464,7 +474,9 @@ function get_body(a: audio) -> string {{
     );
     let audio = media_value(
         MediaKind::Audio,
-        MediaContent::Base64 { base64_data: "AAAA".into() },
+        MediaContent::Base64 {
+            base64_data: "AAAA".into(),
+        },
         Some("audio/wav"),
     );
     let body = body_json(&run_baml_with_args(&source, "get_body", vec![audio]).await);
@@ -490,11 +502,16 @@ function get_body(a: audio) -> string {{
     );
     let audio = media_value(
         MediaKind::Audio,
-        MediaContent::Base64 { base64_data: "AAAA".into() },
+        MediaContent::Base64 {
+            base64_data: "AAAA".into(),
+        },
         Some("audio/mpeg"),
     );
     let body = body_json(&run_baml_with_args(&source, "get_body", vec![audio]).await);
-    assert_eq!(body["messages"][0]["content"][0]["input_audio"]["format"], "mp3");
+    assert_eq!(
+        body["messages"][0]["content"][0]["input_audio"]["format"],
+        "mp3"
+    );
 }
 
 #[tokio::test]
@@ -513,7 +530,10 @@ function get_body(a: audio) -> string {{
     );
     let audio = media_value(
         MediaKind::Audio,
-        MediaContent::Url { url: "https://example.com/speech.wav".into(), base64_data: None },
+        MediaContent::Url {
+            url: "https://example.com/speech.wav".into(),
+            base64_data: None,
+        },
         Some("audio/wav"),
     );
     let body = body_json(&run_baml_with_args(&source, "get_body", vec![audio]).await);
@@ -539,7 +559,10 @@ function get_body(doc: pdf) -> string {{
     );
     let pdf = media_value(
         MediaKind::Pdf,
-        MediaContent::Url { url: "https://example.com/doc.pdf".into(), base64_data: None },
+        MediaContent::Url {
+            url: "https://example.com/doc.pdf".into(),
+            base64_data: None,
+        },
         Some("application/pdf"),
     );
     let body = body_json(&run_baml_with_args(&source, "get_body", vec![pdf]).await);
@@ -571,7 +594,9 @@ function get_body(doc: pdf) -> string {{
     );
     let pdf = media_value(
         MediaKind::Pdf,
-        MediaContent::Base64 { base64_data: "JVBERi0=".into() },
+        MediaContent::Base64 {
+            base64_data: "JVBERi0=".into(),
+        },
         Some("application/pdf"),
     );
     let body = body_json(&run_baml_with_args(&source, "get_body", vec![pdf]).await);
@@ -603,7 +628,10 @@ function get_body(v: video) -> string {{
     );
     let video = media_value(
         MediaKind::Video,
-        MediaContent::Url { url: "https://example.com/clip.mp4".into(), base64_data: None },
+        MediaContent::Url {
+            url: "https://example.com/clip.mp4".into(),
+            base64_data: None,
+        },
         Some("video/mp4"),
     );
     let body = body_json(&run_baml_with_args(&source, "get_body", vec![video]).await);
@@ -628,14 +656,20 @@ function get_body(img: image) -> string {{
     );
     let img = media_value(
         MediaKind::Image,
-        MediaContent::Url { url: "https://example.com/photo.jpg".into(), base64_data: None },
+        MediaContent::Url {
+            url: "https://example.com/photo.jpg".into(),
+            base64_data: None,
+        },
         Some("image/jpeg"),
     );
     let body = body_json(&run_baml_with_args(&source, "get_body", vec![img]).await);
     let content = body["messages"][0]["content"].as_array().unwrap();
     assert_eq!(content.len(), 2);
     // Note: parse_message_content trims whitespace from text chunks
-    assert_eq!(content[0], serde_json::json!({"type": "text", "text": "What is in this image?"}));
+    assert_eq!(
+        content[0],
+        serde_json::json!({"type": "text", "text": "What is in this image?"})
+    );
     assert_eq!(
         content[1],
         serde_json::json!({"type": "image_url", "image_url": {"url": "https://example.com/photo.jpg"}})
@@ -808,7 +842,10 @@ function get_body() -> string {
     let body = body_json(&run_baml(source, "get_body").await);
     let messages = body["messages"].as_array().unwrap();
     for msg in messages {
-        assert_eq!(msg["role"], "user", "o1-mini should not have system messages");
+        assert_eq!(
+            msg["role"], "user",
+            "o1-mini should not have system messages"
+        );
     }
 }
 
@@ -839,7 +876,10 @@ function get_body() -> string {
     let body = body_json(&run_baml(source, "get_body").await);
     let messages = body["messages"].as_array().unwrap();
     for msg in messages {
-        assert_eq!(msg["role"], "user", "o3-mini should not have system messages");
+        assert_eq!(
+            msg["role"], "user",
+            "o3-mini should not have system messages"
+        );
     }
 }
 
