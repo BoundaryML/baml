@@ -362,7 +362,7 @@ pub fn extract_starts_as_text(green: &GreenNode) -> String {
                 let text = child.text().to_string();
                 let trimmed = text.trim();
                 if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
-                    return trimmed[1..trimmed.len() - 1].to_string();
+                    return trimmed[1..trimmed.len() - 1].to_owned();
                 }
             }
             SyntaxKind::RAW_STRING_LITERAL => {
@@ -374,7 +374,7 @@ pub fn extract_starts_as_text(green: &GreenNode) -> String {
                     if inner.starts_with('"') {
                         if let Some(end_pos) = inner.rfind('"') {
                             if end_pos > 0 {
-                                return inner[1..end_pos].to_string();
+                                return inner[1..end_pos].to_owned();
                             }
                         }
                     }
@@ -400,6 +400,6 @@ pub fn extract_starts_as_text(green: &GreenNode) -> String {
                     | SyntaxKind::COMMA
             )
         })
-        .map(|token| token.text().to_string())
+        .map(|token| token.text().to_owned())
         .collect()
 }

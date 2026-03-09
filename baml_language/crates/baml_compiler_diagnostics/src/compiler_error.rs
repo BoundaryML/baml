@@ -148,6 +148,7 @@ const DUPLICATE_VARIANT: ErrorCode = ErrorCode(13);
 const DUPLICATE_ATTRIBUTE: ErrorCode = ErrorCode(14);
 const UNKNOWN_ATTRIBUTE: ErrorCode = ErrorCode(15);
 const INVALID_ATTRIBUTE_CONTEXT: ErrorCode = ErrorCode(16);
+const CONFLICTING_STREAM_ATTRIBUTES: ErrorCode = ErrorCode(101);
 
 // Generator diagnostics
 const UNKNOWN_GENERATOR_PROPERTY: ErrorCode = ErrorCode(17);

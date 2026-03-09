@@ -372,7 +372,7 @@ impl ProjectDatabase {
     pub fn non_builtin_file_paths(&self) -> impl Iterator<Item = std::path::PathBuf> {
         self.file_map
             .keys()
-            .filter(|path| !path.starts_with(baml_builtins::BUILTIN_PATH_PREFIX))
+            .filter(|path| !path.starts_with(SourceFile::builtin_path_prefix()))
             .cloned()
     }
 

@@ -1,4 +1,9 @@
 //! Unit tests for PPIR stream expansion and normalization.
+//!
+//! Tests that require a `ProjectDatabase` (i.e. full compiler pipeline) live in
+//! `baml_tests/tests/ppir_diagnostics.rs` to avoid pulling `baml_project` into
+//! this crate's dev-dependencies, which would create a duplicate copy of
+//! `baml_compiler_ppir` and break Salsa's trait-bound checks.
 
 use baml_base::Name;
 use rustc_hash::FxHashMap;

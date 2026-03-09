@@ -2,9 +2,9 @@ use ariadne::{Label, ReportBuilder};
 use baml_base::Span;
 
 use super::{
-    ARGUMENT_COUNT_MISMATCH, CompilerError, DUPLICATE_ATTRIBUTE, DUPLICATE_FIELD, DUPLICATE_NAME,
-    DUPLICATE_VARIANT, ErrorCode, FIELD_NAME_MATCHES_TYPE_NAME, HTTP_CONFIG_NOT_BLOCK,
-    HirDiagnostic, INVALID_ATTRIBUTE_CONTEXT, INVALID_CLIENT_RESPONSE_TYPE,
+    ARGUMENT_COUNT_MISMATCH, CONFLICTING_STREAM_ATTRIBUTES, CompilerError, DUPLICATE_ATTRIBUTE,
+    DUPLICATE_FIELD, DUPLICATE_NAME, DUPLICATE_VARIANT, ErrorCode, FIELD_NAME_MATCHES_TYPE_NAME,
+    HTTP_CONFIG_NOT_BLOCK, HirDiagnostic, INVALID_ATTRIBUTE_CONTEXT, INVALID_CLIENT_RESPONSE_TYPE,
     INVALID_CONSTRAINT_SYNTAX, INVALID_GENERATOR_PROPERTY_VALUE, INVALID_OPERATOR,
     MISSING_CONDITION_PARENS, MISSING_GENERATOR_PROPERTY, MISSING_PROVIDER,
     MISSING_RETURN_EXPRESSION, MISSING_SEMICOLON, NEGATIVE_TIMEOUT, NO_SUCH_FIELD,
@@ -333,6 +333,20 @@ where
                 ),
                 span,
                 INVALID_ATTRIBUTE_CONTEXT,
+            ),
+            HirDiagnostic::ConflictingStreamAttributes {
+                first_attr,
+                second_attr,
+                first_span,
+                second_span,
+            } => (
+                Report::build(ReportKind::Error, second_span)
+                    .with_message(format!(
+                        "Conflicting stream attributes '@{first_attr}' and '@{second_attr}'"
+                    ))
+                    .with_label(Label::new(second_span).with_message("conflicting attribute"))
+                    .with_label(Label::new(first_span).with_message("first attribute here")),
+                CONFLICTING_STREAM_ATTRIBUTES,
             ),
             HirDiagnostic::UnknownGeneratorProperty {
                 generator_name,

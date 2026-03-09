@@ -287,12 +287,6 @@ pub fn function_signature_source_map<'db>(
     source_map
 }
 
-/// The prefix used for builtin BAML files.
-///
-/// Files with paths starting with this prefix are treated as builtins
-/// and their functions are namespaced accordingly.
-pub const BUILTIN_PATH_PREFIX: &str = "<builtin>/";
-
 /// Derive the namespace for a file based on its path.
 ///
 /// Builtin files (paths starting with `<builtin>/`) get namespaced:
@@ -316,12 +310,13 @@ pub fn file_namespace(db: &dyn Db, file: SourceFile) -> Option<Namespace> {
     let path = file.path(db);
     let path_str = path.to_string_lossy();
 
-    if !path_str.starts_with(BUILTIN_PATH_PREFIX) {
+    if !file.is_builtin(db) {
         return None;
     }
 
     // Extract path after prefix: "<builtin>/baml/llm.baml" -> "baml/llm.baml"
-    let after_prefix = &path_str[BUILTIN_PATH_PREFIX.len()..];
+    let prefix_len = SourceFile::builtin_path_prefix().len();
+    let after_prefix = &path_str[prefix_len..];
 
     // Remove .baml extension and split by /
     let without_ext = after_prefix.strip_suffix(".baml").unwrap_or(after_prefix);

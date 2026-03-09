@@ -117,9 +117,10 @@ pub enum DiagnosticId {
     // Constraint attribute errors (E0032)
     InvalidConstraintSyntax,
 
-    // Attribute value errors (E0037-E0038)
+    // Attribute value errors (E0037-E0038, E0101)
     InvalidAttributeArg,
     UnexpectedAttributeArg,
+    ConflictingStreamAttributes,
 
     // Type literal errors (E0033)
     UnsupportedFloatLiteral,
@@ -254,6 +255,7 @@ impl DiagnosticId {
             // Attribute value errors
             DiagnosticId::InvalidAttributeArg => "E0037",
             DiagnosticId::UnexpectedAttributeArg => "E0038",
+            DiagnosticId::ConflictingStreamAttributes => "E0101",
 
             // Type literal errors
             DiagnosticId::UnsupportedFloatLiteral => "E0033",

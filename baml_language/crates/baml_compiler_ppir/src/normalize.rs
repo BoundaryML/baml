@@ -95,27 +95,28 @@ pub fn parse_starts_as_value(s: &str) -> StartsAs {
             if let Ok(i) = s.parse::<i64>() {
                 return StartsAs::Literal(StartsAsLiteral::Int(i));
             }
-            // Try float (exclude strings with alphabetic chars to avoid Foo.Bar confusion)
-            if s.contains('.') && !s.contains(|c: char| c.is_alphabetic()) {
-                if s.parse::<f64>().is_ok() {
-                    return StartsAs::Literal(StartsAsLiteral::Float(s.to_string()));
-                }
+            // Try float: must contain '.' and have no alphabetic chars (rules out Foo.Bar)
+            if s.bytes().fold((false, true), |(dot, alpha_free), b| {
+                (dot || b == b'.', alpha_free && !b.is_ascii_alphabetic())
+            }) == (true, true)
+                && s.parse::<f64>().is_ok()
+            {
+                return StartsAs::Literal(StartsAsLiteral::Float(s.to_owned()));
             }
             // Try enum value: Foo.Bar pattern (exactly one dot, both parts are identifiers)
             if let Some((left, right)) = s.split_once('.') {
                 if is_identifier(left) && is_identifier(right) {
                     return StartsAs::EnumValue {
-                        enum_name: left.to_string(),
-                        variant_name: right.to_string(),
+                        enum_name: left.to_owned(),
+                        variant_name: right.to_owned(),
                     };
                 }
             }
             // If it looks like an expression (has parens), it's unrecognized.
-            // Everything else is a string literal.
             if s.contains('(') || s.contains(')') {
-                return StartsAs::Unknown(s.to_string());
+                return StartsAs::Unknown(s.to_owned());
             }
-            StartsAs::Literal(StartsAsLiteral::String(s.to_string()))
+            StartsAs::Literal(StartsAsLiteral::String(s.to_owned()))
         }
     }
 }
@@ -143,7 +144,7 @@ pub fn infer_typeof_s(
         StartsAs::Null => Some(PpirTy::Null { attrs: d }),
         StartsAs::Literal(lit) => Some(match lit {
             StartsAsLiteral::String(s) => PpirTy::StringLiteral {
-                value: s.clone(),
+                value: s.to_owned(),
                 attrs: d,
             },
             StartsAsLiteral::Int(i) => PpirTy::IntLiteral {
@@ -159,14 +160,12 @@ pub fn infer_typeof_s(
         StartsAs::EmptyList => None,
         StartsAs::EmptyMap => None,
         StartsAs::EnumValue { enum_name, .. } => {
-            if enum_names.contains_key(enum_name.as_str()) {
-                Some(PpirTy::Named {
+            enum_names
+                .contains_key(enum_name.as_str())
+                .then(|| PpirTy::Named {
                     name: SmolStr::new(enum_name),
                     attrs: d,
                 })
-            } else {
-                None // Unknown type name → caller falls back to Never
-            }
         }
         StartsAs::Unknown(_) => None, // Cannot infer → caller falls back to Never
     }

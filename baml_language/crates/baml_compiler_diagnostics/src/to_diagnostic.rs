@@ -1001,6 +1001,20 @@ impl ToDiagnostic for HirDiagnostic {
             )
             .with_primary(*span, "unexpected argument"),
 
+            HirDiagnostic::ConflictingStreamAttributes {
+                first_attr,
+                second_attr,
+                first_span,
+                second_span,
+            } => Diagnostic::error(
+                DiagnosticId::ConflictingStreamAttributes,
+                format!(
+                    "Conflicting stream attributes `@{first_attr}` and `@{second_attr}`."
+                ),
+            )
+            .with_primary(*second_span, "conflicting attribute")
+            .with_secondary(*first_span, "first attribute here"),
+
             HirDiagnostic::UnsupportedFloatLiteral { value, span } => Diagnostic::error(
                 DiagnosticId::UnsupportedFloatLiteral,
                 format!("Float literal values are not supported: {value}"),

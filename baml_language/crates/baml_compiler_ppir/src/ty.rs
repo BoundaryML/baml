@@ -492,7 +492,7 @@ impl PpirTy {
                     let type_arg_exprs: Vec<_> = type_args_node
                         .children()
                         .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
-                        .map(|n| baml_compiler_syntax::ast::TypeExpr::cast(n).unwrap())
+                        .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
                         .collect();
 
                     if type_arg_exprs.len() == 2 {

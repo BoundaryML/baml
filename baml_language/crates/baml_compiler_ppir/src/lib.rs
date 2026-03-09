@@ -25,6 +25,7 @@ mod desugar;
 pub mod expand_cst;
 pub mod normalize;
 mod ty;
+mod validate;
 
 pub use desugar::{
     PpirDesugaredClass, PpirDesugaredField, PpirDesugaredTypeAlias, PpirStreamStartsAs,
@@ -34,6 +35,7 @@ pub use normalize::{
     StartsAs, StartsAsLiteral, default_starts_as_semantic, infer_typeof_s, parse_starts_as_value,
 };
 pub use ty::{PpirField, PpirTy, PpirTypeAttrs};
+pub use validate::ppir_stream_diagnostics;
 
 //
 // ──────────────────────────────────────────────────────────── DATABASE ─────
@@ -126,67 +128,54 @@ pub struct PpirExpansionCst<'db> {
 /// no downstream queries are invalidated.
 #[salsa::tracked]
 pub fn ppir_names(db: &dyn Db, project: Project) -> PpirNames<'_> {
-    /// Collect @@stream.* block attribute names from a definition.
-    fn collect_stream_block_attrs(
+    /// Collect `@@stream.*` block attribute names from any definition's block attrs.
+    fn stream_block_attrs(
         block_attrs: impl Iterator<Item = baml_compiler_syntax::ast::BlockAttribute>,
     ) -> Vec<Name> {
         block_attrs
             .filter_map(|a| {
                 let name = a.full_name()?;
-                if name.starts_with("stream.") {
-                    Some(SmolStr::from(name.as_str()))
-                } else {
-                    None
-                }
+                name.starts_with("stream.")
+                    .then(|| SmolStr::from(name.as_str()))
             })
             .collect()
     }
 
     let mut class_names: FxHashMap<Name, Vec<Name>> = FxHashMap::default();
     let mut enum_names: FxHashMap<Name, Vec<Name>> = FxHashMap::default();
-    let mut type_alias_names = FxHashSet::default();
+    let mut type_alias_names: FxHashSet<Name> = FxHashSet::default();
 
     for file in project.files(db) {
-        // Skip builtin files — they define internal types, not user-defined classes/enums/aliases.
-        if file
-            .path(db)
-            .to_str()
-            .is_some_and(|p| p.starts_with("<builtin>/") || p.starts_with("<generated:"))
-        {
+        if file.is_virtual(db) {
             continue;
         }
         let cst = syntax_tree(db, *file);
         for child in cst.children() {
             match child.kind() {
                 SyntaxKind::CLASS_DEF => {
-                    if let Some(class_def) =
-                        baml_compiler_syntax::ast::ClassDef::cast(child.clone())
-                    {
-                        if let Some(name_tok) = class_def.name() {
-                            let name = SmolStr::new(name_tok.text());
-                            let stream_attrs =
-                                collect_stream_block_attrs(class_def.block_attributes());
-                            class_names.insert(name, stream_attrs);
+                    if let Some(def) = baml_compiler_syntax::ast::ClassDef::cast(child) {
+                        if let Some(tok) = def.name() {
+                            let name = SmolStr::new(tok.text());
+                            class_names
+                                .entry(name)
+                                .or_insert_with(|| stream_block_attrs(def.block_attributes()));
                         }
                     }
                 }
                 SyntaxKind::ENUM_DEF => {
-                    if let Some(enum_def) = baml_compiler_syntax::ast::EnumDef::cast(child.clone())
-                    {
-                        if let Some(name_tok) = enum_def.name() {
-                            let name = SmolStr::new(name_tok.text());
-                            let stream_attrs =
-                                collect_stream_block_attrs(enum_def.block_attributes());
-                            enum_names.insert(name, stream_attrs);
+                    if let Some(def) = baml_compiler_syntax::ast::EnumDef::cast(child) {
+                        if let Some(tok) = def.name() {
+                            let name = SmolStr::new(tok.text());
+                            enum_names
+                                .entry(name)
+                                .or_insert_with(|| stream_block_attrs(def.block_attributes()));
                         }
                     }
                 }
                 SyntaxKind::TYPE_ALIAS_DEF => {
-                    if let Some(alias_def) =
-                        baml_compiler_syntax::ast::TypeAliasDef::cast(child.clone())
-                    {
-                        if let Some(name_tok) = alias_def.name() {
-                            type_alias_names.insert(SmolStr::new(name_tok.text()));
+                    if let Some(def) = baml_compiler_syntax::ast::TypeAliasDef::cast(child) {
+                        if let Some(tok) = def.name() {
+                            type_alias_names.insert(SmolStr::new(tok.text()));
                         }
                     }
                 }
@@ -208,11 +197,20 @@ pub fn ppir_names(db: &dyn Db, project: Project) -> PpirNames<'_> {
 /// via clone-and-transform of the original CST.
 #[salsa::tracked]
 pub fn ppir_desugared_items(db: &dyn Db, file: SourceFile) -> PpirDesugaredItems<'_> {
-    let file_path = file.path(db);
-    if file_path
-        .to_str()
-        .is_some_and(|p| p.starts_with("<builtin>/") || p.starts_with("<generated:"))
-    {
+    /// Return `Some(name)` for a CST node name that is not a `stream_*` generated
+    /// name and has not yet been seen (dedup guard). Returns `None` to skip.
+    fn accept_name(
+        seen: &mut FxHashSet<Name>,
+        tok: Option<baml_compiler_syntax::SyntaxToken>,
+    ) -> Option<Name> {
+        let name = SmolStr::new(tok?.text());
+        if name.starts_with("stream_") || !seen.insert(name.clone()) {
+            return None;
+        }
+        Some(name)
+    }
+
+    if file.is_virtual(db) {
         return PpirDesugaredItems::new(db, Vec::new(), Vec::new());
     }
 
@@ -220,72 +218,43 @@ pub fn ppir_desugared_items(db: &dyn Db, file: SourceFile) -> PpirDesugaredItems
     let project = db.project();
     let names = ppir_names(db, project);
 
-    let mut desugared_classes = Vec::new();
-    let mut desugared_aliases = Vec::new();
-    let mut seen_class_names = FxHashSet::default();
-    let mut seen_alias_names = FxHashSet::default();
+    let mut desugared_classes: Vec<PpirDesugaredClass> = Vec::new();
+    let mut desugared_aliases: Vec<PpirDesugaredTypeAlias> = Vec::new();
+    let mut seen_class_names: FxHashSet<Name> = FxHashSet::default();
+    let mut seen_alias_names: FxHashSet<Name> = FxHashSet::default();
 
     for child in cst.children() {
         match child.kind() {
             SyntaxKind::CLASS_DEF => {
-                let Some(class_def) = baml_compiler_syntax::ast::ClassDef::cast(child.clone())
-                else {
+                let Some(def) = baml_compiler_syntax::ast::ClassDef::cast(child) else {
                     continue;
                 };
-                let Some(name_tok) = class_def.name() else {
+                let Some(name) = accept_name(&mut seen_class_names, def.name()) else {
                     continue;
                 };
-                let class_name: Name = SmolStr::new(name_tok.text());
-                if class_name.starts_with("stream_") {
-                    continue;
-                }
-                if !seen_class_names.insert(class_name.clone()) {
-                    continue;
-                }
-
-                // Build PPIR fields from CST (type-level attrs captured by PpirTy::from_ast)
-                let ppir_fields = desugar::build_ppir_fields(&class_def);
-
-                // Desugar each field
-                let desugared_fields: Vec<PpirDesugaredField> = ppir_fields
+                let fields = desugar::build_ppir_fields(&def)
                     .iter()
                     .map(|pf| desugar::desugar_field(pf, names, db))
                     .collect();
-
-                desugared_classes.push(PpirDesugaredClass {
-                    name: class_name,
-                    fields: desugared_fields,
-                });
+                desugared_classes.push(PpirDesugaredClass { name, fields });
             }
 
             SyntaxKind::TYPE_ALIAS_DEF => {
-                let Some(alias_def) = baml_compiler_syntax::ast::TypeAliasDef::cast(child.clone())
-                else {
+                let Some(def) = baml_compiler_syntax::ast::TypeAliasDef::cast(child) else {
                     continue;
                 };
-                let Some(name_tok) = alias_def.name() else {
+                let Some(name) = accept_name(&mut seen_alias_names, def.name()) else {
                     continue;
                 };
-                let alias_name: Name = SmolStr::new(name_tok.text());
-                if alias_name.starts_with("stream_") {
-                    continue;
-                }
-                if !seen_alias_names.insert(alias_name.clone()) {
-                    continue;
-                }
-
-                let ty =
-                    alias_def
-                        .ty()
-                        .map(|te| PpirTy::from_ast(&te))
-                        .unwrap_or(PpirTy::Unknown {
-                            attrs: PpirTypeAttrs::default(),
-                        });
-
+                let ty = def
+                    .ty()
+                    .map(|te| PpirTy::from_ast(&te))
+                    .unwrap_or(PpirTy::Unknown {
+                        attrs: PpirTypeAttrs::default(),
+                    });
                 let expanded_body = desugar::stream_expand(&ty, names, db);
-
                 desugared_aliases.push(PpirDesugaredTypeAlias {
-                    name: alias_name,
+                    name,
                     expanded_body,
                 });
             }
@@ -323,8 +292,9 @@ pub fn ppir_expansion_cst(db: &dyn Db, file: SourceFile) -> PpirExpansionCst<'_>
                 .file_name()
                 .unwrap_or_default()
                 .to_string_lossy()
-                .to_string();
-            let display_path = format!("<generated:stream/{file_name}>");
+                .into_owned();
+            let display_path =
+                format!("{}stream/{file_name}>", SourceFile::generated_path_prefix());
             let file_id = FileId::stream_expansion(file.file_id(db));
             let synth_file =
                 SourceFile::new(db, text.clone(), PathBuf::from(&display_path), file_id);

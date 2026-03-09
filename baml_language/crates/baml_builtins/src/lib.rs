@@ -823,7 +823,10 @@ mod tests {
 // ============================================================================
 
 /// Builtin BAML source files for built-in functions.
-pub const BUILTIN_PATH_PREFIX: &str = "<builtin>/";
+/// The path prefix for builtin files, sourced from `baml_base::SourceFile`.
+pub fn builtin_path_prefix() -> &'static str {
+    baml_base::SourceFile::builtin_path_prefix()
+}
 ///
 /// These files are compiled together with user code and provide
 /// implementations for builtin namespaces like `baml.llm`.
@@ -903,16 +906,17 @@ pub fn baml_sources() -> impl Iterator<Item = &'static baml_sources::BuiltinSour
 
 #[cfg(test)]
 mod builtin_path_tests {
-    use super::{BUILTIN_PATH_PREFIX, baml_sources};
+    use super::baml_sources;
 
     #[test]
     fn test_builtin_path_prefix_consistent_with_all() {
+        let prefix = baml_base::SourceFile::builtin_path_prefix();
         for source in baml_sources::ALL {
             assert!(
-                source.path.starts_with(BUILTIN_PATH_PREFIX),
-                "BuiltinSource path {:?} does not start with BUILTIN_PATH_PREFIX ({:?})",
+                source.path.starts_with(prefix),
+                "BuiltinSource path {:?} does not start with builtin_path_prefix ({:?})",
                 source.path,
-                BUILTIN_PATH_PREFIX,
+                prefix,
             );
         }
     }

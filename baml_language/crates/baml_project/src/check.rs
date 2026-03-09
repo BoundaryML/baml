@@ -21,6 +21,7 @@ use baml_compiler_hir::{
     llm_function_file_offset, llm_function_meta, project_class_field_type_spans,
     project_type_alias_type_spans, project_type_item_spans, template_string_file_offset,
 };
+use baml_compiler_ppir::ppir_stream_diagnostics;
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
 use baml_db::{FileId, SourceFile, baml_compiler_parser};
 use baml_workspace::Project;
@@ -71,10 +72,14 @@ pub fn collect_diagnostics(
         }
     }
 
-    // 2. Collect HIR lowering diagnostics (per-file validation)
+    // 2. Collect per-file lowering diagnostics (HIR + PPIR stream)
     for source_file in source_files {
         let lowering_result = file_lowering(db, *source_file);
         for diag in lowering_result.diagnostics(db) {
+            diagnostics.push(diag.to_diagnostic());
+        }
+
+        for diag in ppir_stream_diagnostics(db, *source_file) {
             diagnostics.push(diag.to_diagnostic());
         }
     }

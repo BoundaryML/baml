@@ -65,7 +65,7 @@ pub enum HirDiagnostic {
     UnknownAttribute {
         attr_name: String,
         span: Span,
-        valid_attributes: Vec<&'static str>,
+        valid_attributes: &'static [&'static str],
     },
 
     /// Attribute used in wrong context.
@@ -244,6 +244,14 @@ pub enum HirDiagnostic {
 
     /// Attribute takes no arguments but received some (e.g., @@dynamic("unexpected")).
     UnexpectedAttributeArg { attr_name: String, span: Span },
+
+    /// Conflicting stream attributes on the same type expression.
+    ConflictingStreamAttributes {
+        first_attr: &'static str,
+        second_attr: &'static str,
+        first_span: Span,
+        second_span: Span,
+    },
 
     // ============ Type Diagnostics ============
     /// Float literal used as a type, which is not supported.

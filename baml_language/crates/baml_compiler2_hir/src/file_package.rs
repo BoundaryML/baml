@@ -21,7 +21,7 @@ pub fn file_package(db: &dyn crate::Db, file: SourceFile) -> PackageInfo {
     let path = file.path(db);
     let path_str = path.to_string_lossy();
 
-    if let Some(relative) = path_str.strip_prefix("<builtin>/") {
+    if let Some(relative) = path_str.strip_prefix(baml_base::SourceFile::builtin_path_prefix()) {
         // <builtin>/baml/llm.baml → package "baml", namespace ["llm"]
         // <builtin>/env.baml → package "env", namespace []
         let segments: Vec<&str> = relative.split('/').collect();
