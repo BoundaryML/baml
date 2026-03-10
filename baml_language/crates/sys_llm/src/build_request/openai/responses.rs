@@ -117,6 +117,7 @@ fn prompt_to_responses_input(
 }
 
 /// Converts a single [`PromptAst`] node into a Responses API input message.
+/// Should only be called by `prompt_to_responses_input`, or any other function that ensures that `PromptAst::Vec` has been flattened.
 fn responses_node_to_message(
     node: &bex_vm_types::PromptAst,
     default_role: &str,
@@ -185,11 +186,19 @@ fn responses_media_part(
         MediaKind::Image => {
             let image_url = match content {
                 MediaContent::Url { url, .. } => url.clone(),
-                MediaContent::Base64 { base64_data, .. } => {
+                MediaContent::Base64 { base64_data, .. }
+                | MediaContent::File {
+                    base64_data: Some(base64_data),
+                    ..
+                } => {
                     format!("data:{};base64,{}", mime_type_as_ok(media)?, base64_data)
                 }
-                MediaContent::File { .. } => {
-                    unreachable!("image file should have been resolved before request building")
+                MediaContent::File {
+                    base64_data: None, ..
+                } => {
+                    return Err(BuildRequestError::FileNotResolved(
+                        "image file content was not resolved properly".into(),
+                    ));
                 }
             };
             Ok(vec![ResponsesContentPart::InputImage {
@@ -219,7 +228,11 @@ fn responses_media_part(
                 file_data: None,
                 file_id: None,
             }]),
-            MediaContent::Base64 { base64_data, .. } => {
+            MediaContent::Base64 { base64_data, .. }
+            | MediaContent::File {
+                base64_data: Some(base64_data),
+                ..
+            } => {
                 let data_url = format!("data:{};base64,{}", mime_type_as_ok(media)?, base64_data);
                 Ok(vec![ResponsesContentPart::InputFile {
                     file_data: Some(data_url),
@@ -228,9 +241,11 @@ fn responses_media_part(
                     file_id: None,
                 }])
             }
-            MediaContent::File { .. } => {
-                unreachable!("PDF file should have been resolved before request building")
-            }
+            MediaContent::File {
+                base64_data: None, ..
+            } => Err(BuildRequestError::FileNotResolved(
+                "pdf file content was not resolved properly".into(),
+            )),
         },
         MediaKind::Video => Err(BuildRequestError::UnsupportedMedia(
             "video input is not supported on OpenAI Responses API".into(),

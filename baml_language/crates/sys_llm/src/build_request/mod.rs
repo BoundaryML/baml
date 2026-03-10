@@ -188,6 +188,8 @@ pub(crate) enum BuildRequestError {
     InvalidOption { key: String, reason: String },
     #[error("Unsupported media: {0}")]
     UnsupportedMedia(String),
+    #[error("File not resolved: {0}")]
+    FileNotResolved(String),
 }
 
 /// Returns the MIME type of a media value, or an error if none is set.

@@ -231,18 +231,32 @@ fn openai_media_part(
             MediaContent::Url { url, .. } => Ok(vec![ContentPart::ImageUrl {
                 image_url: ImageUrl { url: url.clone() },
             }]),
-            MediaContent::Base64 { base64_data, .. } => {
+            MediaContent::Base64 { base64_data, .. }
+            | MediaContent::File {
+                base64_data: Some(base64_data),
+                ..
+            } => {
                 let data_url = format!("data:{};base64,{}", mime_type_as_ok(media)?, base64_data);
                 Ok(vec![ContentPart::ImageUrl {
                     image_url: ImageUrl { url: data_url },
                 }])
             }
-            MediaContent::File { .. } => {
-                unreachable!("image file should have been resolved before request building")
-            }
+            MediaContent::File {
+                base64_data: None, ..
+            } => Err(BuildRequestError::FileNotResolved(
+                "image file content was not resolved properly".into(),
+            )),
         },
         MediaKind::Audio => match content {
-            MediaContent::Base64 { base64_data, .. } => {
+            MediaContent::Base64 { base64_data, .. }
+            | MediaContent::File {
+                base64_data: Some(base64_data),
+                ..
+            }
+            | MediaContent::Url {
+                base64_data: Some(base64_data),
+                ..
+            } => {
                 let mime = mime_type_as_ok(media)?;
                 let format = mime.strip_prefix("audio/").unwrap_or(mime);
                 let format = if format == "mpeg" { "mp3" } else { format };
@@ -253,47 +267,27 @@ fn openai_media_part(
                     },
                 }])
             }
-            MediaContent::Url { .. } => {
-                Err(BuildRequestError::UnsupportedMedia(
-                    "audio url is not supported on OpenAI chat completions".into(),
-                ))
-                // The following is a translation of the original logic from engine...
-                // According to the official OpenAI docs, this should not work, thus I have disabled it for now.
-
-                // let ext = url.split('.').next_back();
-                // let ext = match media.mime_type.as_deref() {
-                //     Some(mime) => mime.strip_prefix("audio/").unwrap_or(mime),
-                //     None => match ext {
-                //         Some(ext) => ext,
-                //         None => {
-                //             return Err(BuildRequestError::UnsupportedMedia(
-                //                 "audio url has no extension and no mime type".into(),
-                //             ));
-                //         }
-                //     },
-                // };
-
-                // let format = match ext {
-                //     "mpeg" => "mp3",
-                //     other => other,
-                // };
-
-                // Ok(vec![ContentPart::InputAudio {
-                //     input_audio: InputAudio {
-                //         data: url.clone(),
-                //         format: format.to_string(),
-                //     },
-                // }])
-            }
-            MediaContent::File { .. } => {
-                unreachable!("audio file should have been resolved before request building")
-            }
+            MediaContent::File {
+                base64_data: None, ..
+            } => Err(BuildRequestError::FileNotResolved(
+                "audio file content was not resolved properly".into(),
+            )),
+            MediaContent::Url {
+                base64_data: None, ..
+            } => Err(BuildRequestError::UnsupportedMedia(
+                "audio url content was not resolved properly".into(),
+            )),
         },
         MediaKind::Pdf => match content {
-            MediaContent::Url { .. } => Err(BuildRequestError::UnsupportedMedia(
-                "file URLs are not supported on OpenAI chat completions; use base64-encoded pdf instead".into(),
-            )),
-            MediaContent::Base64 { base64_data, .. } => {
+            MediaContent::Base64 { base64_data, .. }
+            | MediaContent::File {
+                base64_data: Some(base64_data),
+                ..
+            }
+            | MediaContent::Url {
+                base64_data: Some(base64_data),
+                ..
+            } => {
                 let data_url = format!("data:{};base64,{}", mime_type_as_ok(media)?, base64_data);
                 Ok(vec![ContentPart::File {
                     file: FileRef {
@@ -303,15 +297,22 @@ fn openai_media_part(
                     },
                 }])
             }
-            MediaContent::File { .. } => {
-                unreachable!("PDF file should have been resolved before request building")
-            }
+            MediaContent::File {
+                base64_data: None, ..
+            } => Err(BuildRequestError::FileNotResolved(
+                "pdf file content was not resolved properly".into(),
+            )),
+            MediaContent::Url {
+                base64_data: None, ..
+            } => Err(BuildRequestError::UnsupportedMedia(
+                "pdf url content was not resolved properly".into(),
+            )),
         },
         MediaKind::Video => Err(BuildRequestError::UnsupportedMedia(
             "video input is not supported on OpenAI chat completions".into(),
         )),
         MediaKind::Generic => Err(BuildRequestError::UnsupportedMedia(
-            "generic media is currently unimplemented".into(),
+            "generic media is currently unimplemented".into(), // TODO: Implement generic media support
         )),
     }
 }
