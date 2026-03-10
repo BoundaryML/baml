@@ -87,6 +87,27 @@ impl LlmRequestBuilder for OpenAiResponsesBuilder<'_> {
         headers
     }
 
+    fn build_body(
+        &self,
+        client: &LlmPrimitiveClient,
+        prompt: bex_vm_types::PromptAst,
+        stream: bool,
+    ) -> Result<String, BuildRequestError> {
+        let mut body = serde_json::Map::new();
+        if let Some(model) = get_string_option(client, "model") {
+            body.insert("model".to_string(), serde_json::Value::String(model));
+        }
+        if stream {
+            body.insert("stream".to_string(), serde_json::Value::Bool(true));
+        }
+        body.extend(self.build_prompt_body(client, prompt)?);
+        self.forward_options(client, &mut body);
+        serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
+            key: "body".into(),
+            reason: e.to_string(),
+        })
+    }
+
     fn build_prompt_body(
         &self,
         client: &LlmPrimitiveClient,
@@ -591,5 +612,34 @@ mod tests {
             .build_url(&client)
             .unwrap();
         assert_eq!(url, "https://custom.api.com/v1/responses");
+    }
+
+    #[test]
+    fn stream_true_sets_stream() {
+        let client = make_client(
+            "openai-responses",
+            vec![("model", BexExternalValue::String("gpt-4o".into()))],
+        );
+        let builder = OpenAiResponsesBuilder::new(&LlmProvider::OpenAiResponses);
+        let body_str = builder
+            .build_body(&client, msg("user", "hi"), true)
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+        assert_eq!(body["stream"], true);
+        assert!(body.get("stream_options").is_none());
+    }
+
+    #[test]
+    fn stream_false_omits_stream() {
+        let client = make_client(
+            "openai-responses",
+            vec![("model", BexExternalValue::String("gpt-4o".into()))],
+        );
+        let builder = OpenAiResponsesBuilder::new(&LlmProvider::OpenAiResponses);
+        let body_str = builder
+            .build_body(&client, msg("user", "hi"), false)
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+        assert!(body.get("stream").is_none());
     }
 }

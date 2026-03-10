@@ -93,10 +93,18 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
+        stream: bool,
     ) -> Result<String, BuildRequestError> {
         let mut body = serde_json::Map::new();
         if let Some(model) = get_string_option(client, "model") {
             body.insert("model".to_string(), serde_json::Value::String(model));
+        }
+        if stream {
+            body.insert("stream".to_string(), serde_json::Value::Bool(true));
+            body.insert(
+                "stream_options".to_string(),
+                serde_json::json!({ "include_usage": true }),
+            );
         }
         body.extend(self.build_prompt_body(client, prompt)?);
         self.forward_options(client, &mut body);
@@ -836,7 +844,7 @@ mod tests {
                 ("api_key", BexExternalValue::String("sk".into())),
             ],
         );
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
         assert_eq!(body["max_tokens"], 4096);
     }
@@ -855,7 +863,7 @@ mod tests {
                 ("max_tokens", BexExternalValue::Int(1000)),
             ],
         );
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
         assert_eq!(body["max_tokens"], 1000);
     }
@@ -874,7 +882,7 @@ mod tests {
                 ("max_completion_tokens", BexExternalValue::Int(2000)),
             ],
         );
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
         assert!(body.get("max_tokens").is_none());
         assert_eq!(body["max_completion_tokens"], 2000);
@@ -886,7 +894,7 @@ mod tests {
             "openai",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
         assert!(body.get("max_tokens").is_none());
     }
@@ -894,7 +902,7 @@ mod tests {
     #[test]
     fn openai_no_model_when_absent() {
         let client = make_client("openai", vec![]);
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
         assert!(body.get("model").is_none());
     }
@@ -908,7 +916,7 @@ mod tests {
                 ("resource_name", BexExternalValue::String("res".into())),
             ],
         );
-        let err = build_request(&client, msg("user", "hi")).unwrap_err();
+        let err = build_request(&client, msg("user", "hi"), false).unwrap_err();
         assert!(err.to_string().contains("api_version"));
     }
 
@@ -919,7 +927,7 @@ mod tests {
     #[test]
     fn openai_generic_requires_base_url() {
         let client = make_client("openai-generic", vec![]);
-        let err = build_request(&client, msg("user", "hi")).unwrap_err();
+        let err = build_request(&client, msg("user", "hi"), false).unwrap_err();
         assert!(err.to_string().contains("base_url"));
     }
 
@@ -936,7 +944,7 @@ mod tests {
                 ("api_key", BexExternalValue::String("sk-custom".into())),
             ],
         );
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         assert_eq!(result.url, "https://my-llm.example.com/v1/chat/completions");
         assert_eq!(
             result.headers.get("authorization").unwrap(),
@@ -953,7 +961,7 @@ mod tests {
             "ollama",
             vec![("model", BexExternalValue::String("llama3".into()))],
         );
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         assert_eq!(result.url, "http://localhost:11434/v1/chat/completions");
         let body = parse_body(&result.body);
         assert_eq!(body["model"], "llama3");
@@ -971,7 +979,7 @@ mod tests {
                 ("model", BexExternalValue::String("llama3".into())),
             ],
         );
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         assert_eq!(result.url, "http://remote:11434/v1/chat/completions");
     }
 
@@ -981,7 +989,7 @@ mod tests {
             "ollama",
             vec![("model", BexExternalValue::String("llama3".into()))],
         );
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         assert!(result.headers.get("authorization").is_none());
         assert!(result.headers.get("api-key").is_none());
     }
@@ -995,7 +1003,7 @@ mod tests {
                 ("api_key", BexExternalValue::String("sk-or-test".into())),
             ],
         );
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         assert_eq!(result.url, "https://openrouter.ai/api/v1/chat/completions");
         assert_eq!(
             result.headers.get("authorization").unwrap(),
@@ -1015,9 +1023,33 @@ mod tests {
                 ("max_tokens", BexExternalValue::Int(500)),
             ],
         );
-        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
         assert_eq!(body["temperature"], 0.3);
         assert_eq!(body["max_tokens"], 500);
+    }
+
+    #[test]
+    fn stream_true_sets_stream_and_stream_options() {
+        let client = make_client(
+            "openai",
+            vec![("model", BexExternalValue::String("gpt-4o".into()))],
+        );
+        let result = build_request(&client, msg("user", "hi"), true).unwrap();
+        let body = parse_body(&result.body);
+        assert_eq!(body["stream"], true);
+        assert_eq!(body["stream_options"]["include_usage"], true);
+    }
+
+    #[test]
+    fn stream_false_omits_stream_fields() {
+        let client = make_client(
+            "openai",
+            vec![("model", BexExternalValue::String("gpt-4o".into()))],
+        );
+        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let body = parse_body(&result.body);
+        assert!(body.get("stream").is_none());
+        assert!(body.get("stream_options").is_none());
     }
 }

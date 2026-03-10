@@ -54,10 +54,11 @@ pub(crate) trait LlmRequestBuilder {
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
+        stream: bool,
     ) -> Result<RawHttpRequest, BuildRequestError> {
         let url = self.build_url(client)?;
         let headers = self.build_headers(client);
-        let body = self.build_body(client, prompt)?;
+        let body = self.build_body(client, prompt, stream)?;
         Ok(RawHttpRequest {
             method: "POST".to_string(),
             url,
@@ -87,6 +88,7 @@ pub(crate) trait LlmRequestBuilder {
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
+        _stream: bool,
     ) -> Result<String, BuildRequestError> {
         let mut body = serde_json::Map::new();
         if let Some(model) = get_string_option(client, "model") {
@@ -128,6 +130,7 @@ pub(crate) trait LlmRequestBuilder {
 pub(crate) fn build_request(
     client: &LlmPrimitiveClient,
     prompt: bex_vm_types::PromptAst,
+    stream: bool,
 ) -> Result<builtin_types::owned::HttpRequest, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
@@ -138,12 +141,14 @@ pub(crate) fn build_request(
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter => {
-            openai::OpenAiBuilder::new(&provider).build_request(client, prompt)?
+            openai::OpenAiBuilder::new(&provider).build_request(client, prompt, stream)?
         }
         LlmProvider::OpenAiResponses => {
-            openai::OpenAiResponsesBuilder::new(&provider).build_request(client, prompt)?
+            openai::OpenAiResponsesBuilder::new(&provider).build_request(client, prompt, stream)?
         }
-        LlmProvider::Anthropic => anthropic::AnthropicBuilder.build_request(client, prompt)?,
+        LlmProvider::Anthropic => {
+            anthropic::AnthropicBuilder.build_request(client, prompt, stream)?
+        }
         LlmProvider::GoogleAi
         | LlmProvider::VertexAi
         | LlmProvider::AwsBedrock
@@ -304,7 +309,7 @@ mod tests {
     fn test_unsupported_provider() {
         let client = make_client("unknown-provider", vec![]);
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt);
+        let result = build_request(&client, prompt, false);
         assert!(result.is_err());
         assert!(
             result
@@ -332,7 +337,7 @@ mod tests {
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
         let prompt = Arc::new(PromptAst::Vec(vec![msg("system", system_text)]));
 
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -383,7 +388,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
 
         assert_eq!(result.url, "https://api.openai.com/v1/chat/completions");
 
@@ -418,7 +423,7 @@ mod tests {
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
         let prompt = msg("user", "Hello world");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         let body = parse_body(&result);
         assert!(body["messages"][0]["content"].is_array());
         assert_eq!(body["messages"][0]["content"][0]["type"], "text");
@@ -435,7 +440,7 @@ mod tests {
             )],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         assert_eq!(result.url, "https://custom.api.com/chat/completions");
     }
 
@@ -449,7 +454,7 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         let body = parse_body(&result);
         assert_eq!(body["temperature"], 0.7);
     }
@@ -468,7 +473,7 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         let body = parse_body(&result);
         assert!(body.get("api_key").is_none());
         assert!(body.get("base_url").is_none());
@@ -500,7 +505,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -547,7 +552,7 @@ mod tests {
             ],
         );
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         let body = parse_body(&result);
         assert!(body.get("system").is_none());
         assert_eq!(body["messages"].as_array().unwrap().len(), 1);
@@ -595,7 +600,7 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
 
         assert_eq!(
             result.headers.get("anthropic-beta").unwrap(),
@@ -617,7 +622,7 @@ mod tests {
             )],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         assert_eq!(
             result.headers.get("anthropic-version").unwrap(),
             "2024-01-01"
@@ -628,7 +633,7 @@ mod tests {
     fn test_anthropic_default_version() {
         let client = make_client("anthropic", vec![]);
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         assert_eq!(
             result.headers.get("anthropic-version").unwrap(),
             "2023-06-01"
@@ -648,7 +653,7 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         let body = parse_body(&result);
         assert_eq!(body["max_tokens"], 1000);
     }
@@ -667,7 +672,7 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         assert_eq!(result.url, "https://api.openai.com/v1/responses");
         assert_eq!(
             result.headers.get("authorization").unwrap(),
@@ -682,7 +687,7 @@ mod tests {
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         let body = parse_body(&result);
         assert!(
             body.get("input").is_some(),
@@ -701,7 +706,7 @@ mod tests {
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -727,7 +732,7 @@ mod tests {
             msg("user", "hello"),
             msg("assistant", "hi there"),
         ]));
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         let body = parse_body(&result);
         assert_eq!(body["input"][0]["content"][0]["type"], "input_text");
         assert_eq!(body["input"][1]["content"][0]["type"], "output_text");
@@ -743,7 +748,7 @@ mod tests {
             msg("system", "You are helpful."),
             msg("user", "Hi"),
         ]));
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         let body = parse_body(&result);
         assert_eq!(body["input"][0]["role"], "system");
         assert_eq!(body["input"][0]["content"][0]["type"], "input_text");
@@ -760,7 +765,7 @@ mod tests {
             )],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         assert_eq!(result.url, "https://custom.api.com/v1/responses");
     }
 
@@ -774,7 +779,7 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, false).unwrap();
         let body = parse_body(&result);
         assert_eq!(body["temperature"], 0.5);
     }

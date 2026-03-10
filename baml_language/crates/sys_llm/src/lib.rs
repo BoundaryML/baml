@@ -89,7 +89,8 @@ pub fn execute_build_request_from_owned(
     client: &builtin_types::owned::LlmPrimitiveClient,
     prompt: bex_vm_types::PromptAst,
 ) -> Result<builtin_types::owned::HttpRequest, LlmOpError> {
-    build_request::build_request(client, prompt).map_err(|e| LlmOpError::Other(e.to_string()))
+    build_request::build_request(client, prompt, false)
+        .map_err(|e| LlmOpError::Other(e.to_string()))
 }
 
 /// Parse an LLM response and extract the return value given already-extracted owned types.
