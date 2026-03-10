@@ -2,9 +2,21 @@
 
 use std::ops::Deref;
 
+use indexmap::IndexMap;
+
 use crate::{
-    deserializer::{coercer::ParsingContext, deserialize_flags::DeserializerConditions},
-    sap_model::*,
+    deserializer::{
+        coercer::{ParsingContext, ParsingError},
+        deserialize_flags::DeserializerConditions,
+        types::{BamlValueWithFlags, DeserializerMeta},
+    },
+    sap_model::{
+        AnnotatedField, ArrayTy, AttrLiteral, BamlArray, BamlBool, BamlClass, BamlEnum, BamlFloat,
+        BamlInt, BamlMap, BamlNull, BamlPrimitive, BamlStreamState, BamlString, BamlValue,
+        BoolLiteralTy, BoolTy, ClassTy, EnumTy, FloatTy, IntLiteralTy, IntTy, LiteralTy, MapTy,
+        MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy, Ty, TyResolvedRef,
+        TyWithMeta, TypeIdent, TypeName as _, TypeValue, UnionTy,
+    },
 };
 
 pub trait FromLiteral<'s, 'v, 't, N: TypeIdent>: TypeValue<'s, 'v, 't>
@@ -16,6 +28,7 @@ where
     ///
     /// ## Errors
     /// If the literal cannot be converted for the type.
+    #[allow(clippy::wrong_self_convention)]
     fn from_literal(
         &'t self,
         literal: &'t AttrLiteral<'t, N>,
@@ -242,7 +255,7 @@ where
                     BamlValueWithFlags::new(
                         item,
                         DeserializerMeta {
-                            flags: Default::default(),
+                            flags: DeserializerConditions::default(),
                             ty: ty.clone(),
                         },
                     )
@@ -436,7 +449,7 @@ where
                 let value = BamlValueWithFlags::new(
                     value,
                     DeserializerMeta {
-                        flags: Default::default(),
+                        flags: DeserializerConditions::default(),
                         ty: inner_ty,
                     },
                 );
@@ -447,7 +460,7 @@ where
                 let value = BamlValueWithFlags::new(
                     value,
                     DeserializerMeta {
-                        flags: Default::default(),
+                        flags: DeserializerConditions::default(),
                         ty: inner_ty,
                     },
                 );
@@ -458,7 +471,7 @@ where
                 let value = BamlValueWithFlags::new(
                     value,
                     DeserializerMeta {
-                        flags: Default::default(),
+                        flags: DeserializerConditions::default(),
                         ty: inner_ty,
                     },
                 );

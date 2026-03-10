@@ -1,4 +1,4 @@
-//! Converting from [baml_type] types to SAP model types.
+//! Converting from [`baml_type`] types to SAP model types.
 
 use std::borrow::Cow;
 
@@ -25,7 +25,7 @@ pub enum ConvertError<'t> {
     NonParsableType(&'t baml_type::Ty),
 }
 
-pub fn convert<'t>(ty: &'t baml_type::Ty) -> Result<AnnotatedTy<'t, TypeName>, ConvertError<'t>> {
+pub fn convert(ty: &baml_type::Ty) -> Result<AnnotatedTy<'_, TypeName>, ConvertError<'_>> {
     let ty = match ty {
         baml_type::Ty::Int { attr } => TyWithMeta::new(
             sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
@@ -53,7 +53,7 @@ pub fn convert<'t>(ty: &'t baml_type::Ty) -> Result<AnnotatedTy<'t, TypeName>, C
                 baml_type::MediaKind::Video => MediaTy::Video,
                 baml_type::MediaKind::Audio => MediaTy::Audio,
                 baml_type::MediaKind::Pdf => MediaTy::Pdf,
-                _ => return Err(ConvertError::UnknownMediaKind),
+                baml_type::MediaKind::Generic => return Err(ConvertError::UnknownMediaKind),
             };
             TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Media(media_kind)),
@@ -85,7 +85,7 @@ pub fn convert<'t>(ty: &'t baml_type::Ty) -> Result<AnnotatedTy<'t, TypeName>, C
         ),
         baml_type::Ty::Optional(ty, attr) => {
             // becomes a union
-            let ty = convert(&**ty)?;
+            let ty = convert(ty)?;
             TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Union(UnionTy {
                     variants: vec![
@@ -106,8 +106,8 @@ pub fn convert<'t>(ty: &'t baml_type::Ty) -> Result<AnnotatedTy<'t, TypeName>, C
             convert_ty_attrs(attr)?,
         ),
         baml_type::Ty::Map { key, value, attr } => {
-            let key = convert(&**key)?;
-            let value = convert(&**value)?;
+            let key = convert(key)?;
+            let value = convert(value)?;
             TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Map(MapTy {
                     key: Box::new(key),
@@ -141,9 +141,9 @@ pub fn convert<'t>(ty: &'t baml_type::Ty) -> Result<AnnotatedTy<'t, TypeName>, C
     Ok(ty)
 }
 
-pub fn convert_ty_attrs<'t>(
-    attrs: &'t baml_type::TyAttr,
-) -> Result<TypeAnnotations<'t, TypeName>, ConvertError<'t>> {
+pub fn convert_ty_attrs(
+    attrs: &baml_type::TyAttr,
+) -> Result<TypeAnnotations<'_, TypeName>, ConvertError<'_>> {
     let Some(attrs) = &attrs.0 else {
         return Ok(TypeAnnotations::default());
     };
@@ -153,9 +153,9 @@ pub fn convert_ty_attrs<'t>(
     })
 }
 
-pub fn convert_attr_literal<'t>(
-    lit: &'t SapAttrValue<TypeName>,
-) -> Result<AttrLiteral<'t, TypeName>, ConvertError<'t>> {
+pub fn convert_attr_literal(
+    lit: &SapAttrValue<TypeName>,
+) -> Result<AttrLiteral<'_, TypeName>, ConvertError<'_>> {
     let lit = match lit {
         SapAttrValue::Never => AttrLiteral::Never,
         SapAttrValue::ConstValueExpr(SapConstValue::Null) => AttrLiteral::Null,
@@ -172,7 +172,7 @@ pub fn convert_attr_literal<'t>(
             variant_name,
         }) => AttrLiteral::EnumVariant {
             enum_name,
-            variant_name: Cow::Borrowed(&variant_name),
+            variant_name: Cow::Borrowed(variant_name),
         },
     };
     Ok(lit)

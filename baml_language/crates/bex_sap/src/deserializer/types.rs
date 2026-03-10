@@ -31,10 +31,14 @@ impl<'s, 'v, 't, N: TypeIdent> DeserializerMeta<'s, 'v, 't, N> {
             ty: ty.map_ty(Into::into),
         }
     }
+    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub fn with_flags(mut self, flags: impl IntoIterator<Item = Flag<'s, 'v, 't, N>>) -> Self {
         self.flags.flags.extend(flags);
         self
     }
+    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub fn with_flag(mut self, flag: Flag<'s, 'v, 't, N>) -> Self {
         self.flags.flags.push(flag);
         self
@@ -117,7 +121,13 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
     pub fn score(&self) -> i32 {
         let base = self.meta.flags.score();
         match &self.value {
-            BamlValue::Array(arr) => base + arr.value.iter().map(|i| i.score()).sum::<i32>(),
+            BamlValue::Array(arr) => {
+                base + arr
+                    .value
+                    .iter()
+                    .map(super::super::baml_value::ValueWithMeta::score)
+                    .sum::<i32>()
+            }
             BamlValue::Map(map) => base + map.value.iter().map(|(_, v)| v.score()).sum::<i32>(),
             BamlValue::Class(cls) => base + cls.value.iter().map(|(_, v)| v.score()).sum::<i32>(),
             _ => base,
@@ -149,18 +159,19 @@ impl ParsingErrorToUiJson for ParsingError {
             } else {
                 self.scope.join(".")
             }: self.reason,
-            "causes": self.causes.iter().map(|c| c.to_ui_json()).collect::<Vec<_>>(),
+            "causes": self.causes.iter().map(ParsingErrorToUiJson::to_ui_json).collect::<Vec<_>>(),
         })
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
+impl<N: TypeIdent> BamlValueWithFlags<'_, '_, '_, N> {
     pub fn explanation_json(&self) -> Vec<serde_json::Value> {
         let mut expl = vec![];
         self.explanation_impl(vec!["<root>".to_string()], &mut expl);
         expl.into_iter().map(|e| e.to_ui_json()).collect::<Vec<_>>()
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn explanation_impl(&self, scope: Vec<String>, expls: &mut Vec<ParsingError>) {
         let causes = self.meta.flags.explanation();
         if !causes.is_empty() {
@@ -193,14 +204,14 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
                 }
             }
             BamlValue::Map(map) => {
-                for (k, v) in map.value.iter() {
+                for (k, v) in &map.value {
                     let mut scope = scope.clone();
                     scope.push(format!("parsed:{k}"));
                     v.explanation_impl(scope, expls);
                 }
             }
             BamlValue::Class(cls) => {
-                for (k, v) in cls.value.iter() {
+                for (k, v) in &cls.value {
                     let mut scope = scope.clone();
                     scope.push(k.to_string());
                     v.explanation_impl(scope, expls);
@@ -211,7 +222,9 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
     }
 }
 
+#[allow(clippy::must_use_candidate)]
 impl<'s, 'v, 't, T, N: TypeIdent> ValueWithFlags<'s, 'v, 't, T, N> {
+    #[must_use]
     pub fn with_target(
         mut self,
         target: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
@@ -220,11 +233,13 @@ impl<'s, 'v, 't, T, N: TypeIdent> ValueWithFlags<'s, 'v, 't, T, N> {
         self
     }
 
+    #[must_use]
     pub fn with_flag(mut self, flag: Flag<'s, 'v, 't, N>) -> Self {
         self.meta.flags.add_flag(flag);
         self
     }
 
+    #[must_use]
     pub fn with_flags(mut self, flags: impl IntoIterator<Item = Flag<'s, 'v, 't, N>>) -> Self {
         self.meta.flags.flags.extend(flags);
         self
@@ -235,7 +250,7 @@ impl<'s, 'v, 't, T, N: TypeIdent> ValueWithFlags<'s, 'v, 't, T, N> {
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
+impl<N: TypeIdent> BamlValueWithFlags<'_, '_, '_, N> {
     pub(super) fn r#type(&self) -> Cow<'static, str> {
         match &self.value {
             BamlValue::String(..) => Cow::Borrowed("String"),
@@ -243,6 +258,7 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
             BamlValue::Float(..) => Cow::Borrowed("Float"),
             BamlValue::Bool(..) => Cow::Borrowed("Bool"),
             BamlValue::Array(arr) => {
+                #[allow(clippy::redundant_closure_for_method_calls)]
                 let inner = arr
                     .value
                     .iter()
@@ -263,7 +279,7 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'s, 'v, 't, N> {
+impl<N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'_, '_, '_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{} (Score: {}): ", self.r#type(), self.score())?;
         match &self.value {
@@ -282,13 +298,13 @@ impl<'s, 'v, 't, N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'s, 'v, 
             BamlValue::Array(arr) => {
                 writeln!(f)?;
                 for (idx, item) in arr.value.iter().enumerate() {
-                    writeln!(f, "  {idx}: {}", item.to_string().replace("\n", "  \n"))?;
+                    writeln!(f, "  {idx}: {}", item.to_string().replace('\n', "  \n"))?;
                 }
             }
             BamlValue::Map(map) => {
                 writeln!(f)?;
-                for (key, val) in map.value.iter() {
-                    writeln!(f, "{}: {}", key, val)?;
+                for (key, val) in &map.value {
+                    writeln!(f, "{key}: {val}")?;
                 }
             }
             BamlValue::Enum(e) => {
@@ -296,9 +312,9 @@ impl<'s, 'v, 't, N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'s, 'v, 
             }
             BamlValue::Class(cls) => {
                 writeln!(f)?;
-                for (k, v) in cls.value.iter() {
-                    writeln!(f, "  KV {}", k.to_string().replace("\n", "\n  "))?;
-                    writeln!(f, "  {}", v.to_string().replace("\n", "\n  "))?;
+                for (k, v) in &cls.value {
+                    writeln!(f, "  KV {}", k.to_string().replace('\n', "\n  "))?;
+                    writeln!(f, "  {}", v.to_string().replace('\n', "\n  "))?;
                 }
             }
             BamlValue::Null(_) => {
@@ -315,7 +331,7 @@ impl<'s, 'v, 't, N: TypeIdent> std::fmt::Display for BamlValueWithFlags<'s, 'v, 
             write!(
                 f,
                 "\n  {}",
-                self.meta.flags.to_string().replace("\n", "\n  ")
+                self.meta.flags.to_string().replace('\n', "\n  ")
             )?;
         }
         Ok(())

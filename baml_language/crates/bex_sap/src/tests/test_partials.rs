@@ -2,7 +2,7 @@ use crate::{baml_db, baml_tyannotated};
 
 use super::*;
 
-/// Helper: build all the types for the BookAnalysis schema.
+/// Helper: build all the types for the `BookAnalysis` schema.
 fn book_analysis_db() -> TypeRefDb<'static, &'static str> {
     baml_db! {
         class Score {
@@ -30,7 +30,7 @@ fn book_analysis_db() -> TypeRefDb<'static, &'static str> {
     }
 }
 
-/// Helper: build all the types for the choppy (GraphJson / Error) schema.
+/// Helper: build all the types for the choppy (`GraphJson` / Error) schema.
 fn choppy_db() -> TypeRefDb<'static, &'static str> {
     baml_db! {
         class Error {
@@ -217,9 +217,9 @@ test_partial_deserializer!(
       ],
       "wordCounts": [
         {"bookName": "brave new world", "count": 64000},
-        {"bookName": "the lord of the rings", "count": 470000},
-        {"bookName": "three body problem", "count": 150000},
-        {"bookName": "stormlight archive", "count": 400000}
+        {"bookName": "the lord of the rings", "count": 470_000},
+        {"bookName": "three body problem", "count": 150_000},
+        {"bookName": "stormlight archive", "count": 400_000}
       ]
     }
 );

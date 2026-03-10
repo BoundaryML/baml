@@ -78,7 +78,7 @@ where
 
         // assumes no name or alias can have the same value as another name or alias
         // When aliases exist, only aliases are valid for matching (name is excluded)
-        for AnnotatedEnumVariant { name, aliases, .. } in enum_ty.variants.iter() {
+        for AnnotatedEnumVariant { name, aliases } in &enum_ty.variants {
             let matches = if aliases.is_empty() {
                 name == s
             } else {
@@ -87,7 +87,7 @@ where
             if matches {
                 let value = BamlEnum {
                     name: &enum_ty.name,
-                    value: &*name,
+                    value: name,
                 };
                 if !meta
                     .check_asserts(&BamlValue::Enum(value.clone()), ctx)
@@ -147,6 +147,7 @@ where
 }
 
 impl<'s, 'v, 't, N: TypeIdent> EnumTy<'t, N> {
+    #[allow(clippy::type_complexity, clippy::needless_pass_by_value)]
     pub fn coerce_from_cow(
         ctx: &ParsingContext<'s, 'v, 't, N>,
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,

@@ -82,7 +82,7 @@ where
         let mut field_data = IndexMap::new();
         for (k, v) in obj {
             // try_cast is strict and rejects when it finds extra keys.
-            let field = class_ty.fields.iter().find(|f| f.key_matches(&*k))?;
+            let field = class_ty.fields.iter().find(|f| f.key_matches(k))?;
             let field_ty = ctx
                 .db
                 .resolve_with_meta(field.ty.as_ref())
@@ -182,18 +182,16 @@ where
         // There are a few possible approaches here:
         match (value, target.meta.in_progress.as_ref()) {
             (jsonish::Value::Object(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
+                Ok(None)
             }
-            (jsonish::Value::Object(_, CompletionState::Incomplete), Some(lit)) => {
-                return target
-                    .ty
-                    .from_literal(lit, ctx)
-                    .map(|v| {
-                        ValueWithFlags::new(v, DeserializerMeta::new(target))
-                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
-                    })
-                    .map(Some);
-            }
+            (jsonish::Value::Object(_, CompletionState::Incomplete), Some(lit)) => target
+                .ty
+                .from_literal(lit, ctx)
+                .map(|v| {
+                    ValueWithFlags::new(v, DeserializerMeta::new(target))
+                        .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
+                })
+                .map(Some),
             (jsonish::Value::Object(obj, c), None) => {
                 let mut flags = DeserializerConditions::new();
                 if c == &CompletionState::Incomplete {
@@ -232,7 +230,7 @@ where
                         hash_map::Entry::Vacant(entry) => {
                             entry.insert(parsed);
                         }
-                    };
+                    }
                 }
 
                 if entries.is_empty()
@@ -270,7 +268,7 @@ where
                 )
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
+                Ok(None)
             }
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => target
                 .ty

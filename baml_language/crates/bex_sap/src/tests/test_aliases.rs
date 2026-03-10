@@ -52,11 +52,13 @@ test_deserializer!(
     [[], [], [[]]]
 );
 
-/// Helper: build a TypeRefDb for the JsonValue type.
+/// Helper: build a `TypeRefDb` for the `JsonValue` type.
+/// ```baml
 /// type JsonValue = int | float | bool | string | null | JsonValue[] | map<string, JsonValue>
+/// ```
 ///
-/// We introduce helper aliases JsonValueArr and JsonValueMap because the
-/// baml_db! type-alias syntax requires a single token-tree, which map<…>
+/// We introduce helper aliases `JsonValueArr` and `JsonValueMap` because the
+/// `baml_db!` type-alias syntax requires a single token-tree, which `map<…>`
 /// cannot satisfy.
 fn json_value_db() -> TypeRefDb<'static, &'static str> {
     baml_db! {
@@ -236,10 +238,12 @@ test_deserializer!(
     [[42.1]]
 );
 
-/// Helper: build a TypeRefDb for JsonValue defined with cycles.
+/// Helper: build a `TypeRefDb` for `JsonValue` defined with cycles.
+/// ```baml
 /// type JsonValue = int | float | bool | string | null | JsonArray | JsonObject
 /// type JsonArray = JsonValue[]
 /// type JsonObject = map<string, JsonValue>
+/// ```
 fn json_value_with_cycles_db() -> TypeRefDb<'static, &'static str> {
     let mut db = baml_db! {
         type JsonArray = [JsonValue];

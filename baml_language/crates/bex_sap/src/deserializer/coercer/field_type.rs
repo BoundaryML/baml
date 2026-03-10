@@ -24,6 +24,7 @@ where
     't: 's,
     's: 'v,
 {
+    #[allow(clippy::needless_pass_by_value)]
     pub fn try_cast(
         ctx: &ParsingContext<'s, 'v, 't, N>,
         target: TyWithMeta<Self, &'t TypeAnnotations<'t, N>>,
@@ -96,6 +97,7 @@ where
     }
 
     /// Returns `None` if the value is incomplete and the `in_progress` is `never`.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
         target: TyWithMeta<Self, &'t TypeAnnotations<'t, N>>,
@@ -177,7 +179,7 @@ where
                 let Some(ret) = Self::coerce(ctx, target.clone(), v)? else {
                     return Ok(None);
                 };
-                ret.with_flag(Flag::ObjectFromFixedJson(fixes.to_vec()))
+                ret.with_flag(Flag::ObjectFromFixedJson(fixes.clone()))
             }
             _ => {
                 if let Some(value) = Self::try_cast(ctx, target.clone(), value) {

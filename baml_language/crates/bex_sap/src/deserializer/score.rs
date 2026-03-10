@@ -55,6 +55,7 @@ impl<N: TypeIdent> WithScore for Flag<'_, '_, '_, N> {
             Flag::JsonToString(_) => 2,
             Flag::SingleToArray => 1,
             // Parsing errors are bad.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
             Flag::ArrayItemParseError(x, _) => 1 + (*x as i32),
             Flag::MapKeyParseError(_x, _) => 1,
             Flag::MapValueParseError(_x, _) => 1,
@@ -62,7 +63,9 @@ impl<N: TypeIdent> WithScore for Flag<'_, '_, '_, N> {
             Flag::FirstMatch(_, _) => 1,
             // No penalty for picking an option from a union
             Flag::UnionMatch(_, _) => 0,
-            Flag::StrMatchOneFromMany(values) => {
+            Flag::StrMatchOneFromMany(values) =>
+            {
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
                 values.iter().map(|(_, count)| *count as i32).sum::<i32>()
             }
             Flag::StringToInt(_) => 1,

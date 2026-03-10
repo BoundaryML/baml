@@ -31,7 +31,7 @@ pub(super) fn parse<'s>(
 
     let mut state = JsonParseState::new();
 
-    let mut chars = str.char_indices().peekable();
+    let mut chars = str.char_indices();
     while let Some((count, c)) = chars.next() {
         let peekable = str[count + c.len_utf8()..].char_indices().peekable();
         match state.process_token(c, peekable) {
@@ -69,7 +69,7 @@ pub(super) fn parse<'s>(
                             .completed_values
                             .into_iter()
                             .map(|f| {
-                                let _completion_state = f.1.completion_state().clone();
+                                let _completion_state = *f.1.completion_state();
                                 Value::FixedJson(f.1.into(), f.2)
                             })
                             .collect(),

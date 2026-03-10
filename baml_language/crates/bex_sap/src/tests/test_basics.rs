@@ -834,10 +834,11 @@ fn test_mal_formed_json_sequence() {
     // Use is_done=false for partial streaming parse
     let target_ty = crate::baml_tyannotated!(Test);
     let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
-    let parsed = crate::jsonish::parse(raw, Default::default(), false).unwrap();
+    let parsed =
+        crate::jsonish::parse(raw, crate::jsonish::ParseOptions::default(), false).unwrap();
     let ctx = crate::deserializer::coercer::ParsingContext::new(&db);
     let result = TyResolvedRef::coerce(&ctx, target_ty, &parsed);
-    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    assert!(result.is_ok(), "Failed to parse: {result:?}");
     let value = result.unwrap().unwrap();
     let json_value = serde_json::to_value(&value).unwrap();
     let expected = serde_json::json!({

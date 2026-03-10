@@ -11,11 +11,7 @@ use crate::jsonish::{
     value::Fixes,
 };
 
-pub(super) fn parse_func<'s>(
-    str: &'s str,
-    mut options: ParseOptions,
-    is_done: bool,
-) -> Result<Value<'s>> {
+pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) -> Result<Value<'_>> {
     options.depth += 1;
     if options.depth > 100 {
         return Err(anyhow::anyhow!(
@@ -62,7 +58,7 @@ pub(super) fn parse_func<'s>(
             return Ok(Value::AnyOf(vec![v], str.to_string().into()));
         }
         Err(_e) => {}
-    };
+    }
 
     if options.allow_markdown_json {
         match markdown_parser::parse(str, &options) {
@@ -70,18 +66,15 @@ pub(super) fn parse_func<'s>(
                 0 => {}
                 1 => {
                     let res = items.into_iter().next();
-                    match res {
-                        Some(MarkdownResult::CodeBlock(s, v)) => {
-                            return Ok(Value::AnyOf(
-                                vec![Value::Markdown(
-                                    s.to_string().into(),
-                                    Box::new(v),
-                                    CompletionState::Incomplete,
-                                )],
-                                str.to_string().into(),
-                            ));
-                        }
-                        _ => {}
+                    if let Some(MarkdownResult::CodeBlock(s, v)) = res {
+                        return Ok(Value::AnyOf(
+                            vec![Value::Markdown(
+                                s.into(),
+                                Box::new(v),
+                                CompletionState::Incomplete,
+                            )],
+                            str.to_string().into(),
+                        ));
                     }
                 }
                 _ => {
@@ -97,7 +90,7 @@ pub(super) fn parse_func<'s>(
                         .iter()
                         .filter_map(|res| match res {
                             MarkdownResult::String(s) => Some(s.as_str()),
-                            _ => None,
+                            MarkdownResult::CodeBlock(..) => None,
                         })
                         .filter_map(|s| {
                             parse_func(
@@ -116,14 +109,11 @@ pub(super) fn parse_func<'s>(
                         .into_iter()
                         .filter_map(|res| match res {
                             MarkdownResult::CodeBlock(s, v) => Some((s, v)),
-                            _ => None,
+                            MarkdownResult::String(_) => None,
                         })
                         .map(|(s, v)| {
-                            Value::Markdown(
-                                s.to_string().into(),
-                                Box::new(v.clone()),
-                                v.completion_state().clone(),
-                            )
+                            let cs = *v.completion_state();
+                            Value::Markdown(s.into(), Box::new(v), cs)
                         })
                         .collect::<Vec<_>>();
                     let array = Value::Array(items.clone(), CompletionState::Incomplete);
@@ -236,7 +226,7 @@ pub(super) fn parse_func<'s>(
     Err(anyhow::anyhow!("Failed to parse JSON"))
 }
 
-pub fn parse<'s>(str: &'s str, options: ParseOptions, is_done: bool) -> Result<Value<'s>> {
+pub fn parse(str: &str, options: ParseOptions, is_done: bool) -> Result<Value<'_>> {
     let res = parse_func(str, options, is_done)?;
     Ok(res.simplify(is_done))
 }
@@ -343,21 +333,6 @@ mod tests {
         //
         // Re-parsing the full input can create nested AnyOf structures that later leak via Display
         // (e.g. strings like `AnyOf[{,AnyOf[{,{},],]]i`).
-        let input = r#"```json
-{"a": 1}
-```
-
-```json
-{"b": 2}
-```
-
-i"#;
-
-        let res = parse_func(input, ParseOptions::default(), false).unwrap();
-        let Value::AnyOf(choices, _) = res else {
-            panic!("Expected AnyOf, got {res:#?}");
-        };
-
         fn contains_trimmed_string(value: &Value, needle: &str) -> bool {
             match value {
                 Value::String(s, _) => s.trim() == needle,
@@ -374,6 +349,21 @@ i"#;
                 Value::Number(_, _) | Value::Boolean(_) | Value::Null => false,
             }
         }
+
+        let input = r#"```json
+{"a": 1}
+```
+
+```json
+{"b": 2}
+```
+
+i"#;
+
+        let res = parse_func(input, ParseOptions::default(), false).unwrap();
+        let Value::AnyOf(choices, _) = res else {
+            panic!("Expected AnyOf, got {res:#?}");
+        };
 
         let contains_trailing_i = choices.iter().any(|v| contains_trimmed_string(v, "i"));
         assert!(

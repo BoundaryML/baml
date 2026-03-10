@@ -117,14 +117,16 @@ impl<'s> Value<'s> {
             Value::Null => "Null".to_string(),
             Value::Object(k, _) => {
                 let mut s = "Object{".to_string();
-                for (key, value) in k.iter() {
-                    s.push_str(&format!("{}: {}, ", key, value.r#type()));
+                for (key, value) in k {
+                    use std::fmt::Write;
+                    let _ = write!(s, "{}: {}, ", key, value.r#type());
                 }
                 s.push('}');
                 s
             }
             Value::Array(i, _) => {
                 let mut s = "Array[".to_string();
+                #[allow(clippy::redundant_closure_for_method_calls)]
                 let items = i
                     .iter()
                     .map(|v| v.r#type())
@@ -185,17 +187,25 @@ impl<'s> Value<'s> {
             Value::Null => {}
             Value::Object(kv_pairs, s) => {
                 *s = CompletionState::Complete;
-                kv_pairs.iter_mut().for_each(|(_, v)| v.complete_deeply());
+                for (_, v) in kv_pairs.iter_mut() {
+                    v.complete_deeply();
+                }
             }
             Value::Array(elems, s) => {
                 *s = CompletionState::Complete;
-                elems.iter_mut().for_each(|v| v.complete_deeply());
+                for elem in elems.iter_mut() {
+                    elem.complete_deeply();
+                }
             }
             Value::Markdown(_, _, s) => *s = CompletionState::Complete,
             Value::FixedJson(val, _fixes) => {
                 val.complete_deeply();
             }
-            Value::AnyOf(choices, _) => choices.iter_mut().for_each(|v| v.complete_deeply()),
+            Value::AnyOf(choices, _) => {
+                for choice in choices.iter_mut() {
+                    choice.complete_deeply();
+                }
+            }
         }
     }
 
@@ -217,7 +227,7 @@ impl<'s> Value<'s> {
                 Value::Object(o, *completion_state)
             }
             Value::Array(a, completion_state) => {
-                let a: Vec<_> = a.iter().map(|v| v.to_static()).collect();
+                let a: Vec<_> = a.iter().map(Value::to_static).collect();
                 Value::Array(a, *completion_state)
             }
             Value::Markdown(s, v, completion_state) => Value::Markdown(
@@ -230,7 +240,7 @@ impl<'s> Value<'s> {
                 Value::FixedJson(Box::new(v), fixes.clone())
             }
             Value::AnyOf(choices, s) => {
-                let choices: Vec<_> = choices.iter().map(|v| v.to_static()).collect();
+                let choices: Vec<_> = choices.iter().map(Value::to_static).collect();
                 Value::AnyOf(choices, Cow::Owned(s.clone().into_owned()))
             }
         }
@@ -292,7 +302,7 @@ impl std::fmt::Display for Value<'_> {
 // delimiter is present.
 
 /// A serde Visitor that constructs Value directly from the deserializer,
-/// avoiding the intermediate serde_json::Value allocation and double-parsing.
+/// avoiding the intermediate `serde_json::Value` allocation and double-parsing.
 struct ValueVisitor;
 
 impl<'de> serde::de::Visitor<'de> for ValueVisitor {
@@ -321,8 +331,7 @@ impl<'de> serde::de::Visitor<'de> for ValueVisitor {
         match serde_json::Number::from_f64(v) {
             Some(n) => Ok(Value::Number(n, CompletionState::Complete)),
             None => Err(serde::de::Error::custom(format!(
-                "f64 value cannot be represented as JSON number: {}",
-                v
+                "f64 value cannot be represented as JSON number: {v}"
             ))),
         }
     }

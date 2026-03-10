@@ -44,14 +44,15 @@ pub(super) fn coerce_array_to_singular<'s, 'v, 't, N: TypeIdent>(
 }
 
 /// Picks the best value to return for the target type+annotations.
-pub(super) fn pick_best<'s, 'v, 't, 'a, N: TypeIdent>(
+#[allow(clippy::needless_pass_by_value)]
+pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
     ctx: &ParsingContext<'s, 'v, 't, N>,
     target: TyWithMeta<TyResolvedRef<'t, N>, &TypeAnnotations<'t, N>>,
     res: Vec<Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>>,
 ) -> Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError> {
     if res.is_empty() {
         return Err(ctx.error_unexpected_empty_array(&target.ty));
-    };
+    }
     if res.len() == 1 {
         return res.into_iter().next().unwrap();
     }

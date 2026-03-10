@@ -52,7 +52,7 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Mark
             let mut chosen_end = ends[0];
             let mut md_content = after_start[..chosen_end.start()].trim();
 
-            for end in ends.iter() {
+            for end in &ends {
                 let candidate = after_start[..end.start()].trim();
                 if let Ok(v) = super::entry::parse_func(
                     candidate,
@@ -96,7 +96,7 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Mark
                 ));
             }
             Err(_e) => {}
-        };
+        }
 
         if !should_loop {
             break;
@@ -105,12 +105,11 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Mark
 
     if values.is_empty() {
         anyhow::bail!("No markdown blocks found")
-    } else {
-        if !remaining.trim().is_empty() {
-            values.push(MarkdownResult::String(remaining.to_string()));
-        }
-        Ok(values)
     }
+    if !remaining.trim().is_empty() {
+        values.push(MarkdownResult::String(remaining.to_string()));
+    }
+    Ok(values)
 }
 
 #[cfg(test)]
@@ -144,9 +143,7 @@ print("Hello, world!")
         let res = res?;
         assert_eq!(res.len(), 2);
         {
-            let (tag, value) = if let MarkdownResult::CodeBlock(tag, value) = &res[0] {
-                (tag, value)
-            } else {
+            let MarkdownResult::CodeBlock(tag, value) = &res[0] else {
                 panic!("Expected CodeBlock, got {:#?}", res[0]);
             };
             assert_eq!(tag, "json");
@@ -167,10 +164,8 @@ print("Hello, world!")
             );
         }
         {
-            let (tag, value) = if let MarkdownResult::CodeBlock(tag, value) = &res[1] {
-                (tag, value)
-            } else {
-                panic!("Expected CodeBlock, got {:#?}", res[0]);
+            let MarkdownResult::CodeBlock(tag, value) = &res[1] else {
+                panic!("Expected CodeBlock, got {:#?}", res[1]);
             };
             assert_eq!(tag, "test json");
 
@@ -243,7 +238,7 @@ dolor sit amet
         assert!(matches!(&res[1], MarkdownResult::CodeBlock(tag, _) if tag == "json"));
         match &res[2] {
             MarkdownResult::String(s) => assert_eq!(s.trim(), "dolor sit amet"),
-            _ => panic!("Expected String, got {:#?}", res[2]),
+            MarkdownResult::CodeBlock(..) => panic!("Expected String, got {:#?}", res[2]),
         }
 
         Ok(())
@@ -252,6 +247,21 @@ dolor sit amet
     #[test]
     fn fence_like_sequence_inside_triple_backtick_string_does_not_split_markdown_blocks()
     -> Result<()> {
+        fn contains_substring(v: &Value, needle: &str) -> bool {
+            match v {
+                Value::String(s, _) => s.contains(needle),
+                Value::Object(kvs, _) => kvs.iter().any(|(_, v)| contains_substring(v, needle)),
+                Value::Array(items, _) => items.iter().any(|v| contains_substring(v, needle)),
+                Value::Markdown(_, v, _) => contains_substring(v, needle),
+                Value::FixedJson(v, _) => contains_substring(v, needle),
+                Value::AnyOf(choices, original) => {
+                    original.contains(needle)
+                        || choices.iter().any(|v| contains_substring(v, needle))
+                }
+                Value::Number(_, _) | Value::Boolean(_) | Value::Null => false,
+            }
+        }
+
         let res = parse(
             r#"
 ```json
@@ -269,26 +279,10 @@ dolor sit amet
         )?;
 
         assert_eq!(res.len(), 1);
-        let (tag, value) = match &res[0] {
-            MarkdownResult::CodeBlock(tag, value) => (tag, value),
-            _ => panic!("Expected CodeBlock, got {:#?}", res[0]),
+        let MarkdownResult::CodeBlock(tag, value) = &res[0] else {
+            panic!("Expected CodeBlock, got {:#?}", res[0]);
         };
         assert_eq!(tag, "json");
-
-        fn contains_substring(v: &Value, needle: &str) -> bool {
-            match v {
-                Value::String(s, _) => s.contains(needle),
-                Value::Object(kvs, _) => kvs.iter().any(|(_, v)| contains_substring(v, needle)),
-                Value::Array(items, _) => items.iter().any(|v| contains_substring(v, needle)),
-                Value::Markdown(_, v, _) => contains_substring(v, needle),
-                Value::FixedJson(v, _) => contains_substring(v, needle),
-                Value::AnyOf(choices, original) => {
-                    original.contains(needle)
-                        || choices.iter().any(|v| contains_substring(v, needle))
-                }
-                Value::Number(_, _) | Value::Boolean(_) | Value::Null => false,
-            }
-        }
 
         // If markdown parsing were confused by the inner ```json line, we'd typically end up with
         // multiple markdown results or a malformed parsed value missing this substring.

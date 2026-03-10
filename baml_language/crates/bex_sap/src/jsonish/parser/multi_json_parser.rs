@@ -52,24 +52,21 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Valu
 
     if !stack.is_empty() {
         // We reached the end but the stack is not empty
-        match json_str_start {
-            Some(start) => {
-                let json_str = &str[start..];
-                match entry::parse_func(
-                    json_str,
-                    options.next_from_mode(super::ParsingMode::AllJsonObjects),
-                    false,
-                ) {
-                    Ok(json) => {
-                        complete_stack_head(&mut json_objects);
-                        json_objects.push(json)
-                    }
-                    Err(_e) => {
-                        // Ignore errors
-                    }
+        if let Some(start) = json_str_start {
+            let json_str = &str[start..];
+            match entry::parse_func(
+                json_str,
+                options.next_from_mode(super::ParsingMode::AllJsonObjects),
+                false,
+            ) {
+                Ok(json) => {
+                    complete_stack_head(&mut json_objects);
+                    json_objects.push(json);
+                }
+                Err(_e) => {
+                    // Ignore errors
                 }
             }
-            None => {}
         }
     }
 

@@ -4,7 +4,7 @@ use super::*;
 // Helpers
 // ============================================================================
 
-/// Simple class with configurable in_progress and class_in_progress_field_missing.
+/// Simple class with configurable `in_progress` and `class_in_progress_field_missing`.
 fn simple_db() -> TypeRefDb<'static, &'static str> {
     baml_db! {
         class Foo {

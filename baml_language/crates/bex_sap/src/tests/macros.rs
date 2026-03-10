@@ -1,4 +1,4 @@
-/// Tests that raw_string successfully deserializes to the expected JSON value.
+/// Tests that `raw_string` successfully deserializes to the expected JSON value.
 ///
 /// The pipeline is:
 /// 1. `jsonish::parse(raw_string, Default::default(), true)` to parse the raw string.
@@ -126,6 +126,7 @@ macro_rules! test_partial_none_deserializer {
 }
 
 /// Tests partial deserialization that is expected to fail.
+#[allow(unused_macros)]
 macro_rules! test_partial_failing_deserializer {
     ($name:ident, $raw_string:expr, $target_ty:expr, $db:expr) => {
         #[test]

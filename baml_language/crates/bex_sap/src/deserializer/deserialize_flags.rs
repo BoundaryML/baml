@@ -362,6 +362,8 @@ impl<'s, 'v, 't, N: TypeIdent> DeserializerConditions<'s, 'v, 't, N> {
         self.flags.push(flag);
     }
 
+    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub fn with_flag(mut self, flag: Flag<'s, 'v, 't, N>) -> Self {
         self.flags.push(flag);
         self

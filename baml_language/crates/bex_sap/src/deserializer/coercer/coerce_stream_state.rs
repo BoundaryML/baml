@@ -2,6 +2,7 @@ use crate::{
     baml_value::BamlStreamState,
     deserializer::{
         coercer::{ParsingContext, ParsingError, TypeCoercer},
+        deserialize_flags::DeserializerConditions,
         types::{DeserializerMeta, ValueWithFlags},
     },
     jsonish::CompletionState,
@@ -43,7 +44,7 @@ where
         Ok(Some(ValueWithFlags::new(
             value,
             DeserializerMeta {
-                flags: Default::default(),
+                flags: DeserializerConditions::default(),
                 ty: target.map_ty(TyResolvedRef::StreamState),
             },
         )))
@@ -77,7 +78,7 @@ where
         Some(ValueWithFlags::new(
             value,
             DeserializerMeta {
-                flags: Default::default(),
+                flags: DeserializerConditions::default(),
                 ty: target.map_ty(TyResolvedRef::StreamState),
             },
         ))

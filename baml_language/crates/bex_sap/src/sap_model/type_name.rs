@@ -2,7 +2,11 @@
 
 use std::{borrow::Cow, fmt};
 
-use crate::sap_model::*;
+use crate::sap_model::{
+    ArrayTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, FloatTy, IntLiteralTy, IntTy, LiteralTy,
+    MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy, Ty, TyResolved,
+    TyResolvedRef, TyWithMeta, TypeIdent, UnionTy,
+};
 
 /// A trait that provides a type name for a given type.
 /// The name may be static (`"int"`) or dynamic (`"literal[42]"` and `"array[int | string]"`).
@@ -128,7 +132,7 @@ impl<N: TypeIdent> TypeName for EnumTy<'_, N> {
 
 impl<N: TypeIdent> TypeName for UnionTy<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
-        let variants: Vec<_> = self.variants.iter().map(|v| v.type_name()).collect();
+        let variants: Vec<_> = self.variants.iter().map(TyWithMeta::type_name).collect();
         Cow::Owned(variants.join(" | "))
     }
 }

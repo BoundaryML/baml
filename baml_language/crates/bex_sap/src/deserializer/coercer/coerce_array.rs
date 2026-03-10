@@ -18,7 +18,7 @@ use crate::{
 /// Extract the winning union variant index from a coerced value's flags.
 /// Returns None if the value wasn't from a union coercion.
 ///
-/// IMPORTANT: We iterate in REVERSE to get the LAST (outermost) UnionMatch flag.
+/// IMPORTANT: We iterate in REVERSE to get the LAST (outermost) `UnionMatch` flag.
 /// When coercing nested unions like `(A | B)[]` where `B = (C | D)`, the inner
 /// union's flag is added first, then the outer union's flag. We want the outer
 /// union's index for the array hint, not the inner one.
@@ -184,7 +184,7 @@ where
                     Err(e) => flags.add_flag(Flag::ArrayItemParseError(0, e)),
                 }
             }
-        };
+        }
 
         let ret = BamlValue::Array(BamlArray { value: items });
         target.meta.expect_asserts(&ret, ctx)?;

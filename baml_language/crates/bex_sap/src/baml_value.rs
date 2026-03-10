@@ -130,11 +130,11 @@ where
 /// When we parse the value:
 /// - If the value is complete, we return `Complete(value)`.
 /// - If the value's coercer returned `None`, we return `class_in_progress_field_missing`.
-///   For a StreamState type, this should always be a `Pending(<value>)`.
+///   For a `StreamState` type, this should always be a `Pending(<value>)`.
 /// - If the value is incomplete, we return `Incomplete(<value>)`.
 ///   This means either:
-///   - Value has in_progress=<value>, we return `Incomplete(<value>)`
-///   - Value has in_progress=None, we return `Incomplete(<partial_value>)`
+///   - Value has `in_progress=<value>`, we return `Incomplete(<value>)`
+///   - Value has `in_progress=None`, we return `Incomplete(<partial_value>)`
 #[derive(Clone)]
 pub enum BamlStreamState<'s, 'v, 't, N: TypeIdent>
 where
@@ -156,7 +156,7 @@ pub type BamlValueWithMeta<'s, 'v, 't, M, N> = ValueWithMeta<BamlValue<'s, 'v, '
 
 // --- serde::Serialize implementations ---
 
-impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlValue<'s, 'v, 't, N> {
+impl<N: TypeIdent> serde::Serialize for BamlValue<'_, '_, '_, N> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             BamlValue::String(s) => s.serialize(serializer),
@@ -210,7 +210,7 @@ impl serde::Serialize for BamlMedia {
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlArray<'s, 'v, 't, N> {
+impl<N: TypeIdent> serde::Serialize for BamlArray<'_, '_, '_, N> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeSeq;
         let mut seq = serializer.serialize_seq(Some(self.value.len()))?;
@@ -221,7 +221,7 @@ impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlArray<'s, 'v, 't, N> {
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlMap<'s, 'v, 't, N> {
+impl<N: TypeIdent> serde::Serialize for BamlMap<'_, '_, '_, N> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
         let mut map = serializer.serialize_map(Some(self.value.len()))?;
@@ -238,7 +238,7 @@ impl<N: TypeIdent> serde::Serialize for BamlEnum<'_, N> {
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlClass<'s, 'v, 't, N> {
+impl<N: TypeIdent> serde::Serialize for BamlClass<'_, '_, '_, N> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
         let mut map = serializer.serialize_map(Some(self.value.len()))?;
@@ -249,7 +249,7 @@ impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlClass<'s, 'v, 't, N> {
     }
 }
 
-impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlStreamState<'s, 'v, 't, N> {
+impl<N: TypeIdent> serde::Serialize for BamlStreamState<'_, '_, '_, N> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
         let mut map = serializer.serialize_map(Some(2))?;

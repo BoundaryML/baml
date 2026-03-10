@@ -112,7 +112,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
         target: &impl TryTypeName<'t, N>,
         options: impl IntoIterator<Item = T>,
     ) -> ParsingError {
-        let got = options.into_iter().fold("".to_string(), |acc, f| {
+        let got = options.into_iter().fold(String::new(), |acc, f| {
             if acc.is_empty() {
                 return f.to_string();
             }
@@ -120,7 +120,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
         });
         match target.error_type_resolution(self) {
             Ok(ty) => ParsingError {
-                reason: format!("Too many matches for {}. Got: {got}", ty),
+                reason: format!("Too many matches for {ty}. Got: {got}"),
                 scope: self.scope.clone(),
                 causes: Vec::new(),
             },
@@ -154,7 +154,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
     ) -> ParsingError {
         match target.error_type_resolution(self) {
             Ok(ty) => ParsingError {
-                reason: format!("Expected {}, got empty array", ty),
+                reason: format!("Expected {ty}, got empty array"),
                 scope: self.scope.clone(),
                 causes: Vec::new(),
             },
@@ -162,7 +162,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                 reason: format!("Failed to resolve type {ident}"),
                 scope: self.scope.clone(),
                 causes: vec![ParsingError {
-                    reason: format!("Expected <UNRESOLVED>, got empty array"),
+                    reason: "Expected <UNRESOLVED>, got empty array".to_string(),
                     scope: self.scope.clone(),
                     causes: Vec::new(),
                 }],
@@ -173,7 +173,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
     pub(crate) fn error_unexpected_null(&self, target: &impl TryTypeName<'t, N>) -> ParsingError {
         match target.error_type_resolution(self) {
             Ok(ty) => ParsingError {
-                reason: format!("Expected {}, got null", ty),
+                reason: format!("Expected {ty}, got null"),
                 scope: self.scope.clone(),
                 causes: Vec::new(),
             },
@@ -181,7 +181,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                 reason: format!("Failed to resolve type {ident}"),
                 scope: self.scope.clone(),
                 causes: vec![ParsingError {
-                    reason: format!("Expected <UNRESOLVED>, got null"),
+                    reason: "Expected <UNRESOLVED>, got null".to_string(),
                     scope: self.scope.clone(),
                     causes: Vec::new(),
                 }],
@@ -270,7 +270,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                 .chain(unparsed.into_iter().map(|(k, e)| ParsingError {
                     scope: self.scope.clone(),
                     reason: format!("Failed to parse field {}: {}", k.as_ref(), e),
-                    causes: vec![e.clone()],
+                    causes: vec![e],
                 }))
                 .collect(),
         }
@@ -283,7 +283,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
     ) -> ParsingError {
         match target.error_type_resolution(self) {
             Ok(ty) => ParsingError {
-                reason: format!("Expected {}, got {:?}.", ty, got),
+                reason: format!("Expected {ty}, got {got:?}."),
                 scope: self.scope.clone(),
                 causes: Vec::new(),
             },
@@ -291,7 +291,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
                 reason: format!("Failed to resolve type {ident}"),
                 scope: self.scope.clone(),
                 causes: vec![ParsingError {
-                    reason: format!("Expected <UNRESOLVED>, got {:?}.", got),
+                    reason: format!("Expected <UNRESOLVED>, got {got:?}."),
                     scope: self.scope.clone(),
                     causes: Vec::new(),
                 }],
@@ -337,7 +337,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
 
     pub(crate) fn error_assertion_failure(&self) -> ParsingError {
         ParsingError {
-            reason: format!("Assertion failed"),
+            reason: "Assertion failed".to_string(),
             scope: self.scope.clone(),
             causes: Vec::new(),
         }
@@ -352,6 +352,8 @@ pub struct ParsingError {
 }
 
 impl ParsingError {
+    #[allow(clippy::must_use_candidate)]
+    #[must_use]
     pub fn with_cause(mut self, cause: ParsingError) -> Self {
         self.causes.push(cause);
         self
@@ -371,7 +373,7 @@ impl std::fmt::Display for ParsingError {
             self.reason
         )?;
         for cause in &self.causes {
-            write!(f, "\n  - {}", format!("{cause}").replace("\n", "\n  "))?;
+            write!(f, "\n  - {}", format!("{cause}").replace('\n', "\n  "))?;
         }
         Ok(())
     }
@@ -387,8 +389,7 @@ where
     /// Tries to coerce a value to an annotated type. May perform transformations.
     ///
     /// Returns `Ok(None)` if the value was incomplete and has `in_progress = never`
-    ///
-    /// Does not handle errors with [`TypeAnnotations::on_error`]. Callers should use that value if an error occurs.
+    #[allow(clippy::type_complexity)]
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,

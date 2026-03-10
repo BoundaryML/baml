@@ -24,8 +24,8 @@ use crate::{
 /// strategies as [`match_string`] (exact, unaccented, stripped punctuation,
 /// case-insensitive), but without constructing a full [`DeserializerMeta`]
 /// result. This avoids the `'t` lifetime requirement on [`TypeAnnotations`].
-pub(super) fn matches_string_to_string<'t, N: TypeIdent>(
-    _parsing_context: &ParsingContext<'_, '_, 't, N>,
+pub(super) fn matches_string_to_string<N: TypeIdent>(
+    _parsing_context: &ParsingContext<'_, '_, '_, N>,
     raw_value: &str,
     target: &str,
 ) -> bool {
@@ -49,6 +49,7 @@ pub(super) fn matches_string_to_string<'t, N: TypeIdent>(
 }
 
 /// Heuristic match of different possible values against an input string.
+#[allow(clippy::needless_pass_by_value)]
 pub(super) fn match_string<'s, 'v, 't, N: TypeIdent>(
     ctx: &ParsingContext<'s, 'v, 't, N>,
     target: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
@@ -97,13 +98,16 @@ where
     // no point in removing the punctuation from the input string and running
     // the entire algorithm again because it should've already matched the
     // substrings in the previous attempt. This can be optimized.
-    let mut candidates = Vec::from_iter(candidates.iter().map(|(candidate, valid_values)| {
-        let stripped_valid_values = valid_values
-            .iter()
-            .map(|v| without_punctuation(v.as_ref()).collect::<String>())
-            .collect();
-        (*candidate, stripped_valid_values)
-    }));
+    let mut candidates: Vec<_> = candidates
+        .iter()
+        .map(|(candidate, valid_values)| {
+            let stripped_valid_values = valid_values
+                .iter()
+                .map(|v| without_punctuation(v.as_ref()).collect::<String>())
+                .collect();
+            (*candidate, stripped_valid_values)
+        })
+        .collect();
 
     // Second attempt, case sensitive match without punctuation.
     if let Some(string_match) = string_match_strategy(
@@ -131,7 +135,7 @@ where
     let match_context = match_context.to_lowercase();
 
     // TODO: Consider adding a flag for case insensitive match.
-    for (_, valid_values) in candidates.iter_mut() {
+    for (_, valid_values) in &mut candidates {
         for v in valid_values.iter_mut() {
             *v = v.to_lowercase();
         }
@@ -150,7 +154,7 @@ where
     Err(ctx.error_unexpected_type(&target, &value))
 }
 
-fn without_punctuation<'a>(s: &'a str) -> impl Iterator<Item = char> + 'a {
+fn without_punctuation(s: &str) -> impl Iterator<Item = char> + '_ {
     s.chars()
         .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
 }
@@ -197,7 +201,7 @@ where
                 .iter()
                 .map(|(string, count)| format!("{string} ({count} times)")),
         ));
-    };
+    }
 
     Ok(ValueWithFlags::new(
         string_match,

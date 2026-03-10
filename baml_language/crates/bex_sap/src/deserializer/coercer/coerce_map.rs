@@ -190,8 +190,10 @@ where
                     // is also checked at `coerce_arg` in
                     // baml-lib/baml-core/src/ir/ir_helpers/to_baml_arg.rs
                     // TODO: Is it Ok that we assume keys are complete?
-                    let key_as_jsonish =
-                        jsonish::Value::String(key.to_owned(), CompletionState::Complete);
+                    let key_as_jsonish = jsonish::Value::String(
+                        key.clone().into_owned().into(),
+                        CompletionState::Complete,
+                    );
                     match TyResolvedRef::coerce(ctx, key_type.clone(), &key_as_jsonish) {
                         Ok(None) => {
                             unreachable!("key_as_jsonish is defined to be complete");

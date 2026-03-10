@@ -7,6 +7,7 @@ mod multi_json_parser;
 pub use entry::parse;
 
 #[derive(Clone, Copy, Debug)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ParseOptions {
     all_finding_all_json_objects: bool,
     allow_markdown_json: bool,
@@ -27,6 +28,7 @@ impl Default for ParseOptions {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(super) enum ParsingMode {
     JsonMarkdown,
     JsonMarkdownString,

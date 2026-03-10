@@ -21,10 +21,7 @@ use crate::{
         BamlArray, BamlBool, BamlClass, BamlEnum, BamlFloat, BamlInt, BamlMap, BamlMedia, BamlNull,
         BamlPrimitive, BamlStreamState, BamlString, BamlValue,
     },
-    deserializer::{
-        coercer::{ParsingContext, ParsingError},
-        types::{BamlValueWithFlags, DeserializerMeta},
-    },
+    deserializer::coercer::{ParsingContext, ParsingError},
 };
 
 /// An identifier for a type. Used to look up a type in a [`TypeRefDb`].
@@ -41,11 +38,16 @@ pub struct TypeRefDb<'t, N: TypeIdent> {
     types: IndexMap<N, TyResolved<'t, N>>,
 }
 
-impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
-    pub fn new() -> Self {
+impl<N: TypeIdent> Default for TypeRefDb<'_, N> {
+    fn default() -> Self {
         Self {
             types: IndexMap::new(),
         }
+    }
+}
+impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Tries to add a type to the database. Returns an error if the identifier is already in use.
@@ -69,7 +71,7 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
     pub fn resolve(&'t self, ty: &'t Ty<'t, N>) -> Result<TyResolvedRef<'t, N>, &'t N> {
         match ty {
             Ty::Resolved(ty) => Ok(ty.as_ref()),
-            Ty::ResolvedRef(ty) => Ok(ty.clone()),
+            Ty::ResolvedRef(ty) => Ok(*ty),
             Ty::Unresolved(ident) => self.types.get(ident).map(TyResolved::as_ref).ok_or(ident),
         }
     }
@@ -79,6 +81,7 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
     }
 
     /// Like [`TypeRefDb::resolve`], but maps the result to keep the type annotations.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn resolve_with_meta(
         &'t self,
         ty: TyWithMeta<&'t Ty<'t, N>, &'t TypeAnnotations<'t, N>>,
@@ -119,7 +122,7 @@ pub enum TyResolved<'t, N: TypeIdent> {
     /// A type that tells you if it is completed or not.
     StreamState(StreamStateTy<'t, N>),
 }
-impl<'t, N: TypeIdent> From<PrimitiveTy> for TyResolved<'t, N> {
+impl<N: TypeIdent> From<PrimitiveTy> for TyResolved<'_, N> {
     fn from(p: PrimitiveTy) -> Self {
         match p {
             PrimitiveTy::Int(v) => TyResolved::Int(v),
@@ -163,7 +166,7 @@ impl<'t, N: TypeIdent> TyResolved<'t, N> {
             TyResolved::Class(c) => TyResolvedRef::Class(c),
             TyResolved::Enum(e) => TyResolvedRef::Enum(e),
             TyResolved::Union(u) => TyResolvedRef::Union(u),
-            TyResolved::StreamState(s) => TyResolvedRef::StreamState(&*s),
+            TyResolved::StreamState(s) => TyResolvedRef::StreamState(s),
         }
     }
 }
@@ -191,7 +194,7 @@ pub enum TyResolvedRef<'t, N: TypeIdent> {
     /// A type that tells you if it is completed or not.
     StreamState(&'t StreamStateTy<'t, N>),
 }
-impl<'t, N: TypeIdent> From<PrimitiveTy> for TyResolvedRef<'t, N> {
+impl<N: TypeIdent> From<PrimitiveTy> for TyResolvedRef<'_, N> {
     fn from(p: PrimitiveTy) -> Self {
         match p {
             PrimitiveTy::Int(v) => TyResolvedRef::Int(v),
@@ -215,7 +218,7 @@ impl<'t, N: TypeIdent> From<&'t LiteralTy<'t>> for TyResolvedRef<'t, N> {
 // Manual Copy impl because derive(Copy) adds an unnecessary `N: Copy` bound.
 // All variants are either Copy-by-value (primitives) or references (&'t T),
 // so Copy is valid regardless of N.
-impl<'t, N: TypeIdent> Copy for TyResolvedRef<'t, N> {}
+impl<N: TypeIdent> Copy for TyResolvedRef<'_, N> {}
 impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
     /// Returns true if the type may be `null`.
     ///
@@ -256,7 +259,7 @@ impl<'t, N: TypeIdent> Ty<'t, N> {
     ///
     /// Requires `db` in case we need to look up type aliases that may contain optional unions.
     pub fn is_optional(&'t self, db: &'t TypeRefDb<'t, N>) -> bool {
-        db.resolve(self).map_or(false, |ty| ty.is_optional(db))
+        db.resolve(self).is_ok_and(|ty| ty.is_optional(db))
     }
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for Ty<'t, N>
@@ -316,7 +319,7 @@ pub enum PrimitiveTy {
     #[from(forward)]
     Media(MediaTy),
 }
-impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for PrimitiveTy
+impl<'s, 'v> TypeValue<'s, 'v, '_> for PrimitiveTy
 where
     's: 'v,
 {
@@ -348,7 +351,7 @@ impl PrimitiveTy {
 /// Corresponds to the BAML `int` type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct IntTy;
-impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for IntTy
+impl<'s, 'v> TypeValue<'s, 'v, '_> for IntTy
 where
     's: 'v,
 {
@@ -358,7 +361,7 @@ where
 /// Corresponds to the BAML `float` type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct FloatTy;
-impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for FloatTy
+impl<'s, 'v> TypeValue<'s, 'v, '_> for FloatTy
 where
     's: 'v,
 {
@@ -368,7 +371,7 @@ where
 /// Corresponds to the BAML `string` type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct StringTy;
-impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for StringTy
+impl<'s, 'v> TypeValue<'s, 'v, '_> for StringTy
 where
     's: 'v,
 {
@@ -378,7 +381,7 @@ where
 /// Corresponds to the BAML `bool` type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct BoolTy;
-impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for BoolTy
+impl<'s, 'v> TypeValue<'s, 'v, '_> for BoolTy
 where
     's: 'v,
 {
@@ -388,7 +391,7 @@ where
 /// Corresponds to the BAML `null` type.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct NullTy;
-impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for NullTy
+impl<'s, 'v> TypeValue<'s, 'v, '_> for NullTy
 where
     's: 'v,
 {
@@ -402,7 +405,7 @@ pub enum MediaTy {
     Pdf,
     Video,
 }
-impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for MediaTy
+impl<'s, 'v> TypeValue<'s, 'v, '_> for MediaTy
 where
     's: 'v,
 {
@@ -423,7 +426,7 @@ where
 }
 impl<'t> From<&'t str> for LiteralTy<'t> {
     fn from(s: &'t str) -> Self {
-        LiteralTy::String(StringLiteralTy(Cow::Borrowed(s.as_ref())))
+        LiteralTy::String(StringLiteralTy(Cow::Borrowed(s)))
     }
 }
 impl From<i64> for LiteralTy<'static> {
@@ -450,7 +453,7 @@ where
 /// Corresponds to the BAML int literal type.
 #[derive(Clone, PartialEq, Eq)]
 pub struct IntLiteralTy(pub i64);
-impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for IntLiteralTy
+impl<'s, 'v> TypeValue<'s, 'v, '_> for IntLiteralTy
 where
     's: 'v,
 {
@@ -460,7 +463,7 @@ where
 /// Corresponds to the BAML bool literal type.
 #[derive(Clone, PartialEq, Eq)]
 pub struct BoolLiteralTy(pub bool);
-impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for BoolLiteralTy
+impl<'s, 'v> TypeValue<'s, 'v, '_> for BoolLiteralTy
 where
     's: 'v,
 {
@@ -604,7 +607,7 @@ impl<'t, N: TypeIdent> TypeAnnotations<'t, N> {
         value: &BamlValue<'s, 'v, 't, N>,
         ctx: &ParsingContext<'_, '_, 't, N>,
     ) -> Result<bool, ParsingError> {
-        for assert in self.asserts.iter() {
+        for assert in &self.asserts {
             if !assert.evaluate(value, ctx)? {
                 return Ok(false);
             }
@@ -622,7 +625,7 @@ pub struct AnnotatedField<'t, N: TypeIdent> {
     /// If it is `never` then this causes the entire class to be excluded until present.
     ///
     /// - Should always be `null` for optional fields.
-    /// - Should always be `Pending(<value>)` (or `never`) for StreamState fields.
+    /// - Should always be `Pending(<value>)` (or `never`) for `StreamState` fields.
     pub class_in_progress_field_missing: AttrLiteral<'t, N>,
     /// If the parent object is complete and this field is missing, use this value instead.
     /// If it is `never` then this causes an error.
@@ -633,7 +636,7 @@ pub struct AnnotatedField<'t, N: TypeIdent> {
     /// If any are present, the real name is not used for matching.
     pub aliases: Vec<Cow<'t, str>>,
 }
-impl<'t, N: TypeIdent> AnnotatedField<'t, N> {
+impl<N: TypeIdent> AnnotatedField<'_, N> {
     /// Checks if an input key matches the field exactly (including aliases).
     /// Does not do fuzzy matching.
     pub fn key_matches(&self, key: &str) -> bool {

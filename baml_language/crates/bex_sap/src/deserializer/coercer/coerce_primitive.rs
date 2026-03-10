@@ -72,6 +72,7 @@ where
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for IntTy
 where
     't: 's,
@@ -241,6 +242,7 @@ where
     }
 }
 
+#[allow(clippy::cast_precision_loss)]
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for FloatTy
 where
     't: 's,
@@ -651,14 +653,14 @@ where
                         crate::jsonish::Value::String(s, completion_state)
                             if original_string.starts_with(s.as_ref()) || s == original_string =>
                         {
-                            Some((s.clone(), completion_state.clone()))
+                            Some((s.clone(), *completion_state))
                         }
                         _ => None,
                     })
                     .max_by_key(|(s, _)| s.len());
 
                 let (string_val, _completion_state) = string_value
-                    .unwrap_or_else(|| (original_string.clone(), value.completion_state().clone()));
+                    .unwrap_or_else(|| (original_string.clone(), *value.completion_state()));
 
                 string_val.into_owned()
             }
@@ -796,7 +798,7 @@ fn float_from_comma_separated(value: &str) -> Option<f64> {
     }
 
     let number_str = matches[0].as_str();
-    let without_commas = number_str.replace(",", "");
+    let without_commas = number_str.replace(',', "");
     // Remove all Unicode currency symbols
     let re_currency = Regex::new(r"\p{Sc}").unwrap();
     let without_currency = re_currency.replace_all(&without_commas, "");
