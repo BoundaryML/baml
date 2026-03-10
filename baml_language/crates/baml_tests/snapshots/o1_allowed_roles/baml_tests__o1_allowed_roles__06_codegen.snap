@@ -22,10 +22,11 @@ function Gpt4oClient.resolve() -> baml.llm.PrimitiveClient {
 function O1Client.resolve() -> baml.llm.PrimitiveClient {
     load_const "O1Client"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    alloc_array 2
+    alloc_array 3
     load_const "o1"
     load_const "sk-test"
     load_const "model"
@@ -39,10 +40,11 @@ function O1Client.resolve() -> baml.llm.PrimitiveClient {
 function O1MiniClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "O1MiniClient"
     load_const "openai"
-    load_const "user"
+    load_const "system"
+    load_const "system"
     load_const "user"
     load_const "assistant"
-    alloc_array 2
+    alloc_array 3
     load_const "o1-mini"
     load_const "sk-test"
     load_const "model"

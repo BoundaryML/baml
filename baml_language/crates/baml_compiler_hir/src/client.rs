@@ -74,7 +74,6 @@ pub(crate) fn lower_client(
     // Extract and validate config block fields
     let mut default_role: Option<String> = None;
     let mut allowed_roles: Vec<String> = Vec::new();
-    let mut model: Option<String> = None;
     let mut retry_policy_name: Option<Name> = None;
     let mut retry_policy_span: Option<rowan::TextRange> = None;
     let mut sub_client_names: Vec<Name> = Vec::new();
@@ -138,13 +137,6 @@ pub(crate) fn lower_client(
                     }
                 }
 
-                // Extract model name for o1 detection below
-                if let Some(model_item) =
-                    options_block.items().find(|item| item.matches_key("model"))
-                {
-                    model = model_item.value_str();
-                }
-
                 // Extract sub-client names from strategy array (for composite clients)
                 if is_composite {
                     if let Some(strategy_item) = options_block
@@ -206,20 +198,13 @@ pub(crate) fn lower_client(
     }
 
     // Use default allowed_roles if none specified.
-    // For o1 models, default to ["user", "assistant"] (no system role).
-    // See: engine/baml-lib/llm-client/src/clients/openai.rs `allowed_roles()`
+    // Model-specific role defaults (e.g. o1 models) are handled at runtime
+    // in each provider's `allowed_roles()` method.
     if allowed_roles.is_empty() {
-        let is_o1 = model
-            .as_deref()
-            .is_some_and(|m| m == "o1" || m.starts_with("o1-"));
-        if is_o1 {
-            allowed_roles = vec!["user".to_string(), "assistant".to_string()];
-        } else {
-            allowed_roles = DEFAULT_ALLOWED_ROLES
-                .iter()
-                .map(|s| (*s).to_string())
-                .collect();
-        }
+        allowed_roles = DEFAULT_ALLOWED_ROLES
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
     }
 
     Some(Client {

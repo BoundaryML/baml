@@ -7,7 +7,7 @@ function Gpt4oClient.resolve() -> baml.llm.PrimitiveClient {
 }
 
 function O1MiniClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("O1MiniClient", "openai", "user", ["user", "assistant"], { "model": "o1-mini", "api_key": "sk-test" })
+    baml.llm.build_primitive_client("O1MiniClient", "openai", "system", ["system", "user", "assistant"], { "model": "o1-mini", "api_key": "sk-test" })
 }
 
 function O1WithExplicitRoles.resolve() -> baml.llm.PrimitiveClient {
@@ -15,7 +15,7 @@ function O1WithExplicitRoles.resolve() -> baml.llm.PrimitiveClient {
 }
 
 function O1Client.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("O1Client", "openai", "user", ["user", "assistant"], { "model": "o1", "api_key": "sk-test" })
+    baml.llm.build_primitive_client("O1Client", "openai", "system", ["system", "user", "assistant"], { "model": "o1", "api_key": "sk-test" })
 }
 
 client O1WithExplicitRoles {
