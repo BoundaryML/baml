@@ -5179,13 +5179,13 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 }
                 Object::Function(f) => format!("<fn {}>", f.name),
                 Object::Class(c) => format!("<class {}>", c.name),
-                Object::Media(m) => format!("<type {}>", m.kind),
                 Object::Enum(e) => format!("<enum {}>", e.name),
                 Object::Future(_) => "<future>".to_string(),
                 Object::Resource(r) => format!("<resource: {}>", r),
                 Object::PromptAst(_) => "<prompt_ast>".to_string(),
                 Object::Collector(_) => "<collector>".to_string(),
                 Object::Type(ty) => format!("<type: {ty}>"),
+                Object::RustData(_) => "<rust_data>".to_string(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => "<sentinel>".to_string(),
             }

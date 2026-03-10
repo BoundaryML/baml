@@ -10,16 +10,15 @@
 //!
 //! The instructions that the VM runs are defined in [`bex_vm_types::bytecode::Instruction`] enum.
 
-pub mod builtins;
 pub mod debug;
 pub mod errors;
 pub mod indexable;
-pub mod native;
+pub mod package_baml;
 pub mod types;
 pub mod vm;
 pub mod watch;
 
 pub use errors::{InternalError, RuntimeError, StackTrace};
 pub use indexable::EvalStack;
-pub use native::NativeFunction;
+pub use package_baml::NativeFunction;
 pub use vm::{BexVm, BytecodeProgram, SpanNotification, VmExecState, convert_program};

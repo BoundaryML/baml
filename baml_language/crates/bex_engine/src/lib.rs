@@ -809,7 +809,11 @@ impl BexEngine {
         let guard = unsafe { EpochGuard::new() };
 
         // Create VM with shared heap (each VM gets its own TLAB)
-        let mut vm = BexVm::new(Arc::clone(&self.heap), self.globals.clone());
+        let mut vm = BexVm::new(
+            Arc::clone(&self.heap),
+            self.globals.clone(),
+            self.resolved_class_names.clone(),
+        );
 
         // Snapshot args for the root FunctionStart event before converting to VM values
         let args_snapshot = args.clone();

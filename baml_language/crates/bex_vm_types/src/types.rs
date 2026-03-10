@@ -1,4 +1,6 @@
+use std::any::Any;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use baml_type::Ty;
 use bex_resource_types::ResourceHandle;
@@ -613,6 +615,9 @@ impl ConstValue {
 }
 
 /// Media value.
+///
+/// Kept as a type alias for compatibility with downstream crates that still use it.
+/// Within `bex_vm`, media is now stored as `Object::Instance` with a `$rust_type` `_data` field.
 pub type MediaValue = std::sync::Arc<baml_builtins::MediaValue>;
 
 /// Prompt AST tree node.
@@ -675,8 +680,9 @@ pub enum Object {
 
     Future(Future),
 
-    /// Images, audio, pdf, video.
-    Media(MediaValue),
+    /// Opaque Rust-managed data, accessed via `Arc<dyn Any>` downcast.
+    /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
+    RustData(Arc<dyn Any + Send + Sync>),
 
     /// Prompt AST tree node.
     PromptAst(PromptAst),
@@ -708,7 +714,7 @@ impl std::fmt::Display for Object {
             Object::String(string) => string.fmt(f),
             Object::Array(array) => write!(f, "<array len={}>", array.len()),
             Object::Map(map) => write!(f, "<map len={}>", map.len()),
-            Object::Media(media) => media.fmt(f),
+            Object::RustData(_) => write!(f, "<rust_data>"),
             Object::Resource(r) => write!(f, "<{r}>"),
             Object::Collector(_) => write!(f, "<collector>"),
             Object::Type(ty) => write!(f, "<type: {ty}>"),
@@ -806,12 +812,12 @@ pub enum ObjectType {
     String,
     Enum,
     Variant,
-    Media(baml_base::MediaKind),
     Future(FutureType),
     Resource,
     PromptAst,
     Collector,
     Type,
+    RustData,
 }
 
 impl ObjectType {
@@ -825,7 +831,7 @@ impl ObjectType {
             Object::String(_) => Self::String,
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
-            Object::Media(media) => Self::Media(media.kind),
+            Object::RustData(_) => Self::RustData,
             Object::Resource(_) => Self::Resource,
             Object::PromptAst(_) => Self::PromptAst,
             Object::Collector(_) => Self::Collector,
@@ -863,11 +869,11 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::String => write!(f, "string"),
-            ObjectType::Media(media_kind) => write!(f, "{media_kind}"),
             ObjectType::Resource => write!(f, "resource"),
             ObjectType::PromptAst => write!(f, "prompt_ast"),
             ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),
+            ObjectType::RustData => write!(f, "rust_data"),
         }
     }
 }

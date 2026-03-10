@@ -4,4 +4,4 @@ mod types;
 
 pub use codegen::generate_native_trait;
 pub use extract::extract_native_builtins;
-pub use types::{BamlType, NativeBuiltin, Param, Receiver};
+pub use types::{BamlType, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver};

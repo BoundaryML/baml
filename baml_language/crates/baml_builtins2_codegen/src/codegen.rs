@@ -1,80 +1,534 @@
-//! Code generation for `NativeFunctions` trait from extracted `NativeBuiltin` records.
+//! Code generation for modular `BamlClass*` / `BamlNamespace*` / `BamlPackageBaml`
+//! traits from extracted `NativeBuiltin` records.
 //!
 //! `generate_native_trait` takes the output of `extract_native_builtins()` and emits
-//! a Rust source `String` containing the three-tier `NativeFunctions` trait:
+//! a Rust source `String` containing a hierarchy of traits:
 //!
-//! - **Tier 1**: Required methods with clean Rust types (the developer implements these).
-//! - **Tier 2**: Default glue methods (`__baml_*`) that extract `&[Value]` args and
-//!   convert results back to `Value`.
-//! - **Tier 3**: `get_native_fn(path)` match that routes a path string to a glue fn.
+//! - **`BamlClass*`** traits (leaf): required methods with bare names, `__glue_*`
+//!   defaults, and a `__dispatch_*` method that maps method names to glue fns.
+//! - **`BamlNamespace*`** traits (aggregators): supertraits of child classes,
+//!   own free-function methods, and a `__dispatch_*` that routes via `split_once('.')`.
+//! - **`BamlPackageBaml`** (root): supertraits of all top-level classes and namespaces,
+//!   root free functions, and `get_native_fn(path)` entry point.
 
-use crate::types::{BamlType, NativeBuiltin, Receiver};
+use std::collections::BTreeMap;
 
-// ============================================================================
-// Path aliasing — maps `.baml`-derived paths to the legacy paths that
-// `baml_compiler_emit` puts into `Function` objects. Required until the
-// compiler is updated to use `.baml`-derived paths directly.
-//
-// The `.baml` stdlib defines per-class media methods (e.g. `baml.media.Pdf.url`)
-// but the legacy DSL used a single consolidated `Media` struct
-// (`baml.Media.as_url`). We emit match arms for both so that existing
-// bytecode compiled by `baml_compiler_emit` continues to resolve correctly.
-// ============================================================================
-
-/// Returns the legacy path alias for a `.baml`-derived path, if one exists.
-///
-/// Returns `None` if the path has no alias (most paths).
-fn legacy_path_alias(path: &str) -> Option<&'static str> {
-    match path {
-        "baml.media.Pdf.url"
-        | "baml.media.Audio.url"
-        | "baml.media.Video.url"
-        | "baml.media.Image.url" => Some("baml.Media.as_url"),
-        "baml.media.Pdf.file"
-        | "baml.media.Audio.file"
-        | "baml.media.Video.file"
-        | "baml.media.Image.file" => Some("baml.Media.as_file"),
-        "baml.media.Pdf.base64"
-        | "baml.media.Audio.base64"
-        | "baml.media.Video.base64"
-        | "baml.media.Image.base64" => Some("baml.Media.as_base64"),
-        "baml.media.Pdf.mime_type"
-        | "baml.media.Audio.mime_type"
-        | "baml.media.Video.mime_type"
-        | "baml.media.Image.mime_type" => Some("baml.Media.mime_type"),
-        _ => None,
-    }
-}
+use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
 
 // ============================================================================
-// Fallibility — methods that return `Result<T, VmError>` in the clean
-// signature rather than the plain `T` inferred from the `.baml` type.
-//
-// The `.baml` stdlib does not yet encode fallibility (it would need a
-// dedicated `Result<T>` type or a `#[fallible]` attribute). Until then we
-// maintain an explicit allowlist.
+// Fallibility
 // ============================================================================
 
 /// Returns `true` if the clean trait method for this path should return
 /// `Result<T, VmError>` instead of plain `T`.
 fn is_fallible(path: &str) -> bool {
-    matches!(
-        path,
-        "baml.Array.at"
-            | "baml.deep_copy"
-            | "baml.unstable.string"
-    )
+    path.starts_with("baml.unstable.")
+}
+
+// ============================================================================
+// camelCase → snake_case conversion
+// ============================================================================
+
+fn camel_to_snake(s: &str) -> String {
+    let mut result = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if c.is_uppercase() && i > 0 {
+            result.push('_');
+        }
+        result.extend(c.to_lowercase());
+    }
+    result
+}
+
+// ============================================================================
+// Namespace tree
+// ============================================================================
+
+struct BuiltinEntry<'a> {
+    builtin: &'a NativeBuiltin,
+    baml_method_name: String,
+    rust_method_name: String,
+}
+
+struct NamespaceNode<'a> {
+    free_fns: Vec<BuiltinEntry<'a>>,
+    classes: BTreeMap<String, Vec<BuiltinEntry<'a>>>,
+    sub_namespaces: BTreeMap<String, NamespaceNode<'a>>,
+}
+
+impl<'a> NamespaceNode<'a> {
+    fn new() -> Self {
+        Self {
+            free_fns: Vec::new(),
+            classes: BTreeMap::new(),
+            sub_namespaces: BTreeMap::new(),
+        }
+    }
+
+    fn get_or_create_namespace(&mut self, segments: &[&str]) -> &mut Self {
+        let mut current = self;
+        for &seg in segments {
+            current = current
+                .sub_namespaces
+                .entry(seg.to_string())
+                .or_insert_with(NamespaceNode::new);
+        }
+        current
+    }
+}
+
+// ============================================================================
+// Class namespace tree (for view/copy generation)
+// ============================================================================
+
+/// Namespace tree for class definitions (used for view/copy generation).
+struct ClassNamespaceNode<'a> {
+    classes: BTreeMap<String, &'a NativeClassDef>,
+    sub_namespaces: BTreeMap<String, ClassNamespaceNode<'a>>,
+}
+
+impl<'a> ClassNamespaceNode<'a> {
+    fn new() -> Self {
+        Self {
+            classes: BTreeMap::new(),
+            sub_namespaces: BTreeMap::new(),
+        }
+    }
+}
+
+fn build_class_namespace_tree<'a>(class_defs: &'a [NativeClassDef]) -> ClassNamespaceNode<'a> {
+    let mut root = ClassNamespaceNode::new();
+    for def in class_defs {
+        // namespace_prefix is e.g. "baml.media", "baml.errors", "baml"
+        let rest = def.namespace_prefix.strip_prefix("baml.").unwrap_or("");
+        if rest.is_empty() {
+            // Root-level class
+            root.classes.insert(def.name.clone(), def);
+        } else {
+            // Namespaced class — split segments and navigate
+            let segments: Vec<&str> = rest.split('.').collect();
+            let mut node = &mut root;
+            for seg in &segments {
+                node = node.sub_namespaces
+                    .entry(seg.to_string())
+                    .or_insert_with(ClassNamespaceNode::new);
+            }
+            node.classes.insert(def.name.clone(), def);
+        }
+    }
+    root
+}
+
+/// Group builtins into a tree based on their dotted paths.
+///
+/// Path convention: uppercase segments are class names, lowercase are namespaces.
+/// - `baml.Array.length` → class `Array` at root, method `length`
+/// - `baml.media.Pdf.url` → namespace `media`, class `Pdf`, method `url`
+/// - `baml.deep_copy` → root free function
+/// - `baml.math.trunc` → namespace `math`, free function `trunc`
+fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin]) -> NamespaceNode<'a> {
+    let mut root = NamespaceNode::new();
+
+    for b in builtins {
+        let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
+        let segments: Vec<&str> = rest.split('.').collect();
+        let baml_method_name = segments.last().unwrap().to_string();
+        let rust_method_name = camel_to_snake(&baml_method_name);
+
+        let entry = BuiltinEntry {
+            builtin: b,
+            baml_method_name,
+            rust_method_name,
+        };
+
+        let prefix_segments = &segments[..segments.len() - 1];
+
+        let mut ns_segments: Vec<&str> = Vec::new();
+        let mut class_name: Option<&str> = None;
+
+        for &seg in prefix_segments {
+            if seg.starts_with(|c: char| c.is_uppercase()) {
+                class_name = Some(seg);
+                break;
+            } else {
+                ns_segments.push(seg);
+            }
+        }
+
+        let node = root.get_or_create_namespace(&ns_segments);
+
+        if let Some(cls) = class_name {
+            node.classes.entry(cls.to_string()).or_default().push(entry);
+        } else {
+            node.free_fns.push(entry);
+        }
+    }
+
+    root
+}
+
+// ============================================================================
+// View module emission
+// ============================================================================
+
+fn emit_view_module(out: &mut String, root: &ClassNamespaceNode) {
+    out.push_str("#[allow(dead_code, unused_imports, unused_variables)]\n");
+    out.push_str("pub mod view {\n");
+    out.push_str("    use super::*;\n\n");
+    emit_view_namespace_contents(out, root, 1);
+    out.push_str("}\n\n");
+}
+
+fn emit_view_namespace_contents(out: &mut String, node: &ClassNamespaceNode, depth: usize) {
+    let indent = "    ".repeat(depth);
+
+    // Emit classes directly in this namespace
+    for (class_name, class_def) in &node.classes {
+        emit_view_struct(out, class_name, class_def, depth);
+    }
+
+    // Emit sub-namespace modules
+    for (ns_name, sub_node) in &node.sub_namespaces {
+        out.push_str(&format!("{indent}pub mod {ns_name} {{\n"));
+        out.push_str(&format!("{indent}    use super::super::*;\n\n"));
+        emit_view_namespace_contents(out, sub_node, depth + 1);
+        out.push_str(&format!("{indent}}}\n\n"));
+    }
+}
+
+fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, depth: usize) {
+    let indent = "    ".repeat(depth);
+    let inner = "    ".repeat(depth + 1);
+    let inner2 = "    ".repeat(depth + 2);
+
+    // Struct definition
+    out.push_str(&format!("{indent}pub struct {class_name}<'a> {{\n"));
+    out.push_str(&format!("{inner}pub instance: &'a Instance,\n"));
+    out.push_str(&format!("{indent}}}\n\n"));
+
+    // Impl block with typed accessors
+    out.push_str(&format!("{indent}impl<'a> {class_name}<'a> {{\n"));
+
+    for field in &def.fields {
+        let field_name = &field.name;
+        match &field.field_type {
+            BamlType::RustType => {
+                // Generic downcast accessor: fn _data<T: 'static>(&self, vm: &BexVm) -> &T
+                out.push_str(&format!(
+                    "{inner}pub fn {field_name}<'v, T: 'static>(&self, vm: &'v BexVm) -> &'v T {{\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}vm.as_rust_data::<T>(&self.instance.fields[{}])\n",
+                    field.index
+                ));
+                out.push_str(&format!(
+                    "{inner2}    .expect(\"{class_name}.{field_name}: downcast failed\")\n"
+                ));
+                out.push_str(&format!("{inner}}}\n\n"));
+            }
+            BamlType::Int => {
+                out.push_str(&format!(
+                    "{inner}pub fn {field_name}(&self) -> i64 {{\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}match self.instance.fields[{}] {{\n", field.index
+                ));
+                out.push_str(&format!(
+                    "{inner2}    Value::Int(i) => i,\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Int\"),\n"
+                ));
+                out.push_str(&format!("{inner2}}}\n"));
+                out.push_str(&format!("{inner}}}\n\n"));
+            }
+            BamlType::Float => {
+                out.push_str(&format!(
+                    "{inner}pub fn {field_name}(&self) -> f64 {{\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}match self.instance.fields[{}] {{\n", field.index
+                ));
+                out.push_str(&format!(
+                    "{inner2}    Value::Float(f) => f,\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Float\"),\n"
+                ));
+                out.push_str(&format!("{inner2}}}\n"));
+                out.push_str(&format!("{inner}}}\n\n"));
+            }
+            BamlType::Bool => {
+                out.push_str(&format!(
+                    "{inner}pub fn {field_name}(&self) -> bool {{\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}match self.instance.fields[{}] {{\n", field.index
+                ));
+                out.push_str(&format!(
+                    "{inner2}    Value::Bool(b) => b,\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Bool\"),\n"
+                ));
+                out.push_str(&format!("{inner2}}}\n"));
+                out.push_str(&format!("{inner}}}\n\n"));
+            }
+            BamlType::String => {
+                // Heap type — vm parameter needed
+                out.push_str(&format!(
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v str {{\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}vm.as_string(&self.instance.fields[{}])\n", field.index
+                ));
+                out.push_str(&format!(
+                    "{inner2}    .expect(\"{class_name}.{field_name}: expected String\")\n"
+                ));
+                out.push_str(&format!("{inner}}}\n\n"));
+            }
+            BamlType::List(_) => {
+                out.push_str(&format!(
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v [Value] {{\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}vm.as_array(&self.instance.fields[{}])\n", field.index
+                ));
+                out.push_str(&format!(
+                    "{inner2}    .expect(\"{class_name}.{field_name}: expected Array\")\n"
+                ));
+                out.push_str(&format!("{inner}}}\n\n"));
+            }
+            BamlType::Map(_, _) => {
+                out.push_str(&format!(
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v IndexMap<String, Value> {{\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}vm.as_map(&self.instance.fields[{}])\n", field.index
+                ));
+                out.push_str(&format!(
+                    "{inner2}    .expect(\"{class_name}.{field_name}: expected Map\")\n"
+                ));
+                out.push_str(&format!("{inner}}}\n\n"));
+            }
+            BamlType::Optional(inner_ty) => {
+                // For optional fields, return Option<T> with appropriate accessor
+                let (ret_type, some_expr) = view_optional_type_and_expr(
+                    class_name, field_name, inner_ty, field.index
+                );
+                out.push_str(&format!(
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> {ret_type} {{\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}match self.instance.fields[{}] {{\n", field.index
+                ));
+                out.push_str(&format!(
+                    "{inner2}    Value::Null => None,\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}    _ => Some({some_expr}),\n"
+                ));
+                out.push_str(&format!("{inner2}}}\n"));
+                out.push_str(&format!("{inner}}}\n\n"));
+            }
+            // Generic, Named, Media, Null — fallback to &Value
+            _ => {
+                out.push_str(&format!(
+                    "{inner}pub fn {field_name}(&self) -> &Value {{\n"
+                ));
+                out.push_str(&format!(
+                    "{inner2}&self.instance.fields[{}]\n", field.index
+                ));
+                out.push_str(&format!("{inner}}}\n\n"));
+            }
+        }
+    }
+
+    out.push_str(&format!("{indent}}}\n\n"));
+}
+
+/// Returns (return_type, some_expression) for Optional field view accessors.
+fn view_optional_type_and_expr(
+    class_name: &str,
+    field_name: &str,
+    inner: &BamlType,
+    field_index: usize,
+) -> (String, String) {
+    match inner {
+        BamlType::Int => (
+            "Option<i64>".to_string(),
+            format!("match self.instance.fields[{field_index}] {{ Value::Int(i) => i, _ => panic!(\"{class_name}.{field_name}: expected Int\") }}")
+        ),
+        BamlType::Float => (
+            "Option<f64>".to_string(),
+            format!("match self.instance.fields[{field_index}] {{ Value::Float(f) => f, _ => panic!(\"{class_name}.{field_name}: expected Float\") }}")
+        ),
+        BamlType::Bool => (
+            "Option<bool>".to_string(),
+            format!("match self.instance.fields[{field_index}] {{ Value::Bool(b) => b, _ => panic!(\"{class_name}.{field_name}: expected Bool\") }}")
+        ),
+        BamlType::String => (
+            "Option<&'v str>".to_string(),
+            format!("vm.as_string(&self.instance.fields[{field_index}]).expect(\"{class_name}.{field_name}: expected String\")")
+        ),
+        _ => (
+            "Option<&Value>".to_string(),
+            format!("&self.instance.fields[{field_index}]")
+        ),
+    }
+}
+
+// ============================================================================
+// Copy module emission
+// ============================================================================
+
+fn emit_copy_module(out: &mut String, root: &ClassNamespaceNode) {
+    out.push_str("#[allow(dead_code, unused_imports, non_snake_case)]\n");
+    out.push_str("pub mod copy {\n");
+    out.push_str("    use super::*;\n");
+    out.push_str("    use std::sync::Arc;\n");
+    out.push_str("    use std::any::Any;\n\n");
+    emit_copy_namespace_contents(out, root, 1);
+    out.push_str("}\n\n");
+}
+
+fn emit_copy_namespace_contents(out: &mut String, node: &ClassNamespaceNode, depth: usize) {
+    let indent = "    ".repeat(depth);
+
+    for (class_name, class_def) in &node.classes {
+        emit_copy_struct(out, class_name, class_def, depth);
+    }
+
+    for (ns_name, sub_node) in &node.sub_namespaces {
+        out.push_str(&format!("{indent}pub mod {ns_name} {{\n"));
+        out.push_str(&format!("{indent}    use super::super::*;\n"));
+        out.push_str(&format!("{indent}    use std::sync::Arc;\n"));
+        out.push_str(&format!("{indent}    use std::any::Any;\n\n"));
+        emit_copy_namespace_contents(out, sub_node, depth + 1);
+        out.push_str(&format!("{indent}}}\n\n"));
+    }
+}
+
+fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, depth: usize) {
+    let indent = "    ".repeat(depth);
+    let inner = "    ".repeat(depth + 1);
+    let inner2 = "    ".repeat(depth + 2);
+
+    // Struct definition with owned fields
+    out.push_str(&format!("{indent}pub struct {class_name} {{\n"));
+    for field in &def.fields {
+        let rust_type = copy_field_type(&field.field_type);
+        out.push_str(&format!("{inner}pub {}: {rust_type},\n", field.name));
+    }
+    out.push_str(&format!("{indent}}}\n\n"));
+
+    // Impl with to_value()
+    let fqn = format!("{}.{}", def.namespace_prefix, def.name);
+    out.push_str(&format!("{indent}impl {class_name} {{\n"));
+    out.push_str(&format!(
+        "{inner}pub fn to_value(self, vm: &mut BexVm) -> Value {{\n"
+    ));
+    out.push_str(&format!(
+        "{inner2}let class_ptr = vm.resolve_class({fqn:?});\n"
+    ));
+
+    // Convert each field to a Value
+    for field in &def.fields {
+        let conversion = copy_field_to_value(&field.name, &field.field_type);
+        out.push_str(&format!("{inner2}let f_{} = {conversion};\n", field.name));
+    }
+
+    // Build the fields vec
+    out.push_str(&format!("{inner2}vm.alloc_instance(class_ptr, vec!["));
+    for (i, field) in def.fields.iter().enumerate() {
+        if i > 0 { out.push_str(", "); }
+        out.push_str(&format!("f_{}", field.name));
+    }
+    out.push_str("])\n");
+    out.push_str(&format!("{inner}}}\n"));
+    out.push_str(&format!("{indent}}}\n\n"));
+}
+
+/// Map BamlType to the owned Rust type used in copy structs.
+fn copy_field_type(ty: &BamlType) -> String {
+    match ty {
+        BamlType::RustType => "Arc<dyn Any + Send + Sync>".to_string(),
+        BamlType::Int => "i64".to_string(),
+        BamlType::Float => "f64".to_string(),
+        BamlType::Bool => "bool".to_string(),
+        BamlType::Null => "()".to_string(),
+        // Heap types stored as Value — caller creates them via vm helpers
+        BamlType::String | BamlType::List(_) | BamlType::Map(_, _)
+        | BamlType::Optional(_) | BamlType::Generic(_) | BamlType::Named(_)
+        | BamlType::Media(_) => "Value".to_string(),
+    }
+}
+
+/// Generate the expression to convert a copy struct field to a Value.
+fn copy_field_to_value(field_name: &str, ty: &BamlType) -> String {
+    match ty {
+        BamlType::RustType => format!("vm.alloc_rust_data(self.{field_name})"),
+        BamlType::Int => format!("Value::Int(self.{field_name})"),
+        BamlType::Float => format!("Value::Float(self.{field_name})"),
+        BamlType::Bool => format!("Value::Bool(self.{field_name})"),
+        BamlType::Null => "Value::Null".to_string(),
+        // String, List, Map, Optional, Generic, Named, Media — already a Value
+        _ => format!("self.{field_name}"),
+    }
+}
+
+// ============================================================================
+// Naming helpers
+// ============================================================================
+
+fn to_pascal_case(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => {
+            let mut result = c.to_uppercase().to_string();
+            result.push_str(chars.as_str());
+            result
+        }
+    }
+}
+
+fn class_trait_name(namespace_prefix: &str, class_name: &str) -> String {
+    if namespace_prefix.is_empty() {
+        format!("BamlClass{class_name}")
+    } else {
+        let ns_pascal = to_pascal_case(namespace_prefix);
+        format!("BamlClass{ns_pascal}{class_name}")
+    }
+}
+
+fn class_dispatch_name(namespace_prefix: &str, class_name: &str) -> String {
+    let class_lower = class_name.to_lowercase();
+    if namespace_prefix.is_empty() {
+        format!("__dispatch_{class_lower}")
+    } else {
+        format!("__dispatch_{namespace_prefix}_{class_lower}")
+    }
+}
+
+fn namespace_trait_name(name: &str) -> String {
+    let pascal = to_pascal_case(name);
+    format!("BamlNamespace{pascal}")
+}
+
+fn namespace_dispatch_name(name: &str) -> String {
+    format!("__dispatch_{name}")
 }
 
 // ============================================================================
 // Public entry point
 // ============================================================================
 
-/// Generate a Rust source `String` containing the `NativeFunctions` trait.
+/// Generate Rust source containing the `BamlClass*`, `BamlNamespace*`, and
+/// `BamlPackageBaml` trait hierarchy.
 ///
 /// The generated code is intended to be written to a file in `OUT_DIR` and
-/// `include!`-ed into `bex_vm/src/native.rs` instead of the legacy
-/// `baml_builtins::generate_native_trait!()` invocation.
+/// `include!`-ed into `bex_vm/src/native.rs`.
 ///
 /// # Assumptions
 ///
@@ -85,104 +539,300 @@ fn is_fallible(path: &str) -> bool {
 /// - `VmError`, `InternalError`, `RuntimeError` from `crate::errors`
 /// - `Type` from `bex_vm_types`
 /// - `MediaKind` from `baml_type`
-pub fn generate_native_trait(builtins: &[NativeBuiltin]) -> String {
+pub fn generate_native_trait(builtins: &[NativeBuiltin], class_defs: &[NativeClassDef]) -> String {
+    let tree = build_namespace_tree(builtins);
+    let class_tree = build_class_namespace_tree(class_defs);
     let mut out = String::new();
 
-    out.push_str("/// Trait for implementing native BAML functions.\n");
-    out.push_str("///\n");
-    out.push_str("/// Implement the `baml_*` methods — they have clean Rust types.\n");
-    out.push_str("/// The `__baml_*` glue methods and `get_native_fn` are auto-generated.\n");
-    out.push_str("pub trait NativeFunctions {\n");
+    // Emit view and copy modules first (they are referenced by trait signatures later)
+    emit_view_module(&mut out, &class_tree);
+    emit_copy_module(&mut out, &class_tree);
 
-    out.push_str("    // ========== Required methods (implement these) ==========\n");
-    for b in builtins {
-        emit_required_method(&mut out, b);
+    emit_subtree_traits(&mut out, &tree, "");
+    emit_root_trait(&mut out, &tree);
+
+    out
+}
+
+/// Recursively emit class traits and namespace traits (bottom-up).
+fn emit_subtree_traits(out: &mut String, node: &NamespaceNode, namespace_prefix: &str) {
+    for (class_name, entries) in &node.classes {
+        let trait_name = class_trait_name(namespace_prefix, class_name);
+        let dispatch_name = class_dispatch_name(namespace_prefix, class_name);
+        emit_class_trait(out, &trait_name, &dispatch_name, entries);
+    }
+
+    for (ns_name, sub_node) in &node.sub_namespaces {
+        emit_subtree_traits(out, sub_node, ns_name);
+        emit_namespace_trait(out, ns_name, sub_node);
+    }
+}
+
+// ============================================================================
+// Class trait emission
+// ============================================================================
+
+fn emit_class_trait(
+    out: &mut String,
+    trait_name: &str,
+    dispatch_name: &str,
+    entries: &[BuiltinEntry],
+) {
+    out.push_str(&format!("pub trait {trait_name} {{\n"));
+
+    for entry in entries {
+        emit_required_method(out, &entry.rust_method_name, entry.builtin);
     }
     out.push('\n');
 
-    out.push_str("    // ========== Glue methods (default implementations) ==========\n");
-    for b in builtins {
-        emit_glue_method(&mut out, b);
+    for entry in entries {
+        emit_glue_method(out, &entry.rust_method_name, entry.builtin);
     }
-    out.push('\n');
 
-    out.push_str("    // ========== Lookup method (default implementation) ==========\n");
-    out.push_str("    fn get_native_fn(path: &str) -> Option<NativeFunction> {\n");
-    out.push_str("        match path {\n");
-
-    // Track which legacy aliases have already been emitted (to avoid duplicates
-    // when multiple media classes share the same legacy path).
-    let mut emitted_aliases: std::collections::HashSet<&'static str> =
-        std::collections::HashSet::new();
-
-    for b in builtins {
-        let glue = format!("__baml_{}", escape_fn_name(&b.fn_name));
+    out.push_str(&format!(
+        "    fn {dispatch_name}(method: &str) -> Option<NativeFunction> {{\n"
+    ));
+    out.push_str("        match method {\n");
+    for entry in entries {
         out.push_str(&format!(
-            "            {:?} => Some(Self::{}),\n",
-            b.path, glue
+            "            {:?} => Some(Self::__glue_{}),\n",
+            entry.baml_method_name, entry.rust_method_name
         ));
+    }
+    out.push_str("            _ => None,\n");
+    out.push_str("        }\n");
+    out.push_str("    }\n");
 
-        if let Some(alias) = legacy_path_alias(&b.path) {
-            if emitted_aliases.insert(alias) {
-                // Only emit the first media class's glue fn for the alias
-                // (Pdf is the canonical one; all four use equivalent implementations).
-                // We pick the first encountered per alias.
+    out.push_str("}\n\n");
+}
+
+// ============================================================================
+// Namespace trait emission
+// ============================================================================
+
+fn emit_namespace_trait(out: &mut String, ns_name: &str, node: &NamespaceNode) {
+    let trait_name = namespace_trait_name(ns_name);
+    let dispatch_name = namespace_dispatch_name(ns_name);
+
+    let mut supertraits: Vec<String> = Vec::new();
+    for class_name in node.classes.keys() {
+        supertraits.push(class_trait_name(ns_name, class_name));
+    }
+    for sub_ns in node.sub_namespaces.keys() {
+        supertraits.push(namespace_trait_name(sub_ns));
+    }
+
+    if supertraits.is_empty() {
+        out.push_str(&format!("pub trait {trait_name} {{\n"));
+    } else {
+        let bounds = supertraits.join(" + ");
+        out.push_str(&format!("pub trait {trait_name}: {bounds} {{\n"));
+    }
+
+    for entry in &node.free_fns {
+        emit_required_method(out, &entry.rust_method_name, entry.builtin);
+    }
+
+    if !node.free_fns.is_empty() {
+        out.push('\n');
+        for entry in &node.free_fns {
+            emit_glue_method(out, &entry.rust_method_name, entry.builtin);
+        }
+    }
+
+    let has_children = !node.classes.is_empty() || !node.sub_namespaces.is_empty();
+
+    out.push_str(&format!(
+        "    fn {dispatch_name}(rest: &str) -> Option<NativeFunction> {{\n"
+    ));
+
+    if has_children {
+        out.push_str("        match rest.split_once('.') {\n");
+
+        for (class_name, _) in &node.classes {
+            let child_dispatch = class_dispatch_name(ns_name, class_name);
+            out.push_str(&format!(
+                "            Some(({:?}, method)) => Self::{child_dispatch}(method),\n",
+                class_name
+            ));
+        }
+
+        for (sub_ns, _) in &node.sub_namespaces {
+            let child_dispatch = namespace_dispatch_name(sub_ns);
+            out.push_str(&format!(
+                "            Some(({:?}, rest)) => Self::{child_dispatch}(rest),\n",
+                sub_ns
+            ));
+        }
+
+        if !node.free_fns.is_empty() {
+            out.push_str("            None => match rest {\n");
+            for entry in &node.free_fns {
                 out.push_str(&format!(
-                    "            {:?} => Some(Self::{}),\n",
-                    alias, glue
+                    "                {:?} => Some(Self::__glue_{}),\n",
+                    entry.baml_method_name, entry.rust_method_name
                 ));
             }
+            out.push_str("                _ => None,\n");
+            out.push_str("            },\n");
         }
+
+        out.push_str("            _ => None,\n");
+        out.push_str("        }\n");
+    } else {
+        out.push_str("        match rest {\n");
+        for entry in &node.free_fns {
+            out.push_str(&format!(
+                "            {:?} => Some(Self::__glue_{}),\n",
+                entry.baml_method_name, entry.rust_method_name
+            ));
+        }
+        out.push_str("            _ => None,\n");
+        out.push_str("        }\n");
+    }
+
+    out.push_str("    }\n");
+    out.push_str("}\n\n");
+}
+
+// ============================================================================
+// Root trait emission (BamlPackageBaml)
+// ============================================================================
+
+fn emit_root_trait(out: &mut String, root: &NamespaceNode) {
+    let mut supertraits: Vec<String> = Vec::new();
+
+    for class_name in root.classes.keys() {
+        supertraits.push(class_trait_name("", class_name));
+    }
+    for ns_name in root.sub_namespaces.keys() {
+        supertraits.push(namespace_trait_name(ns_name));
+    }
+
+    if supertraits.is_empty() {
+        out.push_str("pub trait BamlPackageBaml {\n");
+    } else {
+        let bounds = supertraits.join(" + ");
+        out.push_str(&format!("pub trait BamlPackageBaml: {bounds} {{\n"));
+    }
+
+    for entry in &root.free_fns {
+        emit_required_method(out, &entry.rust_method_name, entry.builtin);
+    }
+
+    if !root.free_fns.is_empty() {
+        out.push('\n');
+        for entry in &root.free_fns {
+            emit_glue_method(out, &entry.rust_method_name, entry.builtin);
+        }
+    }
+
+    out.push_str("    fn get_native_fn(path: &str) -> Option<NativeFunction> {\n");
+    out.push_str("        let rest = path.strip_prefix(\"baml.\")?;\n");
+    out.push_str("        match rest.split_once('.') {\n");
+
+    for (class_name, _) in &root.classes {
+        let dispatch = class_dispatch_name("", class_name);
+        out.push_str(&format!(
+            "            Some(({:?}, method)) => Self::{dispatch}(method),\n",
+            class_name
+        ));
+    }
+
+    for (ns_name, _) in &root.sub_namespaces {
+        let dispatch = namespace_dispatch_name(ns_name);
+        out.push_str(&format!(
+            "            Some(({:?}, rest)) => Self::{dispatch}(rest),\n",
+            ns_name
+        ));
+    }
+
+    if !root.free_fns.is_empty() {
+        out.push_str("            None => match rest {\n");
+        for entry in &root.free_fns {
+            out.push_str(&format!(
+                "                {:?} => Some(Self::__glue_{}),\n",
+                entry.baml_method_name, entry.rust_method_name
+            ));
+        }
+        out.push_str("                _ => None,\n");
+        out.push_str("            },\n");
     }
 
     out.push_str("            _ => None,\n");
     out.push_str("        }\n");
     out.push_str("    }\n");
     out.push_str("}\n");
-
-    out
 }
 
 // ============================================================================
-// Tier 1 — Required method signatures
+// Method emission helpers
 // ============================================================================
 
-fn emit_required_method(out: &mut String, b: &NativeBuiltin) {
+fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     let return_type = clean_return_type(b);
     let params = clean_param_list(b);
 
-    let has_mut_receiver = b.receiver.as_ref().is_some_and(|r| r.is_mut);
-    if has_mut_receiver {
-        // Mutable receiver methods cannot also receive `vm` — the mutable borrow of
-        // the receiver (e.g. `&mut Vec<Value>`) already ties up `vm`, so passing
-        // `vm` a second time would violate borrow rules at the call site.
-        out.push_str(&format!(
-            "    fn baml_{}({}) -> {};\n",
-            escape_fn_name(&b.fn_name),
-            params,
-            return_type
-        ));
-    } else {
-        out.push_str(&format!(
-            "    fn baml_{}(vm: &mut BexVm, {}) -> {};\n",
-            escape_fn_name(&b.fn_name),
-            params,
-            return_type
-        ));
+    match b.vm_usage {
+        VmUsage::None => out.push_str(&format!(
+            "    fn {method_name}({params}) -> {return_type};\n",
+        )),
+        VmUsage::Ref => out.push_str(&format!(
+            "    fn {method_name}(vm: &BexVm, {params}) -> {return_type};\n",
+        )),
+        VmUsage::MutRef => out.push_str(&format!(
+            "    fn {method_name}(vm: &mut BexVm, {params}) -> {return_type};\n",
+        )),
     }
 }
 
-/// Build the clean parameter list (after the `vm` param).
-///
-/// Receiver always comes first in the clean signature (for API clarity).
-/// The *extraction* order in the glue method is different for mutable receivers
-/// (params extracted first to avoid borrow conflicts), but the signature itself
-/// always has receiver → params.
+fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
+    let glue_name = format!("__glue_{method_name}");
+    let fallible = is_fallible(&b.path);
+
+    out.push_str(&format!(
+        "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeFunctionResult {{\n"
+    ));
+
+    emit_arg_extractions(out, b);
+
+    let call_args = call_arg_list(b);
+    let returns_null = matches!(b.return_type, BamlType::Null);
+
+    let binding = if returns_null {
+        "        "
+    } else {
+        "        let result = "
+    };
+    let suffix = if fallible { "?;\n" } else { ";\n" };
+
+    match b.vm_usage {
+        VmUsage::MutRef | VmUsage::Ref => {
+            out.push_str(&format!(
+                "{binding}Self::{method_name}(vm, {call_args}){suffix}"
+            ));
+        }
+        VmUsage::None => {
+            out.push_str(&format!(
+                "{binding}Self::{method_name}({call_args}){suffix}"
+            ));
+        }
+    }
+
+    emit_result_conversion(out, b);
+
+    out.push_str("    }\n");
+}
+
+// ============================================================================
+// Parameter list and return type helpers
+// ============================================================================
+
+/// Build the clean parameter list.
 fn clean_param_list(b: &NativeBuiltin) -> String {
     let mut parts: Vec<String> = Vec::new();
 
     if let Some(recv) = &b.receiver {
-        // Receiver always first in the clean signature.
         parts.push(format!(
             "{}: {}",
             receiver_param_name(recv),
@@ -192,7 +842,6 @@ fn clean_param_list(b: &NativeBuiltin) -> String {
             parts.push(format!("{}: {}", p.name, baml_type_to_input(&p.ty, false)));
         }
     } else {
-        // Free function: just params.
         for p in &b.params {
             parts.push(format!("{}: {}", p.name, baml_type_to_input(&p.ty, false)));
         }
@@ -201,8 +850,19 @@ fn clean_param_list(b: &NativeBuiltin) -> String {
     parts.join(", ")
 }
 
-/// Clean return type for a trait method.
 fn clean_return_type(b: &NativeBuiltin) -> String {
+    // Static constructors on media classes return copy types
+    if b.receiver.is_none() {
+        if let Some(class_name) = constructor_media_class(b) {
+            let ns = constructor_media_namespace(b);
+            let inner = format!("copy::{ns}::{class_name}");
+            if is_fallible(&b.path) {
+                return format!("Result<{inner}, VmError>");
+            } else {
+                return inner;
+            }
+        }
+    }
     let inner = baml_type_to_output(&b.return_type);
     if is_fallible(&b.path) {
         format!("Result<{inner}, VmError>")
@@ -211,62 +871,55 @@ fn clean_return_type(b: &NativeBuiltin) -> String {
     }
 }
 
-// ============================================================================
-// Tier 2 — Glue methods
-// ============================================================================
-
-fn emit_glue_method(out: &mut String, b: &NativeBuiltin) {
-    let fn_name = escape_fn_name(&b.fn_name);
-    let glue_name = format!("__baml_{fn_name}");
-    let fallible = is_fallible(&b.path);
-
-    out.push_str(&format!(
-        "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeFunctionResult {{\n"
-    ));
-
-    // Emit arg extraction.
-    emit_arg_extractions(out, b);
-
-    // Emit the call.
-    let call_args = call_arg_list(b);
-    let has_mut_receiver = b.receiver.as_ref().is_some_and(|r| r.is_mut);
-    let returns_null = matches!(b.return_type, BamlType::Null);
-
-    // For void/null returns, don't bind to `result` — avoids unused variable warning.
-    let binding = if returns_null { "        " } else { "        let result = " };
-    let suffix = if fallible { "?;\n" } else { ";\n" };
-
-    if has_mut_receiver {
-        out.push_str(&format!(
-            "{binding}Self::baml_{fn_name}({call_args}){suffix}"
-        ));
-    } else {
-        out.push_str(&format!(
-            "{binding}Self::baml_{fn_name}(vm, {call_args}){suffix}"
-        ));
+/// If this is a static constructor for a media class (no receiver, path has a media class segment),
+/// return the class name. Used to determine copy return type.
+fn constructor_media_class(b: &NativeBuiltin) -> Option<&str> {
+    if b.receiver.is_some() {
+        return None;
     }
-
-    // Emit result conversion.
-    emit_result_conversion(out, &b.return_type);
-
-    out.push_str("    }\n");
+    let rest = b.path.strip_prefix("baml.")?;
+    let segments: Vec<&str> = rest.split('.').collect();
+    // Need at least 2 segments for ClassName.method (e.g. "media.Pdf.from_url")
+    if segments.len() < 2 {
+        return None;
+    }
+    let class_seg = segments[segments.len() - 2];
+    // Only uppercase-starting segments are class names
+    if !class_seg.starts_with(|c: char| c.is_uppercase()) {
+        return None;
+    }
+    // Only for media classes
+    match class_seg {
+        "Pdf" | "Audio" | "Video" | "Image" => Some(class_seg),
+        _ => None,
+    }
 }
 
-/// Emit `let var = ...;` extraction statements for all method arguments.
+fn constructor_media_namespace(b: &NativeBuiltin) -> &str {
+    let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
+    let segments: Vec<&str> = rest.split('.').collect();
+    // segments = ["media", "Pdf", "from_url"] → namespace = "media"
+    if segments.len() >= 3 {
+        segments[0]
+    } else {
+        ""
+    }
+}
+
+// ============================================================================
+// Argument extraction
+// ============================================================================
+
 fn emit_arg_extractions(out: &mut String, b: &NativeBuiltin) {
     if let Some(recv) = &b.receiver {
         if recv.is_mut {
-            // Mutable receiver: extract non-receiver params first (cloning), then
-            // take the mutable borrow of the receiver last to avoid borrow conflicts.
             for (i, p) in b.params.iter().enumerate() {
-                let arg_idx = i + 1; // args[0] is the receiver
+                let arg_idx = i + 1;
                 emit_single_extraction(out, &p.name, arg_idx, &p.ty);
             }
-            // Receiver last (mutable borrow of vm).
             let recv_name = receiver_param_name(recv);
             emit_mut_receiver_extraction(out, &recv_name, recv);
         } else {
-            // Immutable receiver first.
             let recv_name = receiver_param_name(recv);
             emit_immut_receiver_extraction(out, &recv_name, 0, recv);
             for (i, p) in b.params.iter().enumerate() {
@@ -275,31 +928,35 @@ fn emit_arg_extractions(out: &mut String, b: &NativeBuiltin) {
             }
         }
     } else {
-        // Free function.
         for (i, p) in b.params.iter().enumerate() {
             emit_single_extraction(out, &p.name, i, &p.ty);
         }
     }
 }
 
-/// Emit a single `let {name} = {extraction_expr};`.
 fn emit_single_extraction(out: &mut String, name: &str, idx: usize, ty: &BamlType) {
     let rhs = extraction_expr(&format!("&args[{idx}]"), ty, false);
     out.push_str(&format!("        let {name} = {rhs};\n"));
 }
 
-/// Emit extraction for an immutable receiver (args[0]).
-fn emit_immut_receiver_extraction(
-    out: &mut String,
-    name: &str,
-    idx: usize,
-    recv: &Receiver,
-) {
-    let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv);
-    out.push_str(&format!("        let {name} = {rhs};\n"));
+fn emit_immut_receiver_extraction(out: &mut String, name: &str, idx: usize, recv: &Receiver) {
+    match recv.class_name.as_str() {
+        "Pdf" | "Audio" | "Video" | "Image" => {
+            let cls = &recv.class_name;
+            out.push_str(&format!(
+                "        let __instance = vm.as_instance(&args[{idx}])?;\n"
+            ));
+            out.push_str(&format!(
+                "        let {name} = view::media::{cls} {{ instance: __instance }};\n"
+            ));
+        }
+        _ => {
+            let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv);
+            out.push_str(&format!("        let {name} = {rhs};\n"));
+        }
+    }
 }
 
-/// Emit extraction for a mutable receiver (`as_array_mut`, `as_map_mut`).
 fn emit_mut_receiver_extraction(out: &mut String, name: &str, recv: &Receiver) {
     let expr = match recv.class_name.as_str() {
         "Array" => "vm.as_array_mut(&args[0])?".to_string(),
@@ -311,17 +968,15 @@ fn emit_mut_receiver_extraction(out: &mut String, name: &str, recv: &Receiver) {
 }
 
 // ============================================================================
-// Argument extraction expressions
+// Extraction expressions
 // ============================================================================
 
-/// Build the extraction expression for an immutable receiver.
 fn receiver_immut_extraction_expr(val: &str, recv: &Receiver) -> String {
     match recv.class_name.as_str() {
         "Array" => format!("vm.as_array({val})?.to_vec()"),
         "Map" => format!("vm.as_map({val})?.clone()"),
         "String" => format!("vm.as_string({val})?.clone()"),
         "Pdf" | "Audio" | "Video" | "Image" => {
-            // Determine MediaKind from class name.
             let kind = media_kind_expr(&recv.class_name);
             format!("vm.as_media({val}, {kind})?.clone()")
         }
@@ -329,7 +984,6 @@ fn receiver_immut_extraction_expr(val: &str, recv: &Receiver) -> String {
     }
 }
 
-/// Build the extraction expression for a parameter value.
 fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool) -> String {
     match ty {
         BamlType::String => {
@@ -366,33 +1020,22 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool) -> String {
             let inner_expr = extraction_expr("other", inner, false);
             format!("match {val} {{ Value::Null => None, other => Some({inner_expr}) }}")
         }
-        BamlType::Generic(_) => {
-            // Pass through as &Value — will be referenced by the call arg.
-            format!("{val}")
-        }
+        BamlType::Generic(_) => format!("{val}"),
         BamlType::Media(name) => {
             let kind = media_kind_expr(name);
             format!("vm.as_media({val}, {kind})?.clone()")
         }
-        BamlType::Named(_) | BamlType::Null => {
-            format!("{val}")
-        }
+        BamlType::Named(_) | BamlType::Null | BamlType::RustType => format!("{val}"),
     }
 }
 
-/// Build the call-arg list (args passed to the clean `baml_*` method, after `vm`).
-///
-/// The call order matches the clean signature: receiver first, then params.
-/// (The extraction order in the glue body is different for mutable receivers,
-/// but the call site always uses receiver-first order.)
 fn call_arg_list(b: &NativeBuiltin) -> String {
     let mut args: Vec<String> = Vec::new();
 
     if let Some(recv) = &b.receiver {
         let name = receiver_param_name(recv);
-        // Receiver always first in the call.
         if recv.is_mut {
-            args.push(name); // already a &mut ref from extraction
+            args.push(name);
         } else {
             args.push(call_arg_for_type(&name, &receiver_baml_type(recv)));
         }
@@ -408,20 +1051,15 @@ fn call_arg_list(b: &NativeBuiltin) -> String {
     args.join(", ")
 }
 
-/// Determine the right way to pass an extracted variable to the clean method.
 fn call_arg_for_type(name: &str, ty: &BamlType) -> String {
     match ty {
-        // These were extracted as owned values; pass by reference.
-        BamlType::String => format!("&{name}"),
-        BamlType::List(_) => format!("&{name}"),
-        BamlType::Map(_, _) => format!("&{name}"),
-        BamlType::Media(_) => format!("&{name}"),
-        // Optional<String> extracted as Option<String>; pass as Option<&str>.
+        BamlType::String | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Media(_) => {
+            format!("&{name}")
+        }
         BamlType::Optional(inner) => match inner.as_ref() {
             BamlType::String => format!("{name}.as_deref()"),
             BamlType::List(_) => format!("{name}.as_deref()"),
             _ => {
-                // Check if inner needs a reference.
                 if call_arg_needs_ref(inner) {
                     format!("{name}.as_ref()")
                 } else {
@@ -429,24 +1067,35 @@ fn call_arg_for_type(name: &str, ty: &BamlType) -> String {
                 }
             }
         },
-        // Scalars and generics are passed by value.
         BamlType::Int | BamlType::Float | BamlType::Bool | BamlType::Null => name.to_string(),
-        // Generic extracted as &Value — already a reference.
-        BamlType::Generic(_) => name.to_string(),
-        BamlType::Named(_) => name.to_string(),
+        // Media class view types (Pdf, Audio, Video, Image) are Named and need to be passed by ref
+        BamlType::Named(class_name)
+            if matches!(class_name.as_str(), "Pdf" | "Audio" | "Video" | "Image") =>
+        {
+            format!("&{name}")
+        }
+        BamlType::Generic(_) | BamlType::Named(_) | BamlType::RustType => name.to_string(),
     }
 }
 
 fn call_arg_needs_ref(ty: &BamlType) -> bool {
-    matches!(ty, BamlType::String | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Media(_))
+    matches!(
+        ty,
+        BamlType::String | BamlType::List(_) | BamlType::Map(_, _) | BamlType::Media(_)
+    )
 }
 
 // ============================================================================
-// Tier 2 — Result conversion
+// Result conversion
 // ============================================================================
 
-fn emit_result_conversion(out: &mut String, ty: &BamlType) {
-    let conversion = result_conversion_expr("result", ty);
+fn emit_result_conversion(out: &mut String, b: &NativeBuiltin) {
+    // Static constructors on media classes: result is a copy struct, call .to_value(vm)
+    if b.receiver.is_none() && constructor_media_class(b).is_some() {
+        out.push_str("        Ok(result.to_value(vm))\n");
+        return;
+    }
+    let conversion = result_conversion_expr("result", &b.return_type);
     out.push_str(&format!("        Ok({conversion})\n"));
 }
 
@@ -463,9 +1112,7 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
             let inner_conversion = result_conversion_expr("v", inner);
             format!("match {name} {{ Some(v) => {inner_conversion}, None => Value::Null }}")
         }
-        BamlType::Generic(_) => name.to_string(),
-        BamlType::Named(_) => name.to_string(),
-        BamlType::Media(_) => name.to_string(),
+        BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => name.to_string(),
     }
 }
 
@@ -473,7 +1120,6 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
 // Type mapping helpers
 // ============================================================================
 
-/// Map a `BamlType` to a Rust input type (used in trait method signatures).
 fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
     match ty {
         BamlType::String => {
@@ -505,8 +1151,7 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
             let inner_str = baml_type_to_input(inner, false);
             format!("Option<{inner_str}>")
         }
-        BamlType::Generic(_) => "&Value".to_string(),
-        BamlType::Named(_) => "&Value".to_string(),
+        BamlType::Generic(_) | BamlType::Named(_) | BamlType::RustType => "&Value".to_string(),
         BamlType::Media(_) => {
             if is_mut {
                 "&mut MediaValue".to_string()
@@ -517,7 +1162,6 @@ fn baml_type_to_input(ty: &BamlType, is_mut: bool) -> String {
     }
 }
 
-/// Map a `BamlType` to a Rust output type (used in trait method return types).
 fn baml_type_to_output(ty: &BamlType) -> String {
     match ty {
         BamlType::String => "String".to_string(),
@@ -531,9 +1175,7 @@ fn baml_type_to_output(ty: &BamlType) -> String {
             let inner_str = baml_type_to_output(inner);
             format!("Option<{inner_str}>")
         }
-        BamlType::Generic(_) => "Value".to_string(),
-        BamlType::Named(_) => "Value".to_string(),
-        BamlType::Media(_) => "Value".to_string(),
+        BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => "Value".to_string(),
     }
 }
 
@@ -541,12 +1183,10 @@ fn baml_type_to_output(ty: &BamlType) -> String {
 // Receiver helpers
 // ============================================================================
 
-/// The parameter name for a receiver (snake_case of the class name).
 fn receiver_param_name(recv: &Receiver) -> String {
     recv.class_name.to_lowercase()
 }
 
-/// The Rust input type for a receiver in the clean signature.
 fn receiver_input_type(recv: &Receiver) -> String {
     match recv.class_name.as_str() {
         "Array" => {
@@ -570,12 +1210,14 @@ fn receiver_input_type(recv: &Receiver) -> String {
                 "&str".to_string()
             }
         }
-        "Pdf" | "Audio" | "Video" | "Image" => "&MediaValue".to_string(),
+        "Pdf" => "&view::media::Pdf<'_>".to_string(),
+        "Audio" => "&view::media::Audio<'_>".to_string(),
+        "Video" => "&view::media::Video<'_>".to_string(),
+        "Image" => "&view::media::Image<'_>".to_string(),
         _ => "&Value".to_string(),
     }
 }
 
-/// Return a synthetic `BamlType` representing the receiver type (for call-arg generation).
 fn receiver_baml_type(recv: &Receiver) -> BamlType {
     match recv.class_name.as_str() {
         "Array" => BamlType::List(Box::new(BamlType::Generic("T".to_string()))),
@@ -584,14 +1226,11 @@ fn receiver_baml_type(recv: &Receiver) -> BamlType {
             Box::new(BamlType::Generic("V".to_string())),
         ),
         "String" => BamlType::String,
-        "Pdf" | "Audio" | "Video" | "Image" => {
-            BamlType::Media(recv.class_name.clone())
-        }
+        "Pdf" | "Audio" | "Video" | "Image" => BamlType::Named(recv.class_name.clone()),
         _ => BamlType::Named(recv.class_name.clone()),
     }
 }
 
-/// The `MediaKind::*` expression for a given media class name.
 fn media_kind_expr(class_name: &str) -> String {
     match class_name {
         "Pdf" => "MediaKind::Pdf".to_string(),
@@ -600,22 +1239,6 @@ fn media_kind_expr(class_name: &str) -> String {
         "Image" => "MediaKind::Image".to_string(),
         _ => "MediaKind::Generic".to_string(),
     }
-}
-
-/// Strip the `baml_` prefix from a fn_name produced by `path_to_fn_name` so
-/// it matches the suffix used in the trait method names.
-///
-/// `extract.rs` produces names like `"baml_array_length"`. The trait emits
-/// `fn baml_array_length(...)`, so we just use the full name as-is — but we
-/// need to avoid double-prefixing `baml_`.
-///
-/// This helper is a no-op; it exists to make the intent explicit.
-fn escape_fn_name(fn_name: &str) -> &str {
-    // fn_name from extract.rs is already `baml_<rest>`.
-    // We strip the `baml_` prefix because the caller writes `fn baml_{name}`.
-    fn_name
-        .strip_prefix("baml_")
-        .unwrap_or(fn_name)
 }
 
 // ============================================================================
@@ -628,127 +1251,336 @@ mod tests {
     use crate::extract::extract_native_builtins;
 
     #[test]
-    fn test_generate_native_trait() {
-        let builtins = extract_native_builtins();
-        let output = generate_native_trait(&builtins);
+    fn test_camel_to_snake() {
+        assert_eq!(camel_to_snake("toLowerCase"), "to_lower_case");
+        assert_eq!(camel_to_snake("toUpperCase"), "to_upper_case");
+        assert_eq!(camel_to_snake("startsWith"), "starts_with");
+        assert_eq!(camel_to_snake("endsWith"), "ends_with");
+        assert_eq!(camel_to_snake("indexOf"), "index_of");
+        assert_eq!(camel_to_snake("charAt"), "char_at");
+        assert_eq!(camel_to_snake("replaceAll"), "replace_all");
+        assert_eq!(camel_to_snake("length"), "length");
+        assert_eq!(camel_to_snake("from_url"), "from_url");
+        assert_eq!(camel_to_snake("mime_type"), "mime_type");
+        assert_eq!(camel_to_snake("deep_copy"), "deep_copy");
+    }
 
-        assert!(output.contains("pub trait NativeFunctions"));
+    #[test]
+    fn test_generate_produces_class_traits() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
         assert!(
-            output.contains("fn baml_array_length("),
-            "missing baml_array_length in output:\n{output}"
+            output.contains("pub trait BamlClassArray"),
+            "missing BamlClassArray trait:\n{output}"
         );
         assert!(
-            output.contains("fn __baml_array_length("),
-            "missing __baml_array_length in output:\n{output}"
+            output.contains("pub trait BamlClassMap"),
+            "missing BamlClassMap trait:\n{output}"
         );
         assert!(
-            output.contains("fn get_native_fn("),
+            output.contains("pub trait BamlClassString"),
+            "missing BamlClassString trait:\n{output}"
+        );
+        assert!(
+            output.contains("pub trait BamlClassMediaPdf"),
+            "missing BamlClassMediaPdf trait:\n{output}"
+        );
+        assert!(
+            output.contains("pub trait BamlClassMediaAudio"),
+            "missing BamlClassMediaAudio trait:\n{output}"
+        );
+        assert!(
+            output.contains("pub trait BamlClassMediaVideo"),
+            "missing BamlClassMediaVideo trait:\n{output}"
+        );
+        assert!(
+            output.contains("pub trait BamlClassMediaImage"),
+            "missing BamlClassMediaImage trait:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_generate_produces_namespace_traits() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        assert!(
+            output.contains("pub trait BamlNamespaceMath"),
+            "missing BamlNamespaceMath trait:\n{output}"
+        );
+        assert!(
+            output.contains("pub trait BamlNamespaceMedia"),
+            "missing BamlNamespaceMedia trait:\n{output}"
+        );
+        assert!(
+            output.contains("pub trait BamlNamespaceUnstable"),
+            "missing BamlNamespaceUnstable trait:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_generate_produces_root_trait() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        assert!(
+            output.contains("pub trait BamlPackageBaml"),
+            "missing BamlPackageBaml trait:\n{output}"
+        );
+        assert!(
+            output.contains("fn get_native_fn(path: &str)"),
             "missing get_native_fn in output:\n{output}"
         );
+    }
+
+    #[test]
+    fn test_bare_method_names_on_class_traits() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
         assert!(
-            output.contains("\"baml.Array.length\""),
-            "missing path baml.Array.length in output:\n{output}"
+            output.contains("fn length(array: &[Value]) -> i64;"),
+            "BamlClassArray should have bare `length` method:\n{output}"
+        );
+        assert!(
+            output.contains("fn to_lower_case(string: &str) -> String;"),
+            "BamlClassString should have bare `to_lower_case` method:\n{output}"
+        );
+        assert!(
+            output.contains("fn trunc(value: f64) -> i64;"),
+            "BamlNamespaceMath should have bare `trunc` method:\n{output}"
         );
     }
 
     #[test]
-    fn test_generate_all_required_methods_present() {
-        let builtins = extract_native_builtins();
-        let output = generate_native_trait(&builtins);
+    fn test_glue_methods_present() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
 
-        // Every extracted builtin should appear in the output.
-        for b in &builtins {
-            let name = escape_fn_name(&b.fn_name);
-            assert!(
-                output.contains(&format!("fn baml_{name}(")),
-                "missing method baml_{name} (path={}) in generated trait",
-                b.path
-            );
-            assert!(
-                output.contains(&format!("fn __baml_{name}(")),
-                "missing glue method __baml_{name} (path={}) in generated trait",
-                b.path
-            );
-            assert!(
-                output.contains(&format!("{:?} => Some(Self::__baml_{name})", b.path)),
-                "missing path {:?} in get_native_fn match (method __baml_{name})",
-                b.path
-            );
-        }
+        assert!(
+            output.contains("fn __glue_length(vm: &mut BexVm, args: &[Value])"),
+            "missing __glue_length:\n{output}"
+        );
+        assert!(
+            output.contains("fn __glue_to_lower_case(vm: &mut BexVm, args: &[Value])"),
+            "missing __glue_to_lower_case:\n{output}"
+        );
+        assert!(
+            output.contains("fn __glue_trunc(vm: &mut BexVm, args: &[Value])"),
+            "missing __glue_trunc:\n{output}"
+        );
     }
 
     #[test]
-    fn test_legacy_path_aliases_present() {
-        let builtins = extract_native_builtins();
-        let output = generate_native_trait(&builtins);
+    fn test_dispatch_methods_present() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
 
-        // Legacy media paths must be present so existing bytecode resolves.
-        let expected_aliases = &[
-            "baml.Media.as_url",
-            "baml.Media.as_file",
-            "baml.Media.as_base64",
-            "baml.Media.mime_type",
-        ];
-        for alias in expected_aliases {
-            assert!(
-                output.contains(&format!("{alias:?} => Some")),
-                "legacy alias {alias:?} missing from get_native_fn match"
-            );
-        }
+        assert!(
+            output.contains("fn __dispatch_array(method: &str)"),
+            "missing __dispatch_array:\n{output}"
+        );
+        assert!(
+            output.contains("fn __dispatch_map(method: &str)"),
+            "missing __dispatch_map:\n{output}"
+        );
+        assert!(
+            output.contains("fn __dispatch_string(method: &str)"),
+            "missing __dispatch_string:\n{output}"
+        );
+        assert!(
+            output.contains("fn __dispatch_math(rest: &str)"),
+            "missing __dispatch_math:\n{output}"
+        );
+        assert!(
+            output.contains("fn __dispatch_media(rest: &str)"),
+            "missing __dispatch_media:\n{output}"
+        );
+        assert!(
+            output.contains("fn __dispatch_media_pdf(method: &str)"),
+            "missing __dispatch_media_pdf:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_root_dispatches_to_children() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        assert!(
+            output.contains("(\"Array\", method)) => Self::__dispatch_array(method)"),
+            "get_native_fn should dispatch Array to __dispatch_array:\n{output}"
+        );
+        assert!(
+            output.contains("(\"media\", rest)) => Self::__dispatch_media(rest)"),
+            "get_native_fn should dispatch media to __dispatch_media:\n{output}"
+        );
+        assert!(
+            output.contains("(\"math\", rest)) => Self::__dispatch_math(rest)"),
+            "get_native_fn should dispatch math to __dispatch_math:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_root_free_fns_on_baml_package() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        assert!(
+            output.contains("fn deep_copy(vm: &mut BexVm, value: &Value) -> Value;"),
+            "BamlPackageBaml should have deep_copy:\n{output}"
+        );
+        assert!(
+            output.contains("fn deep_equals(vm: &BexVm, a: &Value, b: &Value) -> bool;"),
+            "BamlPackageBaml should have deep_equals with &BexVm:\n{output}"
+        );
     }
 
     #[test]
     fn test_array_push_mut_receiver() {
-        let builtins = extract_native_builtins();
-        let output = generate_native_trait(&builtins);
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
 
-        // Array.push has a mutable receiver — signature should use &mut Vec<Value>.
-        // Mutable receiver methods do NOT have vm as first param (borrow conflict).
         assert!(
-            output.contains("fn baml_array_push(array: &mut Vec<Value>, item: &Value)"),
-            "Array.push should have &mut Vec<Value> receiver (no vm param) first:\n{output}"
+            output.contains("fn push(array: &mut Vec<Value>, item: &Value)"),
+            "Array.push should have &mut Vec<Value> receiver:\n{output}"
         );
-        // Must NOT have vm as first param.
         assert!(
-            !output.contains("fn baml_array_push(vm: &mut BexVm,"),
-            "Array.push should NOT have vm: &mut BexVm as first param:\n{output}"
+            !output.contains("fn push(vm: &mut BexVm,"),
+            "Array.push should NOT have vm as first param:\n{output}"
         );
     }
 
     #[test]
-    fn test_fallible_methods_return_result() {
-        let builtins = extract_native_builtins();
-        let output = generate_native_trait(&builtins);
+    fn test_vm_param_matches_vm_usage() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
 
-        // Array.at and deep_copy should return Result<...>.
-        assert!(
-            output.contains("fn baml_array_at(") && output.contains("Result<"),
-            "Array.at should return Result<...>"
-        );
-    }
-
-    #[test]
-    fn test_vm_param_always_present() {
-        let builtins = extract_native_builtins();
-        let output = generate_native_trait(&builtins);
-
-        // Every required method without a mutable receiver must have `vm: &mut BexVm` as first param.
-        // Mutable receiver methods do NOT get vm (borrow conflict at call site).
         for b in &builtins {
-            let name = escape_fn_name(&b.fn_name);
+            let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
+            let segments: Vec<&str> = rest.split('.').collect();
+            let baml_name = segments.last().unwrap();
+            let name = camel_to_snake(baml_name);
             let has_mut_receiver = b.receiver.as_ref().is_some_and(|r| r.is_mut);
+            let has_mut_vm = output.contains(&format!("fn {name}(vm: &mut BexVm,"));
+            let has_ref_vm = output.contains(&format!("fn {name}(vm: &BexVm,"));
+
             if has_mut_receiver {
-                // Mutable receiver methods must NOT have vm as first param.
                 assert!(
-                    !output.contains(&format!("fn baml_{name}(vm: &mut BexVm,")),
-                    "method baml_{name} should NOT have vm: &mut BexVm (mutable receiver)"
+                    !has_mut_vm && !has_ref_vm,
+                    "method {name} should NOT have vm param (mutable receiver)"
                 );
             } else {
-                assert!(
-                    output.contains(&format!("fn baml_{name}(vm: &mut BexVm,")),
-                    "method baml_{name} should have vm: &mut BexVm as first param"
-                );
+                match b.vm_usage {
+                    VmUsage::MutRef => {
+                        assert!(has_mut_vm, "method {name} should have vm: &mut BexVm")
+                    }
+                    VmUsage::Ref => assert!(has_ref_vm, "method {name} should have vm: &BexVm"),
+                    VmUsage::None => assert!(
+                        !has_mut_vm && !has_ref_vm,
+                        "method {name} should NOT have vm param"
+                    ),
+                }
             }
         }
+    }
+
+    #[test]
+    fn test_namespace_media_aggregates_classes() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        assert!(
+            output.contains(
+                "pub trait BamlNamespaceMedia: BamlClassMediaAudio + BamlClassMediaImage + BamlClassMediaPdf + BamlClassMediaVideo"
+            ),
+            "BamlNamespaceMedia should have child class supertraits:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_media_dispatch_routes_to_class_dispatchers() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        assert!(
+            output.contains("(\"Pdf\", method)) => Self::__dispatch_media_pdf(method)"),
+            "__dispatch_media should route Pdf to __dispatch_media_pdf:\n{output}"
+        );
+        assert!(
+            output.contains("(\"Audio\", method)) => Self::__dispatch_media_audio(method)"),
+            "__dispatch_media should route Audio to __dispatch_media_audio:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_static_constructors_on_class_trait() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        assert!(
+            output.contains(
+                "fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Pdf;"
+            ),
+            "BamlClassMediaPdf should have from_url static constructor returning copy::media::Pdf:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_view_module_generated() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        assert!(output.contains("pub mod view"), "missing view module");
+        assert!(output.contains("pub mod copy"), "missing copy module");
+    }
+
+    #[test]
+    fn test_view_media_pdf_struct() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        assert!(
+            output.contains("pub struct Pdf<'a>"),
+            "missing Pdf view struct:\n{output}"
+        );
+        assert!(
+            output.contains("pub instance: &'a Instance"),
+            "Pdf view should hold &Instance:\n{output}"
+        );
+        // _data accessor should be generic with downcast
+        assert!(
+            output.contains("fn _data<'v, T: 'static>"),
+            "Pdf._data should be generic downcast accessor:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_copy_media_pdf_struct() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        // copy::media::Pdf should have _data: Arc<dyn Any + Send + Sync>
+        assert!(
+            output.contains("Arc<dyn Any + Send + Sync>"),
+            "copy struct should have Arc<dyn Any> field:\n{output}"
+        );
+        // to_value method
+        assert!(
+            output.contains("fn to_value(self, vm: &mut BexVm) -> Value"),
+            "copy struct should have to_value method:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_view_namespace_structure() {
+        let (builtins, class_defs) = extract_native_builtins();
+        let output = generate_native_trait(&builtins, &class_defs);
+
+        // Check namespace sub-modules exist
+        assert!(output.contains("pub mod media"), "missing media namespace in view");
+        assert!(output.contains("pub mod errors") || !class_defs.iter().any(|c| c.namespace_prefix == "baml.errors"),
+            "missing errors namespace in view (if error classes exist)");
     }
 }

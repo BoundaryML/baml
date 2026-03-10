@@ -29,6 +29,7 @@ class Array<T> {
     $rust_function
   }
 
+  //baml:mut_vm
   function join(self, separator: string) -> string {
     $rust_function
   }
@@ -39,10 +40,12 @@ class Map<K, V> {
     $rust_function
   }
 
+  //baml:mut_vm
   function has(self, key: K) -> bool {
     $rust_function
   }
 
+  //baml:mut_vm
   function keys(self) -> K[] {
     $rust_function
   }
@@ -56,6 +59,7 @@ class Map<K, V> {
     $rust_function
   }
 
+  //baml:mut_vm
   function get(self, key: K) -> V? {
     $rust_function
   }

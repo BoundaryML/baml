@@ -4,20 +4,23 @@
 //! through the compiler2 front-end (lex → parse → lower), and collects every
 //! function whose body is `FunctionBodyDef::Builtin(BuiltinKind::Vm)` into a
 //! `NativeBuiltin` record. The CST is also retained per file for
-//! `//baml:mut_self` directive scanning.
+//! `//baml:mut_self`, `//baml:vm`, and `//baml:mut_vm` directive scanning.
 
 use baml_base::FileId;
-use baml_compiler2_ast::ast::{BuiltinKind, ClassDef, FunctionBodyDef, FunctionDef, Item, TypeExpr};
 use baml_compiler_syntax::{NodeOrToken, SyntaxKind, SyntaxNode};
+use baml_compiler2_ast::ast::{
+    BuiltinKind, ClassDef, FunctionBodyDef, FunctionDef, Item, TypeExpr,
+};
 
-use crate::types::{BamlType, NativeBuiltin, Param, Receiver};
+use crate::types::{BamlType, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver, VmUsage};
 
 /// Parse, lower, and extract all `$rust_function` builtins from the `.baml` stdlib.
 ///
 /// Only processes files with `package == "baml"`. Skips `$rust_io_function`
 /// builtins entirely (those stay on the legacy pipeline).
-pub fn extract_native_builtins() -> Vec<NativeBuiltin> {
+pub fn extract_native_builtins() -> (Vec<NativeBuiltin>, Vec<NativeClassDef>) {
     let mut builtins = Vec::new();
+    let mut class_defs = Vec::new();
 
     for builtin_file in baml_builtins2::ALL {
         if builtin_file.package != "baml" {
@@ -49,16 +52,24 @@ pub fn extract_native_builtins() -> Vec<NativeBuiltin> {
             match item {
                 Item::Class(class_def) => {
                     extract_from_class(class_def, &namespace_prefix, &cst_root, &mut builtins);
+                    if let Some(class_def_record) = extract_class_fields(class_def, &namespace_prefix) {
+                        class_defs.push(class_def_record);
+                    }
                 }
                 Item::Function(func_def) => {
-                    extract_from_free_function(func_def, &namespace_prefix, &mut builtins);
+                    extract_from_free_function(
+                        func_def,
+                        &namespace_prefix,
+                        &cst_root,
+                        &mut builtins,
+                    );
                 }
                 _ => {}
             }
         }
     }
 
-    builtins
+    (builtins, class_defs)
 }
 
 /// Extract `$rust_function` methods from a class definition.
@@ -111,10 +122,36 @@ fn extract_from_class(
             .map(|p| p.name.as_str() == "self")
             .unwrap_or(false);
 
+        let method_name = method.name.as_str();
+        let is_mut =
+            has_self && has_method_directive(cst_root, class_name, method_name, "//baml:mut_self");
+        let has_vm = has_method_directive(cst_root, class_name, method_name, "//baml:vm");
+        let has_mut_vm = has_method_directive(cst_root, class_name, method_name, "//baml:mut_vm");
+
+        if has_vm && has_mut_vm {
+            panic!(
+                "baml codegen error: {path} has both //baml:vm and //baml:mut_vm \
+                 -- these are mutually exclusive"
+            );
+        }
+        if is_mut && (has_vm || has_mut_vm) {
+            panic!(
+                "baml codegen error: {path} has //baml:mut_self with //baml:vm or //baml:mut_vm \
+                 -- these are mutually exclusive (mutable receiver already borrows vm)"
+            );
+        }
+
+        let vm_usage = if has_mut_vm {
+            VmUsage::MutRef
+        } else if has_vm {
+            VmUsage::Ref
+        } else {
+            VmUsage::None
+        };
+
         let (params, receiver) = if has_self {
             // Instance method: skip `self`, create receiver.
             let params = extract_params_skip_self(method, &all_generics);
-            let is_mut = has_mut_self_directive(cst_root, class_name, method.name.as_str());
             let receiver = Some(Receiver {
                 class_name: class_name.to_string(),
                 class_generics: class_generics.clone(),
@@ -152,14 +189,66 @@ fn extract_from_class(
             return_type,
             generics: all_generics,
             receiver,
+            vm_usage,
         });
     }
+}
+
+/// Extract field definitions from a class, producing a `NativeClassDef`.
+///
+/// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String)
+/// since they don't use `Object::Instance`.
+fn extract_class_fields(class_def: &ClassDef, namespace_prefix: &str) -> Option<NativeClassDef> {
+    let class_name = class_def.name.as_str();
+
+    // Skip classes with dedicated Object variants — they are not Instance-based.
+    match class_name {
+        "Array" | "Map" | "String" => return None,
+        _ => {}
+    }
+
+    // Skip classes with no fields (pure namespace markers or method-only classes).
+    if class_def.fields.is_empty() {
+        return None;
+    }
+
+    let generic_params: Vec<String> = class_def
+        .generic_params
+        .iter()
+        .map(|n| n.as_str().to_string())
+        .collect();
+
+    let fields: Vec<NativeClassField> = class_def
+        .fields
+        .iter()
+        .enumerate()
+        .map(|(index, field)| {
+            let field_type = field
+                .type_expr
+                .as_ref()
+                .map(|te| type_expr_to_baml_type(&te.expr, &generic_params))
+                .unwrap_or(BamlType::Named("unknown".to_string()));
+            NativeClassField {
+                name: field.name.as_str().to_string(),
+                field_type,
+                index,
+            }
+        })
+        .collect();
+
+    Some(NativeClassDef {
+        name: class_name.to_string(),
+        namespace_prefix: namespace_prefix.to_string(),
+        generic_params,
+        fields,
+    })
 }
 
 /// Extract a `$rust_function` free function (not inside a class).
 fn extract_from_free_function(
     func_def: &FunctionDef,
     namespace_prefix: &str,
+    cst_root: &SyntaxNode,
     builtins: &mut Vec<NativeBuiltin>,
 ) {
     if !is_vm_builtin(func_def) {
@@ -174,6 +263,23 @@ fn extract_from_free_function(
 
     let path = format!("{namespace_prefix}.{}", func_def.name.as_str());
     let fn_name = path_to_fn_name(&path);
+    let has_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:vm");
+    let has_mut_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:mut_vm");
+
+    if has_vm && has_mut_vm {
+        panic!(
+            "baml codegen error: {path} has both //baml:vm and //baml:mut_vm \
+             -- these are mutually exclusive"
+        );
+    }
+
+    let vm_usage = if has_mut_vm {
+        VmUsage::MutRef
+    } else if has_vm {
+        VmUsage::Ref
+    } else {
+        VmUsage::None
+    };
 
     // Free functions have no `self` — all params are regular params.
     let params: Vec<Param> = func_def
@@ -202,6 +308,7 @@ fn extract_from_free_function(
         return_type,
         generics,
         receiver: None,
+        vm_usage,
     });
 }
 
@@ -265,9 +372,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             BamlType::Optional(Box::new(type_expr_to_baml_type(inner, generics)))
         }
 
-        TypeExpr::List(inner) => {
-            BamlType::List(Box::new(type_expr_to_baml_type(inner, generics)))
-        }
+        TypeExpr::List(inner) => BamlType::List(Box::new(type_expr_to_baml_type(inner, generics))),
 
         TypeExpr::Map { key, value } => BamlType::Map(
             Box::new(type_expr_to_baml_type(key, generics)),
@@ -302,49 +407,59 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             BamlType::Named("unknown".to_string())
         }
         TypeExpr::Type => BamlType::Named("type".to_string()),
-        TypeExpr::Rust => BamlType::Named("rust".to_string()),
+        TypeExpr::Rust => BamlType::RustType,
     }
 }
 
-/// Check if the function named `method_name` inside the class named `class_name`
-/// has a `//baml:mut_self` comment inside the function node before the `function` keyword.
+/// Check if a method inside a class has the given `directive` comment (e.g. `"//baml:mut_self"`)
+/// before its `function` keyword in the CST.
 ///
 /// In the Rowan CST, the parser's `bump()` emits leading trivia tokens (whitespace,
 /// comments) immediately before the `function` keyword inside the `FUNCTION_DEF` node
-/// itself. So `//baml:mut_self` appears as a `LINE_COMMENT` token child of the
+/// itself. So the directive appears as a `LINE_COMMENT` token child of the
 /// `FUNCTION_DEF` node, before the `KW_FUNCTION` token.
-fn has_mut_self_directive(cst_root: &SyntaxNode, class_name: &str, method_name: &str) -> bool {
+fn has_method_directive(
+    cst_root: &SyntaxNode,
+    class_name: &str,
+    method_name: &str,
+    directive: &str,
+) -> bool {
     for class_node in cst_root.descendants() {
         if class_node.kind() != SyntaxKind::CLASS_DEF {
             continue;
         }
-
-        // Check if this class has the right name.
         if !class_node_has_name(&class_node, class_name) {
             continue;
         }
-
-        // Find all FUNCTION_DEF descendants of this class node.
         for func_node in class_node.descendants() {
             if func_node.kind() != SyntaxKind::FUNCTION_DEF {
                 continue;
             }
-
-            // Check the function name.
             if !func_node_has_name(&func_node, method_name) {
                 continue;
             }
-
-            // Found the function. The `//baml:mut_self` comment is emitted as a
-            // LINE_COMMENT token inside the FUNCTION_DEF node (as leading trivia
-            // before the `function` keyword). Scan tokens inside the node that
-            // appear before the KW_FUNCTION token.
-            if function_node_has_mut_self_leading_comment(&func_node) {
+            if function_node_has_leading_directive(&func_node, directive) {
                 return true;
             }
         }
     }
+    false
+}
 
+/// Check if a top-level (non-class) function has the given `directive` comment
+/// before its `function` keyword in the CST.
+fn has_free_fn_directive(cst_root: &SyntaxNode, fn_name: &str, directive: &str) -> bool {
+    for node in cst_root.children() {
+        if node.kind() != SyntaxKind::FUNCTION_DEF {
+            continue;
+        }
+        if !func_node_has_name(&node, fn_name) {
+            continue;
+        }
+        if function_node_has_leading_directive(&node, directive) {
+            return true;
+        }
+    }
     false
 }
 
@@ -384,44 +499,33 @@ fn func_node_has_name(func_node: &SyntaxNode, method_name: &str) -> bool {
     false
 }
 
-/// Check whether a `FUNCTION_DEF` node contains a `//baml:mut_self` `LINE_COMMENT`
-/// token before its `KW_FUNCTION` token.
+/// Check whether a `FUNCTION_DEF` node contains a specific directive `LINE_COMMENT`
+/// (e.g. `"//baml:mut_self"` or `"//baml:mut_vm"`) before its `KW_FUNCTION` token.
 ///
 /// The parser emits trivia (whitespace, comments) as tokens within the containing
-/// syntactic node before the first real token. So any `//baml:mut_self` that
-/// appears immediately before `function push(...)` in source is stored as a
+/// syntactic node before the first real token. So any directive comment that
+/// appears immediately before `function foo(...)` in source is stored as a
 /// `LINE_COMMENT` child of that `FUNCTION_DEF` node.
-fn function_node_has_mut_self_leading_comment(func_node: &SyntaxNode) -> bool {
+fn function_node_has_leading_directive(func_node: &SyntaxNode, directive: &str) -> bool {
     for element in func_node.children_with_tokens() {
         match element {
-            NodeOrToken::Token(tok) => {
-                match tok.kind() {
-                    SyntaxKind::LINE_COMMENT => {
-                        let text = tok.text().trim();
-                        if text == "//baml:mut_self" {
-                            return true;
-                        }
-                        // A different comment — keep scanning.
-                    }
-                    k if k.is_whitespace() => {
-                        // Skip whitespace/newlines.
-                    }
-                    SyntaxKind::KW_FUNCTION => {
-                        // Reached the `function` keyword — stop, no directive found.
-                        return false;
-                    }
-                    SyntaxKind::AT_AT | SyntaxKind::BLOCK_COMMENT => {
-                        // Block attributes or block comments — keep scanning.
-                    }
-                    _ => {
-                        // Any other token — stop.
-                        return false;
+            NodeOrToken::Token(tok) => match tok.kind() {
+                SyntaxKind::LINE_COMMENT => {
+                    let text = tok.text().trim();
+                    if text == directive {
+                        return true;
                     }
                 }
-            }
-            NodeOrToken::Node(_) => {
-                // A child node (e.g. BLOCK_ATTRIBUTE) before the function keyword — keep scanning.
-            }
+                k if k.is_whitespace() => {}
+                SyntaxKind::KW_FUNCTION => {
+                    return false;
+                }
+                SyntaxKind::AT_AT | SyntaxKind::BLOCK_COMMENT => {}
+                _ => {
+                    return false;
+                }
+            },
+            NodeOrToken::Node(_) => {}
         }
     }
     false
@@ -432,20 +536,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_extract_class_fields() {
+        let (_builtins, class_defs) = extract_native_builtins();
+
+        // Media classes should be extracted
+        let pdf = class_defs.iter().find(|c| c.name == "Pdf").expect("missing Pdf");
+        assert_eq!(pdf.namespace_prefix, "baml.media");
+        assert_eq!(pdf.fields.len(), 1);
+        assert_eq!(pdf.fields[0].name, "_data");
+        assert_eq!(pdf.fields[0].index, 0);
+        assert!(matches!(pdf.fields[0].field_type, BamlType::RustType));
+
+        // Audio, Video, Image should also be extracted
+        assert!(class_defs.iter().any(|c| c.name == "Audio"), "missing Audio");
+        assert!(class_defs.iter().any(|c| c.name == "Video"), "missing Video");
+        assert!(class_defs.iter().any(|c| c.name == "Image"), "missing Image");
+
+        // Array, Map, String should NOT be extracted (dedicated Object variants)
+        assert!(!class_defs.iter().any(|c| c.name == "Array"), "Array should be excluded");
+        assert!(!class_defs.iter().any(|c| c.name == "Map"), "Map should be excluded");
+        assert!(!class_defs.iter().any(|c| c.name == "String"), "String should be excluded");
+    }
+
+    #[test]
     fn test_path_to_fn_name() {
         assert_eq!(path_to_fn_name("baml.Array.length"), "baml_array_length");
         assert_eq!(path_to_fn_name("baml.deep_copy"), "baml_deep_copy");
         assert_eq!(path_to_fn_name("baml.math.trunc"), "baml_math_trunc");
         assert_eq!(path_to_fn_name("baml.media.Pdf.url"), "baml_media_pdf_url");
-        assert_eq!(
-            path_to_fn_name("baml.Array.push"),
-            "baml_array_push"
-        );
+        assert_eq!(path_to_fn_name("baml.Array.push"), "baml_array_push");
     }
 
     #[test]
     fn test_extract_native_builtins() {
-        let builtins = extract_native_builtins();
+        let (builtins, _class_defs) = extract_native_builtins();
         assert!(
             builtins.len() >= 24,
             "Expected at least 24 builtins, got {}",
@@ -459,7 +583,11 @@ mod tests {
             .expect("missing Array.length");
         assert_eq!(array_length.fn_name, "baml_array_length");
         assert!(array_length.receiver.is_some());
-        assert_eq!(array_length.params.len(), 0, "Array.length has no params besides self");
+        assert_eq!(
+            array_length.params.len(),
+            0,
+            "Array.length has no params besides self"
+        );
 
         // Spot-check: deep_copy (free function with generics)
         let deep_copy = builtins
@@ -503,5 +631,55 @@ mod tests {
             .expect("missing media.Pdf.url");
         assert!(pdf_url.receiver.is_some());
         assert_eq!(pdf_url.receiver.as_ref().unwrap().class_name, "Pdf");
+
+        // Spot-check: deep_copy has VmUsage::MutRef
+        assert_eq!(
+            deep_copy.vm_usage,
+            VmUsage::MutRef,
+            "deep_copy should use mut vm"
+        );
+
+        // Spot-check: deep_equals has VmUsage::Ref (immutable vm)
+        let deep_equals = builtins
+            .iter()
+            .find(|b| b.path == "baml.deep_equals")
+            .expect("missing deep_equals");
+        assert_eq!(
+            deep_equals.vm_usage,
+            VmUsage::Ref,
+            "deep_equals should use immutable vm"
+        );
+
+        // Spot-check: Array.length does NOT use vm
+        assert_eq!(
+            array_length.vm_usage,
+            VmUsage::None,
+            "Array.length should not use vm"
+        );
+
+        // Spot-check: Array.push does NOT use vm (it has mut_self instead)
+        assert_eq!(
+            array_push.vm_usage,
+            VmUsage::None,
+            "Array.push should not use vm"
+        );
+
+        // Spot-check: math.trunc does NOT use vm
+        assert_eq!(
+            math_trunc.vm_usage,
+            VmUsage::None,
+            "math.trunc should not use vm"
+        );
+
+        // Spot-check: String.split has VmUsage::MutRef
+        let string_split = builtins
+            .iter()
+            .find(|b| b.path == "baml.String.split")
+            .expect("missing String.split");
+        assert_eq!(
+            string_split.vm_usage,
+            VmUsage::MutRef,
+            "String.split should use mut vm"
+        );
     }
 }

@@ -38,6 +38,9 @@ pub enum InternalError {
 
     #[error("jump offset overflowed instruction pointer")]
     InvalidJump,
+
+    #[error("{0}")]
+    Other(String),
 }
 
 /// Errors that can happen at runtime.

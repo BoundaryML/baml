@@ -451,15 +451,43 @@ impl<'a> BexValue<'a> {
         self,
         heap: &GcProtectedHeap<'_>,
     ) -> Result<bex_vm_types::MediaValue, AccessError> {
+        /// Extract a MediaValue from a media Instance object (field 0 holds a RustData).
         fn from_ptr(ptr: &HeapPtr) -> Result<bex_vm_types::MediaValue, AccessError> {
             let obj = unsafe { ptr.get() };
-            let Object::Media(media) = obj else {
-                return Err(AccessError::TypeMismatch {
+            match obj {
+                Object::Instance(instance) => {
+                    // Media classes store the baml_builtins::MediaValue in field 0 as RustData
+                    let field = instance.fields.first().ok_or_else(|| AccessError::TypeMismatch {
+                        expected: "media instance with _data field",
+                        actual: "instance with no fields".to_string(),
+                    })?;
+                    let Value::Object(data_ptr) = field else {
+                        return Err(AccessError::TypeMismatch {
+                            expected: "media _data (Object)",
+                            actual: "non-object field".to_string(),
+                        });
+                    };
+                    let data_obj = unsafe { data_ptr.get() };
+                    let Object::RustData(arc) = data_obj else {
+                        return Err(AccessError::TypeMismatch {
+                            expected: "media _data (RustData)",
+                            actual: data_obj.to_string(),
+                        });
+                    };
+                    // Clone the arc and downcast to Arc<baml_builtins::MediaValue>
+                    let arc_clone = std::sync::Arc::clone(arc);
+                    let media_arc = arc_clone.downcast::<baml_builtins::MediaValue>()
+                        .map_err(|_| AccessError::TypeMismatch {
+                            expected: "media _data (MediaValue)",
+                            actual: "wrong rust type in RustData".to_string(),
+                        })?;
+                    Ok(media_arc)
+                }
+                _ => Err(AccessError::TypeMismatch {
                     expected: "media",
                     actual: obj.to_string(),
-                });
-            };
-            Ok(media.clone())
+                }),
+            }
         }
 
         match self {
@@ -749,9 +777,6 @@ impl<'a> BexValue<'a> {
                     Object::Resource(resource_handle) => {
                         Ok(BexExternalValue::Resource(resource_handle.clone()))
                     }
-                    Object::Media(media_value) => Ok(BexExternalValue::Adt(BexExternalAdt::Media(
-                        media_value.clone(),
-                    ))),
                     Object::PromptAst(prompt_ast) => Ok(BexExternalValue::Adt(
                         BexExternalAdt::PromptAst(prompt_ast.clone()),
                     )),
@@ -759,6 +784,9 @@ impl<'a> BexValue<'a> {
                         Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone())))
                     }
                     Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
+                    Object::RustData(_) => Err(AccessError::CannotConvertToOwned {
+                        reason: "rust_data: opaque Rust-managed data cannot be converted to external value".to_string(),
+                    }),
                     #[cfg(feature = "heap_debug")]
                     Object::Sentinel(sentinel_kind) => Err(AccessError::CannotConvertToOwned {
                         reason: format!("sentinel: {:?}", sentinel_kind),
