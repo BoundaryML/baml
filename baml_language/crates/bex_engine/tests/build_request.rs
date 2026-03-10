@@ -182,10 +182,22 @@ function get_body() -> string {
 "##;
 
     let body = body_json(&run_baml(source, "get_body").await);
-    let messages = body["messages"].as_array().unwrap();
-    for msg in messages {
-        assert_eq!(msg["role"], "user", "o1 should not have system messages");
-    }
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "o1",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "You are a helpful assistant."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Hello"}]
+                }
+            ]
+        })
+    );
 }
 
 #[tokio::test]
@@ -213,9 +225,22 @@ function get_body() -> string {
 "##;
 
     let body = body_json(&run_baml(source, "get_body").await);
-    let messages = body["messages"].as_array().unwrap();
-    assert_eq!(messages[0]["role"], "system");
-    assert_eq!(messages[1]["role"], "user");
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": "You are helpful."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Hi"}]
+                }
+            ]
+        })
+    );
 }
 
 // ============================================================================
@@ -246,22 +271,25 @@ function get_body() -> string {
 "##;
 
     let body = body_json(&run_baml(source, "get_body").await);
-    let messages = body["messages"].as_array().unwrap();
-    assert_eq!(messages.len(), 3);
-    assert_eq!(messages[0]["role"], "system");
     assert_eq!(
-        messages[0]["content"][0]["text"].as_str().unwrap().trim(),
-        "You are a helpful assistant."
-    );
-    assert_eq!(messages[1]["role"], "user");
-    assert_eq!(
-        messages[1]["content"][0]["text"].as_str().unwrap().trim(),
-        "What is 2+2?"
-    );
-    assert_eq!(messages[2]["role"], "assistant");
-    assert_eq!(
-        messages[2]["content"][0]["text"].as_str().unwrap().trim(),
-        "4"
+        body,
+        serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": "You are a helpful assistant."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "What is 2+2?"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "4"}]
+                }
+            ]
+        })
     );
 }
 
@@ -295,17 +323,37 @@ function get_body() -> string {
 "##;
 
     let body = body_json(&run_baml(source, "get_body").await);
-    let messages = body["messages"].as_array().unwrap();
-    assert_eq!(messages.len(), 6);
-    assert_eq!(messages[0]["role"], "system");
-    assert_eq!(messages[1]["role"], "user");
-    assert_eq!(messages[2]["role"], "assistant");
-    assert_eq!(messages[3]["role"], "user");
-    assert_eq!(messages[4]["role"], "assistant");
-    assert_eq!(messages[5]["role"], "user");
     assert_eq!(
-        messages[5]["content"][0]["text"].as_str().unwrap().trim(),
-        "Goodbye"
+        body,
+        serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": "Be concise."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Hello"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Hi!"}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "How are you?"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Good, thanks!"}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Goodbye"}]
+                }
+            ]
+        })
     );
 }
 
@@ -335,18 +383,30 @@ function get_body() -> string {
 "##;
 
     let body = body_json(&run_baml(source, "get_body").await);
-    let input = body["input"].as_array().unwrap();
-    assert_eq!(input.len(), 4);
-    assert_eq!(input[0]["role"], "system");
-    assert_eq!(input[1]["role"], "user");
-    assert_eq!(input[2]["role"], "assistant");
-    assert_eq!(input[3]["role"], "user");
-    // assistant content should use output_text
-    assert_eq!(input[2]["content"][0]["type"], "output_text");
-    // user/system content should use input_text
-    assert_eq!(input[0]["content"][0]["type"], "input_text");
-    assert_eq!(input[1]["content"][0]["type"], "input_text");
-    assert_eq!(input[3]["content"][0]["type"], "input_text");
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "gpt-4o",
+            "input": [
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": "You are helpful."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hi"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Hello!"}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Bye"}]
+                }
+            ]
+        })
+    );
 }
 
 // ============================================================================
@@ -377,15 +437,20 @@ function get_body(img: image) -> string {{
         Some("image/jpeg"),
     );
     let body = body_json(&run_baml_with_args(&source, "get_body", vec![img]).await);
-    let content = body["messages"][0]["content"].as_array().unwrap();
-    assert_eq!(content.len(), 2);
     assert_eq!(
-        content[0],
-        serde_json::json!({"type": "text", "text": "What is in this image?"})
-    );
-    assert_eq!(
-        content[1],
-        serde_json::json!({"type": "image_url", "image_url": {"url": "https://example.com/photo.jpg"}})
+        body,
+        serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": [
+                        {"type": "text", "text": "What is in this image?"},
+                        {"type": "image_url", "image_url": {"url": "https://example.com/photo.jpg"}}
+                    ]
+                }
+            ]
+        })
     );
 }
 
