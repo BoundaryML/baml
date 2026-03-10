@@ -16,8 +16,6 @@ pub(super) fn parse_func<'s>(
     mut options: ParseOptions,
     is_done: bool,
 ) -> Result<Value<'s>> {
-    log::debug!("Parsing:\n{options:?}\n-------\n{str}\n-------");
-
     options.depth += 1;
     if options.depth > 100 {
         return Err(anyhow::anyhow!(
@@ -63,9 +61,7 @@ pub(super) fn parse_func<'s>(
             }
             return Ok(Value::AnyOf(vec![v], str.to_string().into()));
         }
-        Err(e) => {
-            log::debug!("Invalid JSON: {e:?}");
-        }
+        Err(_e) => {}
     };
 
     if options.allow_markdown_json {
@@ -85,9 +81,7 @@ pub(super) fn parse_func<'s>(
                                 str.to_string().into(),
                             ));
                         }
-                        _ => {
-                            log::debug!("Unexpected markdown result: {res:?}");
-                        }
+                        _ => {}
                     }
                 }
                 _ => {
@@ -113,10 +107,6 @@ pub(super) fn parse_func<'s>(
                                 ),
                                 false,
                             )
-                            .map_err(|e| {
-                                log::debug!("Error parsing markdown string: {e:?}");
-                                e
-                            })
                             .ok()
                             .map(|v| v.to_static())
                         })
@@ -145,9 +135,7 @@ pub(super) fn parse_func<'s>(
                     return Ok(Value::AnyOf(items, str.to_string().into()));
                 }
             },
-            Err(e) => {
-                log::debug!("Markdown parsing error: {e:?}");
-            }
+            Err(_e) => {}
         }
     }
 
@@ -182,9 +170,7 @@ pub(super) fn parse_func<'s>(
                     return Ok(Value::AnyOf(items, str.to_string().into()));
                 }
             },
-            Err(e) => {
-                log::debug!("Error parsing multiple JSON objects: {e:?}");
-            }
+            Err(_e) => {}
         }
     }
 
@@ -232,9 +218,7 @@ pub(super) fn parse_func<'s>(
                     }
                 }
             }
-            Err(e) => {
-                log::debug!("Error fixing json: {e:?}");
-            }
+            Err(_e) => {}
         }
     }
 

@@ -127,11 +127,22 @@ where
     pub name: &'t N,
     pub value: IndexMap<&'t str, BamlValueWithFlags<'s, 'v, 't, N>>,
 }
+/// When we parse the value:
+/// - If the value is complete, we return `Complete(value)`.
+/// - If the value's coercer returned `None`, we return `class_in_progress_field_missing`.
+///   For a StreamState type, this should always be a `Pending(<value>)`.
+/// - If the value is incomplete, we return `Incomplete(<value>)`.
+///   This means either:
+///   - Value has in_progress=<value>, we return `Incomplete(<value>)`
+///   - Value has in_progress=None, we return `Incomplete(<partial_value>)`
 #[derive(Clone)]
 pub enum BamlStreamState<'s, 'v, 't, N: TypeIdent>
 where
     's: 'v,
 {
+    /// The value has not yet been started and has been filled by
+    /// [`crate::sap_model::AnnotatedField::class_in_progress_field_missing`]
+    Pending(Box<BamlValueWithFlags<'s, 'v, 't, N>>),
     Incomplete(Box<BamlValueWithFlags<'s, 'v, 't, N>>),
     Complete(Box<BamlValueWithFlags<'s, 'v, 't, N>>),
 }
@@ -243,6 +254,10 @@ impl<'s, 'v, 't, N: TypeIdent> serde::Serialize for BamlStreamState<'s, 'v, 't, 
         use serde::ser::SerializeMap;
         let mut map = serializer.serialize_map(Some(2))?;
         match self {
+            BamlStreamState::Pending(inner) => {
+                map.serialize_entry("value", &inner.value)?;
+                map.serialize_entry("state", "Pending")?;
+            }
             BamlStreamState::Incomplete(inner) => {
                 map.serialize_entry("value", &inner.value)?;
                 map.serialize_entry("state", "Incomplete")?;

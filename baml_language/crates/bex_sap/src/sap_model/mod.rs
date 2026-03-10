@@ -620,6 +620,7 @@ pub struct AnnotatedField<'t, N: TypeIdent> {
     /// If it is `never` then this causes the entire class to be excluded until present.
     ///
     /// - Should always be `null` for optional fields.
+    /// - Should always be `Pending(<value>)` (or `never`) for StreamState fields.
     pub class_in_progress_field_missing: AttrLiteral<'t, N>,
     /// If the parent object is complete and this field is missing, use this value instead.
     /// If it is `never` then this causes an error.
@@ -680,4 +681,7 @@ pub enum AttrLiteral<'t, N: TypeIdent> {
         enum_name: &'t N,
         variant_name: Cow<'t, str>,
     },
+    StreamStatePending(Box<AttrLiteral<'t, N>>),
+    StreamStateIncomplete(Box<AttrLiteral<'t, N>>),
+    StreamStateComplete(Box<AttrLiteral<'t, N>>),
 }

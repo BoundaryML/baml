@@ -27,13 +27,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: {name} (current: {current})",
-            name = target,
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-
         let all_variants = &target.ty.variants;
 
         let mut add_flags = Vec::new();
@@ -73,11 +66,6 @@ where
                 && val.score() == 0
             {
                 // If the hinted variant gives a perfect match, return immediately
-                log::debug!(
-                    "scope: {scope} :: union hint {hint_idx} succeeded for {name}",
-                    scope = ctx.display_scope(),
-                    name = target,
-                );
                 // Add UnionMatch flag so subsequent array elements can use this hint
                 val.add_flag(Flag::UnionMatch(hint_idx, vec![]));
                 return Ok(Some(val));
@@ -184,11 +172,6 @@ where
                 let opt_ref = TyWithMeta::new(hint_variant.ty, hint_variant.meta);
                 if let Some(mut cast_result) = TyResolvedRef::try_cast(ctx, opt_ref, value) {
                     if cast_result.score() == 0 {
-                        log::debug!(
-                            "scope: {scope} :: try_cast union hint {hint_idx} succeeded for {name}",
-                            scope = ctx.display_scope(),
-                            name = target,
-                        );
                         cast_result.add_flag(Flag::UnionMatch(hint_idx, vec![]));
                         return Some(cast_result);
                     }

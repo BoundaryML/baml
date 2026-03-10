@@ -35,7 +35,6 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Mark
 
     while let Some(cap) = md_tag_start.find(remaining) {
         let tag = cap.as_str();
-        log::trace!("Found tag: {cap:#?}");
 
         let after_start = &remaining[cap.end()..];
 
@@ -71,7 +70,6 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Mark
             md_content
         };
 
-        log::trace!("Content:\n-----\n{md_content}\n-----\n");
 
         let res = match parsed_value {
             Some(v) => Ok(v),
@@ -98,8 +96,7 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Mark
                     v,
                 ));
             }
-            Err(e) => {
-                log::debug!("Error parsing markdown block: Tag: {tag}\n{e:?}");
+            Err(_e) => {
             }
         };
 

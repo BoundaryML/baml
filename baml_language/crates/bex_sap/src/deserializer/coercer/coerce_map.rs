@@ -107,13 +107,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: {name} (current: {current})",
-            name = target,
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-
         if matches!(value, crate::jsonish::Value::Null) {
             return Err(ctx.error_unexpected_null(&target));
         }

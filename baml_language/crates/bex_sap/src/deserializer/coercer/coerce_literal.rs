@@ -76,13 +76,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: int literal {literal} (current: {current})",
-            literal = target.ty.0,
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-
         let ret = match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
@@ -188,13 +181,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: bool literal {literal} (current: {current})",
-            literal = target.ty.0,
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-
         let ret = match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
@@ -323,13 +309,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: string literal {literal:?} (current: {current})",
-            literal = target.ty.0,
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-
         let ret = match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {

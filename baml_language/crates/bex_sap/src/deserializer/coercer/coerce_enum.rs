@@ -113,13 +113,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: {name} (current: {current})",
-            name = target.ty.name,
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-
         // Enums can only be cast from string values
         if matches!(value, jsonish::Value::Null) {
             return Err(ctx.error_unexpected_null(&target));

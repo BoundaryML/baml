@@ -120,13 +120,6 @@ where
 
         let result = match value {
             jsonish::Value::AnyOf(candidates, primitive) => {
-                log::debug!(
-                    "scope: {scope} :: coercing to: {name} (current: {current})",
-                    name = target.clone(),
-                    scope = ctx.display_scope(),
-                    current = value.r#type()
-                );
-
                 match target.ty {
                     TyResolvedRef::String(_) => BamlValueWithFlags::new(
                         BamlValue::String(BamlString {
@@ -171,12 +164,6 @@ where
                 }
             }
             crate::jsonish::Value::Markdown(_t, v, _completion) => {
-                log::debug!(
-                    "scope: {scope} :: coercing to: {name} (current: {current})",
-                    name = target,
-                    scope = ctx.display_scope(),
-                    current = value.r#type()
-                );
                 let Some(ret) = Self::coerce(ctx, target.clone(), v)? else {
                     return Ok(None);
                 };
@@ -189,12 +176,6 @@ where
                 ret.with_flag(flag)
             }
             crate::jsonish::Value::FixedJson(v, fixes) => {
-                log::debug!(
-                    "scope: {scope} :: coercing to: {name} (current: {current})",
-                    name = target,
-                    scope = ctx.display_scope(),
-                    current = value.r#type()
-                );
                 let Some(ret) = Self::coerce(ctx, target.clone(), v)? else {
                     return Ok(None);
                 };

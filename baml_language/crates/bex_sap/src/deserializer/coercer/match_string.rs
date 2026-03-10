@@ -218,21 +218,6 @@ fn string_match_strategy<'t, N: TypeIdent>(
     flags: &mut DeserializerConditions<'_, '_, 't, N>,
     allow_substring_match: bool,
 ) -> Option<&'t str> {
-    log::debug!("string_match_strategy: {value_str}");
-    log::debug!(
-        "candidates:\n{}",
-        candidates
-            .iter()
-            .map(|(c, v)| format!(
-                "{c} -> {}",
-                v.iter()
-                    .map(|v| format!("\"{}\"", v.as_ref()))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
     // Strategy 1: Try exact case-sensitive match
     for (candidate, valid_values) in candidates {
         if valid_values.iter().any(|v| v.as_ref() == value_str) {

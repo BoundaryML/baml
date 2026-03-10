@@ -154,13 +154,6 @@ where
         let class_ty = target.ty;
         let meta = target.meta;
 
-        log::debug!(
-            "scope: {scope} :: coercing to: {name} (current: {current})",
-            name = class_ty.name,
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-
         // If value is not None then we'll update the context to store the
         // current class in the visited set and we'll use that to stop recursion
         // when dealing with recursive classes.
@@ -235,9 +228,7 @@ where
                     };
 
                     match entries.entry(field.name.clone()) {
-                        hash_map::Entry::Occupied(_) => {
-                            log::trace!("Duplicate field: {key}");
-                        }
+                        hash_map::Entry::Occupied(_) => {}
                         hash_map::Entry::Vacant(entry) => {
                             entry.insert(parsed);
                         }
@@ -463,11 +454,7 @@ where
             }
             // Missing entry falls back to `missing` when object is complete
             None /*if !is_incomplete */=> {
-                let field_value = if matches!(missing, AttrLiteral::Null) {
-                    BamlValue::Null(BamlNull)
-                } else {
-                    ty.ty.from_literal(missing, ctx)?
-                };
+                let field_value = ty.ty.from_literal(missing, ctx)?;
                 let field_meta = DeserializerMeta::new(ty);
                 ValueWithFlags::new(field_value, field_meta)
             }

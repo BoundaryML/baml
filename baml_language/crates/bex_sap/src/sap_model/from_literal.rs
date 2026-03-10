@@ -430,15 +430,42 @@ where
             .db
             .resolve_with_meta(self.value.deref().as_ref())
             .map_err(|ident| ctx.error_type_resolution(ident))?;
-        let value = self.value.ty.from_literal(literal, ctx)?;
-        let value = BamlValueWithFlags::new(
-            value,
-            DeserializerMeta {
-                flags: Default::default(),
-                ty: inner_ty,
-            },
-        );
-        Ok(BamlStreamState::Complete(Box::new(value)))
+        match literal {
+            AttrLiteral::StreamStateComplete(value) => {
+                let value = self.value.ty.from_literal(&**value, ctx)?;
+                let value = BamlValueWithFlags::new(
+                    value,
+                    DeserializerMeta {
+                        flags: Default::default(),
+                        ty: inner_ty,
+                    },
+                );
+                Ok(BamlStreamState::Complete(Box::new(value)))
+            }
+            AttrLiteral::StreamStateIncomplete(value) => {
+                let value = self.value.ty.from_literal(&**value, ctx)?;
+                let value = BamlValueWithFlags::new(
+                    value,
+                    DeserializerMeta {
+                        flags: Default::default(),
+                        ty: inner_ty,
+                    },
+                );
+                Ok(BamlStreamState::Incomplete(Box::new(value)))
+            }
+            AttrLiteral::StreamStatePending(value) => {
+                let value = self.value.ty.from_literal(&**value, ctx)?;
+                let value = BamlValueWithFlags::new(
+                    value,
+                    DeserializerMeta {
+                        flags: Default::default(),
+                        ty: inner_ty,
+                    },
+                );
+                Ok(BamlStreamState::Pending(Box::new(value)))
+            }
+            _ => Err(ctx.error_internal("attribute literal must match the type: stream_state")),
+        }
     }
 }
 

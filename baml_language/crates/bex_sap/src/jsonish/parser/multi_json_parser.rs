@@ -40,9 +40,8 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Valu
                         false,
                     ) {
                         Ok(json) => json_objects.push(json),
-                        Err(e) => {
+                        Err(_e) => {
                             // Ignore errors
-                            log::error!("Failed to parse JSON object: {e:?}");
                         }
                     }
                 }
@@ -65,15 +64,12 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Valu
                         complete_stack_head(&mut json_objects);
                         json_objects.push(json)
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         // Ignore errors
-                        log::error!("Failed to parse JSON object: {e:?}");
                     }
                 }
             }
-            None => {
-                log::error!("Unexpected state: stack is not empty but no JSON start was found");
-            }
+            None => {}
         }
     }
 

@@ -83,13 +83,6 @@ where
         // Parsed from JSONish
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlInt, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: int (current: {current})",
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-        log::trace!("content: {}", value);
-
         let mut flags = DeserializerConditions::new();
         let result = match (value, target.meta.in_progress.as_ref()) {
             (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
@@ -258,13 +251,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlFloat, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: float (current: {current})",
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-        log::trace!("content: {}", value);
-
         let mut flags = DeserializerConditions::new();
         let result = match (value, target.meta.in_progress.as_ref()) {
             (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
@@ -426,13 +412,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlBool, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: bool (current: {current})",
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-        log::trace!("content: {}", value);
-
         let mut flags = DeserializerConditions::new();
         let result = match (value, target.meta.in_progress.as_ref()) {
             (crate::jsonish::Value::Boolean(b), _) => {
@@ -564,13 +543,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlNull, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: null (current: {current})",
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-        log::trace!("content: {}", value);
-
         let mut flags = DeserializerConditions::new();
 
         // Handle in_progress for all incomplete values
@@ -640,12 +612,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlString<'s>, N>>, ParsingError> {
-        log::debug!(
-            "scope: {scope} :: coercing to: string (current: {current})",
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-        log::trace!("content: {}", value);
 
         let mut flags = DeserializerConditions::new();
 

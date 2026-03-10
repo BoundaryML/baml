@@ -122,13 +122,6 @@ where
             .resolve_with_meta(element_type.as_ref())
             .map_err(|ident| ctx.error_type_resolution(ident))?;
 
-        log::debug!(
-            "scope: {scope} :: coercing to: {name} (current: {current})",
-            name = target,
-            scope = ctx.display_scope(),
-            current = value.r#type()
-        );
-
         let mut items = vec![];
         let mut flags = DeserializerConditions::new();
 
