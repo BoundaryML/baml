@@ -155,6 +155,7 @@ fn prompt_to_openai_messages(
 /// Converts a single [`PromptAst`] node into an `OpenAI` Chat Completions message JSON value.
 ///
 /// Metadata (e.g. `cache_control`) is merged into the last content part.
+/// Should only be called by `prompt_to_openai_messages`, or something that otherwise ensures flattening of `PromptAst::Vec`.
 fn prompt_node_to_message(
     node: &bex_vm_types::PromptAst,
     default_role: &str,
