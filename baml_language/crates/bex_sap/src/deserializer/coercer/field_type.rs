@@ -119,50 +119,48 @@ where
         }
 
         let result = match value {
-            jsonish::Value::AnyOf(candidates, primitive) => {
-                match target.ty {
-                    TyResolvedRef::String(_) => BamlValueWithFlags::new(
-                        BamlValue::String(BamlString {
-                            value: primitive.clone(),
-                        }),
-                        DeserializerMeta::new(target.clone()),
-                    ),
-                    TyResolvedRef::Enum(enum_ty) => {
-                        let primitive =
-                            jsonish::Value::String(primitive.clone(), CompletionState::Complete);
-                        let ret = EnumTy::coerce_from_cow(
-                            ctx,
-                            TyWithMeta::new(enum_ty, target_meta),
-                            Cow::Owned(primitive),
-                            [],
-                        )?;
-                        match ret {
-                            Some(v) => v.map_value(BamlValue::Enum),
-                            None => return Ok(None),
-                        }
-                    }
-                    TyResolvedRef::LiteralString(s) => {
-                        let candidates = [(&*s.0, vec![&*s.0])];
-                        let ret = match_string(
-                            ctx,
-                            TyWithMeta::new(TyResolvedRef::String(StringTy), target.meta),
-                            Cow::Borrowed(value),
-                            &candidates,
-                            true,
-                        )?;
-                        ret.map_value(|v| BamlValue::String(BamlString { value: v.into() }))
-                    }
-                    _ => match array_helper::coerce_array_to_singular(
+            jsonish::Value::AnyOf(candidates, primitive) => match target.ty {
+                TyResolvedRef::String(_) => BamlValueWithFlags::new(
+                    BamlValue::String(BamlString {
+                        value: primitive.clone(),
+                    }),
+                    DeserializerMeta::new(target.clone()),
+                ),
+                TyResolvedRef::Enum(enum_ty) => {
+                    let primitive =
+                        jsonish::Value::String(primitive.clone(), CompletionState::Complete);
+                    let ret = EnumTy::coerce_from_cow(
                         ctx,
-                        target.clone(),
-                        candidates.iter(),
-                        &|val| Self::coerce(ctx, target.clone(), val),
-                    )? {
-                        Some(v) => v,
+                        TyWithMeta::new(enum_ty, target_meta),
+                        Cow::Owned(primitive),
+                        [],
+                    )?;
+                    match ret {
+                        Some(v) => v.map_value(BamlValue::Enum),
                         None => return Ok(None),
-                    },
+                    }
                 }
-            }
+                TyResolvedRef::LiteralString(s) => {
+                    let candidates = [(&*s.0, vec![&*s.0])];
+                    let ret = match_string(
+                        ctx,
+                        TyWithMeta::new(TyResolvedRef::String(StringTy), target.meta),
+                        Cow::Borrowed(value),
+                        &candidates,
+                        true,
+                    )?;
+                    ret.map_value(|v| BamlValue::String(BamlString { value: v.into() }))
+                }
+                _ => match array_helper::coerce_array_to_singular(
+                    ctx,
+                    target.clone(),
+                    candidates.iter(),
+                    &|val| Self::coerce(ctx, target.clone(), val),
+                )? {
+                    Some(v) => v,
+                    None => return Ok(None),
+                },
+            },
             crate::jsonish::Value::Markdown(_t, v, _completion) => {
                 let Some(ret) = Self::coerce(ctx, target.clone(), v)? else {
                     return Ok(None);

@@ -47,45 +47,45 @@ pub enum TypeRef {
     /// Examples:
     ///   `Path::single("User")` -> User
     ///   `Path::new(["users", "User"])` -> `users::User` (future)
-    Path(Path, TyAttr),
+    Path(Path, TyAttr<Name>),
 
     // --- Primitives ---
     Int {
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
     Float {
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
     String {
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
     Bool {
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
     Null {
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
 
     // --- Media ---
-    Media(baml_base::MediaKind, TyAttr),
+    Media(baml_base::MediaKind, TyAttr<Name>),
 
     // --- Type constructors ---
-    Optional(Box<TypeRef>, TyAttr),
-    List(Box<TypeRef>, TyAttr),
+    Optional(Box<TypeRef>, TyAttr<Name>),
+    List(Box<TypeRef>, TyAttr<Name>),
     Map {
         key: Box<TypeRef>,
         value: Box<TypeRef>,
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
-    Union(Vec<TypeRef>, TyAttr),
+    Union(Vec<TypeRef>, TyAttr<Name>),
 
     // --- Literals ---
-    StringLiteral(String, TyAttr),
-    IntLiteral(i64, TyAttr),
+    StringLiteral(String, TyAttr<Name>),
+    IntLiteral(i64, TyAttr<Name>),
     /// Float literal stored as string to avoid f64's lack of Eq/Hash.
-    FloatLiteral(String, TyAttr),
+    FloatLiteral(String, TyAttr<Name>),
     /// Boolean literal for pattern matching (true/false as types).
-    BoolLiteral(bool, TyAttr),
+    BoolLiteral(bool, TyAttr<Name>),
 
     // --- Function types ---
     /// Function type: `(x: int, y: int) -> bool` or `(int, int) -> bool`.
@@ -95,7 +95,7 @@ pub enum TypeRef {
     Function {
         params: Vec<FunctionTypeParamRef>,
         ret: Box<TypeRef>,
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
 
     // --- Future ---
@@ -105,38 +105,38 @@ pub enum TypeRef {
     Generic {
         base: Box<TypeRef>,
         args: Vec<TypeRef>,
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
     /// Future: Type parameter reference.
     /// Example: T in `function<T>(x: T) -> T`
     #[allow(dead_code)]
-    TypeParam(Name, TyAttr),
+    TypeParam(Name, TyAttr<Name>),
 
     // --- Sentinels ---
     /// Error sentinel.
     Error {
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
     /// Unknown/inferred (internal use for error recovery).
     Unknown {
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
     /// The `unknown` type keyword - accepts any value.
     /// Used in builtin functions like `render_prompt(args: map<string, unknown>)`.
     /// Maps to `Ty::BuiltinUnknown` in TIR.
     BuiltinUnknown {
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
     /// The bottom type — uninhabited (no values).
     /// Maps to `tir::Ty::Never` during lowering.
     Never {
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
     /// The `type` type keyword — the meta-type for type values.
     /// Used in type annotations like `let t: type = ...`.
     /// Maps to `tir::Ty::Type` during lowering.
     Type {
-        attr: TyAttr,
+        attr: TyAttr<Name>,
     },
 }
 
@@ -144,7 +144,7 @@ impl TypeRef {
     // --- TyAttr accessors ---
 
     /// Get the `TyAttr` for this type reference.
-    pub fn attr(&self) -> &TyAttr {
+    pub fn attr(&self) -> &TyAttr<Name> {
         match self {
             TypeRef::Int { attr }
             | TypeRef::Float { attr }
@@ -175,7 +175,7 @@ impl TypeRef {
     /// Replace the `TyAttr` on this type reference, returning a new `TypeRef`.
     /// Short-circuits if the attr is default.
     #[must_use]
-    pub fn with_attr(self, attr: TyAttr) -> Self {
+    pub fn with_attr(self, attr: TyAttr<Name>) -> Self {
         if attr.is_default() {
             return self;
         }

@@ -1982,9 +1982,9 @@ enum SapFieldKind {
 /// Parse an @sap.class_*_`field_missing` attribute from synthesized CST into `FieldAttr`.
 fn parse_sap_field_attr(
     attr: &baml_compiler_syntax::ast::Attribute,
-    existing: &FieldAttr,
+    existing: &FieldAttr<Name>,
     kind: SapFieldKind,
-) -> FieldAttr {
+) -> FieldAttr<Name> {
     let value = parse_sap_attr_value(attr);
     let inner = existing
         .0
@@ -2011,7 +2011,7 @@ fn parse_sap_field_attr(
 }
 
 /// Parse a @@`sap.in_progress` block attribute from synthesized CST into `TyAttr`.
-fn parse_sap_type_attr(attr: &baml_compiler_syntax::ast::BlockAttribute) -> TyAttr {
+fn parse_sap_type_attr(attr: &baml_compiler_syntax::ast::BlockAttribute) -> TyAttr<Name> {
     let value = parse_sap_block_attr_value(attr);
     TyAttr(Some(Box::new(TyAttrInner {
         sap_in_progress: value,
@@ -2020,7 +2020,7 @@ fn parse_sap_type_attr(attr: &baml_compiler_syntax::ast::BlockAttribute) -> TyAt
 
 /// Parse an @sap.* attribute argument into a `SapAttrValue`.
 /// Accepts: "never", "null", "[]", "{}", "true", "false", integers, floats, strings.
-fn parse_sap_attr_value(attr: &baml_compiler_syntax::ast::Attribute) -> SapAttrValue {
+fn parse_sap_attr_value(attr: &baml_compiler_syntax::ast::Attribute) -> SapAttrValue<Name> {
     match attr.string_arg().as_deref() {
         Some("never") => SapAttrValue::Never,
         Some("null") => SapAttrValue::ConstValueExpr(SapConstValue::Null),
@@ -2036,7 +2036,7 @@ fn parse_sap_attr_value(attr: &baml_compiler_syntax::ast::Attribute) -> SapAttrV
             } else if let Some((left, right)) = s.split_once('.') {
                 // Enum value pattern: Foo.Bar
                 SapAttrValue::ConstValueExpr(SapConstValue::EnumValue {
-                    enum_name: left.to_string(),
+                    enum_name: left.into(),
                     variant_name: right.to_string(),
                 })
             } else {
@@ -2049,7 +2049,9 @@ fn parse_sap_attr_value(attr: &baml_compiler_syntax::ast::Attribute) -> SapAttrV
 
 /// Parse a @@sap.* block attribute argument into a `SapAttrValue`.
 /// Same logic as `parse_sap_attr_value` but for `BlockAttribute` type.
-fn parse_sap_block_attr_value(attr: &baml_compiler_syntax::ast::BlockAttribute) -> SapAttrValue {
+fn parse_sap_block_attr_value(
+    attr: &baml_compiler_syntax::ast::BlockAttribute,
+) -> SapAttrValue<Name> {
     match attr.string_arg().as_deref() {
         Some("never") => SapAttrValue::Never,
         Some("null") => SapAttrValue::ConstValueExpr(SapConstValue::Null),
@@ -2065,7 +2067,7 @@ fn parse_sap_block_attr_value(attr: &baml_compiler_syntax::ast::BlockAttribute) 
             } else if let Some((left, right)) = s.split_once('.') {
                 // Enum value pattern: Foo.Bar
                 SapAttrValue::ConstValueExpr(SapConstValue::EnumValue {
-                    enum_name: left.to_string(),
+                    enum_name: left.into(),
                     variant_name: right.to_string(),
                 })
             } else {

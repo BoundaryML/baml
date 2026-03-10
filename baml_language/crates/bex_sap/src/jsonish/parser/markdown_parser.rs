@@ -70,7 +70,6 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Mark
             md_content
         };
 
-
         let res = match parsed_value {
             Some(v) => Ok(v),
             None => super::entry::parse_func(
@@ -96,8 +95,7 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Mark
                     v,
                 ));
             }
-            Err(_e) => {
-            }
+            Err(_e) => {}
         };
 
         if !should_loop {

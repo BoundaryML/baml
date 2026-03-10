@@ -262,13 +262,22 @@ pub fn compile_files(
                 class_type_tags.insert(class_name.clone(), type_tag);
 
                 // Add Class object to program and record its index
+                let ty_attr = class
+                    .ty_attr
+                    .clone()
+                    .expect_map_name(|n| {
+                        resolution_ctx
+                            .expand_name(n)
+                            .map(|qn| baml_type::fqn_to_type_name(&qn))
+                    })
+                    .unwrap_or_default();
                 let class_obj = Object::Class(Class {
                     name: class_name.clone(),
                     fields,
                     description: class.description.value().cloned(),
                     alias: class.alias.value().cloned(),
                     type_tag,
-                    ty_attr: class.ty_attr.clone(),
+                    ty_attr,
                 });
                 class_type_tag_counter += 1;
                 let class_obj_idx = program.add_object(class_obj);
@@ -309,12 +318,21 @@ pub fn compile_files(
                 }
 
                 // Add Enum object to program and record its index
+                let ty_attr = enum_def
+                    .ty_attr
+                    .clone()
+                    .expect_map_name(|n| {
+                        resolution_ctx
+                            .expand_name(n)
+                            .map(|qn| baml_type::fqn_to_type_name(&qn))
+                    })
+                    .unwrap_or_default();
                 let enum_obj = Object::Enum(Enum {
                     name: enum_name.clone(),
                     variants,
                     description: None, // HIR Enum doesn't carry description
                     alias: enum_def.alias.value().cloned(),
-                    ty_attr: enum_def.ty_attr.clone(),
+                    ty_attr,
                 });
                 let enum_obj_idx = program.add_object(enum_obj);
                 enum_object_indices.insert(enum_name.clone(), enum_obj_idx);

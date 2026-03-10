@@ -612,7 +612,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlString<'s>, N>>, ParsingError> {
-
         let mut flags = DeserializerConditions::new();
 
         // Handle in_progress for all incomplete values

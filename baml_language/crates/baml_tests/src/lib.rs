@@ -199,10 +199,12 @@ fn format_node_recursive(node: &baml_db::baml_compiler_syntax::SyntaxNode, depth
 // Use the shared type_ref_to_str function from baml_compiler_hir
 #[cfg(test)]
 use baml_compiler_hir::type_ref_to_str as format_type_ref;
+#[cfg(test)]
+use baml_db::Name;
 
 // Helper for formatting SAP attribute values in HIR snapshots
 #[cfg(test)]
-fn format_sap_attr_value(value: &baml_base::attr::SapAttrValue) -> String {
+fn format_sap_attr_value(value: &baml_base::attr::SapAttrValue<Name>) -> String {
     use baml_base::attr::{SapAttrValue, SapConstValue};
     match value {
         SapAttrValue::Never => "never".to_string(),

@@ -41,23 +41,23 @@ impl fmt::Display for LiteralValue {
 pub enum Ty {
     // Primitive types
     Int {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
     Float {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
     String {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
     Bool {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
     Null {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
 
     // Media types
-    Media(baml_base::MediaKind, TyAttr),
+    Media(baml_base::MediaKind, TyAttr<QualifiedName>),
 
     /// Literal type: a type inhabited by exactly one value (also called singleton type).
     /// Used for exhaustiveness checking of literal unions like `200 | 201 | 204`.
@@ -65,28 +65,28 @@ pub enum Ty {
     ///
     /// Note: `Ty::Null` is also a singleton type but is kept as a separate variant
     /// for convenience, since null is fundamental to optional types.
-    Literal(LiteralValue, TyAttr),
+    Literal(LiteralValue, TyAttr<QualifiedName>),
 
     // User-defined types (resolved with fully-qualified names)
     /// A class type with its fully-qualified name.
-    Class(QualifiedName, TyAttr),
+    Class(QualifiedName, TyAttr<QualifiedName>),
     /// An enum type with its fully-qualified name.
-    Enum(QualifiedName, TyAttr),
+    Enum(QualifiedName, TyAttr<QualifiedName>),
     /// A type alias with its fully-qualified name.
     /// Type aliases are NOT expanded during resolution - they stay as `TypeAlias(FQN)`.
     /// Expansion happens later during normalization when needed for subtype checks.
     /// This preserves user spelling for error messages and handles recursive types.
-    TypeAlias(QualifiedName, TyAttr),
+    TypeAlias(QualifiedName, TyAttr<QualifiedName>),
 
     // Type constructors
-    Optional(Box<Ty>, TyAttr),
-    List(Box<Ty>, TyAttr),
+    Optional(Box<Ty>, TyAttr<QualifiedName>),
+    List(Box<Ty>, TyAttr<QualifiedName>),
     Map {
         key: Box<Ty>,
         value: Box<Ty>,
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
-    Union(Vec<Ty>, TyAttr),
+    Union(Vec<Ty>, TyAttr<QualifiedName>),
 
     /// Function/arrow type: `(T1, T2, ...) -> R`
     ///
@@ -95,27 +95,27 @@ pub enum Ty {
     Function {
         params: Vec<(Option<baml_base::Name>, Ty)>,
         ret: Box<Ty>,
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
 
     // Special types
     /// Type inference failed - used for error recovery.
     /// Treated as uninhabited to prevent cascading errors.
     Unknown {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
     /// A type error occurred.
     Error {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
     /// The void/unit type for functions that return nothing.
     Void {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
 
     /// Opaque resource handle (file, socket, HTTP response body).
     Resource {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
     /// Internal-only type for builtin functions that accept any argument.
     ///
@@ -148,24 +148,24 @@ pub enum Ty {
     /// interim solution that allows builtins to type-check while we design
     /// the proper generic system.
     BuiltinUnknown {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
 
     /// Watch accessor type: represents `x.$watch` on a watched variable.
     /// Contains the inner type being watched for method resolution.
-    WatchAccessor(Box<Ty>, TyAttr),
+    WatchAccessor(Box<Ty>, TyAttr<QualifiedName>),
 
     /// The bottom type (uninhabited). A `throw` expression or a function that
     /// always diverges produces `Never`. It is a subtype of every type:
     /// `Never <: T` for all `T`, and `never | T = T`.
     Never {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
 
     /// Meta-type — the type of type values at the TIR level.
     /// Matches `TypePattern::Type` in builtin signatures.
     Type {
-        attr: TyAttr,
+        attr: TyAttr<QualifiedName>,
     },
 }
 
@@ -236,7 +236,7 @@ impl Ty {
     /// Replace the `TyAttr` on this type, returning a new Ty with the given attr.
     /// Short-circuits if the attr is default (avoids unnecessary cloning).
     #[must_use]
-    pub fn with_attr(self, attr: TyAttr) -> Self {
+    pub fn with_attr(self, attr: TyAttr<QualifiedName>) -> Self {
         if attr.is_default() {
             return self;
         }
@@ -364,7 +364,7 @@ mod tests {
     // NOTE: Subtyping tests are now in normalize.rs which handles
     // type alias resolution and equirecursive subtyping.
 
-    fn d() -> TyAttr {
+    fn d() -> TyAttr<QualifiedName> {
         TyAttr::default()
     }
 

@@ -1,7 +1,8 @@
-//! Based on the compiler-internal type system and SAP annotations: https://beps.boundaryml.com/beps/6
+//! Based on the compiler-internal type system and SAP annotations: [BEP-006: Semantic Streaming (but better)](https://beps.boundaryml.com/beps/6)
 //! These are the interface used to transform JSON-like data into a typed representation.
 
 mod assertions;
+mod convert;
 mod from_literal;
 mod test_macros;
 mod type_name;
@@ -9,6 +10,7 @@ mod type_name;
 use std::{borrow::Cow, fmt::Display};
 
 pub use assertions::*;
+pub use convert::*;
 use derive_more::From;
 pub use from_literal::FromLiteral;
 use indexmap::IndexMap;

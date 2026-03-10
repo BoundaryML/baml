@@ -18,8 +18,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-baml_db = { workspace = true }
-baml_project = { workspace = true }
+baml_type = { workspace = true }
 derive_more = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }

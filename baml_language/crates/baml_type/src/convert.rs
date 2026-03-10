@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use baml_base::{Literal, Name};
 use baml_compiler_tir::{self, LiteralValue, Namespace, QualifiedName};
 
-use crate::{Ty, TypeName};
+use crate::{Ty, TyAttr, TypeName};
 
 /// Convert a `QualifiedName` to a `TypeName`, pre-computing the display string.
 pub fn fqn_to_type_name(fqn: &QualifiedName) -> TypeName {
@@ -43,6 +43,15 @@ pub fn fqn_to_type_name(fqn: &QualifiedName) -> TypeName {
     }
 }
 
+/// Convert a `TyAttr<QualifiedName>` to `TyAttr<TypeName>`.
+///
+/// This is infallible because `fqn_to_type_name` always succeeds.
+fn convert_attr(attr: &baml_base::TyAttr<QualifiedName>) -> TyAttr {
+    attr.clone()
+        .try_map_name(|n| Some(fqn_to_type_name(n)))
+        .unwrap_or_default()
+}
+
 /// Convert a TIR `LiteralValue` to a `baml_base::Literal`.
 fn convert_literal(lit: &LiteralValue) -> Literal {
     match lit {
@@ -69,15 +78,25 @@ pub fn convert_tir_ty(
     recursive_aliases: &HashSet<Name>,
 ) -> Result<Ty, String> {
     match tir_ty {
-        baml_compiler_tir::Ty::Int { attr } => Ok(Ty::Int { attr: attr.clone() }),
-        baml_compiler_tir::Ty::Float { attr } => Ok(Ty::Float { attr: attr.clone() }),
-        baml_compiler_tir::Ty::String { attr } => Ok(Ty::String { attr: attr.clone() }),
-        baml_compiler_tir::Ty::Bool { attr } => Ok(Ty::Bool { attr: attr.clone() }),
-        baml_compiler_tir::Ty::Null { attr } => Ok(Ty::Null { attr: attr.clone() }),
-        baml_compiler_tir::Ty::Media(kind, attr) => Ok(Ty::Media(*kind, attr.clone())),
+        baml_compiler_tir::Ty::Int { attr } => Ok(Ty::Int {
+            attr: convert_attr(attr),
+        }),
+        baml_compiler_tir::Ty::Float { attr } => Ok(Ty::Float {
+            attr: convert_attr(attr),
+        }),
+        baml_compiler_tir::Ty::String { attr } => Ok(Ty::String {
+            attr: convert_attr(attr),
+        }),
+        baml_compiler_tir::Ty::Bool { attr } => Ok(Ty::Bool {
+            attr: convert_attr(attr),
+        }),
+        baml_compiler_tir::Ty::Null { attr } => Ok(Ty::Null {
+            attr: convert_attr(attr),
+        }),
+        baml_compiler_tir::Ty::Media(kind, attr) => Ok(Ty::Media(*kind, convert_attr(attr))),
 
         baml_compiler_tir::Ty::Literal(lit, attr) => {
-            Ok(Ty::Literal(convert_literal(lit), attr.clone()))
+            Ok(Ty::Literal(convert_literal(lit), convert_attr(attr)))
         }
 
         baml_compiler_tir::Ty::Class(fqn, attr) => {
@@ -88,52 +107,56 @@ pub fn convert_tir_ty(
                 return Ok(Ty::opaque_builtin(
                     "baml.llm.PromptAst",
                     "baml.llm.PromptAst",
-                    attr.clone(),
+                    convert_attr(attr),
                 ));
             }
-            Ok(Ty::Class(fqn_to_type_name(fqn), attr.clone()))
+            Ok(Ty::Class(fqn_to_type_name(fqn), convert_attr(attr)))
         }
-        baml_compiler_tir::Ty::Enum(fqn, attr) => Ok(Ty::Enum(fqn_to_type_name(fqn), attr.clone())),
+        baml_compiler_tir::Ty::Enum(fqn, attr) => {
+            Ok(Ty::Enum(fqn_to_type_name(fqn), convert_attr(attr)))
+        }
 
         baml_compiler_tir::Ty::TypeAlias(fqn, attr) => {
             let name = &fqn.name;
             if recursive_aliases.contains(name) {
                 // Recursive alias — cannot expand. Return as TypeAlias for
                 // compiler-level subtyping, or error at runtime boundary.
-                Ok(Ty::TypeAlias(fqn_to_type_name(fqn), attr.clone()))
+                Ok(Ty::TypeAlias(fqn_to_type_name(fqn), convert_attr(attr)))
             } else if let Some(resolved) = aliases.get(name) {
                 // Non-recursive alias — expand inline, preserving source attr if non-default
                 let expanded = convert_tir_ty(resolved, aliases, recursive_aliases)?;
                 if attr.is_default() {
                     Ok(expanded)
                 } else {
-                    Ok(expanded.with_attr(attr.clone()))
+                    Ok(expanded.with_attr(convert_attr(attr)))
                 }
             } else {
                 // Alias not found — shouldn't happen after validation
-                Ok(Ty::Null { attr: attr.clone() })
+                Ok(Ty::Null {
+                    attr: convert_attr(attr),
+                })
             }
         }
 
         baml_compiler_tir::Ty::Optional(inner, attr) => Ok(Ty::Optional(
             Box::new(convert_tir_ty(inner, aliases, recursive_aliases)?),
-            attr.clone(),
+            convert_attr(attr),
         )),
         baml_compiler_tir::Ty::List(inner, attr) => Ok(Ty::List(
             Box::new(convert_tir_ty(inner, aliases, recursive_aliases)?),
-            attr.clone(),
+            convert_attr(attr),
         )),
         baml_compiler_tir::Ty::Map { key, value, attr } => Ok(Ty::Map {
             key: Box::new(convert_tir_ty(key, aliases, recursive_aliases)?),
             value: Box::new(convert_tir_ty(value, aliases, recursive_aliases)?),
-            attr: attr.clone(),
+            attr: convert_attr(attr),
         }),
         baml_compiler_tir::Ty::Union(types, attr) => {
             let converted: Result<Vec<_>, _> = types
                 .iter()
                 .map(|t| convert_tir_ty(t, aliases, recursive_aliases))
                 .collect();
-            Ok(Ty::Union(converted?, attr.clone()))
+            Ok(Ty::Union(converted?, convert_attr(attr)))
         }
 
         baml_compiler_tir::Ty::Function { params, ret, attr } => {
@@ -144,36 +167,44 @@ pub fn convert_tir_ty(
             Ok(Ty::Function {
                 params: converted_params?,
                 ret: Box::new(convert_tir_ty(ret, aliases, recursive_aliases)?),
-                attr: attr.clone(),
+                attr: convert_attr(attr),
             })
         }
 
         // Unknown and Error are TIR-only error recovery types.
         // All real type checking happens in TIR; by the time we convert to
         // baml_type, these just mean "no meaningful type" → map to Null.
-        baml_compiler_tir::Ty::Unknown { attr } => Ok(Ty::Null { attr: attr.clone() }),
-        baml_compiler_tir::Ty::Error { attr, .. } => Ok(Ty::Null { attr: attr.clone() }),
-        baml_compiler_tir::Ty::Void { attr } => Ok(Ty::Void { attr: attr.clone() }),
+        baml_compiler_tir::Ty::Unknown { attr } => Ok(Ty::Null {
+            attr: convert_attr(attr),
+        }),
+        baml_compiler_tir::Ty::Error { attr, .. } => Ok(Ty::Null {
+            attr: convert_attr(attr),
+        }),
+        baml_compiler_tir::Ty::Void { attr } => Ok(Ty::Void {
+            attr: convert_attr(attr),
+        }),
         baml_compiler_tir::Ty::Resource { attr } => Ok(Ty::opaque_builtin(
             "baml.llm.Resource",
             "baml.llm.Resource",
-            attr.clone(),
+            convert_attr(attr),
         )),
         // BuiltinUnknown is preserved for VIR type checking at call sites.
-        baml_compiler_tir::Ty::BuiltinUnknown { attr } => {
-            Ok(Ty::BuiltinUnknown { attr: attr.clone() })
-        }
+        baml_compiler_tir::Ty::BuiltinUnknown { attr } => Ok(Ty::BuiltinUnknown {
+            attr: convert_attr(attr),
+        }),
         baml_compiler_tir::Ty::Type { attr } => Ok(Ty::opaque_builtin(
             "baml.reflect.Type",
             "type",
-            attr.clone(),
+            convert_attr(attr),
         )),
 
         baml_compiler_tir::Ty::WatchAccessor(inner, attr) => Ok(Ty::WatchAccessor(
             Box::new(convert_tir_ty(inner, aliases, recursive_aliases)?),
-            attr.clone(),
+            convert_attr(attr),
         )),
-        baml_compiler_tir::Ty::Never { attr } => Ok(Ty::Null { attr: attr.clone() }),
+        baml_compiler_tir::Ty::Never { attr } => Ok(Ty::Null {
+            attr: convert_attr(attr),
+        }),
     }
 }
 

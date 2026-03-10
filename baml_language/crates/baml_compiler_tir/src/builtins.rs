@@ -356,7 +356,7 @@ pub fn method_param_types(receiver_ty: &Ty, method_name: &str) -> Option<Vec<(&'
 mod tests {
     use super::*;
 
-    fn d() -> TyAttr {
+    fn d() -> TyAttr<QualifiedName> {
         TyAttr::default()
     }
 
