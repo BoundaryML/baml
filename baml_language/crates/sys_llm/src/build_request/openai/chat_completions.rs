@@ -126,7 +126,10 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         prompt: bex_vm_types::PromptAst,
     ) -> Result<serde_json::Map<String, serde_json::Value>, BuildRequestError> {
         let mut map = serde_json::Map::new();
-        let messages = prompt_to_openai_messages(&prompt, &client.default_role)?;
+
+        // TODO: Handle default role in Ollama once compiler2 is merged.
+
+        let messages = prompt_to_openai_messages(&prompt, client.default_role.as_str())?;
         map.insert(
             "messages".to_string(),
             serde_json::to_value(messages).expect("infallible"),
@@ -249,31 +252,37 @@ fn openai_media_part(
                     },
                 }])
             }
-            MediaContent::Url { url, .. } => {
-                let ext = url.split('.').next_back();
-                let ext = match media.mime_type.as_deref() {
-                    Some(mime) => mime.strip_prefix("audio/").unwrap_or(mime),
-                    None => match ext {
-                        Some(ext) => ext,
-                        None => {
-                            return Err(BuildRequestError::UnsupportedMedia(
-                                "audio url has no extension and no mime type".into(),
-                            ));
-                        }
-                    },
-                };
+            MediaContent::Url { .. } => {
+                Err(BuildRequestError::UnsupportedMedia(
+                    "audio url is not supported on OpenAI chat completions".into(),
+                ))
+                // The following is a translation of the original logic from engine...
+                // According to the official OpenAI docs, this should not work, thus I have disabled it for now.
 
-                let format = match ext {
-                    "mpeg" => "mp3",
-                    other => other,
-                };
+                // let ext = url.split('.').next_back();
+                // let ext = match media.mime_type.as_deref() {
+                //     Some(mime) => mime.strip_prefix("audio/").unwrap_or(mime),
+                //     None => match ext {
+                //         Some(ext) => ext,
+                //         None => {
+                //             return Err(BuildRequestError::UnsupportedMedia(
+                //                 "audio url has no extension and no mime type".into(),
+                //             ));
+                //         }
+                //     },
+                // };
 
-                Ok(vec![ContentPart::InputAudio {
-                    input_audio: InputAudio {
-                        data: url.clone(),
-                        format: format.to_string(),
-                    },
-                }])
+                // let format = match ext {
+                //     "mpeg" => "mp3",
+                //     other => other,
+                // };
+
+                // Ok(vec![ContentPart::InputAudio {
+                //     input_audio: InputAudio {
+                //         data: url.clone(),
+                //         format: format.to_string(),
+                //     },
+                // }])
             }
             MediaContent::File { .. } => {
                 unreachable!("audio file should have been resolved before request building")
@@ -429,7 +438,7 @@ mod tests {
     }
 
     #[test]
-    fn chat_audio_url() {
+    fn chat_audio_url_unsupported() {
         let media = make_media(
             MediaKind::Audio,
             MediaContent::Url {
@@ -438,18 +447,14 @@ mod tests {
             },
             Some("audio/wav"),
         );
-        let parts = media
+        let err = media
             .read_content(|c| openai_media_part(&media, c))
-            .unwrap();
-        let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({"type": "input_audio", "input_audio": {"data": "https://example.com/speech.wav", "format": "wav"}})
-        );
+            .unwrap_err();
+        assert!(err.to_string().contains("audio url is not supported"));
     }
 
     #[test]
-    fn chat_pdf_url() {
+    fn chat_pdf_url_unsupported() {
         let media = make_media(
             MediaKind::Pdf,
             MediaContent::Url {
@@ -458,14 +463,10 @@ mod tests {
             },
             Some("application/pdf"),
         );
-        let parts = media
+        let err = media
             .read_content(|c| openai_media_part(&media, c))
-            .unwrap();
-        let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({"type": "file", "file": {"file_url": "https://example.com/doc.pdf", "filename": "document.pdf"}})
-        );
+            .unwrap_err();
+        assert!(err.to_string().contains("file URLs are not supported"));
     }
 
     #[test]
@@ -612,6 +613,10 @@ mod tests {
                     "resource_name",
                     BexExternalValue::String("my-resource".into()),
                 ),
+                (
+                    "api_version",
+                    BexExternalValue::String("2024-02-15-preview".into()),
+                ),
                 ("api_key", BexExternalValue::String("sk-test".into())),
             ],
         );
@@ -619,7 +624,7 @@ mod tests {
         let url = builder.build_url(&client).unwrap();
         assert_eq!(
             url,
-            "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions"
+            "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview"
         );
     }
 
@@ -666,6 +671,10 @@ mod tests {
             vec![
                 ("model", BexExternalValue::String("gpt-4o".into())),
                 ("resource_name", BexExternalValue::String("res".into())),
+                (
+                    "api_version",
+                    BexExternalValue::String("2024-02-15-preview".into()),
+                ),
                 ("api_key", BexExternalValue::String("sk".into())),
             ],
         );
@@ -681,6 +690,10 @@ mod tests {
             vec![
                 ("model", BexExternalValue::String("gpt-4o".into())),
                 ("resource_name", BexExternalValue::String("res".into())),
+                (
+                    "api_version",
+                    BexExternalValue::String("2024-02-15-preview".into()),
+                ),
                 ("max_tokens", BexExternalValue::Int(1000)),
             ],
         );
@@ -696,6 +709,10 @@ mod tests {
             vec![
                 ("model", BexExternalValue::String("gpt-4o".into())),
                 ("resource_name", BexExternalValue::String("res".into())),
+                (
+                    "api_version",
+                    BexExternalValue::String("2024-02-15-preview".into()),
+                ),
                 ("max_completion_tokens", BexExternalValue::Int(2000)),
             ],
         );
@@ -722,5 +739,127 @@ mod tests {
         let result = build_request(&client, msg("user", "hi")).unwrap();
         let body = parse_body(&result.body);
         assert!(body.get("model").is_none());
+    }
+
+    #[test]
+    fn azure_missing_api_version() {
+        let client = make_client(
+            "azure-openai",
+            vec![
+                ("model", BexExternalValue::String("gpt-4o".into())),
+                ("resource_name", BexExternalValue::String("res".into())),
+            ],
+        );
+        let err = build_request(&client, msg("user", "hi")).unwrap_err();
+        assert!(err.to_string().contains("api_version"));
+    }
+
+    // ========================================================================
+    // Chat Completions: other OpenAI-like providers
+    // ========================================================================
+
+    #[test]
+    fn openai_generic_requires_base_url() {
+        let client = make_client("openai-generic", vec![]);
+        let err = build_request(&client, msg("user", "hi")).unwrap_err();
+        assert!(err.to_string().contains("base_url"));
+    }
+
+    #[test]
+    fn openai_generic_with_base_url() {
+        let client = make_client(
+            "openai-generic",
+            vec![
+                (
+                    "base_url",
+                    BexExternalValue::String("https://my-llm.example.com/v1".into()),
+                ),
+                ("model", BexExternalValue::String("my-model".into())),
+                ("api_key", BexExternalValue::String("sk-custom".into())),
+            ],
+        );
+        let result = build_request(&client, msg("user", "hi")).unwrap();
+        assert_eq!(result.url, "https://my-llm.example.com/v1/chat/completions");
+        assert_eq!(
+            result.headers.get("authorization").unwrap(),
+            "Bearer sk-custom"
+        );
+        let body = parse_body(&result.body);
+        assert_eq!(body["model"], "my-model");
+        assert_eq!(body["messages"][0]["role"], "user");
+    }
+
+    #[test]
+    fn ollama_default_url() {
+        let client = make_client(
+            "ollama",
+            vec![("model", BexExternalValue::String("llama3".into()))],
+        );
+        let result = build_request(&client, msg("user", "hi")).unwrap();
+        assert_eq!(result.url, "http://localhost:11434/v1/chat/completions");
+        let body = parse_body(&result.body);
+        assert_eq!(body["model"], "llama3");
+    }
+
+    #[test]
+    fn ollama_custom_base_url() {
+        let client = make_client(
+            "ollama",
+            vec![
+                (
+                    "base_url",
+                    BexExternalValue::String("http://remote:11434/v1".into()),
+                ),
+                ("model", BexExternalValue::String("llama3".into())),
+            ],
+        );
+        let result = build_request(&client, msg("user", "hi")).unwrap();
+        assert_eq!(result.url, "http://remote:11434/v1/chat/completions");
+    }
+
+    #[test]
+    fn ollama_no_auth_header() {
+        let client = make_client(
+            "ollama",
+            vec![("model", BexExternalValue::String("llama3".into()))],
+        );
+        let result = build_request(&client, msg("user", "hi")).unwrap();
+        assert!(result.headers.get("authorization").is_none());
+        assert!(result.headers.get("api-key").is_none());
+    }
+
+    #[test]
+    fn openrouter_default_url() {
+        let client = make_client(
+            "openrouter",
+            vec![
+                ("model", BexExternalValue::String("openai/gpt-4o".into())),
+                ("api_key", BexExternalValue::String("sk-or-test".into())),
+            ],
+        );
+        let result = build_request(&client, msg("user", "hi")).unwrap();
+        assert_eq!(result.url, "https://openrouter.ai/api/v1/chat/completions");
+        assert_eq!(
+            result.headers.get("authorization").unwrap(),
+            "Bearer sk-or-test"
+        );
+        let body = parse_body(&result.body);
+        assert_eq!(body["model"], "openai/gpt-4o");
+    }
+
+    #[test]
+    fn openrouter_forwards_options() {
+        let client = make_client(
+            "openrouter",
+            vec![
+                ("model", BexExternalValue::String("openai/gpt-4o".into())),
+                ("temperature", BexExternalValue::Float(0.3)),
+                ("max_tokens", BexExternalValue::Int(500)),
+            ],
+        );
+        let result = build_request(&client, msg("user", "hi")).unwrap();
+        let body = parse_body(&result.body);
+        assert_eq!(body["temperature"], 0.3);
+        assert_eq!(body["max_tokens"], 500);
     }
 }

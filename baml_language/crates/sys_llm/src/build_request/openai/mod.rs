@@ -22,7 +22,7 @@ pub(super) fn build_openai_url(
 ) -> Result<String, BuildRequestError> {
     if let Some(base_url) = get_string_option(client, "base_url") {
         let base_url = base_url.trim_end_matches('/');
-        return Ok(format!("{base_url}/{path}"));
+        return Ok(format!("{base_url}{path}"));
     }
 
     Ok(match provider {
