@@ -141,7 +141,7 @@ pub(crate) fn build_request(
             openai::OpenAiBuilder::new(&provider).build_request(client, prompt)?
         }
         LlmProvider::OpenAiResponses => {
-            openai::OpenAiResponsesBuilder.build_request(client, prompt)?
+            openai::OpenAiResponsesBuilder::new(&provider).build_request(client, prompt)?
         }
         LlmProvider::Anthropic => anthropic::AnthropicBuilder.build_request(client, prompt)?,
         LlmProvider::GoogleAi

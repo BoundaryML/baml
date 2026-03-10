@@ -8,7 +8,8 @@ use indexmap::IndexMap;
 use serde::Serialize;
 
 use crate::build_request::{
-    BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder, get_string_option, mime_type_as_ok,
+    BuildRequestError, LlmPrimitiveClient, LlmProvider, LlmRequestBuilder, get_string_option,
+    mime_type_as_ok, openai::build_openai_url,
 };
 
 /// A single message in the `OpenAI` Responses API format.
@@ -58,19 +59,24 @@ struct InputAudio {
     format: String,
 }
 
-/// Builder for the `OpenAI` Responses API (`/v1/responses`).
-pub(crate) struct OpenAiResponsesBuilder;
+impl<'a> OpenAiResponsesBuilder<'a> {
+    pub(crate) fn new(provider: &'a LlmProvider) -> Self {
+        Self { provider }
+    }
+}
 
-impl LlmRequestBuilder for OpenAiResponsesBuilder {
+/// Builder for the `OpenAI` Responses API (`/v1/responses`).
+pub(crate) struct OpenAiResponsesBuilder<'a> {
+    provider: &'a LlmProvider,
+}
+
+impl LlmRequestBuilder for OpenAiResponsesBuilder<'_> {
     fn provider_skip_keys(&self) -> &'static [&'static str] {
         &[]
     }
 
     fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError> {
-        let base_url = get_string_option(client, "base_url")
-            .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
-        let base_url = base_url.trim_end_matches('/');
-        Ok(format!("{base_url}/responses"))
+        build_openai_url(*self.provider, client, "/responses")
     }
 
     fn build_auth_headers(&self, client: &LlmPrimitiveClient) -> IndexMap<String, String> {
@@ -465,7 +471,9 @@ mod tests {
     #[test]
     fn responses_url_default() {
         let client = make_client("openai-responses", vec![]);
-        let url = OpenAiResponsesBuilder.build_url(&client).unwrap();
+        let url = OpenAiResponsesBuilder::new(&LlmProvider::OpenAiResponses)
+            .build_url(&client)
+            .unwrap();
         assert_eq!(url, "https://api.openai.com/v1/responses");
     }
 
@@ -478,7 +486,9 @@ mod tests {
                 BexExternalValue::String("https://custom.api.com/v1".into()),
             )],
         );
-        let url = OpenAiResponsesBuilder.build_url(&client).unwrap();
+        let url = OpenAiResponsesBuilder::new(&LlmProvider::OpenAiResponses)
+            .build_url(&client)
+            .unwrap();
         assert_eq!(url, "https://custom.api.com/v1/responses");
     }
 }

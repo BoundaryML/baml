@@ -2,8 +2,6 @@
 //!
 //! Supports: `OpenAi`, `OpenAiGeneric`, `AzureOpenAi`, Ollama, `OpenRouter`.
 
-use std::fmt::Write;
-
 use baml_builtins::{PromptAst, PromptAstSimple};
 use indexmap::IndexMap;
 use serde::Serialize;
@@ -12,7 +10,7 @@ use crate::{
     LlmProvider,
     build_request::{
         BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder, get_string_option,
-        mime_type_as_ok,
+        mime_type_as_ok, openai::build_openai_url,
     },
 };
 
@@ -52,8 +50,6 @@ struct InputAudio {
 #[derive(Debug, Serialize)]
 struct FileRef {
     #[serde(skip_serializing_if = "Option::is_none")]
-    file_url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     file_data: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     file_id: Option<String>,
@@ -78,26 +74,7 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
     }
 
     fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError> {
-        let base_url = get_string_option(client, "base_url")
-            .unwrap_or_else(|| "https://api.openai.com/v1".to_string());
-        let base_url = base_url.trim_end_matches('/');
-
-        // Azure uses a different URL pattern
-        if *self.provider == LlmProvider::AzureOpenAi {
-            let deployment = get_string_option(client, "resource_name")
-                .ok_or_else(|| BuildRequestError::MissingOption("resource_name".into()))?;
-            let model = get_string_option(client, "model")
-                .ok_or_else(|| BuildRequestError::MissingOption("model".into()))?;
-            let mut url = format!(
-                "https://{deployment}.openai.azure.com/openai/deployments/{model}/chat/completions"
-            );
-            if let Some(api_version) = get_string_option(client, "api_version") {
-                write!(url, "?api-version={api_version}").unwrap();
-            }
-            return Ok(url);
-        }
-
-        Ok(format!("{base_url}/chat/completions"))
+        build_openai_url(*self.provider, client, "/chat/completions")
     }
 
     fn build_auth_headers(&self, client: &LlmPrimitiveClient) -> IndexMap<String, String> {
@@ -303,21 +280,15 @@ fn openai_media_part(
             }
         },
         MediaKind::Pdf => match content {
-            MediaContent::Url { url, .. } => Ok(vec![ContentPart::File {
-                file: FileRef {
-                    file_url: Some(url.clone()),
-                    filename: Some("document.pdf".to_string()),
-                    file_data: None,
-                    file_id: None,
-                },
-            }]),
+            MediaContent::Url { .. } => Err(BuildRequestError::UnsupportedMedia(
+                "file URLs are not supported on OpenAI chat completions; use base64-encoded pdf instead".into(),
+            )),
             MediaContent::Base64 { base64_data, .. } => {
                 let data_url = format!("data:{};base64,{}", mime_type_as_ok(media)?, base64_data);
                 Ok(vec![ContentPart::File {
                     file: FileRef {
                         file_data: Some(data_url),
                         filename: Some("document.pdf".to_string()),
-                        file_url: None,
                         file_id: None,
                     },
                 }])
