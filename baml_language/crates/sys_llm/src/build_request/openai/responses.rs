@@ -333,8 +333,10 @@ mod tests {
             .read_content(|c| responses_media_part(&media, c))
             .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json["type"], "input_image");
-        assert_eq!(json["image_url"], "data:image/png;base64,iVBORw0KGgo=");
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_image", "detail": "auto", "image_url": "data:image/png;base64,iVBORw0KGgo="})
+        );
     }
 
     #[test]
@@ -389,9 +391,82 @@ mod tests {
             .read_content(|c| responses_media_part(&media, c))
             .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json["type"], "input_file");
-        assert_eq!(json["file_data"], "data:application/pdf;base64,JVBERi0=");
-        assert_eq!(json["filename"], "document.pdf");
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_file", "file_data": "data:application/pdf;base64,JVBERi0=", "filename": "document.pdf"})
+        );
+    }
+
+    #[test]
+    fn responses_image_file_with_base64_data() {
+        let media = make_media(
+            MediaKind::Image,
+            MediaContent::File {
+                file: "cat.png".into(),
+                base64_data: Some("iVBORw0KGgo=".into()),
+            },
+            Some("image/png"),
+        );
+        let parts = media
+            .read_content(|c| responses_media_part(&media, c))
+            .unwrap();
+        let json = serde_json::to_value(&parts[0]).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_image", "detail": "auto", "image_url": "data:image/png;base64,iVBORw0KGgo="})
+        );
+    }
+
+    #[test]
+    fn responses_image_file_not_resolved_error() {
+        let media = make_media(
+            MediaKind::Image,
+            MediaContent::File {
+                file: "cat.png".into(),
+                base64_data: None,
+            },
+            Some("image/png"),
+        );
+        let err = media
+            .read_content(|c| responses_media_part(&media, c))
+            .unwrap_err();
+        assert!(matches!(err, BuildRequestError::FileNotResolved(_)));
+    }
+
+    #[test]
+    fn responses_pdf_file_with_base64_data() {
+        let media = make_media(
+            MediaKind::Pdf,
+            MediaContent::File {
+                file: "doc.pdf".into(),
+                base64_data: Some("JVBERi0=".into()),
+            },
+            Some("application/pdf"),
+        );
+        let parts = media
+            .read_content(|c| responses_media_part(&media, c))
+            .unwrap();
+        let json = serde_json::to_value(&parts[0]).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_file", "file_data": "data:application/pdf;base64,JVBERi0=", "filename": "document.pdf"})
+        );
+    }
+
+    #[test]
+    fn responses_pdf_file_not_resolved_error() {
+        let media = make_media(
+            MediaKind::Pdf,
+            MediaContent::File {
+                file: "doc.pdf".into(),
+                base64_data: None,
+            },
+            Some("application/pdf"),
+        );
+        let err = media
+            .read_content(|c| responses_media_part(&media, c))
+            .unwrap_err();
+        assert!(matches!(err, BuildRequestError::FileNotResolved(_)));
     }
 
     #[test]
@@ -422,7 +497,10 @@ mod tests {
         )
         .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json["type"], "output_text");
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "output_text", "text": "hi"})
+        );
     }
 
     #[test]
@@ -431,7 +509,10 @@ mod tests {
             responses_content_parts(&baml_builtins::PromptAstSimple::String("hi".into()), "user")
                 .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json["type"], "input_text");
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_text", "text": "hi"})
+        );
     }
 
     #[test]
@@ -446,13 +527,14 @@ mod tests {
         assert_eq!(messages[0].role, "system");
         assert_eq!(messages[1].role, "user");
         assert_eq!(messages[2].role, "assistant");
-        // assistant content should use output_text
-        let json = serde_json::to_value(&messages[2].content[0]).unwrap();
-        assert_eq!(json["type"], "output_text");
-        assert_eq!(json["text"], "4");
-        // system/user content should use input_text
-        let json = serde_json::to_value(&messages[0].content[0]).unwrap();
-        assert_eq!(json["type"], "input_text");
+        assert_eq!(
+            serde_json::to_value(&messages[0].content[0]).unwrap(),
+            serde_json::json!({"type": "input_text", "text": "You are a helpful assistant."})
+        );
+        assert_eq!(
+            serde_json::to_value(&messages[2].content[0]).unwrap(),
+            serde_json::json!({"type": "output_text", "text": "4"})
+        );
     }
 
     #[test]
@@ -473,14 +555,18 @@ mod tests {
         assert_eq!(messages[3].role, "user");
         assert_eq!(messages[4].role, "assistant");
         assert_eq!(messages[5].role, "user");
-        // Verify assistant messages use output_text, others use input_text
-        let json2 = serde_json::to_value(&messages[2].content[0]).unwrap();
-        assert_eq!(json2["type"], "output_text");
-        let json4 = serde_json::to_value(&messages[4].content[0]).unwrap();
-        assert_eq!(json4["type"], "output_text");
-        let json5 = serde_json::to_value(&messages[5].content[0]).unwrap();
-        assert_eq!(json5["type"], "input_text");
-        assert_eq!(json5["text"], "Goodbye");
+        assert_eq!(
+            serde_json::to_value(&messages[2].content[0]).unwrap(),
+            serde_json::json!({"type": "output_text", "text": "Hi!"})
+        );
+        assert_eq!(
+            serde_json::to_value(&messages[4].content[0]).unwrap(),
+            serde_json::json!({"type": "output_text", "text": "Good, thanks!"})
+        );
+        assert_eq!(
+            serde_json::to_value(&messages[5].content[0]).unwrap(),
+            serde_json::json!({"type": "input_text", "text": "Goodbye"})
+        );
     }
 
     #[test]

@@ -436,11 +436,14 @@ mod tests {
             .read_content(|c| openai_media_part(&media, c))
             .unwrap();
         let json = serde_json::to_value(&parts[0]).unwrap();
-        assert_eq!(json["input_audio"]["format"], "mp3");
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_audio", "input_audio": {"data": "AAAA", "format": "mp3"}})
+        );
     }
 
     #[test]
-    fn chat_audio_url_unsupported() {
+    fn chat_audio_url_not_resolved_error() {
         let media = make_media(
             MediaKind::Audio,
             MediaContent::Url {
@@ -452,11 +455,107 @@ mod tests {
         let err = media
             .read_content(|c| openai_media_part(&media, c))
             .unwrap_err();
-        assert!(err.to_string().contains("audio url is not supported"));
+        assert!(matches!(err, BuildRequestError::UnsupportedMedia(_)));
+        assert!(
+            err.to_string()
+                .contains("audio url content was not resolved")
+        );
     }
 
     #[test]
-    fn chat_pdf_url_unsupported() {
+    fn chat_audio_url_with_base64_data() {
+        let media = make_media(
+            MediaKind::Audio,
+            MediaContent::Url {
+                url: "https://example.com/speech.wav".into(),
+                base64_data: Some("AAAA".into()),
+            },
+            Some("audio/wav"),
+        );
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
+        let json = serde_json::to_value(&parts[0]).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_audio", "input_audio": {"data": "AAAA", "format": "wav"}})
+        );
+    }
+
+    #[test]
+    fn chat_audio_file_with_base64_data() {
+        let media = make_media(
+            MediaKind::Audio,
+            MediaContent::File {
+                file: "speech.wav".into(),
+                base64_data: Some("AAAA".into()),
+            },
+            Some("audio/wav"),
+        );
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
+        let json = serde_json::to_value(&parts[0]).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "input_audio", "input_audio": {"data": "AAAA", "format": "wav"}})
+        );
+    }
+
+    #[test]
+    fn chat_audio_file_not_resolved_error() {
+        let media = make_media(
+            MediaKind::Audio,
+            MediaContent::File {
+                file: "speech.wav".into(),
+                base64_data: None,
+            },
+            Some("audio/wav"),
+        );
+        let err = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap_err();
+        assert!(matches!(err, BuildRequestError::FileNotResolved(_)));
+    }
+
+    #[test]
+    fn chat_image_file_with_base64_data() {
+        let media = make_media(
+            MediaKind::Image,
+            MediaContent::File {
+                file: "cat.png".into(),
+                base64_data: Some("iVBORw0KGgo=".into()),
+            },
+            Some("image/png"),
+        );
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
+        let json = serde_json::to_value(&parts[0]).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="}})
+        );
+    }
+
+    #[test]
+    fn chat_image_file_not_resolved_error() {
+        let media = make_media(
+            MediaKind::Image,
+            MediaContent::File {
+                file: "cat.png".into(),
+                base64_data: None,
+            },
+            Some("image/png"),
+        );
+        let err = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap_err();
+        assert!(matches!(err, BuildRequestError::FileNotResolved(_)));
+    }
+
+    #[test]
+    fn chat_pdf_url_not_resolved_error() {
         let media = make_media(
             MediaKind::Pdf,
             MediaContent::Url {
@@ -468,7 +567,64 @@ mod tests {
         let err = media
             .read_content(|c| openai_media_part(&media, c))
             .unwrap_err();
-        assert!(err.to_string().contains("file URLs are not supported"));
+        assert!(matches!(err, BuildRequestError::UnsupportedMedia(_)));
+        assert!(err.to_string().contains("pdf url content was not resolved"));
+    }
+
+    #[test]
+    fn chat_pdf_url_with_base64_data() {
+        let media = make_media(
+            MediaKind::Pdf,
+            MediaContent::Url {
+                url: "https://example.com/doc.pdf".into(),
+                base64_data: Some("JVBERi0=".into()),
+            },
+            Some("application/pdf"),
+        );
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
+        let json = serde_json::to_value(&parts[0]).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "file", "file": {"file_data": "data:application/pdf;base64,JVBERi0=", "filename": "document.pdf"}})
+        );
+    }
+
+    #[test]
+    fn chat_pdf_file_with_base64_data() {
+        let media = make_media(
+            MediaKind::Pdf,
+            MediaContent::File {
+                file: "doc.pdf".into(),
+                base64_data: Some("JVBERi0=".into()),
+            },
+            Some("application/pdf"),
+        );
+        let parts = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap();
+        let json = serde_json::to_value(&parts[0]).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"type": "file", "file": {"file_data": "data:application/pdf;base64,JVBERi0=", "filename": "document.pdf"}})
+        );
+    }
+
+    #[test]
+    fn chat_pdf_file_not_resolved_error() {
+        let media = make_media(
+            MediaKind::Pdf,
+            MediaContent::File {
+                file: "doc.pdf".into(),
+                base64_data: None,
+            },
+            Some("application/pdf"),
+        );
+        let err = media
+            .read_content(|c| openai_media_part(&media, c))
+            .unwrap_err();
+        assert!(matches!(err, BuildRequestError::FileNotResolved(_)));
     }
 
     #[test]
