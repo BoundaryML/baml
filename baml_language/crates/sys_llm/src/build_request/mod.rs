@@ -190,6 +190,18 @@ pub(crate) enum BuildRequestError {
     UnsupportedMedia(String),
 }
 
+/// Returns the MIME type of a media value, or an error if none is set.
+pub(crate) fn mime_type_as_ok(
+    media: &baml_builtins::MediaValue,
+) -> Result<&str, BuildRequestError> {
+    media.mime_type.as_deref().ok_or_else(|| {
+        BuildRequestError::UnsupportedMedia(format!(
+            "missing MIME type for {} media; please specify one explicitly",
+            media.kind
+        ))
+    })
+}
+
 /// Helper to extract a string option from client.options.
 pub(crate) fn get_string_option(client: &LlmPrimitiveClient, key: &str) -> Option<String> {
     match client.options.get(key) {

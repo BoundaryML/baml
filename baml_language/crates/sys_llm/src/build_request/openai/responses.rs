@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 use serde::Serialize;
 
 use crate::build_request::{
-    BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder, get_string_option,
+    BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder, get_string_option, mime_type_as_ok,
 };
 
 /// A single message in the `OpenAI` Responses API format.
@@ -149,7 +149,14 @@ fn responses_content_parts(
                 Ok(vec![ResponsesContentPart::InputText { text: s.clone() }])
             }
         }
-        PromptAstSimple::Media(media) => media.read_content(|c| responses_media_part(media, c)),
+        PromptAstSimple::Media(media) => {
+            if role == "assistant" {
+                return Err(BuildRequestError::UnsupportedMedia(
+                    "assistant messages must be text; media not supported for assistant in Responses API".into(),
+                ));
+            }
+            media.read_content(|c| responses_media_part(media, c))
+        }
         PromptAstSimple::Multiple(multiple) => {
             let mut parts = Vec::new();
             for item in multiple {
@@ -169,15 +176,11 @@ fn responses_media_part(
     use baml_builtins::MediaContent;
 
     match media.kind {
-        MediaKind::Image | MediaKind::Generic => {
+        MediaKind::Image => {
             let image_url = match content {
                 MediaContent::Url { url, .. } => url.clone(),
                 MediaContent::Base64 { base64_data, .. } => {
-                    format!(
-                        "data:{};base64,{}",
-                        media.mime_type.as_deref().unwrap_or("image/png"),
-                        base64_data
-                    )
+                    format!("data:{};base64,{}", mime_type_as_ok(media)?, base64_data)
                 }
                 MediaContent::File { .. } => {
                     unreachable!("image file should have been resolved before request building")
@@ -190,12 +193,8 @@ fn responses_media_part(
         }
         MediaKind::Audio => match content {
             MediaContent::Base64 { base64_data, .. } => {
-                let format = media
-                    .mime_type
-                    .as_deref()
-                    .and_then(|m| m.strip_prefix("audio/"))
-                    .map(|ext| if ext == "mpeg" { "mp3" } else { ext })
-                    .unwrap_or("mp3");
+                let mime = mime_type_as_ok(media)?;
+                let format = mime.strip_prefix("audio/").unwrap_or(mime);
                 Ok(vec![ResponsesContentPart::InputAudio {
                     input_audio: InputAudio {
                         data: base64_data.clone(),
@@ -203,12 +202,9 @@ fn responses_media_part(
                     },
                 }])
             }
-            MediaContent::Url { .. } => Err(BuildRequestError::UnsupportedMedia(
-                "audio URL is not supported on OpenAI Responses API; use base64-encoded audio instead".into(),
+            _ => Err(BuildRequestError::UnsupportedMedia(
+                "audio must be base64 encoded for Responses API".into(),
             )),
-            MediaContent::File { .. } => {
-                unreachable!("audio file should have been resolved before request building")
-            }
         },
         MediaKind::Pdf => match content {
             MediaContent::Url { url, .. } => Ok(vec![ResponsesContentPart::InputFile {
@@ -218,11 +214,7 @@ fn responses_media_part(
                 file_id: None,
             }]),
             MediaContent::Base64 { base64_data, .. } => {
-                let data_url = format!(
-                    "data:{};base64,{}",
-                    media.mime_type.as_deref().unwrap_or("application/pdf"),
-                    base64_data
-                );
+                let data_url = format!("data:{};base64,{}", mime_type_as_ok(media)?, base64_data);
                 Ok(vec![ResponsesContentPart::InputFile {
                     file_data: Some(data_url),
                     filename: Some("document.pdf".to_string()),
@@ -236,6 +228,9 @@ fn responses_media_part(
         },
         MediaKind::Video => Err(BuildRequestError::UnsupportedMedia(
             "video input is not supported on OpenAI Responses API".into(),
+        )),
+        MediaKind::Generic => Err(BuildRequestError::UnsupportedMedia(
+            "generic media is currently unimplemented".into(),
         )),
     }
 }

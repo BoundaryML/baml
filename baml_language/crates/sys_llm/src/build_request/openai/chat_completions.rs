@@ -10,7 +10,10 @@ use serde::Serialize;
 
 use crate::{
     LlmProvider,
-    build_request::{BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder, get_string_option},
+    build_request::{
+        BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder, get_string_option,
+        mime_type_as_ok,
+    },
 };
 
 /// A single chat message in the `OpenAI` Chat Completions format.
@@ -122,7 +125,7 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         self.forward_options(client, &mut body);
 
         // Azure OpenAI: default max_tokens to 4096 if neither max_tokens nor
-        // max_completion_tokens is set.
+        // max_completion_tokens is set. Holdover from engine, not sure why this was the case.
         if *self.provider == LlmProvider::AzureOpenAi {
             if !body.contains_key("max_completion_tokens") && !body.contains_key("max_tokens") {
                 body.insert("max_tokens".to_string(), serde_json::json!(4096));
@@ -243,16 +246,12 @@ fn openai_media_part(
     use baml_builtins::MediaContent;
 
     match media.kind {
-        MediaKind::Image | MediaKind::Generic => match content {
+        MediaKind::Image => match content {
             MediaContent::Url { url, .. } => Ok(vec![ContentPart::ImageUrl {
                 image_url: ImageUrl { url: url.clone() },
             }]),
             MediaContent::Base64 { base64_data, .. } => {
-                let data_url = format!(
-                    "data:{};base64,{}",
-                    media.mime_type.as_deref().unwrap_or("image/png"),
-                    base64_data
-                );
+                let data_url = format!("data:{};base64,{}", mime_type_as_ok(media)?, base64_data);
                 Ok(vec![ContentPart::ImageUrl {
                     image_url: ImageUrl { url: data_url },
                 }])
@@ -263,12 +262,9 @@ fn openai_media_part(
         },
         MediaKind::Audio => match content {
             MediaContent::Base64 { base64_data, .. } => {
-                let format = media
-                    .mime_type
-                    .as_deref()
-                    .and_then(|m| m.strip_prefix("audio/"))
-                    .map(|ext| if ext == "mpeg" { "mp3" } else { ext })
-                    .unwrap_or("mp3");
+                let mime = mime_type_as_ok(media)?;
+                let format = mime.strip_prefix("audio/").unwrap_or(mime);
+                let format = if format == "mpeg" { "mp3" } else { format };
                 Ok(vec![ContentPart::InputAudio {
                     input_audio: InputAudio {
                         data: base64_data.clone(),
@@ -277,14 +273,24 @@ fn openai_media_part(
                 }])
             }
             MediaContent::Url { url, .. } => {
-                // Prefer mime_type, fall back to URL extension
-                let format = media
-                    .mime_type
-                    .as_deref()
-                    .and_then(|m| m.strip_prefix("audio/"))
-                    .or_else(|| url.rsplit('.').next())
-                    .map(|ext| if ext == "mpeg" { "mp3" } else { ext })
-                    .unwrap_or("mp3");
+                let ext = url.split('.').next_back();
+                let ext = match media.mime_type.as_deref() {
+                    Some(mime) => mime.strip_prefix("audio/").unwrap_or(mime),
+                    None => match ext {
+                        Some(ext) => ext,
+                        None => {
+                            return Err(BuildRequestError::UnsupportedMedia(
+                                "audio url has no extension and no mime type".into(),
+                            ));
+                        }
+                    },
+                };
+
+                let format = match ext {
+                    "mpeg" => "mp3",
+                    other => other,
+                };
+
                 Ok(vec![ContentPart::InputAudio {
                     input_audio: InputAudio {
                         data: url.clone(),
@@ -306,11 +312,7 @@ fn openai_media_part(
                 },
             }]),
             MediaContent::Base64 { base64_data, .. } => {
-                let data_url = format!(
-                    "data:{};base64,{}",
-                    media.mime_type.as_deref().unwrap_or("application/pdf"),
-                    base64_data
-                );
+                let data_url = format!("data:{};base64,{}", mime_type_as_ok(media)?, base64_data);
                 Ok(vec![ContentPart::File {
                     file: FileRef {
                         file_data: Some(data_url),
@@ -326,6 +328,9 @@ fn openai_media_part(
         },
         MediaKind::Video => Err(BuildRequestError::UnsupportedMedia(
             "video input is not supported on OpenAI chat completions".into(),
+        )),
+        MediaKind::Generic => Err(BuildRequestError::UnsupportedMedia(
+            "generic media is currently unimplemented".into(),
         )),
     }
 }
