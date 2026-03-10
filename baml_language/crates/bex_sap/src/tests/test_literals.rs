@@ -1,138 +1,138 @@
-use super::*;
+use crate::{baml_db, baml_tyannotated};
 
 test_deserializer!(
     test_literal_integer_positive,
     "2",
-    literal_int(2),
-    empty_db(),
+    baml_tyannotated!(2),
+    baml_db! {},
     2
 );
 
 test_deserializer!(
     test_literal_integer_negative,
     "-42",
-    literal_int(-42),
-    empty_db(),
+    baml_tyannotated!(-42),
+    baml_db! {},
     -42
 );
 
 test_deserializer!(
     test_literal_integer_zero,
     "0",
-    literal_int(0),
-    empty_db(),
+    baml_tyannotated!(0),
+    baml_db! {},
     0
 );
 
 test_deserializer!(
     test_literal_boolean_true,
     "true",
-    literal_bool(true),
-    empty_db(),
+    baml_tyannotated!(true),
+    baml_db! {},
     true
 );
 
 test_deserializer!(
     test_literal_boolean_false,
     "false",
-    literal_bool(false),
-    empty_db(),
+    baml_tyannotated!(false),
+    baml_db! {},
     false
 );
 
 test_deserializer!(
     test_literal_string_uppercase_with_double_quotes,
     r#""TWO""#,
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_uppercase_without_quotes,
     "TWO",
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_mismatched_case,
     "Two",
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_lowercase,
     "two",
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_preceded_by_extra_text,
     "The answer is TWO",
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_preceded_by_extra_text_case_mismatch,
     "The answer is Two",
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_followed_by_extra_text,
     "TWO is the answer",
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_followed_by_extra_text_case_mismatch,
     "Two is the answer",
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_with_quotes_preceded_by_extra_text,
     r#"The answer is "TWO""#,
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_with_quotes_preceded_by_extra_text_case_mismatch,
     r#"The answer is "two""#,
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_with_quotes_followed_by_extra_text,
     r#""TWO" is the answer"#,
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_with_quotes_followed_by_extra_text_case_mismatch,
     r#""Two" is the answer"#,
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
@@ -141,47 +141,47 @@ test_deserializer!(
     // Came up with this example unintentionally but this causes ambiguity
     // issues with unions ("two" | "one"), see the TODO at the end of this file.
     r#"The ansewr "TWO" is the correct one"#,
-    literal_string("two"),
-    empty_db(),
+    baml_tyannotated!("two"),
+    baml_db! {},
     "two"
 );
 
 test_deserializer!(
     test_literal_string_with_special_characters,
     r#""TWO!@#""#,
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_literal_string_with_whitespace,
     r#""  TWO  ""#,
-    literal_string("TWO"),
-    empty_db(),
+    baml_tyannotated!("TWO"),
+    baml_db! {},
     "TWO"
 );
 
 test_deserializer!(
     test_union_literal_integer_positive,
     "2",
-    union_of(vec![annotated(literal_int(2)), annotated(literal_int(3)),]),
-    empty_db(),
+    baml_tyannotated!(2 | 3),
+    baml_db! {},
     2
 );
 
 test_failing_deserializer!(
     test_union_literal_integer_positive_with_both,
     "2 or 3",
-    union_of(vec![annotated(literal_int(2)), annotated(literal_int(3)),]),
-    empty_db()
+    baml_tyannotated!(2 | 3),
+    baml_db! {}
 );
 
 test_failing_deserializer!(
     test_union_literal_bool_with_both,
     "true or false",
-    union_of(vec![annotated(literal_int(2)), annotated(literal_int(3)),]),
-    empty_db()
+    baml_tyannotated!(2 | 3),
+    baml_db! {}
 );
 
 // TODO: This one should fail because of ambiguity but we end up picking
@@ -191,11 +191,8 @@ test_failing_deserializer!(
 test_deserializer!(
     test_union_literal_string_with_both,
     "TWO or THREE",
-    union_of(vec![
-        annotated(literal_string("TWO")),
-        annotated(literal_string("THREE")),
-    ]),
-    empty_db(),
+    baml_tyannotated!(("TWO" | "THREE")),
+    baml_db! {},
     "TWO"
 );
 
@@ -204,12 +201,8 @@ test_deserializer!(
     r#"{
   "status": 1
 }"#,
-    union_of(vec![
-        annotated(literal_int(1)),
-        annotated(literal_bool(true)),
-        annotated(literal_string("THREE")),
-    ]),
-    empty_db(),
+    baml_tyannotated!(1 | true | "THREE"),
+    baml_db! {},
     1
 );
 
@@ -219,12 +212,8 @@ test_deserializer!(
     r#"{
   "status": 1
 }"#,
-    union_of(vec![
-        annotated(literal_int(1)),
-        annotated(literal_bool(true)),
-        annotated(literal_string("THREE")),
-    ]),
-    empty_db(),
+    baml_tyannotated!(1 | true | "THREE"),
+    baml_db! {},
     1
 );
 
@@ -234,12 +223,8 @@ test_deserializer!(
     r#"{
   "result": true
 }"#,
-    union_of(vec![
-        annotated(literal_int(1)),
-        annotated(literal_bool(true)),
-        annotated(literal_string("THREE")),
-    ]),
-    empty_db(),
+    baml_tyannotated!(1 | true | "THREE"),
+    baml_db! {},
     true
 );
 
@@ -249,12 +234,8 @@ test_deserializer!(
     r#"{
   "value": "THREE"
 }"#,
-    union_of(vec![
-        annotated(literal_int(1)),
-        annotated(literal_bool(true)),
-        annotated(literal_string("THREE")),
-    ]),
-    empty_db(),
+    baml_tyannotated!(1 | true | "THREE"),
+    baml_db! {},
     "THREE"
 );
 
@@ -263,30 +244,18 @@ test_deserializer!(
     r#"
         "pay"
     "#,
-    union_of(vec![
-        annotated(literal_string("pay")),
-        annotated(literal_string("pay_without_credit_card")),
-    ]),
-    empty_db(),
+    baml_tyannotated!("pay" | "pay_without_credit_card"),
+    baml_db! {},
     "pay"
 );
 
-test_partial_failing_deserializer!(
+test_partial_none_deserializer!(
     test_ambiguous_literal_string,
     r#"
         "pay
     "#,
-    union_of(vec![
-        annotated_with(
-            literal_string("pay"),
-            TypeAnnotations { in_progress: Some(AttrLiteral::Never), ..Default::default() },
-        ),
-        annotated_with(
-            literal_string("pay_without_credit_card"),
-            TypeAnnotations { in_progress: Some(AttrLiteral::Never), ..Default::default() },
-        ),
-    ]),
-    empty_db()
+    baml_tyannotated!("pay" @in_progress(never) | "pay_without_credit_card" @in_progress(never)),
+    baml_db! {}
 );
 
 // Test with object that has multiple keys (should fail)
@@ -296,12 +265,8 @@ test_failing_deserializer!(
   "status": 1,
   "message": "success"
 }"#,
-    union_of(vec![
-        annotated(literal_int(1)),
-        annotated(literal_bool(true)),
-        annotated(literal_string("THREE")),
-    ]),
-    empty_db()
+    baml_tyannotated!(1 | true | "THREE"),
+    baml_db! {}
 );
 
 // Test with nested object (should fail)
@@ -312,12 +277,8 @@ test_failing_deserializer!(
     "code": 1
   }
 }"#,
-    union_of(vec![
-        annotated(literal_int(1)),
-        annotated(literal_bool(true)),
-        annotated(literal_string("THREE")),
-    ]),
-    empty_db()
+    baml_tyannotated!(1 | true | "THREE"),
+    baml_db! {}
 );
 
 // Test with quoted string value
@@ -326,12 +287,8 @@ test_deserializer!(
     r#"{
   "value": "\"THREE\""
 }"#,
-    union_of(vec![
-        annotated(literal_int(1)),
-        annotated(literal_bool(true)),
-        annotated(literal_string("THREE")),
-    ]),
-    empty_db(),
+    baml_tyannotated!(1 | true | "THREE"),
+    baml_db! {},
     "THREE"
 );
 
@@ -341,12 +298,8 @@ test_deserializer!(
     r#"{
   "value": "The answer is THREE"
 }"#,
-    union_of(vec![
-        annotated(literal_int(1)),
-        annotated(literal_bool(true)),
-        annotated(literal_string("THREE")),
-    ]),
-    empty_db(),
+    baml_tyannotated!(1 | true | "THREE"),
+    baml_db! {},
     "THREE"
 );
 
@@ -356,20 +309,18 @@ test_failing_deserializer!(
     r#"{
   "values": [1]
 }"#,
-    union_of(vec![
-        annotated(literal_int(1)),
-        annotated(literal_bool(true)),
-        annotated(literal_string("THREE")),
-    ]),
-    empty_db()
+    baml_tyannotated!(1 | true | "THREE"),
+    baml_db! {}
 );
 
 test_partial_deserializer!(
     test_partial_class_with_null_literal,
     r#"{"#,
-    class_ty("Foo", vec![
-        field("bar", literal_string("hello")),
-    ]),
-    empty_db(),
+    baml_tyannotated!(Foo),
+    baml_db!{
+        class Foo {
+            bar: "hello" @class_in_progress_field_missing(null),
+        }
+    },
     { "bar": null }
 );

@@ -1,3 +1,5 @@
+use crate::{baml_db, baml_tyannotated};
+
 use super::*;
 
 // --- Task classes ---
@@ -5,58 +7,34 @@ use super::*;
 // class PageTask { type "page", name string, description string, required_components string[], required_actions string[], route string }
 // class ComponentTask { type "component", name string, description string, props string }
 
-fn make_task_db() -> (
-    TyResolved<'static, &'static str>,
-    TyResolved<'static, &'static str>,
-    TyResolved<'static, &'static str>,
-    TypeRefDb<'static, &'static str>,
-) {
-    let server_action = class_ty(
-        "ServerActionTask",
-        vec![
-            field("type", literal_string("server_action")),
-            field("name", string_ty()),
-            field("description", string_ty()),
-            field_with_aliases("signature", string_ty(), vec!["function_signature"]),
-        ],
-    );
-    let page = class_ty(
-        "PageTask",
-        vec![
-            field("type", literal_string("page")),
-            field("name", string_ty()),
-            field("description", string_ty()),
-            field("required_components", array_of(annotated(string_ty()))),
-            field("required_actions", array_of(annotated(string_ty()))),
-            field("route", string_ty()),
-        ],
-    );
-    let component = class_ty(
-        "ComponentTask",
-        vec![
-            field("type", literal_string("component")),
-            field("name", string_ty()),
-            field("description", string_ty()),
-            field("props", string_ty()),
-        ],
-    );
-
-    let mut db = TypeRefDb::new();
-    assert!(
-        db.try_add("ServerActionTask", server_action.clone())
-            .is_ok()
-    );
-    assert!(db.try_add("PageTask", page.clone()).is_ok());
-    assert!(db.try_add("ComponentTask", component.clone()).is_ok());
-
-    (server_action, page, component, db)
+fn make_task_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class ServerActionTask {
+            r#type: "server_action",
+            name: string,
+            description: string,
+            signature: string @alias("function_signature"),
+        }
+        class PageTask {
+            r#type: "page",
+            name: string,
+            description: string,
+            required_components: [string],
+            required_actions: [string],
+            route: string,
+        }
+        class ComponentTask {
+            r#type: "component",
+            name: string,
+            description: string,
+            props: string,
+        }
+    }
 }
 
-#[test]
-fn test_single_page_task() {
-    let (_, page, _, db) = make_task_db();
-
-    let raw = r#"
+test_deserializer!(
+    test_single_page_task,
+    r#"
 {
       type: page,
       name: HomePage,
@@ -65,72 +43,44 @@ fn test_single_page_task() {
       required_actions: [fetchPosts],
       route: /
 }
-  "#;
-    let parsed = crate::jsonish::parse(raw, Default::default(), true).unwrap();
-    let ctx = crate::deserializer::coercer::ParsingContext::new(page.as_ref(), &db);
-    let annots = TypeAnnotations::default();
-    let target = TyWithMeta::new(page.as_ref(), &annots);
-    let result = TyResolvedRef::coerce(&ctx, target, &parsed);
-    assert!(result.is_ok());
-    let value = result.unwrap().unwrap();
-    let json_value = serde_json::to_value(&value).unwrap();
-    let expected = serde_json::json!({
+  "#,
+    baml_tyannotated!(PageTask),
+    make_task_db(),
+    {
         "type": "page",
         "name": "HomePage",
         "description": "Landing page with post list",
         "required_components": ["PostCard", "PostFilter"],
         "required_actions": ["fetchPosts"],
         "route": "/"
-    });
-    assert_eq!(json_value, expected);
-}
+    }
+);
 
-#[test]
-fn test_class_2_single() {
-    let (_, _, _, db) = make_task_db();
-    let target_ty = array_of(annotated(union_of(vec![
-        annotated(Ty::Unresolved("ServerActionTask")),
-        annotated(Ty::Unresolved("PageTask")),
-        annotated(Ty::Unresolved("ComponentTask")),
-    ])));
-
-    let raw = r#"[
+test_deserializer!(
+    test_class_2_single,
+    r#"[
     {
       type: server_action,
       name: fetchPosts,
       description: Fetch paginated blog posts with sorting and filtering,
       function_signature: async function fetchPosts(page: number, sort: string, filters: object): Promise<PostList>
     }
-  ]"#;
-    let parsed = crate::jsonish::parse(raw, Default::default(), true).unwrap();
-    let ctx = crate::deserializer::coercer::ParsingContext::new(target_ty.as_ref(), &db);
-    let annots = TypeAnnotations::default();
-    let target = TyWithMeta::new(target_ty.as_ref(), &annots);
-    let result = TyResolvedRef::coerce(&ctx, target, &parsed);
-    assert!(result.is_ok());
-    let value = result.unwrap().unwrap();
-    let json_value = serde_json::to_value(&value).unwrap();
-    let expected = serde_json::json!([
+  ]"#,
+    baml_tyannotated!([(ServerActionTask | PageTask | ComponentTask)]),
+    make_task_db(),
+    [
         {
             "type": "server_action",
             "name": "fetchPosts",
             "description": "Fetch paginated blog posts with sorting and filtering",
             "signature": "async function fetchPosts(page: number, sort: string, filters: object): Promise<PostList>"
         }
-    ]);
-    assert_eq!(json_value, expected);
-}
+    ]
+);
 
-#[test]
-fn test_class_2_two() {
-    let (_, _, _, db) = make_task_db();
-    let target_ty = array_of(annotated(union_of(vec![
-        annotated(Ty::Unresolved("ServerActionTask")),
-        annotated(Ty::Unresolved("PageTask")),
-        annotated(Ty::Unresolved("ComponentTask")),
-    ])));
-
-    let raw = r#"[
+test_deserializer!(
+    test_class_2_two,
+    r#"[
     {
       type: server_action,
       name: fetchPosts,
@@ -143,16 +93,10 @@ fn test_class_2_two() {
       description: Card component for displaying post preview on home page,
       props: {title: string, excerpt: string, author: Author, date: string, onClick: () => void}
     }
-  ]"#;
-    let parsed = crate::jsonish::parse(raw, Default::default(), true).unwrap();
-    let ctx = crate::deserializer::coercer::ParsingContext::new(target_ty.as_ref(), &db);
-    let annots = TypeAnnotations::default();
-    let target = TyWithMeta::new(target_ty.as_ref(), &annots);
-    let result = TyResolvedRef::coerce(&ctx, target, &parsed);
-    assert!(result.is_ok());
-    let value = result.unwrap().unwrap();
-    let json_value = serde_json::to_value(&value).unwrap();
-    let expected = serde_json::json!([
+  ]"#,
+    baml_tyannotated!([(ServerActionTask | PageTask | ComponentTask)]),
+    make_task_db(),
+    [
         {
             "type": "server_action",
             "name": "fetchPosts",
@@ -165,20 +109,12 @@ fn test_class_2_two() {
             "description": "Card component for displaying post preview on home page",
             "props": "{title: string, excerpt: string, author: Author, date: string, onClick: () => void}"
         }
-    ]);
-    assert_eq!(json_value, expected);
-}
+    ]
+);
 
-#[test]
-fn test_class_2_three() {
-    let (_, _, _, db) = make_task_db();
-    let target_ty = array_of(annotated(union_of(vec![
-        annotated(Ty::Unresolved("ServerActionTask")),
-        annotated(Ty::Unresolved("PageTask")),
-        annotated(Ty::Unresolved("ComponentTask")),
-    ])));
-
-    let raw = r#"[
+test_deserializer!(
+    test_class_2_three,
+    r#"[
     {
       type: server_action,
       name: fetchPosts,
@@ -199,16 +135,10 @@ fn test_class_2_three() {
       required_actions: [fetchPosts],
       route: /
     }
-  ]"#;
-    let parsed = crate::jsonish::parse(raw, Default::default(), true).unwrap();
-    let ctx = crate::deserializer::coercer::ParsingContext::new(target_ty.as_ref(), &db);
-    let annots = TypeAnnotations::default();
-    let target = TyWithMeta::new(target_ty.as_ref(), &annots);
-    let result = TyResolvedRef::coerce(&ctx, target, &parsed);
-    assert!(result.is_ok());
-    let value = result.unwrap().unwrap();
-    let json_value = serde_json::to_value(&value).unwrap();
-    let expected = serde_json::json!([
+  ]"#,
+    baml_tyannotated!([(ServerActionTask | PageTask | ComponentTask)]),
+    make_task_db(),
+    [
         {
             "type": "server_action",
             "name": "fetchPosts",
@@ -229,20 +159,12 @@ fn test_class_2_three() {
             "required_actions": ["fetchPosts"],
             "route": "/"
         }
-    ]);
-    assert_eq!(json_value, expected);
-}
+    ]
+);
 
-#[test]
-fn test_class_2_four() {
-    let (_, _, _, db) = make_task_db();
-    let target_ty = array_of(annotated(union_of(vec![
-        annotated(Ty::Unresolved("ServerActionTask")),
-        annotated(Ty::Unresolved("PageTask")),
-        annotated(Ty::Unresolved("ComponentTask")),
-    ])));
-
-    let raw = r#"[
+test_deserializer!(
+    test_class_2_four,
+    r#"[
     {
       type: server_action,
       name: fetchPosts,
@@ -269,16 +191,10 @@ fn test_class_2_four() {
       description: Fetch single post with full content and metadata,
       function_signature: async function fetchPostById(id: string): Promise<Post>
     }
-  ]"#;
-    let parsed = crate::jsonish::parse(raw, Default::default(), true).unwrap();
-    let ctx = crate::deserializer::coercer::ParsingContext::new(target_ty.as_ref(), &db);
-    let annots = TypeAnnotations::default();
-    let target = TyWithMeta::new(target_ty.as_ref(), &annots);
-    let result = TyResolvedRef::coerce(&ctx, target, &parsed);
-    assert!(result.is_ok());
-    let value = result.unwrap().unwrap();
-    let json_value = serde_json::to_value(&value).unwrap();
-    let expected = serde_json::json!([
+  ]"#,
+    baml_tyannotated!([(ServerActionTask | PageTask | ComponentTask)]),
+    make_task_db(),
+    [
         {
             "type": "server_action",
             "name": "fetchPosts",
@@ -305,20 +221,12 @@ fn test_class_2_four() {
             "description": "Fetch single post with full content and metadata",
             "signature": "async function fetchPostById(id: string): Promise<Post>"
         }
-    ]);
-    assert_eq!(json_value, expected);
-}
+    ]
+);
 
-#[test]
-fn test_full() {
-    let (_, _, _, db) = make_task_db();
-    let target_ty = array_of(annotated(union_of(vec![
-        annotated(Ty::Unresolved("ServerActionTask")),
-        annotated(Ty::Unresolved("PageTask")),
-        annotated(Ty::Unresolved("ComponentTask")),
-    ])));
-
-    let raw = r###"
+test_deserializer!(
+    test_full,
+    r###"
 Let me break this down page by page:
 
 Page 1: Home (/)
@@ -488,16 +396,10 @@ Actions:
     route: /profile
   }
 ]
-  "###;
-    let parsed = crate::jsonish::parse(raw, Default::default(), true).unwrap();
-    let ctx = crate::deserializer::coercer::ParsingContext::new(target_ty.as_ref(), &db);
-    let annots = TypeAnnotations::default();
-    let target = TyWithMeta::new(target_ty.as_ref(), &annots);
-    let result = TyResolvedRef::coerce(&ctx, target, &parsed);
-    assert!(result.is_ok());
-    let value = result.unwrap().unwrap();
-    let json_value = serde_json::to_value(&value).unwrap();
-    let expected = serde_json::json!([
+  "###,
+    baml_tyannotated!([(ServerActionTask | PageTask | ComponentTask)]),
+    make_task_db(),
+    [
         {
             "type": "server_action",
             "name": "fetchPosts",
@@ -602,9 +504,8 @@ Actions:
             "required_actions": ["fetchUserProfile", "updateProfile"],
             "route": "/profile"
         }
-    ]);
-    assert_eq!(json_value, expected);
-}
+    ]
+);
 
 // Skipped tests:
 // - test_streaming_not_null_list (uses streaming behavior annotations)

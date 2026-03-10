@@ -159,12 +159,15 @@ where
                         )?;
                         ret.map_value(|v| BamlValue::String(BamlString { value: v.into() }))
                     }
-                    _ => array_helper::coerce_array_to_singular(
+                    _ => match array_helper::coerce_array_to_singular(
                         ctx,
                         target.clone(),
                         candidates.iter(),
                         &|val| Self::coerce(ctx, target.clone(), val),
-                    )?,
+                    )? {
+                        Some(v) => v,
+                        None => return Ok(None),
+                    },
                 }
             }
             crate::jsonish::Value::Markdown(_t, v, _completion) => {
@@ -296,12 +299,12 @@ where
         // so that nested implied-key coercion (e.g. {"item": "hello"} → Inner { value: string })
         // is still allowed.
         if ctx.scope.is_empty() {
-            if result
-                .conditions()
-                .flags
-                .iter()
-                .any(|f| matches!(f, Flag::InferedObject(Cow::Borrowed(crate::jsonish::Value::String(..)))))
-            {
+            if result.conditions().flags.iter().any(|f| {
+                matches!(
+                    f,
+                    Flag::InferedObject(Cow::Borrowed(crate::jsonish::Value::String(..)))
+                )
+            }) {
                 return Err(ctx.error_unexpected_type(&target.ty, &"string (inferred object)"));
             }
         }

@@ -6,6 +6,9 @@ use super::{ParsingContext, ParsingError};
 use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
 
 /// Tries to pick one of the items in the array and returns it.
+///
+/// Returns `Ok(None)` when every candidate returned `Ok(None)` (e.g. all
+/// were incomplete with `@in_progress(never)`).
 pub(super) fn coerce_array_to_singular<'s, 'v, 't, N: TypeIdent>(
     ctx: &ParsingContext<'s, 'v, 't, N>,
     target: TyWithMeta<TyResolvedRef<'t, N>, &TypeAnnotations<'t, N>>,
@@ -13,22 +16,31 @@ pub(super) fn coerce_array_to_singular<'s, 'v, 't, N: TypeIdent>(
     coercion: &dyn Fn(
         &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError>,
-) -> Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError> {
+) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError> {
+    let mut had_none = false;
     let parsed = items
         .into_iter()
-        .filter_map(|item| coercion(item).transpose())
+        .filter_map(|item| match coercion(item) {
+            Ok(None) => {
+                had_none = true;
+                None
+            }
+            other => other.transpose(),
+        })
         .collect::<Vec<_>>();
 
-    let mut best = pick_best(ctx, target, parsed);
-
-    if let Ok(ref mut f) = best {
-        // Store empty vec - the full results are only used for debugging display
-        // TODO: Restore if detailed debugging is needed:
-        // f.add_flag(Flag::FirstMatch(0, parsed.to_vec()))
-        f.add_flag(Flag::FirstMatch(0, vec![]))
+    if parsed.is_empty() && had_none {
+        return Ok(None);
     }
 
-    best
+    let mut best = pick_best(ctx, target, parsed)?;
+
+    // Store empty vec - the full results are only used for debugging display
+    // TODO: Restore if detailed debugging is needed:
+    // best.add_flag(Flag::FirstMatch(0, parsed.to_vec()))
+    best.add_flag(Flag::FirstMatch(0, vec![]));
+
+    Ok(Some(best))
 }
 
 /// Picks the best value to return for the target type+annotations.
@@ -201,16 +213,18 @@ pub(super) fn pick_best<'s, 'v, 't, 'a, N: TypeIdent>(
 
                 // NOTE: per-field condition checks (default detection) cannot be expressed
                 // on inner BamlValue items which lack metadata. Using top-level flags instead.
-                let a_is_default = a_val
-                    .conditions()
-                    .flags
-                    .iter()
-                    .any(|f| matches!(f, Flag::DefaultFromNoValue | Flag::DefaultFromInProgress(..)));
-                let b_is_default = b_val
-                    .conditions()
-                    .flags
-                    .iter()
-                    .any(|f| matches!(f, Flag::DefaultFromNoValue | Flag::DefaultFromInProgress(..)));
+                let a_is_default = a_val.conditions().flags.iter().any(|f| {
+                    matches!(
+                        f,
+                        Flag::DefaultFromNoValue | Flag::DefaultFromInProgress(..)
+                    )
+                });
+                let b_is_default = b_val.conditions().flags.iter().any(|f| {
+                    matches!(
+                        f,
+                        Flag::DefaultFromNoValue | Flag::DefaultFromInProgress(..)
+                    )
+                });
 
                 match (a_is_default, b_is_default) {
                     // Return B

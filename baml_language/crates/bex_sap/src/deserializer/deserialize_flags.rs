@@ -31,7 +31,7 @@ where
     MapKeyParseError(usize, ParsingError),
     MapValueParseError(Cow<'s, str>, ParsingError),
     /// When an optional field's value is present but parsing failed.
-    /// The field will be set to `null` and this flag will be added to the class object.
+    /// The field will be set to its default as if it were missing and this flag will be added to the class object.
     ///
     /// (In the case that a required field is errored, it is an error on the parent object so no flag is added.)
     OptionalFieldError(Cow<'s, str>, ParsingError),
@@ -58,13 +58,14 @@ where
     /// When a field is missing (in complete objects) or not yet started (in incomplete objects)
     /// and has been filled with a default value.
     ///
-    /// The value used is either [`crate::sap_model::AnnotatedField::missing`] or [`crate::sap_model::AnnotatedField::before_started`].
+    /// The value used is either [`crate::sap_model::AnnotatedField::class_in_progress_field_missing`]
+    /// or [`crate::sap_model::AnnotatedField::class_completed_field_missing`].
     DefaultFromNoValue,
     /// When a value is incomplete and the [`crate::sap_model::TypeAnnotations::in_progress`] is set.
     /// The type of `in_progress` should match the expected type.
     ///
     /// Includes the partial value that was present in the input.
-    /// Implies `Self::Incomplete`.
+    /// Implies [`Flag::Incomplete`].
     DefaultFromInProgress(Cow<'v, crate::jsonish::Value<'s>>),
     DefaultButHadValue(Cow<'v, crate::jsonish::Value<'s>>),
     OptionalDefaultFromNoValue,

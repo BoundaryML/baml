@@ -616,11 +616,15 @@ impl<'t, N: TypeIdent> TypeAnnotations<'t, N> {
 pub struct AnnotatedField<'t, N: TypeIdent> {
     pub name: Cow<'t, str>,
     pub ty: AnnotatedTy<'t, N>,
-    /// If the parent object is incomplete and this field has not yet been started,
-    /// use this value instead. If it is `never` then this causes an error.
+    /// If the parent object is incomplete and this field has not yet been started, use this value instead.
+    /// If it is `never` then this causes the entire class to be excluded until present.
+    ///
+    /// - Should always be `null` for optional fields.
     pub class_in_progress_field_missing: AttrLiteral<'t, N>,
     /// If the parent object is complete and this field is missing, use this value instead.
     /// If it is `never` then this causes an error.
+    ///
+    /// - Should always be `null` for optional fields.
     pub class_completed_field_missing: AttrLiteral<'t, N>,
     /// Aliases for the field name.
     /// If any are present, the real name is not used for matching.
@@ -670,7 +674,7 @@ pub enum AttrLiteral<'t, N: TypeIdent> {
         name: &'t N,
         data: IndexMap<Cow<'t, str>, AttrLiteral<'t, N>>,
     },
-    
+
     Map(IndexMap<Cow<'t, str>, AttrLiteral<'t, N>>),
     EnumVariant {
         enum_name: &'t N,

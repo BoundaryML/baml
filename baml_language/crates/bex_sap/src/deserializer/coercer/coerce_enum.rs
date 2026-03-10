@@ -52,21 +52,29 @@ where
             return None;
         };
 
-        if completion == &CompletionState::Incomplete {
-            return if let Some(ref in_progress) = meta.in_progress {
-                let in_progress = enum_ty.from_literal(in_progress, ctx).ok()?;
-                Some(ValueWithFlags::new(
-                    in_progress,
-                    DeserializerMeta {
-                        flags: DeserializerConditions::new()
-                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
-                        ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
-                    },
-                ))
-            } else {
-                None
-            };
-        }
+        let flags = match (completion, target.meta.in_progress.as_ref()) {
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
+            (CompletionState::Incomplete, Some(lit)) => {
+                return target
+                    .ty
+                    .from_literal(lit, ctx)
+                    .map(|ret| {
+                        ValueWithFlags::new(
+                            ret,
+                            DeserializerMeta {
+                                flags: DeserializerConditions::new()
+                                    .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
+                                ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
+                            },
+                        )
+                    })
+                    .ok();
+            }
+            (CompletionState::Incomplete, None) => {
+                DeserializerConditions::new().with_flag(Flag::Incomplete)
+            }
+            (CompletionState::Complete, _) => DeserializerConditions::new(),
+        };
 
         // assumes no name or alias can have the same value as another name or alias
         // When aliases exist, only aliases are valid for matching (name is excluded)
@@ -90,7 +98,7 @@ where
                 return Some(ValueWithFlags::new(
                     value,
                     DeserializerMeta {
-                        flags: DeserializerConditions::new(),
+                        flags,
                         ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
                     },
                 ));

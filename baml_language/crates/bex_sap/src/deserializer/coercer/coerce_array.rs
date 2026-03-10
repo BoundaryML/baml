@@ -50,29 +50,43 @@ where
         let element_type = ctx.db.resolve_with_meta(element_type.as_ref()).ok()?;
 
         // Only handle array values
-        let crate::jsonish::Value::Array(arr, _) = value else {
+        let crate::jsonish::Value::Array(arr, completion_state) = value else {
             return None;
+        };
+
+        let flags = match (completion_state, target.meta.in_progress.as_ref()) {
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
+            (CompletionState::Incomplete, Some(lit)) => {
+                return target
+                    .ty
+                    .from_literal(lit, ctx)
+                    .map(|ret| {
+                        ValueWithFlags::new(
+                            ret,
+                            DeserializerMeta {
+                                flags: DeserializerConditions::new()
+                                    .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
+                                ty: TyWithMeta::new(TyResolvedRef::Array(target.ty), target.meta),
+                            },
+                        )
+                    })
+                    .ok();
+            }
+            (CompletionState::Incomplete, None) => {
+                DeserializerConditions::new().with_flag(Flag::Incomplete)
+            }
+            (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
 
         // For empty arrays, we can return immediately
         if arr.is_empty() {
-            let mut result = ValueWithFlags::new(
+            return Some(ValueWithFlags::new(
                 BamlArray { value: Vec::new() },
                 DeserializerMeta {
-                    flags: DeserializerConditions::new(),
+                    flags,
                     ty: TyWithMeta::new(TyResolvedRef::Array(target.ty), target.meta),
                 },
-            );
-
-            // Check completion state
-            match value.completion_state() {
-                CompletionState::Complete => {}
-                CompletionState::Incomplete => {
-                    result.add_flag(Flag::Incomplete);
-                }
-            }
-
-            return Some(result);
+            ));
         }
 
         // Try to cast all elements, tracking union hints for optimization
@@ -81,32 +95,20 @@ where
         for (i, item) in arr.iter().enumerate() {
             let child_ctx = ctx.enter_scope_with_hint(&format!("{i}"), last_union_hint);
             let et_ref = TyWithMeta::new(element_type.ty, element_type.meta);
-            let Some(v) = TyResolvedRef::try_cast(&child_ctx, et_ref, item) else {
-                return None; // Fail fast on first error
-            };
+            let v = TyResolvedRef::try_cast(&child_ctx, et_ref, item)?;
 
             // Extract winning variant index for the next iteration's hint
             last_union_hint = extract_union_winner_index(&v);
             items.push(v);
         }
 
-        let mut result = ValueWithFlags::new(
+        Some(ValueWithFlags::new(
             BamlArray { value: items },
             DeserializerMeta {
-                flags: DeserializerConditions::new(),
+                flags,
                 ty: TyWithMeta::new(TyResolvedRef::Array(target.ty), target.meta),
             },
-        );
-
-        // Check completion state
-        match value.completion_state() {
-            CompletionState::Complete => {}
-            CompletionState::Incomplete => {
-                result.add_flag(Flag::Incomplete);
-            }
-        }
-
-        Some(result)
+        ))
     }
 
     fn coerce(
@@ -170,11 +172,6 @@ where
                                 *completion_state,
                                 CompletionState::Incomplete,
                                 "Array should be incomplete if an item is."
-                            );
-                            debug_assert_eq!(
-                                i + 1,
-                                arr.len(),
-                                "Incomplete array element should be last"
                             );
                         }
                         // TODO(vbv): document why we penalize in proportion to how deep into an array a parse error is

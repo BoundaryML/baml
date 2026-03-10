@@ -36,6 +36,30 @@ where
             return None;
         };
 
+        let flags = match (completion_state, target.meta.in_progress.as_ref()) {
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
+            (CompletionState::Incomplete, Some(lit)) => {
+                return target
+                    .ty
+                    .from_literal(lit, ctx)
+                    .map(|ret| {
+                        ValueWithFlags::new(
+                            ret,
+                            DeserializerMeta {
+                                flags: DeserializerConditions::new()
+                                    .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
+                                ty: TyWithMeta::new(TyResolvedRef::Class(class_ty), meta),
+                            },
+                        )
+                    })
+                    .ok();
+            }
+            (CompletionState::Incomplete, None) => {
+                DeserializerConditions::new().with_flag(Flag::Incomplete)
+            }
+            (CompletionState::Complete, _) => DeserializerConditions::new(),
+        };
+
         let ctx = {
             let cls_value_pair = (name.to_string(), value);
 
@@ -54,16 +78,11 @@ where
             &ctx.visit_class_value_pair(cls_value_pair, false)
         };
 
-        let mut flags = DeserializerConditions::new();
-
         // add entries as fields
         let mut field_data = IndexMap::new();
         for (k, v) in obj {
-            let field = class_ty.fields.iter().find(|f| f.key_matches(&*k));
-            let Some(field) = field else {
-                // it is an extra entry. try_cast is strict and rejects when it finds extra keys.
-                return None;
-            };
+            // try_cast is strict and rejects when it finds extra keys.
+            let field = class_ty.fields.iter().find(|f| f.key_matches(&*k))?;
             let field_ty = ctx
                 .db
                 .resolve_with_meta(field.ty.as_ref())
@@ -87,21 +106,23 @@ where
             }
 
             let replacement = match completion_state {
+                CompletionState::Incomplete if matches!(before_started, AttrLiteral::Never) => {
+                    return None;
+                }
                 CompletionState::Incomplete => before_started,
+                CompletionState::Complete if matches!(missing, AttrLiteral::Never) => {
+                    return None;
+                }
                 CompletionState::Complete => missing,
             };
-            if matches!(replacement, AttrLiteral::Never) && ty.ty.is_optional(ctx.db) {
-                continue; // happy path: we don't need the field, it's optional
-            }
 
             let field_ty = ctx
                 .db
                 .resolve_with_meta(ty.as_ref())
                 .map_err(|ident| ctx.error_type_resolution(ident))
                 .ok()?;
-            // try_cast is the strict path — if from_literal fails (e.g.
-            // AttrLiteral::Null on a non-nullable type), we return None so the
-            // lenient coerce path can handle it instead.
+
+            // Literal must match thet field's type.
             let value = field_ty.ty.from_literal(replacement, ctx).ok()?;
             let value = BamlValueWithFlags::new(
                 value,
@@ -111,10 +132,6 @@ where
                 },
             );
             field_data.insert(&**name, value);
-        }
-
-        if *completion_state == CompletionState::Incomplete {
-            flags.add_flag(Flag::Incomplete);
         }
 
         Some(ValueWithFlags::new(
@@ -192,17 +209,15 @@ where
                 let mut extra_keys = IndexMap::new();
                 let mut entries = HashMap::new();
                 for (key, v) in obj {
-                    let Some(field) = class_ty
-                        .fields
-                        .iter()
-                        .find(|f| {
-                            if f.aliases.is_empty() {
-                                matches_string_to_string(ctx, key, &f.name)
-                            } else {
-                                f.aliases.iter().any(|a| matches_string_to_string(ctx, key, a))
-                            }
-                        })
-                    else {
+                    let Some(field) = class_ty.fields.iter().find(|f| {
+                        if f.aliases.is_empty() {
+                            matches_string_to_string(ctx, key, &f.name)
+                        } else {
+                            f.aliases
+                                .iter()
+                                .any(|a| matches_string_to_string(ctx, key, a))
+                        }
+                    }) else {
                         extra_keys.insert(key.clone(), v);
                         continue;
                     };
@@ -266,12 +281,14 @@ where
             (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
             }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
-                target.ty.from_literal(lit, ctx).map(|v| {
+            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => target
+                .ty
+                .from_literal(lit, ctx)
+                .map(|v| {
                     ValueWithFlags::new(v, DeserializerMeta::new(target.clone()))
                         .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
                 })
-            }
+                .map(Some),
             (jsonish::Value::Array(items, c), None) => {
                 let mut completed = Vec::new();
                 if let [field] = class_ty.fields.as_slice()
@@ -314,7 +331,11 @@ where
                             .map(|v| v.map(|v| v.map_value(BamlValue::Class)))
                     },
                 );
-                completed.push(singular);
+                match singular {
+                    Ok(Some(v)) => completed.push(Ok(v)),
+                    Ok(None) => {} // all candidates were incomplete with @in_progress(never)
+                    Err(e) => completed.push(Err(e)),
+                }
 
                 if completed.is_empty() {
                     Err(ctx.error_unexpected_type(&target, value))
@@ -331,6 +352,7 @@ where
                             _ => unreachable!("We just wrapped it in a BamlValue::Class"),
                         })
                     })
+                    .map(Some)
                 }
             }
             (x, _) if class_ty.fields.len() == 1 => {
@@ -361,7 +383,9 @@ where
                         };
                         let cls_meta =
                             DeserializerMeta::new(target.clone().map_ty(TyResolvedRef::Class));
-                        Ok(ValueWithFlags::new(cls_value, cls_meta).with_flags(flags.flags))
+                        Ok(Some(
+                            ValueWithFlags::new(cls_value, cls_meta).with_flags(flags.flags),
+                        ))
                     }
                     Ok(None) => Err(ctx.error_unexpected_type(&target, x)),
                     Err(e) => Err(e),
@@ -369,7 +393,6 @@ where
             }
             _ => Err(ctx.error_unexpected_type(&target, value)),
         }
-        .map(Some)
     }
 }
 
@@ -379,7 +402,7 @@ fn class_from_entries<'s, 'v, 't, N: TypeIdent>(
     is_incomplete: bool,
     mut entries: HashMap<Cow<'s, str>, Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>>,
     flags: DeserializerConditions<'s, 'v, 't, N>,
-) -> Result<ValueWithFlags<'s, 'v, 't, BamlClass<'s, 'v, 't, N>, N>, ParsingError>
+) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlClass<'s, 'v, 't, N>, N>>, ParsingError>
 where
     't: 's,
     's: 'v,
@@ -399,44 +422,54 @@ where
             .db
             .resolve_with_meta(ty.as_ref())
             .map_err(|ident| ctx.error_type_resolution(ident))?;
-        let is_optional = ty.ty.is_optional(ctx.db);
+        // let is_optional = ty.ty.is_optional(ctx.db);
         let field_entry = match entries.remove(name.as_ref()) {
             // Happy path: we have this field
             Some(Ok(some)) => some,
-            // Skip optional fields with errors
-            Some(Err(e)) if is_optional => {
-                let field_value = BamlValue::Null(BamlNull);
-                let field_meta = DeserializerMeta::new(ty);
-                ValueWithFlags::new(field_value, field_meta)
-                    .with_flag(Flag::OptionalFieldError(name.clone(), e))
-            }
-            // Required field with error
+            // // Skip optional fields with errors
+            // Some(Err(e)) if is_optional => {
+            //     let field_value = match is_incomplete {
+            //         true => before_started,
+            //         false => missing,
+            //     };
+            //     let field_meta = DeserializerMeta::new(ty);
+            //     ValueWithFlags::new(field_value, field_meta)
+            //         .with_flag(Flag::OptionalFieldError(name.clone(), e))
+            // }
+            // // Required field with error
             Some(Err(e)) => {
                 err_unparsed.push((name, e));
                 continue;
             }
+            // If missing and class object is incomplete, `before_started=never` means we do not return the class
+            // until it is available.
+            None if is_incomplete && matches!(before_started, AttrLiteral::Never) => {
+                return Ok(None);
+            }
             // Missing entry falls back to `before_started` when object is incomplete
-            None if is_incomplete && !matches!(before_started, AttrLiteral::Never) => {
-                let field_value = ty.ty.from_literal(before_started, ctx)?;
+            None if is_incomplete => {
+                let field_value = if matches!(before_started, AttrLiteral::Null) {
+                    BamlValue::Null(BamlNull)
+                } else {
+                    ty.ty.from_literal(before_started, ctx)?
+                };
                 let field_meta = DeserializerMeta::new(ty);
                 ValueWithFlags::new(field_value, field_meta)
             }
-            // Missing entry falls back to `missing` when object is complete
-            None if !is_incomplete && !matches!(missing, AttrLiteral::Never) => {
-                let field_value = ty.ty.from_literal(missing, ctx)?;
-                let field_meta = DeserializerMeta::new(ty);
-                ValueWithFlags::new(field_value, field_meta)
-            }
-            // Missing optional entries are `null`
-            None if is_optional => {
-                let field_value = BamlValue::Null(BamlNull);
-                let field_meta = DeserializerMeta::new(ty);
-                ValueWithFlags::new(field_value, field_meta)
-            }
-            // Missing required entries are errors
-            None => {
+            // If missing and class object is complete, `missing=never` means we error
+            None if !is_incomplete && matches!(missing, AttrLiteral::Never) => {
                 err_missing.push(name.clone());
                 continue;
+            }
+            // Missing entry falls back to `missing` when object is complete
+            None /*if !is_incomplete */=> {
+                let field_value = if matches!(missing, AttrLiteral::Null) {
+                    BamlValue::Null(BamlNull)
+                } else {
+                    ty.ty.from_literal(missing, ctx)?
+                };
+                let field_meta = DeserializerMeta::new(ty);
+                ValueWithFlags::new(field_value, field_meta)
             }
         };
         field_data.insert(&**name, field_entry);
@@ -445,7 +478,7 @@ where
         return Err(ctx.error_missing_required_field(err_unparsed, err_missing, None));
     }
 
-    Ok(ValueWithFlags::new(
+    Ok(Some(ValueWithFlags::new(
         BamlClass {
             name: &target.ty.name,
             value: field_data,
@@ -454,5 +487,5 @@ where
             flags,
             ty: target.map_ty(TyResolvedRef::Class),
         },
-    ))
+    )))
 }

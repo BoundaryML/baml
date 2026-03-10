@@ -163,7 +163,7 @@ impl<'s> Value<'s> {
             Value::Object(_, s) => s,
             Value::Array(_, s) => s,
             Value::Markdown(_, _, s) => s,
-            Value::FixedJson(_, _) => &CompletionState::Complete,
+            Value::FixedJson(v, _) => v.completion_state(),
             Value::AnyOf(choices, _) => {
                 if choices
                     .iter()

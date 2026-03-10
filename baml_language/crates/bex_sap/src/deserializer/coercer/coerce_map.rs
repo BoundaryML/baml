@@ -36,25 +36,40 @@ where
             return None;
         };
 
+        let mut flags = match (completion_state, target.meta.in_progress.as_ref()) {
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
+            (CompletionState::Incomplete, Some(lit)) => {
+                return target
+                    .ty
+                    .from_literal(lit, ctx)
+                    .map(|ret| {
+                        ValueWithFlags::new(
+                            ret,
+                            DeserializerMeta {
+                                flags: DeserializerConditions::new()
+                                    .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
+                                ty: target.map_ty(TyResolvedRef::Map),
+                            },
+                        )
+                    })
+                    .ok();
+            }
+            (CompletionState::Incomplete, None) => {
+                DeserializerConditions::new().with_flag(Flag::Incomplete)
+            }
+            (CompletionState::Complete, _) => DeserializerConditions::new(),
+        };
+        flags.add_flag(Flag::ObjectToMap(Cow::Borrowed(value)));
+
         let map_ty = target.ty;
         let meta = target.meta;
 
         // For empty objects, we can return immediately
         if obj.is_empty() {
-            let mut flags = DeserializerConditions::new();
-            flags.add_flag(Flag::ObjectToMap(Cow::Borrowed(value)));
-
-            let map = BamlMap {
-                value: IndexMap::new(),
-            };
-
-            // Check completion state
-            if matches!(completion_state, CompletionState::Incomplete) {
-                flags.add_flag(Flag::Incomplete);
-            }
-
             return Some(ValueWithFlags::new(
-                map,
+                BamlMap {
+                    value: IndexMap::new(),
+                },
                 DeserializerMeta {
                     flags,
                     ty: TyWithMeta::new(TyResolvedRef::Map(map_ty), meta),
@@ -77,27 +92,14 @@ where
             })
             .collect::<Option<_>>()?;
 
-        let mut flags = DeserializerConditions::new();
-        flags.add_flag(Flag::ObjectToMap(Cow::Borrowed(value)));
-
         let map = BamlMap { value: items };
-        let mut result = ValueWithFlags::new(
+        Some(ValueWithFlags::new(
             map,
             DeserializerMeta {
                 flags,
                 ty: TyWithMeta::new(TyResolvedRef::Map(map_ty), meta),
             },
-        );
-
-        // Check completion state
-        match value.completion_state() {
-            CompletionState::Complete => {}
-            CompletionState::Incomplete => {
-                result.add_flag(Flag::Incomplete);
-            }
-        }
-
-        Some(result)
+        ))
     }
 
     fn coerce(
@@ -249,8 +251,7 @@ mod tests {
         );
         let db = TypeRefDb::new();
 
-        let target_resolved_ref = TyResolvedRef::Map(&target_ty);
-        let ctx = ParsingContext::new(target_resolved_ref, &db);
+        let ctx = ParsingContext::new(&db);
         let annotations = TypeAnnotations::default();
         let target_ty = TyWithMeta::new(&target_ty, &annotations);
 

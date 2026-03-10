@@ -131,24 +131,38 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<BamlValueWithFlags<'s, 'v, 't, N>> {
+        let flags = match (value.completion_state(), target.meta.in_progress.as_ref()) {
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
+            (CompletionState::Incomplete, Some(lit)) => {
+                return target
+                    .ty
+                    .from_literal(lit, ctx)
+                    .map(|ret| {
+                        BamlValueWithFlags::new(
+                            ret,
+                            DeserializerMeta {
+                                flags: DeserializerConditions::new()
+                                    .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
+                                ty: TyWithMeta::new(TyResolvedRef::Union(target.ty), target.meta),
+                            },
+                        )
+                    })
+                    .ok();
+            }
+            (CompletionState::Incomplete, None) => {
+                DeserializerConditions::new().with_flag(Flag::Incomplete)
+            }
+            (CompletionState::Complete, _) => DeserializerConditions::new(),
+        };
+
         if matches!(value, crate::jsonish::Value::Null) && target.ty.is_optional(ctx.db) {
-            let mut result = BamlValueWithFlags::new(
+            return Some(BamlValueWithFlags::new(
                 BamlValue::Null(BamlNull),
                 DeserializerMeta {
                     flags: DeserializerConditions::new(),
                     ty: TyWithMeta::new(TyResolvedRef::Null(NullTy), target.meta),
                 },
-            );
-
-            // Check completion state
-            match value.completion_state() {
-                CompletionState::Complete => {}
-                CompletionState::Incomplete => {
-                    result.add_flag(crate::deserializer::deserialize_flags::Flag::Incomplete);
-                }
-            }
-
-            return Some(result);
+            ));
         }
 
         let variants: Vec<_> = target
@@ -200,7 +214,7 @@ where
             }
         }
 
-        let mut result = match filtered_options.len() {
+        match filtered_options.len() {
             0 => None,
             1 => {
                 let (_, v) = filtered_options.remove(0);
@@ -216,19 +230,8 @@ where
                     .map(|(_, v)| Ok(v))
                     .collect::<Vec<_>>(),
             )
-            .ok(),
-        };
-
-        // Check completion state
-        if let Some(ref mut res) = result {
-            match value.completion_state() {
-                CompletionState::Complete => {}
-                CompletionState::Incomplete => {
-                    res.add_flag(crate::deserializer::deserialize_flags::Flag::Incomplete);
-                }
-            }
+            .ok()
+            .map(|v| v.with_flags(flags.flags)),
         }
-
-        result
     }
 }

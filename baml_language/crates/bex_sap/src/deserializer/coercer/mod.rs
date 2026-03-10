@@ -16,8 +16,7 @@ use crate::{
     baml_value::ValueWithMeta,
     deserializer::types::DeserializerMeta,
     sap_model::{
-        FromLiteral, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, TypeName, TypeRefDb,
-        TypeValue,
+        FromLiteral, TyWithMeta, TypeAnnotations, TypeIdent, TypeName, TypeRefDb, TypeValue,
     },
 };
 // use baml_types::{BamlValue, Constraint, JinjaExpression};
@@ -32,7 +31,6 @@ pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     visited_during_coerce: HashSet<(String, &'v jsonish::Value<'s>)>,
     visited_during_try_cast: HashSet<(String, &'v jsonish::Value<'s>)>,
     pub db: &'t TypeRefDb<'t, N>,
-    pub of: TyResolvedRef<'t, N>,
     /// Hint for union coercion: the variant index that succeeded on the previous
     /// array element. Used to optimize arrays of unions by trying the likely
     /// variant first.
@@ -48,13 +46,12 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn new(of: TyResolvedRef<'t, N>, db: &'t TypeRefDb<'t, N>) -> Self {
+    pub(crate) fn new(db: &'t TypeRefDb<'t, N>) -> Self {
         ParsingContext {
             scope: Vec::new(),
             visited_during_coerce: HashSet::new(),
             visited_during_try_cast: HashSet::new(),
             db,
-            of,
             union_variant_hint: None,
         }
     }
@@ -67,7 +64,6 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_coerce: self.visited_during_coerce.clone(),
             visited_during_try_cast: self.visited_during_try_cast.clone(),
             db: self.db,
-            of: self.of,
             // Don't propagate hint to nested scopes by default
             union_variant_hint: None,
         }
@@ -83,7 +79,6 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_coerce: self.visited_during_coerce.clone(),
             visited_during_try_cast: self.visited_during_try_cast.clone(),
             db: self.db,
-            of: self.of,
             union_variant_hint: hint,
         }
     }
@@ -108,7 +103,6 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_coerce: new_visited_coerce,
             visited_during_try_cast: new_visited_try_cast,
             db: self.db,
-            of: self.of,
             union_variant_hint: None,
         }
     }

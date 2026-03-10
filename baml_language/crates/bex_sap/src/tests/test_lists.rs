@@ -1,45 +1,47 @@
-use super::*;
+use crate::{baml_db, baml_tyannotated};
 
 test_deserializer!(
     test_list,
     r#"["a", "b"]"#,
-    array_of(annotated(string_ty())),
-    empty_db(),
+    baml_tyannotated!([string]),
+    baml_db! {},
     ["a", "b"]
 );
 
 test_deserializer!(
     test_list_with_quotes,
     r#"["\"a\"", "\"b\""]"#,
-    array_of(annotated(string_ty())),
-    empty_db(),
+    baml_tyannotated!([string]),
+    baml_db! {},
     ["\"a\"", "\"b\""]
 );
 
 test_deserializer!(
     test_list_with_extra_text,
     r#"["a", "b"] is the output."#,
-    array_of(annotated(string_ty())),
-    empty_db(),
+    baml_tyannotated!([string]),
+    baml_db! {},
     ["a", "b"]
 );
 
 test_deserializer!(
     test_list_with_invalid_extra_text,
     r#"[a, b] is the output."#,
-    array_of(annotated(string_ty())),
-    empty_db(),
+    baml_tyannotated!([string]),
+    baml_db! {},
     ["a", "b"]
 );
 
 test_deserializer!(
     test_list_object_from_string,
     r#"[{"a": 1, "b": "hello"}, {"a": 2, "b": "world"}]"#,
-    array_of(annotated(class_ty("Foo", vec![
-        field("a", int_ty()),
-        field("b", string_ty()),
-    ]))),
-    empty_db(),
+    baml_tyannotated!([Foo]),
+    baml_db!{
+        class Foo {
+            a: int,
+            b: string,
+        }
+    },
     [{"a": 1, "b": "hello"}, {"a": 2, "b": "world"}]
 );
 
@@ -79,13 +81,15 @@ test_deserializer!(
     }
   ]
     "#,
-    array_of(annotated(class_ty("ListClass", vec![
-        field("date", string_ty()),
-        field("description", string_ty()),
-        field("transaction_amount", float_ty()),
-        field("transaction_type", string_ty()),
-    ]))),
-    empty_db(),
+    baml_tyannotated!([ListClass]),
+    baml_db!{
+        class ListClass {
+            date: string,
+            description: string,
+            transaction_amount: float,
+            transaction_type: string,
+        }
+    },
     [
         {
           "date": "01/01",
@@ -123,16 +127,16 @@ test_deserializer!(
 test_deserializer!(
     test_list_streaming,
     r#"[1234, 5678"#,
-    array_of(annotated(int_ty())),
-    empty_db(),
+    baml_tyannotated!([int]),
+    baml_db! {},
     [1234, 5678]
 );
 
 test_deserializer!(
     test_list_streaming_2,
     r#"[1234"#,
-    array_of(annotated(int_ty())),
-    empty_db(),
+    baml_tyannotated!([int]),
+    baml_db! {},
     [1234]
 );
 
@@ -140,7 +144,7 @@ test_deserializer!(
     test_list_streaming_inside_json_block,
     r#"```json
 ["a","#,
-    array_of(annotated(string_ty())),
-    empty_db(),
+    baml_tyannotated!([string]),
+    baml_db! {},
     ["a"]
 );

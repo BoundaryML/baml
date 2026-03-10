@@ -1,136 +1,59 @@
+use crate::{baml_db, baml_tyannotated};
+
 use super::*;
 
-/// Helper: build all the types for the BookAnalysis schema and return
-/// (book_analysis_ty, db) ready for use in tests.
-fn book_analysis_schema() -> (
-    TyResolved<'static, &'static str>,
-    TypeRefDb<'static, &'static str>,
-) {
-    let score_cls = class_ty(
-        "Score",
-        vec![field("year", int_ty()), field("score", int_ty())],
-    );
-    let pop_cls = class_ty(
-        "PopularityOverTime",
-        vec![
-            field("bookName", string_ty()),
-            AnnotatedField {
-                name: Cow::Borrowed("scores"),
-                ty: annotated(array_of(annotated(Ty::Unresolved("Score")))),
-                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
-                class_completed_field_missing: AttrLiteral::Never,
-                aliases: vec![],
-            },
-        ],
-    );
-    let word_count_cls = class_ty(
-        "WordCount",
-        vec![field("bookName", string_ty()), field("count", int_ty())],
-    );
-    let ranking_cls = class_ty(
-        "Ranking",
-        vec![field("bookName", string_ty()), field("score", int_ty())],
-    );
-    let book_analysis = class_ty(
-        "BookAnalysis",
-        vec![
-            AnnotatedField {
-                name: Cow::Borrowed("bookNames"),
-                ty: annotated(array_of(annotated(string_ty()))),
-                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
-                class_completed_field_missing: AttrLiteral::Never,
-                aliases: vec![],
-            },
-            AnnotatedField {
-                name: Cow::Borrowed("popularityOverTime"),
-                ty: annotated(array_of(annotated(Ty::Unresolved("PopularityOverTime")))),
-                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
-                class_completed_field_missing: AttrLiteral::Never,
-                aliases: vec![Cow::Borrowed("popularityData")],
-            },
-            AnnotatedField {
-                name: Cow::Borrowed("popularityRankings"),
-                ty: annotated(array_of(annotated(Ty::Unresolved("Ranking")))),
-                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
-                class_completed_field_missing: AttrLiteral::Never,
-                aliases: vec![],
-            },
-            AnnotatedField {
-                name: Cow::Borrowed("wordCounts"),
-                ty: annotated(array_of(annotated(Ty::Unresolved("WordCount")))),
-                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
-                class_completed_field_missing: AttrLiteral::Never,
-                aliases: vec![],
-            },
-        ],
-    );
-
-    let mut db = TypeRefDb::new();
-    db.try_add("Score", score_cls).ok().unwrap();
-    db.try_add("PopularityOverTime", pop_cls).ok().unwrap();
-    db.try_add("WordCount", word_count_cls).ok().unwrap();
-    db.try_add("Ranking", ranking_cls).ok().unwrap();
-
-    (book_analysis, db)
+/// Helper: build all the types for the BookAnalysis schema.
+fn book_analysis_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class Score {
+            year: int @class_in_progress_field_missing(null),
+            score: int @class_in_progress_field_missing(null),
+        }
+        class PopularityOverTime {
+            bookName: string @class_in_progress_field_missing(null),
+            scores: [Score] @class_in_progress_field_missing([]),
+        }
+        class WordCount {
+            bookName: string @class_in_progress_field_missing(null),
+            count: int @class_in_progress_field_missing(null),
+        }
+        class Ranking {
+            bookName: string @class_in_progress_field_missing(null),
+            score: int @class_in_progress_field_missing(null),
+        }
+        class BookAnalysis {
+            bookNames: [string] @class_in_progress_field_missing([]),
+            popularityOverTime: [PopularityOverTime] @alias("popularityData") @class_in_progress_field_missing([]),
+            popularityRankings: [Ranking] @class_in_progress_field_missing([]),
+            wordCounts: [WordCount] @class_in_progress_field_missing([]),
+        }
+    }
 }
 
-/// Helper: build all the types for the choppy (GraphJson / Error) schema and
-/// return (db) — callers pick which top-level type to target.
-fn choppy_schema() -> TypeRefDb<'static, &'static str> {
-    let error_cls = class_ty(
-        "Error",
-        vec![field("code", int_ty()), field("message", string_ty())],
-    );
-    let error_basic_cls = class_ty("ErrorBasic", vec![field("message", string_ty())]);
-    let vertex_cls = class_ty(
-        "Vertex",
-        vec![
-            field("id", string_ty()),
-            AnnotatedField {
-                name: Cow::Borrowed("metadata"),
-                ty: annotated(map_of(annotated(string_ty()), annotated(string_ty()))),
-                class_in_progress_field_missing: AttrLiteral::Map(IndexMap::new()),
-                class_completed_field_missing: AttrLiteral::Never,
-                aliases: vec![],
-            },
-        ],
-    );
-    let edge_cls = class_ty(
-        "Edge",
-        vec![
-            field("source_id", string_ty()),
-            field("target_id", string_ty()),
-            field("relationship", string_ty()),
-        ],
-    );
-    let graph_json_cls = class_ty(
-        "GraphJson",
-        vec![
-            AnnotatedField {
-                name: Cow::Borrowed("vertices"),
-                ty: annotated(array_of(annotated(Ty::Unresolved("Vertex")))),
-                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
-                class_completed_field_missing: AttrLiteral::Never,
-                aliases: vec![],
-            },
-            AnnotatedField {
-                name: Cow::Borrowed("edges"),
-                ty: annotated(array_of(annotated(Ty::Unresolved("Edge")))),
-                class_in_progress_field_missing: AttrLiteral::Array(vec![]),
-                class_completed_field_missing: AttrLiteral::Never,
-                aliases: vec![],
-            },
-        ],
-    );
-
-    let mut db = TypeRefDb::new();
-    db.try_add("Error", error_cls).ok().unwrap();
-    db.try_add("ErrorBasic", error_basic_cls).ok().unwrap();
-    db.try_add("Vertex", vertex_cls).ok().unwrap();
-    db.try_add("Edge", edge_cls).ok().unwrap();
-    db.try_add("GraphJson", graph_json_cls).ok().unwrap();
-
-    db
+/// Helper: build all the types for the choppy (GraphJson / Error) schema.
+fn choppy_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class Error {
+            code: int @class_in_progress_field_missing(null),
+            message: string @class_in_progress_field_missing(null),
+        }
+        class ErrorBasic {
+            message: string @class_in_progress_field_missing(null),
+        }
+        class Vertex {
+            id: string @class_in_progress_field_missing(null),
+            metadata: map<string, string> @class_in_progress_field_missing({}),
+        }
+        class Edge {
+            source_id: string @class_in_progress_field_missing(null),
+            target_id: string @class_in_progress_field_missing(null),
+            relationship: string @class_in_progress_field_missing(null),
+        }
+        class GraphJson {
+            vertices: [Vertex] @class_in_progress_field_missing([]),
+            edges: [Edge] @class_in_progress_field_missing([]),
+        }
+    }
 }
 
 const TRIMMED_CHOPPY_RESULT: &str = r#"
@@ -151,11 +74,9 @@ const TRIMMED_CHOPPY_RESULT: &str = r#"
 // ---------------------------------------------------------------------------
 // Test 1: Full BookAnalysis with all fields complete
 // ---------------------------------------------------------------------------
-#[test]
-fn test_partial_analysis_1() {
-    let (book_analysis, db) = book_analysis_schema();
-
-    let raw = r#"
+test_partial_deserializer!(
+    test_partial_analysis_1,
+    r#"
     ```json
     {
       "bookNames": [
@@ -228,23 +149,10 @@ fn test_partial_analysis_1() {
       ]
     }
     ```
-    "#;
-
-    let parsed =
-        crate::jsonish::parse(raw, Default::default(), false).expect("jsonish::parse failed");
-    let ctx = crate::deserializer::coercer::ParsingContext::new(book_analysis.as_ref(), &db);
-    let annots = TypeAnnotations::default();
-    let target = TyWithMeta::new(book_analysis.as_ref(), &annots);
-    let result = TyResolvedRef::coerce(&ctx, target, &parsed);
-    assert!(result.is_ok(), "Failed to parse: {:?}", result);
-    let value = result.unwrap();
-    assert!(
-        value.is_some(),
-        "Coercion returned None (in_progress=never?)"
-    );
-    let value = value.unwrap();
-    let json_value = serde_json::to_value(&value).unwrap();
-    let expected = serde_json::json!({
+    "#,
+    baml_tyannotated!(BookAnalysis),
+    book_analysis_db(),
+    {
       "bookNames": [
         "brave new world",
         "the lord of the rings",
@@ -313,18 +221,15 @@ fn test_partial_analysis_1() {
         {"bookName": "three body problem", "count": 150000},
         {"bookName": "stormlight archive", "count": 400000}
       ]
-    });
-    assert_eq!(json_value, expected);
-}
+    }
+);
 
 // ---------------------------------------------------------------------------
 // Test 2: Partial BookAnalysis with data cut off mid-stream
 // ---------------------------------------------------------------------------
-#[test]
-fn test_partial_analysis_2() {
-    let (book_analysis, db) = book_analysis_schema();
-
-    let raw = r#"
+test_partial_deserializer!(
+    test_partial_analysis_2,
+    r#"
   ```json
   {
     "bookNames": [
@@ -338,23 +243,10 @@ fn test_partial_analysis_2() {
         "bookName": "brave new world",
         "scores": [
           {"year": 1950, "score": 70},
-  "#;
-
-    let parsed =
-        crate::jsonish::parse(raw, Default::default(), false).expect("jsonish::parse failed");
-    let ctx = crate::deserializer::coercer::ParsingContext::new(book_analysis.as_ref(), &db);
-    let annots = TypeAnnotations::default();
-    let target = TyWithMeta::new(book_analysis.as_ref(), &annots);
-    let result = TyResolvedRef::coerce(&ctx, target, &parsed);
-    assert!(result.is_ok(), "Failed to parse: {:?}", result);
-    let value = result.unwrap();
-    assert!(
-        value.is_some(),
-        "Coercion returned None (in_progress=never?)"
-    );
-    let value = value.unwrap();
-    let json_value = serde_json::to_value(&value).unwrap();
-    let expected = serde_json::json!({
+  "#,
+    baml_tyannotated!(BookAnalysis),
+    book_analysis_db(),
+    {
       "bookNames": [
         "brave new world",
         "the lord of the rings",
@@ -371,9 +263,8 @@ fn test_partial_analysis_2() {
       ],
       "popularityRankings": [],
       "wordCounts": []
-    });
-    assert_eq!(json_value, expected);
-}
+    }
+);
 
 // ---------------------------------------------------------------------------
 // Test 3: Partial GraphJson with incomplete vertex
@@ -381,23 +272,8 @@ fn test_partial_analysis_2() {
 test_partial_deserializer!(
     test_partial_choppy,
     TRIMMED_CHOPPY_RESULT,
-    class_ty("GraphJson", vec![
-        AnnotatedField {
-            name: Cow::Borrowed("vertices"),
-            ty: annotated(array_of(annotated(Ty::Unresolved("Vertex")))),
-            class_in_progress_field_missing: AttrLiteral::Array(vec![]),
-            class_completed_field_missing: AttrLiteral::Never,
-            aliases: vec![],
-        },
-        AnnotatedField {
-            name: Cow::Borrowed("edges"),
-            ty: annotated(array_of(annotated(Ty::Unresolved("Edge")))),
-            class_in_progress_field_missing: AttrLiteral::Array(vec![]),
-            class_completed_field_missing: AttrLiteral::Never,
-            aliases: vec![],
-        },
-    ]),
-    choppy_schema(),
+    baml_tyannotated!(GraphJson),
+    choppy_db(),
     {
       "vertices": [
         {
@@ -424,12 +300,8 @@ test_partial_deserializer!(
 test_partial_deserializer!(
     test_partial_choppy_union,
     TRIMMED_CHOPPY_RESULT,
-    union_of(vec![
-        annotated(Ty::Unresolved("GraphJson")),
-        annotated(array_of(annotated(Ty::Unresolved("GraphJson")))),
-        annotated(Ty::Unresolved("Error")),
-    ]),
-    choppy_schema(),
+    baml_tyannotated!((GraphJson | [GraphJson] | Error)),
+    choppy_db(),
     {
       "vertices": [
         {
@@ -456,11 +328,8 @@ test_partial_deserializer!(
 test_partial_deserializer!(
     test_partial_choppy_union_2,
     TRIMMED_CHOPPY_RESULT,
-    union_of(vec![
-        annotated(Ty::Unresolved("GraphJson")),
-        annotated(Ty::Unresolved("ErrorBasic")),
-    ]),
-    choppy_schema(),
+    baml_tyannotated!((GraphJson | ErrorBasic)),
+    choppy_db(),
     {
       "vertices": [
         {

@@ -34,14 +34,25 @@ pub(super) fn parse_func<'s>(
                     *completion_state = CompletionState::Complete;
                 }
                 Value::Number(_, completion_state) => {
-                    *completion_state = CompletionState::Incomplete;
+                    // A bare number could have more digits coming (e.g. "42"
+                    // might become "420"), so mark it as Incomplete unless the
+                    // caller told us the input is done.
+                    *completion_state = if is_done {
+                        CompletionState::Complete
+                    } else {
+                        CompletionState::Incomplete
+                    };
                 }
                 Value::Boolean(_) => {}
                 Value::Object(_, _) => {}
                 Value::Array(_, _) => {}
                 Value::Null => {}
                 Value::Markdown(_, _, completion_state) => {
-                    *completion_state = CompletionState::Incomplete;
+                    *completion_state = if is_done {
+                        CompletionState::Complete
+                    } else {
+                        CompletionState::Incomplete
+                    };
                 }
                 Value::FixedJson(_, _) => {
                     unreachable!("Serde deserializes into concrete values, not FixedJson")

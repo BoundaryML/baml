@@ -1,11 +1,12 @@
 use super::*;
+use crate::{baml_db, baml_tyannotated};
 
 // type A = A[]
 test_deserializer!(
     test_simple_recursive_alias_list,
     "[[], [], [[]]]",
-    array_of(annotated(Ty::Unresolved("A"))),
-    crate::baml_db! { type A = [A]; },
+    baml_tyannotated!([A]),
+    baml_db! { type A = [A]; },
     [[], [], [[]]]
 );
 
@@ -13,10 +14,10 @@ test_deserializer!(
 test_deserializer!(
     test_simple_recursive_alias_map,
     r#"{"one": {"two": {}}, "three": {"four": {}}}"#,
-    map_of(annotated(string_ty()), annotated(Ty::Unresolved("A"))),
+    baml_tyannotated!(A),
     {
-        let mut db = TypeRefDb::new();
-        db.try_add("A", map_of(annotated(string_ty()), annotated(Ty::Unresolved("A")))).ok().unwrap();
+        let mut db = baml_db! {};
+        db.try_add("A", crate::baml_tyresolved!(map<string, A>)).ok().unwrap();
         db
     },
     {
@@ -29,13 +30,10 @@ test_deserializer!(
 test_deserializer!(
     test_simple_recursive_alias_map_union,
     r#"{"one": {"two": {}}, "three": {"four": {}}}"#,
-    union_of(vec![
-        annotated(Ty::Unresolved("A")),
-        annotated(int_ty()),
-    ]),
+    baml_tyannotated!((A | int)),
     {
-        let mut db = TypeRefDb::new();
-        db.try_add("A", map_of(annotated(string_ty()), annotated(Ty::Unresolved("A")))).ok().unwrap();
+        let mut db = baml_db! {};
+        db.try_add("A", crate::baml_tyresolved!(map<string, A>)).ok().unwrap();
         db
     },
     {
@@ -49,33 +47,23 @@ test_deserializer!(
 test_deserializer!(
     test_recursive_alias_cycle,
     "[[], [], [[]]]",
-    array_of(annotated(Ty::Unresolved("A"))),
-    crate::baml_db! { type A = [A]; type B = [A]; type C = [A]; },
+    baml_tyannotated!([A]),
+    baml_db! { type A = [A]; type B = [A]; type C = [A]; },
     [[], [], [[]]]
 );
 
-/// Helper: build JsonValue type and db.
+/// Helper: build a TypeRefDb for the JsonValue type.
 /// type JsonValue = int | float | bool | string | null | JsonValue[] | map<string, JsonValue>
-fn json_value_db() -> (
-    TyResolved<'static, &'static str>,
-    TypeRefDb<'static, &'static str>,
-) {
-    let json_value_ty = union_of(vec![
-        annotated(int_ty()),
-        annotated(float_ty()),
-        annotated(bool_ty()),
-        annotated(string_ty()),
-        annotated(null_ty()),
-        annotated(array_of(annotated(Ty::Unresolved("JsonValue")))),
-        annotated(map_of(
-            annotated(string_ty()),
-            annotated(Ty::Unresolved("JsonValue")),
-        )),
-    ]);
-    let mut db = TypeRefDb::new();
-    let target = json_value_ty.clone();
-    db.try_add("JsonValue", json_value_ty).ok().unwrap();
-    (target, db)
+///
+/// We introduce helper aliases JsonValueArr and JsonValueMap because the
+/// baml_db! type-alias syntax requires a single token-tree, which map<…>
+/// cannot satisfy.
+fn json_value_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        type JsonValueArr = [JsonValue];
+        type JsonValueMap = (map<string, JsonValue>);
+        type JsonValue = (int | float | bool | string | null | JsonValueArr | JsonValueMap);
+    }
 }
 
 test_deserializer!(
@@ -88,8 +76,8 @@ test_deserializer!(
         "bool": true
     }
     "#,
-    json_value_db().0,
-    json_value_db().1,
+    baml_tyannotated!(JsonValue),
+    json_value_db(),
     {
         "int": 1,
         "float": 1.0,
@@ -108,8 +96,8 @@ test_deserializer!(
         "list": [1, 2, 3]
     }
     "#,
-    json_value_db().0,
-    json_value_db().1,
+    baml_tyannotated!(JsonValue),
+    json_value_db(),
     {
         "number": 1,
         "string": "test",
@@ -132,8 +120,8 @@ test_deserializer!(
         }
     }
     "#,
-    json_value_db().0,
-    json_value_db().1,
+    baml_tyannotated!(JsonValue),
+    json_value_db(),
     {
         "number": 1,
         "string": "test",
@@ -174,8 +162,8 @@ test_deserializer!(
         }
     }
     "#,
-    json_value_db().0,
-    json_value_db().1,
+    baml_tyannotated!(JsonValue),
+    json_value_db(),
     {
         "number": 1,
         "string": "test",
@@ -220,8 +208,8 @@ test_deserializer!(
         }
     ]
     "#,
-    json_value_db().0,
-    json_value_db().1,
+    baml_tyannotated!(JsonValue),
+    json_value_db(),
     [
         {
             "number": 1,
@@ -243,47 +231,32 @@ test_deserializer!(
     r#"
     [[42.1]]
     "#,
-    json_value_db().0,
-    json_value_db().1,
+    baml_tyannotated!(JsonValue),
+    json_value_db(),
     [[42.1]]
 );
 
-/// Helper for JsonValue defined with cycles:
+/// Helper: build a TypeRefDb for JsonValue defined with cycles.
 /// type JsonValue = int | float | bool | string | null | JsonArray | JsonObject
 /// type JsonArray = JsonValue[]
 /// type JsonObject = map<string, JsonValue>
-fn json_value_with_cycles_db() -> (
-    TyResolved<'static, &'static str>,
-    TypeRefDb<'static, &'static str>,
-) {
-    let json_value_ty = union_of(vec![
-        annotated(int_ty()),
-        annotated(float_ty()),
-        annotated(bool_ty()),
-        annotated(string_ty()),
-        annotated(null_ty()),
-        annotated(Ty::Unresolved("JsonArray")),
-        annotated(Ty::Unresolved("JsonObject")),
-    ]);
-    let mut db = TypeRefDb::new();
-    db.try_add(
-        "JsonArray",
-        array_of(annotated(Ty::Unresolved("JsonValue"))),
-    )
-    .ok()
-    .unwrap();
+fn json_value_with_cycles_db() -> TypeRefDb<'static, &'static str> {
+    let mut db = baml_db! {
+        type JsonArray = [JsonValue];
+    };
     db.try_add(
         "JsonObject",
-        map_of(
-            annotated(string_ty()),
-            annotated(Ty::Unresolved("JsonValue")),
-        ),
+        crate::baml_tyresolved!(map<string, JsonValue>),
     )
     .ok()
     .unwrap();
-    let target = json_value_ty.clone();
-    db.try_add("JsonValue", json_value_ty).ok().unwrap();
-    (target, db)
+    db.try_add(
+        "JsonValue",
+        crate::baml_tyresolved!((int | float | bool | string | null | JsonArray | JsonObject)),
+    )
+    .ok()
+    .unwrap();
+    db
 }
 
 test_deserializer!(
@@ -300,8 +273,8 @@ test_deserializer!(
         }
     }
     "#,
-    json_value_with_cycles_db().0,
-    json_value_with_cycles_db().1,
+    baml_tyannotated!(JsonValue),
+    json_value_with_cycles_db(),
     {
         "number": 1,
         "string": "test",
@@ -343,8 +316,8 @@ test_deserializer!(
         }
     }
     "#,
-    json_value_db().0,
-    json_value_db().1,
+    baml_tyannotated!(JsonValue),
+    json_value_db(),
     {
         "recipe": {
             "name": "Chocolate Chip Cookies",
@@ -373,13 +346,9 @@ test_deserializer!(
 );
 
 // test_alias_with_class: Uses the cyclic JsonValue type with the recipe structure.
-// The old test used load_test_ir and render_output_format which no longer exist.
-// Converted to the standard pipeline with constructed types.
-#[test]
-fn test_alias_with_class() {
-    let (target_ty, db) = json_value_with_cycles_db();
-
-    let raw = r#"{
+test_deserializer!(
+    test_alias_with_class,
+    r#"{
         "recipe": {
             "name": "Chocolate Chip Cookies",
             "servings": 24,
@@ -403,15 +372,32 @@ fn test_alias_with_class() {
                 "Cool on wire racks."
             ]
         }
-    }"#;
-
-    let parsed = crate::jsonish::parse(raw, Default::default(), true).unwrap();
-    let ctx = crate::deserializer::coercer::ParsingContext::new(target_ty.as_ref(), &db);
-    let annotations = TypeAnnotations::default();
-    let target = TyWithMeta::new(target_ty.as_ref(), &annotations);
-    let result = TyResolvedRef::coerce(&ctx, target, &parsed);
-
-    assert!(result.is_ok(), "Failed to parse: {result:?}");
-    let value = result.unwrap();
-    assert!(value.is_some(), "Coercion returned None");
-}
+    }"#,
+    baml_tyannotated!(JsonValue),
+    json_value_with_cycles_db(),
+    {
+        "recipe": {
+            "name": "Chocolate Chip Cookies",
+            "servings": 24,
+            "ingredients": [
+                "2 1/4 cups all-purpose flour", "1/2 teaspoon baking soda",
+                "1 cup unsalted butter, room temperature",
+                "1/2 cup granulated sugar",
+                "1 cup packed light-brown sugar",
+                "1 teaspoon salt", "2 teaspoons pure vanilla extract",
+                "2 large eggs", "2 cups semisweet and/or milk chocolate chips"
+            ],
+            "instructions": [
+                "Preheat oven to 350°F (180°C).",
+                "In a small bowl, whisk together flour and baking soda; set aside.",
+                "In a large bowl, cream butter and sugars until light and fluffy.",
+                "Add salt, vanilla, and eggs; mix well.",
+                "Gradually stir in flour mixture.",
+                "Fold in chocolate chips.",
+                "Drop by rounded tablespoons onto ungreased baking sheets.",
+                "Bake for 10-12 minutes or until golden brown.",
+                "Cool on wire racks."
+            ]
+        }
+    }
+);
