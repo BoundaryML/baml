@@ -9,10 +9,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, Stmt, TypeExpr};
-use baml_compiler2_hir::{
-    contributions::Definition,
-    package::{PackageId, package_items},
-};
+use baml_compiler2_hir::{contributions::Definition, package::PackageId};
+use baml_compiler2_ppir::package_items;
 
 use crate::{lower_type_expr::lower_type_expr, ty::Ty};
 

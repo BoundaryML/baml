@@ -49,17 +49,33 @@ impl PpirTypeAttrs {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PpirTy {
     /// Named type reference (user-defined class, enum, type alias, or `stream_*` name).
-    Named { name: Name, attrs: PpirTypeAttrs },
+    /// `path` carries the full qualified path segments (e.g., `["ns", "Foo"]`).
+    Named {
+        path: Vec<Name>,
+        attrs: PpirTypeAttrs,
+    },
 
     /// Primitives.
-    Int { attrs: PpirTypeAttrs },
-    Float { attrs: PpirTypeAttrs },
-    String { attrs: PpirTypeAttrs },
-    Bool { attrs: PpirTypeAttrs },
+    Int {
+        attrs: PpirTypeAttrs,
+    },
+    Float {
+        attrs: PpirTypeAttrs,
+    },
+    String {
+        attrs: PpirTypeAttrs,
+    },
+    Bool {
+        attrs: PpirTypeAttrs,
+    },
 
     /// Null and never.
-    Null { attrs: PpirTypeAttrs },
-    Never { attrs: PpirTypeAttrs },
+    Null {
+        attrs: PpirTypeAttrs,
+    },
+    Never {
+        attrs: PpirTypeAttrs,
+    },
 
     /// Type constructors.
     Optional {
@@ -85,8 +101,14 @@ pub enum PpirTy {
         value: std::string::String,
         attrs: PpirTypeAttrs,
     },
-    IntLiteral { value: i64, attrs: PpirTypeAttrs },
-    BoolLiteral { value: bool, attrs: PpirTypeAttrs },
+    IntLiteral {
+        value: i64,
+        attrs: PpirTypeAttrs,
+    },
+    BoolLiteral {
+        value: bool,
+        attrs: PpirTypeAttrs,
+    },
 
     /// Media types.
     Media {
@@ -94,8 +116,15 @@ pub enum PpirTy {
         attrs: PpirTypeAttrs,
     },
 
+    /// `$rust_type` — opaque Rust-managed state field type.
+    RustType {
+        attrs: PpirTypeAttrs,
+    },
+
     /// Error recovery / unknown.
-    Unknown { attrs: PpirTypeAttrs },
+    Unknown {
+        attrs: PpirTypeAttrs,
+    },
 }
 
 impl PpirTy {
@@ -117,6 +146,7 @@ impl PpirTy {
             | Self::IntLiteral { attrs, .. }
             | Self::BoolLiteral { attrs, .. }
             | Self::Media { attrs, .. }
+            | Self::RustType { attrs }
             | Self::Unknown { attrs } => attrs,
         }
     }
@@ -139,6 +169,7 @@ impl PpirTy {
             | Self::IntLiteral { attrs, .. }
             | Self::BoolLiteral { attrs, .. }
             | Self::Media { attrs, .. }
+            | Self::RustType { attrs }
             | Self::Unknown { attrs } => attrs,
         }
     }
@@ -149,8 +180,8 @@ impl PpirTy {
     pub fn clone_without_attrs(&self) -> Self {
         let d = PpirTypeAttrs::default();
         match self {
-            Self::Named { name, .. } => Self::Named {
-                name: name.clone(),
+            Self::Named { path, .. } => Self::Named {
+                path: path.clone(),
                 attrs: d,
             },
             Self::Int { .. } => Self::Int { attrs: d },
@@ -192,6 +223,7 @@ impl PpirTy {
                 kind: *kind,
                 attrs: d,
             },
+            Self::RustType { .. } => Self::RustType { attrs: d },
             Self::Unknown { .. } => Self::Unknown { attrs: d },
         }
     }
@@ -200,10 +232,10 @@ impl PpirTy {
     // ──────────────────────────── CONSTRUCTORS ─────
     //
 
-    /// Create a simple named type reference.
+    /// Create a simple named type reference (single-segment path).
     pub fn named(name: impl Into<Name>) -> Self {
         PpirTy::Named {
-            name: name.into(),
+            path: vec![name.into()],
             attrs: PpirTypeAttrs::default(),
         }
     }
@@ -258,10 +290,19 @@ impl PpirTy {
                 kind: baml_base::MediaKind::Pdf,
                 attrs: d,
             },
-            _ => PpirTy::Named {
-                name: SmolStr::new(name),
-                attrs: d,
-            },
+            _ => {
+                if name.contains('.') {
+                    PpirTy::Named {
+                        path: name.split('.').map(Name::new).collect(),
+                        attrs: d,
+                    }
+                } else {
+                    PpirTy::Named {
+                        path: vec![SmolStr::new(name)],
+                        attrs: d,
+                    }
+                }
+            }
         }
     }
 
@@ -279,15 +320,13 @@ impl PpirTy {
     }
 
     /// Extract `@stream.*` type-level attributes from `RawAttribute` list.
+    ///
+    /// Note: `@stream.type` is not parsed here — it is an internal implementation
+    /// detail set programmatically, not exposed as user-facing syntax.
     fn extract_type_attrs(attrs: &[RawAttribute]) -> PpirTypeAttrs {
         let mut result = PpirTypeAttrs::default();
         for attr in attrs {
             match attr.name.as_str() {
-                "stream.type" => {
-                    if let Some(arg) = attr.args.first() {
-                        result.stream_type = Some(Box::new(PpirTy::from_type_name(&arg.value)));
-                    }
-                }
                 "stream.done" => result.stream_done = true,
                 "stream.with_state" => result.stream_with_state = true,
                 _ => {}
@@ -306,7 +345,7 @@ impl PpirTy {
             TypeExpr::Null => PpirTy::Null { attrs },
             TypeExpr::Never => PpirTy::Never { attrs },
             TypeExpr::Path(segments) => PpirTy::Named {
-                name: segments.last().cloned().unwrap_or_else(|| SmolStr::new("")),
+                path: segments.clone(),
                 attrs,
             },
             TypeExpr::Optional(inner) => PpirTy::Optional {
@@ -334,14 +373,8 @@ impl PpirTy {
                     value: s.clone(),
                     attrs,
                 },
-                baml_base::Literal::Int(i) => PpirTy::IntLiteral {
-                    value: *i,
-                    attrs,
-                },
-                baml_base::Literal::Bool(b) => PpirTy::BoolLiteral {
-                    value: *b,
-                    attrs,
-                },
+                baml_base::Literal::Int(i) => PpirTy::IntLiteral { value: *i, attrs },
+                baml_base::Literal::Bool(b) => PpirTy::BoolLiteral { value: *b, attrs },
                 baml_base::Literal::Float(_) => {
                     // Float literals don't have a dedicated PpirTy variant.
                     // Treat as Unknown for now (rare in practice).
@@ -351,10 +384,10 @@ impl PpirTy {
             TypeExpr::Media(kind) => PpirTy::Media { kind: *kind, attrs },
             TypeExpr::BuiltinUnknown
             | TypeExpr::Type
-            | TypeExpr::Rust
             | TypeExpr::Function { .. }
             | TypeExpr::Error
             | TypeExpr::Unknown => PpirTy::Unknown { attrs },
+            TypeExpr::Rust => PpirTy::RustType { attrs },
         }
     }
 
@@ -368,34 +401,31 @@ impl PpirTy {
     /// on the synthesized field/class.
     pub fn to_type_expr(&self) -> TypeExpr {
         match self {
-            PpirTy::Named { name, .. } => TypeExpr::Path(vec![name.clone()]),
+            PpirTy::Named { path, .. } => TypeExpr::Path(path.clone()),
             PpirTy::Int { .. } => TypeExpr::Int,
             PpirTy::Float { .. } => TypeExpr::Float,
             PpirTy::String { .. } => TypeExpr::String,
             PpirTy::Bool { .. } => TypeExpr::Bool,
             PpirTy::Null { .. } => TypeExpr::Null,
             PpirTy::Never { .. } => TypeExpr::Never,
-            PpirTy::Optional { inner, .. } => {
-                TypeExpr::Optional(Box::new(inner.to_type_expr()))
-            }
+            PpirTy::Optional { inner, .. } => TypeExpr::Optional(Box::new(inner.to_type_expr())),
             PpirTy::List { inner, .. } => TypeExpr::List(Box::new(inner.to_type_expr())),
             PpirTy::Map { key, value, .. } => TypeExpr::Map {
                 key: Box::new(key.to_type_expr()),
                 value: Box::new(value.to_type_expr()),
             },
             PpirTy::Union { variants, .. } => {
-                TypeExpr::Union(variants.iter().map(|v| v.to_type_expr()).collect())
+                TypeExpr::Union(variants.iter().map(PpirTy::to_type_expr).collect())
             }
             PpirTy::StringLiteral { value, .. } => {
                 TypeExpr::Literal(baml_base::Literal::String(value.clone()))
             }
-            PpirTy::IntLiteral { value, .. } => {
-                TypeExpr::Literal(baml_base::Literal::Int(*value))
-            }
+            PpirTy::IntLiteral { value, .. } => TypeExpr::Literal(baml_base::Literal::Int(*value)),
             PpirTy::BoolLiteral { value, .. } => {
                 TypeExpr::Literal(baml_base::Literal::Bool(*value))
             }
             PpirTy::Media { kind, .. } => TypeExpr::Media(*kind),
+            PpirTy::RustType { .. } => TypeExpr::Rust,
             PpirTy::Unknown { .. } => TypeExpr::Unknown,
         }
     }
@@ -410,12 +440,10 @@ impl PpirTy {
 /// Intermediate representation — the expansion step processes these
 /// into `PpirDesugaredField`s.
 #[derive(Debug, Clone)]
-pub struct PpirField {
+pub struct PpirRawField {
     pub name: Name,
     /// The parsed type (carries type-level attrs extracted from field attributes).
     pub ty: PpirTy,
-    /// `@stream.starts_as(<arg>)` — raw attribute value string, or None.
-    pub starts_as: Option<std::string::String>,
-    /// `@stream.not_null` — desugars to `starts_as = "never"`.
+    /// `@stream.not_null` — field is absent until streaming completes.
     pub not_null: bool,
 }

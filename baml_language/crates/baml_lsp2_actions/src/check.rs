@@ -21,7 +21,8 @@
 
 use baml_base::{FileId, SourceFile, Span};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic};
-use baml_compiler2_hir::{body::FunctionBody, file_semantic_index};
+use baml_compiler2_hir::body::FunctionBody;
+use baml_compiler2_ppir::file_semantic_index;
 use baml_compiler2_tir::inference::render_scope_diagnostics;
 
 use crate::Db;
@@ -122,10 +123,10 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // param types and return type to check for unresolved types.
     // Expression-body functions already get this check in step 3 via
     // `infer_scope_types`, so we skip them to avoid duplicate diagnostics.
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     for (local_id, func_data) in &item_tree.functions {
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
         let body = baml_compiler2_hir::body::function_body(db, func_loc);

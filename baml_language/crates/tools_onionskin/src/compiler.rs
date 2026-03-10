@@ -1269,10 +1269,9 @@ impl CompilerRunner {
     fn run_hir2(&mut self) {
         use baml_compiler2_ast::FunctionBodyDef;
         use baml_compiler2_hir::{
-            file_package::file_package,
-            namespace::{NamespaceId, namespace_items},
-            scope::ScopeKind,
+            file_package::file_package, namespace::NamespaceId, scope::ScopeKind,
         };
+        use baml_compiler2_ppir::namespace_items;
 
         let mut output = String::new();
         let mut output_annotated = Vec::new();
@@ -1404,7 +1403,7 @@ impl CompilerRunner {
                     LineStatus::Cached
                 };
 
-                let index = baml_compiler2_hir::file_semantic_index(&self.db, *source_file);
+                let index = baml_compiler2_ppir::file_semantic_index(&self.db, *source_file);
                 let items = &index.item_tree;
 
                 // Build file summary string
@@ -2010,7 +2009,7 @@ impl CompilerRunner {
             writeln!(output, "File: {file_path}").ok();
             output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
 
-            let index = baml_compiler2_hir::file_semantic_index(&self.db, *source_file);
+            let index = baml_compiler2_ppir::file_semantic_index(&self.db, *source_file);
 
             for (i, scope) in index.scopes.iter().enumerate() {
                 let scope_id = index.scope_ids[i];
@@ -2515,10 +2514,9 @@ impl CompilerRunner {
     /// Reuses HIR2's package grouping, then enriches items with type-checked info.
     fn build_tir2_column_data(&mut self) {
         use baml_compiler2_hir::{
-            file_package::file_package,
-            namespace::{NamespaceId, namespace_items},
-            scope::ScopeKind,
+            file_package::file_package, namespace::NamespaceId, scope::ScopeKind,
         };
+        use baml_compiler2_ppir::namespace_items;
 
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
         sorted_files.sort_by_key(|(path, _)| path.as_path());
@@ -2632,7 +2630,7 @@ impl CompilerRunner {
                     .map(|f| f.to_string_lossy().to_string())
                     .unwrap_or_else(|| path.display().to_string());
 
-                let index = baml_compiler2_hir::file_semantic_index(&self.db, *source_file);
+                let index = baml_compiler2_ppir::file_semantic_index(&self.db, *source_file);
                 let items = &index.item_tree;
 
                 // Build summary parts
@@ -3395,7 +3393,7 @@ impl CompilerRunner {
             let file_path = path.display().to_string();
             let file_recomputed = self.modified_files.contains(path);
 
-            let index = baml_compiler2_hir::file_semantic_index(&self.db, *source_file);
+            let index = baml_compiler2_ppir::file_semantic_index(&self.db, *source_file);
             let item_tree = &index.item_tree;
 
             // Sort functions by name for deterministic output.

@@ -7,10 +7,10 @@
 //! - Per-scope `ScopeBindings` (let-bindings + parameters)
 //! - `FileSymbolContributions` (names exported to the package namespace)
 //!
-//! Phase 2 adds:
-//! - Projection queries: `file_symbol_contributions`, `file_item_tree`, `scope_bindings_query`
-//! - Per-item queries: `function_signature`, `function_body`
-//! - Cross-file aggregation: `namespace_items`, `package_items`
+//! Raw queries (`raw_file_semantic_index`, `raw_namespace_items`, `raw_package_items`)
+//! process original AST items only — no PPIR expansion. PPIR uses these for
+//! symbol classification, then re-runs the builder on merged items to produce
+//! canonical queries that TIR consumes.
 
 pub mod body;
 mod builder;
@@ -30,8 +30,8 @@ use std::sync::Arc;
 
 use baml_base::SourceFile;
 
+pub use crate::builder::SemanticIndexBuilder;
 use crate::{
-    builder::SemanticIndexBuilder,
     contributions::FileSymbolContributions,
     item_tree::ItemTree,
     semantic_index::{FileSemanticIndex, ScopeBindings},
@@ -41,7 +41,9 @@ use crate::{
 
 /// Database trait for `compiler2_hir` queries.
 ///
-/// Extends `baml_workspace::Db`. Use `file_semantic_index` for HIR queries.
+/// Extends `baml_workspace::Db`. HIR is pure — no PPIR dependency.
+/// Use `raw_file_semantic_index` for HIR queries on original AST items.
+/// For canonical queries including stream_* types, use `baml_compiler2_ppir::*`.
 ///
 /// The `compiler2_extra_files()` method provides access to compiler2-only
 /// builtin stub files that must NOT be in the shared `project.files()` list
@@ -49,7 +51,7 @@ use crate::{
 /// type parameters or `$rust_type` fields). Implementors that have such files
 /// should override this to return the appropriate `Compiler2ExtraFiles` handle.
 #[salsa::db]
-pub trait Db: baml_compiler2_ppir::Db {
+pub trait Db: baml_workspace::Db {
     /// Returns the compiler2-only extra files, or `None` if not configured.
     ///
     /// The default implementation returns `None`, meaning no extra files.
@@ -78,21 +80,20 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
     files
 }
 
-// ── file_semantic_index ───────────────────────────────────────────────────────
+// ── raw_file_semantic_index ────────────────────────────────────────────────────
 
-/// Coarse per-file query — always re-runs on file change (`no_eq`).
+/// Raw semantic index — original AST items only, no PPIR expansion.
+/// Used by PPIR for symbol classification. TIR should use
+/// `baml_compiler2_ppir::file_semantic_index` instead.
 ///
-/// Projection queries (`file_symbol_contributions`, `file_item_tree`,
-/// `scope_bindings`) provide Salsa early-cutoff via `Arc` equality.
+/// Coarse per-file query — always re-runs on file change (`no_eq`).
+/// Projection queries (`raw_file_symbol_contributions`, `raw_file_item_tree`)
+/// provide Salsa early-cutoff via `Arc` equality.
 #[salsa::tracked(returns(ref), no_eq)]
-pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
+pub fn raw_file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
-    let (mut items, _ast_diagnostics) = baml_compiler2_ast::lower_file(&tree);
-
-    // Merge synthetic stream_* items from PPIR expansion
-    let expansion = baml_compiler2_ppir::ppir_expansion_items(db, file);
-    items.extend(expansion.items(db).iter().cloned());
+    let (items, _ast_diagnostics) = baml_compiler2_ast::lower_file(&tree);
 
     SemanticIndexBuilder::new(db, file).build(&items, file_range)
 }
@@ -101,38 +102,40 @@ pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'
 //
 // These are plain functions (not Salsa-tracked) that extract fields from the
 // `FileSemanticIndex`. The early-cutoff is achieved at the level of
-// `namespace_items` / `package_items` which use `PartialEq` on their results.
+// `raw_namespace_items` / `raw_package_items` which use `PartialEq` on their results.
 
-/// Returns the symbol contributions for a file (clones the Arc — O(1)).
+/// Returns the raw symbol contributions for a file (clones the Arc — O(1)).
+/// Raw = original AST items only, no PPIR expansion.
 ///
 /// Not tracked — callers that need Salsa cut-off should use the
-/// `namespace_items` query which re-reads this and uses `PartialEq`.
-pub fn file_symbol_contributions(
+/// `raw_namespace_items` query which re-reads this and uses `PartialEq`.
+pub fn raw_file_symbol_contributions(
     db: &dyn Db,
     file: SourceFile,
 ) -> Arc<FileSymbolContributions<'_>> {
-    let index = file_semantic_index(db, file);
+    let index = raw_file_semantic_index(db, file);
     Arc::clone(&index.symbol_contributions)
 }
 
-/// Returns the item tree for a file (clones the Arc — O(1)).
+/// Returns the raw item tree for a file (clones the Arc — O(1)).
+/// Raw = original AST items only, no PPIR expansion.
 ///
-/// Not tracked — the item tree is cached via `file_semantic_index`.
+/// Not tracked — the item tree is cached via `raw_file_semantic_index`.
 /// This helper is for convenience in downstream queries.
-pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
-    let index = file_semantic_index(db, file);
+pub fn raw_file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+    let index = raw_file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
 }
 
-/// Returns the `ScopeBindings` for a given scope.
+/// Returns the `ScopeBindings` for a given scope (raw index).
 ///
 /// Not tracked — callers use the pre-interned `ScopeId` to look up bindings.
-pub fn scope_bindings_query<'db>(
+pub fn raw_scope_bindings_query<'db>(
     db: &'db dyn Db,
     scope_id: crate::scope::ScopeId<'db>,
 ) -> ScopeBindings {
     let file = scope_id.file(db);
-    let index = file_semantic_index(db, file);
+    let index = raw_file_semantic_index(db, file);
     let local_id = scope_id.file_scope_id(db);
     index.scope_bindings[local_id.index() as usize].clone()
 }

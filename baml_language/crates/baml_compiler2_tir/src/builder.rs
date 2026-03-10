@@ -2124,7 +2124,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(def) = self.package_items.lookup_type(&[short]) {
             if let Definition::Class(class_loc) = def {
                 let file = class_loc.file(self.context.db());
-                let item_tree = baml_compiler2_hir::file_item_tree(self.context.db(), file);
+                let item_tree = baml_compiler2_ppir::file_item_tree(self.context.db(), file);
                 let class_data = &item_tree[class_loc.id(self.context.db())];
                 for field in &class_data.fields {
                     let mut diags = Vec::new();
@@ -2168,7 +2168,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         let db = self.context.db();
         let file = class_loc.file(db);
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
         let class_data = &item_tree[class_loc.id(db)];
 
         for &method_id in &class_data.methods {
@@ -2267,7 +2267,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let baml_pkg_id =
             baml_compiler2_hir::package::PackageId::new(db, baml_base::Name::new("baml"));
-        let baml_items = baml_compiler2_hir::package::package_items(db, baml_pkg_id);
+        let baml_items = baml_compiler2_ppir::package_items(db, baml_pkg_id);
 
         // Look up the class by path (e.g. &["Array"] or &["media", "Image"]).
         let path: Vec<Name> = class_path.iter().map(|s| baml_base::Name::new(s)).collect();
@@ -2277,7 +2277,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         let file = class_loc.file(db);
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
         let class_data = &item_tree[class_loc.id(db)];
 
         // Bind generic type variables: e.g. {T → int} for Array<int>.
@@ -2359,7 +2359,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(def) = self.package_items.lookup_type(&[short]) {
             if let Definition::Enum(enum_loc) = def {
                 let file = enum_loc.file(self.context.db());
-                let item_tree = baml_compiler2_hir::file_item_tree(self.context.db(), file);
+                let item_tree = baml_compiler2_ppir::file_item_tree(self.context.db(), file);
                 let enum_data = &item_tree[enum_loc.id(self.context.db())];
                 return enum_data.variants.iter().map(|v| v.name.clone()).collect();
             }

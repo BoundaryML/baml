@@ -298,7 +298,7 @@ impl PpirTy {
     /// Parse a CST `TypeExpr` into a `PpirTy`.
     ///
     /// Parses the type structure and captures `@stream.*` annotations from
-    /// both the TYPE_EXPR's own ATTRIBUTE children and the field-level attributes.
+    /// both the `TYPE_EXPR`'s own `ATTRIBUTE` children and the field-level attributes.
     pub fn from_ast(
         type_expr: &baml_compiler_syntax::ast::TypeExpr,
         field_attrs: impl Iterator<Item = baml_compiler_syntax::ast::Attribute>,

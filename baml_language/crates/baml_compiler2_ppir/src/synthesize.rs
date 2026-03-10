@@ -1,6 +1,6 @@
 //! AST item synthesis for compiler2 stream_* definitions.
 //!
-//! Replaces compiler1's `expand_cst.rs` (GreenNode synthesis) with direct
+//! Replaces compiler1's `expand_cst.rs` (`GreenNode` synthesis) with direct
 //! construction of `ast::Item::Class` and `ast::Item::TypeAlias`.
 
 use baml_base::Name;
@@ -9,8 +9,10 @@ use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 use text_size::TextRange;
 
-use crate::desugar::{PpirDesugaredClass, PpirDesugaredField, PpirDesugaredTypeAlias, PpirStreamStartsAs};
-use crate::ty::{PpirTy, PpirTypeAttrs};
+use crate::{
+    desugar::{PpirDesugaredClass, PpirDesugaredField, PpirDesugaredTypeAlias, PpirStreamStartsAs},
+    ty::{PpirTy, PpirTypeAttrs},
+};
 
 /// Synthesize `stream_*` AST items from desugared PPIR data.
 ///
@@ -152,7 +154,7 @@ fn compute_final_field_type(field: &PpirDesugaredField) -> PpirTy {
 //
 
 /// Add `@sap.class_completed_field_missing` and `@sap.class_in_progress_field_missing`
-/// attributes based on the starts_as value.
+/// attributes based on the `starts_as` value.
 fn add_sap_starts_as_attrs(starts_as: &PpirStreamStartsAs, attrs: &mut Vec<ast::RawAttribute>) {
     match starts_as {
         PpirStreamStartsAs::Never => {
@@ -165,14 +167,10 @@ fn add_sap_starts_as_attrs(starts_as: &PpirStreamStartsAs, attrs: &mut Vec<ast::
                 attrs.push(make_raw_attr("sap.class_in_progress_field_missing", &text));
             }
         }
-        PpirStreamStartsAs::Explicit { text, .. } => {
-            attrs.push(make_raw_attr("sap.class_completed_field_missing", text));
-            attrs.push(make_raw_attr("sap.class_in_progress_field_missing", text));
-        }
     }
 }
 
-/// Convert a default starts_as type to its text representation.
+/// Convert a default `starts_as` type to its text representation.
 fn default_starts_as_text(ty: &PpirTy) -> Option<String> {
     match ty {
         PpirTy::Null { .. } => Some("null".to_string()),

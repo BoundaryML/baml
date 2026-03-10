@@ -8,11 +8,8 @@
 use std::fmt::Write;
 
 use baml_base::Name;
-use baml_compiler2_hir::{
-    contributions::Definition,
-    file_item_tree,
-    package::{PackageId, package_items},
-};
+use baml_compiler2_hir::{contributions::Definition, package::PackageId};
+use baml_compiler2_ppir::{file_item_tree, package_items};
 use baml_project::ProjectDatabase;
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
@@ -494,7 +491,8 @@ fn file_package_derives_correct_namespaces() {
 #[test]
 fn rust_type_field_lowers_to_rust_type() {
     use baml_compiler2_ast::TypeExpr;
-    use baml_compiler2_hir::package::{PackageId, package_items};
+    use baml_compiler2_hir::package::PackageId;
+    use baml_compiler2_ppir::package_items;
     use baml_compiler2_tir::lower_type_expr::lower_type_expr;
 
     let db = make_db();

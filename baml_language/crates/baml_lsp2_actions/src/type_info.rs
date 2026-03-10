@@ -215,7 +215,7 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
         }
 
         Definition::Class(class_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
             let class_data = &item_tree[class_loc.id(db)];
             let class_name = class_data.name.as_str().to_string();
 
@@ -234,7 +234,7 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
         }
 
         Definition::Enum(enum_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
             let enum_data = &item_tree[enum_loc.id(db)];
             let variants = enum_data
                 .variants
@@ -248,7 +248,7 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
         }
 
         Definition::TypeAlias(alias_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, alias_loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, alias_loc.file(db));
             let alias_data = &item_tree[alias_loc.id(db)];
             let alias_name = alias_data.name.as_str().to_string();
 
@@ -263,7 +263,7 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
         }
 
         Definition::TemplateString(ts_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, ts_loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, ts_loc.file(db));
             let ts_data = &item_tree[ts_loc.id(db)];
             Some(TypeInfo::TemplateString {
                 name: ts_data.name.as_str().to_string(),
@@ -271,7 +271,7 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
         }
 
         Definition::Client(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
             Some(TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
@@ -280,7 +280,7 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
         }
 
         Definition::Generator(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
             Some(TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
@@ -289,7 +289,7 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
         }
 
         Definition::Test(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
             Some(TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
@@ -298,7 +298,7 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
         }
 
         Definition::RetryPolicy(loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
             Some(TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
@@ -318,8 +318,8 @@ fn local_type_info(
     name: &Name,
     site: DefinitionSite,
 ) -> Option<TypeInfo> {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
     // Find the enclosing Function scope.
     let scope_id = index.scope_at_offset(at_offset);

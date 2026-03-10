@@ -9,6 +9,7 @@ workspace = true
 [dependencies]
 baml_base = { workspace = true }
 baml_compiler2_ast = { workspace = true }
+baml_compiler2_hir = { workspace = true }
 baml_compiler_parser = { workspace = true }
 baml_workspace = { workspace = true }
 rustc-hash = { workspace = true }

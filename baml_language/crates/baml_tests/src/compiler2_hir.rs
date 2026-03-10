@@ -8,11 +8,8 @@
 #[cfg(test)]
 mod tests {
     use baml_base::Name;
-    use baml_compiler2_hir::{
-        file_semantic_index,
-        namespace::NamespaceId,
-        package::{PackageId, package_items},
-    };
+    use baml_compiler2_hir::{namespace::NamespaceId, package::PackageId};
+    use baml_compiler2_ppir::{file_semantic_index, package_items};
     use baml_project::ProjectDatabase;
     use salsa::Setter;
 
@@ -141,7 +138,7 @@ mod tests {
         let _f = db.add_file("ns.baml", "class Widget {}");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
 
         assert!(ns.types.contains_key(&Name::new("Widget")));
     }
@@ -157,7 +154,7 @@ mod tests {
             "function greet(name: string) -> string { client C\nprompt #\"hi\"# }",
         );
 
-        let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
+        let item_tree = baml_compiler2_ppir::file_item_tree(&db, file);
 
         // Find the function in the item tree
         let func = item_tree
@@ -223,7 +220,7 @@ mod tests {
 
             // scope_bindings_query also works using the pre-interned ScopeId
             let scope_id = index.scope_ids[i];
-            let bindings2 = baml_compiler2_hir::scope_bindings_query(&db, scope_id);
+            let bindings2 = baml_compiler2_ppir::scope_bindings_query(&db, scope_id);
             assert_eq!(bindings2.params.len(), 2);
         } else {
             panic!("No Function scope found in index");
@@ -241,7 +238,7 @@ mod tests {
         let _file_b = db.add_file("b.baml", "class Foo { y string }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
 
         // First wins (a.baml < b.baml alphabetically)
         assert!(ns.types.contains_key(&Name::new("Foo")));
@@ -253,7 +250,11 @@ mod tests {
             "Expected 2 conflicts (Foo + stream_Foo), got: {:?}",
             ns.conflicts()
         );
-        let foo_conflict = ns.conflicts().iter().find(|c| c.name == Name::new("Foo")).expect("Foo conflict");
+        let foo_conflict = ns
+            .conflicts()
+            .iter()
+            .find(|c| c.name == Name::new("Foo"))
+            .expect("Foo conflict");
         assert_eq!(foo_conflict.entries.len(), 2);
     }
 
@@ -275,7 +276,7 @@ mod tests {
         );
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
 
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
@@ -293,7 +294,7 @@ mod tests {
         let _file_b = db.add_file("b.baml", "enum Thing { A\nB }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
 
         assert_eq!(ns.conflicts().len(), 1);
         let conflict = &ns.conflicts()[0];
@@ -318,7 +319,7 @@ mod tests {
         let _file_b = db.add_file("b.baml", "class Bar { y string }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
 
         assert!(ns.conflicts().is_empty());
     }
@@ -335,7 +336,11 @@ mod tests {
 
         // 2 conflicts: "Dup" and "stream_Dup" (both defined in a.baml and b.baml)
         assert_eq!(items.conflicts().len(), 2);
-        let dup_conflict = items.conflicts().iter().find(|c| c.name == Name::new("Dup")).expect("Dup conflict");
+        let dup_conflict = items
+            .conflicts()
+            .iter()
+            .find(|c| c.name == Name::new("Dup"))
+            .expect("Dup conflict");
         assert_eq!(dup_conflict.name, Name::new("Dup"));
 
         // Resolution still works (first wins)
@@ -352,7 +357,7 @@ mod tests {
         let file_a = db.add_file("a.baml", "class Widget { a_field int }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
 
         // 2 conflicts: "Widget" and "stream_Widget"
         assert_eq!(ns.conflicts().len(), 2);
@@ -372,7 +377,7 @@ mod tests {
         let _file = db.add_file("mixed.baml", "enum Foo { A\nB }\nclass Foo { x int }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
 
         assert_eq!(ns.conflicts().len(), 1);
         assert_eq!(ns.conflicts()[0].name, Name::new("Foo"));

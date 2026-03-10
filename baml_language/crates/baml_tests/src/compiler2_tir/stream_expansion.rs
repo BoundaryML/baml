@@ -250,43 +250,6 @@ class References {
     insta::assert_snapshot!(render_tir(&db, file));
 }
 
-// ── @stream.starts_as ───────────────────────────────────────────────────────
-
-#[test]
-fn stream_starts_as_explicit() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-class WithStartsAs {
-    name string @stream.starts_as("Loading...")
-    age int
-}
-"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
-// ── @stream.type ────────────────────────────────────────────────────────────
-
-#[test]
-fn stream_type_override() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        "\
-class Inner {
-    value string
-}
-
-class WithTypeOverride {
-    items Inner[] @stream.type(string)
-    internal string @stream.type(never)
-}",
-    );
-    insta::assert_snapshot!(render_tir(&db, file));
-}
-
 // ── Combined annotations ────────────────────────────────────────────────────
 
 #[test]

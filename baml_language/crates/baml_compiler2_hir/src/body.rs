@@ -40,7 +40,7 @@ pub enum FunctionBody {
 #[salsa::tracked]
 pub fn function_body<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) -> Arc<FunctionBody> {
     let file = function.file(db);
-    let item_tree = crate::file_item_tree(db, file);
+    let item_tree = crate::raw_file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
     let body = match &func_data.body {
@@ -68,7 +68,7 @@ pub fn function_body_source_map<'db>(
     function: FunctionLoc<'db>,
 ) -> Option<AstSourceMap> {
     let file = function.file(db);
-    let item_tree = crate::file_item_tree(db, file);
+    let item_tree = crate::raw_file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
     match &func_data.body {

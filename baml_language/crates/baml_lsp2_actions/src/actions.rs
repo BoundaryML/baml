@@ -19,7 +19,8 @@
 //!   the Playground.
 
 use baml_base::SourceFile;
-use baml_compiler2_hir::{contributions::Definition, file_symbol_contributions};
+use baml_compiler2_hir::contributions::Definition;
+use baml_compiler2_ppir::file_symbol_contributions;
 use text_size::TextRange;
 
 use crate::Db;

@@ -85,8 +85,8 @@ pub struct InlineAnnotation {
 /// queries (`function_body`, `function_body_source_map`,
 /// `infer_scope_types`, `file_item_tree`, `file_semantic_index`).
 pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
 
     let mut out: Vec<InlineAnnotation> = Vec::new();
 

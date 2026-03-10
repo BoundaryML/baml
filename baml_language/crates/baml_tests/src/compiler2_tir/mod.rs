@@ -30,11 +30,11 @@ pub(crate) mod support {
     use baml_compiler2_hir::{
         body::{FunctionBody, function_body},
         contributions::Definition,
-        file_semantic_index,
         loc::FunctionLoc,
         scope::ScopeKind,
         signature::function_signature,
     };
+    use baml_compiler2_ppir::file_semantic_index;
     use baml_compiler2_tir::{
         inference::{
             ScopeInference, infer_scope_types, render_scope_diagnostics, resolve_class_fields,
@@ -463,7 +463,8 @@ pub(crate) mod support {
 
     /// Render a file's TIR output in the same format as the onion skin tool.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_hir::package::{PackageId, package_items};
+        use baml_compiler2_hir::package::PackageId;
+        use baml_compiler2_ppir::package_items;
         use baml_compiler2_tir::inference::{
             detect_invalid_alias_cycles, detect_invalid_class_cycles,
         };

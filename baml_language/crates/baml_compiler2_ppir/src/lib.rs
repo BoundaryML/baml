@@ -1,17 +1,11 @@
 //! Pre-Processed Intermediate Representation (PPIR) for compiler2.
 //!
-//! Sits between the AST and HIR. Responsible for:
-//! 1. Stream annotation capture from AST items (type-level via `PpirTy::from_type_expr`,
-//!    field-level via `build_ppir_field`)
-//! 2. Cross-file name classification (`PpirNames`)
-//! 3. Stream type expansion (`stream_expand` on `PpirTy`)
-//! 4. `@sap.*` attribute synthesis (`sap_starts_as`, `sap_in_progress_never`)
-//! 5. Synthetic AST item generation (`synthesize_stream_items`)
+//! Depends on HIR. Uses HIR's `raw_package_items` for namespace-aware
+//! symbol classification during stream expansion. Hosts the canonical
+//! queries (`file_semantic_index`, `namespace_items`, `package_items`)
+//! that include both original AST items and synthetic `stream_*` items.
 //!
-//! PPIR runs before HIR so that `stream_*` types are regular BAML types —
-//! they go through the same HIR resolution, TIR type-checking, and codegen
-//! as user-defined types. This is a deliberate departure from engine/, where
-//! stream types were a dual type system with special semantics.
+//! Pipeline: syntax → HIR (raw) → PPIR (expansion + canonical) → TIR.
 //!
 //! **No union simplification in PPIR.** Synthesized field types may contain
 //! redundant unions (e.g., `null | null | string`, `never | int`). This is
@@ -21,40 +15,26 @@
 //! expansion logic simpler and easier to reason about.
 
 pub mod desugar;
-pub mod normalize;
 pub mod synthesize;
 pub mod ty;
 
+use std::sync::Arc;
+
+use baml_base::{Name, SourceFile};
+use baml_compiler2_ast as ast;
+use baml_compiler2_hir::{
+    contributions::FileSymbolContributions,
+    item_tree::ItemTree,
+    namespace::{NameConflict, NamespaceId, NamespaceItems},
+    package::{PackageId, PackageItems, PackageItemsExtra},
+    semantic_index::{FileSemanticIndex, ScopeBindings},
+};
 pub use desugar::{
     PpirDesugaredClass, PpirDesugaredField, PpirDesugaredTypeAlias, PpirStreamStartsAs,
     build_ppir_field, default_sap_starts_as, desugar_field, stream_expand,
 };
-pub use ty::{PpirField, PpirTy, PpirTypeAttrs};
-
-use baml_base::{Name, SourceFile};
-use baml_compiler2_ast as ast;
-use baml_workspace::Project;
 use rustc_hash::{FxHashMap, FxHashSet};
-
-//
-// ──────────────────────────────────────────────────────── NAMES ─────
-//
-
-/// Cross-file name classification for stream expansion.
-///
-/// Tells `stream_expand` which names are classes/type-aliases (get `stream_` prefix)
-/// vs. enums (stay unchanged). Built from AST items before desugaring.
-///
-/// `class_names` and `enum_names` map type name → list of block-level `@@stream.*` attribute names.
-#[derive(Debug, Clone, Default)]
-pub struct PpirNames {
-    /// Class names → their `@@stream.*` block attributes.
-    pub class_names: FxHashMap<Name, Vec<Name>>,
-    /// Enum names → their `@@stream.*` block attributes.
-    pub enum_names: FxHashMap<Name, Vec<Name>>,
-    /// Type alias names (no block attrs tracked).
-    pub type_alias_names: FxHashSet<Name>,
-}
+pub use ty::{PpirRawField, PpirTy, PpirTypeAttrs};
 
 //
 // ──────────────────────────────────────────────────────── DATABASE ─────
@@ -62,10 +42,12 @@ pub struct PpirNames {
 
 /// Database trait for PPIR queries.
 ///
-/// Extends `baml_workspace::Db` — NOT `baml_compiler2_hir::Db`.
-/// PPIR sits below HIR in the dependency chain.
+/// Extends `baml_compiler2_hir::Db`. PPIR uses HIR's `raw_package_items`
+/// for namespace-aware symbol classification, then hosts the canonical
+/// queries (`file_semantic_index`, `namespace_items`, `package_items`) that
+/// include both original and synthetic `stream_*` items.
 #[salsa::db]
-pub trait Db: baml_workspace::Db {}
+pub trait Db: baml_compiler2_hir::Db {}
 
 //
 // ───────────────────────────────────────────────────── TRACKED STRUCTS ─────
@@ -93,21 +75,20 @@ pub struct PpirExpansionItems<'db> {
 }
 
 //
-// ────────────────────────────────────────────────────────── SALSA QUERIES ─────
+// ──────────────────────────────────────────────── BLOCK ATTRIBUTES ─────
 //
 
-/// Collect name sets across all files by walking AST items.
-///
-/// Reads from `lower_file(syntax_tree(file))` — does NOT depend on HIR.
-/// Returns a plain `PpirNames` struct (not Salsa-tracked) since the
-/// desugar module operates without db access.
-pub fn collect_ppir_names(db: &dyn Db, project: Project) -> PpirNames {
-    let mut class_names: FxHashMap<Name, Vec<Name>> = FxHashMap::default();
-    let mut enum_names: FxHashMap<Name, Vec<Name>> = FxHashMap::default();
-    let mut type_alias_names = FxHashSet::default();
-
+/// Collect all @@ block attributes per type.
+/// Scans AST items (classes and enums) across all user files.
+/// Keyed by fully-qualified path (`namespace_path` + name) to avoid collisions
+/// between types with the same bare name in different namespaces.
+/// Returns path → list of all block attribute names (e.g., `stream.done`, `stream.not_null`).
+pub fn collect_block_attrs(
+    db: &dyn crate::Db,
+    project: baml_workspace::Project,
+) -> FxHashMap<Vec<Name>, Vec<Name>> {
+    let mut result = FxHashMap::default();
     for file in project.files(db) {
-        // Skip builtin/generated files
         if file
             .path(db)
             .to_str()
@@ -115,64 +96,62 @@ pub fn collect_ppir_names(db: &dyn Db, project: Project) -> PpirNames {
         {
             continue;
         }
-
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
         let cst = baml_compiler_parser::syntax_tree(db, *file);
         let (items, _) = ast::lower_file(&cst);
-
         for item in &items {
-            match item {
-                ast::Item::Class(c) => {
-                    let stream_attrs: Vec<Name> = c
-                        .attributes
-                        .iter()
-                        .filter(|a| a.name.starts_with("stream."))
-                        .map(|a| a.name.clone())
-                        .collect();
-                    class_names.insert(c.name.clone(), stream_attrs);
-                }
-                ast::Item::Enum(e) => {
-                    let stream_attrs: Vec<Name> = e
-                        .attributes
-                        .iter()
-                        .filter(|a| a.name.starts_with("stream."))
-                        .map(|a| a.name.clone())
-                        .collect();
-                    enum_names.insert(e.name.clone(), stream_attrs);
-                }
-                ast::Item::TypeAlias(a) => {
-                    type_alias_names.insert(a.name.clone());
-                }
-                _ => {}
+            let (name, item_attrs) = match item {
+                ast::Item::Class(c) => (&c.name, &c.attributes),
+                ast::Item::Enum(e) => (&e.name, &e.attributes),
+                _ => continue,
+            };
+            let attr_names: Vec<Name> = item_attrs.iter().map(|a| a.name.clone()).collect();
+            if !attr_names.is_empty() {
+                let mut full_path = pkg_info.namespace_path.clone();
+                full_path.push(name.clone());
+                result
+                    .entry(full_path)
+                    .or_insert_with(Vec::new)
+                    .extend(attr_names);
             }
         }
     }
-
-    PpirNames {
-        class_names,
-        enum_names,
-        type_alias_names,
-    }
+    result
 }
+
+fn is_builtin_or_generated(db: &dyn crate::Db, file: SourceFile) -> bool {
+    file.path(db)
+        .to_str()
+        .is_some_and(|p| p.starts_with("<builtin>/") || p.starts_with("<generated:"))
+}
+
+//
+// ────────────────────────────────────────────────────────── SALSA QUERIES ─────
+//
 
 /// Compute desugared stream data for a single file.
 ///
+/// Uses HIR's `raw_package_items` for namespace-aware type classification.
 /// For each class: runs `stream_expand` per field to compute `stream_type`,
 /// synthesizes `@sap.*` attributes (`sap_in_progress_never`, `sap_starts_as`).
 /// For each type alias: runs `stream_expand` on the alias body.
 #[salsa::tracked]
 pub fn ppir_desugared_items(db: &dyn Db, file: SourceFile) -> PpirDesugaredItems<'_> {
-    let file_path = file.path(db);
-    if file_path
-        .to_str()
-        .is_some_and(|p| p.starts_with("<builtin>/") || p.starts_with("<generated:"))
-    {
+    if is_builtin_or_generated(db, file) {
         return PpirDesugaredItems::new(db, Vec::new(), Vec::new());
     }
 
     let cst = baml_compiler_parser::syntax_tree(db, file);
     let (items, _) = ast::lower_file(&cst);
+
+    // Get HIR classification for the file's package (raw = original types only)
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package);
+    let package_items = baml_compiler2_hir::package::raw_package_items(db, pkg_id);
+
+    // Get @@ block attributes
     let project = db.project();
-    let names = collect_ppir_names(db, project);
+    let block_attrs = collect_block_attrs(db, project);
 
     let mut desugared_classes = Vec::new();
     let mut desugared_aliases = Vec::new();
@@ -189,10 +168,11 @@ pub fn ppir_desugared_items(db: &dyn Db, file: SourceFile) -> PpirDesugaredItems
                     continue;
                 }
 
-                let ppir_fields: Vec<PpirField> = c.fields.iter().map(build_ppir_field).collect();
+                let ppir_fields: Vec<PpirRawField> =
+                    c.fields.iter().map(build_ppir_field).collect();
                 let desugared_fields: Vec<PpirDesugaredField> = ppir_fields
                     .iter()
-                    .map(|pf| desugar_field(pf, &names))
+                    .map(|pf| desugar_field(pf, package_items, &block_attrs))
                     .collect();
 
                 desugared_classes.push(PpirDesugaredClass {
@@ -216,7 +196,7 @@ pub fn ppir_desugared_items(db: &dyn Db, file: SourceFile) -> PpirDesugaredItems
                         attrs: PpirTypeAttrs::default(),
                     });
 
-                let expanded_body = stream_expand(&ty, &names);
+                let expanded_body = stream_expand(&ty, package_items);
 
                 desugared_aliases.push(PpirDesugaredTypeAlias {
                     name: a.name.clone(),
@@ -231,8 +211,6 @@ pub fn ppir_desugared_items(db: &dyn Db, file: SourceFile) -> PpirDesugaredItems
 }
 
 /// Compute synthetic AST items for a single file's stream_* definitions.
-///
-/// This is the main entry point called by HIR.
 #[salsa::tracked]
 pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems<'_> {
     let desugared = ppir_desugared_items(db, file);
@@ -251,8 +229,186 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
         })
         .collect();
 
-    let synthetic =
-        synthesize::synthesize_stream_items(desugared.classes(db), desugared.type_aliases(db), &original_class_attrs);
+    let synthetic = synthesize::synthesize_stream_items(
+        desugared.classes(db),
+        desugared.type_aliases(db),
+        &original_class_attrs,
+    );
     PpirExpansionItems::new(db, synthetic)
 }
 
+//
+// ────────────────────────────────── CANONICAL QUERIES (original + stream_*) ─────
+//
+// These are the queries that TIR and all downstream consumers use.
+// They re-run HIR's SemanticIndexBuilder on original + synthetic items.
+//
+
+/// Canonical semantic index: original AST items + PPIR synthetic stream_* items.
+/// Re-runs HIR's `SemanticIndexBuilder` on the merged item list.
+#[salsa::tracked(returns(ref), no_eq)]
+pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
+    let tree = baml_compiler_parser::syntax_tree(db, file);
+    let file_range = tree.text_range();
+    let (mut items, _) = ast::lower_file(&tree);
+
+    // Merge synthetic stream_* items
+    let expansion = ppir_expansion_items(db, file);
+    items.extend(expansion.items(db).iter().cloned());
+
+    // Re-run HIR builder on merged items
+    baml_compiler2_hir::SemanticIndexBuilder::new(db, file).build(&items, file_range)
+}
+
+/// Canonical symbol contributions (original + stream_* types).
+pub fn file_symbol_contributions(
+    db: &dyn Db,
+    file: SourceFile,
+) -> Arc<FileSymbolContributions<'_>> {
+    let index = file_semantic_index(db, file);
+    Arc::clone(&index.symbol_contributions)
+}
+
+/// Canonical item tree (original + stream_* types).
+pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
+    let index = file_semantic_index(db, file);
+    Arc::clone(&index.item_tree)
+}
+
+/// Returns the `ScopeBindings` for a given scope (canonical index).
+pub fn scope_bindings_query<'db>(
+    db: &'db dyn Db,
+    scope_id: baml_compiler2_hir::scope::ScopeId<'db>,
+) -> ScopeBindings {
+    let file = scope_id.file(db);
+    let index = file_semantic_index(db, file);
+    let local_id = scope_id.file_scope_id(db);
+    index.scope_bindings[local_id.index() as usize].clone()
+}
+
+/// Canonical namespace items (original + stream_* types).
+#[salsa::tracked(returns(ref))]
+pub fn namespace_items<'db>(
+    db: &'db dyn Db,
+    namespace_id: NamespaceId<'db>,
+) -> NamespaceItems<'db> {
+    use baml_compiler2_hir::{
+        contributions::{Contribution, Definition},
+        namespace::{ConflictEntry, NamespaceItemsExtra},
+    };
+
+    let package = namespace_id.package(db);
+    let ns_path = namespace_id.path(db);
+
+    // Collect matching files, then sort alphabetically by path.
+    let mut matching_files: Vec<SourceFile> = baml_compiler2_hir::compiler2_all_files(db)
+        .into_iter()
+        .filter(|file| {
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
+            pkg_info.package == *package && pkg_info.namespace_path == *ns_path
+        })
+        .collect();
+    matching_files.sort_by_key(|a| a.path(db));
+
+    // Accumulate all contributions per name (preserving file order).
+    // Uses PPIR's file_symbol_contributions (canonical, includes stream_* types).
+    let mut type_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
+    let mut value_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
+
+    for file in &matching_files {
+        let contributions = file_symbol_contributions(db, *file);
+        for (name, contrib) in &contributions.types {
+            type_defs.entry(name.clone()).or_default().push(*contrib);
+        }
+        for (name, contrib) in &contributions.values {
+            value_defs.entry(name.clone()).or_default().push(*contrib);
+        }
+    }
+
+    // First definition wins; collect conflicts for names with len > 1.
+    let mut types: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
+    let mut values: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
+    let mut conflicts: Vec<NameConflict<'db>> = Vec::new();
+
+    for (name, contribs) in type_defs {
+        types.insert(name.clone(), contribs[0].definition);
+        if contribs.len() > 1 {
+            conflicts.push(NameConflict {
+                name,
+                entries: contribs
+                    .into_iter()
+                    .map(|c| ConflictEntry {
+                        definition: c.definition,
+                        name_span: c.name_span,
+                    })
+                    .collect(),
+            });
+        }
+    }
+    for (name, contribs) in value_defs {
+        values.insert(name.clone(), contribs[0].definition);
+        if contribs.len() > 1 {
+            conflicts.push(NameConflict {
+                name,
+                entries: contribs
+                    .into_iter()
+                    .map(|c| ConflictEntry {
+                        definition: c.definition,
+                        name_span: c.name_span,
+                    })
+                    .collect(),
+            });
+        }
+    }
+
+    // Sort conflicts by name for deterministic output.
+    conflicts.sort_by(|a, b| a.name.cmp(&b.name));
+
+    let extra = if conflicts.is_empty() {
+        None
+    } else {
+        Some(Box::new(NamespaceItemsExtra { conflicts }))
+    };
+
+    NamespaceItems {
+        types,
+        values,
+        extra,
+    }
+}
+
+/// Canonical package items (original + stream_* types).
+#[salsa::tracked(returns(ref))]
+pub fn package_items<'db>(db: &'db dyn Db, package_id: PackageId<'db>) -> PackageItems<'db> {
+    let package_name = package_id.name(db);
+
+    // Discover all unique namespace paths for this package.
+    let mut ns_paths: std::collections::HashSet<Vec<Name>> = std::collections::HashSet::new();
+    for file in baml_compiler2_hir::compiler2_all_files(db) {
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+        if pkg_info.package == *package_name {
+            ns_paths.insert(pkg_info.namespace_path.clone());
+        }
+    }
+
+    let mut namespaces: FxHashMap<Vec<Name>, NamespaceItems<'db>> = FxHashMap::default();
+    let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
+    for ns_path in ns_paths {
+        let ns_id = NamespaceId::new(db, package_name.clone(), ns_path.clone());
+        let items = namespace_items(db, ns_id);
+        all_conflicts.extend(items.conflicts().iter().cloned());
+        namespaces.insert(ns_path, items.clone());
+    }
+
+    all_conflicts.sort_by(|a, b| a.name.cmp(&b.name));
+
+    let extra = if all_conflicts.is_empty() {
+        None
+    } else {
+        Some(Box::new(PackageItemsExtra {
+            conflicts: all_conflicts,
+        }))
+    };
+
+    PackageItems { namespaces, extra }
+}

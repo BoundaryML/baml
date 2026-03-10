@@ -13,6 +13,7 @@ doctest = false
 baml_base = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_hir = { workspace = true }
+baml_compiler2_ppir = { workspace = true }
 baml_compiler2_tir = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_emit = { workspace = true }

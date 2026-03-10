@@ -105,8 +105,8 @@ fn local_definition_location(
     at_offset: TextSize,
     site: DefinitionSite,
 ) -> Option<Location> {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
     // Find the enclosing Function scope to locate the function in the item tree.
     let scope_id = index.scope_at_offset(at_offset);

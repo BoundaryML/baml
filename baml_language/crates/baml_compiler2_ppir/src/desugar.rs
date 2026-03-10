@@ -5,24 +5,37 @@
 //! consumes these to build synthetic AST items.
 
 use baml_base::Name;
+use baml_compiler2_hir::{contributions::Definition, package::PackageItems};
+use rustc_hash::FxHashMap;
 use smol_str::SmolStr;
 
-use crate::{
-    PpirNames,
-    normalize,
-    ty::{PpirField, PpirTy, PpirTypeAttrs},
-};
+use crate::ty::{PpirRawField, PpirTy, PpirTypeAttrs};
+
+/// Symbol classification result for stream expansion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymbolKind {
+    Class,
+    Enum,
+    TypeAlias,
+}
+
+/// Classify a type path using HIR's package-level name resolution.
+pub fn classify_type(package_items: &PackageItems<'_>, path: &[Name]) -> Option<SymbolKind> {
+    package_items.lookup_type(path).and_then(|def| match def {
+        Definition::Class(_) => Some(SymbolKind::Class),
+        Definition::Enum(_) => Some(SymbolKind::Enum),
+        Definition::TypeAlias(_) => Some(SymbolKind::TypeAlias),
+        _ => None,
+    })
+}
 
 //
 // ──────────────────────────────────────────────── OUTPUT TYPES ─────
 //
 
-/// SAP starts-as value, synthesized from `@stream.starts_as` / `@stream.not_null` / defaults.
+/// SAP starts-as value, synthesized from `@stream.not_null` / defaults.
 /// This becomes the `@sap.class_completed_field_missing` and `@sap.class_in_progress_field_missing`
 /// attribute values, computed as part of `@stream.*` desugaring.
-///
-/// In compiler2, the `Explicit` variant stores the raw text string from
-/// `RawAttributeArg.value` instead of a GreenNode.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PpirStreamStartsAs {
     /// Field is absent until it begins streaming.
@@ -31,10 +44,6 @@ pub enum PpirStreamStartsAs {
     /// Default value computed during PPIR expansion from `stream_type`'s syntactic category.
     /// null for scalars, `[]` for lists, `{}` for maps, never for literals.
     DefaultFor(PpirTy),
-    /// Explicit `@stream.starts_as(<arg>)`.
-    /// `text`: raw attribute value string.
-    /// `typeof_s`: best-effort inferred type (Never if unrecognizable).
-    Explicit { text: String, typeof_s: PpirTy },
 }
 
 impl PpirStreamStartsAs {
@@ -46,7 +55,6 @@ impl PpirStreamStartsAs {
                 attrs: PpirTypeAttrs::default(),
             }),
             PpirStreamStartsAs::DefaultFor(ty) => Some(ty.clone()),
-            PpirStreamStartsAs::Explicit { typeof_s, .. } => Some(typeof_s.clone()),
         }
     }
 }
@@ -88,8 +96,8 @@ pub struct PpirDesugaredTypeAlias {
 /// Checks `PpirTypeAttrs` before recursing:
 /// - `@stream.type(D)`: use D, don't recurse
 /// - `@stream.done` (without `stream_type`): use T as-is (atomic)
-/// - Otherwise: normal recursive expansion using name classification
-pub fn stream_expand(ty: &PpirTy, names: &PpirNames) -> PpirTy {
+/// - Otherwise: normal recursive expansion using HIR name classification
+pub fn stream_expand(ty: &PpirTy, package_items: &PackageItems<'_>) -> PpirTy {
     let attrs = ty.attrs();
 
     // Explicit @stream.type(D) — use D directly
@@ -102,12 +110,11 @@ pub fn stream_expand(ty: &PpirTy, names: &PpirNames) -> PpirTy {
         return ty.clone_without_attrs();
     }
 
-    // Normal recursive expansion (inline name classification via PpirNames)
+    // Normal recursive expansion using HIR classification
     match ty {
-        PpirTy::Int { .. }
-        | PpirTy::Float { .. }
-        | PpirTy::String { .. }
-        | PpirTy::Bool { .. } => ty.clone_without_attrs(),
+        PpirTy::Int { .. } | PpirTy::Float { .. } | PpirTy::String { .. } | PpirTy::Bool { .. } => {
+            ty.clone_without_attrs()
+        }
 
         PpirTy::Null { .. } => PpirTy::Null {
             attrs: PpirTypeAttrs::default(),
@@ -120,38 +127,46 @@ pub fn stream_expand(ty: &PpirTy, names: &PpirNames) -> PpirTy {
             ty.clone_without_attrs()
         }
 
-        // Inline name classification: class/type_alias → stream_*, enum → unchanged
-        PpirTy::Named { name, .. } => {
-            if names.class_names.contains_key(name) || names.type_alias_names.contains(name) {
-                PpirTy::Named {
-                    name: SmolStr::new(format!("stream_{name}")),
-                    attrs: PpirTypeAttrs::default(),
+        // HIR-based classification: class/type_alias → stream_*, enum → unchanged
+        PpirTy::Named { path, .. } => {
+            match classify_type(package_items, path) {
+                Some(SymbolKind::Class | SymbolKind::TypeAlias) => {
+                    let (bare_name, prefix) = path.split_last().expect("non-empty path");
+                    PpirTy::Named {
+                        path: prefix
+                            .iter()
+                            .cloned()
+                            .chain(std::iter::once(SmolStr::new(format!("stream_{bare_name}"))))
+                            .collect(),
+                        attrs: PpirTypeAttrs::default(),
+                    }
                 }
-            } else {
-                // Enum or unknown — unchanged
-                ty.clone_without_attrs()
+                _ => ty.clone_without_attrs(), // Enum, unknown, builtin — unchanged
             }
         }
 
         PpirTy::List { inner, .. } => PpirTy::List {
-            inner: Box::new(stream_expand(inner, names)),
+            inner: Box::new(stream_expand(inner, package_items)),
             attrs: PpirTypeAttrs::default(),
         },
 
         PpirTy::Map { key, value, .. } => PpirTy::Map {
             key: key.clone(),
-            value: Box::new(stream_expand(value, names)),
+            value: Box::new(stream_expand(value, package_items)),
             attrs: PpirTypeAttrs::default(),
         },
 
         PpirTy::Union { variants, .. } => PpirTy::Union {
-            variants: variants.iter().map(|v| stream_expand(v, names)).collect(),
+            variants: variants
+                .iter()
+                .map(|v| stream_expand(v, package_items))
+                .collect(),
             attrs: PpirTypeAttrs::default(),
         },
 
         PpirTy::Optional { inner, .. } => PpirTy::Union {
             variants: vec![
-                stream_expand(inner, names),
+                stream_expand(inner, package_items),
                 PpirTy::Null {
                     attrs: PpirTypeAttrs::default(),
                 },
@@ -180,7 +195,8 @@ pub fn default_sap_starts_as(stream_type: &PpirTy) -> PpirStreamStartsAs {
         PpirTy::StringLiteral { .. }
         | PpirTy::IntLiteral { .. }
         | PpirTy::BoolLiteral { .. }
-        | PpirTy::Never { .. } => PpirStreamStartsAs::Never,
+        | PpirTy::Never { .. }
+        | PpirTy::RustType { .. } => PpirStreamStartsAs::Never,
 
         PpirTy::List { .. } => PpirStreamStartsAs::DefaultFor(PpirTy::List {
             inner: Box::new(PpirTy::Never {
@@ -207,13 +223,12 @@ pub fn default_sap_starts_as(stream_type: &PpirTy) -> PpirStreamStartsAs {
 // ──────────────────────────────────────── BUILDING PPIR FIELDS ─────
 //
 
-/// Build a `PpirField` from a compiler2 AST `FieldDef`.
+/// Build a `PpirRawField` from a compiler2 AST `FieldDef`.
 ///
-/// Type-level annotations (`@stream.done`, `@stream.type`, `@stream.with_state`)
+/// Type-level annotations (`@stream.done`, `@stream.with_state`)
 /// are captured by `PpirTy::from_type_expr()` on the field's type.
-/// Field-level annotations (`@stream.starts_as`, `@stream.not_null`) are read
-/// from the field's `RawAttribute` list.
-pub fn build_ppir_field(field: &baml_compiler2_ast::FieldDef) -> PpirField {
+/// Field-level annotation `@stream.not_null` is read from the field's `RawAttribute` list.
+pub fn build_ppir_field(field: &baml_compiler2_ast::FieldDef) -> PpirRawField {
     let type_expr = field
         .type_expr
         .as_ref()
@@ -222,22 +237,14 @@ pub fn build_ppir_field(field: &baml_compiler2_ast::FieldDef) -> PpirField {
 
     let ty = PpirTy::from_type_expr(type_expr, &field.attributes);
 
-    let starts_as = field
-        .attributes
-        .iter()
-        .find(|a| a.name.as_str() == "stream.starts_as")
-        .and_then(|a| a.args.first())
-        .map(|arg| arg.value.clone());
-
     let not_null = field
         .attributes
         .iter()
         .any(|a| a.name.as_str() == "stream.not_null");
 
-    PpirField {
+    PpirRawField {
         name: field.name.clone(),
         ty,
-        starts_as,
         not_null,
     }
 }
@@ -249,37 +256,28 @@ pub fn build_ppir_field(field: &baml_compiler2_ast::FieldDef) -> PpirField {
 /// Desugar a single field's stream annotations into `PpirDesugaredField`.
 ///
 /// Computes `stream_type` via `stream_expand`, synthesizes @sap.* attributes.
-pub fn desugar_field(pf: &PpirField, names: &PpirNames) -> PpirDesugaredField {
+pub fn desugar_field(
+    pf: &PpirRawField,
+    package_items: &PackageItems<'_>,
+    block_attrs: &FxHashMap<Vec<Name>, Vec<Name>>,
+) -> PpirDesugaredField {
     // 1. Compute stream_type via stream_expand (respects type-level attrs)
-    let stream_type = stream_expand(&pf.ty, names);
+    let stream_type = stream_expand(&pf.ty, package_items);
 
     // 2. Synthesize @sap.in_progress from @stream.done
     let sap_in_progress_never = pf.ty.attrs().stream_done;
 
-    // 3. Synthesize sap_starts_as from @stream.starts_as / @stream.not_null / defaults
+    // 3. Synthesize sap_starts_as from @stream.not_null / defaults
     //    Priority order:
     //    1. Field-level @stream.not_null → Never
-    //    2. Explicit @stream.starts_as(value) → Explicit(text)
-    //    3. Type-level @@stream.not_null on referenced type → Never
-    //    4. Default from stream_type
-    let sap_starts_as = if pf.not_null {
-        PpirStreamStartsAs::Never
-    } else if let Some(text) = &pf.starts_as {
-        let starts_as = normalize::parse_starts_as_value(text);
-        let typeof_s = normalize::infer_typeof_s(&starts_as, &names.enum_names).unwrap_or(
-            PpirTy::Never {
-                attrs: PpirTypeAttrs::default(),
-            },
-        );
-        PpirStreamStartsAs::Explicit {
-            text: text.clone(),
-            typeof_s,
-        }
-    } else if type_has_block_attr(&pf.ty, "stream.not_null", names) {
-        PpirStreamStartsAs::Never
-    } else {
-        default_sap_starts_as(&stream_type)
-    };
+    //    2. Type-level @@stream.not_null on referenced type → Never
+    //    3. Default from stream_type
+    let sap_starts_as =
+        if pf.not_null || type_has_block_attr(&pf.ty, "stream.not_null", block_attrs) {
+            PpirStreamStartsAs::Never
+        } else {
+            default_sap_starts_as(&stream_type)
+        };
 
     PpirDesugaredField {
         name: pf.name.clone(),
@@ -294,17 +292,15 @@ pub fn desugar_field(pf: &PpirField, names: &PpirNames) -> PpirDesugaredField {
 ///
 /// Only matches bare named types (e.g., `Foo`). Does NOT match `Foo[]`, `Foo?`,
 /// `Foo | Bar`, etc. — those use their own default `starts_as` behavior.
-fn type_has_block_attr(ty: &PpirTy, attr: &str, names: &PpirNames) -> bool {
-    let PpirTy::Named { name, .. } = ty else {
+fn type_has_block_attr(
+    ty: &PpirTy,
+    attr: &str,
+    block_attrs: &FxHashMap<Vec<Name>, Vec<Name>>,
+) -> bool {
+    let PpirTy::Named { path, .. } = ty else {
         return false;
     };
-    let has_attr = |attrs: &Vec<Name>| attrs.iter().any(|a| a == attr);
-    names
-        .class_names
-        .get(name.as_str())
-        .is_some_and(has_attr)
-        || names
-            .enum_names
-            .get(name.as_str())
-            .is_some_and(has_attr)
+    block_attrs
+        .get(path)
+        .is_some_and(|attrs| attrs.iter().any(|a| a == attr))
 }
