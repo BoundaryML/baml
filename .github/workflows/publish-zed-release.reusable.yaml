@@ -106,7 +106,7 @@ jobs:
             --repo "zed-industries/extensions" \
             --base "main" \
             --head "BoundaryML:$BRANCH_NAME" \
-            --title "Update baml extension to ${BAML_EXTENSION_VERSION}" \
+            --title "Update baml to v${BAML_EXTENSION_VERSION}" \
             --body "$(cat <<EOF
           Automated sync of [engine/zed] ([workflow logs]).
 
