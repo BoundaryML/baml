@@ -153,6 +153,29 @@ fn anthropic_content_parts(
         }
     }
 }
+/// Convert content to JSON values and merge metadata into the last part.
+fn content_to_json(
+    content: &PromptAstSimple,
+    metadata: &serde_json::Value,
+) -> Result<Vec<serde_json::Value>, BuildRequestError> {
+    let parts = anthropic_content_parts(content)?;
+    let mut values: Vec<serde_json::Value> = parts
+        .into_iter()
+        .map(|p| serde_json::to_value(p).expect("infallible"))
+        .collect();
+
+    if let serde_json::Value::Object(meta_map) = metadata {
+        if !meta_map.is_empty() {
+            if let Some(serde_json::Value::Object(part_map)) = values.last_mut() {
+                for (k, v) in meta_map {
+                    part_map.insert(k.clone(), v.clone());
+                }
+            }
+        }
+    }
+
+    Ok(values)
+}
 
 /// Extract system messages to a separate array and return non-system messages.
 ///
@@ -178,52 +201,24 @@ fn extract_system_and_messages(
                 content,
                 metadata,
             } if role == "system" => {
-                // System messages -> top-level system field
-                let parts = anthropic_content_parts(content.as_ref())?;
-                system_parts.extend(
-                    parts
-                        .into_iter()
-                        .map(|p| serde_json::to_value(p).expect("infallible")),
-                );
+                system_parts.extend(content_to_json(content.as_ref(), metadata)?);
             }
             PromptAst::Message {
                 role,
                 content,
                 metadata,
             } => {
-                // Non-system messages -> messages array
-                let content_parts = anthropic_content_parts(content.as_ref())?;
-
-                // Convert content parts to JSON values
-                let mut content_values: Vec<serde_json::Value> = content_parts
-                    .into_iter()
-                    .map(|p| serde_json::to_value(p).expect("infallible"))
-                    .collect();
-
-                // Apply metadata to the last content part
-                if let serde_json::Value::Object(meta_map) = metadata {
-                    if !meta_map.is_empty() {
-                        if let Some(serde_json::Value::Object(part_map)) = content_values.last_mut()
-                        {
-                            for (k, v) in meta_map {
-                                part_map.insert(k.clone(), v.clone());
-                            }
-                        }
-                    }
-                }
-
+                let content_values = content_to_json(content.as_ref(), metadata)?;
                 let mut msg = serde_json::Map::new();
                 msg.insert("role".to_string(), serde_json::Value::String(role.clone()));
                 msg.insert(
                     "content".to_string(),
                     serde_json::Value::Array(content_values),
                 );
-
                 messages.push(serde_json::Value::Object(msg));
             }
             PromptAst::Simple(content) => {
-                // Simple nodes use default role
-                let content_parts = anthropic_content_parts(content.as_ref())?;
+                let content_values = content_to_json(content.as_ref(), &serde_json::Value::Null)?;
                 let mut msg = serde_json::Map::new();
                 msg.insert(
                     "role".to_string(),
@@ -231,12 +226,7 @@ fn extract_system_and_messages(
                 );
                 msg.insert(
                     "content".to_string(),
-                    serde_json::Value::Array(
-                        content_parts
-                            .into_iter()
-                            .map(|p| serde_json::to_value(p).expect("infallible"))
-                            .collect(),
-                    ),
+                    serde_json::Value::Array(content_values),
                 );
                 messages.push(serde_json::Value::Object(msg));
             }
@@ -673,6 +663,47 @@ mod tests {
                 "system": [
                     {"type": "text", "text": "First instruction."},
                     {"type": "text", "text": "Second instruction."}
+                ],
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [{"type": "text", "text": "Hello"}]
+                    }
+                ]
+            })
+        );
+    }
+
+    #[test]
+    fn anthropic_system_metadata_merged_to_last_part() {
+        let client = make_client(vec![
+            (
+                "model",
+                BexExternalValue::String("claude-3-haiku-20240307".into()),
+            ),
+            ("max_tokens", BexExternalValue::Int(1000)),
+        ]);
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            Arc::new(PromptAst::Message {
+                role: "system".to_string(),
+                content: Arc::new("You are a helpful assistant.".to_string().into()),
+                metadata: serde_json::json!({"cache_control": {"type": "ephemeral"}}),
+            }),
+            msg("user", "Hello"),
+        ]));
+        let result = build_request(&client, prompt, false).unwrap();
+        let body = parse_body(&result.body);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 1000,
+                "system": [
+                    {
+                        "type": "text",
+                        "text": "You are a helpful assistant.",
+                        "cache_control": {"type": "ephemeral"}
+                    }
                 ],
                 "messages": [
                     {
