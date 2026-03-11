@@ -68,9 +68,9 @@ impl ModelFeatures {
                 max_one_system_prompt: false,
                 allowed_metadata: AllowedMetadata::All,
             },
-            // Anthropic: single system prompt only
+            // Anthropic: multiple system messages allowed (extracted into system array)
             LlmProvider::Anthropic => Self {
-                max_one_system_prompt: true,
+                max_one_system_prompt: false,
                 allowed_metadata: AllowedMetadata::All,
             },
             // AWS Bedrock, Google AI, Vertex AI: single system prompt only

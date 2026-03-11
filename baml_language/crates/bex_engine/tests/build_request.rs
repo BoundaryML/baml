@@ -77,17 +77,31 @@ client C {
 }
 "#;
 
+/// Shared `OpenAI` Responses API client block.
+const OPENAI_RESPONSES_CLIENT: &str = r#"
+client C {
+    provider openai-responses
+    options { model "gpt-4o"  api_key "sk-test" }
+}
+"#;
+
+/// Shared `OpenAI` O1 client block.
+const OPENAI_O1_CLIENT: &str = r#"
+client C {
+    provider openai
+    options { model "o1"  api_key "sk-test" }
+}
+"#;
+
 // ============================================================================
 // Template strings — verify they expand before request building
 // ============================================================================
 
 #[tokio::test]
 async fn test_openai_template_string_expansion() {
-    let source = r##"
-client C {
-    provider openai
-    options { model "gpt-4o"  api_key "sk-test" }
-}
+    let source = [
+        OPENAI_CLIENT,
+        r##"
 template_string Greet(name: string) #"Hello, {{ name }}!"#
 function F(name: string) -> string {
     client C
@@ -96,9 +110,11 @@ function F(name: string) -> string {
 function get_body() -> string {
     baml.llm.build_request("F", { "name": "Alice" }).body
 }
-"##;
+"##,
+    ]
+    .join("\n");
 
-    let body = body_json(&run_baml(source, "get_body").await);
+    let body = body_json(&run_baml(&source, "get_body").await);
     assert_eq!(
         body,
         serde_json::json!({
@@ -119,11 +135,9 @@ function get_body() -> string {
 
 #[tokio::test]
 async fn test_openai_struct_arg_in_prompt() {
-    let source = r##"
-client C {
-    provider openai
-    options { model "gpt-4o"  api_key "sk-test" }
-}
+    let source = [
+        OPENAI_CLIENT,
+        r##"
 class Person {
     name string
     age int
@@ -135,9 +149,11 @@ function F(p: Person) -> string {
 function get_body() -> string {
     baml.llm.build_request("F", { "p": { "name": "Bob", "age": 42 } }).body
 }
-"##;
+"##,
+    ]
+    .join("\n");
 
-    let body = body_json(&run_baml(source, "get_body").await);
+    let body = body_json(&run_baml(&source, "get_body").await);
     assert_eq!(
         body,
         serde_json::json!({
@@ -159,14 +175,9 @@ function get_body() -> string {
 
 #[tokio::test]
 async fn test_o1_converts_system_to_user() {
-    let source = r##"
-client C {
-    provider openai
-    options {
-        model "o1"
-        api_key "sk-test"
-    }
-}
+    let source = [
+        OPENAI_O1_CLIENT,
+        r##"
 function F() -> string {
     client C
     prompt #"
@@ -179,9 +190,11 @@ function F() -> string {
 function get_body() -> string {
     baml.llm.build_request("F", {}).body
 }
-"##;
+"##,
+    ]
+    .join("\n");
 
-    let body = body_json(&run_baml(source, "get_body").await);
+    let body = body_json(&run_baml(&source, "get_body").await);
     assert_eq!(
         body,
         serde_json::json!({
@@ -189,11 +202,10 @@ function get_body() -> string {
             "messages": [
                 {
                     "role": "user",
-                    "content": [{"type": "text", "text": "You are a helpful assistant."}]
-                },
-                {
-                    "role": "user",
-                    "content": [{"type": "text", "text": "Hello"}]
+                    "content": [
+                        {"type": "text", "text": "You are a helpful assistant."},
+                        {"type": "text", "text": "Hello"}
+                    ]
                 }
             ]
         })
@@ -202,14 +214,9 @@ function get_body() -> string {
 
 #[tokio::test]
 async fn test_non_o_series_keeps_system() {
-    let source = r##"
-client C {
-    provider openai
-    options {
-        model "gpt-4o"
-        api_key "sk-test"
-    }
-}
+    let source = [
+        OPENAI_CLIENT,
+        r##"
 function F() -> string {
     client C
     prompt #"
@@ -222,9 +229,11 @@ function F() -> string {
 function get_body() -> string {
     baml.llm.build_request("F", {}).body
 }
-"##;
+"##,
+    ]
+    .join("\n");
 
-    let body = body_json(&run_baml(source, "get_body").await);
+    let body = body_json(&run_baml(&source, "get_body").await);
     assert_eq!(
         body,
         serde_json::json!({
@@ -249,11 +258,9 @@ function get_body() -> string {
 
 #[tokio::test]
 async fn test_openai_three_role_conversation() {
-    let source = r##"
-client C {
-    provider openai
-    options { model "gpt-4o"  api_key "sk-test" }
-}
+    let source = [
+        OPENAI_CLIENT,
+        r##"
 function F() -> string {
     client C
     prompt #"
@@ -268,9 +275,11 @@ function F() -> string {
 function get_body() -> string {
     baml.llm.build_request("F", {}).body
 }
-"##;
+"##,
+    ]
+    .join("\n");
 
-    let body = body_json(&run_baml(source, "get_body").await);
+    let body = body_json(&run_baml(&source, "get_body").await);
     assert_eq!(
         body,
         serde_json::json!({
@@ -295,11 +304,9 @@ function get_body() -> string {
 
 #[tokio::test]
 async fn test_openai_multi_turn_conversation() {
-    let source = r##"
-client C {
-    provider openai
-    options { model "gpt-4o"  api_key "sk-test" }
-}
+    let source = [
+        OPENAI_CLIENT,
+        r##"
 function F() -> string {
     client C
     prompt #"
@@ -320,9 +327,11 @@ function F() -> string {
 function get_body() -> string {
     baml.llm.build_request("F", {}).body
 }
-"##;
+"##,
+    ]
+    .join("\n");
 
-    let body = body_json(&run_baml(source, "get_body").await);
+    let body = body_json(&run_baml(&source, "get_body").await);
     assert_eq!(
         body,
         serde_json::json!({
@@ -359,11 +368,9 @@ function get_body() -> string {
 
 #[tokio::test]
 async fn test_responses_api_multi_turn() {
-    let source = r##"
-client C {
-    provider openai-responses
-    options { model "gpt-4o"  api_key "sk-test" }
-}
+    let source = [
+        OPENAI_RESPONSES_CLIENT,
+        r##"
 function F() -> string {
     client C
     prompt #"
@@ -380,9 +387,11 @@ function F() -> string {
 function get_body() -> string {
     baml.llm.build_request("F", {}).body
 }
-"##;
+"##,
+    ]
+    .join("\n");
 
-    let body = body_json(&run_baml(source, "get_body").await);
+    let body = body_json(&run_baml(&source, "get_body").await);
     assert_eq!(
         body,
         serde_json::json!({
@@ -416,18 +425,19 @@ function get_body() -> string {
 
 #[tokio::test]
 async fn test_openai_mixed_text_and_image() {
-    let source = format!(
+    let source = [
+        OPENAI_CLIENT,
         r##"
-{OPENAI_CLIENT}
-function F(img: image) -> string {{
+function F(img: image) -> string {
     client C
-    prompt #"What is in this image? {{{{ img }}}}"#
-}}
-function get_body(img: image) -> string {{
-    baml.llm.build_request("F", {{ "img": img }}).body
-}}
-"##
-    );
+    prompt #"What is in this image? {{ img }}"#
+}
+function get_body(img: image) -> string {
+    baml.llm.build_request("F", { "img": img }).body
+}
+"##,
+    ]
+    .join("\n");
     let img = media_value(
         MediaKind::Image,
         MediaContent::Url {
@@ -460,11 +470,9 @@ function get_body(img: image) -> string {{
 
 #[tokio::test]
 async fn test_responses_api_basic() {
-    let source = r##"
-client C {
-    provider openai-responses
-    options { model "gpt-4o"  api_key "sk-test" }
-}
+    let source = [
+        OPENAI_RESPONSES_CLIENT,
+        r##"
 function F(name: string) -> string {
     client C
     prompt #"Hello, {{ name }}!"#
@@ -472,9 +480,11 @@ function F(name: string) -> string {
 function get_body() -> string {
     baml.llm.build_request("F", { "name": "World" }).body
 }
-"##;
+"##,
+    ]
+    .join("\n");
 
-    let body = body_json(&run_baml(source, "get_body").await);
+    let body = body_json(&run_baml(&source, "get_body").await);
     assert_eq!(
         body,
         serde_json::json!({
@@ -483,6 +493,397 @@ function get_body() -> string {
                 {
                     "role": "system",
                     "content": [{"type": "input_text", "text": "Hello, World!"}]
+                }
+            ]
+        })
+    );
+}
+
+// ============================================================================
+// OpenAI multiple system messages — merged into one message
+// ============================================================================
+
+#[tokio::test]
+async fn test_openai_multiple_system_messages() {
+    let source = [
+        OPENAI_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        You are helpful.
+        {{ _.role("system") }}
+        You are concise.
+        {{ _.role("user") }}
+        Hello
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request("F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "gpt-4o",
+            "messages": [
+                {
+                    "role": "system",
+                    "content": [
+                        {"type": "text", "text": "You are helpful."},
+                        {"type": "text", "text": "You are concise."}
+                    ]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Hello"}]
+                }
+            ]
+        })
+    );
+}
+
+// ============================================================================
+// Anthropic Integration Tests
+// ============================================================================
+
+/// Shared Anthropic client block.
+const ANTHROPIC_CLIENT: &str = r#"
+client C {
+    provider anthropic
+    options {
+        model "claude-3-5-sonnet-20241022"
+        api_key "sk-ant-test"
+        default_role "user"
+    }
+}
+"#;
+
+// ============================================================================
+// Template strings — verify they expand before request building
+// ============================================================================
+
+#[tokio::test]
+async fn test_anthropic_template_string_expansion() {
+    let source = [
+        ANTHROPIC_CLIENT,
+        r##"
+template_string Greet(name: string) #"Hello, {{ name }}!"#
+function F(name: string) -> string {
+    client C
+    prompt #"{{ Greet(name) }}"#
+}
+function get_body() -> string {
+    baml.llm.build_request("F", { "name": "Alice" }).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 4096,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Hello, Alice!"}]
+                }
+            ]
+        })
+    );
+}
+
+// ============================================================================
+// Struct args — verify they render into the prompt correctly
+// ============================================================================
+
+#[tokio::test]
+async fn test_anthropic_struct_arg_in_prompt() {
+    let source = [
+        ANTHROPIC_CLIENT,
+        r##"
+class Person {
+    name string
+    age int
+}
+function F(p: Person) -> string {
+    client C
+    prompt #"{{ p.name }} is {{ p.age }}"#
+}
+function get_body() -> string {
+    baml.llm.build_request("F", { "p": { "name": "Bob", "age": 42 } }).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 4096,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Bob is 42"}]
+                }
+            ]
+        })
+    );
+}
+
+// ============================================================================
+// Multi-message conversations (3+ messages)
+// ============================================================================
+
+#[tokio::test]
+async fn test_anthropic_three_role_conversation() {
+    let source = [
+        ANTHROPIC_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        You are a helpful assistant.
+        {{ _.role("user") }}
+        What is 2+2?
+        {{ _.role("assistant") }}
+        4
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request("F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 4096,
+            "system": [
+                {"type": "text", "text": "You are a helpful assistant."}
+            ],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "What is 2+2?"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "4"}]
+                }
+            ]
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_anthropic_multi_turn_conversation() {
+    let source = [
+        ANTHROPIC_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        Be concise.
+        {{ _.role("user") }}
+        Hello
+        {{ _.role("assistant") }}
+        Hi!
+        {{ _.role("user") }}
+        How are you?
+        {{ _.role("assistant") }}
+        Good, thanks!
+        {{ _.role("user") }}
+        Goodbye
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request("F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 4096,
+            "system": [
+                {"type": "text", "text": "Be concise."}
+            ],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Hello"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Hi!"}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "How are you?"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Good, thanks!"}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Goodbye"}]
+                }
+            ]
+        })
+    );
+}
+
+// ============================================================================
+// Media passed through BAML function args
+// ============================================================================
+
+#[tokio::test]
+async fn test_anthropic_mixed_text_and_image() {
+    let source = [
+        ANTHROPIC_CLIENT,
+        r##"
+function F(img: image) -> string {
+    client C
+    prompt #"What is in this image? {{ img }}"#
+}
+function get_body(img: image) -> string {
+    baml.llm.build_request("F", { "img": img }).body
+}
+"##,
+    ]
+    .join("\n");
+    let img = media_value(
+        MediaKind::Image,
+        MediaContent::Url {
+            url: "https://example.com/photo.jpg".into(),
+            base64_data: None,
+        },
+        Some("image/jpeg"),
+    );
+    let body = body_json(&run_baml_with_args(&source, "get_body", vec![img]).await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 4096,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "What is in this image?"},
+                        {"type": "image", "source": {"type": "url", "url": "https://example.com/photo.jpg"}}
+                    ]
+                }
+            ]
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_anthropic_audio_url() {
+    let source = [
+        ANTHROPIC_CLIENT,
+        r##"
+function F(audio: audio) -> string {
+    client C
+    prompt #"Transcribe this audio: {{ audio }}"#
+}
+function get_body(audio: audio) -> string {
+    baml.llm.build_request("F", { "audio": audio }).body
+}
+"##,
+    ]
+    .join("\n");
+    let audio = media_value(
+        MediaKind::Audio,
+        MediaContent::Url {
+            url: "https://example.com/speech.mp3".into(),
+            base64_data: None,
+        },
+        Some("audio/mpeg"),
+    );
+    let body = body_json(&run_baml_with_args(&source, "get_body", vec![audio]).await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 4096,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Transcribe this audio:"},
+                        {"type": "audio", "source": {"type": "url", "url": "https://example.com/speech.mp3"}}
+                    ]
+                }
+            ]
+        })
+    );
+}
+
+// ============================================================================
+// Multiple system messages combined
+// ============================================================================
+
+#[tokio::test]
+async fn test_anthropic_multiple_system_messages() {
+    let source = [
+        ANTHROPIC_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        You are helpful.
+        {{ _.role("system") }}
+        You are concise.
+        {{ _.role("user") }}
+        Hello
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request("F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "model": "claude-3-5-sonnet-20241022",
+            "max_tokens": 4096,
+            "system": [
+                {"type": "text", "text": "You are helpful."},
+                {"type": "text", "text": "You are concise."}
+            ],
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Hello"}]
                 }
             ]
         })

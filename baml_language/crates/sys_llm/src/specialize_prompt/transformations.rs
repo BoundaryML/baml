@@ -9,6 +9,8 @@ use crate::{AllowedMetadata, ModelFeatures};
 ///
 /// Walks the top-level `PromptAst::Vec` and merges consecutive `Message` nodes
 /// that share the same role by combining their contents into a `Vec` node.
+/// Adjacent system messages are never merged — they are kept separate so that
+/// each one becomes its own content entry in the final request body.
 ///
 /// Ported from: engine/baml-runtime/src/internal/llm_client/traits/mod.rs:89-102
 pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_types::PromptAst {
@@ -39,7 +41,10 @@ pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_ty
                             content: curr_content,
                             metadata: curr_metadata,
                         },
-                    ) if last_role == curr_role && (last_metadata == curr_metadata) => {
+                    ) if last_role == curr_role
+                        && last_role != "system"
+                        && (last_metadata == curr_metadata) =>
+                    {
                         let merged = Arc::new(PromptAst::Message {
                             role: last_role.clone(),
                             content: last_content.clone().join(curr_content.clone()),
@@ -277,7 +282,7 @@ mod tests {
     #[test]
     fn test_anthropic_defaults() {
         let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &IndexMap::new());
-        assert!(features.max_one_system_prompt);
+        assert!(!features.max_one_system_prompt);
     }
 
     #[test]
@@ -349,6 +354,27 @@ mod tests {
         let prompt = msg("user", "Hello");
         let result = merge_adjacent_roles(prompt);
         assert_eq!(result, msg("user", "Hello"));
+    }
+
+    #[test]
+    fn test_no_merge_adjacent_system_messages() {
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "First"),
+            msg("system", "Second"),
+            msg("user", "Hello"),
+            msg("user", "World"),
+        ]));
+        let result = merge_adjacent_roles(prompt);
+        let expected = Arc::new(PromptAst::Vec(vec![
+            msg("system", "First"),
+            msg("system", "Second"),
+            Arc::new(PromptAst::Message {
+                role: "user".to_string(),
+                content: Arc::new("HelloWorld".to_string().into()),
+                metadata: Value::Null,
+            }),
+        ]));
+        assert_eq!(result, expected);
     }
 
     // ---- consolidate_system_prompts tests ----
@@ -468,7 +494,7 @@ mod tests {
                 content: Arc::new("HelloHow are you?".to_string().into()),
                 metadata: Value::Null,
             }),
-            msg("user", "Also be concise"),
+            msg("system", "Also be concise"),
             msg("assistant", "I'm fine"),
         ]));
         assert_eq!(result, expected);

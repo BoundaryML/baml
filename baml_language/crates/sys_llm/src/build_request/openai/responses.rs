@@ -128,13 +128,26 @@ fn prompt_to_responses_input(
     prompt: &bex_vm_types::PromptAst,
     default_role: &str,
 ) -> Result<Vec<ResponsesMessage>, BuildRequestError> {
-    match prompt.as_ref() {
+    let raw = match prompt.as_ref() {
         PromptAst::Vec(items) => items
             .iter()
             .map(|node| responses_node_to_message(node, default_role))
-            .collect(),
-        _ => Ok(vec![responses_node_to_message(prompt, default_role)?]),
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => vec![responses_node_to_message(prompt, default_role)?],
+    };
+
+    // Merge adjacent messages with the same role by combining their content arrays.
+    let mut result: Vec<ResponsesMessage> = Vec::with_capacity(raw.len());
+    for msg in raw {
+        if let Some(last) = result.last_mut() {
+            if last.role == msg.role {
+                last.content.extend(msg.content);
+                continue;
+            }
+        }
+        result.push(msg);
     }
+    Ok(result)
 }
 
 /// Converts a single [`PromptAst`] node into a Responses API input message.
@@ -544,17 +557,22 @@ mod tests {
             msg("assistant", "4"),
         ]));
         let messages = prompt_to_responses_input(&prompt, "user").unwrap();
-        assert_eq!(messages.len(), 3);
-        assert_eq!(messages[0].role, "system");
-        assert_eq!(messages[1].role, "user");
-        assert_eq!(messages[2].role, "assistant");
         assert_eq!(
-            serde_json::to_value(&messages[0].content[0]).unwrap(),
-            serde_json::json!({"type": "input_text", "text": "You are a helpful assistant."})
-        );
-        assert_eq!(
-            serde_json::to_value(&messages[2].content[0]).unwrap(),
-            serde_json::json!({"type": "output_text", "text": "4"})
+            serde_json::to_value(&messages).unwrap(),
+            serde_json::json!([
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": "You are a helpful assistant."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "What is 2+2?"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "4"}]
+                }
+            ])
         );
     }
 
@@ -569,24 +587,34 @@ mod tests {
             msg("user", "Goodbye"),
         ]));
         let messages = prompt_to_responses_input(&prompt, "user").unwrap();
-        assert_eq!(messages.len(), 6);
-        assert_eq!(messages[0].role, "system");
-        assert_eq!(messages[1].role, "user");
-        assert_eq!(messages[2].role, "assistant");
-        assert_eq!(messages[3].role, "user");
-        assert_eq!(messages[4].role, "assistant");
-        assert_eq!(messages[5].role, "user");
         assert_eq!(
-            serde_json::to_value(&messages[2].content[0]).unwrap(),
-            serde_json::json!({"type": "output_text", "text": "Hi!"})
-        );
-        assert_eq!(
-            serde_json::to_value(&messages[4].content[0]).unwrap(),
-            serde_json::json!({"type": "output_text", "text": "Good, thanks!"})
-        );
-        assert_eq!(
-            serde_json::to_value(&messages[5].content[0]).unwrap(),
-            serde_json::json!({"type": "input_text", "text": "Goodbye"})
+            serde_json::to_value(&messages).unwrap(),
+            serde_json::json!([
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": "Be concise."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Hello"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Hi!"}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "How are you?"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "output_text", "text": "Good, thanks!"}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": "Goodbye"}]
+                }
+            ])
         );
     }
 
@@ -625,8 +653,16 @@ mod tests {
             .build_body(&client, msg("user", "hi"), true)
             .unwrap();
         let body: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-        assert_eq!(body["stream"], true);
-        assert!(body.get("stream_options").is_none());
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "stream": true,
+                "input": [
+                    {"role": "user", "content": [{"type": "input_text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -640,6 +676,14 @@ mod tests {
             .build_body(&client, msg("user", "hi"), false)
             .unwrap();
         let body: serde_json::Value = serde_json::from_str(&body_str).unwrap();
-        assert!(body.get("stream").is_none());
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "input": [
+                    {"role": "user", "content": [{"type": "input_text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 }

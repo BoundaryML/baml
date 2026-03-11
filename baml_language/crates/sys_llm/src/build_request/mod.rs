@@ -7,7 +7,6 @@ mod openai;
 
 use std::str::FromStr;
 
-use baml_builtins::PromptAstSimple;
 use bex_external_types::BexExternalValue;
 use bex_heap::{builtin_types, builtin_types::owned::LlmPrimitiveClient};
 
@@ -237,30 +236,6 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
             Some(serde_json::Value::Object(map))
         }
         _ => None, // Skip non-serializable types (Resource, PromptAst, etc.)
-    }
-}
-
-fn prompt_to_content_parts_simple(content: &PromptAstSimple) -> Vec<serde_json::Value> {
-    match content {
-        PromptAstSimple::String(s) => {
-            vec![serde_json::json!({"type": "text", "text": s})]
-        }
-        PromptAstSimple::Media(media) => {
-            media.read_content(|f| match f {
-                baml_builtins::MediaContent::Url { url, .. } => {
-                    vec![serde_json::json!({"type": "input_image", "image_url": url})]
-                }
-                baml_builtins::MediaContent::Base64 { base64_data, .. } => {
-                    vec![serde_json::json!({"type": "input_image", "image_url": format!("data:{};base64,{}", media.mime_type.as_deref().unwrap_or("image/png"), base64_data)})]
-                }
-                baml_builtins::MediaContent::File { file, .. } => {
-                    vec![serde_json::json!({"type": "file", "file_id": file})]
-                }
-            })
-        }
-        PromptAstSimple::Multiple(multiple) => {
-            multiple.iter().flat_map(|i| prompt_to_content_parts_simple(i)).collect()
-        }
     }
 }
 

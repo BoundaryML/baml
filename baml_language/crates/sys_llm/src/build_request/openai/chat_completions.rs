@@ -151,13 +151,48 @@ fn prompt_to_openai_messages(
     prompt: &bex_vm_types::PromptAst,
     default_role: &str,
 ) -> Result<Vec<serde_json::Value>, BuildRequestError> {
-    match prompt.as_ref() {
+    let raw = match prompt.as_ref() {
         PromptAst::Vec(items) => items
             .iter()
             .map(|node| prompt_node_to_message(node, default_role))
-            .collect(),
-        _ => Ok(vec![prompt_node_to_message(prompt, default_role)?]),
+            .collect::<Result<Vec<_>, _>>()?,
+        _ => vec![prompt_node_to_message(prompt, default_role)?],
+    };
+
+    // Merge adjacent messages with the same role by combining their content arrays.
+    // This handles the case where multiple system messages should become one message
+    // with multiple content entries.
+    Ok(merge_adjacent_openai_messages(raw))
+}
+
+/// Merge adjacent JSON messages that share the same role by concatenating
+/// their `content` arrays into a single message.
+fn merge_adjacent_openai_messages(messages: Vec<serde_json::Value>) -> Vec<serde_json::Value> {
+    let mut result: Vec<serde_json::Value> = Vec::with_capacity(messages.len());
+
+    for msg in messages {
+        let dominated = result.last_mut().and_then(|last| {
+            let last_role = last.get("role").and_then(|r| r.as_str());
+            let curr_role = msg.get("role").and_then(|r| r.as_str());
+            if last_role == curr_role {
+                // Extend the last message's content array with the current one.
+                if let (Some(last_content), Some(curr_content)) = (
+                    last.get_mut("content").and_then(|c| c.as_array_mut()),
+                    msg.get("content").and_then(|c| c.as_array()),
+                ) {
+                    last_content.extend(curr_content.iter().cloned());
+                    return Some(());
+                }
+            }
+            None
+        });
+
+        if dominated.is_none() {
+            result.push(msg);
+        }
     }
+
+    result
 }
 
 /// Converts a single [`PromptAst`] node into an `OpenAI` Chat Completions message JSON value.
@@ -678,9 +713,15 @@ mod tests {
     fn chat_single_message() {
         let prompt = msg("user", "hello");
         let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
-        assert_eq!(messages.len(), 1);
-        assert_eq!(messages[0]["role"], "user");
-        assert_eq!(messages[0]["content"][0]["text"], "hello");
+        assert_eq!(
+            serde_json::Value::Array(messages),
+            serde_json::json!([
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "hello"}]
+                }
+            ])
+        );
     }
 
     #[test]
@@ -690,9 +731,19 @@ mod tests {
             msg("user", "Hi"),
         ]));
         let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
-        assert_eq!(messages.len(), 2);
-        assert_eq!(messages[0]["role"], "system");
-        assert_eq!(messages[1]["role"], "user");
+        assert_eq!(
+            serde_json::Value::Array(messages),
+            serde_json::json!([
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": "Be helpful."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Hi"}]
+                }
+            ])
+        );
     }
 
     #[test]
@@ -703,16 +754,23 @@ mod tests {
             msg("assistant", "4"),
         ]));
         let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
-        assert_eq!(messages.len(), 3);
-        assert_eq!(messages[0]["role"], "system");
         assert_eq!(
-            messages[0]["content"][0]["text"],
-            "You are a helpful assistant."
+            serde_json::Value::Array(messages),
+            serde_json::json!([
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": "You are a helpful assistant."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "What is 2+2?"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "4"}]
+                }
+            ])
         );
-        assert_eq!(messages[1]["role"], "user");
-        assert_eq!(messages[1]["content"][0]["text"], "What is 2+2?");
-        assert_eq!(messages[2]["role"], "assistant");
-        assert_eq!(messages[2]["content"][0]["text"], "4");
     }
 
     #[test]
@@ -726,14 +784,35 @@ mod tests {
             msg("user", "Goodbye"),
         ]));
         let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
-        assert_eq!(messages.len(), 6);
-        assert_eq!(messages[0]["role"], "system");
-        assert_eq!(messages[1]["role"], "user");
-        assert_eq!(messages[2]["role"], "assistant");
-        assert_eq!(messages[3]["role"], "user");
-        assert_eq!(messages[4]["role"], "assistant");
-        assert_eq!(messages[5]["role"], "user");
-        assert_eq!(messages[5]["content"][0]["text"], "Goodbye");
+        assert_eq!(
+            serde_json::Value::Array(messages),
+            serde_json::json!([
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": "Be concise."}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Hello"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Hi!"}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "How are you?"}]
+                },
+                {
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Good, thanks!"}]
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Goodbye"}]
+                }
+            ])
+        );
     }
 
     #[test]
@@ -744,11 +823,22 @@ mod tests {
             msg("user", "User msg."),
         ]));
         let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
-        assert_eq!(messages.len(), 3);
-        assert_eq!(messages[0]["role"], "system");
-        assert_eq!(messages[1]["role"], "user");
-        assert_eq!(messages[1]["content"][0]["text"], "bare text");
-        assert_eq!(messages[2]["role"], "user");
+        assert_eq!(
+            serde_json::Value::Array(messages),
+            serde_json::json!([
+                {
+                    "role": "system",
+                    "content": [{"type": "text", "text": "System prompt."}]
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "bare text"},
+                        {"type": "text", "text": "User msg."}
+                    ]
+                }
+            ])
+        );
     }
 
     #[test]
@@ -760,8 +850,13 @@ mod tests {
         });
         let messages = prompt_to_openai_messages(&prompt, "user").unwrap();
         assert_eq!(
-            messages[0]["content"][0]["cache_control"],
-            serde_json::json!({"type": "ephemeral"})
+            serde_json::Value::Array(messages),
+            serde_json::json!([
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "hello", "cache_control": {"type": "ephemeral"}}]
+                }
+            ])
         );
     }
 
@@ -846,7 +941,16 @@ mod tests {
         );
         let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
-        assert_eq!(body["max_tokens"], 4096);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "max_tokens": 4096,
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -865,7 +969,16 @@ mod tests {
         );
         let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
-        assert_eq!(body["max_tokens"], 1000);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "max_tokens": 1000,
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -884,8 +997,16 @@ mod tests {
         );
         let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
-        assert!(body.get("max_tokens").is_none());
-        assert_eq!(body["max_completion_tokens"], 2000);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "max_completion_tokens": 2000,
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -896,7 +1017,15 @@ mod tests {
         );
         let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
-        assert!(body.get("max_tokens").is_none());
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -904,7 +1033,14 @@ mod tests {
         let client = make_client("openai", vec![]);
         let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
-        assert!(body.get("model").is_none());
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -951,8 +1087,15 @@ mod tests {
             "Bearer sk-custom"
         );
         let body = parse_body(&result.body);
-        assert_eq!(body["model"], "my-model");
-        assert_eq!(body["messages"][0]["role"], "user");
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "my-model",
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -964,7 +1107,15 @@ mod tests {
         let result = build_request(&client, msg("user", "hi"), false).unwrap();
         assert_eq!(result.url, "http://localhost:11434/v1/chat/completions");
         let body = parse_body(&result.body);
-        assert_eq!(body["model"], "llama3");
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "llama3",
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -1010,7 +1161,15 @@ mod tests {
             "Bearer sk-or-test"
         );
         let body = parse_body(&result.body);
-        assert_eq!(body["model"], "openai/gpt-4o");
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "openai/gpt-4o",
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -1025,8 +1184,17 @@ mod tests {
         );
         let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
-        assert_eq!(body["temperature"], 0.3);
-        assert_eq!(body["max_tokens"], 500);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "openai/gpt-4o",
+                "temperature": 0.3,
+                "max_tokens": 500,
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -1037,8 +1205,17 @@ mod tests {
         );
         let result = build_request(&client, msg("user", "hi"), true).unwrap();
         let body = parse_body(&result.body);
-        assert_eq!(body["stream"], true);
-        assert_eq!(body["stream_options"]["include_usage"], true);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "stream": true,
+                "stream_options": {"include_usage": true},
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 
     #[test]
@@ -1049,7 +1226,14 @@ mod tests {
         );
         let result = build_request(&client, msg("user", "hi"), false).unwrap();
         let body = parse_body(&result.body);
-        assert!(body.get("stream").is_none());
-        assert!(body.get("stream_options").is_none());
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+                ]
+            })
+        );
     }
 }
