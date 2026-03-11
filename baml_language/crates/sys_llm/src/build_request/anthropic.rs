@@ -487,7 +487,7 @@ mod tests {
             .unwrap_err();
         assert!(matches!(err, BuildRequestError::UnsupportedMedia(_)));
         assert!(err.to_string().contains("video"));
-        assert!(err.to_string().contains("extracting frames"));
+        assert!(err.to_string().contains("not supported"));
     }
 
     // ========================================================================
