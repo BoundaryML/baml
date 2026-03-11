@@ -153,6 +153,7 @@ fn anthropic_content_parts(
         }
     }
 }
+
 /// Convert content to JSON values and merge metadata into the last part.
 fn content_to_json(
     content: &PromptAstSimple,
