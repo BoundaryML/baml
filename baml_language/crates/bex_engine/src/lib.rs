@@ -422,7 +422,7 @@ impl BexEngine {
             .enumerate()
             .filter_map(|(idx, obj)| {
                 if let Object::Class(class) = obj {
-                    Some((class.name.clone(), idx))
+                    Some((class.name.to_string(), idx))
                 } else {
                     None
                 }
@@ -434,7 +434,7 @@ impl BexEngine {
             .enumerate()
             .filter_map(|(idx, obj)| {
                 if let Object::Enum(enm) = obj {
-                    Some((enm.name.clone(), idx))
+                    Some((enm.name.to_string(), idx))
                 } else {
                     None
                 }
@@ -623,16 +623,16 @@ impl BexEngine {
     /// Extract class definitions from the heap for output format rendering.
     fn extract_class_definitions(
         resolved_class_names: &indexmap::IndexMap<String, HeapPtr>,
-    ) -> indexmap::IndexMap<String, sys_types::ClassDefinition> {
+    ) -> indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition> {
         let mut defs = indexmap::IndexMap::new();
-        for (name, ptr) in resolved_class_names {
+        for (_name, ptr) in resolved_class_names {
             // SAFETY: ptr is from resolved_class_names, a compile-time object
             let obj = unsafe { ptr.get() };
             if let Object::Class(cls) = obj {
                 defs.insert(
-                    name.clone(),
+                    cls.name.clone(),
                     sys_types::ClassDefinition {
-                        name: cls.name.clone(),
+                        name: cls.name.display_name.to_string(),
                         description: cls.description.clone(),
                         alias: cls.alias.clone(),
                         fields: cls
@@ -656,16 +656,16 @@ impl BexEngine {
     /// Extract enum definitions from the heap for output format rendering.
     fn extract_enum_definitions(
         resolved_enum_names: &indexmap::IndexMap<String, HeapPtr>,
-    ) -> indexmap::IndexMap<String, sys_types::EnumDefinition> {
+    ) -> indexmap::IndexMap<baml_type::TypeName, sys_types::EnumDefinition> {
         let mut defs = indexmap::IndexMap::new();
-        for (name, ptr) in resolved_enum_names {
+        for (_name, ptr) in resolved_enum_names {
             // SAFETY: ptr is from resolved_enum_names, a compile-time object
             let obj = unsafe { ptr.get() };
             if let Object::Enum(enm) = obj {
                 defs.insert(
-                    name.clone(),
+                    enm.name.clone(),
                     sys_types::EnumDefinition {
-                        name: enm.name.clone(),
+                        name: enm.name.display_name.to_string(),
                         description: enm.description.clone(),
                         alias: enm.alias.clone(),
                         variants: enm

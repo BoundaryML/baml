@@ -203,7 +203,7 @@ pub fn compile_files(
 
         // Add Class object to program and record its index
         let class_obj = Object::Class(Class {
-            name: builtin.path.to_string(),
+            name: baml_type::TypeName::from_dotted_path(builtin.path),
             fields,
             description: None,
             alias: None,
@@ -272,7 +272,7 @@ pub fn compile_files(
                     })
                     .unwrap_or_default();
                 let class_obj = Object::Class(Class {
-                    name: class_name.clone(),
+                    name: baml_type::fqn_to_type_name(&fqn),
                     fields,
                     description: class.description.value().cloned(),
                     alias: class.alias.value().cloned(),
@@ -301,7 +301,8 @@ pub fn compile_files(
             if let ItemId::Enum(enum_loc) = item {
                 let item_tree = baml_compiler_hir::file_item_tree(db, enum_loc.file(db));
                 let enum_def = &item_tree[enum_loc.id(db)];
-                let enum_name = enum_def.name.to_string();
+                let enum_fqn = baml_compiler_hir::enum_qualified_name(db, *enum_loc);
+                let enum_name = enum_fqn.display();
 
                 let mut variant_indices = HashMap::new();
                 let mut variants = Vec::new();
@@ -328,7 +329,7 @@ pub fn compile_files(
                     })
                     .unwrap_or_default();
                 let enum_obj = Object::Enum(Enum {
-                    name: enum_name.clone(),
+                    name: baml_type::fqn_to_type_name(&enum_fqn),
                     variants,
                     description: None, // HIR Enum doesn't carry description
                     alias: enum_def.alias.value().cloned(),
@@ -362,7 +363,7 @@ pub fn compile_files(
             variant_indices.insert(v.to_string(), idx);
         }
         let enum_obj = Object::Enum(Enum {
-            name: builtin_enum.path.to_string(),
+            name: baml_type::TypeName::from_dotted_path(builtin_enum.path),
             variants,
             description: None,
             alias: None,
@@ -765,7 +766,7 @@ pub fn compile_files(
             {
                 program
                     .recursive_type_alias_defs
-                    .insert(alias_name.to_string(), target_ty);
+                    .insert(baml_type::TypeName::local(alias_name.clone()), target_ty);
             }
         }
     }

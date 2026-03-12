@@ -30,9 +30,8 @@ pub use defs::*;
 pub struct TypeName {
     /// Short name: "Response", "User"
     pub name: Name,
-    /// Module path segments: empty for local types, ["http"] for baml.http.Response
-    // TODO(perf): module_path is unused by all post-TIR consumers. Could be simplified
-    // to just { name, display_name } in a follow-up to reduce TypeName from 72 to 48 bytes.
+    /// Module path segments: empty for local types, ["baml", "http"] for baml.http.Response.
+    /// Used by runtime maps (SysOpContext) to distinguish `baml.SomeType` from local `SomeType`.
     pub module_path: Vec<Name>,
     /// Pre-computed display string: "baml.http.Response" for builtins, "User" for locals.
     /// Does NOT participate in PartialEq/Hash.
@@ -46,6 +45,24 @@ impl TypeName {
             display_name: name.clone(),
             name,
             module_path: vec![],
+        }
+    }
+
+    /// Create a TypeName from a dotted path like `"baml.http.Response"`.
+    ///
+    /// The last segment becomes `name`, everything before it becomes `module_path`,
+    /// and `display_name` is the full dotted path.
+    pub fn from_dotted_path(path: &str) -> Self {
+        let segments: Vec<&str> = path.split('.').collect();
+        let name = Name::new(*segments.last().expect("path must be non-empty"));
+        let module_path = segments[..segments.len() - 1]
+            .iter()
+            .map(|s| Name::new(*s))
+            .collect();
+        Self {
+            display_name: Name::new(path),
+            name,
+            module_path,
         }
     }
 }
