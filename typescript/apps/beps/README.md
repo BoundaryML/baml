@@ -183,10 +183,10 @@ A standalone web application for managing BAML Enhancement Proposals (BEPs) and 
    2. Click "New OAuth App"
    3. Fill in the details:
       - Application name: `BEP Feedback` (or your preferred name)
-      - Homepage URL: `http://localhost:3000` (or your production URL)
-      - Authorization callback URL: `http://localhost:3000/api/auth/github/callback`
+      - Homepage URL: `https://beps.boundaryml.com`
+      - Authorization callback URL: `https://beps.boundaryml.com/api/auth/github/callback`
    4. Copy the Client ID and generate a Client Secret
-   5. Add them to your `.env.local` file
+   5. Add them to your environment variables (Convex dashboard or hosting provider)
 
 5. **Start the development server**
    ```bash
