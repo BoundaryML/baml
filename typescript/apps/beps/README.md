@@ -170,9 +170,31 @@ A standalone web application for managing BAML Enhancement Proposals (BEPs) and 
    # Anthropic API (for AI features)
    ANTHROPIC_API_KEY=sk-ant-...
 
-   # Login Page Passkey
+   # GitHub OAuth (recommended)
+   GITHUB_CLIENT_ID=your-github-client-id
+   GITHUB_CLIENT_SECRET=your-github-client-secret
+
+   # Login Page Passkey (optional fallback)
    LOGIN_PASSKEY=password
    ```
+
+   **Setting up GitHub OAuth:**
+   1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
+   2. Click "New OAuth App"
+   3. Fill in the details:
+      - Application name: `BEP Feedback` (or your preferred name)
+      - Homepage URL: `https://beps.boundaryml.com`
+      - Authorization callback URL: `https://beps.boundaryml.com/api/auth/github/callback`
+   4. Copy the Client ID and generate a Client Secret
+   5. Add them to your environment variables (Convex dashboard or hosting provider)
+
+   **Vercel Preview Deployments:**
+   GitHub OAuth works automatically with Vercel preview deployments. The OAuth flow
+   routes through the production callback URL, then redirects back to the preview
+   deployment with the authenticated user data. Allowed preview URL patterns:
+   - `*.vercel.app`
+   - `*-boundaryml.vercel.app`
+   - `localhost:*` (for local development)
 
 5. **Start the development server**
    ```bash
