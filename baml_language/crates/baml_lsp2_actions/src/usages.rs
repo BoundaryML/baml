@@ -159,8 +159,8 @@ fn find_local_usages(
     name_text: &str,
     target_resolved: &ResolvedName<'_>,
 ) -> Vec<Location> {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
     // Find the enclosing Function scope.
     let scope_id = index.scope_at_offset(at_offset);
@@ -287,10 +287,8 @@ fn same_local_definition(a: &ResolvedName<'_>, b: &ResolvedName<'_>) -> bool {
 /// We also always include `reference_file` itself, in case it contributes no
 /// top-level items (e.g. a file that is only a consumer, not a definer).
 fn collect_source_files(db: &dyn Db, reference_file: SourceFile) -> Vec<SourceFile> {
-    use baml_compiler2_hir::{
-        file_package::file_package,
-        package::{PackageId, package_items},
-    };
+    use baml_compiler2_hir::{file_package::file_package, package::PackageId};
+    use baml_compiler2_ppir::package_items;
 
     let pkg_info = file_package(db, reference_file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());

@@ -145,14 +145,15 @@ unsafe impl salsa::Update for NamespaceItems<'_> {
     }
 }
 
-/// Merges `file_symbol_contributions` for all files within a namespace.
+/// Merges raw `file_symbol_contributions` for all files within a namespace.
+/// Raw = original AST items only, no PPIR expansion.
 ///
 /// Files are sorted alphabetically by path for deterministic "first wins"
 /// ordering. Keyed by `NamespaceId` so Salsa caches per namespace. Uses
 /// `PartialEq` for early-cutoff: downstream queries only re-run when the
 /// merged symbol set actually changes.
 #[salsa::tracked(returns(ref))]
-pub fn namespace_items<'db>(
+pub fn raw_namespace_items<'db>(
     db: &'db dyn crate::Db,
     namespace_id: NamespaceId<'db>,
 ) -> NamespaceItems<'db> {
@@ -177,7 +178,7 @@ pub fn namespace_items<'db>(
     let mut value_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
 
     for file in &matching_files {
-        let contributions = crate::file_symbol_contributions(db, *file);
+        let contributions = crate::raw_file_symbol_contributions(db, *file);
         for (name, contrib) in &contributions.types {
             type_defs.entry(name.clone()).or_default().push(*contrib);
         }

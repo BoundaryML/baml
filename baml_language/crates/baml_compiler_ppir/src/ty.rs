@@ -297,14 +297,18 @@ impl PpirTy {
 
     /// Parse a CST `TypeExpr` into a `PpirTy`.
     ///
-    /// Parses the type structure and captures type-level `@stream.*` annotations
-    /// from ATTRIBUTE children of the `TYPE_EXPR`.
-    pub fn from_ast(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
+    /// Parses the type structure and captures `@stream.*` annotations from
+    /// both the `TYPE_EXPR`'s own `ATTRIBUTE` children and the field-level attributes.
+    pub fn from_ast(
+        type_expr: &baml_compiler_syntax::ast::TypeExpr,
+        field_attrs: impl Iterator<Item = baml_compiler_syntax::ast::Attribute>,
+    ) -> Self {
         // Parse the type structure
         let mut result = Self::from_ast_structure(type_expr);
 
-        // Capture type-level annotations from ATTRIBUTE children
-        for attr in type_expr.attributes() {
+        // Capture stream annotations from both TYPE_EXPR children and field-level attrs
+        let all_attrs = type_expr.attributes().chain(field_attrs);
+        for attr in all_attrs {
             if let Some(attr_name) = attr.full_name() {
                 match attr_name.as_str() {
                     "stream.done" => {
@@ -320,7 +324,7 @@ impl PpirTy {
                         result.attrs_mut().stream_with_state = true;
                     }
                     _ => {
-                        // Other type-level attrs (e.g., @assert, @check) ignored by PPIR
+                        // Other attrs (e.g., @assert, @check, @alias) ignored by PPIR
                     }
                 }
             }
@@ -370,7 +374,7 @@ impl PpirTy {
     /// Get the element type for an array `TypeExpr`.
     fn from_ast_array_element(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
         if let Some(inner) = type_expr.inner_type_expr() {
-            return Self::from_ast(&inner);
+            return Self::from_ast(&inner, std::iter::empty());
         }
 
         let depth = type_expr.array_depth();
@@ -390,7 +394,7 @@ impl PpirTy {
     fn from_ast_base(type_expr: &baml_compiler_syntax::ast::TypeExpr) -> Self {
         // Handle parenthesized types like `(int | string)`
         if let Some(inner) = type_expr.inner_type_expr() {
-            return Self::from_ast(&inner);
+            return Self::from_ast(&inner, std::iter::empty());
         }
 
         // Handle parenthesized unions
@@ -400,7 +404,7 @@ impl PpirTy {
                 let members: Vec<PpirTy> = params
                     .iter()
                     .filter_map(baml_compiler_syntax::FunctionTypeParam::ty)
-                    .map(|t| Self::from_ast(&t))
+                    .map(|t| Self::from_ast(&t, std::iter::empty()))
                     .collect();
                 if !members.is_empty() {
                     return PpirTy::Union {
@@ -434,8 +438,8 @@ impl PpirTy {
             if name == "map" {
                 let args = type_expr.type_arg_exprs();
                 if args.len() == 2 {
-                    let key = Self::from_ast(&args[0]);
-                    let value = Self::from_ast(&args[1]);
+                    let key = Self::from_ast(&args[0], std::iter::empty());
+                    let value = Self::from_ast(&args[1], std::iter::empty());
                     return PpirTy::Map {
                         key: Box::new(key),
                         value: Box::new(value),
@@ -453,7 +457,7 @@ impl PpirTy {
     /// Parse a union member from its structured parts.
     fn from_union_member(parts: &baml_compiler_syntax::ast::UnionMemberParts) -> Self {
         if let Some(type_expr) = parts.type_expr() {
-            let inner = Self::from_ast(&type_expr);
+            let inner = Self::from_ast(&type_expr, std::iter::empty());
             return Self::apply_modifiers_from_parts(inner, parts);
         }
 
@@ -464,7 +468,7 @@ impl PpirTy {
             {
                 if let Some(type_expr) = baml_compiler_syntax::ast::TypeExpr::cast(inner_type_expr)
                 {
-                    let inner = Self::from_ast(&type_expr);
+                    let inner = Self::from_ast(&type_expr, std::iter::empty());
                     return Self::apply_modifiers_from_parts(inner, parts);
                 }
             }
@@ -496,8 +500,8 @@ impl PpirTy {
                         .collect();
 
                     if type_arg_exprs.len() == 2 {
-                        let key = Self::from_ast(&type_arg_exprs[0]);
-                        let value = Self::from_ast(&type_arg_exprs[1]);
+                        let key = Self::from_ast(&type_arg_exprs[0], std::iter::empty());
+                        let value = Self::from_ast(&type_arg_exprs[1], std::iter::empty());
                         let base = PpirTy::Map {
                             key: Box::new(key),
                             value: Box::new(value),

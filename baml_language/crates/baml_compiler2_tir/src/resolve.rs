@@ -10,11 +10,9 @@
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::{
-    contributions::Definition,
-    package::{PackageId, package_items},
-    scope::ScopeKind,
-    semantic_index::DefinitionSite,
+    contributions::Definition, package::PackageId, scope::ScopeKind, semantic_index::DefinitionSite,
 };
+use baml_compiler2_ppir::package_items;
 use text_size::TextSize;
 
 /// What a name resolves to — produced on demand, NOT stored in a map.
@@ -51,7 +49,7 @@ pub fn resolve_name_at<'db>(
     at_offset: TextSize,
     name: &Name,
 ) -> ResolvedName<'db> {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let scope_id = index.scope_at_offset(at_offset);
 
     // Walk ancestor scopes from innermost to outermost

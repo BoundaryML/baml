@@ -50,7 +50,7 @@ fn function_signature_with_source_map<'db>(
     function: FunctionLoc<'db>,
 ) -> (Arc<FunctionSignature>, SignatureSourceMap) {
     let file = function.file(db);
-    let item_tree = crate::file_item_tree(db, file);
+    let item_tree = crate::raw_file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
     // Build semantic signature — strip spans, keep TypeExpr

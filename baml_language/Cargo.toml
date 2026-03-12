@@ -31,6 +31,7 @@ baml_codegen_types = { path = "crates/baml_codegen_types" }
 baml_compiler_analysis = { path = "crates/baml_compiler_analysis" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
+baml_compiler2_ppir = { path = "crates/baml_compiler2_ppir" }
 baml_compiler2_tir = { path = "crates/baml_compiler2_tir" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }

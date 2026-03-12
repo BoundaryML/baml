@@ -44,62 +44,62 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "name"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "starts_as"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            STRING_LITERAL "Loading..."
-              QUOTE """
-              WORD "Loading"
-              DOT_DOT_DOT "..."
-              QUOTE """
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "starts_as"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "Loading..."
+            QUOTE """
+            WORD "Loading"
+            DOT_DOT_DOT "..."
+            QUOTE """
+          R_PAREN ")"
     FIELD
       WORD "gpa"
-      TYPE_EXPR
+      TYPE_EXPR "float"
         WORD "float"
-        ATTRIBUTE "@stream.not_null"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "not_null"
+      ATTRIBUTE "@stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
     FIELD
       WORD "certifications"
-      TYPE_EXPR
+      TYPE_EXPR "Education[]"
         WORD "Education"
         L_BRACKET "["
         R_BRACKET "]"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "type"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            UNQUOTED_STRING "Education"
-              WORD "Education"
-        L_BRACKET "["
-        R_BRACKET "]"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "type"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "Education"
+            WORD "Education"
+    L_BRACKET "["
+    R_BRACKET "]"
     R_PAREN ")"
     FIELD
       WORD "internal"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "type"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            UNQUOTED_STRING "never"
-              WORD "never"
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "type"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "never"
+            WORD "never"
+          R_PAREN ")"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -112,34 +112,34 @@ SOURCE_FILE
           QUOTE """
           WORD "resume"
           QUOTE """
-        ATTRIBUTE "@stream.done"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "done"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
     FIELD
       WORD "name"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE "@stream.done"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "done"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
     FIELD
       WORD "id"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE "@stream.done"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "done"
-        ATTRIBUTE "@stream.not_null"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "not_null"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+      ATTRIBUTE "@stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -174,18 +174,18 @@ SOURCE_FILE
         WORD "float"
     FIELD
       WORD "y"
-      TYPE_EXPR
+      TYPE_EXPR "float"
         WORD "float"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "starts_as"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            UNQUOTED_STRING "null"
-              WORD "null"
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "starts_as"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "null"
+            WORD "null"
+          R_PAREN ")"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -253,67 +253,67 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "name"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE "@stream.done"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "done"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
     FIELD
       WORD "gpa"
-      TYPE_EXPR
+      TYPE_EXPR "float"
         WORD "float"
-        ATTRIBUTE "@stream.not_null"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "not_null"
+      ATTRIBUTE "@stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
     FIELD
       WORD "title"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "starts_as"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            STRING_LITERAL "Loading..."
-              QUOTE """
-              WORD "Loading"
-              DOT_DOT_DOT "..."
-              QUOTE """
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "starts_as"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "Loading..."
+            QUOTE """
+            WORD "Loading"
+            DOT_DOT_DOT "..."
+            QUOTE """
+          R_PAREN ")"
     FIELD
       WORD "internal_id"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "type"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            UNQUOTED_STRING "never"
-              WORD "never"
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "type"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "never"
+            WORD "never"
+          R_PAREN ")"
     FIELD
       WORD "token"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE "@stream.done"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "done"
-        ATTRIBUTE "@stream.not_null"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "not_null"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+      ATTRIBUTE "@stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
     R_BRACE "}"
   ENUM_DEF
     KW_ENUM "enum"
@@ -332,22 +332,22 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "status"
-      TYPE_EXPR
+      TYPE_EXPR "Status"
         WORD "Status"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "starts_as"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            STRING_LITERAL "Status.Loading"
-              QUOTE """
-              WORD "Status"
-              DOT "."
-              WORD "Loading"
-              QUOTE """
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "starts_as"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "Status.Loading"
+            QUOTE """
+            WORD "Status"
+            DOT "."
+            WORD "Loading"
+            QUOTE """
+          R_PAREN ")"
     FIELD
       WORD "message"
       TYPE_EXPR "string"
@@ -359,49 +359,49 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "items"
-      TYPE_EXPR
+      TYPE_EXPR "Person[]"
         WORD "Person"
         L_BRACKET "["
         R_BRACKET "]"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "type"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            UNQUOTED_STRING "string"
-              WORD "string"
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "type"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "string"
+            WORD "string"
+          R_PAREN ")"
     FIELD
       WORD "maybe"
-      TYPE_EXPR
+      TYPE_EXPR "string?"
         WORD "string"
         QUESTION "?"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "type"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            UNQUOTED_STRING "int"
-              WORD "int"
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "type"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "int"
+            WORD "int"
+          R_PAREN ")"
     FIELD
       WORD "internal"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "type"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            UNQUOTED_STRING "never"
-              WORD "never"
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "type"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "never"
+            WORD "never"
+          R_PAREN ")"
     FIELD
       WORD "data"
       TYPE_EXPR
@@ -414,16 +414,16 @@ SOURCE_FILE
           TYPE_EXPR "int"
             WORD "int"
           GREATER ">"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "type"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            UNQUOTED_STRING "never"
-              WORD "never"
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "type"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "never"
+            WORD "never"
+          R_PAREN ")"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
@@ -431,59 +431,59 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "done_string"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE "@stream.done"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "done"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
     FIELD
       WORD "not_null_string"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE "@stream.not_null"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "not_null"
+      ATTRIBUTE "@stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
     FIELD
       WORD "not_null_class"
-      TYPE_EXPR
+      TYPE_EXPR "Inner"
         WORD "Inner"
-        ATTRIBUTE "@stream.not_null"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "not_null"
+      ATTRIBUTE "@stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
     FIELD
       WORD "done_and_not_null"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE "@stream.done"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "done"
-        ATTRIBUTE "@stream.not_null"
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "not_null"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
+      ATTRIBUTE "@stream.not_null"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "not_null"
     FIELD
       WORD "type_never"
-      TYPE_EXPR
+      TYPE_EXPR "string"
         WORD "string"
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "type"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            UNQUOTED_STRING "never"
-              WORD "never"
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "type"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "never"
+            WORD "never"
+          R_PAREN ")"
     FIELD
       WORD "type_never_literal"
       TYPE_EXPR
@@ -491,16 +491,16 @@ SOURCE_FILE
           QUOTE """
           WORD "resume"
           QUOTE """
-        ATTRIBUTE
-          AT "@"
-          WORD "stream"
-          DOT "."
-          WORD "type"
-          ATTRIBUTE_ARGS
-            L_PAREN "("
-            UNQUOTED_STRING "never"
-              WORD "never"
-            R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "type"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          UNQUOTED_STRING "never"
+            WORD "never"
+          R_PAREN ")"
     R_BRACE "}"
 
 === ERRORS ===
@@ -510,6 +510,26 @@ Error: Expected ')', found '['
  32 │     name string @stream.done
     │         ┬  
     │         ╰── Expected ')', found '['
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found '['
+    ╭─[ main.baml:32:9 ]
+    │
+ 32 │     name string @stream.done
+    │         ┬  
+    │         ╰── Expected Unexpected token in class body, found '['
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found ']'
+    ╭─[ main.baml:32:10 ]
+    │
+ 32 │     name string @stream.done
+    │          ┬  
+    │          ╰── Expected Unexpected token in class body, found ']'
     │ 
     │ Note: Error code: E0010
 ────╯

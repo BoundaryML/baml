@@ -34,9 +34,9 @@ class stream_FieldAttributes {
   details: never | string | null
   state: null | string
 
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  multiple: null | string | null
+  @sap.class_in_progress_field_missing(never)
+  @sap.class_completed_field_missing(never)
+  multiple: never | string?
 }
 
 class stream_ClassAttributes {

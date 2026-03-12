@@ -45,6 +45,9 @@ fn class_field_access() {
         return x.name : string
       }
     }
+    class user.stream_Foo {
+      name: null | string
+    }
     ");
 }
 
@@ -78,6 +81,9 @@ fn unresolved_field() {
         return x.missing : unknown
       }
       !! 63..73: unresolved member: user.Foo.missing
+    }
+    class user.stream_Foo {
+      name: null | string
     }
     ");
 }
@@ -149,6 +155,11 @@ fn resolve_class_fields_query() {
       y: float
       label: string
     }
+    class user.stream_Point {
+      x: null | int
+      y: null | float
+      label: null | string
+    }
     ");
 }
 
@@ -156,7 +167,10 @@ fn resolve_class_fields_query() {
 fn resolve_type_alias_query() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "type MyStr = string");
-    insta::assert_snapshot!(render_tir(&db, file), @"type user.MyStr = string");
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    type user.MyStr = string
+    type user.stream_MyStr = string
+    ");
 }
 
 #[test]

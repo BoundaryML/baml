@@ -236,32 +236,32 @@ pub(crate) fn build_ppir_fields(class_def: &baml_compiler_syntax::ast::ClassDef)
             let field_name: Name = SmolStr::new(field_node.name()?.text());
 
             // Parse field type from CST TypeExpr → PpirTy
-            // This captures type-level @stream.* annotations via TypeExpr::attributes()
+            // Pass field-level attributes so @stream.* annotations are captured
+            // regardless of whether they're inside TYPE_EXPR or at field level.
             let ty = field_node
                 .ty()
-                .map(|te| PpirTy::from_ast(&te))
+                .map(|te| PpirTy::from_ast(&te, field_node.attributes()))
                 .unwrap_or(PpirTy::Unknown {
                     attrs: PpirTypeAttrs::default(),
                 });
 
-            // Extract field-level attributes
+            // Extract field-level @stream.starts_as and @stream.not_null.
+            // Check both TYPE_EXPR children and field-level attributes.
             let mut starts_as: Option<SyntaxNode> = None;
             let mut not_null = false;
 
-            // Read field-level stream annotations from the TYPE_EXPR.
-            // The parser puts ALL @stream.* annotations inside the TYPE_EXPR
-            // node (not as direct field children). Type-level annotations
-            // (@stream.done, @stream.type, @stream.with_state) are already
-            // captured by PpirTy::from_ast(); here we extract the field-level
-            // ones (@stream.starts_as, @stream.not_null).
-            if let Some(type_expr) = field_node.ty() {
-                for attr in type_expr.attributes() {
-                    if let Some(attr_name) = attr.full_name() {
-                        match attr_name.as_str() {
-                            "stream.starts_as" => starts_as = attr.arg_syntax_node(),
-                            "stream.not_null" => not_null = true,
-                            _ => {}
-                        }
+            let type_attrs: Vec<_> = field_node
+                .ty()
+                .into_iter()
+                .flat_map(|te| te.attributes().collect::<Vec<_>>())
+                .collect();
+            let all_attrs = type_attrs.into_iter().chain(field_node.attributes());
+            for attr in all_attrs {
+                if let Some(attr_name) = attr.full_name() {
+                    match attr_name.as_str() {
+                        "stream.starts_as" => starts_as = attr.arg_syntax_node(),
+                        "stream.not_null" => not_null = true,
+                        _ => {}
                     }
                 }
             }

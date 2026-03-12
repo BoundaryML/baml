@@ -78,7 +78,7 @@ pub fn definition_span<'db>(
     def: Definition<'db>,
 ) -> Option<(SourceFile, TextRange)> {
     let def_file = def.file(db);
-    let contributions = baml_compiler2_hir::file_symbol_contributions(db, def_file);
+    let contributions = baml_compiler2_ppir::file_symbol_contributions(db, def_file);
 
     // Search both type and value namespaces.
     let name_span = contributions

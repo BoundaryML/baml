@@ -520,9 +520,9 @@ class stream_MultiAttrField {
   @sap.class_completed_field_missing(null)
   name: null | string
 
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  summary: null | string | null
+  @sap.class_in_progress_field_missing(never)
+  @sap.class_completed_field_missing(never)
+  summary: never | string?
 }
 
 class stream_TypeVariety {

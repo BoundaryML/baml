@@ -403,7 +403,7 @@ fn resolve_type_name(db: &dyn Db, file: SourceFile, name: &str) -> SemanticToken
     // Look up in package items.
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let name_obj = baml_base::Name::new(name);
 
     match pkg_items.lookup_type(&[name_obj]) {
@@ -494,7 +494,7 @@ impl<'db> ExprBodyVisitor<'db> {
         file: SourceFile,
         node_start: text_size::TextSize,
     ) -> Option<Self> {
-        let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+        let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
         // Find the function whose span starts at node_start (the FUNCTION_DEF node).
         let (func_local_id, _func_data) = item_tree
@@ -514,7 +514,7 @@ impl<'db> ExprBodyVisitor<'db> {
         let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
 
         // Find the function scope for infer_scope_types.
-        let index = baml_compiler2_hir::file_semantic_index(db, file);
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
         let func_scope_file_id = index
             .scopes
             .iter()

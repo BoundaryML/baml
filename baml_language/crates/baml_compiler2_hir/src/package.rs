@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     contributions::Definition,
-    namespace::{NameConflict, NamespaceId, NamespaceItems, namespace_items},
+    namespace::{NameConflict, NamespaceId, NamespaceItems, raw_namespace_items},
 };
 
 /// Interned package identity.
@@ -111,13 +111,17 @@ impl<'db> PackageItems<'db> {
     }
 }
 
-/// Merges all `namespace_items` within a package.
+/// Merges all raw `namespace_items` within a package.
+/// Raw = original AST items only, no PPIR expansion.
 ///
 /// Discovers all unique namespace paths for the package by scanning project
-/// files, then calls `namespace_items` for each — allowing Salsa to cache
+/// files, then calls `raw_namespace_items` for each — allowing Salsa to cache
 /// each namespace's contribution independently.
 #[salsa::tracked(returns(ref))]
-pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) -> PackageItems<'db> {
+pub fn raw_package_items<'db>(
+    db: &'db dyn crate::Db,
+    package_id: PackageId<'db>,
+) -> PackageItems<'db> {
     let package_name = package_id.name(db);
 
     // Discover all unique namespace paths for this package.
@@ -136,7 +140,7 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
     for ns_path in ns_paths {
         let ns_id = NamespaceId::new(db, package_name.clone(), ns_path.clone());
-        let items = namespace_items(db, ns_id);
+        let items = raw_namespace_items(db, ns_id);
         all_conflicts.extend(items.conflicts().iter().cloned());
         namespaces.insert(ns_path, items.clone());
     }

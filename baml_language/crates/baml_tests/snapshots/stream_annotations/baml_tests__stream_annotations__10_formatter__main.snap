@@ -2,4 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === PARSER ERROR ===
-[UnexpectedToken { expected: "')'", found: "'['", span: Span { file_id: FileId(0), range: 656..657 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "')'", span: Span { file_id: FileId(0), range: 658..659 } }]
+[UnexpectedToken { expected: "')'", found: "'['", span: Span { file_id: FileId(0), range: 656..657 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'['", span: Span { file_id: FileId(0), range: 656..657 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "']'", span: Span { file_id: FileId(0), range: 657..658 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "')'", span: Span { file_id: FileId(0), range: 658..659 } }]

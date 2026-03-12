@@ -33,12 +33,10 @@
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 use baml_compiler2_hir::{
-    contributions::Definition,
-    loc::FunctionLoc,
-    package::{PackageId, package_items},
-    scope::ScopeKind,
+    contributions::Definition, loc::FunctionLoc, package::PackageId, scope::ScopeKind,
     semantic_index::ScopeBindings,
 };
+use baml_compiler2_ppir::package_items;
 use baml_compiler2_tir::ty::Ty;
 use rowan::NodeOrToken;
 use text_size::TextSize;
@@ -487,7 +485,7 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
             }
 
             // Methods from item tree.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
             let class_data = &item_tree[class_loc.id(db)];
             for method_id in &class_data.methods {
                 let method = &item_tree[*method_id];
@@ -512,7 +510,7 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
                 return Vec::new();
             };
 
-            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
             let enum_data = &item_tree[enum_loc.id(db)];
 
             enum_data
@@ -652,7 +650,7 @@ fn find_base_for_field_access(token: &baml_compiler_syntax::SyntaxToken) -> Opti
 fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
     match def {
         Definition::Class(class_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
             let class = &item_tree[class_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
             Some(Ty::Class(baml_compiler2_tir::ty::QualifiedTypeName {
@@ -661,7 +659,7 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             }))
         }
         Definition::Enum(enum_loc) => {
-            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
             let enum_data = &item_tree[enum_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db));
             Some(Ty::Enum(baml_compiler2_tir::ty::QualifiedTypeName {
@@ -680,8 +678,8 @@ fn local_variable_ty(
     at_offset: TextSize,
     site: baml_compiler2_hir::semantic_index::DefinitionSite,
 ) -> Option<Ty> {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
     // Find the enclosing Function scope.
     let scope_id = index.scope_at_offset(at_offset);
@@ -760,7 +758,7 @@ fn completions_for_value_position(
     let mut items: Vec<Completion> = Vec::new();
 
     // ── Locals (innermost scope first) ───────────────────────────────────────
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let scope_id = index.scope_at_offset(offset);
 
     let mut sort_prefix = 0usize;

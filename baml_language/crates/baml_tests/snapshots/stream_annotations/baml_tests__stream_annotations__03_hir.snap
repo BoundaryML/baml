@@ -73,7 +73,7 @@ class WithDone {
 class ExplicitAnnotations {
   name: string
   gpa: float
-  certifications: Education[][]
+  certifications: Education[]
   internal: string
 }
 
@@ -117,7 +117,7 @@ class stream_AnnotatedResume {
 class stream_ExplicitAnnotations {
   name: "Loading..." | string
   gpa: never | float
-  certifications: null | Education
+  certifications: (null | Education)[]
 }
 
 class stream_ReferencesNotNull {

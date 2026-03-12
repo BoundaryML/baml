@@ -1621,7 +1621,7 @@ impl<'a> Parser<'a> {
                     if attr_name_first.kind == TokenKind::Word
                         && matches!(
                             attr_name_first.text.as_str(),
-                            "alias" | "description" | "skip"
+                            "alias" | "description" | "skip" | "stream"
                         )
                     {
                         // attribute applies to a field, not the type

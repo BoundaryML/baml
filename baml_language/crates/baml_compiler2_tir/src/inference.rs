@@ -18,9 +18,10 @@ use baml_compiler2_hir::{
     body::FunctionBody,
     contributions::Definition,
     loc::{ClassLoc, TypeAliasLoc},
-    package::{PackageId, PackageItems, package_items},
+    package::{PackageId, PackageItems},
     scope::{ScopeId, ScopeKind},
 };
+use baml_compiler2_ppir::package_items;
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -128,7 +129,7 @@ pub fn infer_scope_types<'db>(
 ) -> ScopeInference<'db> {
     let file = scope_id.file(db);
     let file_scope = scope_id.file_scope_id(db);
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let scope = &index.scopes[file_scope.index() as usize];
 
     // Get package items for cross-file resolution
@@ -145,7 +146,7 @@ pub fn infer_scope_types<'db>(
         ScopeKind::Function => {
             // Find the function by matching scope range against item_tree functions.
             // This works for both top-level functions AND class methods.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
             let mut found = false;
             for (local_id, func_data) in &item_tree.functions {
                 if func_data.span == scope.range {
@@ -417,7 +418,7 @@ pub fn resolve_class_fields<'db>(
     class_loc: ClassLoc<'db>,
 ) -> Arc<ResolvedClassFields> {
     let file = class_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = package_items(db, pkg_id);
@@ -461,7 +462,7 @@ pub fn resolve_type_alias<'db>(
     alias_loc: TypeAliasLoc<'db>,
 ) -> Arc<ResolvedTypeAlias> {
     let file = alias_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = package_items(db, pkg_id);
@@ -508,9 +509,9 @@ pub fn render_scope_diagnostics<'db>(
     // Find the source map by matching scope range against item_tree functions.
     let file = scope_id.file(db);
     let file_scope = scope_id.file_scope_id(db);
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let scope = &index.scopes[file_scope.index() as usize];
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
     let source_map = item_tree
         .functions
@@ -537,7 +538,7 @@ pub fn collect_file_diagnostics<'db>(
     db: &'db dyn crate::Db,
     file: baml_base::SourceFile,
 ) -> TypeCheckDiagnostics<'db> {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let mut all_diagnostics = TypeCheckDiagnostics::default();
 
     for scope_id in &index.scope_ids {

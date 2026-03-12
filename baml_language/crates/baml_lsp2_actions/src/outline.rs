@@ -23,9 +23,8 @@
 //! to `ClassField` / `EnumVariant` in the HIR item tree.
 
 use baml_base::SourceFile;
-use baml_compiler2_hir::{
-    contributions::DefinitionKind, file_item_tree, file_symbol_contributions,
-};
+use baml_compiler2_hir::contributions::DefinitionKind;
+use baml_compiler2_ppir::{file_item_tree, file_symbol_contributions};
 use text_size::TextRange;
 
 use crate::Db;
