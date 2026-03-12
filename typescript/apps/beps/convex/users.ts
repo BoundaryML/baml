@@ -48,12 +48,9 @@ export const getOrCreate = mutation({
     passkey: v.string(),
   },
   handler: async (ctx, args) => {
-    // Validate passkey - supports two passwords
-    const passkey1 = process.env.LOGIN_PASSKEY;
-    const passkey2 = process.env.LOGIN_PASSKEY_2;
-    const validPasskeys = [passkey1, passkey2].filter(Boolean);
-    
-    if (validPasskeys.length === 0 || !validPasskeys.includes(args.passkey)) {
+    // Validate passkey
+    const expectedPasskey = process.env.LOGIN_PASSKEY;
+    if (!expectedPasskey || args.passkey !== expectedPasskey) {
       throw new Error("Invalid passkey");
     }
 
@@ -70,6 +67,55 @@ export const getOrCreate = mutation({
     // Create new user with default role
     const userId = await ctx.db.insert("users", {
       name: args.name,
+      role: "member",
+      createdAt: Date.now(),
+    });
+
+    return userId;
+  },
+});
+
+export const getOrCreateFromGitHub = mutation({
+  args: {
+    githubId: v.string(),
+    name: v.string(),
+    avatarUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Check if user exists by GitHub ID
+    const existingByGithub = await ctx.db
+      .query("users")
+      .withIndex("by_github_id", (q) => q.eq("githubId", args.githubId))
+      .unique();
+
+    if (existingByGithub) {
+      // Update avatar if changed
+      if (args.avatarUrl && existingByGithub.avatarUrl !== args.avatarUrl) {
+        await ctx.db.patch(existingByGithub._id, { avatarUrl: args.avatarUrl });
+      }
+      return existingByGithub._id;
+    }
+
+    // Check if user exists by name (for migration from passkey auth)
+    const existingByName = await ctx.db
+      .query("users")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .unique();
+
+    if (existingByName) {
+      // Link existing user to GitHub
+      await ctx.db.patch(existingByName._id, {
+        githubId: args.githubId,
+        avatarUrl: args.avatarUrl,
+      });
+      return existingByName._id;
+    }
+
+    // Create new user
+    const userId = await ctx.db.insert("users", {
+      name: args.name,
+      githubId: args.githubId,
+      avatarUrl: args.avatarUrl,
       role: "member",
       createdAt: Date.now(),
     });

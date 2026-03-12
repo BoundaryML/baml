@@ -38,15 +38,17 @@ export const userRole = v.union(
 
 export default defineSchema({
   // ─────────────────────────────────────────────────────────────────────────
-  // USERS (simple name-based auth)
+  // USERS (GitHub OAuth or passkey auth)
   // ─────────────────────────────────────────────────────────────────────────
   users: defineTable({
     name: v.string(),
     avatarUrl: v.optional(v.string()),
+    githubId: v.optional(v.string()),
     role: userRole,
     createdAt: v.number(),
   })
-    .index("by_name", ["name"]),
+    .index("by_name", ["name"])
+    .index("by_github_id", ["githubId"]),
 
   // ─────────────────────────────────────────────────────────────────────────
   // BEPs (main proposals)

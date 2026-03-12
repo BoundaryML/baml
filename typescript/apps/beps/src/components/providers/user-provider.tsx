@@ -20,11 +20,18 @@ interface User {
   createdAt: number;
 }
 
+interface GitHubUserData {
+  githubId: string;
+  name: string;
+  avatarUrl?: string;
+}
+
 interface UserContextType {
   user: User | null;
   userId: Id<"users"> | null;
   isLoading: boolean;
   login: (name: string, passkey: string) => Promise<void>;
+  loginWithGitHub: (userData: GitHubUserData) => Promise<void>;
   logout: () => void;
 }
 
@@ -86,6 +93,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const { userId: storedUserId, setUserId: setStoredUserId, isHydrated } = useLocalStorageUserId();
 
   const getOrCreate = useMutation(api.users.getOrCreate);
+  const getOrCreateFromGitHub = useMutation(api.users.getOrCreateFromGitHub);
   const user = useQuery(
     api.users.get,
     storedUserId ? { id: storedUserId } : "skip"
@@ -93,6 +101,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const login = async (name: string, passkey: string) => {
     const userId = await getOrCreate({ name, passkey });
+    setStoredUserId(userId);
+  };
+
+  const loginWithGitHub = async (userData: GitHubUserData) => {
+    const userId = await getOrCreateFromGitHub({
+      githubId: userData.githubId,
+      name: userData.name,
+      avatarUrl: userData.avatarUrl,
+    });
     setStoredUserId(userId);
   };
 
@@ -107,6 +124,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         userId: storedUserId,
         isLoading: !isHydrated || (storedUserId !== null && user === undefined),
         login,
+        loginWithGitHub,
         logout,
       }}
     >
