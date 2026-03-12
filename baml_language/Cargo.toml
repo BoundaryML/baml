@@ -241,7 +241,7 @@ large_stack_arrays = "allow"
 [profile.release]
 lto = "fat"
 codegen-units = 1
-opt-level = "s"   # smallest; try "s" if perf matters
+opt-level = "z"   # smallest; try "s" if perf matters
 strip = "symbols" # still keep your strip -x in packaging
 panic = "abort"
 
