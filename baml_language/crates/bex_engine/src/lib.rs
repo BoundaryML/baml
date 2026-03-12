@@ -486,25 +486,15 @@ impl BexEngine {
                 .client_metadata
                 .into_iter()
                 .map(|(name, meta)| {
-                    let client_type = match meta.client_type {
-                        bex_vm_types::ClientBuildType::Primitive => {
-                            bex_heap::builtin_types::owned::LlmClientType::Primitive
-                        }
-                        bex_vm_types::ClientBuildType::Fallback => {
-                            bex_heap::builtin_types::owned::LlmClientType::Fallback
-                        }
-                        bex_vm_types::ClientBuildType::RoundRobin => {
-                            bex_heap::builtin_types::owned::LlmClientType::RoundRobin
-                        }
-                    };
-                    let retry_policy = meta.retry_policy.map(|rp| {
-                        bex_heap::builtin_types::owned::LlmRetryPolicy {
-                            max_retries: rp.max_retries,
-                            initial_delay_ms: rp.initial_delay_ms,
-                            multiplier: rp.multiplier,
-                            max_delay_ms: rp.max_delay_ms,
-                        }
-                    });
+                    let client_type = meta.client_type;
+                    let retry_policy =
+                        meta.retry_policy
+                            .map(|rp| sys_types::io::owned::llm::RetryPolicy {
+                                max_retries: rp.max_retries,
+                                initial_delay_ms: rp.initial_delay_ms,
+                                multiplier: rp.multiplier,
+                                max_delay_ms: rp.max_delay_ms,
+                            });
                     (
                         name,
                         sys_types::ClientBuildMeta {
@@ -523,10 +513,7 @@ impl BexEngine {
         let round_robin_counters = client_metadata
             .iter()
             .filter(|(_, meta)| {
-                matches!(
-                    meta.client_type,
-                    bex_heap::builtin_types::owned::LlmClientType::RoundRobin
-                )
+                matches!(meta.client_type, bex_vm_types::ClientBuildType::RoundRobin)
             })
             .map(|(name, meta)| {
                 let start = meta

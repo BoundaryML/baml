@@ -193,10 +193,6 @@ impl BexEngine {
             Object::Future(_) => Err(EngineError::CannotConvert {
                 type_name: "future".to_string(),
             }),
-            Object::Resource(handle) => Ok(BexExternalValue::Resource(handle.clone())),
-            Object::PromptAst(ast) => Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(
-                ast.clone(),
-            ))),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
             Object::RustData(_) => Err(EngineError::CannotConvert {
@@ -247,7 +243,7 @@ impl BexEngine {
                     .collect();
                 vm.alloc_map(values)
             }
-            BexExternalValue::Resource(handle) => vm.alloc_resource(handle),
+            BexExternalValue::RustData(data) => vm.alloc_rust_data(data),
             // Allocate instance by looking up class and converting fields
             BexExternalValue::Instance { class_name, fields } => {
                 let class_ptr = self
@@ -296,20 +292,6 @@ impl BexEngine {
             BexExternalValue::Union { value, .. } => {
                 self.convert_external_to_vm_value(vm, *value, guard)
             }
-            BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
-                // Media is now stored as Object::Instance with a _data RustData field.
-                let class_name = match media.kind {
-                    baml_type::MediaKind::Pdf => "baml.media.Pdf",
-                    baml_type::MediaKind::Audio => "baml.media.Audio",
-                    baml_type::MediaKind::Video => "baml.media.Video",
-                    baml_type::MediaKind::Image => "baml.media.Image",
-                    baml_type::MediaKind::Generic => "baml.media.Image", // fallback
-                };
-                let class_ptr = vm.resolve_class(class_name);
-                let data = vm.alloc_rust_data(media as std::sync::Arc<dyn std::any::Any + Send + Sync>);
-                vm.alloc_instance(class_ptr, vec![data])
-            }
-            BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => vm.alloc_prompt_ast(ast),
             BexExternalValue::Adt(BexExternalAdt::Collector(c)) => vm.alloc_collector(c),
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => vm.alloc_type(ty),
             BexExternalValue::FunctionRef { global_index } => {
@@ -454,12 +436,6 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(tn, _)) => {
             enum_name.as_str() == tn.display_name.as_str()
         }
-        (BexExternalValue::Adt(BexExternalAdt::Media(_)), Ty::Media(_, _)) => true,
-        (BexExternalValue::Adt(BexExternalAdt::PromptAst(_)), ty)
-            if ty.is_opaque("baml.llm.PromptAst") =>
-        {
-            true
-        }
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (BexExternalValue::Adt(BexExternalAdt::Type(_)), ty)
             if ty.is_opaque("baml.reflect.Type") =>
@@ -550,7 +526,6 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     }
                 }
                 Object::Map(_) => members.iter().find(|m| matches!(m, Ty::Map { .. })),
-                Object::PromptAst(_) => members.iter().find(|m| m.is_opaque("baml.llm.PromptAst")),
                 _ => None,
             }
         }
@@ -596,7 +571,6 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                         entries,
                     }
                 }
-                Object::Resource(handle) => BexExternalValue::Resource(handle.clone()),
                 Object::Instance(instance) => {
                     // Get class name from the class object
                     let class_obj = vm.get_object(instance.class);

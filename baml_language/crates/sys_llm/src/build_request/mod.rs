@@ -1,6 +1,6 @@
 //! LlmProvider-specific HTTP request building.
 //!
-//! Converts a `LlmPrimitiveClient` + `PromptAst` into a `baml.http.Request` instance.
+//! Converts a `crate::baml_std::PrimitiveClient` + `PromptAst` into a `baml.http.Request` instance.
 
 mod anthropic;
 mod openai;
@@ -9,7 +9,6 @@ use std::str::FromStr;
 
 use baml_builtins::PromptAstSimple;
 use bex_external_types::BexExternalValue;
-use bex_heap::{builtin_types, builtin_types::owned::LlmPrimitiveClient};
 
 use crate::LlmProvider;
 
@@ -34,11 +33,16 @@ pub(crate) trait LlmRequestBuilder {
     fn provider_skip_keys(&self) -> &'static [&'static str];
 
     /// Build the request URL.
-    fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError>;
+    fn build_url(
+        &self,
+        client: &crate::baml_std::PrimitiveClient,
+    ) -> Result<String, BuildRequestError>;
 
     /// Build auth + provider-specific headers (without content-type or custom headers).
-    fn build_auth_headers(&self, client: &LlmPrimitiveClient)
-    -> indexmap::IndexMap<String, String>;
+    fn build_auth_headers(
+        &self,
+        client: &crate::baml_std::PrimitiveClient,
+    ) -> indexmap::IndexMap<String, String>;
 
     /// Convert a specialized prompt into the JSON body fields specific to this provider.
     fn build_prompt_body(
@@ -51,7 +55,7 @@ pub(crate) trait LlmRequestBuilder {
     /// Build the full request. Default: POST with url/headers/body from trait methods.
     fn build_request(
         &self,
-        client: &LlmPrimitiveClient,
+        client: &crate::baml_std::PrimitiveClient,
         prompt: bex_vm_types::PromptAst,
     ) -> Result<RawHttpRequest, BuildRequestError> {
         let url = self.build_url(client)?;
@@ -66,7 +70,10 @@ pub(crate) trait LlmRequestBuilder {
     }
 
     /// Build headers: auth headers + content-type + custom headers from options.
-    fn build_headers(&self, client: &LlmPrimitiveClient) -> indexmap::IndexMap<String, String> {
+    fn build_headers(
+        &self,
+        client: &crate::baml_std::PrimitiveClient,
+    ) -> indexmap::IndexMap<String, String> {
         let mut headers = indexmap::IndexMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
         headers.extend(self.build_auth_headers(client));
@@ -84,7 +91,7 @@ pub(crate) trait LlmRequestBuilder {
     /// Build JSON body: model + prompt fields + forwarded options.
     fn build_body(
         &self,
-        client: &LlmPrimitiveClient,
+        client: &crate::baml_std::PrimitiveClient,
         prompt: bex_vm_types::PromptAst,
     ) -> Result<String, BuildRequestError> {
         let mut body = serde_json::Map::new();
@@ -102,7 +109,7 @@ pub(crate) trait LlmRequestBuilder {
     /// Forward non-skipped options to body.
     fn forward_options(
         &self,
-        client: &LlmPrimitiveClient,
+        client: &crate::baml_std::PrimitiveClient,
         body: &mut serde_json::Map<String, serde_json::Value>,
     ) {
         let provider_keys = self.provider_skip_keys();
@@ -125,9 +132,9 @@ pub(crate) trait LlmRequestBuilder {
 /// Returns an owned `HttpRequest` matching the `baml.http.Request` class:
 /// `{ method: String, url: String, headers: Map<String, String>, body: String }`
 pub(crate) fn build_request(
-    client: &LlmPrimitiveClient,
+    client: &crate::baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-) -> Result<builtin_types::owned::HttpRequest, BuildRequestError> {
+) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
 
@@ -165,8 +172,8 @@ pub(crate) struct RawHttpRequest {
 
 impl RawHttpRequest {
     /// Convert to an owned `builtin_types::owned::HttpRequest`.
-    fn into_owned(self) -> builtin_types::owned::HttpRequest {
-        builtin_types::owned::HttpRequest {
+    fn into_owned(self) -> crate::baml_std::HttpRequest {
+        crate::baml_std::HttpRequest {
             method: self.method,
             url: self.url,
             headers: self.headers,
@@ -186,7 +193,10 @@ pub(crate) enum BuildRequestError {
 }
 
 /// Helper to extract a string option from client.options.
-pub(crate) fn get_string_option(client: &LlmPrimitiveClient, key: &str) -> Option<String> {
+pub(crate) fn get_string_option(
+    client: &crate::baml_std::PrimitiveClient,
+    key: &str,
+) -> Option<String> {
     match client.options.get(key) {
         Some(BexExternalValue::String(s)) => Some(s.clone()),
         _ => None,
@@ -250,12 +260,15 @@ mod tests {
 
     use super::*;
 
-    fn make_client(provider: &str, options: Vec<(&str, BexExternalValue)>) -> LlmPrimitiveClient {
+    fn make_client(
+        provider: &str,
+        options: Vec<(&str, BexExternalValue)>,
+    ) -> crate::baml_std::PrimitiveClient {
         let mut opts = IndexMap::new();
         for (k, v) in options {
             opts.insert(k.to_string(), v);
         }
-        LlmPrimitiveClient {
+        crate::baml_std::PrimitiveClient {
             name: "test-client".to_string(),
             provider: provider.to_string(),
             default_role: "user".to_string(),
@@ -277,7 +290,7 @@ mod tests {
     }
 
     /// Parse the body JSON from an `HttpRequest`.
-    fn parse_body(req: &builtin_types::owned::HttpRequest) -> serde_json::Value {
+    fn parse_body(req: &crate::baml_std::HttpRequest) -> serde_json::Value {
         serde_json::from_str(&req.body).unwrap()
     }
 

@@ -282,6 +282,13 @@ impl Ty {
         Ty::Class(TypeName::local(name.into()), TyAttr::default())
     }
 
+    /// `unknown` with default attributes.
+    pub fn unknown() -> Self {
+        Ty::BuiltinUnknown {
+            attr: TyAttr::default(),
+        }
+    }
+
     // --- Opaque type constructors ---
 
     /// Helper to build a TypeName for a builtin opaque type.

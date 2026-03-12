@@ -69,6 +69,7 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
         TypeExpr::Rust => "$rust_type".into(),
         TypeExpr::Error => "error".into(),
         TypeExpr::Unknown => "?".into(),
+        TypeExpr::Never => "never".into(),
     }
 }
 
@@ -596,6 +597,21 @@ fn expr_desc_spans<'db>(
         }
         Expr::Missing => {
             spans.push(DetailSpan::Code("<missing>".into()));
+        }
+        Expr::Catch { base, clauses } => {
+            spans.push(DetailSpan::Code("catch (".into()));
+            spans.extend(expr_desc_spans(*base, body, inference));
+            spans.push(DetailSpan::Code(") {".into()));
+            for clause in clauses {
+                spans.push(DetailSpan::Code(format!(
+                    "  {clause:?} =>",
+                    clause = clause.kind
+                )));
+            }
+            spans.push(DetailSpan::Code("}".into()));
+        }
+        Expr::Throw { .. } => {
+            spans.push(DetailSpan::Code("throw { ... }".into()));
         }
     }
 
@@ -1515,7 +1531,9 @@ impl CompilerRunner {
                                 name,
                                 scope,
                                 sites,
-                            } = diag;
+                            } = diag else {
+                                continue;
+                            };
                             let use_dot = sites[0].kind.is_member();
                             let qualified = match (scope, use_dot) {
                                 (Some(s), true) => format!("{}.{}", s, name),
@@ -1594,7 +1612,10 @@ impl CompilerRunner {
                             name,
                             scope,
                             sites,
-                        } = diag;
+                        } = diag
+                        else {
+                            continue;
+                        };
                         let matches = match scope {
                             Some(s) => s.as_str() == item_name,
                             None => name.as_str() == item_name,
@@ -1938,6 +1959,8 @@ impl CompilerRunner {
                 Expr::FieldAccess { base, field } => format!("{}.{field}", expr_desc(*base, body)),
                 Expr::Index { base, .. } => format!("{}[...]", expr_desc(*base, body)),
                 Expr::Missing => "<missing>".into(),
+                Expr::Catch { .. } => "catch (...) { ... }".into(),
+                Expr::Throw { .. } => "throw { ... }".into(),
             }
         }
 
@@ -2409,6 +2432,12 @@ impl CompilerRunner {
                         }
                         Stmt::Missing => {
                             let line = format!("{pad}<missing stmt>");
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                        }
+                        Stmt::Throw { value } => {
+                            let desc = expr_desc(*value, body);
+                            let line = format!("{pad}throw {desc}");
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
                         }
@@ -3044,6 +3073,12 @@ impl CompilerRunner {
                         }
                         Stmt::Missing => {
                             lines.push(plain(format!("{pad}  <missing stmt>")));
+                        }
+                        Stmt::Throw { value } => {
+                            let desc = expr_desc_spans(*value, body, inference);
+                            let mut line = vec![DetailSpan::Code(format!("{pad}throw "))];
+                            line.extend(desc);
+                            lines.push(line);
                         }
                     }
                 }

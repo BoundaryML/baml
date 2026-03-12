@@ -12,6 +12,8 @@ use std::{
     },
 };
 
+use bex_heap::BexHeap;
+use sys_types::{AsBexExternalValue, BexExternalValue, CallId, SysOpContext, SysOpOutput};
 use tokio::sync::{broadcast, oneshot};
 
 use crate::playground_ws::WsOutMessage;
@@ -45,71 +47,33 @@ impl PlaygroundEnvState {
     }
 }
 
-/// `SysOpEnv` implementation that asks the webview for every env var.
+/// `IoNamespaceEnv` implementation that asks the webview for every env var.
 pub struct PlaygroundEnv(pub Arc<PlaygroundEnvState>);
 
-impl sys_types::SysOpEnv for PlaygroundEnv {
-    fn env_get(
+impl sys_types::io::IoNamespaceEnv for PlaygroundEnv {
+    fn get(
         &self,
-        _call_id: sys_types::CallId,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
         key: String,
-    ) -> sys_types::SysOpOutput<Option<String>> {
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
         let state = self.0.clone();
-        sys_types::SysOpOutput::async_op(async move {
+        SysOpOutput::async_op(async move {
             let (tx, rx) = oneshot::channel();
             let id = state.next_id.fetch_add(1, Ordering::Relaxed);
             state.pending.lock().unwrap().insert(id, tx);
             let _ = state
                 .broadcast_tx
                 .send(WsOutMessage::EnvVarRequest { id, variable: key });
-            match tokio::time::timeout(ENV_REQUEST_TIMEOUT, rx).await {
-                Ok(Ok(value)) => Ok(value),
+            let value: Option<String> = match tokio::time::timeout(ENV_REQUEST_TIMEOUT, rx).await {
+                Ok(Ok(value)) => value,
                 Ok(Err(_)) | Err(_) => {
                     state.pending.lock().unwrap().remove(&id);
-                    Ok(None)
+                    None
                 }
-            }
-        })
-    }
-
-    fn env_get_or_panic(
-        &self,
-        _call_id: sys_types::CallId,
-        key: String,
-    ) -> sys_types::SysOpOutput<String> {
-        let state = self.0.clone();
-        let key_for_err = key.clone();
-        sys_types::SysOpOutput::async_op(async move {
-            let (tx, rx) = oneshot::channel();
-            let id = state.next_id.fetch_add(1, Ordering::Relaxed);
-            state.pending.lock().unwrap().insert(id, tx);
-            let _ = state
-                .broadcast_tx
-                .send(WsOutMessage::EnvVarRequest { id, variable: key });
-            match tokio::time::timeout(ENV_REQUEST_TIMEOUT, rx).await {
-                Ok(Ok(Some(val))) => Ok(val),
-                Ok(Ok(None)) => Err(sys_types::OpErrorKind::Other(format!(
-                    "Environment variable '{}' not found",
-                    key_for_err
-                ))),
-                Ok(Err(_)) => {
-                    state.pending.lock().unwrap().remove(&id);
-                    Err(sys_types::OpErrorKind::Other(format!(
-                        "Environment variable '{}' request cancelled",
-                        key_for_err
-                    )))
-                }
-                Err(_) => {
-                    state.pending.lock().unwrap().remove(&id);
-                    Err(sys_types::OpErrorKind::Timeout {
-                        message: format!(
-                            "Environment variable '{}' request timed out",
-                            key_for_err
-                        ),
-                        duration: ENV_REQUEST_TIMEOUT,
-                    })
-                }
-            }
+            };
+            Ok(value)
         })
     }
 }

@@ -3,7 +3,7 @@
 use baml_builtins::PromptAst;
 use indexmap::IndexMap;
 
-use super::{BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder, get_string_option};
+use super::{BuildRequestError, LlmRequestBuilder, get_string_option};
 use crate::build_request::prompt_to_content_parts_simple;
 
 /// Builder for the Anthropic provider.
@@ -14,13 +14,19 @@ impl LlmRequestBuilder for AnthropicBuilder {
         &["anthropic_version"]
     }
 
-    fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError> {
+    fn build_url(
+        &self,
+        client: &crate::baml_std::PrimitiveClient,
+    ) -> Result<String, BuildRequestError> {
         let base_url = get_string_option(client, "base_url")
             .unwrap_or_else(|| "https://api.anthropic.com".to_string());
         Ok(format!("{base_url}/v1/messages"))
     }
 
-    fn build_auth_headers(&self, client: &LlmPrimitiveClient) -> IndexMap<String, String> {
+    fn build_auth_headers(
+        &self,
+        client: &crate::baml_std::PrimitiveClient,
+    ) -> IndexMap<String, String> {
         let mut headers = IndexMap::new();
         // Anthropic uses x-api-key header
         if let Some(api_key) = get_string_option(client, "api_key") {

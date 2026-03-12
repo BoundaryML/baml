@@ -1,7 +1,6 @@
 mod codegen_accessors;
 mod codegen_builtins;
 mod codegen_native;
-mod codegen_sys_ops;
 mod collect;
 mod parse;
 mod util;
@@ -21,10 +20,6 @@ pub fn generate_module(input: &str) -> syn::Result<String> {
         "generate_native_trait",
         codegen_native::generate(&collected),
     );
-    let sys_ops = wrap_macro(
-        "generate_sys_op_traits",
-        codegen_sys_ops::generate(&collected),
-    );
     let accessors = wrap_macro(
         "generate_builtin_accessors",
         codegen_accessors::generate(&collected),
@@ -33,7 +28,6 @@ pub fn generate_module(input: &str) -> syn::Result<String> {
     Ok(quote! {
         #builtins
         #native
-        #sys_ops
         #accessors
     }
     .to_string())

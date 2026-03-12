@@ -1,0 +1,22 @@
+[package]
+name = "baml_compiler2_mir"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+
+[dependencies]
+baml_base = { workspace = true }
+baml_compiler2_ast = { workspace = true }
+baml_compiler2_hir = { workspace = true }
+baml_compiler2_tir = { workspace = true }
+baml_type = { workspace = true }
+log = { workspace = true }
+rustc-hash = { workspace = true }
+salsa = { workspace = true }
+smol_str = { workspace = true }
+text-size = { workspace = true }
+
+[lints]
+workspace = true

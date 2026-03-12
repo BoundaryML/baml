@@ -1,4 +1,6 @@
-use sys_types::{CallId, OpErrorKind, SysOpOutput, SysOpSys};
+use std::sync::Arc;
+
+use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput, io::IoNamespaceSys};
 use wasm_bindgen::prelude::*;
 
 use crate::send_wrapper::SendFuture;
@@ -17,12 +19,34 @@ impl WasmSys {
     }
 }
 
-impl SysOpSys for WasmSys {
-    fn baml_sys_panic(&self, _call_id: CallId, message: String) -> SysOpOutput<()> {
+impl IoNamespaceSys for WasmSys {
+    fn shell(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _command: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn panic(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        message: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Other(message))
     }
 
-    fn baml_sys_sleep(&self, _call_id: CallId, delay_ms: i64) -> SysOpOutput<()> {
+    fn sleep(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        delay_ms: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         let millis = i32::try_from(delay_ms.clamp(0, i64::from(i32::MAX))).unwrap_or(i32::MAX);
         let promise = js_sys::Promise::new(&mut |resolve, _reject| {
             set_timeout(&resolve, millis);

@@ -1,8 +1,8 @@
-//! Extract `$rust_function` builtins from the compiler2 `.baml` stdlib files.
+//! Extract `$rust_function` and `$rust_io_function` builtins from the compiler2 `.baml` stdlib files.
 //!
-//! Iterates `baml_builtins2::ALL` for the `"baml"` package, parses each file
-//! through the compiler2 front-end (lex → parse → lower), and collects every
-//! function whose body is `FunctionBodyDef::Builtin(BuiltinKind::Vm)` into a
+//! Iterates `baml_builtins2::ALL`, parses each file through the compiler2
+//! front-end (lex → parse → lower), and collects every function whose body is
+//! `FunctionBodyDef::Builtin(BuiltinKind::Vm)` or `BuiltinKind::Io` into a
 //! `NativeBuiltin` record. The CST is also retained per file for
 //! `//baml:mut_self`, `//baml:vm`, and `//baml:mut_vm` directive scanning.
 
@@ -12,26 +12,28 @@ use baml_compiler2_ast::ast::{
     BuiltinKind, ClassDef, FunctionBodyDef, FunctionDef, Item, TypeExpr,
 };
 
-use crate::types::{BamlType, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver, VmUsage};
+use crate::types::{
+    BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
+    VmUsage,
+};
 
-/// Parse, lower, and extract all `$rust_function` builtins from the `.baml` stdlib.
+/// Parse, lower, and extract all `$rust_function` and `$rust_io_function` builtins
+/// from the `.baml` stdlib.
 ///
-/// Only processes files with `package == "baml"`. Skips `$rust_io_function`
-/// builtins entirely (those stay on the legacy pipeline).
-pub fn extract_native_builtins() -> (Vec<NativeBuiltin>, Vec<NativeClassDef>) {
-    let mut builtins = Vec::new();
+/// Returns `(vm_builtins, io_builtins, class_defs)`:
+/// - `vm_builtins`: `$rust_function` builtins (synchronous, run inline in VM)
+/// - `io_builtins`: `$rust_io_function` builtins (async, dispatched via engine)
+/// - `class_defs`: class definitions with fields (for view/owned struct generation)
+pub fn extract_native_builtins() -> (Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>) {
+    let mut vm_builtins = Vec::new();
+    let mut io_builtins = Vec::new();
     let mut class_defs = Vec::new();
 
     for builtin_file in baml_builtins2::ALL {
-        if builtin_file.package != "baml" {
-            continue;
-        }
-
         // Lex and parse into a lossless CST.
         let tokens = baml_compiler_lexer::lex_lossless(builtin_file.contents, FileId::new(0));
         let (green, errors) = baml_compiler_parser::parse_file(&tokens);
         if !errors.is_empty() {
-            // Skip files that fail to parse (shouldn't happen in practice).
             continue;
         }
         let cst_root = SyntaxNode::new_root(green);
@@ -39,20 +41,33 @@ pub fn extract_native_builtins() -> (Vec<NativeBuiltin>, Vec<NativeClassDef>) {
         // Lower CST → AST items.
         let (items, _diags) = baml_compiler2_ast::lower_file(&cst_root);
 
-        // Build the namespace prefix from the file's namespace slices.
-        // e.g. namespace = &["math"] → namespace_prefix = "baml.math"
-        //      namespace = &[]       → namespace_prefix = "baml"
+        // Build the namespace prefix from the file's package and namespace slices.
+        // e.g. package="baml", namespace=["math"] → "baml.math"
+        //      package="baml", namespace=[]        → "baml"
+        //      package="env",  namespace=[]        → "env"
         let namespace_prefix = if builtin_file.namespace.is_empty() {
-            "baml".to_string()
+            builtin_file.package.to_string()
         } else {
-            format!("baml.{}", builtin_file.namespace.join("."))
+            format!(
+                "{}.{}",
+                builtin_file.package,
+                builtin_file.namespace.join(".")
+            )
         };
 
         for item in &items {
             match item {
                 Item::Class(class_def) => {
-                    extract_from_class(class_def, &namespace_prefix, &cst_root, &mut builtins);
-                    if let Some(class_def_record) = extract_class_fields(class_def, &namespace_prefix) {
+                    extract_from_class(
+                        class_def,
+                        &namespace_prefix,
+                        &cst_root,
+                        &mut vm_builtins,
+                        &mut io_builtins,
+                    );
+                    if let Some(class_def_record) =
+                        extract_class_fields(class_def, &namespace_prefix)
+                    {
                         class_defs.push(class_def_record);
                     }
                 }
@@ -61,7 +76,8 @@ pub fn extract_native_builtins() -> (Vec<NativeBuiltin>, Vec<NativeClassDef>) {
                         func_def,
                         &namespace_prefix,
                         &cst_root,
-                        &mut builtins,
+                        &mut vm_builtins,
+                        &mut io_builtins,
                     );
                 }
                 _ => {}
@@ -69,15 +85,16 @@ pub fn extract_native_builtins() -> (Vec<NativeBuiltin>, Vec<NativeClassDef>) {
         }
     }
 
-    (builtins, class_defs)
+    (vm_builtins, io_builtins, class_defs)
 }
 
-/// Extract `$rust_function` methods from a class definition.
+/// Extract `$rust_function` and `$rust_io_function` methods from a class definition.
 fn extract_from_class(
     class_def: &ClassDef,
     namespace_prefix: &str,
     cst_root: &SyntaxNode,
-    builtins: &mut Vec<NativeBuiltin>,
+    vm_builtins: &mut Vec<NativeBuiltin>,
+    io_builtins: &mut Vec<NativeBuiltin>,
 ) {
     let class_name = class_def.name.as_str();
     let class_generics: Vec<String> = class_def
@@ -87,12 +104,12 @@ fn extract_from_class(
         .collect();
 
     for method in &class_def.methods {
-        if !is_vm_builtin(method) {
-            continue;
-        }
+        let pipeline = match extract_builtin_pipeline(method) {
+            Some(p) => p,
+            None => continue,
+        };
 
-        // Merge class generics with method-level generics (method generics first isn't
-        // common, but handle it).
+        // Merge class generics with method-level generics.
         let method_generics: Vec<String> = method
             .generic_params
             .iter()
@@ -105,17 +122,9 @@ fn extract_from_class(
             }
         }
 
-        // Build the dotted path: "baml.Array.length" or "baml.media.Pdf.url"
         let path = format!("{namespace_prefix}.{class_name}.{}", method.name.as_str());
-
-        // Derive fn_name: dots→underscores, lowercase.
-        // e.g. "baml.Array.length" → "baml_array_length"
-        // Note: class name stays as-is in the fn_name (lowercased).
         let fn_name = path_to_fn_name(&path);
 
-        // Detect whether this is an instance method (has `self` first param) or a
-        // static/constructor method (no `self`). Static methods like `Pdf.from_url(url, mime_type)`
-        // are defined inside the class but don't take `self`.
         let has_self = method
             .params
             .first()
@@ -149,8 +158,13 @@ fn extract_from_class(
             VmUsage::None
         };
 
+        let throws = if pipeline == BuiltinPipeline::Io {
+            extract_throws(method)
+        } else {
+            vec![]
+        };
+
         let (params, receiver) = if has_self {
-            // Instance method: skip `self`, create receiver.
             let params = extract_params_skip_self(method, &all_generics);
             let receiver = Some(Receiver {
                 class_name: class_name.to_string(),
@@ -159,7 +173,6 @@ fn extract_from_class(
             });
             (params, receiver)
         } else {
-            // Static/constructor method: all params are regular params, no receiver.
             let params: Vec<Param> = method
                 .params
                 .iter()
@@ -175,14 +188,13 @@ fn extract_from_class(
             (params, None)
         };
 
-        // Determine return type.
         let return_type = method
             .return_type
             .as_ref()
             .map(|te| type_expr_to_baml_type(&te.expr, &all_generics))
             .unwrap_or(BamlType::Null);
 
-        builtins.push(NativeBuiltin {
+        let builtin = NativeBuiltin {
             path,
             fn_name,
             params,
@@ -190,7 +202,14 @@ fn extract_from_class(
             generics: all_generics,
             receiver,
             vm_usage,
-        });
+            pipeline,
+            throws,
+        };
+
+        match pipeline {
+            BuiltinPipeline::Vm => vm_builtins.push(builtin),
+            BuiltinPipeline::Io => io_builtins.push(builtin),
+        }
     }
 }
 
@@ -244,16 +263,18 @@ fn extract_class_fields(class_def: &ClassDef, namespace_prefix: &str) -> Option<
     })
 }
 
-/// Extract a `$rust_function` free function (not inside a class).
+/// Extract a `$rust_function` or `$rust_io_function` free function (not inside a class).
 fn extract_from_free_function(
     func_def: &FunctionDef,
     namespace_prefix: &str,
     cst_root: &SyntaxNode,
-    builtins: &mut Vec<NativeBuiltin>,
+    vm_builtins: &mut Vec<NativeBuiltin>,
+    io_builtins: &mut Vec<NativeBuiltin>,
 ) {
-    if !is_vm_builtin(func_def) {
-        return;
-    }
+    let pipeline = match extract_builtin_pipeline(func_def) {
+        Some(p) => p,
+        None => return,
+    };
 
     let generics: Vec<String> = func_def
         .generic_params
@@ -281,7 +302,12 @@ fn extract_from_free_function(
         VmUsage::None
     };
 
-    // Free functions have no `self` — all params are regular params.
+    let throws = if pipeline == BuiltinPipeline::Io {
+        extract_throws(func_def)
+    } else {
+        vec![]
+    };
+
     let params: Vec<Param> = func_def
         .params
         .iter()
@@ -301,7 +327,7 @@ fn extract_from_free_function(
         .map(|te| type_expr_to_baml_type(&te.expr, &generics))
         .unwrap_or(BamlType::Null);
 
-    builtins.push(NativeBuiltin {
+    let builtin = NativeBuiltin {
         path,
         fn_name,
         params,
@@ -309,12 +335,60 @@ fn extract_from_free_function(
         generics,
         receiver: None,
         vm_usage,
-    });
+        pipeline,
+        throws,
+    };
+
+    match pipeline {
+        BuiltinPipeline::Vm => vm_builtins.push(builtin),
+        BuiltinPipeline::Io => io_builtins.push(builtin),
+    }
 }
 
-/// Returns true if the function body is `$rust_function` (VM builtin).
-fn is_vm_builtin(func: &FunctionDef) -> bool {
-    matches!(func.body, Some(FunctionBodyDef::Builtin(BuiltinKind::Vm)))
+/// Returns the pipeline kind if the function body is a Rust builtin, or None otherwise.
+fn extract_builtin_pipeline(func: &FunctionDef) -> Option<BuiltinPipeline> {
+    match &func.body {
+        Some(FunctionBodyDef::Builtin(BuiltinKind::Vm)) => Some(BuiltinPipeline::Vm),
+        Some(FunctionBodyDef::Builtin(BuiltinKind::Io)) => Some(BuiltinPipeline::Io),
+        _ => None,
+    }
+}
+
+/// Extract error categories from the `throws` clause of an IO function.
+///
+/// The `throws` field is `Option<SpannedTypeExpr>`. For a single error like
+/// `throws baml.errors.Io`, it's `TypeExpr::Path(["baml", "errors", "Io"])`.
+/// For multiple errors like `throws baml.errors.Io | baml.errors.Timeout`,
+/// it's `TypeExpr::Union([Path(...), Path(...)])`.
+fn extract_throws(func: &FunctionDef) -> Vec<String> {
+    let Some(throws_expr) = &func.throws else {
+        return vec![];
+    };
+    extract_throw_categories(&throws_expr.expr)
+}
+
+fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
+    match ty {
+        TypeExpr::Path(segments) => {
+            let path: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
+            if path.len() >= 3 && path[0] == "baml" && path[1] == "errors" {
+                vec![path[2..].join(".")]
+            } else {
+                vec![
+                    segments
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join("."),
+                ]
+            }
+        }
+        TypeExpr::Union(members) => members
+            .iter()
+            .flat_map(|m| extract_throw_categories(m))
+            .collect(),
+        _ => vec![],
+    }
 }
 
 /// Convert a dotted path to a Rust function name.
@@ -537,25 +611,103 @@ mod tests {
 
     #[test]
     fn test_extract_class_fields() {
-        let (_builtins, class_defs) = extract_native_builtins();
+        let (_vm, _io, class_defs) = extract_native_builtins();
 
-        // Media classes should be extracted
-        let pdf = class_defs.iter().find(|c| c.name == "Pdf").expect("missing Pdf");
+        let pdf = class_defs
+            .iter()
+            .find(|c| c.name == "Pdf")
+            .expect("missing Pdf");
         assert_eq!(pdf.namespace_prefix, "baml.media");
         assert_eq!(pdf.fields.len(), 1);
         assert_eq!(pdf.fields[0].name, "_data");
         assert_eq!(pdf.fields[0].index, 0);
         assert!(matches!(pdf.fields[0].field_type, BamlType::RustType));
 
-        // Audio, Video, Image should also be extracted
-        assert!(class_defs.iter().any(|c| c.name == "Audio"), "missing Audio");
-        assert!(class_defs.iter().any(|c| c.name == "Video"), "missing Video");
-        assert!(class_defs.iter().any(|c| c.name == "Image"), "missing Image");
+        assert!(
+            class_defs.iter().any(|c| c.name == "Audio"),
+            "missing Audio"
+        );
+        assert!(
+            class_defs.iter().any(|c| c.name == "Video"),
+            "missing Video"
+        );
+        assert!(
+            class_defs.iter().any(|c| c.name == "Image"),
+            "missing Image"
+        );
 
-        // Array, Map, String should NOT be extracted (dedicated Object variants)
-        assert!(!class_defs.iter().any(|c| c.name == "Array"), "Array should be excluded");
-        assert!(!class_defs.iter().any(|c| c.name == "Map"), "Map should be excluded");
-        assert!(!class_defs.iter().any(|c| c.name == "String"), "String should be excluded");
+        assert!(
+            !class_defs.iter().any(|c| c.name == "Array"),
+            "Array should be excluded"
+        );
+        assert!(
+            !class_defs.iter().any(|c| c.name == "Map"),
+            "Map should be excluded"
+        );
+        assert!(
+            !class_defs.iter().any(|c| c.name == "String"),
+            "String should be excluded"
+        );
+
+        // IO class fields
+        let file = class_defs
+            .iter()
+            .find(|c| c.name == "File")
+            .expect("missing File");
+        assert_eq!(file.namespace_prefix, "baml.fs");
+        assert_eq!(file.fields.len(), 1);
+        assert_eq!(file.fields[0].name, "_handle");
+        assert!(matches!(file.fields[0].field_type, BamlType::RustType));
+
+        let socket = class_defs
+            .iter()
+            .find(|c| c.name == "Socket")
+            .expect("missing Socket");
+        assert_eq!(socket.namespace_prefix, "baml.net");
+        assert_eq!(socket.fields.len(), 1);
+        assert_eq!(socket.fields[0].name, "_handle");
+        assert!(matches!(socket.fields[0].field_type, BamlType::RustType));
+
+        let response = class_defs
+            .iter()
+            .find(|c| c.name == "Response")
+            .expect("missing Response");
+        assert_eq!(response.namespace_prefix, "baml.http");
+        assert_eq!(response.fields.len(), 4);
+        assert_eq!(response.fields[0].name, "status_code");
+        assert!(matches!(response.fields[0].field_type, BamlType::Int));
+        assert_eq!(response.fields[1].name, "headers");
+        assert!(matches!(response.fields[1].field_type, BamlType::Map(_, _)));
+        assert_eq!(response.fields[2].name, "url");
+        assert!(matches!(response.fields[2].field_type, BamlType::String));
+        assert_eq!(response.fields[3].name, "_body");
+        assert!(matches!(response.fields[3].field_type, BamlType::RustType));
+
+        let request = class_defs
+            .iter()
+            .find(|c| c.name == "Request")
+            .expect("missing Request");
+        assert_eq!(request.namespace_prefix, "baml.http");
+        assert_eq!(request.fields.len(), 4);
+
+        // LLM classes
+        let pc = class_defs
+            .iter()
+            .find(|c| c.name == "PrimitiveClient")
+            .expect("missing PrimitiveClient");
+        assert_eq!(pc.namespace_prefix, "baml.llm");
+
+        let client = class_defs
+            .iter()
+            .find(|c| c.name == "Client")
+            .expect("missing Client");
+        assert_eq!(client.namespace_prefix, "baml.llm");
+
+        let retry = class_defs
+            .iter()
+            .find(|c| c.name == "RetryPolicy")
+            .expect("missing RetryPolicy");
+        assert_eq!(retry.namespace_prefix, "baml.llm");
     }
 
     #[test]
@@ -568,55 +720,86 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_native_builtins() {
-        let (builtins, _class_defs) = extract_native_builtins();
+    fn test_sys_op_variant_name() {
+        let make = |path: &str| NativeBuiltin {
+            path: path.to_string(),
+            fn_name: String::new(),
+            params: vec![],
+            return_type: BamlType::Null,
+            generics: vec![],
+            receiver: None,
+            vm_usage: VmUsage::None,
+            pipeline: BuiltinPipeline::Io,
+            throws: vec![],
+        };
+        assert_eq!(make("baml.fs.open").sys_op_variant_name(), "BamlFsOpen");
+        assert_eq!(
+            make("baml.fs.File.read").sys_op_variant_name(),
+            "BamlFsFileRead"
+        );
+        assert_eq!(make("baml.env.get").sys_op_variant_name(), "BamlEnvGet");
+        assert_eq!(
+            make("baml.http.fetch").sys_op_variant_name(),
+            "BamlHttpFetch"
+        );
+        assert_eq!(make("baml.sys.panic").sys_op_variant_name(), "BamlSysPanic");
+        assert_eq!(
+            make("baml.llm.PrimitiveClient.render_prompt").sys_op_variant_name(),
+            "BamlLlmPrimitiveClientRenderPrompt"
+        );
+        assert_eq!(
+            make("baml.llm.get_jinja_template").sys_op_variant_name(),
+            "BamlLlmGetJinjaTemplate"
+        );
+        assert_eq!(
+            make("baml.llm.round_robin_next").sys_op_variant_name(),
+            "BamlLlmRoundRobinNext"
+        );
+    }
+
+    #[test]
+    fn test_extract_vm_builtins_unchanged() {
+        let (vm_builtins, _io, _class_defs) = extract_native_builtins();
         assert!(
-            builtins.len() >= 24,
-            "Expected at least 24 builtins, got {}",
-            builtins.len()
+            vm_builtins.len() >= 24,
+            "Expected at least 24 VM builtins, got {}",
+            vm_builtins.len()
         );
 
-        // Spot-check: Array.length
-        let array_length = builtins
+        // All VM builtins should have pipeline == Vm
+        for b in &vm_builtins {
+            assert_eq!(b.pipeline, BuiltinPipeline::Vm, "{} should be Vm", b.path);
+            assert!(b.throws.is_empty(), "{} should have no throws", b.path);
+        }
+
+        let array_length = vm_builtins
             .iter()
             .find(|b| b.path == "baml.Array.length")
             .expect("missing Array.length");
         assert_eq!(array_length.fn_name, "baml_array_length");
         assert!(array_length.receiver.is_some());
-        assert_eq!(
-            array_length.params.len(),
-            0,
-            "Array.length has no params besides self"
-        );
+        assert_eq!(array_length.params.len(), 0);
 
-        // Spot-check: deep_copy (free function with generics)
-        let deep_copy = builtins
+        let deep_copy = vm_builtins
             .iter()
             .find(|b| b.path == "baml.deep_copy")
             .expect("missing deep_copy");
         assert!(deep_copy.receiver.is_none());
         assert_eq!(deep_copy.generics, vec!["T"]);
 
-        // Spot-check: Array.push has mut receiver
-        let array_push = builtins
+        let array_push = vm_builtins
             .iter()
             .find(|b| b.path == "baml.Array.push")
             .expect("missing Array.push");
-        assert!(
-            array_push.receiver.as_ref().unwrap().is_mut,
-            "Array.push should have mut receiver"
-        );
+        assert!(array_push.receiver.as_ref().unwrap().is_mut);
 
-        // Spot-check: String.length
-        let string_length = builtins
+        let string_length = vm_builtins
             .iter()
             .find(|b| b.path == "baml.String.length")
             .expect("missing String.length");
         assert_eq!(string_length.fn_name, "baml_string_length");
-        assert!(string_length.receiver.is_some());
 
-        // Spot-check: math.trunc (namespaced free function)
-        let math_trunc = builtins
+        let math_trunc = vm_builtins
             .iter()
             .find(|b| b.path == "baml.math.trunc")
             .expect("missing math.trunc");
@@ -624,62 +807,139 @@ mod tests {
         assert_eq!(math_trunc.params.len(), 1);
         assert!(matches!(math_trunc.params[0].ty, BamlType::Float));
 
-        // Spot-check: media.Pdf.url (namespaced class method)
-        let pdf_url = builtins
+        let pdf_url = vm_builtins
             .iter()
             .find(|b| b.path == "baml.media.Pdf.url")
             .expect("missing media.Pdf.url");
         assert!(pdf_url.receiver.is_some());
         assert_eq!(pdf_url.receiver.as_ref().unwrap().class_name, "Pdf");
 
-        // Spot-check: deep_copy has VmUsage::MutRef
-        assert_eq!(
-            deep_copy.vm_usage,
-            VmUsage::MutRef,
-            "deep_copy should use mut vm"
-        );
+        assert_eq!(deep_copy.vm_usage, VmUsage::MutRef);
 
-        // Spot-check: deep_equals has VmUsage::Ref (immutable vm)
-        let deep_equals = builtins
+        let deep_equals = vm_builtins
             .iter()
             .find(|b| b.path == "baml.deep_equals")
             .expect("missing deep_equals");
-        assert_eq!(
-            deep_equals.vm_usage,
-            VmUsage::Ref,
-            "deep_equals should use immutable vm"
-        );
+        assert_eq!(deep_equals.vm_usage, VmUsage::Ref);
 
-        // Spot-check: Array.length does NOT use vm
-        assert_eq!(
-            array_length.vm_usage,
-            VmUsage::None,
-            "Array.length should not use vm"
-        );
+        assert_eq!(array_length.vm_usage, VmUsage::None);
+        assert_eq!(array_push.vm_usage, VmUsage::None);
+        assert_eq!(math_trunc.vm_usage, VmUsage::None);
 
-        // Spot-check: Array.push does NOT use vm (it has mut_self instead)
-        assert_eq!(
-            array_push.vm_usage,
-            VmUsage::None,
-            "Array.push should not use vm"
-        );
-
-        // Spot-check: math.trunc does NOT use vm
-        assert_eq!(
-            math_trunc.vm_usage,
-            VmUsage::None,
-            "math.trunc should not use vm"
-        );
-
-        // Spot-check: String.split has VmUsage::MutRef
-        let string_split = builtins
+        let string_split = vm_builtins
             .iter()
             .find(|b| b.path == "baml.String.split")
             .expect("missing String.split");
-        assert_eq!(
-            string_split.vm_usage,
-            VmUsage::MutRef,
-            "String.split should use mut vm"
+        assert_eq!(string_split.vm_usage, VmUsage::MutRef);
+    }
+
+    #[test]
+    fn test_extract_io_builtins() {
+        let (_vm, io_builtins, _class_defs) = extract_native_builtins();
+
+        // All IO builtins should have pipeline == Io
+        for b in &io_builtins {
+            assert_eq!(b.pipeline, BuiltinPipeline::Io, "{} should be Io", b.path);
+        }
+
+        let expected_paths = [
+            "baml.fs.open",
+            "baml.fs.File.read",
+            "baml.fs.File.close",
+            "baml.net.connect",
+            "baml.net.Socket.read",
+            "baml.net.Socket.close",
+            "baml.http.fetch",
+            "baml.http.send",
+            "baml.http.Response.text",
+            "baml.sys.shell",
+            "baml.sys.sleep",
+            "baml.sys.panic",
+            "baml.env.get",
+        ];
+        for path in &expected_paths {
+            assert!(
+                io_builtins.iter().any(|b| b.path == *path),
+                "missing IO builtin: {path}"
+            );
+        }
+
+        // LLM functions from llm_types.baml
+        let llm_paths = [
+            "baml.llm.PrimitiveClient.render_prompt",
+            "baml.llm.PrimitiveClient.specialize_prompt",
+            "baml.llm.PrimitiveClient.build_request",
+            "baml.llm.PrimitiveClient.parse",
+            "baml.llm.get_jinja_template",
+            "baml.llm.build_primitive_client",
+            "baml.llm.get_client",
+            "baml.llm.resolve_client",
+            "baml.llm.round_robin_next",
+            "baml.llm.round_robin_peek",
+            "baml.llm.get_return_type",
+        ];
+        for path in &llm_paths {
+            assert!(
+                io_builtins.iter().any(|b| b.path == *path),
+                "missing LLM IO builtin: {path}"
+            );
+        }
+
+        // baml.http.Response.ok is NOT extracted (pure BAML expression, not $rust_io_function)
+        assert!(
+            !io_builtins
+                .iter()
+                .any(|b| b.path == "baml.http.Response.ok"),
+            "Response.ok should not be extracted as IO builtin"
         );
+    }
+
+    #[test]
+    fn test_io_builtin_throws() {
+        let (_vm, io_builtins, _class_defs) = extract_native_builtins();
+
+        let fs_open = io_builtins
+            .iter()
+            .find(|b| b.path == "baml.fs.open")
+            .unwrap();
+        assert_eq!(fs_open.throws, vec!["Io"]);
+
+        let net_connect = io_builtins
+            .iter()
+            .find(|b| b.path == "baml.net.connect")
+            .unwrap();
+        assert_eq!(net_connect.throws, vec!["Io", "Timeout"]);
+
+        let http_fetch = io_builtins
+            .iter()
+            .find(|b| b.path == "baml.http.fetch")
+            .unwrap();
+        assert_eq!(http_fetch.throws, vec!["Io", "Timeout"]);
+
+        // baml.sys.panic has no throws clause
+        let sys_panic = io_builtins
+            .iter()
+            .find(|b| b.path == "baml.sys.panic")
+            .unwrap();
+        assert!(sys_panic.throws.is_empty());
+
+        // LLM functions have throws too
+        let get_client = io_builtins
+            .iter()
+            .find(|b| b.path == "baml.llm.get_client")
+            .unwrap();
+        assert_eq!(get_client.throws, vec!["InvalidArgument"]);
+
+        let render_prompt = io_builtins
+            .iter()
+            .find(|b| b.path == "baml.llm.PrimitiveClient.render_prompt")
+            .unwrap();
+        assert_eq!(render_prompt.throws, vec!["RenderPrompt"]);
+
+        let specialize = io_builtins
+            .iter()
+            .find(|b| b.path == "baml.llm.PrimitiveClient.specialize_prompt")
+            .unwrap();
+        assert_eq!(specialize.throws, vec!["RenderPrompt", "LlmClient"]);
     }
 }

@@ -17,7 +17,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bex_heap::{BexHeap, Tlab};
-use bex_resource_types::ResourceHandle;
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, StackIndex, UnaryOp, Value, Variant,
@@ -411,8 +410,6 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Future(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
                 Object::RustData(_) => type_tags::UNKNOWN,
-                Object::Resource(_) => type_tags::RESOURCE,
-                Object::PromptAst(_) => type_tags::PROMPT_AST,
                 Object::Collector(_) => type_tags::COLLECTOR,
                 Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
@@ -763,29 +760,6 @@ impl BexVm {
         Value::Object(self.tlab.alloc(Object::Future(future)))
     }
 
-    /// Allocate a resource object on the heap.
-    pub fn alloc_resource(&mut self, resource: ResourceHandle) -> Value {
-        Value::Object(self.tlab.alloc(Object::Resource(resource)))
-    }
-
-    /// Allocate a prompt AST object on the heap.
-    pub fn alloc_prompt_ast(&mut self, ast: bex_vm_types::PromptAst) -> Value {
-        Value::Object(self.tlab.alloc(Object::PromptAst(ast)))
-    }
-
-    /// Get prompt AST from a Value.
-    pub fn as_prompt_ast(&self, value: &Value) -> Result<&bex_vm_types::PromptAst, InternalError> {
-        let index = self.as_object_ptr(value, ObjectType::PromptAst)?;
-        let obj = self.get_object(index);
-        match obj {
-            Object::PromptAst(ast) => Ok(ast),
-            _ => Err(InternalError::TypeError {
-                expected: ObjectType::PromptAst.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
-    }
-
     /// Allocate a collector object on the heap.
     pub fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> Value {
         Value::Object(self.tlab.alloc(Object::Collector(collector)))
@@ -824,15 +798,13 @@ impl BexVm {
                 return Err(InternalError::TypeError {
                     expected: Type::Object(ObjectType::RustData),
                     got: self.type_of(other),
-                })
+                });
             }
         };
         let obj = self.get_object(ptr);
         match obj {
             Object::RustData(arc) => arc.downcast_ref::<T>().ok_or_else(|| {
-                InternalError::Other(
-                    "RustData downcast failed: wrong concrete type".to_string(),
-                )
+                InternalError::Other("RustData downcast failed: wrong concrete type".to_string())
             }),
             _ => Err(InternalError::TypeError {
                 expected: Type::Object(ObjectType::RustData),
@@ -851,7 +823,7 @@ impl BexVm {
                 return Err(InternalError::TypeError {
                     expected: Type::Object(ObjectType::Instance),
                     got: self.type_of(other),
-                })
+                });
             }
         };
         let obj = self.get_object(ptr);

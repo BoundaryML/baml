@@ -1,5 +1,5 @@
 class PromptAst {
-  @@internal.opaque
+  _data $rust_type
 }
 
 enum ClientType {
@@ -60,7 +60,6 @@ class PrimitiveClient {
   }
 }
 
-@@internal.uses(engine_ctx)
 function get_jinja_template(function_name: string) -> string throws baml.errors.InvalidArgument {
   $rust_io_function
 }
@@ -75,29 +74,24 @@ function build_primitive_client(
   $rust_io_function
 }
 
-@@internal.uses(engine_ctx)
 function get_client(function_name: string) -> Client throws baml.errors.InvalidArgument {
   $rust_io_function
 }
 
-@@internal.uses(engine_ctx)
 function resolve_client(
   client_name: string,
 ) -> () -> PrimitiveClient throws baml.errors.InvalidArgument {
   $rust_io_function
 }
 
-@@internal.uses(engine_ctx)
 function round_robin_next(client_name: string) -> int throws baml.errors.InvalidArgument {
   $rust_io_function
 }
 
-@@internal.uses(engine_ctx)
 function round_robin_peek(client_name: string) -> int throws baml.errors.InvalidArgument {
   $rust_io_function
 }
 
-@@internal.uses(engine_ctx)
 function get_return_type(function_name: string) -> type throws baml.errors.InvalidArgument {
   $rust_io_function
 }

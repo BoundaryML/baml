@@ -4,8 +4,12 @@
 //! The JS callback returns a `Promise<string | undefined>`, allowing the
 //! host page to show an interactive prompt and resolve when the user submits.
 
+use std::sync::Arc;
+
 use js_sys::{Function, Promise};
-use sys_types::{CallId, OpErrorKind, SysOpEnv, SysOpOutput};
+use sys_types::{
+    BexExternalValue, BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput, io::IoNamespaceEnv,
+};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
@@ -31,8 +35,24 @@ impl WasmEnv {
     }
 }
 
-impl SysOpEnv for WasmEnv {
-    fn env_get(&self, _call_id: CallId, key: String) -> SysOpOutput<Option<String>> {
+fn js_to_env_value(value: &wasm_bindgen::JsValue) -> Result<Option<String>, OpErrorKind> {
+    if value.is_undefined() || value.is_null() {
+        return Ok(None);
+    }
+    let s = value.as_string().ok_or_else(|| {
+        OpErrorKind::Other("Env function did not return a string or undefined".into())
+    })?;
+    Ok(Some(s))
+}
+
+impl IoNamespaceEnv for WasmEnv {
+    fn get(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        key: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
         let env_fn = self.env_fn().clone();
         let result = env_fn
             .call1(&wasm_bindgen::JsValue::NULL, &key.into())
@@ -45,70 +65,20 @@ impl SysOpEnv for WasmEnv {
             Err(e) => return SysOpOutput::err(e),
         };
 
-        // The callback may return a plain value or a Promise.
-        let value = if result.is_instance_of::<Promise>() {
+        if result.is_instance_of::<Promise>() {
             let promise: Promise = result.unchecked_into();
             return SysOpOutput::Async(Box::pin(SendFuture(async move {
                 let result = JsFuture::from(promise).await.map_err(|e| {
                     let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
                     OpErrorKind::Other(format!("Env callback promise rejected: {msg}"))
                 })?;
-                if result.is_undefined() || result.is_null() {
-                    return Ok(None);
-                }
-                let s = result.as_string().ok_or_else(|| {
-                    OpErrorKind::Other("Env function did not return a string or undefined".into())
-                });
-                match s {
-                    Ok(s) => Ok(Some(s)),
-                    Err(e) => Err(e),
-                }
+                js_to_env_value(&result)
             })));
-        } else {
-            result
-        };
-
-        if value.is_undefined() || value.is_null() {
-            return SysOpOutput::ok(None);
         }
-        let s = value.as_string().ok_or_else(|| {
-            OpErrorKind::Other("Env function did not return a string or undefined".into())
-        });
-        match s {
-            Ok(s) => SysOpOutput::ok(Some(s)),
+
+        match js_to_env_value(&result) {
+            Ok(v) => SysOpOutput::ok(v),
             Err(e) => SysOpOutput::err(e),
         }
-    }
-
-    fn env_get_or_panic(&self, _call_id: CallId, key: String) -> SysOpOutput<String> {
-        let env_fn = self.env_fn().clone();
-        let key_for_err = key.clone();
-        SysOpOutput::Async(Box::pin(SendFuture(async move {
-            let result = env_fn
-                .call1(&wasm_bindgen::JsValue::NULL, &key.into())
-                .map_err(|e| {
-                    let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
-                    OpErrorKind::Other(format!("Failed to call env function: {msg}"))
-                })?;
-
-            let value = if result.is_instance_of::<Promise>() {
-                let promise: Promise = result.unchecked_into();
-                JsFuture::from(promise).await.map_err(|e| {
-                    let msg = e.as_string().unwrap_or_else(|| format!("{e:?}"));
-                    OpErrorKind::Other(format!("Env callback promise rejected: {msg}"))
-                })?
-            } else {
-                result
-            };
-
-            if value.is_undefined() || value.is_null() {
-                return Err(OpErrorKind::Other(format!(
-                    "Environment variable '{key_for_err}' not found",
-                )));
-            }
-            value.as_string().ok_or_else(|| {
-                OpErrorKind::Other("Env function did not return a string or undefined".into())
-            })
-        })))
     }
 }

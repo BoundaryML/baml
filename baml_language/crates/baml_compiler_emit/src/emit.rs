@@ -1888,20 +1888,12 @@ impl PullSink for StackifyCodegen<'_, '_> {
             Ty::List(..) => Some(baml_type::typetag::LIST),
             Ty::Map { .. } => Some(baml_type::typetag::MAP),
             Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
-            Ty::Media(..) => Some(baml_type::typetag::MEDIA),
             Ty::Literal(lit, _) => Some(match lit {
                 baml_base::Literal::Int(_) => baml_type::typetag::INT,
                 baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,
                 baml_base::Literal::String(_) => baml_type::typetag::STRING,
                 baml_base::Literal::Bool(_) => baml_type::typetag::BOOL,
             }),
-            Ty::Opaque(..) if ty.is_opaque("baml.llm.Resource") => {
-                Some(baml_type::typetag::RESOURCE)
-            }
-            Ty::Opaque(..) if ty.is_opaque("baml.llm.PromptAst") => {
-                Some(baml_type::typetag::PROMPT_AST)
-            }
-            Ty::Opaque(..) if ty.is_opaque("baml.reflect.Type") => Some(baml_type::typetag::TYPE),
             _ => None,
         };
 

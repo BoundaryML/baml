@@ -105,21 +105,26 @@ pub fn external_to_baml_value(
             )))
         }
 
-        BexExternalValue::Adt(BexExternalAdt::Media(media)) if options.serialize_media => Some(
-            BamlValueVariant::MediaValue(bex_media_to_proto_media(media)),
-        ),
+        // BexExternalValue::Adt(BexExternalAdt::Media(media)) if options.serialize_media => Some(
+        //     BamlValueVariant::MediaValue(bex_media_to_proto_media(media)),
+        // ),
 
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt_ast))
-            if options.serialize_prompt_ast =>
-        {
-            Some(BamlValueVariant::PromptAstValue(
-                bex_prompt_ast_to_proto_prompt_ast(prompt_ast),
-            ))
+        // BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt_ast))
+        //     if options.serialize_prompt_ast =>
+        // {
+        //     Some(BamlValueVariant::PromptAstValue(
+        //         bex_prompt_ast_to_proto_prompt_ast(prompt_ast),
+        //     ))
+        // }
+
+        BexExternalValue::RustData(_) => {
+            return Err(CtypesError::InternalError(
+                "RustData cannot be serialized over FFI".to_string(),
+            ));
         }
 
         // All opaque types → insert into handle table, encode as BamlHandle.
         BexExternalValue::Handle(_)
-        | BexExternalValue::Resource(_)
         | BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Adt(_) => {
             let table_value = HandleTableValue::try_from(value.clone()).map_err(|e| {

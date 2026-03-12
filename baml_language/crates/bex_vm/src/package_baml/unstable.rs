@@ -107,9 +107,7 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             }
             Object::Function(f) => Ok(format!("<function {}>", f.name)),
             Object::Class(c) => Ok(format!("<class {}>", c.name)),
-            Object::Resource(r) => Ok(format!("<{r}>")),
             Object::Future(_) => Ok("<future>".to_string()),
-            Object::PromptAst(_) => Ok("<prompt_ast>".to_string()),
             Object::Collector(_) => Ok("<collector>".to_string()),
             Object::Type(ty) => Ok(format!("<type: {ty}>")),
             Object::RustData(_) => Ok("<rust_data>".to_string()),

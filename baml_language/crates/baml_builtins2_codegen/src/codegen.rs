@@ -109,7 +109,8 @@ fn build_class_namespace_tree<'a>(class_defs: &'a [NativeClassDef]) -> ClassName
             let segments: Vec<&str> = rest.split('.').collect();
             let mut node = &mut root;
             for seg in &segments {
-                node = node.sub_namespaces
+                node = node
+                    .sub_namespaces
                     .entry(seg.to_string())
                     .or_insert_with(ClassNamespaceNode::new);
             }
@@ -227,15 +228,12 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 out.push_str(&format!("{inner}}}\n\n"));
             }
             BamlType::Int => {
+                out.push_str(&format!("{inner}pub fn {field_name}(&self) -> i64 {{\n"));
                 out.push_str(&format!(
-                    "{inner}pub fn {field_name}(&self) -> i64 {{\n"
+                    "{inner2}match self.instance.fields[{}] {{\n",
+                    field.index
                 ));
-                out.push_str(&format!(
-                    "{inner2}match self.instance.fields[{}] {{\n", field.index
-                ));
-                out.push_str(&format!(
-                    "{inner2}    Value::Int(i) => i,\n"
-                ));
+                out.push_str(&format!("{inner2}    Value::Int(i) => i,\n"));
                 out.push_str(&format!(
                     "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Int\"),\n"
                 ));
@@ -243,15 +241,12 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 out.push_str(&format!("{inner}}}\n\n"));
             }
             BamlType::Float => {
+                out.push_str(&format!("{inner}pub fn {field_name}(&self) -> f64 {{\n"));
                 out.push_str(&format!(
-                    "{inner}pub fn {field_name}(&self) -> f64 {{\n"
+                    "{inner2}match self.instance.fields[{}] {{\n",
+                    field.index
                 ));
-                out.push_str(&format!(
-                    "{inner2}match self.instance.fields[{}] {{\n", field.index
-                ));
-                out.push_str(&format!(
-                    "{inner2}    Value::Float(f) => f,\n"
-                ));
+                out.push_str(&format!("{inner2}    Value::Float(f) => f,\n"));
                 out.push_str(&format!(
                     "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Float\"),\n"
                 ));
@@ -259,15 +254,12 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                 out.push_str(&format!("{inner}}}\n\n"));
             }
             BamlType::Bool => {
+                out.push_str(&format!("{inner}pub fn {field_name}(&self) -> bool {{\n"));
                 out.push_str(&format!(
-                    "{inner}pub fn {field_name}(&self) -> bool {{\n"
+                    "{inner2}match self.instance.fields[{}] {{\n",
+                    field.index
                 ));
-                out.push_str(&format!(
-                    "{inner2}match self.instance.fields[{}] {{\n", field.index
-                ));
-                out.push_str(&format!(
-                    "{inner2}    Value::Bool(b) => b,\n"
-                ));
+                out.push_str(&format!("{inner2}    Value::Bool(b) => b,\n"));
                 out.push_str(&format!(
                     "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Bool\"),\n"
                 ));
@@ -280,7 +272,8 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                     "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v str {{\n"
                 ));
                 out.push_str(&format!(
-                    "{inner2}vm.as_string(&self.instance.fields[{}])\n", field.index
+                    "{inner2}vm.as_string(&self.instance.fields[{}])\n",
+                    field.index
                 ));
                 out.push_str(&format!(
                     "{inner2}    .expect(\"{class_name}.{field_name}: expected String\")\n"
@@ -292,7 +285,8 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                     "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v [Value] {{\n"
                 ));
                 out.push_str(&format!(
-                    "{inner2}vm.as_array(&self.instance.fields[{}])\n", field.index
+                    "{inner2}vm.as_array(&self.instance.fields[{}])\n",
+                    field.index
                 ));
                 out.push_str(&format!(
                     "{inner2}    .expect(\"{class_name}.{field_name}: expected Array\")\n"
@@ -304,7 +298,8 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
                     "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v IndexMap<String, Value> {{\n"
                 ));
                 out.push_str(&format!(
-                    "{inner2}vm.as_map(&self.instance.fields[{}])\n", field.index
+                    "{inner2}vm.as_map(&self.instance.fields[{}])\n",
+                    field.index
                 ));
                 out.push_str(&format!(
                     "{inner2}    .expect(\"{class_name}.{field_name}: expected Map\")\n"
@@ -313,32 +308,24 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
             }
             BamlType::Optional(inner_ty) => {
                 // For optional fields, return Option<T> with appropriate accessor
-                let (ret_type, some_expr) = view_optional_type_and_expr(
-                    class_name, field_name, inner_ty, field.index
-                );
+                let (ret_type, some_expr) =
+                    view_optional_type_and_expr(class_name, field_name, inner_ty, field.index);
                 out.push_str(&format!(
                     "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> {ret_type} {{\n"
                 ));
                 out.push_str(&format!(
-                    "{inner2}match self.instance.fields[{}] {{\n", field.index
+                    "{inner2}match self.instance.fields[{}] {{\n",
+                    field.index
                 ));
-                out.push_str(&format!(
-                    "{inner2}    Value::Null => None,\n"
-                ));
-                out.push_str(&format!(
-                    "{inner2}    _ => Some({some_expr}),\n"
-                ));
+                out.push_str(&format!("{inner2}    Value::Null => None,\n"));
+                out.push_str(&format!("{inner2}    _ => Some({some_expr}),\n"));
                 out.push_str(&format!("{inner2}}}\n"));
                 out.push_str(&format!("{inner}}}\n\n"));
             }
             // Generic, Named, Media, Null — fallback to &Value
             _ => {
-                out.push_str(&format!(
-                    "{inner}pub fn {field_name}(&self) -> &Value {{\n"
-                ));
-                out.push_str(&format!(
-                    "{inner2}&self.instance.fields[{}]\n", field.index
-                ));
+                out.push_str(&format!("{inner}pub fn {field_name}(&self) -> &Value {{\n"));
+                out.push_str(&format!("{inner2}&self.instance.fields[{}]\n", field.index));
                 out.push_str(&format!("{inner}}}\n\n"));
             }
         }
@@ -357,23 +344,31 @@ fn view_optional_type_and_expr(
     match inner {
         BamlType::Int => (
             "Option<i64>".to_string(),
-            format!("match self.instance.fields[{field_index}] {{ Value::Int(i) => i, _ => panic!(\"{class_name}.{field_name}: expected Int\") }}")
+            format!(
+                "match self.instance.fields[{field_index}] {{ Value::Int(i) => i, _ => panic!(\"{class_name}.{field_name}: expected Int\") }}"
+            ),
         ),
         BamlType::Float => (
             "Option<f64>".to_string(),
-            format!("match self.instance.fields[{field_index}] {{ Value::Float(f) => f, _ => panic!(\"{class_name}.{field_name}: expected Float\") }}")
+            format!(
+                "match self.instance.fields[{field_index}] {{ Value::Float(f) => f, _ => panic!(\"{class_name}.{field_name}: expected Float\") }}"
+            ),
         ),
         BamlType::Bool => (
             "Option<bool>".to_string(),
-            format!("match self.instance.fields[{field_index}] {{ Value::Bool(b) => b, _ => panic!(\"{class_name}.{field_name}: expected Bool\") }}")
+            format!(
+                "match self.instance.fields[{field_index}] {{ Value::Bool(b) => b, _ => panic!(\"{class_name}.{field_name}: expected Bool\") }}"
+            ),
         ),
         BamlType::String => (
             "Option<&'v str>".to_string(),
-            format!("vm.as_string(&self.instance.fields[{field_index}]).expect(\"{class_name}.{field_name}: expected String\")")
+            format!(
+                "vm.as_string(&self.instance.fields[{field_index}]).expect(\"{class_name}.{field_name}: expected String\")"
+            ),
         ),
         _ => (
             "Option<&Value>".to_string(),
-            format!("&self.instance.fields[{field_index}]")
+            format!("&self.instance.fields[{field_index}]"),
         ),
     }
 }
@@ -441,7 +436,9 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     // Build the fields vec
     out.push_str(&format!("{inner2}vm.alloc_instance(class_ptr, vec!["));
     for (i, field) in def.fields.iter().enumerate() {
-        if i > 0 { out.push_str(", "); }
+        if i > 0 {
+            out.push_str(", ");
+        }
         out.push_str(&format!("f_{}", field.name));
     }
     out.push_str("])\n");
@@ -458,8 +455,12 @@ fn copy_field_type(ty: &BamlType) -> String {
         BamlType::Bool => "bool".to_string(),
         BamlType::Null => "()".to_string(),
         // Heap types stored as Value — caller creates them via vm helpers
-        BamlType::String | BamlType::List(_) | BamlType::Map(_, _)
-        | BamlType::Optional(_) | BamlType::Generic(_) | BamlType::Named(_)
+        BamlType::String
+        | BamlType::List(_)
+        | BamlType::Map(_, _)
+        | BamlType::Optional(_)
+        | BamlType::Generic(_)
+        | BamlType::Named(_)
         | BamlType::Media(_) => "Value".to_string(),
     }
 }
@@ -899,11 +900,7 @@ fn constructor_media_namespace(b: &NativeBuiltin) -> &str {
     let rest = b.path.strip_prefix("baml.").unwrap_or(&b.path);
     let segments: Vec<&str> = rest.split('.').collect();
     // segments = ["media", "Pdf", "from_url"] → namespace = "media"
-    if segments.len() >= 3 {
-        segments[0]
-    } else {
-        ""
-    }
+    if segments.len() >= 3 { segments[0] } else { "" }
 }
 
 // ============================================================================
@@ -1112,7 +1109,9 @@ fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
             let inner_conversion = result_conversion_expr("v", inner);
             format!("match {name} {{ Some(v) => {inner_conversion}, None => Value::Null }}")
         }
-        BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => name.to_string(),
+        BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => {
+            name.to_string()
+        }
     }
 }
 
@@ -1175,7 +1174,9 @@ fn baml_type_to_output(ty: &BamlType) -> String {
             let inner_str = baml_type_to_output(inner);
             format!("Option<{inner_str}>")
         }
-        BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => "Value".to_string(),
+        BamlType::Generic(_) | BamlType::Named(_) | BamlType::Media(_) | BamlType::RustType => {
+            "Value".to_string()
+        }
     }
 }
 
@@ -1267,7 +1268,7 @@ mod tests {
 
     #[test]
     fn test_generate_produces_class_traits() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1302,7 +1303,7 @@ mod tests {
 
     #[test]
     fn test_generate_produces_namespace_traits() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1321,7 +1322,7 @@ mod tests {
 
     #[test]
     fn test_generate_produces_root_trait() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1336,7 +1337,7 @@ mod tests {
 
     #[test]
     fn test_bare_method_names_on_class_traits() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1355,7 +1356,7 @@ mod tests {
 
     #[test]
     fn test_glue_methods_present() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1374,7 +1375,7 @@ mod tests {
 
     #[test]
     fn test_dispatch_methods_present() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1405,7 +1406,7 @@ mod tests {
 
     #[test]
     fn test_root_dispatches_to_children() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1424,7 +1425,7 @@ mod tests {
 
     #[test]
     fn test_root_free_fns_on_baml_package() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1439,7 +1440,7 @@ mod tests {
 
     #[test]
     fn test_array_push_mut_receiver() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1454,7 +1455,7 @@ mod tests {
 
     #[test]
     fn test_vm_param_matches_vm_usage() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         for b in &builtins {
@@ -1488,7 +1489,7 @@ mod tests {
 
     #[test]
     fn test_namespace_media_aggregates_classes() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1501,7 +1502,7 @@ mod tests {
 
     #[test]
     fn test_media_dispatch_routes_to_class_dispatchers() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1516,20 +1517,18 @@ mod tests {
 
     #[test]
     fn test_static_constructors_on_class_trait() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
-            output.contains(
-                "fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Pdf;"
-            ),
+            output.contains("fn from_url(url: &str, mime_type: Option<&str>) -> copy::media::Pdf;"),
             "BamlClassMediaPdf should have from_url static constructor returning copy::media::Pdf:\n{output}"
         );
     }
 
     #[test]
     fn test_view_module_generated() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(output.contains("pub mod view"), "missing view module");
@@ -1538,7 +1537,7 @@ mod tests {
 
     #[test]
     fn test_view_media_pdf_struct() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1558,7 +1557,7 @@ mod tests {
 
     #[test]
     fn test_copy_media_pdf_struct() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         // copy::media::Pdf should have _data: Arc<dyn Any + Send + Sync>
@@ -1575,12 +1574,20 @@ mod tests {
 
     #[test]
     fn test_view_namespace_structure() {
-        let (builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
         let output = generate_native_trait(&builtins, &class_defs);
 
         // Check namespace sub-modules exist
-        assert!(output.contains("pub mod media"), "missing media namespace in view");
-        assert!(output.contains("pub mod errors") || !class_defs.iter().any(|c| c.namespace_prefix == "baml.errors"),
-            "missing errors namespace in view (if error classes exist)");
+        assert!(
+            output.contains("pub mod media"),
+            "missing media namespace in view"
+        );
+        assert!(
+            output.contains("pub mod errors")
+                || !class_defs
+                    .iter()
+                    .any(|c| c.namespace_prefix == "baml.errors"),
+            "missing errors namespace in view (if error classes exist)"
+        );
     }
 }

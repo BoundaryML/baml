@@ -5,13 +5,18 @@
 
 use std::sync::Arc;
 
-use bex_heap::builtin_types;
 use js_sys::{Function, Object, Promise, Reflect};
-use sys_types::{CallId, OpErrorKind, SysOpHttp, SysOpOutput};
+use sys_types::{
+    BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput,
+    io::{self, IoClassHttpResponse, IoNamespaceHttp},
+};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
-use crate::{registry::WasmRegistry, send_wrapper::SendFuture};
+use crate::{
+    registry::{WasmRegistry, WasmResponseBody},
+    send_wrapper::SendFuture,
+};
 
 /// WASM HTTP implementation that holds the JS fetch function and response registry.
 ///
@@ -19,11 +24,11 @@ use crate::{registry::WasmRegistry, send_wrapper::SendFuture};
 /// the instance is captured in the `SysOps` closures so no global state is needed.
 pub(crate) struct WasmHttp {
     /// The JS function to call for HTTP requests.
-    /// Signature: (method, url, headersJson, body) =>
+    /// Signature: (callId, method, url, headersJson, body) =>
     ///   Promise<{ status: number, headersJson: string, url: string, bodyPromise: Promise<string> }>
-    /// The body is only awaited when `response_text()` is called.
+    /// The body is only awaited when `response.text()` is called.
     fetch_fn: crate::send_wrapper::SendWrapper<Function>,
-    /// Registry for HTTP response bodies (and other resources) for this instance.
+    /// Registry for HTTP response bodies for this instance.
     registry: Arc<WasmRegistry>,
 }
 
@@ -38,30 +43,16 @@ impl WasmHttp {
     fn fetch_fn(&self) -> &Function {
         self.fetch_fn.inner()
     }
-}
 
-impl SysOpHttp for WasmHttp {
-    fn baml_http_fetch(
+    /// Shared implementation for both `fetch` (GET) and `send` (arbitrary method).
+    fn do_send(
         &self,
         call_id: CallId,
-        url: String,
-    ) -> SysOpOutput<builtin_types::owned::HttpResponse> {
-        let req = builtin_types::owned::HttpRequest {
-            method: "GET".to_string(),
-            url,
-            headers: indexmap::IndexMap::new(),
-            body: String::new(),
-        };
-        self.baml_http_send(call_id, req)
-    }
-
-    fn baml_http_send(
-        &self,
-        call_id: CallId,
-        request: builtin_types::owned::HttpRequest,
-    ) -> SysOpOutput<builtin_types::owned::HttpResponse> {
+        request: io::owned::http::Request,
+    ) -> SysOpOutput<io::owned::http::Response> {
         let fetch_fn = self.fetch_fn().clone();
         let registry = Arc::clone(&self.registry);
+
         SysOpOutput::Async(Box::pin(SendFuture(async move {
             let headers_json = serde_json::to_string(&request.headers)
                 .map_err(|e| OpErrorKind::Other(format!("Failed to serialize headers: {e}")))?;
@@ -126,27 +117,43 @@ impl SysOpHttp for WasmHttp {
                     OpErrorKind::Other("Response 'bodyPromise' is not a Promise".into())
                 })?;
 
-            let headers: indexmap::IndexMap<String, String> = serde_json::from_str(&headers_str)
-                .map_err(|e| OpErrorKind::Other(format!("Failed to parse headersJson: {e}")))?;
+            let headers_parsed: indexmap::IndexMap<String, String> =
+                serde_json::from_str(&headers_str)
+                    .map_err(|e| OpErrorKind::Other(format!("Failed to parse headersJson: {e}")))?;
+            let headers = headers_parsed;
 
-            let handle = registry.register_http_response(body_promise, final_url.clone());
+            let key = registry.store_body_promise(body_promise);
+            let body: Arc<dyn std::any::Any + Send + Sync> =
+                Arc::new(WasmResponseBody { registry, key });
 
-            Ok(builtin_types::owned::HttpResponse {
+            Ok(io::owned::http::Response {
                 status_code: status,
                 headers,
                 url: final_url,
-                _handle: handle,
+                _body: body,
             })
         })))
     }
+}
 
-    fn baml_http_response_text(
+impl IoClassHttpResponse for WasmHttp {
+    fn text(
         &self,
+        _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        response: builtin_types::owned::HttpResponse,
+        response: io::owned::http::Response,
     ) -> SysOpOutput<String> {
         let registry = Arc::clone(&self.registry);
-        let key = response._handle.key();
+        let body = response
+            ._body
+            .downcast_ref::<WasmResponseBody>()
+            .map(|b| b.key);
+        let Some(key) = body else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Response body handle is not a WasmResponseBody".into(),
+            ));
+        };
+
         SysOpOutput::Async(Box::pin(SendFuture(async move {
             let promise = registry.take_body_promise(key).ok_or_else(|| {
                 OpErrorKind::Other(
@@ -168,12 +175,32 @@ impl SysOpHttp for WasmHttp {
             })
         })))
     }
+}
 
-    fn baml_http_response_ok(
+impl IoNamespaceHttp for WasmHttp {
+    fn fetch(
         &self,
-        _call_id: CallId,
-        response: builtin_types::owned::HttpResponse,
-    ) -> SysOpOutput<bool> {
-        SysOpOutput::ok((200..300).contains(&response.status_code))
+        _heap: &Arc<BexHeap>,
+        call_id: CallId,
+        url: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        let req = io::owned::http::Request {
+            method: "GET".to_string(),
+            url,
+            headers: indexmap::IndexMap::new(),
+            body: String::new(),
+        };
+        self.do_send(call_id, req)
+    }
+
+    fn send(
+        &self,
+        _heap: &Arc<BexHeap>,
+        call_id: CallId,
+        request: io::owned::http::Request,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        self.do_send(call_id, request)
     }
 }

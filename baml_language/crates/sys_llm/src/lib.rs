@@ -6,6 +6,7 @@
 //! - `specialize_prompt()` - Transform a generic `PromptAst` for a specific LLM provider
 //! - `execute_*` entry points for trait-based dispatch from `sys_types`
 
+pub mod baml_std;
 mod build_request;
 pub(crate) mod jinja;
 mod model_features;
@@ -18,7 +19,6 @@ pub(crate) mod types;
 use std::str::FromStr;
 
 use bex_external_types::BexExternalValue;
-use bex_heap::builtin_types;
 // Used by bex_engine tests
 pub use jinja::{
     OutputFormatContent, RenderContext, RenderContextClient, RenderEnum, RenderEnumVariant,
@@ -40,7 +40,7 @@ pub use types::LlmOpError;
 ///
 /// `args` is expected to be `BexExternalValue::Map { entries, .. }`.
 pub fn execute_render_prompt_from_owned(
-    client: &builtin_types::owned::LlmPrimitiveClient,
+    client: &baml_std::PrimitiveClient,
     template: &str,
     args: &BexExternalValue,
 ) -> Result<bex_vm_types::PromptAst, LlmOpError> {
@@ -76,7 +76,7 @@ pub fn execute_render_prompt_from_owned(
 
 /// Specialize a prompt for a provider given already-extracted owned types.
 pub fn execute_specialize_prompt_from_owned(
-    client: &builtin_types::owned::LlmPrimitiveClient,
+    client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
 ) -> Result<bex_vm_types::PromptAst, LlmOpError> {
     Ok(specialize_prompt::specialize_prompt_from_owned(
@@ -86,15 +86,15 @@ pub fn execute_specialize_prompt_from_owned(
 
 /// Build an HTTP request from a prompt given already-extracted owned types.
 pub fn execute_build_request_from_owned(
-    client: &builtin_types::owned::LlmPrimitiveClient,
+    client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-) -> Result<builtin_types::owned::HttpRequest, LlmOpError> {
+) -> Result<baml_std::HttpRequest, LlmOpError> {
     build_request::build_request(client, prompt).map_err(|e| LlmOpError::Other(e.to_string()))
 }
 
 /// Parse an LLM response and extract the return value given already-extracted owned types.
 pub fn execute_parse_response_from_owned(
-    client: &builtin_types::owned::LlmPrimitiveClient,
+    client: &baml_std::PrimitiveClient,
     response: &str,
     return_type: &baml_type::Ty,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
@@ -163,14 +163,14 @@ fn extract_string_list(
 #[cfg(test)]
 mod tests {
     use bex_external_types::BexExternalValue;
-    use bex_heap::builtin_types::owned::LlmPrimitiveClient;
 
     use super::execute_parse_response_from_owned;
+    use crate::baml_std;
 
     fn make_client_with_options(
         options: indexmap::IndexMap<String, BexExternalValue>,
-    ) -> LlmPrimitiveClient {
-        LlmPrimitiveClient {
+    ) -> baml_std::PrimitiveClient {
+        baml_std::PrimitiveClient {
             name: "TestClient".to_string(),
             provider: "openai".to_string(),
             default_role: "user".to_string(),

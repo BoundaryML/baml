@@ -9,8 +9,6 @@ mod transformations;
 
 use std::str::FromStr;
 
-use bex_heap::builtin_types::owned::LlmPrimitiveClient;
-
 use crate::{LlmProvider, ModelFeatures};
 
 /// Apply prompt specialization given already-extracted owned types.
@@ -21,7 +19,7 @@ use crate::{LlmProvider, ModelFeatures};
 /// 2. Consolidate system prompts (when `max_one_system_prompt` is true)
 /// 3. Filter role metadata (strip disallowed metadata keys)
 pub(crate) fn specialize_prompt_from_owned(
-    client: &LlmPrimitiveClient,
+    client: &crate::baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
 ) -> bex_vm_types::PromptAst {
     let provider = LlmProvider::from_str(&client.provider).unwrap_or(LlmProvider::OpenAiGeneric);

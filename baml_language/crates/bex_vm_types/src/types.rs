@@ -1,6 +1,4 @@
-use std::any::Any;
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{any::Any, collections::HashMap, sync::Arc};
 
 use baml_type::Ty;
 use bex_resource_types::ResourceHandle;
@@ -170,61 +168,14 @@ impl std::fmt::Display for SysOpPanicCategory {
 // External Operations
 // ============================================================================
 
-/// System operations that run outside the VM.
-///
-/// Generated from `#[sys_op]` definitions in `baml_builtins::with_builtins!`.
-/// Adding a new `#[sys_op]` in the DSL automatically adds an enum variant here.
-///
-/// The `for_all_sys_ops!` macro carries the definitive list of variants, paths,
-/// and `snake_case` names. This enum, `path()`, `sys_op_for_path()`, and `Display`
-/// are all generated from it — no manual maintenance needed.
-macro_rules! define_sys_op_enum {
-    ($({ $Variant:ident, $path:expr, $snake:ident, $uses_ctx:expr, [$($throw_cat:ident),*], [$($panic_cat:ident),*] })*) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub enum SysOp {
-            $( $Variant, )*
-        }
-
-        impl SysOp {
-            /// Get the DSL path for this `sys_op` (e.g., `"baml.fs.open"`).
-            pub const fn path(&self) -> &'static str {
-                match self {
-                    $( SysOp::$Variant => $path, )*
-                }
-            }
-
-            /// Error categories this `sys_op` is allowed to throw per its contract.
-            pub fn allowed_error_categories(&self) -> &'static [SysOpErrorCategory] {
-                match self {
-                    $( SysOp::$Variant => &[$(SysOpErrorCategory::$throw_cat),*], )*
-                }
-            }
-
-            /// Panic categories this `sys_op` is allowed to surface per its contract.
-            pub fn allowed_panic_categories(&self) -> &'static [SysOpPanicCategory] {
-                match self {
-                    $( SysOp::$Variant => &[$(SysOpPanicCategory::$panic_cat),*], )*
-                }
-            }
-        }
-
-        /// Look up a `SysOp` by its DSL path string.
-        pub fn sys_op_for_path(path: &str) -> Option<SysOp> {
-            match path {
-                $( $path => Some(SysOp::$Variant), )*
-                _ => None,
-            }
-        }
-
-        impl std::fmt::Display for SysOp {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.path())
-            }
-        }
-    };
-}
-
-baml_builtins::for_all_sys_ops!(define_sys_op_enum);
+// System operations that run outside the VM.
+//
+// Generated from `.baml` `$rust_io_function` definitions in `baml_builtins2`.
+// The enum, `path()`, `sys_op_for_path()`, and `Display` are all generated
+// by `baml_builtins2_codegen` at build time.
+// SysOp enum, path(), allowed_error_categories(), allowed_panic_categories(),
+// Display, and sys_op_for_path() — generated from .baml $rust_io_function definitions.
+include!(concat!(env!("OUT_DIR"), "/sys_op_generated.rs"));
 
 // ============================================================================
 // Function Types
@@ -684,12 +635,6 @@ pub enum Object {
     /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
     RustData(Arc<dyn Any + Send + Sync>),
 
-    /// Prompt AST tree node.
-    PromptAst(PromptAst),
-
-    /// External resource (file handle, socket, etc.).
-    Resource(ResourceHandle),
-
     /// Collector object (opaque handle to `bex_events::Collector`).
     Collector(CollectorRef),
 
@@ -698,9 +643,6 @@ pub enum Object {
 
     #[cfg(feature = "heap_debug")]
     Sentinel(SentinelKind),
-    // TODO: Figure out how to handle this here.
-    // /// Used for `baml.fetch_as` function.
-    // BamlType(TypeIR),
 }
 
 impl std::fmt::Display for Object {
@@ -715,10 +657,8 @@ impl std::fmt::Display for Object {
             Object::Array(array) => write!(f, "<array len={}>", array.len()),
             Object::Map(map) => write!(f, "<map len={}>", map.len()),
             Object::RustData(_) => write!(f, "<rust_data>"),
-            Object::Resource(r) => write!(f, "<{r}>"),
             Object::Collector(_) => write!(f, "<collector>"),
             Object::Type(ty) => write!(f, "<type: {ty}>"),
-            Object::PromptAst(prompt) => write!(f, "<prompt_ast {prompt:?}>"),
             Object::Future(future) => match future {
                 Future::Pending(future) => {
                     write!(f, "<pending: {}>", future.operation)
@@ -813,8 +753,6 @@ pub enum ObjectType {
     Enum,
     Variant,
     Future(FutureType),
-    Resource,
-    PromptAst,
     Collector,
     Type,
     RustData,
@@ -832,8 +770,6 @@ impl ObjectType {
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
             Object::RustData(_) => Self::RustData,
-            Object::Resource(_) => Self::Resource,
-            Object::PromptAst(_) => Self::PromptAst,
             Object::Collector(_) => Self::Collector,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
@@ -869,8 +805,6 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
             ObjectType::String => write!(f, "string"),
-            ObjectType::Resource => write!(f, "resource"),
-            ObjectType::PromptAst => write!(f, "prompt_ast"),
             ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),

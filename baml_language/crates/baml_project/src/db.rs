@@ -273,11 +273,10 @@ impl ProjectDatabase {
 
         // Load v1 builtin BAML files (for the shared project.files() list).
         // v2 builtin stubs are loaded separately into compiler2_extra_files.
-        let (v1_builtin_files, v2_builtin_files) = self.load_builtin_baml_files();
+        let v2_builtin_files = self.load_builtin_baml_files();
 
         // Combine user files with v1 builtin files (user first, then builtins)
-        let mut all_files = user_files;
-        all_files.extend(v1_builtin_files);
+        let all_files = user_files;
 
         // Create and set the project (v1 compiler only sees this)
         let project = Project::new(self, canonical_root, all_files);
@@ -303,23 +302,7 @@ impl ProjectDatabase {
     /// Builtin files use virtual paths like `<builtin>/baml/llm.baml`. These paths
     /// are embedded in the compiler binary, not present on the user's filesystem.
     /// As a result, goto-definition to builtins won't work in editors.
-    fn load_builtin_baml_files(&mut self) -> (Vec<SourceFile>, Vec<SourceFile>) {
-        let mut v1_builtin_files = Vec::new();
-
-        // Load all v1 builtin BAML sources (disk read on native, embedded on WASM)
-        for builtin_source in baml_builtins::baml_sources() {
-            let path = PathBuf::from(builtin_source.path);
-            let file = self.add_file_internal(&path, builtin_source.source());
-            let file_id = file.file_id(self);
-
-            // Register in file_id_to_path for diagnostic filename display
-            // and in file_map so builtins are included in check() diagnostics.
-            self.file_id_to_path.insert(file_id, path.clone());
-            self.file_map.insert(path, file);
-
-            v1_builtin_files.push(file);
-        }
-
+    fn load_builtin_baml_files(&mut self) -> Vec<SourceFile> {
         // Load compiler2-only builtin stub files (Array<T>, Map<K,V>, String, Media, etc.)
         // These flow through the compiler2 HIR pipeline: package_items(db, "baml")
         // will contain Array, Map, String, Media, and the baml.env / baml.http /
@@ -349,7 +332,7 @@ impl ProjectDatabase {
             v2_builtin_files.push(file);
         }
 
-        (v1_builtin_files, v2_builtin_files)
+        v2_builtin_files
     }
 
     /// Add a file to the database.

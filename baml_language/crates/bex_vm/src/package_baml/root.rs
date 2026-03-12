@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use bex_vm_types::{
     HeapPtr,
@@ -91,9 +90,7 @@ fn deep_copy_value_recursive(
                 Object::Enum(e) => vm.tlab.alloc(Object::Enum(e)),
                 Object::Variant(v) => vm.tlab.alloc(Object::Variant(v)),
                 Object::RustData(arc) => vm.tlab.alloc(Object::RustData(Arc::clone(&arc))),
-                Object::Resource(r) => vm.tlab.alloc(Object::Resource(r)),
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
-                Object::PromptAst(ast) => vm.tlab.alloc(Object::PromptAst(ast)),
                 Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
                 #[cfg(feature = "heap_debug")]

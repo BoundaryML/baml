@@ -50,7 +50,7 @@ impl BuiltinFile {
 pub const PACKAGE_BAML: &str = "baml";
 
 /// Single macro form: package (from `baml_std/$pkg/...`), namespace (root or `[ns, ...]`), filename, path.
-/// Path must follow `../../../baml_std/<package>/...` so the folder tree defines the package.
+/// Path must follow `../baml_std/<package>/...` so the folder tree defines the package.
 macro_rules! builtin {
     ($pkg:literal, root, $filename:literal, $path:literal) => {
         BuiltinFile {
@@ -80,81 +80,81 @@ pub const ALL: &[BuiltinFile] = &[
         "baml",
         root,
         "containers.baml",
-        "../../../baml_std/baml/containers.baml"
+        "../baml_std/baml/containers.baml"
     ),
     builtin!(
         "baml",
         root,
         "core.baml",
-        "../../../baml_std/baml/core.baml"
+        "../baml_std/baml/core.baml"
     ),
     builtin!(
         "baml",
         ["errors"],
         "errors.baml",
-        "../../../baml_std/baml/errors.baml"
+        "../baml_std/baml/errors.baml"
     ),
     builtin!(
         "baml",
         root,
         "string.baml",
-        "../../../baml_std/baml/string.baml"
+        "../baml_std/baml/string.baml"
     ),
     builtin!(
         "baml",
         ["env"],
         "env.baml",
-        "../../../baml_std/baml/env.baml"
+        "../baml_std/baml/env.baml"
     ),
     builtin!(
         "baml",
         ["http"],
         "http.baml",
-        "../../../baml_std/baml/http.baml"
+        "../baml_std/baml/http.baml"
     ),
     builtin!(
         "baml",
         ["math"],
         "math.baml",
-        "../../../baml_std/baml/math.baml"
+        "../baml_std/baml/math.baml"
     ),
     builtin!(
         "baml",
         ["sys"],
         "sys.baml",
-        "../../../baml_std/baml/sys.baml"
+        "../baml_std/baml/sys.baml"
     ),
-    builtin!("baml", ["fs"], "fs.baml", "../../../baml_std/baml/fs.baml"),
+    builtin!("baml", ["fs"], "fs.baml", "../baml_std/baml/fs.baml"),
     builtin!(
         "baml",
         ["net"],
         "net.baml",
-        "../../../baml_std/baml/net.baml"
+        "../baml_std/baml/net.baml"
     ),
     builtin!(
         "baml",
         ["media"],
         "media.baml",
-        "../../../baml_std/baml/media.baml"
+        "../baml_std/baml/media.baml"
     ),
     builtin!(
         "baml",
         ["unstable"],
         "unstable.baml",
-        "../../../baml_std/baml/unstable.baml"
+        "../baml_std/baml/unstable.baml"
     ),
     builtin!(
         "baml",
         ["llm"],
         "llm_types.baml",
-        "../../../baml_std/baml/llm_types.baml"
+        "../baml_std/baml/llm_types.baml"
     ),
     builtin!(
         "baml",
         ["llm"],
         "llm.baml",
-        "../../../baml_std/baml/llm.baml"
+        "../baml_std/baml/llm.baml"
     ),
     // --- baml_std/env/ ---
-    builtin!("env", root, "env.baml", "../../../baml_std/env/env.baml"),
+    builtin!("env", root, "env.baml", "../baml_std/env/env.baml"),
 ];

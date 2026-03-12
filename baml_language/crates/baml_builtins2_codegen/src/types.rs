@@ -1,4 +1,13 @@
-/// A single extracted `$rust_function` builtin.
+/// Which pipeline a builtin belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltinPipeline {
+    /// `$rust_function` — synchronous, runs inline in VM.
+    Vm,
+    /// `$rust_io_function` — asynchronous, dispatched via engine.
+    Io,
+}
+
+/// A single extracted `$rust_function` or `$rust_io_function` builtin.
 pub struct NativeBuiltin {
     /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.math.trunc"`
     pub path: String,
@@ -15,6 +24,30 @@ pub struct NativeBuiltin {
     /// How the method uses the VM parameter, determined by `//baml:vm` or `//baml:mut_vm`
     /// directives. Mutually exclusive with `receiver.is_mut` (enforced at extraction time).
     pub vm_usage: VmUsage,
+    /// Which pipeline this builtin belongs to.
+    pub pipeline: BuiltinPipeline,
+    /// Error categories from `throws` clause (IO only). E.g. `["Io", "Timeout"]`.
+    pub throws: Vec<String>,
+}
+
+impl NativeBuiltin {
+    /// Derive the `SysOp` enum variant name from the path.
+    /// `"baml.fs.open"` → `"BamlFsOpen"`, `"baml.fs.File.read"` → `"BamlFsFileRead"`,
+    /// `"baml.env.get"` → `"BamlEnvGet"`, `"baml.llm.render_prompt"` → `"BamlLlmRenderPrompt"`.
+    pub fn sys_op_variant_name(&self) -> String {
+        self.path
+            .split('.')
+            .flat_map(|segment| {
+                segment.split('_').map(|word| {
+                    let mut chars = word.chars();
+                    match chars.next() {
+                        None => String::new(),
+                        Some(c) => c.to_uppercase().to_string() + chars.as_str(),
+                    }
+                })
+            })
+            .collect()
+    }
 }
 
 /// How a native method accesses the VM.

@@ -22,7 +22,6 @@
 //! ```
 
 mod bex_external_value;
-pub mod builtins;
 mod epoch_guard;
 mod handle;
 

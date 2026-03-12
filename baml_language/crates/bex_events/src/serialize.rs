@@ -122,15 +122,9 @@ fn bex_value_to_json(value: &BexExternalValue) -> serde_json::Value {
         }
         BexExternalValue::Union { value, .. } => bex_value_to_json(value),
         BexExternalValue::Handle(_) => serde_json::Value::String("<handle>".into()),
-        BexExternalValue::Resource(_) => serde_json::Value::String("<resource>".into()),
+        BexExternalValue::RustData(_) => serde_json::Value::String("<rust_data>".into()),
         BexExternalValue::FunctionRef { global_index } => {
             serde_json::json!({"__function_ref": global_index})
-        }
-        BexExternalValue::Adt(BexExternalAdt::Media(_)) => {
-            serde_json::json!({"__adt": "Media"})
-        }
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
-            serde_json::json!({"__adt": "PromptAst"})
         }
         BexExternalValue::Adt(BexExternalAdt::Collector(_)) => {
             serde_json::json!({"__adt": "Collector"})

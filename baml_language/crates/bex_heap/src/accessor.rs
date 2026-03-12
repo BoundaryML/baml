@@ -260,24 +260,30 @@ impl<'a> BexValue<'a> {
         }
     }
 
-    pub fn as_resource_handle(
+    /// Extract an opaque `Arc<dyn Any + Send + Sync>` from a RustData value.
+    /// Handles both external values (`BexExternalValue::RustData`) and
+    /// heap values (`Object::RustData`).
+    pub fn as_rust_data(
         self,
         heap: &GcProtectedHeap<'_>,
-    ) -> Result<bex_resource_types::ResourceHandle, AccessError> {
+    ) -> Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> {
         match self {
-            BexValue::ExternalValue(BexExternalValue::Resource(handle)) => Ok(handle.clone()),
-            other => other.as_object("resource", heap, |ptr| {
+            BexValue::ExternalValue(BexExternalValue::RustData(data)) => {
+                Ok(std::sync::Arc::clone(data))
+            }
+            other => other.as_object("rust_data", heap, |ptr| {
                 let obj = unsafe { ptr.get() };
-                let Object::Resource(resource) = obj else {
+                let Object::RustData(arc) = obj else {
                     return Err(AccessError::TypeMismatch {
-                        expected: "resource",
+                        expected: "rust_data",
                         actual: obj.to_string(),
                     });
                 };
-                Ok(resource.clone())
+                Ok(std::sync::Arc::clone(arc))
             }),
         }
     }
+
     pub fn as_string(self, heap: &GcProtectedHeap<'_>) -> Result<&'a String, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::String(s)) => Ok(s),
@@ -447,102 +453,6 @@ impl<'a> BexValue<'a> {
         self.as_class(heap, T::name()).map(|cls| T::from(cls))
     }
 
-    pub fn as_media(
-        self,
-        heap: &GcProtectedHeap<'_>,
-    ) -> Result<bex_vm_types::MediaValue, AccessError> {
-        /// Extract a MediaValue from a media Instance object (field 0 holds a RustData).
-        fn from_ptr(ptr: &HeapPtr) -> Result<bex_vm_types::MediaValue, AccessError> {
-            let obj = unsafe { ptr.get() };
-            match obj {
-                Object::Instance(instance) => {
-                    // Media classes store the baml_builtins::MediaValue in field 0 as RustData
-                    let field = instance.fields.first().ok_or_else(|| AccessError::TypeMismatch {
-                        expected: "media instance with _data field",
-                        actual: "instance with no fields".to_string(),
-                    })?;
-                    let Value::Object(data_ptr) = field else {
-                        return Err(AccessError::TypeMismatch {
-                            expected: "media _data (Object)",
-                            actual: "non-object field".to_string(),
-                        });
-                    };
-                    let data_obj = unsafe { data_ptr.get() };
-                    let Object::RustData(arc) = data_obj else {
-                        return Err(AccessError::TypeMismatch {
-                            expected: "media _data (RustData)",
-                            actual: data_obj.to_string(),
-                        });
-                    };
-                    // Clone the arc and downcast to Arc<baml_builtins::MediaValue>
-                    let arc_clone = std::sync::Arc::clone(arc);
-                    let media_arc = arc_clone.downcast::<baml_builtins::MediaValue>()
-                        .map_err(|_| AccessError::TypeMismatch {
-                            expected: "media _data (MediaValue)",
-                            actual: "wrong rust type in RustData".to_string(),
-                        })?;
-                    Ok(media_arc)
-                }
-                _ => Err(AccessError::TypeMismatch {
-                    expected: "media",
-                    actual: obj.to_string(),
-                }),
-            }
-        }
-
-        match self {
-            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::Media(media))) => {
-                Ok(media.clone())
-            }
-            BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
-                let ptr = heap
-                    .resolve_handle(handle.slab_key())
-                    .ok_or(AccessError::InvalidHandle { expected: "media" })?;
-                from_ptr(&ptr)
-            }
-            BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => from_ptr(ptr),
-            other => Err(AccessError::TypeMismatch {
-                expected: "media",
-                actual: other.type_name(),
-            }),
-        }
-    }
-
-    pub fn as_prompt_ast_owned(
-        self,
-        heap: &GcProtectedHeap<'_>,
-    ) -> Result<bex_vm_types::PromptAst, AccessError> {
-        fn from_ptr(ptr: &HeapPtr) -> Result<bex_vm_types::PromptAst, AccessError> {
-            let obj = unsafe { ptr.get() };
-            let Object::PromptAst(ast) = obj else {
-                return Err(AccessError::TypeMismatch {
-                    expected: "prompt ast",
-                    actual: obj.to_string(),
-                });
-            };
-            Ok(ast.clone())
-        }
-
-        match self {
-            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::PromptAst(ast))) => {
-                Ok(ast.clone())
-            }
-            BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
-                let ptr =
-                    heap.resolve_handle(handle.slab_key())
-                        .ok_or(AccessError::InvalidHandle {
-                            expected: "prompt ast",
-                        })?;
-                from_ptr(&ptr)
-            }
-            BexValue::Value(Value::Object(ptr)) | BexValue::HeapPtr(ptr) => from_ptr(ptr),
-            other => Err(AccessError::TypeMismatch {
-                expected: "prompt_ast",
-                actual: other.type_name(),
-            }),
-        }
-    }
-
     pub fn as_collector_owned(
         self,
         heap: &GcProtectedHeap<'_>,
@@ -685,8 +595,8 @@ impl<'a> BexValue<'a> {
                     value: Box::new(BexValue::ExternalValue(value).as_owned_but_very_slow(heap)?),
                     metadata: metadata.clone(),
                 }),
-                BexExternalValue::Resource(resource_handle) => {
-                    Ok(BexExternalValue::Resource(resource_handle.clone()))
+                BexExternalValue::RustData(data) => {
+                    Ok(BexExternalValue::RustData(std::sync::Arc::clone(data)))
                 }
                 BexExternalValue::Adt(adt) => Ok(BexExternalValue::Adt(adt.clone())),
             },
@@ -774,19 +684,11 @@ impl<'a> BexValue<'a> {
                             variant_name: variant_def.name.clone(),
                         })
                     }
-                    Object::Resource(resource_handle) => {
-                        Ok(BexExternalValue::Resource(resource_handle.clone()))
-                    }
-                    Object::PromptAst(prompt_ast) => Ok(BexExternalValue::Adt(
-                        BexExternalAdt::PromptAst(prompt_ast.clone()),
-                    )),
                     Object::Collector(c) => {
                         Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone())))
                     }
                     Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
-                    Object::RustData(_) => Err(AccessError::CannotConvertToOwned {
-                        reason: "rust_data: opaque Rust-managed data cannot be converted to external value".to_string(),
-                    }),
+                    Object::RustData(data) => Ok(BexExternalValue::RustData(data.clone())),
                     #[cfg(feature = "heap_debug")]
                     Object::Sentinel(sentinel_kind) => Err(AccessError::CannotConvertToOwned {
                         reason: format!("sentinel: {:?}", sentinel_kind),
@@ -804,10 +706,3 @@ impl<'a> BexValue<'a> {
 pub trait BuiltinClass<'a>: Sized + From<BexClass<'a>> {
     fn name() -> &'static str;
 }
-
-#[allow(unreachable_code)]
-mod _builtin_accessors {
-    use super::*;
-    baml_builtins::generate_builtin_accessors!();
-}
-pub use _builtin_accessors::*;

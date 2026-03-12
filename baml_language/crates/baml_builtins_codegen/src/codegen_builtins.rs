@@ -163,34 +163,6 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
         })
         .collect();
 
-    // Generate sys_op entries.
-    let sys_op_entries: Vec<_> = collected
-        .native_defs
-        .iter()
-        .filter(|d| d.is_sys_op)
-        .map(|d| {
-            let fn_name_str = d.fn_name.to_string();
-            let variant_name = format_ident!("{}", to_pascal_case(&fn_name_str));
-            let path = &d.path;
-            let fn_name = &d.fn_name;
-            let uses_engine_ctx = d.uses_engine_ctx;
-            let throw_cats: Vec<_> = d
-                .throws
-                .iter()
-                .map(|s| format_ident!("{}", s))
-                .collect();
-            let panic_cats: Vec<_> = d
-                .panics
-                .iter()
-                .map(|s| format_ident!("{}", s))
-                .collect();
-
-            quote! {
-                { #variant_name, #path, #fn_name, #uses_engine_ctx, [#(#throw_cats),*], [#(#panic_cats),*] }
-            }
-        })
-        .collect();
-
     quote! {
         /// Path constants for all builtins.
         pub mod paths {
@@ -223,16 +195,6 @@ pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
                 $callback!(
                     #(#native_fn_entries),*
                 );
-            };
-        }
-
-        /// Invoke a macro with all sys_op definitions.
-        #[macro_export]
-        macro_rules! for_all_sys_ops {
-            ($callback:ident) => {
-                $callback! {
-                    #(#sys_op_entries)*
-                }
             };
         }
 

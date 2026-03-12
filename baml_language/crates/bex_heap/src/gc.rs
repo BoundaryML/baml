@@ -318,8 +318,6 @@ impl BexHeap {
             | Object::Enum(_)
             | Object::Function(_)
             | Object::RustData(_)
-            | Object::PromptAst(_)
-            | Object::Resource(_)
             | Object::Collector(_)
             | Object::Type(_) => {}
         }
@@ -389,8 +387,6 @@ impl BexHeap {
             | Object::Enum(_)
             | Object::Function(_)
             | Object::RustData(_)
-            | Object::PromptAst(_)
-            | Object::Resource(_)
             | Object::Collector(_)
             | Object::Type(_) => {}
         }
