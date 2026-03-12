@@ -188,6 +188,14 @@ A standalone web application for managing BAML Enhancement Proposals (BEPs) and 
    4. Copy the Client ID and generate a Client Secret
    5. Add them to your environment variables (Convex dashboard or hosting provider)
 
+   **Vercel Preview Deployments:**
+   GitHub OAuth works automatically with Vercel preview deployments. The OAuth flow
+   routes through the production callback URL, then redirects back to the preview
+   deployment with the authenticated user data. Allowed preview URL patterns:
+   - `*.vercel.app`
+   - `*-boundaryml.vercel.app`
+   - `localhost:*` (for local development)
+
 5. **Start the development server**
    ```bash
    bun run dev
