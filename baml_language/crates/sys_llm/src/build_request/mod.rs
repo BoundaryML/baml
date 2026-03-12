@@ -135,6 +135,7 @@ pub(crate) fn build_request(
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
 
     // load aws config so it gets put into binary
+    #[cfg(not(target_arch = "wasm32"))]
     tokio::spawn(aws_config::load_defaults(
         aws_config::BehaviorVersion::latest(),
     ));
