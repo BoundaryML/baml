@@ -7,7 +7,7 @@ description = "Native LSP server for BAML using bex_project"
 [features]
 default = [  ]
 native-tls = [ "reqwest/native-tls", "sys_native/native-tls" ]
-rustls = [ "reqwest/rustls", "sys_native/rustls" ]
+rustls = [ "reqwest/rustls-no-provider", "sys_native/rustls" ]
 
 [dependencies]
 bex_events_native = { workspace = true }

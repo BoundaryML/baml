@@ -9,7 +9,7 @@ license.workspace = true
 [features]
 default = [  ]
 native-tls = [ "reqwest/native-tls" ]
-rustls = [ "reqwest/rustls" ]
+rustls = [ "reqwest/rustls-no-provider" ]
 bundle-http = [ "dep:reqwest" ]
 
 [dependencies]
@@ -17,7 +17,7 @@ bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
-reqwest = { workspace = true, features = [ "rustls" ], optional = true }
+reqwest = { workspace = true, features = [ "rustls-no-provider" ], optional = true }
 tokio = { workspace = true, features = [ "sync", "fs", "net", "process", "io-util", "time" ] }
 
 [lints]
