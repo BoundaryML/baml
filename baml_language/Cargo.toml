@@ -87,7 +87,9 @@ arboard = "3.4"
 ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
-aws-config = { version = "1.8.15", features = [ "behavior-version-latest" ] }
+aws-config = { version = "1.8", default-features = false }
+aws-smithy-http-client = { version = "1.0", default-features = false, features = [ "rustls-ring" ] }
+aws-smithy-async = { version = "1.0", default-features = false, features = [ "rt-tokio" ] }
 axum = { version = "0.8.4", features = [ "ws" ] }
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "0.28.0"
