@@ -48,9 +48,12 @@ export const getOrCreate = mutation({
     passkey: v.string(),
   },
   handler: async (ctx, args) => {
-    // Validate passkey
-    const expectedPasskey = process.env.LOGIN_PASSKEY;
-    if (!expectedPasskey || args.passkey !== expectedPasskey) {
+    // Validate passkey - supports two passwords
+    const passkey1 = process.env.LOGIN_PASSKEY;
+    const passkey2 = process.env.LOGIN_PASSKEY_2;
+    const validPasskeys = [passkey1, passkey2].filter(Boolean);
+    
+    if (validPasskeys.length === 0 || !validPasskeys.includes(args.passkey)) {
       throw new Error("Invalid passkey");
     }
 

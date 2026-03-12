@@ -170,8 +170,9 @@ A standalone web application for managing BAML Enhancement Proposals (BEPs) and 
    # Anthropic API (for AI features)
    ANTHROPIC_API_KEY=sk-ant-...
 
-   # Login Page Passkey
+   # Login Page Passkeys (at least one required, both supported)
    LOGIN_PASSKEY=password
+   LOGIN_PASSKEY_2=optional_second_password
    ```
 
 5. **Start the development server**
