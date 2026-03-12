@@ -134,6 +134,11 @@ pub(crate) fn build_request(
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
 
+    // load aws config so it gets put into binary
+    tokio::spawn(aws_config::load_defaults(
+        aws_config::BehaviorVersion::latest(),
+    ));
+
     let raw = match provider {
         LlmProvider::OpenAi
         | LlmProvider::OpenAiGeneric
