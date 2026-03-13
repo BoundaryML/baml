@@ -129,6 +129,19 @@ export const getById = internalQuery({
   },
 });
 
+// Internal mutation to store Slack thread timestamp
+export const storeSlackThreadTs = internalMutation({
+  args: {
+    bepId: v.id("beps"),
+    slackThreadTs: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.bepId, {
+      slackThreadTs: args.slackThreadTs,
+    });
+  },
+});
+
 // Internal query to get version by ID with editor name
 export const getVersionById = internalQuery({
   args: { id: v.id("bepVersions") },

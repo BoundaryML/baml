@@ -1,7 +1,7 @@
 "use node";
 
 import { v } from "convex/values";
-import { internalAction, internalMutation } from "./_generated/server";
+import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 const SLACK_CHANNEL = "#beps";
@@ -102,22 +102,6 @@ function getStatusEmoji(status: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INTERNAL MUTATION: Store Slack thread timestamp
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const storeSlackThreadTs = internalMutation({
-  args: {
-    bepId: v.id("beps"),
-    slackThreadTs: v.string(),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.bepId, {
-      slackThreadTs: args.slackThreadTs,
-    });
-  },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
 // INTERNAL ACTIONS: Slack notifications
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -203,7 +187,7 @@ export const notifyBepCreated = internalAction({
     );
 
     if (result.ok && result.ts) {
-      await ctx.runMutation(internal.slack.storeSlackThreadTs, {
+      await ctx.runMutation(internal.beps.storeSlackThreadTs, {
         bepId: args.bepId,
         slackThreadTs: result.ts,
       });
@@ -267,7 +251,7 @@ export const notifyBepVersionCreated = internalAction({
     );
 
     if (!bep.slackThreadTs && result.ok && result.ts) {
-      await ctx.runMutation(internal.slack.storeSlackThreadTs, {
+      await ctx.runMutation(internal.beps.storeSlackThreadTs, {
         bepId: args.bepId,
         slackThreadTs: result.ts,
       });
@@ -331,7 +315,7 @@ export const notifyCommentAdded = internalAction({
     );
 
     if (!bep.slackThreadTs && result.ok && result.ts) {
-      await ctx.runMutation(internal.slack.storeSlackThreadTs, {
+      await ctx.runMutation(internal.beps.storeSlackThreadTs, {
         bepId: args.bepId,
         slackThreadTs: result.ts,
       });
@@ -375,7 +359,7 @@ export const notifyStatusChanged = internalAction({
     );
 
     if (!bep.slackThreadTs && result.ok && result.ts) {
-      await ctx.runMutation(internal.slack.storeSlackThreadTs, {
+      await ctx.runMutation(internal.beps.storeSlackThreadTs, {
         bepId: args.bepId,
         slackThreadTs: result.ts,
       });
