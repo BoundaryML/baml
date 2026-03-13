@@ -19,6 +19,7 @@ import type * as issues from "../issues.js";
 import type * as lib_prompts from "../lib/prompts.js";
 import type * as migrations from "../migrations.js";
 import type * as presence from "../presence.js";
+import type * as slack from "../slack.js";
 import type * as users from "../users.js";
 
 import type {
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   "lib/prompts": typeof lib_prompts;
   migrations: typeof migrations;
   presence: typeof presence;
+  slack: typeof slack;
   users: typeof users;
 }>;
 

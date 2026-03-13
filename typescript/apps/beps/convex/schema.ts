@@ -73,6 +73,9 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
     supersededBy: v.optional(v.id("beps")),
+
+    // Slack integration - thread_ts for #beps channel notifications
+    slackThreadTs: v.optional(v.string()),
   })
     .index("by_number", ["number"])
     .index("by_status", ["status"])
