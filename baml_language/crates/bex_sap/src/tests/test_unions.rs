@@ -229,3 +229,33 @@ test_deserializer!(
 );
 
 // test_try_cast_union_early_return_preserves_incomplete_flag: skipped (uses internal APIs)
+
+// ============================================================================
+// Multi-variant union with parse_as
+// ============================================================================
+
+// parse_as with multi-variant target picks int
+test_deserializer!(
+    test_union_multi_parse_as,
+    r#"42"#,
+    baml_tyannotated!((string | int | null) @parse_as((string | int))),
+    baml_db! {},
+    42
+);
+
+// parse_as with multi-variant target picks string
+test_deserializer!(
+    test_union_multi_parse_as_string,
+    r#""hello""#,
+    baml_tyannotated!((string | int | null) @parse_as((string | int))),
+    baml_db! {},
+    "hello"
+);
+
+// null rejected by parse_as(string | int)
+test_failing_deserializer!(
+    test_union_multi_parse_as_rejects_null,
+    r#"null"#,
+    baml_tyannotated!((string | int | null) @parse_as((string | int))),
+    baml_db! {}
+);

@@ -156,7 +156,7 @@ macro_rules! __parse_ty_attrs {
     }};
     {@parse_as($($ty:tt)+) $($rest:tt)*} => {{
         let mut attrs = $crate::__parse_ty_attrs!{$($rest)*};
-        attrs.parse_as = Some($crate::baml_ty!{$($ty)+});
+        attrs.parse_as = Some(Box::new($crate::baml_tyannotated!{$($ty)+}));
         attrs
     }};
     {@in_progress($lit:tt) $($rest:tt)*} => {{
@@ -546,7 +546,7 @@ macro_rules! __class_field_args {
             [$($aliases),*]
             [{
                 let mut ta = $type_annotations;
-                ta.parse_as = Some($crate::baml_ty!{$($ty)+});
+                ta.parse_as = Some(Box::new($crate::baml_tyannotated!{$($ty)+}));
                 ta
             }]
             [$in_progress_opt]

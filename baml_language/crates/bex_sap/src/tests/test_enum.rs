@@ -1,3 +1,4 @@
+use super::*;
 use crate::{baml_db, baml_tyannotated};
 
 test_deserializer!(
@@ -447,3 +448,49 @@ offers and urgency ($^{$_{Ω}$rel}$), which are common traits of spam messages. 
 );
 
 // test_enum_from_string is skipped because it uses `res.meta_mut().streaming_behavior.done = true`
+
+// ============================================================================
+// Enum atomic streaming behavior
+//
+// Enums are atomic: incomplete enum values should be excluded in streaming.
+// ============================================================================
+
+// Incomplete enum in array is excluded (atomic behavior)
+test_partial_deserializer!(
+    test_enum_in_array_partial_excluded,
+    r#"["RED", "GR"#,
+    baml_tyannotated!([Color @ in_progress(never)]),
+    baml_db! { enum Color { RED, GREEN, BLUE } },
+    ["RED"]
+);
+
+fn enum_field_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        enum Color {
+            RED,
+            GREEN,
+            BLUE
+        }
+        class ColorHolder {
+            color: (Color | null) @in_progress(never) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
+        }
+    }
+}
+
+// Incomplete enum field -> null via cascade (in_progress(never) -> missing -> class_in_progress_field_missing(null))
+test_partial_deserializer!(
+    test_enum_field_partial_null,
+    r#"{"color": "RE"#,
+    baml_tyannotated!(ColorHolder),
+    enum_field_db(),
+    {"color": null}
+);
+
+// Complete enum value is fine
+test_deserializer!(
+    test_enum_field_complete,
+    r#"{"color": "RED"}"#,
+    baml_tyannotated!(ColorHolder),
+    enum_field_db(),
+    {"color": "RED"}
+);

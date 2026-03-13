@@ -1068,3 +1068,636 @@ test_partial_deserializer!(
     mixed_all_db(),
     [{"id": 1, "name": {"value": "done", "state": "Complete"}, "tags": ["x"]}]
 );
+
+// ============================================================================
+// Section 21: @parse_as on union types (primary use case)
+//
+// The canonical streaming pattern: T | null @parse_as(T) @in_progress(null)
+// parse_as restricts what values can be parsed — null can only enter via defaults.
+// ============================================================================
+
+// --- Basic parse_as on int | null ---
+
+test_deserializer!(
+    test_union_parse_as_int_complete,
+    r#"42"#,
+    baml_tyannotated!((int | null) @parse_as(int)),
+    baml_db! {},
+    42
+);
+
+test_failing_deserializer!(
+    test_union_parse_as_int_rejects_null,
+    r#"null"#,
+    baml_tyannotated!((int | null) @parse_as(int)),
+    baml_db! {}
+);
+
+// --- parse_as + in_progress: canonical streaming pattern ---
+
+test_partial_deserializer!(
+    test_union_parse_as_int_in_progress_partial,
+    r#"4"#,
+    baml_tyannotated!((int | null) @parse_as(int) @in_progress(null)),
+    baml_db! {},
+    null
+);
+
+test_deserializer!(
+    test_union_parse_as_int_in_progress_complete,
+    r#"42"#,
+    baml_tyannotated!((int | null) @parse_as(int) @in_progress(null)),
+    baml_db! {},
+    42
+);
+
+// --- parse_as on string | null ---
+
+test_deserializer!(
+    test_union_parse_as_string_complete,
+    r#""hello""#,
+    baml_tyannotated!((string | null) @parse_as(string)),
+    baml_db! {},
+    "hello"
+);
+
+test_partial_deserializer!(
+    test_union_parse_as_string_in_progress_partial,
+    r#""hel"#,
+    baml_tyannotated!((string | null) @parse_as(string) @in_progress(null)),
+    baml_db! {},
+    null
+);
+
+test_deserializer!(
+    test_union_parse_as_string_in_progress_complete,
+    r#""hello""#,
+    baml_tyannotated!((string | null) @parse_as(string) @in_progress(null)),
+    baml_db! {},
+    "hello"
+);
+
+// --- parse_as on bool | null ---
+
+test_deserializer!(
+    test_union_parse_as_bool_complete,
+    r#"true"#,
+    baml_tyannotated!((bool | null) @parse_as(bool)),
+    baml_db! {},
+    true
+);
+
+// --- Coercion through parse_as ---
+
+test_deserializer!(
+    test_union_parse_as_int_from_string,
+    r#""42""#,
+    baml_tyannotated!((int | null) @parse_as(int)),
+    baml_db! {},
+    42
+);
+
+test_failing_deserializer!(
+    test_union_parse_as_int_invalid,
+    r#""hello""#,
+    baml_tyannotated!((int | null) @parse_as(int)),
+    baml_db! {}
+);
+
+// --- Null rejection across types ---
+
+test_failing_deserializer!(
+    test_union_parse_as_string_rejects_null,
+    r#"null"#,
+    baml_tyannotated!((string | null) @parse_as(string)),
+    baml_db! {}
+);
+
+test_failing_deserializer!(
+    test_union_parse_as_bool_rejects_null,
+    r#"null"#,
+    baml_tyannotated!((bool | null) @parse_as(bool)),
+    baml_db! {}
+);
+
+// ============================================================================
+// Section 22: @parse_as on class fields
+//
+// Field-level parse_as within class definitions — the most realistic usage.
+// ============================================================================
+
+fn parse_as_field_int_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class ParseAsIntClass {
+            count: (int | null) @parse_as(int) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+        }
+    }
+}
+
+test_deserializer!(
+    test_field_parse_as_int_complete,
+    r#"{"count": 5}"#,
+    baml_tyannotated!(ParseAsIntClass),
+    parse_as_field_int_db(),
+    {"count": 5}
+);
+
+test_deserializer!(
+    test_field_parse_as_int_missing_complete,
+    r#"{}"#,
+    baml_tyannotated!(ParseAsIntClass),
+    parse_as_field_int_db(),
+    {"count": null}
+);
+
+test_partial_deserializer!(
+    test_field_parse_as_int_partial_missing,
+    r#"{"#,
+    baml_tyannotated!(ParseAsIntClass),
+    parse_as_field_int_db(),
+    {"count": null}
+);
+
+fn parse_as_field_int_with_in_progress_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class ParseAsIntInProgress {
+            count: (int | null) @parse_as(int) @in_progress(null) @class_in_progress_field_missing(null),
+        }
+    }
+}
+
+test_partial_deserializer!(
+    test_field_parse_as_int_partial_incomplete_value,
+    r#"{"count": 4"#,
+    baml_tyannotated!(ParseAsIntInProgress),
+    parse_as_field_int_with_in_progress_db(),
+    {"count": null}
+);
+
+test_deserializer!(
+    test_field_parse_as_int_complete_value,
+    r#"{"count": 42}"#,
+    baml_tyannotated!(ParseAsIntInProgress),
+    parse_as_field_int_with_in_progress_db(),
+    {"count": 42}
+);
+
+fn parse_as_field_string_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class ParseAsStringClass {
+            name: (string | null) @parse_as(string) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+        }
+    }
+}
+
+test_deserializer!(
+    test_field_parse_as_string,
+    r#"{"name": "Alice"}"#,
+    baml_tyannotated!(ParseAsStringClass),
+    parse_as_field_string_db(),
+    {"name": "Alice"}
+);
+
+fn parse_as_field_string_in_progress_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class ParseAsStringInProgress {
+            name: (string | null) @parse_as(string) @in_progress(null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+        }
+    }
+}
+
+test_partial_deserializer!(
+    test_field_parse_as_string_partial,
+    r#"{"name": "Ali"#,
+    baml_tyannotated!(ParseAsStringInProgress),
+    parse_as_field_string_in_progress_db(),
+    {"name": null}
+);
+
+// --- Null rejection on class fields ---
+
+test_failing_deserializer!(
+    test_field_parse_as_int_rejects_null_value,
+    r#"{"count": null}"#,
+    baml_tyannotated!(ParseAsIntClass),
+    parse_as_field_int_db()
+);
+
+test_failing_deserializer!(
+    test_field_parse_as_string_rejects_null_value,
+    r#"{"name": null}"#,
+    baml_tyannotated!(ParseAsStringClass),
+    parse_as_field_string_db()
+);
+
+// ============================================================================
+// Section 23: @parse_as with StreamState
+// ============================================================================
+
+test_deserializer!(
+    test_stream_state_inner_parse_as_complete,
+    r#"42"#,
+    baml_tyannotated!(StreamState<(int | null) @parse_as(int) @in_progress(null)>),
+    baml_db! {},
+    {"value": 42, "state": "Complete"}
+);
+
+test_partial_deserializer!(
+    test_stream_state_inner_parse_as_partial,
+    r#"4"#,
+    baml_tyannotated!(StreamState<(int | null) @parse_as(int) @in_progress(null)>),
+    baml_db! {},
+    {"value": null, "state": "Incomplete"}
+);
+
+test_failing_deserializer!(
+    test_stream_state_inner_parse_as_rejects_null,
+    r#"null"#,
+    baml_tyannotated!(StreamState<(int | null) @parse_as(int)>),
+    baml_db! {}
+);
+
+// ============================================================================
+// Section 24: @parse_as on nested structures
+// ============================================================================
+
+fn parse_as_nested_item_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class ParseAsItem {
+            value: (int | null) @parse_as(int) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+        }
+    }
+}
+
+test_deserializer!(
+    test_parse_as_field_in_array_items,
+    r#"[{"value": 1}, {"value": 2}]"#,
+    baml_tyannotated!([ParseAsItem]),
+    parse_as_nested_item_db(),
+    [{"value": 1}, {"value": 2}]
+);
+
+fn parse_as_nested_item_in_progress_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class ParseAsItemInProgress {
+            value: (int | null) @parse_as(int) @in_progress(null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+        }
+    }
+}
+
+test_partial_deserializer!(
+    test_parse_as_field_in_array_items_partial,
+    r#"[{"value": 1}, {"value": 2"#,
+    baml_tyannotated!([ParseAsItemInProgress]),
+    parse_as_nested_item_in_progress_db(),
+    [{"value": 1}, {"value": null}]
+);
+
+// Array coercion drops items that fail to parse, so a null field
+// rejected by parse_as(int) causes the whole item to be filtered out.
+test_deserializer!(
+    test_parse_as_field_in_array_items_null_rejected,
+    r#"[{"value": 1}, {"value": null}]"#,
+    baml_tyannotated!([ParseAsItem]),
+    parse_as_nested_item_db(),
+    [{"value": 1}]
+);
+
+// ============================================================================
+// Section 25: @parse_as with literal types
+//
+// Since in_progress and class_in_progress_field_missing values are literals,
+// the full streaming type is often a union of literals.
+// ============================================================================
+
+// --- String literals ---
+
+test_deserializer!(
+    test_literal_parse_as_string_complete,
+    r#"my input"#,
+    baml_tyannotated!(("my input" | "loading") @parse_as("my input")),
+    baml_db! {},
+    "my input"
+);
+
+test_failing_deserializer!(
+    test_literal_parse_as_string_rejects_other_literal,
+    r#"loading"#,
+    baml_tyannotated!(("my input" | "loading") @parse_as("my input")),
+    baml_db! {}
+);
+
+test_partial_deserializer!(
+    test_literal_parse_as_string_in_progress,
+    r#"my inp"#,
+    baml_tyannotated!(("my input" | "loading") @parse_as("my input") @in_progress("loading")),
+    baml_db! {},
+    "loading"
+);
+
+test_deserializer!(
+    test_literal_parse_as_string_in_progress_complete,
+    r#"my input"#,
+    baml_tyannotated!(("my input" | "loading") @parse_as("my input") @in_progress("loading")),
+    baml_db! {},
+    "my input"
+);
+
+// --- Int literals ---
+
+test_deserializer!(
+    test_literal_parse_as_int_complete,
+    r#"42"#,
+    baml_tyannotated!((42 | 0) @parse_as(42)),
+    baml_db! {},
+    42
+);
+
+test_failing_deserializer!(
+    test_literal_parse_as_int_rejects_other,
+    r#"0"#,
+    baml_tyannotated!((42 | 0) @parse_as(42)),
+    baml_db! {}
+);
+
+test_partial_deserializer!(
+    test_literal_parse_as_int_in_progress,
+    r#"4"#,
+    baml_tyannotated!((42 | 0) @parse_as(42) @in_progress(0)),
+    baml_db! {},
+    0
+);
+
+// --- Bool literal with null ---
+
+test_deserializer!(
+    test_literal_parse_as_bool_complete,
+    r#"true"#,
+    baml_tyannotated!((true | null) @parse_as(true)),
+    baml_db! {},
+    true
+);
+
+test_failing_deserializer!(
+    test_literal_parse_as_bool_rejects_null,
+    r#"null"#,
+    baml_tyannotated!((true | null) @parse_as(true)),
+    baml_db! {}
+);
+
+// --- Literal parse_as on class fields ---
+
+fn literal_parse_as_class_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class StatusClass {
+            state: ("ready" | "loading") @parse_as("ready") @in_progress("loading") @class_in_progress_field_missing("loading"),
+        }
+    }
+}
+
+test_partial_deserializer!(
+    test_literal_field_parse_as_in_class,
+    r#"{"state": "rea"#,
+    baml_tyannotated!(StatusClass),
+    literal_parse_as_class_db(),
+    {"state": "loading"}
+);
+
+test_deserializer!(
+    test_literal_field_parse_as_in_class_complete,
+    r#"{"state": "ready"}"#,
+    baml_tyannotated!(StatusClass),
+    literal_parse_as_class_db(),
+    {"state": "ready"}
+);
+
+test_failing_deserializer!(
+    test_literal_field_parse_as_in_class_rejects_loading,
+    r#"{"state": "loading"}"#,
+    baml_tyannotated!(StatusClass),
+    literal_parse_as_class_db()
+);
+
+// ============================================================================
+// Gap 1: in_progress(<literal>) on class fields
+//
+// Incomplete field value replaced by a literal default.
+// ============================================================================
+
+// Incomplete field value -> in_progress("loading")
+test_partial_deserializer!(
+    test_field_in_progress_literal_partial,
+    r#"{"name": "hel"#,
+    baml_tyannotated!(InProgressLitClass),
+    baml_db! {
+        class InProgressLitClass {
+            name: string @in_progress("loading") @class_in_progress_field_missing(null),
+        }
+    },
+    {"name": "loading"}
+);
+
+// Complete value ignores in_progress
+test_deserializer!(
+    test_field_in_progress_literal_complete,
+    r#"{"name": "hello"}"#,
+    baml_tyannotated!(InProgressLitClass2),
+    baml_db! {
+        class InProgressLitClass2 {
+            name: string @in_progress("loading") @class_in_progress_field_missing(null),
+        }
+    },
+    {"name": "hello"}
+);
+
+// Integer field with in_progress default
+test_partial_deserializer!(
+    test_field_in_progress_int_literal_partial,
+    r#"{"count": 4"#,
+    baml_tyannotated!(InProgressIntClass),
+    baml_db! {
+        class InProgressIntClass {
+            count: int @in_progress(0) @class_in_progress_field_missing(null),
+        }
+    },
+    {"count": 0}
+);
+
+// ============================================================================
+// Gap 2: in_progress(never) cascading to class_in_progress_field_missing
+//
+// Field has @in_progress(never) -> incomplete field -> Ok(None) -> field
+// treated as missing -> class_in_progress_field_missing fills it.
+// ============================================================================
+
+// in_progress(never) makes field "missing", class_in_progress_field_missing("loading") fills it
+test_partial_deserializer!(
+    test_field_in_progress_never_cascades_to_loading,
+    r#"{"field": "hel"#,
+    baml_tyannotated!(CascadeClass),
+    baml_db! {
+        class CascadeClass {
+            field: string @in_progress(never) @class_in_progress_field_missing("loading"),
+        }
+    },
+    {"field": "loading"}
+);
+
+// Same cascade but to null
+test_partial_deserializer!(
+    test_field_in_progress_never_cascades_to_null,
+    r#"{"field": "hel"#,
+    baml_tyannotated!(CascadeNullClass),
+    baml_db! {
+        class CascadeNullClass {
+            field: (string | null) @in_progress(never) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+        }
+    },
+    {"field": null}
+);
+
+// Complete field value is unaffected by in_progress(never)
+test_deserializer!(
+    test_field_in_progress_never_complete_value_passes,
+    r#"{"field": "hello"}"#,
+    baml_tyannotated!(CascadeClass2),
+    baml_db! {
+        class CascadeClass2 {
+            field: string @in_progress(never) @class_in_progress_field_missing("loading"),
+        }
+    },
+    {"field": "hello"}
+);
+
+// ============================================================================
+// Gap 3: class_completed_field_missing with container defaults
+//
+// Missing containers default to empty when missing from completed objects.
+// ============================================================================
+
+// Missing list in completed object -> []
+test_deserializer!(
+    test_completed_missing_list_default,
+    r#"{}"#,
+    baml_tyannotated!(CompletedListClass),
+    baml_db! {
+        class CompletedListClass {
+            items: [string] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
+        }
+    },
+    {"items": []}
+);
+
+// Missing map in completed object -> {}
+test_deserializer!(
+    test_completed_missing_map_default,
+    r#"{}"#,
+    baml_tyannotated!(CompletedMapClass),
+    baml_db! {
+        class CompletedMapClass {
+            data: map<string, int> @class_in_progress_field_missing({}) @class_completed_field_missing({}),
+        }
+    },
+    {"data": {}}
+);
+
+// Missing nullable in completed object -> null
+test_deserializer!(
+    test_completed_missing_nullable_default,
+    r#"{}"#,
+    baml_tyannotated!(CompletedNullableClass),
+    baml_db! {
+        class CompletedNullableClass {
+            opt: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+        }
+    },
+    {"opt": null}
+);
+
+// ============================================================================
+// Gap 5: @stream.not_null pattern on containers
+//
+// class_in_progress_field_missing(never) + class_completed_field_missing([])
+// means class is excluded until field is present, but missing from completed
+// object defaults to empty.
+// ============================================================================
+
+fn not_null_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class NotNullList {
+            items: [string] @class_in_progress_field_missing(never) @class_completed_field_missing([]),
+        }
+    }
+}
+
+// not_null: class excluded when items not present in partial
+test_partial_none_deserializer!(
+    test_not_null_list_field_missing_partial,
+    r#"{"#,
+    baml_tyannotated!(NotNullList),
+    not_null_db()
+);
+
+// not_null: class visible once items present
+test_partial_deserializer!(
+    test_not_null_list_field_present_partial,
+    r#"{"items": ["a""#,
+    baml_tyannotated!(NotNullList),
+    not_null_db(),
+    {"items": ["a"]}
+);
+
+// Complete object: missing list field -> []
+test_deserializer!(
+    test_not_null_list_field_missing_complete,
+    r#"{}"#,
+    baml_tyannotated!(NotNullList),
+    not_null_db(),
+    {"items": []}
+);
+
+// ============================================================================
+// Gap 7: StreamState with @in_progress(never) inner
+// ============================================================================
+
+// StreamState wraps in_progress(never) - incomplete inner excluded, whole thing is None
+test_partial_none_deserializer!(
+    test_stream_state_done_inner_partial,
+    r#"4"#,
+    baml_tyannotated!(StreamState<int @in_progress(never)>),
+    baml_db! {}
+);
+
+// Complete value works normally
+test_deserializer!(
+    test_stream_state_done_inner_complete,
+    r#"42"#,
+    baml_tyannotated!(StreamState<int @in_progress(never)>),
+    baml_db! {},
+    {"value": 42, "state": "Complete"}
+);
+
+// ============================================================================
+// Gap 8: Deeply nested parse_as
+// ============================================================================
+
+fn nested_parse_as_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        class Inner {
+            x: (int | null) @parse_as(int) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+        }
+        class Outer {
+            inner: Inner @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+            y: (int | null) @parse_as(int) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+        }
+    }
+}
+
+// parse_as at multiple nesting levels
+test_deserializer!(
+    test_nested_class_both_have_parse_as_fields,
+    r#"{"inner": {"x": 1}, "y": 2}"#,
+    baml_tyannotated!(Outer),
+    nested_parse_as_db(),
+    {"inner": {"x": 1}, "y": 2}
+);

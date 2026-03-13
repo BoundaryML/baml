@@ -148,3 +148,34 @@ test_deserializer!(
     baml_db! {},
     ["a"]
 );
+
+// ============================================================================
+// Array parse_as tests
+// ============================================================================
+
+// Array parse_as with narrower element type
+test_deserializer!(
+    test_array_parse_as_narrower_element,
+    r#"[1, 2, 3]"#,
+    baml_tyannotated!([(int | null)] @parse_as([int])),
+    baml_db! {},
+    [1, 2, 3]
+);
+
+// Partial array through parse_as
+test_partial_deserializer!(
+    test_array_parse_as_partial,
+    r#"[1, 2"#,
+    baml_tyannotated!([(int | null)] @parse_as([int])),
+    baml_db! {},
+    [1, 2]
+);
+
+// null element rejected by parse_as([int]) - array drops the failed element
+test_deserializer!(
+    test_array_parse_as_rejects_null_element,
+    r#"[1, null, 3]"#,
+    baml_tyannotated!([(int | null)] @parse_as([int])),
+    baml_db! {},
+    [1, 3]
+);
