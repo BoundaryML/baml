@@ -586,8 +586,13 @@ impl OptimizeArgs {
                 Ok(OptimizeRunResult::Success)
             }
             Err(e) => {
-                // If TUI was launched, wait for it to close even on error
+                // Signal the error to the TUI via file, then wait for it to close
                 if let Some(handle) = tui_handle {
+                    if let Ok(storage) =
+                        crate::optimize::storage::OptimizationStorage::from_existing(&run_dir)
+                    {
+                        let _ = storage.write_error(&format!("{e}"));
+                    }
                     let _ = handle.join();
                 }
 

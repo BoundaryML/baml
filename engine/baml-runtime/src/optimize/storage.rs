@@ -396,6 +396,26 @@ impl OptimizationStorage {
         Ok(())
     }
 
+    // =========================================================================
+    // Errors
+    // =========================================================================
+
+    /// Write an error message to signal failure to the TUI
+    pub fn write_error(&self, message: &str) -> Result<()> {
+        let path = self.run_dir.join("error.json");
+        let content = serde_json::json!({ "error": message });
+        std::fs::write(path, serde_json::to_string_pretty(&content)?)?;
+        Ok(())
+    }
+
+    /// Load an error message if one was written
+    pub fn load_error(&self) -> Option<String> {
+        let path = self.run_dir.join("error.json");
+        let content = std::fs::read_to_string(path).ok()?;
+        let value: serde_json::Value = serde_json::from_str(&content).ok()?;
+        value.get("error")?.as_str().map(|s| s.to_string())
+    }
+
     /// Get path to the best candidate file
     pub fn best_candidate_path(&self, candidate_id: usize) -> PathBuf {
         let filename = format!("{:02}_", candidate_id);
