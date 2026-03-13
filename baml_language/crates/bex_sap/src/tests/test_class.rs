@@ -1,6 +1,5 @@
-use crate::{baml_db, baml_tyannotated};
-
 use super::*;
+use crate::{baml_db, baml_tyannotated};
 
 // --- Foo: class with string list ---
 // class Foo { hi string[] }

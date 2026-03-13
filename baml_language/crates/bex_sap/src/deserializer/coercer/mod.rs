@@ -6,25 +6,24 @@ mod coerce_literal;
 mod coerce_map;
 mod coerce_primitive;
 mod coerce_stream_state;
+mod coerce_ty;
 mod coerce_union;
-mod field_type;
 mod match_string;
 
 use std::{borrow::Cow, collections::HashSet};
 
+// use baml_types::{BamlValue, Constraint, JinjaExpression};
+// use internal_baml_core::ir::jinja_helpers::evaluate_predicate;
+// use internal_baml_jinja::types::OutputFormatContent;
+use super::types::BamlValueWithFlags;
 use crate::{
     baml_value::ValueWithMeta,
     deserializer::types::DeserializerMeta,
+    jsonish,
     sap_model::{
         FromLiteral, TyWithMeta, TypeAnnotations, TypeIdent, TypeName, TypeRefDb, TypeValue,
     },
 };
-// use baml_types::{BamlValue, Constraint, JinjaExpression};
-// use internal_baml_core::ir::jinja_helpers::evaluate_predicate;
-// use internal_baml_jinja::types::OutputFormatContent;
-
-use super::types::BamlValueWithFlags;
-use crate::jsonish;
 
 pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     pub scope: Vec<String>,

@@ -1,19 +1,25 @@
-use std::borrow::Cow;
-use std::collections::{HashMap, hash_map};
-
-use crate::baml_value::{BamlClass, BamlNull, BamlValue};
-use crate::jsonish::{self, CompletionState};
-use crate::sap_model::{
-    AnnotatedField, AttrLiteral, ClassTy, FromLiteral as _, TyResolvedRef, TyWithMeta,
-    TypeAnnotations, TypeIdent,
+use std::{
+    borrow::Cow,
+    collections::{HashMap, hash_map},
 };
+
 use indexmap::IndexMap;
 
 use super::ParsingContext;
-use crate::deserializer::{
-    coercer::{ParsingError, TypeCoercer, array_helper, match_string::matches_string_to_string},
-    deserialize_flags::{DeserializerConditions, Flag},
-    types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
+use crate::{
+    baml_value::{BamlClass, BamlNull, BamlValue},
+    deserializer::{
+        coercer::{
+            ParsingError, TypeCoercer, array_helper, match_string::matches_string_to_string,
+        },
+        deserialize_flags::{DeserializerConditions, Flag},
+        types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
+    },
+    jsonish::{self, CompletionState},
+    sap_model::{
+        AnnotatedField, AttrLiteral, ClassTy, FromLiteral as _, TyResolvedRef, TyWithMeta,
+        TypeAnnotations, TypeIdent,
+    },
 };
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for ClassTy<'t, N>

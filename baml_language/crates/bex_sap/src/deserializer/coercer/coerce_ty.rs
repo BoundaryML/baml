@@ -1,15 +1,20 @@
 use std::borrow::Cow;
 
-use crate::baml_value::{BamlPrimitive, BamlString, BamlValue};
-use crate::deserializer::coercer::match_string::match_string;
-use crate::deserializer::coercer::{ParsingContext, ParsingError, TypeCoercer, array_helper};
-use crate::deserializer::types::DeserializerMeta;
-use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
-use crate::jsonish::{self, CompletionState};
-use crate::sap_model::{
-    ArrayTy, AttrLiteral, BoolLiteralTy, BoolTy, ClassTy, EnumTy, FloatTy, IntLiteralTy, IntTy,
-    MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy, TyResolvedRef,
-    TyWithMeta, TypeAnnotations, TypeIdent, UnionTy,
+use crate::{
+    baml_value::{BamlPrimitive, BamlString, BamlValue},
+    deserializer::{
+        coercer::{
+            ParsingContext, ParsingError, TypeCoercer, array_helper, match_string::match_string,
+        },
+        deserialize_flags::Flag,
+        types::{BamlValueWithFlags, DeserializerMeta},
+    },
+    jsonish::{self, CompletionState},
+    sap_model::{
+        ArrayTy, AttrLiteral, BoolLiteralTy, BoolTy, ClassTy, EnumTy, FloatTy, IntLiteralTy, IntTy,
+        MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy,
+        TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, UnionTy,
+    },
 };
 
 /// Dispatch methods for `TyResolvedRef` that delegate to the appropriate

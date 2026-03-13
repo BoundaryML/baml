@@ -1,23 +1,20 @@
-use std::borrow::Cow;
-use std::collections::VecDeque;
-use std::ops::Deref;
+use std::{borrow::Cow, collections::VecDeque, ops::Deref};
 
-use crate::baml_value::{BamlMap, BamlValue};
-use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
-use crate::jsonish::CompletionState;
-use crate::sap_model::{
-    AttrLiteral, FromLiteral as _, MapTy, Ty, TyResolved, TyResolvedRef, TyWithMeta,
-    TypeAnnotations, TypeIdent,
-};
 use indexmap::IndexMap;
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::{
+    baml_value::{BamlMap, BamlValue},
     deserializer::{
         deserialize_flags::{DeserializerConditions, Flag},
-        types::BamlValueWithFlags,
+        types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
     },
     jsonish,
+    jsonish::CompletionState,
+    sap_model::{
+        AttrLiteral, FromLiteral as _, MapTy, Ty, TyResolved, TyResolvedRef, TyWithMeta,
+        TypeAnnotations, TypeIdent,
+    },
 };
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for MapTy<'t, N>
@@ -230,9 +227,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::sap_model::{NullTy, PrimitiveTy, StringTy, TypeRefDb};
-
     use super::*;
+    use crate::sap_model::{NullTy, PrimitiveTy, StringTy, TypeRefDb};
 
     #[test]
     fn test_empty_map() {

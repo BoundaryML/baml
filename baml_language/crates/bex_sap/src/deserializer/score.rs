@@ -1,37 +1,13 @@
-// use baml_types::{Constraint, ConstraintLevel};
-
-use crate::sap_model::TypeIdent;
-
 use super::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::ValueWithFlags,
 };
+use crate::sap_model::TypeIdent;
 
-// Lower is better
+/// Lower is better
 pub trait WithScore {
     fn score(&self) -> i32;
 }
-
-// impl<'t, N: TypeIdent> WithScore for BamlValueWithFlags<'t, N> {
-//     fn score(&self) -> i32 {
-//         match self {
-//             BamlValueWithFlags::String(s) => s.score(),
-//             BamlValueWithFlags::Int(s) => s.score(),
-//             BamlValueWithFlags::Float(s) => s.score(),
-//             BamlValueWithFlags::Bool(s) => s.score(),
-//             BamlValueWithFlags::List(s, _, items) => {
-//                 s.score() + 10 * items.iter().map(WithScore::score).sum::<i32>()
-//             }
-//             BamlValueWithFlags::Map(s, _, _) => s.score(),
-//             BamlValueWithFlags::Enum(_, _, s) => s.score(),
-//             BamlValueWithFlags::Class(_, s, _, kv) => {
-//                 s.score() + 10 * kv.iter().map(|(_, v)| v.score()).sum::<i32>()
-//             }
-//             BamlValueWithFlags::Null(_, s) => s.score(),
-//             BamlValueWithFlags::Media(_, s) => s.score(),
-//         }
-//     }
-// }
 
 impl<N: TypeIdent> WithScore for Flag<'_, '_, '_, N> {
     fn score(&self) -> i32 {

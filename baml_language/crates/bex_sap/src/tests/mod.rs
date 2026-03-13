@@ -15,12 +15,10 @@ mod test_maps;
 mod test_partials;
 mod test_streaming;
 mod test_unions;
-// mod animation; // Depends on constraint/streaming infra
 
 use std::borrow::Cow;
 
-use crate::sap_model::*;
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_tyannotated, sap_model::*};
 
 // ---------------------------------------------------------------------------
 // Inline tests from old mod.rs (primitives + simple classes)

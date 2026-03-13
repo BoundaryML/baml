@@ -1,20 +1,19 @@
 use std::borrow::Cow;
 
 use super::{ParsingContext, ParsingError};
-use crate::baml_value::{BamlBool, BamlInt, BamlString, BamlValue};
-use crate::deserializer::deserialize_flags::DeserializerConditions;
-use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
-use crate::jsonish::CompletionState;
-use crate::sap_model::{
-    AttrLiteral, BoolLiteralTy, BoolTy, FromLiteral as _, IntLiteralTy, IntTy, LiteralTy,
-    StringLiteralTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
-};
 use crate::{
+    baml_value::{BamlBool, BamlInt, BamlString, BamlValue},
     deserializer::{
         coercer::{TypeCoercer, match_string::match_string},
-        deserialize_flags::Flag,
+        deserialize_flags::{DeserializerConditions, Flag},
+        types::{DeserializerMeta, ValueWithFlags},
     },
     jsonish,
+    jsonish::CompletionState,
+    sap_model::{
+        AttrLiteral, BoolLiteralTy, BoolTy, FromLiteral as _, IntLiteralTy, IntTy, LiteralTy,
+        StringLiteralTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
+    },
 };
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for IntLiteralTy

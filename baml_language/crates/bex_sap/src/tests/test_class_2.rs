@@ -1,6 +1,5 @@
-use crate::{baml_db, baml_tyannotated};
-
 use super::*;
+use crate::{baml_db, baml_tyannotated};
 
 // --- Task classes ---
 // class ServerActionTask { type "server_action", name string, description string, signature string @alias("function_signature") }

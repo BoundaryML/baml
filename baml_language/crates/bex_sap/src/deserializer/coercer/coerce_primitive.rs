@@ -1,18 +1,20 @@
 use std::borrow::Cow;
 
-use crate::baml_value::{BamlBool, BamlFloat, BamlInt, BamlMedia, BamlNull, BamlString, BamlValue};
-use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
-use crate::jsonish::{self, CompletionState};
-use crate::sap_model::{
-    AttrLiteral, BoolTy, FloatTy, FromLiteral as _, IntTy, MediaTy, NullTy, PrimitiveTy, StringTy,
-    TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
-};
 use regex::Regex;
 
 use super::{ParsingContext, ParsingError, array_helper::coerce_array_to_singular};
-use crate::deserializer::{
-    coercer::TypeCoercer,
-    deserialize_flags::{DeserializerConditions, Flag},
+use crate::{
+    baml_value::{BamlBool, BamlFloat, BamlInt, BamlMedia, BamlNull, BamlString, BamlValue},
+    deserializer::{
+        coercer::TypeCoercer,
+        deserialize_flags::{DeserializerConditions, Flag},
+        types::{DeserializerMeta, ValueWithFlags},
+    },
+    jsonish::{self, CompletionState},
+    sap_model::{
+        AttrLiteral, BoolTy, FloatTy, FromLiteral as _, IntTy, MediaTy, NullTy, PrimitiveTy,
+        StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
+    },
 };
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for PrimitiveTy

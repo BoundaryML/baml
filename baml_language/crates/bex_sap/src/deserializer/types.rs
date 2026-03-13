@@ -1,15 +1,15 @@
 use std::{borrow::Cow, collections::HashSet};
 
-use crate::{
-    baml_value::{BamlValue, BamlValueWithMeta, ValueWithMeta},
-    sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, TypeName},
-};
 use serde_json::json;
 
 use super::{
     coercer::ParsingError,
     deserialize_flags::{DeserializerConditions, Flag},
     score::WithScore,
+};
+use crate::{
+    baml_value::{BamlValue, BamlValueWithMeta, ValueWithMeta},
+    sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, TypeName},
 };
 
 /// Metadata on values produced by the deserializer.

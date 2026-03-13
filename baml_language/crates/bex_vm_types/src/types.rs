@@ -54,7 +54,7 @@ pub struct Program {
 
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Keyed by TypeName for consistent identity with `Ty::TypeAlias`.
+    /// Keyed by [`TypeName`] for consistent identity with `Ty::TypeAlias`.
     pub recursive_type_alias_defs: IndexMap<baml_type::TypeName, Ty>,
 }
 

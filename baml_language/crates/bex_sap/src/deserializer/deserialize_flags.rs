@@ -1,8 +1,7 @@
 use std::borrow::Cow;
 
-use crate::sap_model::TypeIdent;
-
 use super::{coercer::ParsingError, types::BamlValueWithFlags};
+use crate::sap_model::TypeIdent;
 
 /// ## Lifetimes
 /// `'s`: the lifetime of the input string

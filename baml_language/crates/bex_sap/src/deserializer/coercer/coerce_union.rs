@@ -1,13 +1,13 @@
 use std::borrow::Cow;
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
-use crate::deserializer::{
-    coercer::array_helper,
-    deserialize_flags::{DeserializerConditions, Flag},
-    types::{BamlValueWithFlags, DeserializerMeta},
-};
 use crate::{
     baml_value::{BamlNull, BamlValue},
+    deserializer::{
+        coercer::array_helper,
+        deserialize_flags::{DeserializerConditions, Flag},
+        types::{BamlValueWithFlags, DeserializerMeta},
+    },
     jsonish::CompletionState,
     sap_model::{
         AttrLiteral, FromLiteral as _, NullTy, TyResolvedRef, TyWithMeta, TypeAnnotations,

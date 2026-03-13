@@ -1,6 +1,5 @@
-use crate::{baml_db, baml_tyannotated};
-
 use super::*;
+use crate::{baml_db, baml_tyannotated};
 
 /// Helper: build all the types for the `BookAnalysis` schema.
 fn book_analysis_db() -> TypeRefDb<'static, &'static str> {

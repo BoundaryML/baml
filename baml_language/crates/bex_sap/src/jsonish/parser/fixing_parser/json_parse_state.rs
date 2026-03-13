@@ -1,9 +1,7 @@
 use std::iter::Peekable;
 
-use crate::jsonish::CompletionState;
-
 use super::json_collection::JsonCollection;
-use crate::jsonish::{JsonishError, Value, value::Fixes};
+use crate::jsonish::{CompletionState, JsonishError, Value, value::Fixes};
 
 /// Tracks quote and backslash state incrementally for quoted strings
 /// to avoid O(n²) rescanning when determining if a quote closes a string.

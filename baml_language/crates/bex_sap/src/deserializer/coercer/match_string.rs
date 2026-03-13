@@ -4,13 +4,12 @@
 
 use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
 
+use super::ParsingContext;
 // use baml_types::TypeValue;
 use crate::{
     deserializer::types::DeserializerMeta,
     sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent},
 };
-
-use super::ParsingContext;
 use crate::{
     deserializer::{
         coercer::ParsingError,

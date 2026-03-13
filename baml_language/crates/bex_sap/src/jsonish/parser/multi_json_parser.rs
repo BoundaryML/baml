@@ -87,9 +87,8 @@ fn complete_stack_head(stack: &mut [Value<'_>]) {
 mod test {
     use std::borrow::Cow;
 
-    use crate::jsonish::CompletionState;
-
     use super::*;
+    use crate::jsonish::CompletionState;
 
     #[test]
     fn test_parse() -> Result<(), JsonishError> {
