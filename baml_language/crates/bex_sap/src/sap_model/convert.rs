@@ -149,6 +149,7 @@ pub fn convert_ty_attrs(
     };
     Ok(TypeAnnotations {
         in_progress: Some(convert_attr_literal(&attrs.sap_in_progress)?),
+        parse_as: None,      // TODO: parse_as
         asserts: Vec::new(), // TODO: assertions
     })
 }

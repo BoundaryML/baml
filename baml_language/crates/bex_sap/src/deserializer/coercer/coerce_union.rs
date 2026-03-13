@@ -51,6 +51,22 @@ where
             (CompletionState::Complete, _) => {}
         }
 
+        if let Some(parse_as_ty) = target.meta.parse_as.as_ref() {
+            let parse_as = ctx
+                .db
+                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
+                .map_err(|ident| ctx.error_type_resolution(ident))?;
+            debug_assert!(
+                parse_as.meta.parse_as.as_ref().map(|p| p.as_ref()) != Some(parse_as_ty.as_ref()),
+                "If parse_as is the same, it should be `None`."
+            );
+            let Some(value) = TyResolvedRef::coerce(ctx, parse_as.clone(), value)? else {
+                return Ok(None);
+            };
+            parse_as.meta.expect_asserts(&value.value, ctx)?;
+            return Ok(Some(value));
+        }
+
         // Optimization: If we have a hint from a previous array element, try that variant first.
         // This helps with arrays of unions where elements are typically homogeneous.
         if let Some(hint_idx) = ctx.union_variant_hint
@@ -140,6 +156,24 @@ where
             }
             (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
+
+        if let Some(parse_as_ty) = &target.meta.parse_as {
+            let parse_as = ctx
+                .db
+                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
+                .ok()?;
+            debug_assert!(
+                parse_as.meta.parse_as.as_ref().map(|p| p.as_ref()) != Some(parse_as_ty.as_ref()),
+                "If parse_as is the same, it should be `None`."
+            );
+            let Some(value) = TyResolvedRef::try_cast(&ctx, parse_as.clone(), value) else {
+                return None;
+            };
+            let Ok(true) = parse_as.meta.check_asserts(&value.value, ctx) else {
+                return None;
+            };
+            return Some(value);
+        }
 
         if matches!(value, crate::jsonish::Value::Null) && target.ty.is_optional(ctx.db) {
             return Some(BamlValueWithFlags::new(

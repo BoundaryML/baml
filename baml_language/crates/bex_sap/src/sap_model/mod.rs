@@ -103,7 +103,7 @@ where
 /// Contains a SAP model type, generally part of the one passed into the deserializer.
 ///
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
-#[derive(Clone, From)]
+#[derive(Clone, From, PartialEq)]
 pub enum TyResolved<'t, N: TypeIdent> {
     Int(IntTy),
     Float(FloatTy),
@@ -175,7 +175,7 @@ impl<'t, N: TypeIdent> TyResolved<'t, N> {
 ///
 /// This is a reference to a SAP model type, generally part of the one passed into the deserializer.
 /// At the top-level, any type references (identified by `N`) are resolved in this type.
-#[derive(Clone, From)]
+#[derive(Clone, From, PartialEq)]
 pub enum TyResolvedRef<'t, N: TypeIdent> {
     Int(IntTy),
     Float(FloatTy),
@@ -231,6 +231,45 @@ impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
             _ => false,
         }
     }
+    /// Returns true if the two types are equivalent.
+    /// More comprehensive than `==` because it can look up unresolved named types
+    /// to compared with resolved types
+    pub fn ty_equiv(self, other: Self, db: &TypeRefDb<'t, N>) -> bool {
+        match (self, other) {
+            (TyResolvedRef::Null(..), TyResolvedRef::Null(..)) => true,
+            (TyResolvedRef::Int(..), TyResolvedRef::Int(..)) => true,
+            (TyResolvedRef::Float(..), TyResolvedRef::Float(..)) => true,
+            (TyResolvedRef::String(..), TyResolvedRef::String(..)) => true,
+            (TyResolvedRef::Bool(..), TyResolvedRef::Bool(..)) => true,
+            (TyResolvedRef::Media(a), TyResolvedRef::Media(b)) => a == b,
+            (TyResolvedRef::LiteralInt(a), TyResolvedRef::LiteralInt(b)) => a.0 == b.0,
+            (TyResolvedRef::LiteralBool(a), TyResolvedRef::LiteralBool(b)) => a.0 == b.0,
+            (TyResolvedRef::LiteralString(a), TyResolvedRef::LiteralString(b)) => a.0 == b.0,
+            (TyResolvedRef::Array(a), TyResolvedRef::Array(b)) => {
+                a.ty.ty.ty_equiv(&b.ty.ty, db) && a.ty.meta == b.ty.meta
+            }
+            (TyResolvedRef::Map(a), TyResolvedRef::Map(b)) => {
+                a.key.ty.ty_equiv(&b.key.ty, db)
+                    && a.key.meta == b.key.meta
+                    && a.value.ty.ty_equiv(&b.value.ty, db)
+                    && a.value.meta == b.value.meta
+            }
+
+            (TyResolvedRef::Union(a), TyResolvedRef::Union(b)) => {
+                a.variants.len() == b.variants.len()
+                    && a.variants
+                        .iter()
+                        .zip(b.variants.iter())
+                        .all(|(a, b)| a.ty.ty_equiv(&b.ty, db) && a.meta == b.meta)
+            }
+            (TyResolvedRef::StreamState(a), TyResolvedRef::StreamState(b)) => {
+                a.value.ty.ty_equiv(&b.value.ty, db) && a.value.meta == b.value.meta
+            }
+            (TyResolvedRef::Class(a), TyResolvedRef::Class(b)) => a.name == b.name,
+            (TyResolvedRef::Enum(a), TyResolvedRef::Enum(b)) => a.name == b.name,
+            _ => false,
+        }
+    }
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for TyResolvedRef<'t, N>
 where
@@ -258,8 +297,32 @@ impl<'t, N: TypeIdent> Ty<'t, N> {
     /// Returns true if the type may be `null`.
     ///
     /// Requires `db` in case we need to look up type aliases that may contain optional unions.
-    pub fn is_optional(&'t self, db: &'t TypeRefDb<'t, N>) -> bool {
+    pub fn is_optional(&self, db: &'t TypeRefDb<'t, N>) -> bool {
         db.resolve(self).is_ok_and(|ty| ty.is_optional(db))
+    }
+    /// Similar to [`PartialEq::eq`] except that it is better able to check equivalence
+    /// by looking up unknown types by name.
+    pub fn ty_equiv(&self, other: &Self, db: &'t TypeRefDb<'t, N>) -> bool {
+        match (self, other) {
+            (Ty::Unresolved(a), Ty::Unresolved(b)) => a == b,
+            (Ty::Unresolved(a), Ty::Resolved(TyResolved::Class(b))) => *a == b.name,
+            (Ty::Unresolved(a), Ty::Resolved(TyResolved::Enum(b))) => *a == b.name,
+            (Ty::Resolved(TyResolved::Class(a)), Ty::Unresolved(b)) => a.name == *b,
+            (Ty::Resolved(TyResolved::Enum(a)), Ty::Unresolved(b)) => a.name == *b,
+            (Ty::Unresolved(a), Ty::ResolvedRef(TyResolvedRef::Class(b))) => *a == b.name,
+            (Ty::Unresolved(a), Ty::ResolvedRef(TyResolvedRef::Enum(b))) => *a == b.name,
+            (Ty::ResolvedRef(TyResolvedRef::Class(a)), Ty::Unresolved(b)) => a.name == *b,
+            (Ty::ResolvedRef(TyResolvedRef::Enum(a)), Ty::Unresolved(b)) => a.name == *b,
+            (a, b) => {
+                let Ok(a) = db.resolve(a) else {
+                    return false;
+                };
+                let Ok(b) = db.resolve(b) else {
+                    return false;
+                };
+                a.ty_equiv(b, db)
+            }
+        }
     }
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for Ty<'t, N>
@@ -267,6 +330,26 @@ where
     's: 'v,
 {
     type Value = BamlValue<'s, 'v, 't, N>;
+}
+impl<N: TypeIdent> PartialEq for Ty<'_, N> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Ty::Resolved(a), Ty::Resolved(b)) => a == b,
+            (Ty::ResolvedRef(a), Ty::ResolvedRef(b)) => a == b,
+            (Ty::Unresolved(a), Ty::Unresolved(b)) => a == b,
+            (Ty::Resolved(a), Ty::ResolvedRef(b)) => a.as_ref() == *b,
+            (Ty::ResolvedRef(a), Ty::Resolved(b)) => *a == b.as_ref(),
+            (Ty::Unresolved(a), Ty::Resolved(TyResolved::Class(b))) => *a == b.name,
+            (Ty::Unresolved(a), Ty::Resolved(TyResolved::Enum(b))) => *a == b.name,
+            (Ty::Resolved(TyResolved::Class(a)), Ty::Unresolved(b)) => a.name == *b,
+            (Ty::Resolved(TyResolved::Enum(a)), Ty::Unresolved(b)) => a.name == *b,
+            (Ty::Unresolved(a), Ty::ResolvedRef(TyResolvedRef::Class(b))) => *a == b.name,
+            (Ty::Unresolved(a), Ty::ResolvedRef(TyResolvedRef::Enum(b))) => *a == b.name,
+            (Ty::ResolvedRef(TyResolvedRef::Class(a)), Ty::Unresolved(b)) => a.name == *b,
+            (Ty::ResolvedRef(TyResolvedRef::Enum(a)), Ty::Unresolved(b)) => a.name == *b,
+            _ => false,
+        }
+    }
 }
 
 /// Represents a type with additional metadata.
@@ -303,6 +386,11 @@ impl<T: Clone, M: Clone> Clone for TyWithMeta<T, M> {
             ty: self.ty.clone(),
             meta: self.meta.clone(),
         }
+    }
+}
+impl<T: PartialEq, M: PartialEq> PartialEq for TyWithMeta<T, M> {
+    fn eq(&self, other: &Self) -> bool {
+        self.ty == other.ty && self.meta == other.meta
     }
 }
 
@@ -471,7 +559,7 @@ where
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct ArrayTy<'t, N: TypeIdent> {
     pub ty: Box<AnnotatedTy<'t, N>>,
 }
@@ -483,7 +571,7 @@ where
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct MapTy<'t, N: TypeIdent> {
     pub key: Box<AnnotatedTy<'t, N>>,
     pub value: Box<AnnotatedTy<'t, N>>,
@@ -507,6 +595,7 @@ impl<'t, N: TypeIdent> MapTy<'t, N> {
 #[derive(Clone)]
 pub struct ClassTy<'t, N: TypeIdent> {
     pub name: N,
+    /// Not used in determining equality, as classes should be identical if their names are the same.
     pub fields: Vec<AnnotatedField<'t, N>>,
 }
 impl<'s, 'v, 't, N: TypeIdent> TypeValue<'s, 'v, 't> for ClassTy<'t, N>
@@ -515,11 +604,17 @@ where
 {
     type Value = BamlClass<'s, 'v, 't, N>;
 }
+impl<N: TypeIdent> PartialEq for ClassTy<'_, N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone)]
 pub struct EnumTy<'t, N: TypeIdent> {
     pub name: N,
+    /// Not used in determining equality, as enums should be identical if their names are the same.
     pub variants: Vec<AnnotatedEnumVariant<'t>>,
 }
 impl<'s, 'v, 't, N: TypeIdent + 't> TypeValue<'s, 'v, 't> for EnumTy<'t, N>
@@ -528,9 +623,14 @@ where
 {
     type Value = BamlEnum<'t, N>;
 }
+impl<N: TypeIdent> PartialEq for EnumTy<'_, N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct UnionTy<'t, N: TypeIdent> {
     pub variants: Vec<AnnotatedTy<'t, N>>,
 }
@@ -538,7 +638,7 @@ impl<'t, N: TypeIdent> UnionTy<'t, N> {
     /// Returns true if any of the variants are `null`.
     ///
     /// Requires `ctx` in case we need to look up type aliases that may contain optional unions.
-    pub fn is_optional(&'t self, db: &'t TypeRefDb<'t, N>) -> bool {
+    pub fn is_optional(&self, db: &'t TypeRefDb<'t, N>) -> bool {
         self.variants.iter().any(|v| v.ty.is_optional(db))
     }
 }
@@ -550,7 +650,7 @@ where
 }
 
 /// Represents that the value should be wrapped in a stream state enum.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct StreamStateTy<'t, N: TypeIdent> {
     pub value: Box<AnnotatedTy<'t, N>>,
 }
@@ -562,7 +662,7 @@ where
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct TypeAnnotations<'t, N: TypeIdent> {
     /// Represents the behavior when streaming and incomplete.
     ///
@@ -575,6 +675,23 @@ pub struct TypeAnnotations<'t, N: TypeIdent> {
     /// If `Some("Loading...")`, then `"Loading..."` should be used until done.
     pub in_progress: Option<AttrLiteral<'t, N>>,
 
+    /// The "done" type to parse as ("done" to SAP, may still be partial if generated for streaming).
+    /// Must be a subtype of the annotated type.
+    /// The annotated type may or may not be a supertype, as it is the union of this type and all 'default' values
+    /// that could replace it during streaming.
+    ///
+    /// Set to `None` if and only if the `parse_as` type is the same as the annotated type.
+    ///
+    /// ## Examples
+    /// ```baml,ignore
+    /// type A = int; // results in
+    /// type stream.A = int | null @parse_as(int) @in_progress(null);
+    ///
+    /// type B = string; // results in
+    /// type stream.B = string; // both `None` because `string` can be partial
+    /// ```
+    pub parse_as: Option<Box<AnnotatedTy<'t, N>>>,
+
     /// The set of assertions that should be run on the value.
     /// Note that if the value is filled by some default (such as [`TypeAnnotations::in_progress`]),
     /// the assertions may or may not be run on the default value (TODO: make this behavior consistent).
@@ -584,6 +701,7 @@ impl<N: TypeIdent> Default for TypeAnnotations<'_, N> {
     fn default() -> Self {
         Self {
             in_progress: None,
+            parse_as: None,
             asserts: Vec::new(),
         }
     }
@@ -659,7 +777,7 @@ pub struct AnnotatedEnumVariant<'t> {
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 ///
 /// Used in attributes like `@sap.in_progress(...)` and `@sap.class_completed_field_missing(...)`
-#[derive(Clone, From)]
+#[derive(Clone, From, PartialEq)]
 pub enum AttrLiteral<'t, N: TypeIdent> {
     /// the `never` bottom type.
     /// Generally used to indicate that the value should be excluded,

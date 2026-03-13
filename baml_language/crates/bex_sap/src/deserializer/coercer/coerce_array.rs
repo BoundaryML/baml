@@ -76,6 +76,28 @@ where
             (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
 
+        if let Some(parse_as_ty) = target.meta.parse_as.as_ref() {
+            let parse_as = ctx
+                .db
+                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
+                .ok()?;
+            let TyResolvedRef::Array(parse_as_arr) = parse_as.ty else {
+                // Only arrays can be subtypes of arrays
+                return None;
+            };
+            debug_assert!(
+                parse_as_arr != target.ty,
+                "If parse_as is the same, it should be `None`."
+            );
+            let arr = ArrayTy::try_cast(ctx, TyWithMeta::new(parse_as_arr, parse_as.meta), value)?;
+            let value = BamlValue::Array(arr.value);
+            target.meta.expect_asserts(&value, ctx).ok()?;
+            let BamlValue::Array(ret) = value else {
+                unreachable!("we just wrapped it in a BamlValue::Array");
+            };
+            return Some(ValueWithFlags::new(ret, arr.meta));
+        }
+
         // For empty arrays, we can return immediately
         if arr.is_empty() {
             return Some(ValueWithFlags::new(
@@ -123,29 +145,56 @@ where
         let mut items = vec![];
         let mut flags = DeserializerConditions::new();
 
-        match value {
-            crate::jsonish::Value::Array(arr, completion_state) => {
-                if *completion_state == CompletionState::Incomplete {
-                    match &target.meta.in_progress {
-                        Some(AttrLiteral::Never) => return Ok(None),
-                        Some(lit) => {
-                            let ret = target.ty.from_literal(lit, ctx)?;
-                            let ret = ValueWithFlags::new(
-                                ret,
-                                DeserializerMeta {
-                                    flags: DeserializerConditions::new().with_flag(
-                                        Flag::DefaultFromInProgress(Cow::Borrowed(value)),
-                                    ),
-                                    ty: target.map_ty(TyResolvedRef::Array),
-                                },
-                            );
-                            return Ok(Some(ret));
-                        }
-                        None => {
-                            flags.add_flag(Flag::Incomplete);
-                        }
-                    }
+        match (value, &target.meta.in_progress) {
+            (
+                crate::jsonish::Value::Array(_, CompletionState::Incomplete),
+                Some(AttrLiteral::Never),
+            ) => {
+                return Ok(None);
+            }
+            (crate::jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
+                let ret = target.ty.from_literal(&lit, ctx)?;
+                let ret = ValueWithFlags::new(
+                    ret,
+                    DeserializerMeta {
+                        flags: DeserializerConditions::new()
+                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
+                        ty: target.map_ty(TyResolvedRef::Array),
+                    },
+                );
+                return Ok(Some(ret));
+            }
+            (_, _) if target.meta.parse_as.is_some() => {
+                let parse_as_ty = target.meta.parse_as.as_ref().unwrap_or_else(|| unreachable!("We just checked it is Some. Once let guards are stabilized, we can remove this."));
+                let parse_as = ctx
+                    .db
+                    .resolve_with_meta(parse_as_ty.as_ref().as_ref())
+                    .map_err(|name| ctx.error_type_resolution(name))?;
+                let TyResolvedRef::Array(parse_as_arr) = parse_as.ty else {
+                    // Only arrays can be subtypes of arrays
+                    return Err(ctx.error_internal("parse_as should always be an array"));
+                };
+                debug_assert!(
+                    parse_as_arr != target.ty,
+                    "If parse_as is the same, it should be `None`."
+                );
+                let arr =
+                    ArrayTy::coerce(ctx, TyWithMeta::new(parse_as_arr, parse_as.meta), value)?;
+                let Some(arr) = arr else {
+                    return Ok(None);
+                };
+                let value = BamlValue::Array(arr.value);
+                target.meta.expect_asserts(&value, ctx)?;
+                let BamlValue::Array(ret) = value else {
+                    unreachable!("we just wrapped it in a BamlValue::Array");
+                };
+                return Ok(Some(ValueWithFlags::new(ret, arr.meta)));
+            }
+            (crate::jsonish::Value::Array(arr, c), _) => {
+                if matches!(c, CompletionState::Incomplete) {
+                    flags.add_flag(Flag::Incomplete);
                 }
+
                 // Track the winning union variant from the previous element to hint the next
                 let mut last_union_hint: Option<usize> = None;
                 for (i, item) in arr.iter().enumerate() {
@@ -160,7 +209,7 @@ where
                         Ok(None) => {
                             // child is incomplete with `in_progress = never`
                             debug_assert_eq!(
-                                *completion_state,
+                                *c,
                                 CompletionState::Incomplete,
                                 "Array should be incomplete if an item is."
                             );
@@ -171,7 +220,7 @@ where
                 }
             }
             // Not an array: try and make it a single-value array
-            v => {
+            (v, _) => {
                 flags.add_flag(Flag::SingleToArray);
                 let et_ref = TyWithMeta::new(element_type.ty, element_type.meta);
                 match TyResolvedRef::coerce(&ctx.enter_scope("<implied>"), et_ref, v) {

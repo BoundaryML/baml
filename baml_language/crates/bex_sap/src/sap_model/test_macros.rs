@@ -154,6 +154,11 @@ macro_rules! __parse_ty_attrs {
         // attrs.asserts.push($crate::__parse_assert!{$($assert)*});
         attrs
     }};
+    {@parse_as($($ty:tt)+) $($rest:tt)*} => {{
+        let mut attrs = $crate::__parse_ty_attrs!{$($rest)*};
+        attrs.parse_as = Some($crate::baml_ty!{$($ty)+});
+        attrs
+    }};
     {@in_progress($lit:tt) $($rest:tt)*} => {{
         let mut attrs = $crate::__parse_ty_attrs!{$($rest)*};
         attrs.in_progress = Some($crate::__parse_attr_literal!{$lit});
@@ -523,6 +528,25 @@ macro_rules! __class_field_args {
             [{
                 let mut ta = $type_annotations;
                 ta.in_progress = Some($crate::__parse_attr_literal!{$($attr_lit)+});
+                ta
+            }]
+            [$in_progress_opt]
+            [$completed_opt]
+            { $($rest)* }
+        )
+    };
+    (<><><> __INTERNAL__
+        [$($aliases:expr),*]
+        [$type_annotations:expr]
+        [$in_progress_opt:expr]
+        [$completed_opt:expr]
+        { @parse_as($($ty:tt)+) $($rest:tt)* }
+    ) => {
+        $crate::__class_field_args!(<><><> __INTERNAL__
+            [$($aliases),*]
+            [{
+                let mut ta = $type_annotations;
+                ta.parse_as = Some($crate::baml_ty!{$($ty)+});
                 ta
             }]
             [$in_progress_opt]

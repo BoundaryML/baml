@@ -86,6 +86,12 @@ where
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlInt, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
+
+        if target.meta.parse_as.is_some() {
+            // `parse_as` should always be `None` for `IntTy` because it subtypes are only literals
+            return Err(ctx.error_internal("parse_as should always be `None` for `IntTy`"));
+        }
+
         let result = match (value, target.meta.in_progress.as_ref()) {
             (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -231,6 +237,11 @@ where
             (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
 
+        if target.meta.parse_as.is_some() {
+            // `parse_as` should always be `None` for `IntTy` because it subtypes are only literals
+            return None;
+        }
+
         Some(ValueWithFlags::new(
             BamlInt {
                 value: num.as_i64()?,
@@ -255,6 +266,12 @@ where
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlFloat, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
+
+        if target.meta.parse_as.is_some() {
+            // `parse_as` should always be `None` for `FloatTy` because it subtypes are only literals
+            return Err(ctx.error_internal("parse_as should always be `None` for `FloatTy`"));
+        }
+
         let result = match (value, target.meta.in_progress.as_ref()) {
             (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
                 return Ok(None);
@@ -393,6 +410,11 @@ where
             (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
 
+        if target.meta.parse_as.is_some() {
+            // `parse_as` should always be `None` for `FloatTy` because it subtypes are only literals
+            return None;
+        }
+
         Some(ValueWithFlags::new(
             BamlFloat {
                 value: num.as_f64()?,
@@ -526,6 +548,11 @@ where
             return None;
         };
 
+        if target.meta.parse_as.is_some() {
+            // `parse_as` should always be `None` for `BoolTy` because it subtypes are only literals
+            return None;
+        }
+
         Some(ValueWithFlags::new(
             BamlBool { value: *b },
             DeserializerMeta {
@@ -568,6 +595,11 @@ where
             (CompletionState::Complete, _) => {}
         }
 
+        if target.meta.parse_as.is_some() {
+            // `parse_as` should always be `None` for `NullTy` because it has no subtypes
+            return Err(ctx.error_internal("parse_as should always be `None` for `NullTy`"));
+        }
+
         match value {
             crate::jsonish::Value::Null => {}
             v => flags.add_flag(Flag::DefaultButHadValue(Cow::Borrowed(v))),
@@ -594,6 +626,11 @@ where
         let crate::jsonish::Value::Null = value else {
             return None;
         };
+
+        if target.meta.parse_as.is_some() {
+            // `parse_as` should always be `None` for `NullTy` because it has no subtypes
+            return None;
+        }
 
         Some(ValueWithFlags::new(
             BamlNull,
@@ -635,6 +672,15 @@ where
                 flags.add_flag(Flag::Incomplete);
             }
             (CompletionState::Complete, _) => {}
+        }
+
+        if target.meta.parse_as.is_some() {
+            // `parse_as` should always be `None` for `StringTy` because its subtypes are only literals
+            // This is because the only subtype of `StringTy` is `StringLiteralTy`,
+            // but if we have `parse_as = StringLiteralTy` then the type should have been a union,
+            // as the `AttrLiteral`s will either have a non-subtype of `StringTy`,
+            // or will only be string literals (meaning we can have a union of string literals).
+            return Err(ctx.error_internal("parse_as should always be `None` for `StringTy`"));
         }
 
         let result: String = match value {
@@ -719,6 +765,15 @@ where
             }
             (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
+
+        if target.meta.parse_as.is_some() {
+            // `parse_as` should always be `None` for `StringTy` because its subtypes are only literals
+            // This is because the only subtype of `StringTy` is `StringLiteralTy`,
+            // but if we have `parse_as = StringLiteralTy` then the type should have been a union,
+            // as the `AttrLiteral`s will either have a non-subtype of `StringTy`,
+            // or will only be string literals (meaning we can have a union of string literals).
+            return None;
+        }
 
         Some(ValueWithFlags::new(
             BamlString {

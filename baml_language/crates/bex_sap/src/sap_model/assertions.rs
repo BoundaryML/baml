@@ -5,7 +5,7 @@ use crate::{
 };
 
 /// TODO
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct Assertion<'t, N: TypeIdent> {
     _marker: std::marker::PhantomData<&'t N>,
 }
