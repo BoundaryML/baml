@@ -882,19 +882,18 @@ impl<'db> LoweringContext<'db> {
         let is_sys_op = self.check_sys_op(callee);
 
         if is_sys_op {
-            let future_local = self.builder.temp(Ty::Null { attr: TyAttr::default() });
+            // dest must be a local place for Await
+            let dest_local = match dest {
+                Place::Local(l) => l,
+                _ => self.builder.temp(Ty::Null { attr: TyAttr::default() }),
+            };
+            let result_ty = self.builder.local_ty(dest_local);
+            let future_ty = Ty::Future(Box::new(result_ty), TyAttr::default());
+            let future_local = self.builder.temp(future_ty);
             let future_place = Place::Local(future_local);
             let resume = self.builder.create_block();
             self.builder.dispatch_future(callee_operand, arg_operands, future_place.clone(), resume);
             self.builder.set_current_block(resume);
-            // dest must be a local place for Await
-            let dest_local = match dest {
-                Place::Local(l) => l,
-                _ => {
-                    let tmp = self.builder.temp(Ty::Null { attr: TyAttr::default() });
-                    tmp
-                }
-            };
             let dest_place = Place::Local(dest_local);
             self.builder.await_(future_place, dest_place, target, unwind);
         } else {

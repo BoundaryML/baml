@@ -207,7 +207,8 @@ impl OutputFormatContent {
             | Ty::Function { .. }
             | Ty::Void { .. }
             | Ty::WatchAccessor(..)
-            | Ty::BuiltinUnknown { .. } => {
+            | Ty::BuiltinUnknown { .. }
+            | Ty::Future(..) => {
                 unreachable!(
                     "compiler-only variant {:?} should not reach output_format",
                     ty

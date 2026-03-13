@@ -160,6 +160,11 @@ pub enum Ty {
     BuiltinUnknown {
         attr: TyAttr,
     },
+    /// A future handle — the result of `dispatch_future` before `await`.
+    ///
+    /// The inner type is the type the future resolves to upon `await`.
+    /// Compiler-only: should never reach runtime (futures are awaited in MIR).
+    Future(Box<Ty>, TyAttr),
 }
 
 // NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
@@ -195,6 +200,7 @@ impl Ty {
             Ty::TypeAlias(tn, _) => Ty::TypeAlias(tn, attr),
             Ty::Function { params, ret, .. } => Ty::Function { params, ret, attr },
             Ty::WatchAccessor(inner, _) => Ty::WatchAccessor(inner, attr),
+            Ty::Future(inner, _) => Ty::Future(inner, attr),
         }
     }
 
@@ -219,7 +225,8 @@ impl Ty {
             | Ty::Union(_, attr)
             | Ty::Opaque(_, attr)
             | Ty::TypeAlias(_, attr)
-            | Ty::WatchAccessor(_, attr) => attr,
+            | Ty::WatchAccessor(_, attr)
+            | Ty::Future(_, attr) => attr,
         }
     }
 
@@ -453,6 +460,7 @@ impl Ty {
                 | Ty::Void { .. }
                 | Ty::WatchAccessor(..)
                 | Ty::BuiltinUnknown { .. }
+                | Ty::Future(..)
         )
     }
 
@@ -487,6 +495,7 @@ impl Ty {
                 }
                 ret.validate_runtime()
             }
+            Ty::Future(_, _) => Err("Future type should not reach runtime (must be awaited)".to_string()),
             Ty::Int { .. }
             | Ty::Float { .. }
             | Ty::String { .. }
@@ -538,6 +547,7 @@ impl fmt::Display for Ty {
             Ty::Void { .. } => write!(f, "void"),
             Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
+            Ty::Future(inner, _) => write!(f, "future<{inner}>"),
         }
     }
 }

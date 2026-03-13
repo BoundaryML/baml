@@ -8,15 +8,15 @@ fn ReadAndClose() -> string {
     let _1: baml.File // f
     let _2: (string) -> baml.File
     let _3: "example.txt"
-    let _4: null
+    let _4: future<baml.File>
     let _5: string // content
     let _6: baml.File
     let _7: (baml.File) -> string
-    let _8: null
+    let _8: future<string>
     let _9: null
     let _10: baml.File
     let _11: (baml.File) -> null
-    let _12: null
+    let _12: future<null>
 
     bb0: {
         _2 = const fn baml.fs.open;
@@ -64,10 +64,10 @@ fn ReadFile() -> string {
     let _1: baml.File // f
     let _2: (string) -> baml.File
     let _3: "example.txt"
-    let _4: null
+    let _4: future<baml.File>
     let _5: baml.File
     let _6: (baml.File) -> string
-    let _7: null
+    let _7: future<string>
 
     bb0: {
         _2 = const fn baml.fs.open;
@@ -104,9 +104,9 @@ fn ReadFileInline() -> string {
     let _1: baml.File
     let _2: (string) -> baml.File
     let _3: "data.json"
-    let _4: null
+    let _4: future<baml.File>
     let _5: (baml.File) -> string
-    let _6: null
+    let _6: future<string>
 
     bb0: {
         _2 = const fn baml.fs.open;
@@ -142,19 +142,19 @@ fn ReadMultipleFiles() -> string {
     let _1: baml.File // f1
     let _2: (string) -> baml.File
     let _3: "file1.txt"
-    let _4: null
+    let _4: future<baml.File>
     let _5: baml.File // f2
     let _6: (string) -> baml.File
     let _7: "file2.txt"
-    let _8: null
+    let _8: future<baml.File>
     let _9: string // content1
     let _10: baml.File
     let _11: (baml.File) -> string
-    let _12: null
+    let _12: future<string>
     let _13: string // content2
     let _14: baml.File
     let _15: (baml.File) -> string
-    let _16: null
+    let _16: future<string>
     let _17: string
     let _18: string
 
@@ -216,10 +216,10 @@ fn ConnectAndRead() -> string {
     let _1: baml.Socket // sock
     let _2: (string) -> baml.Socket
     let _3: "127.0.0.1:8080"
-    let _4: null
+    let _4: future<baml.Socket>
     let _5: baml.Socket
     let _6: (baml.Socket) -> string
-    let _7: null
+    let _7: future<string>
 
     bb0: {
         _2 = const fn baml.net.connect;
@@ -256,9 +256,9 @@ fn ConnectAndReadInline() -> string {
     let _1: baml.Socket
     let _2: (string) -> baml.Socket
     let _3: "localhost:3000"
-    let _4: null
+    let _4: future<baml.Socket>
     let _5: (baml.Socket) -> string
-    let _6: null
+    let _6: future<string>
 
     bb0: {
         _2 = const fn baml.net.connect;
@@ -294,19 +294,19 @@ fn MultipleConnections() -> string {
     let _1: baml.Socket // s1
     let _2: (string) -> baml.Socket
     let _3: "server1:80"
-    let _4: null
+    let _4: future<baml.Socket>
     let _5: baml.Socket // s2
     let _6: (string) -> baml.Socket
     let _7: "server2:80"
-    let _8: null
+    let _8: future<baml.Socket>
     let _9: string // data1
     let _10: baml.Socket
     let _11: (baml.Socket) -> string
-    let _12: null
+    let _12: future<string>
     let _13: string // data2
     let _14: baml.Socket
     let _15: (baml.Socket) -> string
-    let _16: null
+    let _16: future<string>
     let _17: string
     let _18: string
 
@@ -368,15 +368,15 @@ fn ConnectReadAndClose() -> string {
     let _1: baml.Socket // sock
     let _2: (string) -> baml.Socket
     let _3: "127.0.0.1:8080"
-    let _4: null
+    let _4: future<baml.Socket>
     let _5: string // data
     let _6: baml.Socket
     let _7: (baml.Socket) -> string
-    let _8: null
+    let _8: future<string>
     let _9: null
     let _10: baml.Socket
     let _11: (baml.Socket) -> null
-    let _12: null
+    let _12: future<null>
 
     bb0: {
         _2 = const fn baml.net.connect;
@@ -424,11 +424,11 @@ fn ChainCommands() -> string {
     let _1: string // result1
     let _2: (string) -> string
     let _3: "pwd"
-    let _4: null
+    let _4: future<string>
     let _5: string // result2
     let _6: (string) -> string
     let _7: "whoami"
-    let _8: null
+    let _8: future<string>
     let _9: string
     let _10: string
     let _11: " - "
@@ -474,7 +474,7 @@ fn RunCommandWithVar() -> string {
     let _1: string // cmd
     let _2: (string) -> string
     let _3: string
-    let _4: null
+    let _4: future<string>
 
     bb0: {
         _1 = const "ls -la";
@@ -501,7 +501,7 @@ fn RunCommand() -> string {
     let _0: string // _0 // return
     let _1: (string) -> string
     let _2: "echo hello"
-    let _3: null
+    let _3: future<string>
 
     bb0: {
         _1 = const fn baml.sys.shell;

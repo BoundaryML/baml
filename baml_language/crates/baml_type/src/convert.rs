@@ -224,6 +224,8 @@ pub fn sanitize_for_runtime(ty: Ty) -> Result<Ty, String> {
                 members.into_iter().map(sanitize_for_runtime).collect();
             Ok(Ty::Union(sanitized?, attr))
         }
+        // Future should not reach runtime — must be awaited in MIR
+        Ty::Future(_, _) => Err("Future type should not reach runtime (must be awaited)".to_string()),
         // All other variants pass through
         other => Ok(other),
     }
