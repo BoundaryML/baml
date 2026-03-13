@@ -1580,112 +1580,149 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     let _40: ChainUser
     let _41: null
     let _42: void
-    let _43: null
-    let _44: void
-    let _45: null
-    let _46: void
-    let _47: 0
-    let _48: null
-    let _49: void
-    let _50: 0
-    let _51: null
-    let _52: void
-    let _53: 0
-    let _54: null
-    let _55: ChainItem[]
+    let _43: string
+    let _44: ChainUser
+    let _45: string
+    let _46: null
+    let _47: void
+    let _48: ChainItem[]
+    let _49: string
+    let _50: null
+    let _51: void
+    let _52: ChainItem[]
+    let _53: ChainProfile
+    let _54: ChainUser
+    let _55: string
     let _56: 0
     let _57: null
-    let _58: ChainItem
+    let _58: void
     let _59: ChainItem[]
-    let _60: 0
-    let _61: null
-    let _62: string[]
-    let _63: ChainUser
-    let _64: 0
-    let _65: null
-    let _66: int[]
-    let _67: int[][]
-    let _68: ChainUser
+    let _60: string
+    let _61: 0
+    let _62: null
+    let _63: void
+    let _64: ChainItem[]
+    let _65: string
+    let _66: 0
+    let _67: null
+    let _68: ChainItem[]
     let _69: 0
-    let _70: 1
-    let _71: null
+    let _70: null
+    let _71: ChainItem
     let _72: ChainItem[]
     let _73: 0
     let _74: null
-    let _75: ChainItem[]
-    let _76: 0
-    let _77: null
-    let _78: void
-    let _79: null
-    let _80: void
-    let _81: null
-    let _82: void
-    let _83: null
+    let _75: string[]
+    let _76: ChainUser
+    let _77: 0
+    let _78: null
+    let _79: int[]
+    let _80: int[][]
+    let _81: ChainUser
+    let _82: 0
+    let _83: 1
     let _84: null
     let _85: ChainItem[]
-    let _86: ChainProfile
-    let _87: ChainUser
-    let _88: (ChainItem[], int, int) -> ChainItem[]
+    let _86: 0
+    let _87: null
+    let _88: ChainItem[]
     let _89: 0
-    let _90: void
+    let _90: null
     let _91: void
-    let _92: void
-    let _93: 1
-    let _94: int
-    let _95: ChainPreferences
-    let _96: ChainSettings
-    let _97: ChainProfile
-    let _98: ChainUser
-    let _99: null
-    let _100: void
-    let _101: null
-    let _102: void
-    let _103: null
-    let _104: null
-    let _105: int[]
-    let _106: int[][]
-    let _107: ChainUser
-    let _108: 0
-    let _109: 0
-    let _110: null
-    let _111: int[]
-    let _112: int[][]
-    let _113: ChainUser
-    let _114: 0
-    let _115: 1
+    let _92: null
+    let _93: void
+    let _94: null
+    let _95: void
+    let _96: null
+    let _97: null
+    let _98: ChainItem[]
+    let _99: ChainProfile
+    let _100: ChainUser
+    let _101: (ChainItem[], int, int) -> ChainItem[]
+    let _102: 0
+    let _103: void
+    let _104: void
+    let _105: void
+    let _106: ChainItem[]
+    let _107: ChainProfile
+    let _108: ChainUser
+    let _109: string
+    let _110: 1
+    let _111: int
+    let _112: ChainPreferences
+    let _113: ChainSettings
+    let _114: ChainProfile
+    let _115: ChainUser
     let _116: null
-    let _117: int[]
-    let _118: int[][]
-    let _119: ChainUser
-    let _120: void
-    let _121: void
-    let _122: void
-    let _123: 1
-    let _124: void
-    let _125: void
-    let _126: void
-    let _127: 1
-    let _128: null
-    let _129: ChainUser
-    let _130: null
-    let _131: ChainItem[]
-    let _132: 0
+    let _117: void
+    let _118: null
+    let _119: void
+    let _120: null
+    let _121: null
+    let _122: int[]
+    let _123: int[][]
+    let _124: ChainUser
+    let _125: 0
+    let _126: 0
+    let _127: null
+    let _128: int[]
+    let _129: int[][]
+    let _130: ChainUser
+    let _131: 0
+    let _132: 1
     let _133: null
-    let _134: void
-    let _135: 0
-    let _136: null
+    let _134: int[]
+    let _135: int[][]
+    let _136: ChainUser
     let _137: void
-    let _138: null
-    let _139: int[]
+    let _138: void
+    let _139: void
     let _140: int[][]
     let _141: ChainUser
-    let _142: 0
-    let _143: 0
-    let _144: null
+    let _142: string
+    let _143: 1
+    let _144: void
     let _145: void
-    let _146: null
-    let _147: null
-    let _148: ChainUser
+    let _146: void
+    let _147: int[]
+    let _148: int[][]
+    let _149: ChainUser
+    let _150: 0
+    let _151: string
+    let _152: 1
+    let _153: null
+    let _154: ChainUser
+    let _155: null
+    let _156: ChainItem[]
+    let _157: 0
+    let _158: null
+    let _159: void
+    let _160: ChainItem[]
+    let _161: string
+    let _162: 0
+    let _163: null
+    let _164: void
+    let _165: string
+    let _166: string[]
+    let _167: ChainUser
+    let _168: 0
+    let _169: string
+    let _170: null
+    let _171: int[]
+    let _172: int[][]
+    let _173: ChainUser
+    let _174: 0
+    let _175: 0
+    let _176: null
+    let _177: void
+    let _178: string
+    let _179: ChainItem
+    let _180: ChainItem[]
+    let _181: 0
+    let _182: string
+    let _183: null
+    let _184: null
+    let _185: ChainUser
 
     bb0: {
         _4 = copy _1;
@@ -1725,7 +1762,10 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
         _39 = copy _40.1;
         _38 = copy _39.1;
         _37 = copy _38.0;
-        _42 = const null;
+        _44 = copy _1;
+        _43 = copy _44.0;
+        _45 = const "len";
+        _42 = copy _43[_45];
         _41 = call copy _42() -> [bb2];
     }
 
@@ -1734,161 +1774,195 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     }
 
     bb2: {
-        _44 = const null;
-        _43 = call copy _44() -> [bb3];
+        _48 = copy _2;
+        _49 = const "len";
+        _47 = copy _48[_49];
+        _46 = call copy _47() -> [bb3];
     }
 
     bb3: {
-        _46 = const null;
-        _47 = const 0_i64;
-        _45 = call copy _46(copy _47) -> [bb4];
+        _54 = copy _1;
+        _53 = copy _54.1;
+        _52 = copy _53.2;
+        _55 = const "get";
+        _51 = copy _52[_55];
+        _56 = const 0_i64;
+        _50 = call copy _51(copy _56) -> [bb4];
     }
 
     bb4: {
-        _49 = const null;
-        _50 = const 0_i64;
-        _48 = call copy _49(copy _50) -> [bb5];
+        _59 = copy _2;
+        _60 = const "get";
+        _58 = copy _59[_60];
+        _61 = const 0_i64;
+        _57 = call copy _58(copy _61) -> [bb5];
     }
 
     bb5: {
-        _52 = const null;
-        _53 = const 0_i64;
-        _51 = call copy _52(copy _53) -> [bb6];
+        _64 = copy _2;
+        _65 = const "get";
+        _63 = copy _64[_65];
+        _66 = const 0_i64;
+        _62 = call copy _63(copy _66) -> [bb6];
     }
 
     bb6: {
-        _55 = copy _2;
-        _56 = const 0_i64;
-        _54 = copy _55[_56];
-        _59 = copy _2;
-        _60 = const 0_i64;
-        _58 = copy _59[_60];
-        _57 = copy _58.0;
-        _63 = copy _1;
-        _62 = copy _63.2;
-        _64 = const 0_i64;
-        _61 = copy _62[_64];
-        _68 = copy _1;
-        _67 = copy _68.3;
+        _68 = copy _2;
         _69 = const 0_i64;
-        _66 = copy _67[_69];
-        _70 = const 1_i64;
-        _65 = copy _66[_70];
+        _67 = copy _68[_69];
         _72 = copy _2;
         _73 = const 0_i64;
         _71 = copy _72[_73];
-        _75 = copy _2;
-        _76 = const 0_i64;
-        _74 = copy _75[_76];
-        _78 = const null;
-        _77 = call copy _78() -> [bb7];
+        _70 = copy _71.0;
+        _76 = copy _1;
+        _75 = copy _76.2;
+        _77 = const 0_i64;
+        _74 = copy _75[_77];
+        _81 = copy _1;
+        _80 = copy _81.3;
+        _82 = const 0_i64;
+        _79 = copy _80[_82];
+        _83 = const 1_i64;
+        _78 = copy _79[_83];
+        _85 = copy _2;
+        _86 = const 0_i64;
+        _84 = copy _85[_86];
+        _88 = copy _2;
+        _89 = const 0_i64;
+        _87 = copy _88[_89];
+        _91 = const null;
+        _90 = call copy _91() -> [bb7];
     }
 
     bb7: {
-        _80 = const null;
-        _79 = call copy _80() -> [bb8];
+        _93 = const null;
+        _92 = call copy _93() -> [bb8];
     }
 
     bb8: {
-        _82 = const null;
-        _81 = call copy _82() -> [bb9];
+        _95 = const null;
+        _94 = call copy _95() -> [bb9];
     }
 
     bb9: {
-        _83 = const null;
-        _87 = copy _1;
-        _86 = copy _87.1;
-        _85 = copy _86.2;
-        _88 = const fn baml.Array.slice;
-        _89 = const 0_i64;
-        _92 = const null;
-        _91 = call copy _92() -> [bb10];
+        _96 = const null;
+        _100 = copy _1;
+        _99 = copy _100.1;
+        _98 = copy _99.2;
+        _101 = const fn baml.Array.slice;
+        _102 = const 0_i64;
+        _108 = copy _1;
+        _107 = copy _108.1;
+        _106 = copy _107.2;
+        _109 = const "len";
+        _105 = copy _106[_109];
+        _104 = call copy _105() -> [bb10];
     }
 
     bb10: {
-        _93 = const 1_i64;
-        _90 = copy _91 - copy _93;
-        _98 = copy _1;
-        _97 = copy _98.1;
-        _96 = copy _97.1;
-        _95 = copy _96.2;
-        _94 = copy _95.2;
-        _84 = call copy _88(copy _85, copy _89, copy _90, copy _94) -> [bb11];
+        _110 = const 1_i64;
+        _103 = copy _104 - copy _110;
+        _115 = copy _1;
+        _114 = copy _115.1;
+        _113 = copy _114.1;
+        _112 = copy _113.2;
+        _111 = copy _112.2;
+        _97 = call copy _101(copy _98, copy _102, copy _103, copy _111) -> [bb11];
     }
 
     bb11: {
-        _100 = const null;
-        _99 = call copy _100() -> [bb12];
+        _117 = const null;
+        _116 = call copy _117() -> [bb12];
     }
 
     bb12: {
-        _102 = const null;
-        _101 = call copy _102() -> [bb13];
+        _119 = const null;
+        _118 = call copy _119() -> [bb13];
     }
 
     bb13: {
-        _103 = const null;
-        _107 = copy _1;
-        _106 = copy _107.3;
-        _108 = const 0_i64;
-        _105 = copy _106[_108];
-        _109 = const 0_i64;
-        _104 = copy _105[_109];
-        _113 = copy _1;
-        _112 = copy _113.3;
-        _114 = const 0_i64;
-        _111 = copy _112[_114];
-        _115 = const 1_i64;
-        _110 = copy _111[_115];
-        _119 = copy _1;
-        _118 = copy _119.3;
-        _122 = const null;
-        _121 = call copy _122() -> [bb14];
+        _120 = const null;
+        _124 = copy _1;
+        _123 = copy _124.3;
+        _125 = const 0_i64;
+        _122 = copy _123[_125];
+        _126 = const 0_i64;
+        _121 = copy _122[_126];
+        _130 = copy _1;
+        _129 = copy _130.3;
+        _131 = const 0_i64;
+        _128 = copy _129[_131];
+        _132 = const 1_i64;
+        _127 = copy _128[_132];
+        _136 = copy _1;
+        _135 = copy _136.3;
+        _141 = copy _1;
+        _140 = copy _141.3;
+        _142 = const "len";
+        _139 = copy _140[_142];
+        _138 = call copy _139() -> [bb14];
     }
 
     bb14: {
-        _123 = const 1_i64;
-        _120 = copy _121 - copy _123;
-        _117 = copy _118[_120];
-        _126 = const null;
-        _125 = call copy _126() -> [bb15];
+        _143 = const 1_i64;
+        _137 = copy _138 - copy _143;
+        _134 = copy _135[_137];
+        _149 = copy _1;
+        _148 = copy _149.3;
+        _150 = const 0_i64;
+        _147 = copy _148[_150];
+        _151 = const "len";
+        _146 = copy _147[_151];
+        _145 = call copy _146() -> [bb15];
     }
 
     bb15: {
-        _127 = const 1_i64;
-        _124 = copy _125 - copy _127;
-        _116 = copy _117[_124];
-        _129 = copy _1;
-        _128 = copy _129.0;
-        _131 = copy _2;
-        _132 = const 0_i64;
-        _130 = copy _131[_132];
-        _134 = const null;
-        _135 = const 0_i64;
-        _133 = call copy _134(copy _135) -> [bb16];
+        _152 = const 1_i64;
+        _144 = copy _145 - copy _152;
+        _133 = copy _134[_144];
+        _154 = copy _1;
+        _153 = copy _154.0;
+        _156 = copy _2;
+        _157 = const 0_i64;
+        _155 = copy _156[_157];
+        _160 = copy _2;
+        _161 = const "get";
+        _159 = copy _160[_161];
+        _162 = const 0_i64;
+        _158 = call copy _159(copy _162) -> [bb16];
     }
 
     bb16: {
-        _137 = const null;
-        _136 = call copy _137() -> [bb17];
+        _167 = copy _1;
+        _166 = copy _167.2;
+        _168 = const 0_i64;
+        _165 = copy _166[_168];
+        _169 = const "len";
+        _164 = copy _165[_169];
+        _163 = call copy _164() -> [bb17];
     }
 
     bb17: {
-        _141 = copy _1;
-        _140 = copy _141.3;
-        _142 = const 0_i64;
-        _139 = copy _140[_142];
-        _143 = const 0_i64;
-        _138 = copy _139[_143];
-        _145 = const null;
-        _144 = call copy _145() -> [bb18];
+        _173 = copy _1;
+        _172 = copy _173.3;
+        _174 = const 0_i64;
+        _171 = copy _172[_174];
+        _175 = const 0_i64;
+        _170 = copy _171[_175];
+        _180 = copy _2;
+        _181 = const 0_i64;
+        _179 = copy _180[_181];
+        _178 = copy _179.0;
+        _182 = const "len";
+        _177 = copy _178[_182];
+        _176 = call copy _177() -> [bb18];
     }
 
     bb18: {
-        _146 = const null;
-        _147 = const null;
-        _148 = copy _1;
-        _0 = copy _148.0;
+        _183 = const null;
+        _184 = const null;
+        _185 = copy _1;
+        _0 = copy _185.0;
         goto -> bb1;
     }
 }

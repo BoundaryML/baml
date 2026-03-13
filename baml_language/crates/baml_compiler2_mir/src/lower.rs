@@ -1069,9 +1069,21 @@ impl<'db> LoweringContext<'db> {
 
         // Check if this is a package path intermediate (e.g. `baml.HttpMethod` in
         // `baml.HttpMethod.Get`). TIR marks these as Ty::Unknown. Emit null placeholder.
+        // CRITICAL: only treat the expression as a namespace intermediate if the BASE
+        // is also Unknown (i.e. `baml` in `baml.HttpMethod`). If the base has a
+        // concrete type, this is a real field access whose field type happens to be
+        // Unknown (unresolved type annotation). In that case, fall through to emit
+        // the field projection.
         if let Some(Tir2Ty::Unknown) = self.expr_types.get(&expr_id) {
-            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-            return;
+            let base_is_also_unknown = self.expr_types
+                .get(&base)
+                .map(|ty| matches!(ty, Tir2Ty::Unknown))
+                .unwrap_or(true);
+            if base_is_also_unknown {
+                self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+                return;
+            }
+            // Base is a real value (non-Unknown type) — fall through to field projection
         }
 
         // Regular field access

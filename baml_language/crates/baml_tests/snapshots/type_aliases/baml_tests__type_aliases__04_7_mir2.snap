@@ -65,9 +65,11 @@ fn MakeJSON(i: NotJSON) -> JSON {
     // Locals:
     let _0: JSON // _0 // return
     let _1: NotJSON // i // param
+    let _2: NotJSON
 
     bb0: {
-        _0 = const null;
+        _2 = copy _1;
+        _0 = copy _2.0;
         goto -> bb1;
     }
 

@@ -80,6 +80,8 @@ fn Headers() -> string {
     let _4: int
     let _5: int
     let _6: void
+    let _7: int
+    let _8: string
 
     bb0: {
         notify_block(Setup, level=2);
@@ -90,7 +92,9 @@ fn Headers() -> string {
         _4 = copy _1;
         _5 = copy _2;
         _3 = copy _4 + copy _5;
-        _6 = const null;
+        _7 = copy _3;
+        _8 = const "to_string";
+        _6 = copy _7[_8];
         _0 = call copy _6() -> [bb2];
     }
 

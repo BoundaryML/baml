@@ -2182,6 +2182,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Ty::Unknown
                 }
             }
+            Ty::TypeAlias(qtn) => {
+                // Expand the alias to its concrete type, then recurse.
+                if let Some(expanded) = self.aliases.get(qtn) {
+                    let expanded = expanded.clone();
+                    return self.resolve_member(&expanded, member, at);
+                }
+                // Alias not in map (cyclic or unresolved) — treat as Unknown
+                Ty::Unknown
+            }
             Ty::Unknown => {
                 // Base type unknown — can't resolve member, but don't emit error
                 // (the base type error was already reported upstream)
@@ -2241,6 +2250,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Optional(inner) => {
                 // Drill through Optional to resolve the member on the inner type
                 self.try_resolve_member_on_ty(inner, member)
+            }
+            Ty::TypeAlias(qtn) => {
+                if let Some(expanded) = self.aliases.get(qtn) {
+                    let expanded = expanded.clone();
+                    self.try_resolve_member_on_ty(&expanded, member)
+                } else {
+                    None
+                }
             }
             Ty::Unknown => {
                 // Unknown propagates — treat as if the field exists with Unknown type
