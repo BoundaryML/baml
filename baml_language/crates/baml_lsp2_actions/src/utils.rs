@@ -164,6 +164,7 @@ pub fn display_ty(ty: &Ty) -> String {
         Ty::Void => "void".to_string(),
         Ty::BuiltinUnknown | Ty::Unknown => "unknown".to_string(),
         Ty::RustType => "$rust_type".to_string(),
+        Ty::Type => "type".to_string(),
         Ty::Error => "!error".to_string(),
     }
 }

@@ -404,6 +404,20 @@ pub(crate) mod support {
                 writeln!(output, "{pad}while {cond_desc}").ok();
                 render_expr(*body_expr, body, inference, indent + 2, output);
             }
+            Stmt::For {
+                binding,
+                collection,
+                body: for_body,
+            } => {
+                let bind_name = match &body.patterns[*binding] {
+                    Pattern::Binding(n) => n.to_string(),
+                    Pattern::TypedBinding { name, .. } => name.to_string(),
+                    other => format!("{other:?}"),
+                };
+                let coll_desc = expr_desc(*collection, body);
+                writeln!(output, "{pad}for {bind_name} in {coll_desc}").ok();
+                render_expr(*for_body, body, inference, indent + 2, output);
+            }
             Stmt::Assign { target, value } => {
                 let target_desc = expr_desc(*target, body);
                 let val_desc = expr_desc(*value, body);

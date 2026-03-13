@@ -89,6 +89,9 @@ impl baml_compiler2_hir::Db for ProjectDatabase {
 impl baml_compiler2_tir::Db for ProjectDatabase {}
 
 #[salsa::db]
+impl baml_compiler2_mir::Db for ProjectDatabase {}
+
+#[salsa::db]
 impl baml_lsp2_actions::Db for ProjectDatabase {}
 
 #[salsa::db]

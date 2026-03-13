@@ -111,6 +111,14 @@ impl MirBuilder {
         self.locals.len()
     }
 
+    /// Return the declared type of a local variable.
+    ///
+    /// Used by `bind_pattern` in `lower.rs` to propagate the scrutinee's type
+    /// to catch binding locals when TIR has not populated the pattern type map.
+    pub(crate) fn local_ty(&self, local: Local) -> Ty {
+        self.locals[local.0].ty.clone()
+    }
+
     // ========================================================================
     // Block Management
     // ========================================================================

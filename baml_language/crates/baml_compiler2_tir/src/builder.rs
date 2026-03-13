@@ -58,6 +58,26 @@ struct ThrowPatternMatches {
     definitely_handled: BTreeSet<String>,
 }
 
+/// Result of resolving a member on a builtin class (Array, Map, String, media types).
+/// Distinguishes methods (which have locs) from fields (which are just types).
+enum BuiltinResolution<'db> {
+    Method {
+        ty: Ty,
+        class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
+        func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    },
+    Field(Ty),
+}
+
+impl<'db> BuiltinResolution<'db> {
+    fn into_ty(self) -> Ty {
+        match self {
+            BuiltinResolution::Method { ty, .. } => ty,
+            BuiltinResolution::Field(ty) => ty,
+        }
+    }
+}
+
 /// Per-scope inference builder.
 ///
 /// Created at the start of `infer_scope_types`, discarded when done.
@@ -70,6 +90,10 @@ pub struct TypeInferenceBuilder<'db> {
     /// Binding types: the type a variable is bound to (may differ from the
     /// initializer expression type due to widening or annotation).
     bindings: FxHashMap<PatId, Ty>,
+    /// Method resolutions: for field-access expressions that resolved to a
+    /// method or free function, records the structural path so MIR can emit
+    /// the correct QualifiedName without re-doing resolution.
+    resolutions: FxHashMap<ExprId, crate::inference::MethodResolution<'db>>,
     /// Package items for cross-file name resolution.
     package_items: &'db PackageItems<'db>,
     /// Current package ID (for throw-set queries).
@@ -111,6 +135,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             context,
             expressions: FxHashMap::default(),
             bindings: FxHashMap::default(),
+            resolutions: FxHashMap::default(),
             package_items,
             package_id,
             scope,
@@ -128,10 +153,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> (
         FxHashMap<ExprId, Ty>,
         FxHashMap<PatId, Ty>,
+        FxHashMap<ExprId, crate::inference::MethodResolution<'db>>,
         TypeCheckDiagnostics<'db>,
     ) {
         let diagnostics = self.context.finish();
-        (self.expressions, self.bindings, diagnostics)
+        (self.expressions, self.bindings, self.resolutions, diagnostics)
     }
 
     /// Set the declared return type (for return statement checking).
@@ -217,9 +243,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
 
                     let callee_ty = self.infer_expr(*callee, body);
-                    for arg in args {
-                        self.infer_expr(*arg, body);
-                    }
+
                     match &callee_ty {
                         Ty::Function { params, ret } => {
                             // For method calls, skip the `self` parameter when
@@ -238,9 +262,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                                     expr_id,
                                 );
                             }
+
+                            // Contextual typing: check each argument against its
+                            // corresponding parameter type. This is how TypeScript
+                            // works — argument expressions are contextually typed by
+                            // the function's declared parameter types. This enables
+                            // empty map literals `{}` to adopt the expected map type
+                            // from the function signature, rather than inferring
+                            // `map<void, void>` from zero entries.
+                            for (i, arg) in args.iter().enumerate() {
+                                if let Some((_name, param_ty)) = effective_params.get(i) {
+                                    self.check_expr(*arg, body, param_ty);
+                                } else {
+                                    // Extra args beyond param count — infer bottom-up
+                                    self.infer_expr(*arg, body);
+                                }
+                            }
+
                             *ret.clone()
                         }
-                        Ty::Unknown | Ty::Error => Ty::Unknown,
+                        Ty::Unknown | Ty::Error => {
+                            // Callee type unknown — fall back to bottom-up inference
+                            for arg in args {
+                                self.infer_expr(*arg, body);
+                            }
+                            Ty::Unknown
+                        }
                         _ => {
                             self.context.report_simple(
                                 TirTypeError::NotCallable {
@@ -248,6 +295,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 },
                                 expr_id,
                             );
+                            // Callee not callable — still infer args for error recovery
+                            for arg in args {
+                                self.infer_expr(*arg, body);
+                            }
                             Ty::Unknown
                         }
                     }
@@ -283,7 +334,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::FieldAccess { base, field } => {
                 // Check for primitive-type static method access first:
                 // `image.from_url(...)` where `image` is a type name, not a value.
-                if let Some(ty) = self.try_primitive_static_access(*base, field, body) {
+                if let Some(ty) = self.try_primitive_static_access(expr_id, *base, field, body) {
+                    ty
+                // Check for package access: `baml.Array.length`, `env.get`, etc.
+                } else if let Some(ty) = self.try_package_access(expr_id, *base, field, body) {
                     ty
                 } else {
                     let base_ty = self.infer_expr(*base, body);
@@ -638,6 +692,47 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*while_body, body);
                 false
             }
+            // Design note: Stmt::For is kept as a first-class construct (not desugared
+            // to While) so we can produce for-loop-specific diagnostics ("cannot iterate
+            // over type X") and preserve iteration semantics for downstream codegen.
+            // Desugaring to index-based basic blocks happens at MIR lowering time.
+            Stmt::For {
+                binding,
+                collection,
+                body: for_body,
+            } => {
+                // 1. Infer the collection type
+                let coll_ty = self.infer_expr(*collection, body);
+
+                // 2. Derive the element type from the collection
+                let elem_ty = match &coll_ty {
+                    Ty::List(elem) => *elem.clone(),
+                    Ty::EvolvingList(elem) => *elem.clone(),
+                    _ => {
+                        self.context.report_simple(
+                            TirTypeError::NotIterable { ty: coll_ty },
+                            *collection,
+                        );
+                        Ty::Unknown
+                    }
+                };
+
+                // 3. Bind the loop variable to the element type
+                let pat = &body.patterns[*binding];
+                let name = match pat {
+                    baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
+                    baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                self.bindings.insert(*binding, elem_ty.clone());
+                if let Some(name) = name {
+                    self.locals.insert(name, elem_ty);
+                }
+
+                // 4. Check the body
+                self.infer_expr(*for_body, body);
+                false
+            }
             Stmt::Assign { target, value } => {
                 // Check for container index mutation: x[i] = val
                 if self.try_index_assign_mutation(*target, *value, body) {
@@ -919,6 +1014,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         let mut residual = self.catch_base_throw_types(base_expr_id, body);
 
         for clause in clauses {
+            // Compute the clause-level binding type from the current residual throw set.
+            // This is the type of the error variable (e.g. `e` in `catch (e)`).
+            let clause_binding_ty = if residual.is_empty() {
+                Ty::Unknown
+            } else {
+                self.throw_facts_to_ty(&residual)
+            };
+            // Record the clause binding type in the bindings map so MIR can read it.
+            self.bindings.insert(clause.binding, clause_binding_ty);
+
             let binding_name = match &body.patterns[clause.binding] {
                 baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
                 baml_compiler2_ast::Pattern::TypedBinding { name, ty } => {
@@ -1437,7 +1542,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             | Ty::EvolvingList(_)
             | Ty::EvolvingMap(_, _)
             | Ty::Function { .. }
-            | Ty::RustType => false,
+            | Ty::RustType
+            | Ty::Type => false,
         }
     }
 
@@ -1590,6 +1696,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_effective_throws_from_stmt(*after_stmt, body, out);
                 }
             }
+            Stmt::For {
+                collection,
+                body: for_body,
+                ..
+            } => {
+                self.collect_effective_throws_from_expr(*collection, body, out);
+                self.collect_effective_throws_from_expr(*for_body, body, out);
+            }
             Stmt::Return(expr) => {
                 if let Some(expr) = expr {
                     self.collect_effective_throws_from_expr(*expr, body, out);
@@ -1729,6 +1843,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(after_stmt) = after {
                     self.collect_throw_facts_from_stmt(*after_stmt, body, out);
                 }
+            }
+            Stmt::For {
+                collection,
+                body: for_body,
+                ..
+            } => {
+                self.collect_throw_facts_from_expr(*collection, body, out);
+                self.collect_throw_facts_from_expr(*for_body, body, out);
             }
             Stmt::Return(expr) => {
                 if let Some(expr) = expr {
@@ -1905,7 +2027,19 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // Check class methods via the item tree (methods are stored
                 // directly on the Class entry, not in the package namespace).
-                if let Some(ty) = self.lookup_class_method(class_name, member) {
+                if let Some((ty, class_loc, func_loc)) = self.lookup_class_method(class_name, member) {
+                    let db = self.context.db();
+                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+                    let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
+                    let class_data = &item_tree[class_loc.id(db)];
+                    self.resolutions.insert(at, crate::inference::MethodResolution::Method {
+                        package: pkg_info.package,
+                        namespace: pkg_info.namespace_path,
+                        class: class_data.name.clone(),
+                        name: member.clone(),
+                        class_loc,
+                        func_loc,
+                    });
                     return ty;
                 }
 
@@ -1952,7 +2086,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Ty::List(element_ty) => {
                 // Bridge: int[] → Array<int> — resolve via builtin Array class.
-                self.resolve_builtin_method(&["Array"], &[element_ty.as_ref().clone()], member)
+                self.resolve_builtin_member(&["Array"], &[element_ty.as_ref().clone()], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_simple(
                             TirTypeError::UnresolvedMember {
@@ -1966,10 +2100,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Ty::Map(key_ty, val_ty) => {
                 // Bridge: map<string, int> → Map<string, int>
-                self.resolve_builtin_method(
+                self.resolve_builtin_member(
                     &["Map"],
                     &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
                     member,
+                    at,
                 )
                 .unwrap_or_else(|| {
                     self.context.report_simple(
@@ -1985,7 +2120,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Primitive(PrimitiveType::String)
             | Ty::Literal(baml_base::Literal::String(_), _) => {
                 // Bridge: string / "literal" → String class
-                self.resolve_builtin_method(&["String"], &[], member)
+                self.resolve_builtin_member(&["String"], &[], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_simple(
                             TirTypeError::UnresolvedMember {
@@ -2004,7 +2139,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 | PrimitiveType::Pdf),
             ) => {
                 // Bridge: each media primitive → its own builtin class in baml.media
-                self.resolve_builtin_method(p.builtin_class_path(), &[], member)
+                self.resolve_builtin_member(p.builtin_class_path(), &[], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_simple(
                             TirTypeError::UnresolvedMember {
@@ -2077,29 +2212,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(field_ty) = fields.get(member) {
                     return Some(field_ty.clone());
                 }
-                if let Some(method_ty) = self.lookup_class_method(class_name, member) {
+                if let Some((method_ty, _, _)) = self.lookup_class_method(class_name, member) {
                     return Some(method_ty);
                 }
                 None
             }
             Ty::List(element_ty) => {
                 self.resolve_builtin_method(&["Array"], &[element_ty.as_ref().clone()], member)
+                    .map(|r| r.into_ty())
             }
             Ty::Map(key_ty, val_ty) => self.resolve_builtin_method(
                 &["Map"],
                 &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
                 member,
-            ),
+            ).map(|r| r.into_ty()),
             Ty::Primitive(PrimitiveType::String)
             | Ty::Literal(baml_base::Literal::String(_), _) => {
                 self.resolve_builtin_method(&["String"], &[], member)
+                    .map(|r| r.into_ty())
             }
             Ty::Primitive(
                 p @ (PrimitiveType::Image
                 | PrimitiveType::Audio
                 | PrimitiveType::Video
                 | PrimitiveType::Pdf),
-            ) => self.resolve_builtin_method(p.builtin_class_path(), &[], member),
+            ) => self.resolve_builtin_method(p.builtin_class_path(), &[], member)
+                .map(|r| r.into_ty()),
             Ty::Optional(inner) => {
                 // Drill through Optional to resolve the member on the inner type
                 self.try_resolve_member_on_ty(inner, member)
@@ -2121,9 +2259,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> FxHashMap<Name, Ty> {
         let mut result = FxHashMap::default();
         let short = Self::unqualify(class_name);
-        if let Some(def) = self.package_items.lookup_type(&[short]) {
+        let pkg_items_for_class = self.resolve_class_pkg_items(&class_name.pkg);
+        if let Some(def) = pkg_items_for_class.lookup_type_any_ns(&short) {
             if let Definition::Class(class_loc) = def {
                 let file = class_loc.file(self.context.db());
+                let ns_context = baml_compiler2_hir::file_package::file_package(self.context.db(), file).namespace_path;
                 let item_tree = baml_compiler2_hir::file_item_tree(self.context.db(), file);
                 let class_data = &item_tree[class_loc.id(self.context.db())];
                 for field in &class_data.fields {
@@ -2132,10 +2272,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .type_expr
                         .as_ref()
                         .map(|te| {
-                            let ty = crate::lower_type_expr::lower_type_expr(
+                            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                                 self.context.db(),
                                 &te.expr,
-                                self.package_items,
+                                pkg_items_for_class,
+                                &ns_context,
                                 &mut diags,
                             );
                             for diag in diags.drain(..) {
@@ -2151,23 +2292,45 @@ impl<'db> TypeInferenceBuilder<'db> {
         result
     }
 
+    /// Fetch `PackageItems` for the package that owns a class type.
+    ///
+    /// Returns `self.package_items` when the class is in the current package,
+    /// or loads the correct foreign package's items when the class lives in a
+    /// different package (e.g., `baml` builtins).
+    fn resolve_class_pkg_items(
+        &self,
+        class_pkg: &baml_base::Name,
+    ) -> &'db baml_compiler2_hir::package::PackageItems<'db> {
+        let db = self.context.db();
+        if class_pkg.as_str() == self.package_id.name(db).as_str() {
+            self.package_items
+        } else {
+            let foreign_pkg_id =
+                baml_compiler2_hir::package::PackageId::new(db, class_pkg.clone());
+            baml_compiler2_hir::package::package_items(db, foreign_pkg_id)
+        }
+    }
+
     /// Look up a class method by name from the item tree.
     ///
     /// Methods are stored on the `Class` entry directly (not in the package
     /// namespace), so we resolve the class, iterate its method IDs, and match
-    /// by name.
+    /// by name. Returns the method type along with the class and function locs
+    /// so callers can record a `MethodResolution`.
     fn lookup_class_method(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
         method_name: &Name,
-    ) -> Option<Ty> {
+    ) -> Option<(Ty, baml_compiler2_hir::loc::ClassLoc<'db>, baml_compiler2_hir::loc::FunctionLoc<'db>)> {
         let short = Self::unqualify(class_name);
-        let def = self.package_items.lookup_type(&[short])?;
+        let pkg_items_for_class = self.resolve_class_pkg_items(&class_name.pkg);
+        let def = pkg_items_for_class.lookup_type_any_ns(&short)?;
         let Definition::Class(class_loc) = def else {
             return None;
         };
         let db = self.context.db();
         let file = class_loc.file(db);
+        let ns_context = baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let item_tree = baml_compiler2_hir::file_item_tree(db, file);
         let class_data = &item_tree[class_loc.id(db)];
 
@@ -2177,30 +2340,38 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                 let mut diags = Vec::new();
+                let class_ty = Ty::Class(class_name.clone());
                 let ty = Ty::Function {
                     params: sig
                         .params
                         .iter()
                         .map(|(n, te)| {
-                            (
-                                Some(n.clone()),
-                                crate::lower_type_expr::lower_type_expr(
+                            let param_ty = if n.as_str() == "self"
+                                && matches!(te, baml_compiler2_ast::TypeExpr::Unknown)
+                            {
+                                // self with no annotation → use the enclosing class type
+                                class_ty.clone()
+                            } else {
+                                crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
                                     te,
-                                    self.package_items,
+                                    pkg_items_for_class,
+                                    &ns_context,
                                     &mut diags,
-                                ),
-                            )
+                                )
+                            };
+                            (Some(n.clone()), param_ty)
                         })
                         .collect(),
                     ret: Box::new(
                         sig.return_type
                             .as_ref()
                             .map(|te| {
-                                crate::lower_type_expr::lower_type_expr(
+                                crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
                                     te,
-                                    self.package_items,
+                                    pkg_items_for_class,
+                                    &ns_context,
                                     &mut diags,
                                 )
                             })
@@ -2208,7 +2379,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ),
                 };
                 // Note: diags from method signatures are reported at definition site.
-                return Some(ty);
+                return Some((ty, class_loc, func_loc));
             }
         }
         None
@@ -2220,8 +2391,178 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Returns `Some(method_ty)` if the base is a recognized primitive type name
     /// and the field is a valid static method on the corresponding builtin class.
     /// Returns `None` to fall through to normal FieldAccess resolution.
+    /// Try to resolve a FieldAccess chain rooted at `Path(["baml"])` as a
+    /// builtin package access: `baml.Array.length`, `baml.media.Image.from_url`.
+    ///
+    /// Walks the FieldAccess chain to extract the class path and member name,
+    /// then delegates to `resolve_builtin_member`.
+    /// Try to resolve a FieldAccess chain as a package access path.
+    ///
+    /// Walks the FieldAccess chain to find a root `Path([pkg_name])` where
+    /// `pkg_name` is a known package. Then resolves intermediate segments
+    /// through the package's namespace to find a type (class/enum), and
+    /// finally uses `resolve_member` on that type for the final field.
+    ///
+    /// Handles patterns like:
+    /// - `baml.Array.length` → package="baml", path=["Array"], member="length"
+    /// - `baml.media.Image.from_url` → package="baml", path=["media","Image"], member="from_url"
+    /// - `env.get` → package="env", path=[], member="get" (free function)
+    fn try_package_access(
+        &mut self,
+        at: ExprId,
+        base_id: ExprId,
+        member: &Name,
+        body: &ExprBody,
+    ) -> Option<Ty> {
+        // Walk the chain to collect segments before this member access.
+        let mut segments: Vec<Name> = Vec::new();
+        let mut current = base_id;
+        loop {
+            match &body.exprs[current] {
+                Expr::Path(path_segments) if path_segments.len() == 1 => {
+                    segments.push(path_segments[0].clone());
+                    break;
+                }
+                Expr::FieldAccess { base, field } => {
+                    segments.push(field.clone());
+                    current = *base;
+                }
+                _ => return None,
+            }
+        }
+
+        // Reverse so we have root-to-leaf order: ["baml", "Array"] or ["env"]
+        segments.reverse();
+
+        if segments.is_empty() {
+            return None;
+        }
+
+        // Check if the root segment is a known package (not a local variable)
+        let pkg_name = &segments[0];
+        if self.locals.contains_key(pkg_name) {
+            return None; // It's a local variable, not a package
+        }
+
+        let db = self.context.db();
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name.clone());
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+
+        // Check that this package actually has items (non-empty = real package)
+        if pkg_items.namespaces.is_empty() {
+            return None;
+        }
+
+        // The remaining segments (after the package name) form the item path.
+        let item_path = &segments[1..];
+
+        // Record types for intermediate expressions (so MIR doesn't panic on them).
+        let mut cur = base_id;
+        loop {
+            match &body.exprs[cur] {
+                Expr::Path(_) => {
+                    self.record_expr_type(cur, Ty::Unknown);
+                    break;
+                }
+                Expr::FieldAccess { base, .. } => {
+                    self.record_expr_type(cur, Ty::Unknown);
+                    cur = *base;
+                }
+                _ => break,
+            }
+        }
+
+        if item_path.is_empty() {
+            // Direct package member: e.g. `env.get` — look up in the package's value namespace
+            if let Some(def) = pkg_items.lookup_value(&[member.clone()]) {
+                if let Definition::Function(func_loc) = def {
+                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
+                    let ns_context = pkg_info.namespace_path.clone();
+                    self.resolutions.insert(at, crate::inference::MethodResolution::Free {
+                        package: pkg_info.package,
+                        namespace: pkg_info.namespace_path,
+                        name: member.clone(),
+                        func_loc,
+                    });
+                    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                    let mut diags = Vec::new();
+                    let ty = Ty::Function {
+                        params: sig.params.iter().map(|(n, te)| {
+                            (Some(n.clone()), crate::lower_type_expr::lower_type_expr_in_ns(db, te, pkg_items, &ns_context, &mut diags))
+                        }).collect(),
+                        ret: Box::new(sig.return_type.as_ref()
+                            .map(|te| crate::lower_type_expr::lower_type_expr_in_ns(db, te, pkg_items, &ns_context, &mut diags))
+                            .unwrap_or(Ty::Unknown)),
+                    };
+                    return Some(ty);
+                }
+            }
+            return None;
+        }
+
+        // Try to resolve the item_path as a type in the package.
+        // For class types, look up the method/field directly in the same package.
+        // e.g. ["Array"] → look up Array class in baml, then resolve "length" on it.
+        if let Some(def) = pkg_items.lookup_type(item_path) {
+            match def {
+                Definition::Class(_class_loc) => {
+                    if pkg_name.as_str() == self.package_id.name(db).as_str() {
+                        // Same package as the user — use resolve_member which looks in self.package_items
+                        let class_qtn = crate::lower_type_expr::qualify_def(db, def, &item_path.last().unwrap());
+                        let base_ty = Ty::Class(class_qtn);
+                        return Some(self.resolve_member(&base_ty, member, at));
+                    } else {
+                        // Different package — use resolve_builtin_member which looks up in the correct package
+                        let class_path: Vec<&str> = item_path.iter().map(|s| s.as_str()).collect();
+                        return self.resolve_builtin_member(&class_path, &[], member, at)
+                            .or_else(|| {
+                                // Fall back to enum variant check
+                                let class_qtn = crate::lower_type_expr::qualify_def(db, def, &item_path.last().unwrap());
+                                let base_ty = Ty::Class(class_qtn);
+                                Some(self.resolve_member(&base_ty, member, at))
+                            });
+                    }
+                }
+                Definition::Enum(_) => {
+                    let enum_qtn = crate::lower_type_expr::qualify_def(db, def, &item_path.last().unwrap());
+                    let base_ty = Ty::Enum(enum_qtn);
+                    return Some(self.resolve_member(&base_ty, member, at));
+                }
+                _ => {}
+            }
+        }
+
+        // Also try as a value (function) in a nested namespace
+        if let Some(def) = pkg_items.lookup_value(&[item_path.to_vec(), vec![member.clone()]].concat()) {
+            if let Definition::Function(func_loc) = def {
+                let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
+                let ns_context = pkg_info.namespace_path.clone();
+                self.resolutions.insert(at, crate::inference::MethodResolution::Free {
+                    package: pkg_info.package,
+                    namespace: pkg_info.namespace_path,
+                    name: member.clone(),
+                    func_loc,
+                });
+                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                let mut diags = Vec::new();
+                let ty = Ty::Function {
+                    params: sig.params.iter().map(|(n, te)| {
+                        (Some(n.clone()), crate::lower_type_expr::lower_type_expr_in_ns(db, te, pkg_items, &ns_context, &mut diags))
+                    }).collect(),
+                    ret: Box::new(sig.return_type.as_ref()
+                        .map(|te| crate::lower_type_expr::lower_type_expr_in_ns(db, te, pkg_items, &ns_context, &mut diags))
+                        .unwrap_or(Ty::Unknown)),
+                };
+                return Some(ty);
+            }
+        }
+
+        None
+    }
+
     fn try_primitive_static_access(
-        &self,
+        &mut self,
+        at: ExprId,
         base_id: ExprId,
         field: &Name,
         body: &ExprBody,
@@ -2245,7 +2586,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             _ => return None,
         };
 
-        self.resolve_builtin_method(class_path, &[], field)
+        self.resolve_builtin_member(class_path, &[], field, at)
     }
 
     /// Resolve a method or field on a builtin class declared in the `"baml"` package.
@@ -2258,12 +2599,42 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// 5. Falls back to checking class fields.
     ///
     /// Returns `None` if the class or member is not found.
+    /// Wrapper around `resolve_builtin_method` that also stores a `MethodResolution`
+    /// when the result is a method (not a field).
+    fn resolve_builtin_member(
+        &mut self,
+        class_path: &[&str],
+        type_args: &[Ty],
+        member_name: &Name,
+        at: ExprId,
+    ) -> Option<Ty> {
+        let result = self.resolve_builtin_method(class_path, type_args, member_name)?;
+        match result {
+            BuiltinResolution::Method { ty, class_loc, func_loc } => {
+                let db = self.context.db();
+                let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+                let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
+                let class_data = &item_tree[class_loc.id(db)];
+                self.resolutions.insert(at, crate::inference::MethodResolution::Method {
+                    package: pkg_info.package,
+                    namespace: pkg_info.namespace_path,
+                    class: class_data.name.clone(),
+                    name: member_name.clone(),
+                    class_loc,
+                    func_loc,
+                });
+                Some(ty)
+            }
+            BuiltinResolution::Field(ty) => Some(ty),
+        }
+    }
+
     fn resolve_builtin_method(
         &self,
         class_path: &[&str],
         type_args: &[Ty],
         member_name: &Name,
-    ) -> Option<Ty> {
+    ) -> Option<BuiltinResolution<'db>> {
         let db = self.context.db();
         let baml_pkg_id =
             baml_compiler2_hir::package::PackageId::new(db, baml_base::Name::new("baml"));
@@ -2290,17 +2661,63 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                 let mut diags = Vec::new();
+                // Build the class type for self parameter resolution.
+                // For generics, apply type_args (e.g. Array<int>).
+                let builtin_class_ty = if type_args.is_empty() {
+                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+                    Ty::Class(crate::ty::QualifiedTypeName {
+                        pkg: pkg_info.package,
+                        name: class_data.name.clone(),
+                        generic_params: class_data.generic_params.clone(),
+                    })
+                } else if type_args.len() == 1 {
+                    // Single type arg: Array<T> → List(T), special-case common containers
+                    match class_data.name.as_str() {
+                        "Array" => Ty::List(Box::new(type_args[0].clone())),
+                        _ => {
+                            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+                            Ty::Class(crate::ty::QualifiedTypeName::new(
+                                pkg_info.package,
+                                class_data.name.clone(),
+                            ))
+                        }
+                    }
+                } else if type_args.len() == 2 {
+                    match class_data.name.as_str() {
+                        "Map" => Ty::Map(Box::new(type_args[0].clone()), Box::new(type_args[1].clone())),
+                        _ => {
+                            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+                            Ty::Class(crate::ty::QualifiedTypeName::new(
+                                pkg_info.package,
+                                class_data.name.clone(),
+                            ))
+                        }
+                    }
+                } else {
+                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+                    Ty::Class(crate::ty::QualifiedTypeName::new(
+                        pkg_info.package,
+                        class_data.name.clone(),
+                    ))
+                };
+
                 let params: Vec<(Option<Name>, Ty)> = sig
                     .params
                     .iter()
                     .map(|(n, te)| {
-                        let ty = crate::generics::lower_type_expr_with_generics(
-                            db,
-                            te,
-                            self.package_items,
-                            &bindings,
-                            &mut diags,
-                        );
+                        let ty = if n.as_str() == "self"
+                            && matches!(te, baml_compiler2_ast::TypeExpr::Unknown)
+                        {
+                            builtin_class_ty.clone()
+                        } else {
+                            crate::generics::lower_type_expr_with_generics(
+                                db,
+                                te,
+                                self.package_items,
+                                &bindings,
+                                &mut diags,
+                            )
+                        };
                         (Some(n.clone()), ty)
                     })
                     .collect();
@@ -2321,9 +2738,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // (the builtin .baml stub). We don't want to spam user code
                 // with unresolved-type errors from builtin signatures.
                 drop(diags);
-                return Some(Ty::Function {
-                    params,
-                    ret: Box::new(ret),
+                return Some(BuiltinResolution::Method {
+                    ty: Ty::Function { params, ret: Box::new(ret) },
+                    class_loc,
+                    func_loc,
                 });
             }
         }
@@ -2346,7 +2764,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     })
                     .unwrap_or(Ty::Unknown);
                 drop(diags);
-                return Some(field_ty);
+                return Some(BuiltinResolution::Field(field_ty));
             }
         }
 

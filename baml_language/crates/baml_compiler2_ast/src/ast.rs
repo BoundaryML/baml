@@ -285,6 +285,22 @@ pub enum Stmt {
         after: Option<StmtId>,
         origin: LoopOrigin,
     },
+    /// For-in loop: `for let <binding> in <collection> { <body> }`.
+    ///
+    /// Kept as a first-class node (not desugared to While) so that:
+    /// - TIR can produce for-loop-specific diagnostics ("cannot iterate over X")
+    /// - Codegen can emit native for-loops in target languages (TS/Python/Rust)
+    /// - The user's intent is preserved through the pipeline
+    ///
+    /// Desugaring to index-based iteration happens at MIR lowering time.
+    For {
+        /// The loop variable binding pattern (e.g. `i` in `for let i in xs`).
+        binding: PatId,
+        /// The collection expression to iterate over.
+        collection: ExprId,
+        /// The loop body expression.
+        body: ExprId,
+    },
     Return(Option<ExprId>),
     Throw {
         value: ExprId,
@@ -440,6 +456,11 @@ pub struct FunctionDef {
     pub return_type: Option<SpannedTypeExpr>,
     pub throws: Option<SpannedTypeExpr>,
     pub body: Option<FunctionBodyDef>,
+    /// LLM function metadata (client name, prompt template).
+    /// Present only for functions declared with `{ client ...; prompt ... }` syntax.
+    /// The body is desugared to a synthetic `Expr` calling `baml.llm.call_llm_function`,
+    /// while this field preserves the original metadata for Jinja type-checking.
+    pub llm_meta: Option<LlmBodyDef>,
     pub attributes: Vec<RawAttribute>,
     pub span: TextRange,
     pub name_span: TextRange,
@@ -448,7 +469,6 @@ pub struct FunctionDef {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionBodyDef {
-    Llm(LlmBodyDef),
     Expr(ExprBody, AstSourceMap),
     /// Body is `$rust_function` or `$rust_io_function` — Rust-bound implementation.
     Builtin(BuiltinKind),

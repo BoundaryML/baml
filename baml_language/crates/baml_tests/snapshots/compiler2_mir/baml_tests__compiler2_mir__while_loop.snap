@@ -1,0 +1,53 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn f(n: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // n // param
+    let _2: int // sum
+    let _3: int // i
+    let _4: bool
+    let _5: int
+    let _6: void
+    let _7: null
+    let _8: null
+
+    bb0: {
+        _2 = const 0_i64;
+        _3 = const 0_i64;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = copy _3;
+        _6 = n {  };
+        _4 = copy _5 < copy _6;
+        branch copy _4 -> [bb3, bb4];
+    }
+
+    bb3: {
+        _8 = call const fn baml.sys.panic(const "parse error") -> [bb5];
+    }
+
+    bb4: {
+        _0 = copy _2;
+        goto -> bb7;
+    }
+
+    bb5: {
+        unreachable;
+    }
+
+    bb6: {
+        goto -> bb2;
+    }
+
+    bb7: {
+        return;
+    }
+}

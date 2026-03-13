@@ -21,10 +21,37 @@ pub fn lower_type_expr(
     package_items: &PackageItems<'_>,
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
+    lower_type_expr_in_ns(db, type_expr, package_items, &[], diagnostics)
+}
+
+/// Like [`lower_type_expr`], but resolves unqualified names relative to
+/// `ns_context` first (e.g. `["fs"]`), falling back to the package root.
+///
+/// Use this when lowering type expressions from a function/class signature
+/// that lives in a sub-namespace of its package. For example, `File` in
+/// `baml/fs.baml` (namespace `["fs"]`) resolves via `lookup_type(&["fs", "File"])`.
+pub fn lower_type_expr_in_ns(
+    db: &dyn crate::Db,
+    type_expr: &TypeExpr,
+    package_items: &PackageItems<'_>,
+    ns_context: &[baml_base::Name],
+    diagnostics: &mut Vec<TirTypeError>,
+) -> Ty {
     match type_expr {
         TypeExpr::Path(segments) => {
-            let names: Vec<baml_base::Name> = segments.clone();
-            if let Some(def) = package_items.lookup_type(&names) {
+            // When we have a namespace context, try the qualified path first.
+            // e.g. for ns_context=["fs"], segments=["File"], try ["fs", "File"].
+            let resolved = if !ns_context.is_empty() {
+                let qualified: Vec<baml_base::Name> = ns_context.iter()
+                    .chain(segments.iter())
+                    .cloned()
+                    .collect();
+                package_items.lookup_type(&qualified)
+                    .or_else(|| package_items.lookup_type(segments))
+            } else {
+                package_items.lookup_type(segments)
+            };
+            if let Some(def) = resolved {
                 let short = segments.last().expect("non-empty path");
                 match def {
                     Definition::Class(_) => Ty::Class(qualify_def(db, def, short)),
@@ -59,26 +86,28 @@ pub fn lower_type_expr(
             // Generic media — treated as unknown for type resolution purposes
             baml_base::MediaKind::Generic => return Ty::Unknown,
         }),
-        TypeExpr::Optional(inner) => Ty::Optional(Box::new(lower_type_expr(
+        TypeExpr::Optional(inner) => Ty::Optional(Box::new(lower_type_expr_in_ns(
             db,
             inner,
             package_items,
+            ns_context,
             diagnostics,
         ))),
-        TypeExpr::List(inner) => Ty::List(Box::new(lower_type_expr(
+        TypeExpr::List(inner) => Ty::List(Box::new(lower_type_expr_in_ns(
             db,
             inner,
             package_items,
+            ns_context,
             diagnostics,
         ))),
         TypeExpr::Map { key, value } => Ty::Map(
-            Box::new(lower_type_expr(db, key, package_items, diagnostics)),
-            Box::new(lower_type_expr(db, value, package_items, diagnostics)),
+            Box::new(lower_type_expr_in_ns(db, key, package_items, ns_context, diagnostics)),
+            Box::new(lower_type_expr_in_ns(db, value, package_items, ns_context, diagnostics)),
         ),
         TypeExpr::Union(members) => Ty::Union(
             members
                 .iter()
-                .map(|m| lower_type_expr(db, m, package_items, diagnostics))
+                .map(|m| lower_type_expr_in_ns(db, m, package_items, ns_context, diagnostics))
                 .collect(),
         ),
         TypeExpr::Function { params, ret } => Ty::Function {
@@ -87,16 +116,17 @@ pub fn lower_type_expr(
                 .map(|p| {
                     (
                         p.name.clone(),
-                        lower_type_expr(db, &p.ty, package_items, diagnostics),
+                        lower_type_expr_in_ns(db, &p.ty, package_items, ns_context, diagnostics),
                     )
                 })
                 .collect(),
-            ret: Box::new(lower_type_expr(db, ret, package_items, diagnostics)),
+            ret: Box::new(lower_type_expr_in_ns(db, ret, package_items, ns_context, diagnostics)),
         },
         TypeExpr::Literal(lit) => Ty::Literal(lit.clone(), Freshness::Regular),
         TypeExpr::BuiltinUnknown => Ty::BuiltinUnknown,
         TypeExpr::Error | TypeExpr::Unknown => Ty::Unknown,
-        TypeExpr::Type => Ty::Unknown,
+        // Dedicated Ty::Type variant — see ty.rs doc comment for design rationale.
+        TypeExpr::Type => Ty::Type,
         // `$rust_type` — opaque Rust-managed state field type.
         TypeExpr::Rust => Ty::RustType,
     }

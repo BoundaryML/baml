@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn f(x: int, y: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
+    let _2: int // y // param
+    let _3: int
+    let _4: int
+
+    bb0: {
+        _3 = copy _1;
+        _4 = copy _2;
+        _0 = copy _3 + copy _4;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+}

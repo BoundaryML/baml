@@ -49,6 +49,8 @@ pub enum TirTypeError {
     VoidUsedAsValue,
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
     NotCallable { ty: Ty },
+    /// Expression is not iterable (e.g. `for let i in 42 { ... }` where 42 is an int).
+    NotIterable { ty: Ty },
     /// Expression is not indexable (e.g. `true[0]`).
     NotIndexable { ty: Ty },
     /// Invalid operand types for a binary operator (e.g. `true + false`).
@@ -126,6 +128,9 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::NotCallable { ty } => {
                 write!(f, "type `{ty}` is not callable")
+            }
+            TirTypeError::NotIterable { ty } => {
+                write!(f, "cannot iterate over type `{ty}`")
             }
             TirTypeError::NotIndexable { ty } => {
                 write!(f, "type `{ty}` is not indexable")

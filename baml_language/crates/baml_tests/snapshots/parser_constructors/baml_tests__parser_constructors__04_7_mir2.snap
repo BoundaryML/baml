@@ -1,0 +1,267 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn floatArray() -> float[] {
+    // Locals:
+    let _0: float[] // _0 // return
+    let _1: 1.0
+    let _2: 2.0
+    let _3: 3.0
+
+    bb0: {
+        _1 = const 1_f64;
+        _2 = const 2_f64;
+        _3 = const 3_f64;
+        _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn boolArray() -> bool[] {
+    // Locals:
+    let _0: bool[] // _0 // return
+    let _1: true
+    let _2: false
+    let _3: true
+
+    bb0: {
+        _1 = const true;
+        _2 = const false;
+        _3 = const true;
+        _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn mixedArray() -> int | string[] {
+    // Locals:
+    let _0: int | string[] // _0 // return
+    let _1: 1
+    let _2: "two"
+    let _3: 3
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const "two";
+        _3 = const 3_i64;
+        _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn intArray() -> int[] {
+    // Locals:
+    let _0: int[] // _0 // return
+    let _1: 1
+    let _2: 2
+    let _3: 3
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const 2_i64;
+        _3 = const 3_i64;
+        _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn stringArray() -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+    let _1: "hello"
+    let _2: "world"
+    let _3: "test"
+
+    bb0: {
+        _1 = const "hello";
+        _2 = const "world";
+        _3 = const "test";
+        _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn pointArray() -> Point[] {
+    // Locals:
+    let _0: Point[] // _0 // return
+    let _1: Point
+    let _2: 1
+    let _3: 2
+    let _4: Point
+    let _5: 3
+    let _6: 4
+    let _7: Point
+    let _8: 5
+    let _9: 6
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _1 = Point { copy _2, copy _3 };
+        _5 = const 3_i64;
+        _6 = const 4_i64;
+        _4 = Point { copy _5, copy _6 };
+        _8 = const 5_i64;
+        _9 = const 6_i64;
+        _7 = Point { copy _8, copy _9 };
+        _0 = [copy _1, copy _4, copy _7];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn point() -> Point {
+    // Locals:
+    let _0: Point // _0 // return
+    let _1: 1
+    let _2: 2
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const 2_i64;
+        _0 = Point { copy _1, copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn vec2d() -> Vec2D {
+    // Locals:
+    let _0: Vec2D // _0 // return
+    let _1: Point
+    let _2: 1
+    let _3: 2
+    let _4: Point
+    let _5: 3
+    let _6: 4
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _1 = Point { copy _2, copy _3 };
+        _5 = const 3_i64;
+        _6 = const 4_i64;
+        _4 = Point { copy _5, copy _6 };
+        _0 = Vec2D { copy _1, copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn boolValues() -> map<string, bool> {
+    // Locals:
+    let _0: map<string, bool> // _0 // return
+    let _1: "hello"
+    let _2: true
+    let _3: "test"
+    let _4: false
+
+    bb0: {
+        _1 = const "hello";
+        _2 = const true;
+        _3 = const "test";
+        _4 = const false;
+        _0 = { copy _1: copy _2, copy _3: copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn intValues() -> map<string, int> {
+    // Locals:
+    let _0: map<string, int> // _0 // return
+    let _1: "hello"
+    let _2: 1
+    let _3: "test"
+    let _4: 2
+
+    bb0: {
+        _1 = const "hello";
+        _2 = const 1_i64;
+        _3 = const "test";
+        _4 = const 2_i64;
+        _0 = { copy _1: copy _2, copy _3: copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn stringValues() -> map<string, string> {
+    // Locals:
+    let _0: map<string, string> // _0 // return
+    let _1: "hello"
+    let _2: "world"
+    let _3: "test"
+    let _4: "test"
+
+    bb0: {
+        _1 = const "hello";
+        _2 = const "world";
+        _3 = const "test";
+        _4 = const "test";
+        _0 = { copy _1: copy _2, copy _3: copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn floatValues() -> map<string, float> {
+    // Locals:
+    let _0: map<string, float> // _0 // return
+    let _1: "hello"
+    let _2: 1.0
+    let _3: "test"
+    let _4: 2.0
+
+    bb0: {
+        _1 = const "hello";
+        _2 = const 1_f64;
+        _3 = const "test";
+        _4 = const 2_f64;
+        _0 = { copy _1: copy _2, copy _3: copy _4 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

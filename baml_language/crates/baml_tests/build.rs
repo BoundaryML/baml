@@ -208,6 +208,7 @@ fn generate_project_tests(
     let hir_test = generate_hir_test(project);
     let tir_test = generate_tir_test(project);
     let mir_test = generate_mir_test(project);
+    let mir2_test = generate_mir2_test(project);
     let control_flow_test =
         if project.name == "control_flow" || project.name == "headers_edge_cases" {
             generate_control_flow_test(project)
@@ -262,6 +263,7 @@ fn generate_project_tests(
             #hir_test
             #tir_test
             #mir_test
+            #mir2_test
             #control_flow_test
             #diagnostics_test
             #codegen_test
@@ -602,6 +604,66 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_5_mir", output);
+            });
+        }
+    }
+}
+
+fn generate_mir2_test(project: &TestProject) -> TokenStream {
+    let file_loaders: TokenStream = project
+        .files
+        .iter()
+        .map(|baml_file| {
+            let full_path = baml_file.full_path.display().to_string();
+            let relative_path = baml_file.relative_path.display().to_string();
+            let include_content = make_include_str(&full_path);
+
+            quote! {
+                {
+                    let content = #include_content;
+                    let content = content.replace("\r\n", "\n");
+                    let sf = db.add_file(
+                        #relative_path,
+                        &content,
+                    );
+                    source_files.push(sf);
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[test]
+        fn test_04_7_mir2() {
+            use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
+            use baml_compiler2_mir::{lower_function, pretty::display_function};
+
+            let mut db = ProjectDatabase::new();
+            let _root = db.set_project_root(std::path::Path::new("."));
+            let mut source_files = Vec::new();
+
+            #file_loaders
+
+            let mut output = String::new();
+            writeln!(output, "=== MIR2 ===").unwrap();
+
+            for source_file in &source_files {
+                let item_tree = file_item_tree(&db, *source_file);
+                for (local_id, _func_data) in item_tree.functions.iter() {
+                    let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
+                    match lower_function(&db, func_loc) {
+                        Some(mir) => {
+                            writeln!(output, "{}", display_function(&mir)).unwrap();
+                        }
+                        None => {
+                            // LLM/Builtin/Missing — skip
+                        }
+                    }
+                }
+            }
+
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+                assert_snapshot!("04_7_mir2", output);
             });
         }
     }

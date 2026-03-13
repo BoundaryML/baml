@@ -5,7 +5,7 @@
 
 use std::fmt;
 
-use baml_base::{Name, QualifiedName, Span};
+use baml_base::{Name, Span};
 use baml_type::Ty;
 
 // ============================================================================
@@ -523,21 +523,82 @@ pub enum Constant {
     String(String),
     Bool(bool),
     Null,
-    /// A function reference with its fully-qualified name.
+    /// A function reference with structured item identification.
     ///
-    /// The `QualifiedName` is carried from TIR resolution through VIR.
-    /// It is converted to a runtime string only in the emit phase.
-    Function(QualifiedName),
+    /// Carried from TIR resolution through lowering. Converted to a
+    /// runtime string only in the emit phase.
+    Function(ItemRef),
     /// An enum variant value.
     EnumVariant {
-        /// The qualified name of the enum type.
-        enum_qn: QualifiedName,
+        /// Structured reference to the enum type.
+        enum_ref: ItemRef,
         /// The variant name within the enum.
         variant: Name,
     },
     /// Placeholder for type info when needed.
     #[allow(dead_code)]
     Ty(Ty),
+}
+
+/// A structured reference to a named item (function, method, enum type).
+///
+/// Uses explicit fields for package, namespace, class, and name.
+/// No string-path encoding or display-logic special-casing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ItemRef {
+    /// A free function or top-level item: `env.get`, `Foo`, `baml.sys.panic`
+    Free {
+        package: Name,
+        namespace: Vec<Name>,
+        name: Name,
+    },
+    /// A class method: `baml.Array.length`, `Baz.Greeting`
+    Method {
+        package: Name,
+        namespace: Vec<Name>,
+        class: Name,
+        name: Name,
+    },
+    /// An enum type reference: `HttpMethod`, `Color`
+    EnumType {
+        package: Name,
+        namespace: Vec<Name>,
+        name: Name,
+    },
+}
+
+impl fmt::Display for ItemRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Always include the package prefix (including "user").
+        // All parts are joined with ".".
+        match self {
+            ItemRef::Free { package, namespace, name } => {
+                let mut parts: Vec<&str> = vec![package.as_str()];
+                for ns in namespace {
+                    parts.push(ns.as_str());
+                }
+                parts.push(name.as_str());
+                write!(f, "{}", parts.join("."))
+            }
+            ItemRef::Method { package, namespace, class, name } => {
+                let mut parts: Vec<&str> = vec![package.as_str()];
+                for ns in namespace {
+                    parts.push(ns.as_str());
+                }
+                parts.push(class.as_str());
+                parts.push(name.as_str());
+                write!(f, "{}", parts.join("."))
+            }
+            ItemRef::EnumType { package, namespace, name } => {
+                let mut parts: Vec<&str> = vec![package.as_str()];
+                for ns in namespace {
+                    parts.push(ns.as_str());
+                }
+                parts.push(name.as_str());
+                write!(f, "{}", parts.join("."))
+            }
+        }
+    }
 }
 
 // ============================================================================

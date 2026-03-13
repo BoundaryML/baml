@@ -1,0 +1,66 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn caller() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: unknown
+    let _2: () -> bool
+    let _3: Errors // e
+    let _4: bool
+
+    bb0: {
+        _2 = const fn user.callee;
+        _0 = call copy _2() -> [bb4, unwind: bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _3 = copy _1;
+        _4 = copy _1 == const user.Errors.AuthenticationError;
+        branch copy _4 -> [bb5, bb6];
+    }
+
+    bb4: {
+        goto -> bb2;
+    }
+
+    bb5: {
+        _0 = const null;
+        goto -> bb7;
+    }
+
+    bb6: {
+        throw copy _1;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn callee() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb2;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        return;
+    }
+}

@@ -93,6 +93,19 @@ impl<'db> PackageItems<'db> {
         None
     }
 
+    /// Look up a type by short name, searching across ALL namespaces.
+    ///
+    /// Use when the caller only has a short name (e.g. `"File"`) without
+    /// knowing which namespace it lives in. Returns the first match found.
+    pub fn lookup_type_any_ns(&self, name: &Name) -> Option<Definition<'db>> {
+        for ns in self.namespaces.values() {
+            if let Some(def) = ns.types.get(name) {
+                return Some(*def);
+            }
+        }
+        None
+    }
+
     /// Look up a value by path segments.
     pub fn lookup_value(&self, path: &[Name]) -> Option<Definition<'db>> {
         if path.is_empty() {

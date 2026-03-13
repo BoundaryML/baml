@@ -655,19 +655,19 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
             let class = &item_tree[class_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
-            Some(Ty::Class(baml_compiler2_tir::ty::QualifiedTypeName {
-                pkg: Name::new(pkg_info.package.as_str()),
-                name: class.name.clone(),
-            }))
+            Some(Ty::Class(baml_compiler2_tir::ty::QualifiedTypeName::new(
+                Name::new(pkg_info.package.as_str()),
+                class.name.clone(),
+            )))
         }
         Definition::Enum(enum_loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
             let enum_data = &item_tree[enum_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db));
-            Some(Ty::Enum(baml_compiler2_tir::ty::QualifiedTypeName {
-                pkg: Name::new(pkg_info.package.as_str()),
-                name: enum_data.name.clone(),
-            }))
+            Some(Ty::Enum(baml_compiler2_tir::ty::QualifiedTypeName::new(
+                Name::new(pkg_info.package.as_str()),
+                enum_data.name.clone(),
+            )))
         }
         _ => None,
     }

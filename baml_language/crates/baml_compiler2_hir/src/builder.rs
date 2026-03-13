@@ -221,13 +221,18 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.record_expr_scope(expr_id);
             let _ = expr;
         }
-        // Collect let-bindings, detecting duplicates within the scope.
+        // Collect let-bindings and for-loop bindings, detecting duplicates within the scope.
         let mut seen: FxHashMap<Name, Vec<MemberSite>> = FxHashMap::default();
         for (stmt_id, stmt) in body.stmts.iter() {
-            if let ast::Stmt::Let { pattern, .. } = stmt {
+            let binding_pattern = match stmt {
+                ast::Stmt::Let { pattern, .. } => Some(*pattern),
+                ast::Stmt::For { binding, .. } => Some(*binding),
+                _ => None,
+            };
+            if let Some(pattern) = binding_pattern {
                 let scope_id = self.current_scope_id();
-                if let ast::Pattern::Binding(name) = &body.patterns[*pattern] {
-                    let name_range = source_map.pattern_span(*pattern);
+                if let ast::Pattern::Binding(name) = &body.patterns[pattern] {
+                    let name_range = source_map.pattern_span(pattern);
 
                     seen.entry(name.clone()).or_default().push(MemberSite {
                         range: name_range,

@@ -1,0 +1,100 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn GetUser(id: int) -> User {
+    // Locals:
+    let _0: User // _0 // return
+    let _1: int // id // param
+    let _2: (string, map<string, unknown>) -> unknown
+    let _3: "GetUser"
+    let _4: map<string, unknown>
+    let _5: "id"
+    let _6: int
+
+    bb0: {
+        _2 = const fn baml.llm.call_llm_function;
+        _3 = const "GetUser";
+        _5 = const "id";
+        _6 = copy _1;
+        _4 = { copy _5: copy _6 };
+        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn GetMixedMap() -> map<string, int | string> {
+    // Locals:
+    let _0: map<string, int | string> // _0 // return
+    let _1: (string, map<string, unknown>) -> unknown
+    let _2: "GetMixedMap"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.call_llm_function;
+        _2 = const "GetMixedMap";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn GetStatus() -> Status {
+    // Locals:
+    let _0: Status // _0 // return
+    let _1: (string, map<string, unknown>) -> unknown
+    let _2: "GetStatus"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.call_llm_function;
+        _2 = const "GetStatus";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn GetMixedList() -> int | string[] {
+    // Locals:
+    let _0: int | string[] // _0 // return
+    let _1: (string, map<string, unknown>) -> unknown
+    let _2: "GetMixedList"
+    let _3: map<string, unknown>
+
+    bb0: {
+        _1 = const fn baml.llm.call_llm_function;
+        _2 = const "GetMixedList";
+        _3 = {  };
+        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}

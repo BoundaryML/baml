@@ -1,0 +1,104 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn Broken.MixedLiteralAndTyped(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: bool
+    let _3: bool
+
+    bb0: {
+        _2 = copy _1 == const 42_i64;
+        branch copy _2 -> [bb3, bb5];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _0 = const "mixed";
+        goto -> bb2;
+    }
+
+    bb4: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb5: {
+        _3 = is_type(copy _1, Int { attr: TyAttr(None) });
+        branch copy _3 -> [bb3, bb4];
+    }
+}
+
+fn Broken.BadUnionPattern(x: int | bool) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int | bool // x // param
+    let _2: bool
+    let _3: int | void // a
+    let _4: null
+    let _5: int | bool // bool
+
+    bb0: {
+        _2 = is_type(copy _1, Union([Int { attr: TyAttr(None) }, Void { attr: TyAttr(None) }], TyAttr(None)));
+        branch copy _2 -> [bb3, bb4];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _3 = copy _1;
+        _4 = call const fn baml.sys.panic(const "parse error") -> [bb5];
+    }
+
+    bb4: {
+        goto -> bb7;
+    }
+
+    bb5: {
+        unreachable;
+    }
+
+    bb6: {
+        goto -> bb2;
+    }
+
+    bb7: {
+        _5 = copy _1;
+        _0 = const "bad";
+        goto -> bb2;
+    }
+
+    bb8: {
+        _0 = const null;
+        goto -> bb2;
+    }
+}
+
+fn Broken.Invalid() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

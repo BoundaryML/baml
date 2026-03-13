@@ -1,0 +1,523 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn ReadAndClose() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.File // f
+    let _2: (string) -> baml.File
+    let _3: "example.txt"
+    let _4: null
+    let _5: string // content
+    let _6: baml.File
+    let _7: (baml.File) -> string
+    let _8: null
+    let _9: null
+    let _10: baml.File
+    let _11: (baml.File) -> null
+    let _12: null
+
+    bb0: {
+        _2 = const fn baml.fs.open;
+        _3 = const "example.txt";
+        _4 = dispatch_future copy _2(copy _3) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _6 = copy _1;
+        _7 = const fn baml.fs.File.read;
+        _8 = dispatch_future copy _7(copy _6) -> bb5;
+    }
+
+    bb3: {
+        _1 = await _4 -> [bb2];
+    }
+
+    bb4: {
+        _10 = copy _1;
+        _11 = const fn baml.fs.File.close;
+        _12 = dispatch_future copy _11(copy _10) -> bb7;
+    }
+
+    bb5: {
+        _5 = await _8 -> [bb4];
+    }
+
+    bb6: {
+        _0 = copy _5;
+        goto -> bb1;
+    }
+
+    bb7: {
+        _9 = await _12 -> [bb6];
+    }
+}
+
+fn ReadFile() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.File // f
+    let _2: (string) -> baml.File
+    let _3: "example.txt"
+    let _4: null
+    let _5: baml.File
+    let _6: (baml.File) -> string
+    let _7: null
+
+    bb0: {
+        _2 = const fn baml.fs.open;
+        _3 = const "example.txt";
+        _4 = dispatch_future copy _2(copy _3) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = copy _1;
+        _6 = const fn baml.fs.File.read;
+        _7 = dispatch_future copy _6(copy _5) -> bb5;
+    }
+
+    bb3: {
+        _1 = await _4 -> [bb2];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        _0 = await _7 -> [bb4];
+    }
+}
+
+fn ReadFileInline() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.File
+    let _2: (string) -> baml.File
+    let _3: "data.json"
+    let _4: null
+    let _5: (baml.File) -> string
+    let _6: null
+
+    bb0: {
+        _2 = const fn baml.fs.open;
+        _3 = const "data.json";
+        _4 = dispatch_future copy _2(copy _3) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = const fn baml.fs.File.read;
+        _6 = dispatch_future copy _5(copy _1) -> bb5;
+    }
+
+    bb3: {
+        _1 = await _4 -> [bb2];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        _0 = await _6 -> [bb4];
+    }
+}
+
+fn ReadMultipleFiles() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.File // f1
+    let _2: (string) -> baml.File
+    let _3: "file1.txt"
+    let _4: null
+    let _5: baml.File // f2
+    let _6: (string) -> baml.File
+    let _7: "file2.txt"
+    let _8: null
+    let _9: string // content1
+    let _10: baml.File
+    let _11: (baml.File) -> string
+    let _12: null
+    let _13: string // content2
+    let _14: baml.File
+    let _15: (baml.File) -> string
+    let _16: null
+    let _17: string
+    let _18: string
+
+    bb0: {
+        _2 = const fn baml.fs.open;
+        _3 = const "file1.txt";
+        _4 = dispatch_future copy _2(copy _3) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _6 = const fn baml.fs.open;
+        _7 = const "file2.txt";
+        _8 = dispatch_future copy _6(copy _7) -> bb5;
+    }
+
+    bb3: {
+        _1 = await _4 -> [bb2];
+    }
+
+    bb4: {
+        _10 = copy _1;
+        _11 = const fn baml.fs.File.read;
+        _12 = dispatch_future copy _11(copy _10) -> bb7;
+    }
+
+    bb5: {
+        _5 = await _8 -> [bb4];
+    }
+
+    bb6: {
+        _14 = copy _5;
+        _15 = const fn baml.fs.File.read;
+        _16 = dispatch_future copy _15(copy _14) -> bb9;
+    }
+
+    bb7: {
+        _9 = await _12 -> [bb6];
+    }
+
+    bb8: {
+        _17 = copy _9;
+        _18 = copy _13;
+        _0 = copy _17 + copy _18;
+        goto -> bb1;
+    }
+
+    bb9: {
+        _13 = await _16 -> [bb8];
+    }
+}
+
+fn ConnectAndRead() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.Socket // sock
+    let _2: (string) -> baml.Socket
+    let _3: "127.0.0.1:8080"
+    let _4: null
+    let _5: baml.Socket
+    let _6: (baml.Socket) -> string
+    let _7: null
+
+    bb0: {
+        _2 = const fn baml.net.connect;
+        _3 = const "127.0.0.1:8080";
+        _4 = dispatch_future copy _2(copy _3) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = copy _1;
+        _6 = const fn baml.net.Socket.read;
+        _7 = dispatch_future copy _6(copy _5) -> bb5;
+    }
+
+    bb3: {
+        _1 = await _4 -> [bb2];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        _0 = await _7 -> [bb4];
+    }
+}
+
+fn ConnectAndReadInline() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.Socket
+    let _2: (string) -> baml.Socket
+    let _3: "localhost:3000"
+    let _4: null
+    let _5: (baml.Socket) -> string
+    let _6: null
+
+    bb0: {
+        _2 = const fn baml.net.connect;
+        _3 = const "localhost:3000";
+        _4 = dispatch_future copy _2(copy _3) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _5 = const fn baml.net.Socket.read;
+        _6 = dispatch_future copy _5(copy _1) -> bb5;
+    }
+
+    bb3: {
+        _1 = await _4 -> [bb2];
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+
+    bb5: {
+        _0 = await _6 -> [bb4];
+    }
+}
+
+fn MultipleConnections() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.Socket // s1
+    let _2: (string) -> baml.Socket
+    let _3: "server1:80"
+    let _4: null
+    let _5: baml.Socket // s2
+    let _6: (string) -> baml.Socket
+    let _7: "server2:80"
+    let _8: null
+    let _9: string // data1
+    let _10: baml.Socket
+    let _11: (baml.Socket) -> string
+    let _12: null
+    let _13: string // data2
+    let _14: baml.Socket
+    let _15: (baml.Socket) -> string
+    let _16: null
+    let _17: string
+    let _18: string
+
+    bb0: {
+        _2 = const fn baml.net.connect;
+        _3 = const "server1:80";
+        _4 = dispatch_future copy _2(copy _3) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _6 = const fn baml.net.connect;
+        _7 = const "server2:80";
+        _8 = dispatch_future copy _6(copy _7) -> bb5;
+    }
+
+    bb3: {
+        _1 = await _4 -> [bb2];
+    }
+
+    bb4: {
+        _10 = copy _1;
+        _11 = const fn baml.net.Socket.read;
+        _12 = dispatch_future copy _11(copy _10) -> bb7;
+    }
+
+    bb5: {
+        _5 = await _8 -> [bb4];
+    }
+
+    bb6: {
+        _14 = copy _5;
+        _15 = const fn baml.net.Socket.read;
+        _16 = dispatch_future copy _15(copy _14) -> bb9;
+    }
+
+    bb7: {
+        _9 = await _12 -> [bb6];
+    }
+
+    bb8: {
+        _17 = copy _9;
+        _18 = copy _13;
+        _0 = copy _17 + copy _18;
+        goto -> bb1;
+    }
+
+    bb9: {
+        _13 = await _16 -> [bb8];
+    }
+}
+
+fn ConnectReadAndClose() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.Socket // sock
+    let _2: (string) -> baml.Socket
+    let _3: "127.0.0.1:8080"
+    let _4: null
+    let _5: string // data
+    let _6: baml.Socket
+    let _7: (baml.Socket) -> string
+    let _8: null
+    let _9: null
+    let _10: baml.Socket
+    let _11: (baml.Socket) -> null
+    let _12: null
+
+    bb0: {
+        _2 = const fn baml.net.connect;
+        _3 = const "127.0.0.1:8080";
+        _4 = dispatch_future copy _2(copy _3) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _6 = copy _1;
+        _7 = const fn baml.net.Socket.read;
+        _8 = dispatch_future copy _7(copy _6) -> bb5;
+    }
+
+    bb3: {
+        _1 = await _4 -> [bb2];
+    }
+
+    bb4: {
+        _10 = copy _1;
+        _11 = const fn baml.net.Socket.close;
+        _12 = dispatch_future copy _11(copy _10) -> bb7;
+    }
+
+    bb5: {
+        _5 = await _8 -> [bb4];
+    }
+
+    bb6: {
+        _0 = copy _5;
+        goto -> bb1;
+    }
+
+    bb7: {
+        _9 = await _12 -> [bb6];
+    }
+}
+
+fn ChainCommands() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // result1
+    let _2: (string) -> string
+    let _3: "pwd"
+    let _4: null
+    let _5: string // result2
+    let _6: (string) -> string
+    let _7: "whoami"
+    let _8: null
+    let _9: string
+    let _10: string
+    let _11: " - "
+    let _12: string
+
+    bb0: {
+        _2 = const fn baml.sys.shell;
+        _3 = const "pwd";
+        _4 = dispatch_future copy _2(copy _3) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _6 = const fn baml.sys.shell;
+        _7 = const "whoami";
+        _8 = dispatch_future copy _6(copy _7) -> bb5;
+    }
+
+    bb3: {
+        _1 = await _4 -> [bb2];
+    }
+
+    bb4: {
+        _10 = copy _1;
+        _11 = const " - ";
+        _9 = copy _10 + copy _11;
+        _12 = copy _5;
+        _0 = copy _9 + copy _12;
+        goto -> bb1;
+    }
+
+    bb5: {
+        _5 = await _8 -> [bb4];
+    }
+}
+
+fn RunCommandWithVar() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // cmd
+    let _2: (string) -> string
+    let _3: string
+    let _4: null
+
+    bb0: {
+        _1 = const "ls -la";
+        _2 = const fn baml.sys.shell;
+        _3 = copy _1;
+        _4 = dispatch_future copy _2(copy _3) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _0 = await _4 -> [bb2];
+    }
+}
+
+fn RunCommand() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: (string) -> string
+    let _2: "echo hello"
+    let _3: null
+
+    bb0: {
+        _1 = const fn baml.sys.shell;
+        _2 = const "echo hello";
+        _3 = dispatch_future copy _1(copy _2) -> bb3;
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+
+    bb3: {
+        _0 = await _3 -> [bb2];
+    }
+}

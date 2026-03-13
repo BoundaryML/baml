@@ -1,19 +1,21 @@
 use std::collections::HashMap;
 
-use baml_base::{Name, QualifiedName};
+use baml_base::Name;
 use baml_compiler2_ast::ExprId;
-use baml_type::{Ty, TyAttr};
+use baml_type::{MediaKind, Ty, TyAttr, TypeName};
 
 use crate::builder::MirBuilder;
 use crate::ir::*;
 
 // --- Helper enums carried forward from old code ---
 
+#[allow(dead_code)]
 enum FieldSource {
     Named(ExprId),
     Spread(Local, usize),
 }
 
+#[allow(dead_code)]
 enum SwitchKind {
     Integer,
     EnumDiscriminant(Name),
@@ -31,14 +33,18 @@ struct CatchContext {
     error_local: Local,
 }
 
+#[allow(dead_code)]
 struct PendingHeader {
     name: String,
 }
 
 struct VizContext {
     function_name: String,
+    #[allow(dead_code)]
     next_node_id: u32,
+    #[allow(dead_code)]
     parent_keys: Vec<String>,
+    #[allow(dead_code)]
     ordinal_counters: Vec<u32>,
 }
 
@@ -53,13 +59,1853 @@ impl VizContext {
     }
 }
 
-// --- New compiler2 entry point (stub) ---
+// ─── Type conversion: TIR Ty → baml_type::Ty ────────────────────────────────
 
-use baml_compiler2_hir::loc::FunctionLoc;
+use baml_compiler2_tir::ty::{PrimitiveType, QualifiedTypeName, Ty as Tir2Ty};
+
+fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
+    let module_path: Vec<Name> = match qtn.pkg.as_str() {
+        "baml" => vec![Name::new("baml")],
+        "env" => vec![Name::new("env")],
+        _ => vec![], // "user" or other → local
+    };
+    let base_display = if module_path.is_empty() {
+        qtn.name.to_string()
+    } else {
+        format!("{}.{}", qtn.pkg, qtn.name)
+    };
+    let display_name = if qtn.generic_params.is_empty() {
+        Name::new(base_display)
+    } else {
+        let params: Vec<_> = qtn.generic_params.iter().map(|p| p.to_string()).collect();
+        Name::new(format!("{}<{}>", base_display, params.join(", ")))
+    };
+    TypeName {
+        name: qtn.name.clone(),
+        module_path,
+        display_name,
+    }
+}
+
+fn convert_tir2_ty(ty: &Tir2Ty) -> Ty {
+    let attr = TyAttr::default();
+    match ty {
+        // Primitives
+        Tir2Ty::Primitive(PrimitiveType::Int) => Ty::Int { attr },
+        Tir2Ty::Primitive(PrimitiveType::Float) => Ty::Float { attr },
+        Tir2Ty::Primitive(PrimitiveType::String) => Ty::String { attr },
+        Tir2Ty::Primitive(PrimitiveType::Bool) => Ty::Bool { attr },
+        Tir2Ty::Primitive(PrimitiveType::Null) => Ty::Null { attr },
+        Tir2Ty::Primitive(PrimitiveType::Image) => Ty::Media(MediaKind::Image, attr),
+        Tir2Ty::Primitive(PrimitiveType::Audio) => Ty::Media(MediaKind::Audio, attr),
+        Tir2Ty::Primitive(PrimitiveType::Video) => Ty::Media(MediaKind::Video, attr),
+        Tir2Ty::Primitive(PrimitiveType::Pdf) => Ty::Media(MediaKind::Pdf, attr),
+
+        // Named types
+        Tir2Ty::Class(qtn) => Ty::Class(qtn_to_type_name(qtn), attr),
+        Tir2Ty::Enum(qtn) => Ty::Enum(qtn_to_type_name(qtn), attr),
+        Tir2Ty::TypeAlias(qtn) => Ty::TypeAlias(qtn_to_type_name(qtn), attr),
+
+        // EnumVariant → collapse to parent Enum type
+        Tir2Ty::EnumVariant(qtn, _variant) => Ty::Enum(qtn_to_type_name(qtn), attr),
+
+        // Containers
+        Tir2Ty::List(inner) => Ty::List(Box::new(convert_tir2_ty(inner)), attr),
+        Tir2Ty::Map(k, v) => Ty::Map {
+            key: Box::new(convert_tir2_ty(k)),
+            value: Box::new(convert_tir2_ty(v)),
+            attr,
+        },
+        Tir2Ty::Union(members) => {
+            Ty::Union(members.iter().map(convert_tir2_ty).collect(), attr)
+        }
+        Tir2Ty::Optional(inner) => Ty::Optional(Box::new(convert_tir2_ty(inner)), attr),
+        Tir2Ty::Literal(lit, _freshness) => Ty::Literal(lit.clone(), attr),
+
+        // Evolving containers → freeze to regular containers
+        Tir2Ty::EvolvingList(inner) => Ty::List(Box::new(convert_tir2_ty(inner)), attr),
+        Tir2Ty::EvolvingMap(k, v) => Ty::Map {
+            key: Box::new(convert_tir2_ty(k)),
+            value: Box::new(convert_tir2_ty(v)),
+            attr,
+        },
+
+        // Functions — drop param names
+        Tir2Ty::Function { params, ret } => Ty::Function {
+            params: params.iter().map(|(_, t)| convert_tir2_ty(t)).collect(),
+            ret: Box::new(convert_tir2_ty(ret)),
+            attr,
+        },
+
+        // Bottom / sentinel types
+        Tir2Ty::Never => Ty::Void { attr },
+        Tir2Ty::Void => Ty::Void { attr },
+        Tir2Ty::BuiltinUnknown => Ty::BuiltinUnknown { attr },
+        Tir2Ty::RustType => {
+            // RustType is an opaque sentinel — map to Opaque with a synthetic name
+            Ty::Opaque(
+                TypeName {
+                    name: Name::new("RustType"),
+                    module_path: vec![Name::new("baml"), Name::new("rust")],
+                    display_name: Name::new("RustType"),
+                },
+                attr,
+            )
+        }
+        Tir2Ty::Type => {
+            // The `type` metatype maps to the same opaque representation as v1.
+            // See Ty::type_type() in baml_type/src/lib.rs.
+            Ty::Opaque(
+                TypeName {
+                    name: Name::new("Type"),
+                    module_path: vec![Name::new("baml"), Name::new("reflect")],
+                    display_name: Name::new("type"),
+                },
+                attr,
+            )
+        }
+        Tir2Ty::Unknown => Ty::Void { attr }, // error recovery
+        Tir2Ty::Error => Ty::Void { attr },   // error recovery
+    }
+}
+
+// ─── def_to_item_ref helper ──────────────────────────────────────────────────
+
+use baml_compiler2_hir::{
+    contributions::Definition,
+    file_package::file_package,
+    file_item_tree,
+};
+
+fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef {
+    let file = def.file(db);
+    let pkg_info = file_package(db, file);
+    let item_tree = file_item_tree(db, file);
+
+    let name: Name = match def {
+        Definition::Function(loc) => item_tree[loc.id(db)].name.clone(),
+        Definition::Class(loc) => item_tree[loc.id(db)].name.clone(),
+        Definition::Enum(loc) => item_tree[loc.id(db)].name.clone(),
+        Definition::TypeAlias(loc) => item_tree[loc.id(db)].name.clone(),
+        Definition::TemplateString(loc) => item_tree[loc.id(db)].name.clone(),
+        Definition::Client(loc) => item_tree[loc.id(db)].name.clone(),
+        Definition::Generator(loc) => item_tree[loc.id(db)].name.clone(),
+        Definition::Test(loc) => item_tree[loc.id(db)].name.clone(),
+        Definition::RetryPolicy(loc) => item_tree[loc.id(db)].name.clone(),
+    };
+
+    ItemRef::Free {
+        package: pkg_info.package.clone(),
+        namespace: pkg_info.namespace_path.clone(),
+        name,
+    }
+}
+
+/// Convert a `MethodResolution` (from TIR) into an `ItemRef` (for MIR).
+fn resolution_to_item_ref(res: &baml_compiler2_tir::inference::MethodResolution<'_>) -> ItemRef {
+    use baml_compiler2_tir::inference::MethodResolution;
+    match res {
+        MethodResolution::Free { package, namespace, name, .. } => {
+            ItemRef::Free {
+                package: package.clone(),
+                namespace: namespace.clone(),
+                name: name.clone(),
+            }
+        }
+        MethodResolution::Method { package, namespace, class, name, .. } => {
+            ItemRef::Method {
+                package: package.clone(),
+                namespace: namespace.clone(),
+                class: class.clone(),
+                name: name.clone(),
+            }
+        }
+    }
+}
+
+// ─── LoweringContext ─────────────────────────────────────────────────────────
+
+use baml_compiler2_ast::{
+    AstSourceMap, ExprBody as AstExprBody, PatId as AstPatId,
+    Expr as AstExpr, Stmt as AstStmt, Pattern as AstPattern,
+    BinaryOp as AstBinaryOp, UnaryOp as AstUnaryOp, AssignOp as AstAssignOp,
+    Literal as AstLiteral,
+};
+use baml_compiler2_hir::{
+    body::{FunctionBody, function_body, function_body_source_map},
+    loc::FunctionLoc,
+    package::{PackageId, package_items},
+    scope::FileScopeId,
+    file_semantic_index,
+    signature::function_signature,
+};
+use baml_compiler2_tir::{
+    inference::infer_scope_types,
+    resolve::{resolve_name_at, ResolvedName},
+};
+use rustc_hash::FxHashMap;
+
+// Re-use ExprId from baml_compiler2_ast (already imported above via ExprId)
+use baml_compiler2_ast::ExprId as AstExprId;
+use baml_compiler2_ast::StmtId as AstStmtId;
+
+struct LoweringContext<'db> {
+    db: &'db dyn crate::Db,
+    builder: MirBuilder,
+    locals: HashMap<Name, Local>,
+    loop_context: Option<LoopContext>,
+    catch_context: Option<CatchContext>,
+
+    // Eagerly aggregated type maps from all scopes in the function
+    expr_types: FxHashMap<AstExprId, Tir2Ty>,
+    pat_types: FxHashMap<AstPatId, Tir2Ty>,
+    // Method resolutions from TIR: ExprId → MethodResolution
+    resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MethodResolution<'db>>,
+
+    // AST expression body and source map
+    body: AstExprBody,
+    source_map: Option<AstSourceMap>,
+    file: baml_base::SourceFile,
+    func_loc: FunctionLoc<'db>,
+
+    // Schema maps built from PackageItems
+    class_fields: HashMap<String, HashMap<String, usize>>,
+    enum_variants: HashMap<String, HashMap<String, usize>>,
+    #[allow(dead_code)]
+    class_type_tags: HashMap<String, i64>,
+
+    // Watch/viz state (carried forward as-is)
+    watched_locals_stack: Vec<Local>,
+    #[allow(dead_code)]
+    viz_context: VizContext,
+    #[allow(dead_code)]
+    pending_header: Option<PendingHeader>,
+}
+
+impl<'db> LoweringContext<'db> {
+    fn new(
+        db: &'db dyn crate::Db,
+        func_loc: FunctionLoc<'db>,
+        expr_body: AstExprBody,
+        source_map: Option<AstSourceMap>,
+    ) -> Self {
+        let file = func_loc.file(db);
+
+        // --- Resolve FunctionLoc → FileScopeId via span ---
+        let item_tree = file_item_tree(db, file);
+        let func_data = &item_tree[func_loc.id(db)];
+        let func_span = func_data.span;
+
+        let index = file_semantic_index(db, file);
+        let func_scope_id: FileScopeId = index.scope_at_offset(func_span.start());
+
+        // --- Eagerly aggregate expr_types, pat_types, and resolutions from all scopes ---
+        let mut expr_types: FxHashMap<AstExprId, Tir2Ty> = FxHashMap::default();
+        let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
+        let mut resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MethodResolution<'db>> = FxHashMap::default();
+
+        let merge_scope = |fsi: FileScopeId,
+                           expr_types: &mut FxHashMap<AstExprId, Tir2Ty>,
+                           pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
+                           resolutions: &mut FxHashMap<AstExprId, baml_compiler2_tir::inference::MethodResolution<'db>>| {
+            let scope_id = index.scope_ids[fsi.index() as usize];
+            let inference = infer_scope_types(db, scope_id);
+            for (&expr_id, ty) in inference.iter_expressions() {
+                expr_types.insert(expr_id, ty.clone());
+            }
+            for (&pat_id, ty) in inference.iter_bindings() {
+                pat_types.insert(pat_id, ty.clone());
+            }
+            for (&expr_id, res) in inference.iter_resolutions() {
+                resolutions.insert(expr_id, res.clone());
+            }
+        };
+
+        // Include the function scope itself
+        merge_scope(func_scope_id, &mut expr_types, &mut pat_types, &mut resolutions);
+
+        // Include all descendant scopes (blocks, lambdas, etc.)
+        let func_scope = &index.scopes[func_scope_id.index() as usize];
+        let desc_start = func_scope.descendants.start.index();
+        let desc_end = func_scope.descendants.end.index();
+        for raw_idx in desc_start..desc_end {
+            merge_scope(
+                FileScopeId::new(raw_idx),
+                &mut expr_types,
+                &mut pat_types,
+                &mut resolutions,
+            );
+        }
+
+        // --- Build class_fields / enum_variants / class_type_tags from PackageItems ---
+        let pkg_info = file_package(db, file);
+        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let pkg_items = package_items(db, pkg_id);
+
+        let mut class_fields: HashMap<String, HashMap<String, usize>> = HashMap::new();
+        let mut class_type_tags: HashMap<String, i64> = HashMap::new();
+        let mut class_type_tag_counter = 0i64;
+        let mut enum_variants: HashMap<String, HashMap<String, usize>> = HashMap::new();
+
+        for ns in pkg_items.namespaces.values() {
+            for (_name, def) in &ns.types {
+                match def {
+                    Definition::Class(class_loc) => {
+                        let cfile = class_loc.file(db);
+                        let citree = file_item_tree(db, cfile);
+                        let class_data = &citree[class_loc.id(db)];
+                        let class_name = class_data.name.to_string();
+
+                        let mut fields = HashMap::new();
+                        for (idx, field) in class_data.fields.iter().enumerate() {
+                            fields.insert(field.name.to_string(), idx);
+                        }
+                        let type_tag =
+                            baml_type::typetag::CLASS_BASE + class_type_tag_counter;
+                        class_type_tag_counter += 1;
+                        class_type_tags.insert(class_name.clone(), type_tag);
+                        class_fields.insert(class_name, fields);
+                    }
+                    Definition::Enum(enum_loc) => {
+                        let efile = enum_loc.file(db);
+                        let eitree = file_item_tree(db, efile);
+                        let enum_data = &eitree[enum_loc.id(db)];
+                        let enum_name = enum_data.name.to_string();
+
+                        let mut variants = HashMap::new();
+                        for (idx, variant) in enum_data.variants.iter().enumerate() {
+                            variants.insert(variant.name.to_string(), idx);
+                        }
+                        enum_variants.insert(enum_name, variants);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // --- Determine arity from function signature ---
+        let sig = function_signature(db, func_loc);
+        let arity = sig.params.len();
+
+        // Detect if this function is a class method by checking the parent scope.
+        // If so, qualify the function name as "ClassName.MethodName".
+        let func_scope = &index.scopes[func_scope_id.index() as usize];
+        let func_name = if let Some(parent_idx) = func_scope.parent {
+            let parent = &index.scopes[parent_idx.index() as usize];
+            if matches!(parent.kind, baml_compiler2_hir::scope::ScopeKind::Class) {
+                if let Some(ref class_name) = parent.name {
+                    Name::new(format!("{}.{}", class_name.as_str(), func_data.name.as_str()))
+                } else {
+                    func_data.name.clone()
+                }
+            } else {
+                func_data.name.clone()
+            }
+        } else {
+            func_data.name.clone()
+        };
+
+        LoweringContext {
+            db,
+            builder: MirBuilder::new(func_name, arity),
+            locals: HashMap::new(),
+            loop_context: None,
+            catch_context: None,
+            expr_types,
+            pat_types,
+            resolutions,
+            body: expr_body,
+            source_map,
+            file,
+            func_loc,
+            class_fields,
+            enum_variants,
+            class_type_tags,
+            watched_locals_stack: Vec::new(),
+            viz_context: VizContext::new(func_data.name.to_string()),
+            pending_header: None,
+        }
+    }
+
+    /// Get the baml_type::Ty for an expression by looking up in the aggregated map
+    /// and converting from TIR Ty.
+    fn expr_ty(&self, expr_id: AstExprId) -> Ty {
+        self.expr_types
+            .get(&expr_id)
+            .map(convert_tir2_ty)
+            .unwrap_or(Ty::Null { attr: TyAttr::default() })
+    }
+
+    /// Get the baml_type::Ty for a pattern binding
+    fn pat_ty(&self, pat_id: AstPatId) -> Ty {
+        self.pat_types
+            .get(&pat_id)
+            .map(convert_tir2_ty)
+            .unwrap_or(Ty::Null { attr: TyAttr::default() })
+    }
+
+    /// Resolve a TypeExpr annotation directly to a baml_type::Ty.
+    /// Used for TypedBinding patterns where TIR may not have populated the
+    /// bindings map (e.g. catch arm and match arm patterns).
+    fn resolve_type_annotation(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Ty {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr;
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
+        let pkg_items = package_items(self.db, pkg_id);
+        let mut diags = Vec::new();
+        let tir_ty = lower_type_expr(self.db, ty_expr, &pkg_items, &mut diags);
+        convert_tir2_ty(&tir_ty)
+    }
+}
+
+// ─── 3.1: lower_function_body ────────────────────────────────────────────────
+
+impl<'db> LoweringContext<'db> {
+    fn lower_function_body(&mut self) -> MirFunction {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr;
+
+        let sig = function_signature(self.db, self.func_loc);
+
+        // Return place _0
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
+        let pkg_items = package_items(self.db, pkg_id);
+
+        let ret_ty = sig.return_type
+            .as_ref()
+            .map(|te| {
+                let mut diags = Vec::new();
+                let tir_ty = lower_type_expr(self.db, te, &pkg_items, &mut diags);
+                convert_tir2_ty(&tir_ty)
+            })
+            .unwrap_or(Ty::Null { attr: TyAttr::default() });
+        let ret = self.builder.declare_local(Some(Name::new("_0")), ret_ty, None, false);
+
+        // Detect enclosing class for `self` parameter resolution
+        let index = file_semantic_index(self.db, self.file);
+        let item_tree = file_item_tree(self.db, self.file);
+        let func_data = &item_tree[self.func_loc.id(self.db)];
+        let func_scope_id: FileScopeId = index.scope_at_offset(func_data.span.start());
+        let func_scope = &index.scopes[func_scope_id.index() as usize];
+        let enclosing_class_name: Option<Name> = func_scope.parent.and_then(|parent_idx| {
+            let parent = &index.scopes[parent_idx.index() as usize];
+            if matches!(parent.kind, baml_compiler2_hir::scope::ScopeKind::Class) {
+                parent.name.clone()
+            } else {
+                None
+            }
+        });
+
+        // Parameter locals _1..=_n
+        // For `self` with no annotation, look up the TIR-inferred parameter type
+        // which correctly resolves to the enclosing class type.
+        for (param_name, param_te) in sig.params.iter() {
+            let param_ty = if param_name.as_str() == "self"
+                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
+            {
+                // self parameter: TIR resolves this via enclosing class lookup.
+                // Read the same resolution here.
+                enclosing_class_name.as_ref()
+                    .and_then(|cn| {
+                        pkg_items.lookup_type(&[cn.clone()]).map(|def| {
+                            let tir_ty = baml_compiler2_tir::ty::Ty::Class(
+                                baml_compiler2_tir::lower_type_expr::qualify_def(self.db, def, cn),
+                            );
+                            convert_tir2_ty(&tir_ty)
+                        })
+                    })
+                    .unwrap_or(Ty::Null { attr: TyAttr::default() })
+            } else {
+                let mut diags = Vec::new();
+                let tir_ty = lower_type_expr(self.db, param_te, &pkg_items, &mut diags);
+                convert_tir2_ty(&tir_ty)
+            };
+            let local = self.builder.declare_local(Some(param_name.clone()), param_ty, None, false);
+            self.locals.insert(param_name.clone(), local);
+        }
+
+        // Entry and exit blocks
+        let entry = self.builder.create_block();
+        let exit = self.builder.create_block();
+        self.builder.set_current_block(entry);
+
+        // Lower root expression into return place
+        let root_expr = self.body.root_expr;
+        if let Some(root) = root_expr {
+            self.lower_expr(root, Place::local(ret));
+        } else {
+            self.builder.assign(Place::local(ret), Rvalue::Use(Operand::Constant(Constant::Null)));
+        }
+
+        // Goto exit, emit Return terminator
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(exit);
+        }
+        self.builder.set_current_block(exit);
+        self.builder.return_();
+
+        // Take the builder out of self to call `build()` which consumes it
+        let dummy = MirBuilder::new(Name::new("_dummy"), 0);
+        let builder = std::mem::replace(&mut self.builder, dummy);
+        builder.build()
+    }
+}
+
+// ─── 3.2: Core lower_expr dispatch ───────────────────────────────────────────
+
+impl<'db> LoweringContext<'db> {
+    fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
+        // Clone expr to avoid borrow issues
+        let expr = self.body.exprs[expr_id].clone();
+        match expr {
+            AstExpr::Literal(lit) => {
+                let constant = self.lower_literal(&lit);
+                self.builder.assign(dest, Rvalue::Use(Operand::Constant(constant)));
+            }
+
+            AstExpr::Null => {
+                self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            }
+
+            AstExpr::Path(segments) => {
+                self.lower_path_expr(expr_id, &segments.clone(), dest);
+            }
+
+            AstExpr::If { condition, then_branch, else_branch } => {
+                self.lower_if(expr_id, condition, then_branch, else_branch, dest);
+            }
+
+            AstExpr::Binary { op, lhs, rhs } => {
+                self.lower_binary(expr_id, &op.clone(), lhs, rhs, dest);
+            }
+
+            AstExpr::Unary { op, expr } => {
+                self.lower_unary(expr_id, &op.clone(), expr, dest);
+            }
+
+            AstExpr::Call { callee, args } => {
+                self.lower_call(expr_id, callee, &args.clone(), dest);
+            }
+
+            AstExpr::Array { elements } => {
+                let operands: Vec<Operand> = elements.iter()
+                    .map(|&e| self.lower_to_operand(e))
+                    .collect();
+                self.builder.assign(dest, Rvalue::Array(operands));
+            }
+
+            AstExpr::Map { entries } => {
+                let pairs: Vec<(Operand, Operand)> = entries.iter()
+                    .map(|&(k, v)| (self.lower_to_operand(k), self.lower_to_operand(v)))
+                    .collect();
+                self.builder.assign(dest, Rvalue::Map(pairs));
+            }
+
+            AstExpr::Object { type_name, fields, spreads } => {
+                self.lower_object(expr_id, &type_name.clone(), &fields.clone(), &spreads.clone(), dest);
+            }
+
+            AstExpr::FieldAccess { base, field } => {
+                self.lower_field_access(expr_id, base, &field.clone(), dest);
+            }
+
+            AstExpr::Index { base, index } => {
+                self.lower_index(expr_id, base, index, dest);
+            }
+
+            AstExpr::Block { stmts, tail_expr } => {
+                for &stmt_id in &stmts.clone() {
+                    self.lower_stmt(stmt_id);
+                    if self.builder.is_current_terminated() {
+                        break; // Remaining stmts are dead code (after return/throw/break/continue)
+                    }
+                }
+                if !self.builder.is_current_terminated() {
+                    match tail_expr {
+                        Some(tail) => self.lower_expr(tail, dest),
+                        None => {
+                            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+                        }
+                    }
+                }
+            }
+
+            AstExpr::Match { scrutinee, arms, .. } => {
+                let arms_owned = arms.clone();
+                self.lower_match(expr_id, scrutinee, &arms_owned, dest);
+            }
+
+            AstExpr::Catch { base, clauses } => {
+                let clauses_owned = clauses.clone();
+                self.lower_catch(expr_id, base, &clauses_owned, dest);
+            }
+
+            AstExpr::Throw { value } => {
+                let val_op = self.lower_to_operand(value);
+                self.builder.throw(val_op);
+                // Start a dead block for any code after this (unreachable)
+                let dead = self.builder.create_block();
+                self.builder.set_current_block(dead);
+            }
+
+            AstExpr::Missing => {
+                self.emit_panic_call("parse error", expr_id);
+            }
+        }
+    }
+}
+
+// ─── Literal helper ───────────────────────────────────────────────────────────
+
+impl<'db> LoweringContext<'db> {
+    fn lower_literal(&self, lit: &AstLiteral) -> Constant {
+        use baml_base::Literal;
+        match lit {
+            Literal::Int(v) => Constant::Int(*v),
+            Literal::Float(s) => {
+                // Literal::Float stores a string representation — parse to f64
+                let v: f64 = s.parse().unwrap_or(0.0);
+                Constant::Float(v)
+            }
+            Literal::String(v) => Constant::String(v.to_string()),
+            Literal::Bool(v) => Constant::Bool(*v),
+        }
+    }
+}
+
+// ─── 3.3: Path expression lowering ───────────────────────────────────────────
+
+impl<'db> LoweringContext<'db> {
+    fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
+        debug_assert!(segments.len() == 1, "multi-segment paths should be desugared");
+        let name = &segments[0];
+
+        let span_start = self.source_map.as_ref()
+            .map(|sm| sm.expr_span(expr_id).start())
+            .unwrap_or_default();
+
+        let resolved = resolve_name_at(self.db, self.file, span_start, name);
+        match resolved {
+            ResolvedName::Local { name: local_name, .. } => {
+                if let Some(&local) = self.locals.get(&local_name) {
+                    self.builder.assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
+                } else {
+                    let msg = format!("unresolved local: {local_name}");
+                    self.emit_panic_call(&msg, expr_id);
+                }
+            }
+            ResolvedName::Item(def) => {
+                self.lower_item_ref(expr_id, def, dest);
+            }
+            ResolvedName::Builtin(def) => {
+                let item = def_to_item_ref(self.db, def);
+                self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Function(item))));
+            }
+            ResolvedName::Unknown => {
+                // If TIR recorded a type for this expr, it was handled as a package
+                // path intermediate (e.g. `baml` in `baml.HttpMethod.Get`). Emit a
+                // null placeholder — the outer FieldAccess will produce the real value.
+                if self.expr_types.contains_key(&expr_id) {
+                    self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+                } else {
+                    let msg = format!("unresolved name: {name}");
+                    self.emit_panic_call(&msg, expr_id);
+                }
+            }
+        }
+    }
+
+    fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
+        let item = def_to_item_ref(self.db, def);
+        // Check if this expression's type is EnumVariant
+        if let Some(tir_ty) = self.expr_types.get(&expr_id).cloned() {
+            if let Tir2Ty::EnumVariant(_qtn, variant) = &tir_ty {
+                let variant_name = variant.clone();
+                // Convert the Free item ref to an EnumType variant
+                let enum_ref = match item {
+                    ItemRef::Free { package, namespace, name } => ItemRef::EnumType { package, namespace, name },
+                    other => other,
+                };
+                self.builder.assign(dest, Rvalue::Use(Operand::Constant(
+                    Constant::EnumVariant { enum_ref, variant: variant_name }
+                )));
+                return;
+            }
+        }
+        // Otherwise treat as function/constructor reference
+        self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Function(item))));
+    }
+}
+
+// ─── 3.4: Operator mapping and binary/unary lowering ─────────────────────────
+
+impl<'db> LoweringContext<'db> {
+    fn convert_binop(op: &AstBinaryOp) -> Option<BinOp> {
+        match op {
+            AstBinaryOp::Add => Some(BinOp::Add),
+            AstBinaryOp::Sub => Some(BinOp::Sub),
+            AstBinaryOp::Mul => Some(BinOp::Mul),
+            AstBinaryOp::Div => Some(BinOp::Div),
+            AstBinaryOp::Mod => Some(BinOp::Mod),
+            AstBinaryOp::Eq => Some(BinOp::Eq),
+            AstBinaryOp::Ne => Some(BinOp::Ne),
+            AstBinaryOp::Lt => Some(BinOp::Lt),
+            AstBinaryOp::Le => Some(BinOp::Le),
+            AstBinaryOp::Gt => Some(BinOp::Gt),
+            AstBinaryOp::Ge => Some(BinOp::Ge),
+            AstBinaryOp::BitAnd => Some(BinOp::BitAnd),
+            AstBinaryOp::BitOr => Some(BinOp::BitOr),
+            AstBinaryOp::BitXor => Some(BinOp::BitXor),
+            AstBinaryOp::Shl => Some(BinOp::Shl),
+            AstBinaryOp::Shr => Some(BinOp::Shr),
+            // Short-circuit operators handled separately
+            AstBinaryOp::And | AstBinaryOp::Or => None,
+            // Instanceof is not a simple binary op at MIR level
+            AstBinaryOp::Instanceof => None,
+        }
+    }
+
+    fn lower_binary(&mut self, expr_id: AstExprId, op: &AstBinaryOp, lhs: AstExprId, rhs: AstExprId, dest: Place) {
+        match op {
+            AstBinaryOp::And => {
+                return self.lower_short_circuit(expr_id, lhs, rhs, dest, true);
+            }
+            AstBinaryOp::Or => {
+                return self.lower_short_circuit(expr_id, lhs, rhs, dest, false);
+            }
+            AstBinaryOp::Instanceof => {
+                // Lower as IsType check
+                let lhs_op = self.lower_to_operand(lhs);
+                // Get the type from the expression type map (the rhs is a type name)
+                let check_ty = self.expr_ty(expr_id);
+                self.builder.assign(dest, Rvalue::IsType { operand: lhs_op, ty: check_ty });
+                return;
+            }
+            _ => {}
+        }
+
+        let left = self.lower_to_operand(lhs);
+        let right = self.lower_to_operand(rhs);
+        if let Some(mir_op) = Self::convert_binop(op) {
+            self.builder.assign(dest, Rvalue::BinaryOp { op: mir_op, left, right });
+        } else {
+            // Fallback — shouldn't happen for well-typed code
+            self.emit_panic_call("unsupported binary op", expr_id);
+        }
+    }
+
+    fn lower_short_circuit(&mut self, _expr_id: AstExprId, lhs: AstExprId, rhs: AstExprId, dest: Place, is_and: bool) {
+        let lhs_op = self.lower_to_operand(lhs);
+        self.builder.assign(dest.clone(), Rvalue::Use(lhs_op.clone()));
+
+        let bb_rhs = self.builder.create_block();
+        let bb_join = self.builder.create_block();
+
+        if is_and {
+            self.builder.branch(lhs_op, bb_rhs, bb_join);
+        } else {
+            self.builder.branch(lhs_op, bb_join, bb_rhs);
+        }
+
+        self.builder.set_current_block(bb_rhs);
+        self.lower_expr(rhs, dest.clone());
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        self.builder.set_current_block(bb_join);
+    }
+
+    fn lower_unary(&mut self, _expr_id: AstExprId, op: &AstUnaryOp, expr: AstExprId, dest: Place) {
+        let operand = self.lower_to_operand(expr);
+        let mir_op = match op {
+            AstUnaryOp::Not => crate::UnaryOp::Not,
+            AstUnaryOp::Neg => crate::UnaryOp::Neg,
+        };
+        self.builder.assign(dest, Rvalue::UnaryOp { op: mir_op, operand });
+    }
+}
+
+// ─── 3.5: Call lowering with builtin detection ────────────────────────────────
+
+impl<'db> LoweringContext<'db> {
+    fn lower_call(&mut self, expr_id: AstExprId, callee: AstExprId, args: &[AstExprId], dest: Place) {
+        // Check if callee is a field access (potential watch method call)
+        let callee_expr = self.body.exprs[callee].clone();
+        if let AstExpr::FieldAccess { base, field } = &callee_expr {
+            let field_name = field.clone();
+            let base_id = *base;
+            if field_name.as_str() == "options" || field_name.as_str() == "notify" {
+                let args_owned = args.to_vec();
+                self.lower_watch_method(expr_id, base_id, &field_name, &args_owned, dest);
+                return;
+            }
+        }
+
+        // Check if callee is a method call (FieldAccess with a MethodResolution).
+        // If the base is a real value (not a package namespace), prepend it as self.
+        let (callee_operand, arg_operands) = if let AstExpr::FieldAccess { base, .. } = &callee_expr {
+            if self.resolutions.contains_key(&callee) {
+                // Check if base is a value receiver or a package path.
+                // Package paths have Unknown type in TIR (baml, baml.Array, etc.)
+                let base_is_value = self.expr_types.get(base)
+                    .map(|ty| !matches!(ty, Tir2Ty::Unknown))
+                    .unwrap_or(false);
+                if base_is_value {
+                    // Method call: arr.length() — prepend receiver as self
+                    let receiver_op = self.lower_to_operand(*base);
+                    let callee_op = self.lower_to_operand(callee);
+                    let mut all_args = vec![receiver_op];
+                    all_args.extend(args.iter().map(|&a| self.lower_to_operand(a)));
+                    (callee_op, all_args)
+                } else {
+                    // Package function reference: baml.Array.length(array) — no self prepend
+                    let callee_op = self.lower_to_operand(callee);
+                    let arg_ops: Vec<Operand> = args.iter().map(|&a| self.lower_to_operand(a)).collect();
+                    (callee_op, arg_ops)
+                }
+            } else {
+                let callee_op = self.lower_to_operand(callee);
+                let arg_ops: Vec<Operand> = args.iter().map(|&a| self.lower_to_operand(a)).collect();
+                (callee_op, arg_ops)
+            }
+        } else {
+            let callee_op = self.lower_to_operand(callee);
+            let arg_ops: Vec<Operand> = args.iter().map(|&a| self.lower_to_operand(a)).collect();
+            (callee_op, arg_ops)
+        };
+
+        let target = self.builder.create_block();
+        let unwind = self.catch_context.as_ref().map(|c| c.unwind_target);
+
+        // Check if callee resolves to a builtin IO function (sys-op)
+        let is_sys_op = self.check_sys_op(callee);
+
+        if is_sys_op {
+            let future_local = self.builder.temp(Ty::Null { attr: TyAttr::default() });
+            let future_place = Place::Local(future_local);
+            let resume = self.builder.create_block();
+            self.builder.dispatch_future(callee_operand, arg_operands, future_place.clone(), resume);
+            self.builder.set_current_block(resume);
+            // dest must be a local place for Await
+            let dest_local = match dest {
+                Place::Local(l) => l,
+                _ => {
+                    let tmp = self.builder.temp(Ty::Null { attr: TyAttr::default() });
+                    tmp
+                }
+            };
+            let dest_place = Place::Local(dest_local);
+            self.builder.await_(future_place, dest_place, target, unwind);
+        } else {
+            self.builder.call(callee_operand, arg_operands, dest, target, unwind);
+        }
+
+        self.builder.set_current_block(target);
+    }
+
+    fn check_sys_op(&self, callee: AstExprId) -> bool {
+        use baml_compiler2_ast::BuiltinKind;
+
+        // ── Existing path: simple Path callee ─────────────────────────────────
+        if let AstExpr::Path(segments) = &self.body.exprs[callee] {
+            if segments.len() == 1 {
+                let span_start = self.source_map.as_ref()
+                    .map(|sm| sm.expr_span(callee).start())
+                    .unwrap_or_default();
+                let resolved = resolve_name_at(self.db, self.file, span_start, &segments[0]);
+                let func_loc = match resolved {
+                    ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
+                    ResolvedName::Item(Definition::Function(fl)) => Some(fl),
+                    _ => None,
+                };
+                if let Some(fl) = func_loc {
+                    let body = function_body(self.db, fl);
+                    if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // ── NEW: FieldAccess callee (e.g. f.read, sock.recv) ──────────────────
+        if let AstExpr::FieldAccess { .. } = &self.body.exprs[callee] {
+            use baml_compiler2_tir::inference::MethodResolution;
+            if let Some(resolution) = self.resolutions.get(&callee) {
+                let func_loc = match resolution {
+                    MethodResolution::Method { func_loc, .. } => Some(*func_loc),
+                    MethodResolution::Free { func_loc, .. } => Some(*func_loc),
+                };
+                if let Some(fl) = func_loc {
+                    let body = function_body(self.db, fl);
+                    if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
+    }
+}
+
+// ─── 3.6: Helper methods ─────────────────────────────────────────────────────
+
+impl<'db> LoweringContext<'db> {
+    fn lower_to_operand(&mut self, expr_id: AstExprId) -> Operand {
+        let ty = self.expr_ty(expr_id);
+        let temp = self.builder.temp(ty);
+        self.lower_expr(expr_id, Place::local(temp));
+        Operand::Copy(Place::Local(temp))
+    }
+
+    fn emit_panic_call(&mut self, message: &str, _expr_id: AstExprId) {
+        // Emit a call to baml.sys.panic with the error message
+        let callee = Operand::Constant(Constant::Function(
+            ItemRef::Free {
+                package: Name::new("baml"),
+                namespace: vec![Name::new("sys")],
+                name: Name::new("panic"),
+            },
+        ));
+        let msg = Operand::Constant(Constant::String(message.to_string()));
+        let temp = self.builder.temp(Ty::Null { attr: TyAttr::default() });
+        let unreachable_block = self.builder.create_block();
+        self.builder.call(callee, vec![msg], Place::local(temp), unreachable_block, None);
+        self.builder.set_current_block(unreachable_block);
+        self.builder.unreachable();
+        // Start a new block for any code after this (dead code)
+        let dead = self.builder.create_block();
+        self.builder.set_current_block(dead);
+    }
+
+    fn lower_if(
+        &mut self,
+        _expr_id: AstExprId,
+        condition: AstExprId,
+        then_branch: AstExprId,
+        else_branch: Option<AstExprId>,
+        dest: Place,
+    ) {
+        let cond_op = self.lower_to_operand(condition);
+        let bb_then = self.builder.create_block();
+        let bb_else = self.builder.create_block();
+        let bb_join = self.builder.create_block();
+
+        self.builder.branch(cond_op, bb_then, bb_else);
+
+        self.builder.set_current_block(bb_then);
+        self.lower_expr(then_branch, dest.clone());
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        self.builder.set_current_block(bb_else);
+        if let Some(else_expr) = else_branch {
+            self.lower_expr(else_expr, dest);
+        } else {
+            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+        }
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        self.builder.set_current_block(bb_join);
+    }
+
+    fn lower_object(
+        &mut self,
+        _expr_id: AstExprId,
+        type_name: &Option<Name>,
+        fields: &[(Name, AstExprId)],
+        spreads: &[baml_compiler2_ast::SpreadField],
+        dest: Place,
+    ) {
+        let class_name = type_name.as_ref().map(|n| n.to_string()).unwrap_or_default();
+
+        if spreads.is_empty() {
+            let field_operands: Vec<Operand> = fields.iter()
+                .map(|(_, e)| self.lower_to_operand(*e))
+                .collect();
+            self.builder.assign(dest, Rvalue::Aggregate {
+                kind: AggregateKind::Class(class_name),
+                fields: field_operands,
+            });
+        } else {
+            // Handle spreads: lower base objects, then overlay named fields
+            // For now emit a simple aggregate from named fields only (spreads are secondary)
+            // TODO Phase 5: port full spread handling from old lower_expr lines 807-922
+            let field_operands: Vec<Operand> = fields.iter()
+                .map(|(_, e)| self.lower_to_operand(*e))
+                .collect();
+            self.builder.assign(dest, Rvalue::Aggregate {
+                kind: AggregateKind::Class(class_name),
+                fields: field_operands,
+            });
+        }
+    }
+
+    fn lower_field_access(&mut self, expr_id: AstExprId, base: AstExprId, field: &Name, dest: Place) {
+        // Check if TIR resolved this to a method — if so, emit a function constant
+        if let Some(resolution) = self.resolutions.get(&expr_id).cloned() {
+            let item = resolution_to_item_ref(&resolution);
+            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Function(item))));
+            return;
+        }
+
+        // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
+        if let Some(tir_ty) = self.expr_types.get(&expr_id).cloned() {
+            if let Tir2Ty::EnumVariant(qtn, variant) = &tir_ty {
+                let enum_ref = ItemRef::EnumType {
+                    package: qtn.pkg.clone(),
+                    namespace: vec![],
+                    name: qtn.name.clone(),
+                };
+                self.builder.assign(dest, Rvalue::Use(Operand::Constant(
+                    Constant::EnumVariant { enum_ref, variant: variant.clone() }
+                )));
+                return;
+            }
+        }
+
+        // Check if this is a package path intermediate (e.g. `baml.HttpMethod` in
+        // `baml.HttpMethod.Get`). TIR marks these as Ty::Unknown. Emit null placeholder.
+        if let Some(Tir2Ty::Unknown) = self.expr_types.get(&expr_id) {
+            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            return;
+        }
+
+        // Regular field access
+        let base_ty = self.expr_ty(base);
+        let base_op = self.lower_to_operand(base);
+        let field_str = field.to_string();
+
+        // Look up field index from class_fields
+        let field_idx = if let Ty::Class(ref tn, _) = base_ty {
+            self.class_fields
+                .get(tn.name.as_str())
+                .and_then(|fields| fields.get(&field_str))
+                .copied()
+        } else {
+            None
+        };
+
+        let base_local = self.operand_to_local(base_op, base_ty);
+
+        if let Some(idx) = field_idx {
+            self.builder.assign(dest, Rvalue::Use(Operand::Copy(
+                Place::Field { base: Box::new(Place::Local(base_local)), field: idx }
+            )));
+        } else {
+            // Fallback: dynamic field access via index
+            let key_local = self.builder.temp(Ty::String { attr: TyAttr::default() });
+            self.builder.assign(
+                Place::local(key_local),
+                Rvalue::Use(Operand::Constant(Constant::String(field_str))),
+            );
+            self.builder.assign(dest, Rvalue::Use(Operand::Copy(
+                Place::Index {
+                    base: Box::new(Place::Local(base_local)),
+                    index: key_local,
+                    kind: IndexKind::Map,
+                }
+            )));
+        }
+    }
+
+    fn lower_index(&mut self, _expr_id: AstExprId, base: AstExprId, index: AstExprId, dest: Place) {
+        let base_ty = self.expr_ty(base);
+        let base_op = self.lower_to_operand(base);
+        let index_op = self.lower_to_operand(index);
+        let index_ty = self.expr_ty(index);
+
+        let base_local = self.operand_to_local(base_op, base_ty.clone());
+        let index_local = self.operand_to_local(index_op, index_ty);
+
+        let kind = if matches!(base_ty, Ty::List(..)) {
+            IndexKind::Array
+        } else {
+            IndexKind::Map
+        };
+
+        self.builder.assign(dest, Rvalue::Use(Operand::Copy(
+            Place::Index { base: Box::new(Place::Local(base_local)), index: index_local, kind }
+        )));
+    }
+
+    /// If the expression is a simple local variable reference (single-segment path
+    /// resolving to a known local), return its Local directly without allocating
+    /// a temp or emitting a copy.
+    fn try_resolve_to_local(&self, expr_id: AstExprId) -> Option<Local> {
+        let expr = &self.body.exprs[expr_id];
+        if let AstExpr::Path(segments) = expr {
+            if segments.len() == 1 {
+                if let Some(&local) = self.locals.get(&segments[0]) {
+                    return Some(local);
+                }
+            }
+        }
+        None
+    }
+
+    /// Convert an operand to a local, materializing a temp if necessary.
+    fn operand_to_local(&mut self, op: Operand, ty: Ty) -> Local {
+        match op {
+            Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) => l,
+            _ => {
+                let temp = self.builder.temp(ty);
+                self.builder.assign(Place::local(temp), Rvalue::Use(op));
+                temp
+            }
+        }
+    }
+
+    fn lower_watch_method(
+        &mut self,
+        _expr_id: AstExprId,
+        base: AstExprId,
+        method: &Name,
+        args: &[AstExprId],
+        dest: Place,
+    ) {
+        // Find the watched local from the base expression
+        let base_op = self.lower_to_operand(base);
+        let local = match base_op {
+            Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) => l,
+            _ => {
+                // Not a direct local — fall back to regular call lowering
+                // (shouldn't happen in well-formed code)
+                self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+                return;
+            }
+        };
+
+        if method.as_str() == "options" {
+            // $watch.options(filter) — emit WatchOptions statement
+            if let Some(&filter_expr) = args.first() {
+                let filter_op = self.lower_to_operand(filter_expr);
+                self.builder.watch_options(local, filter_op);
+            }
+            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+        } else if method.as_str() == "notify" {
+            // $watch.notify() — emit WatchNotify statement
+            self.builder.watch_notify(local);
+            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+        } else {
+            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+        }
+    }
+}
+
+// ─── Statement lowering ───────────────────────────────────────────────────────
+
+impl<'db> LoweringContext<'db> {
+    fn lower_stmt(&mut self, stmt_id: AstStmtId) {
+        let stmt = self.body.stmts[stmt_id].clone();
+        match stmt {
+            AstStmt::Expr(expr_id) => {
+                // Lower expression, discard result
+                let temp = self.builder.temp(Ty::Null { attr: TyAttr::default() });
+                self.lower_expr(expr_id, Place::local(temp));
+            }
+
+            AstStmt::Let { pattern, initializer, is_watched, .. } => {
+                // Extract binding name from pattern
+                let pat = self.body.patterns[pattern].clone();
+                let name = match &pat {
+                    AstPattern::Binding(n) => n.clone(),
+                    AstPattern::TypedBinding { name, .. } => name.clone(),
+                    _ => Name::new("_"),
+                };
+
+                let local_ty = self.pat_ty(pattern);
+                let local = self.builder.declare_local(Some(name.clone()), local_ty, None, is_watched);
+                self.locals.insert(name, local);
+
+                if is_watched {
+                    self.watched_locals_stack.push(local);
+                }
+
+                if let Some(init) = initializer {
+                    self.lower_expr(init, Place::local(local));
+                } else {
+                    self.builder.assign(Place::local(local), Rvalue::Use(Operand::Constant(Constant::Null)));
+                }
+            }
+
+            AstStmt::While { condition, body, after, .. } => {
+                let bb_cond = self.builder.create_block();
+                let bb_body = self.builder.create_block();
+                let bb_exit = self.builder.create_block();
+
+                let prev_loop = self.loop_context.take();
+                let watched_depth = self.watched_locals_stack.len();
+                self.loop_context = Some(LoopContext {
+                    break_target: bb_exit,
+                    continue_target: bb_cond,
+                    watched_locals_depth: watched_depth,
+                });
+
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(bb_cond);
+                }
+
+                self.builder.set_current_block(bb_cond);
+                let cond_op = self.lower_to_operand(condition);
+                self.builder.branch(cond_op, bb_body, bb_exit);
+
+                self.builder.set_current_block(bb_body);
+                let body_temp = self.builder.temp(Ty::Null { attr: TyAttr::default() });
+                self.lower_expr(body, Place::local(body_temp));
+
+                if let Some(after_stmt) = after {
+                    self.lower_stmt(after_stmt);
+                }
+
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(bb_cond);
+                }
+
+                self.loop_context = prev_loop;
+                self.builder.set_current_block(bb_exit);
+            }
+
+            // For-loop desugaring to index-based iteration.
+            //
+            // We desugar here (at MIR level) rather than at AST level because:
+            // - TIR needs the first-class For node for proper diagnostics
+            // - Future codegen can pattern-match on the loop structure to emit
+            //   native for-loops in target languages
+            //
+            // The desugaring is:
+            //   let __coll = <collection>;
+            //   let __idx = 0;
+            //   while __idx < len(__coll) {
+            //       let <binding> = __coll[__idx];
+            //       <body>;
+            //       __idx += 1;
+            //   }
+            AstStmt::For { binding, collection, body } => {
+                // 1. Evaluate collection into a temp local
+                let coll_ty = self.expr_ty(collection);
+                let coll_local = self.builder.temp(coll_ty.clone());
+                self.lower_expr(collection, Place::local(coll_local));
+
+                // 2. Determine element type from collection type
+                let elem_ty = match &coll_ty {
+                    Ty::List(inner, _) => *inner.clone(),
+                    _ => Ty::Void { attr: TyAttr::default() },
+                };
+
+                // 3. Create index local, initialized to 0
+                let int_ty = Ty::Int { attr: TyAttr::default() };
+                let idx_local = self.builder.declare_local(
+                    Some(Name::new("__for_idx")), int_ty.clone(), None, false,
+                );
+                self.builder.assign(
+                    Place::local(idx_local),
+                    Rvalue::Use(Operand::Constant(Constant::Int(0))),
+                );
+
+                // 4. Create loop blocks: header (condition check), body, after (increment), exit
+                let bb_header = self.builder.create_block();
+                let bb_body = self.builder.create_block();
+                let bb_after = self.builder.create_block();
+                let bb_exit = self.builder.create_block();
+
+                // Register loop context so break/continue work inside for-loops
+                let prev_loop = self.loop_context.take();
+                let watched_depth = self.watched_locals_stack.len();
+                self.loop_context = Some(LoopContext {
+                    break_target: bb_exit,
+                    continue_target: bb_after,
+                    watched_locals_depth: watched_depth,
+                });
+
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(bb_header);
+                }
+
+                // 5. Header: check __idx < len(__coll)
+                self.builder.set_current_block(bb_header);
+                let len_local = self.builder.temp(int_ty.clone());
+                self.builder.assign(
+                    Place::local(len_local),
+                    Rvalue::Len(Place::local(coll_local)),
+                );
+                let cond_local = self.builder.temp(Ty::Bool { attr: TyAttr::default() });
+                self.builder.assign(
+                    Place::local(cond_local),
+                    Rvalue::BinaryOp {
+                        op: BinOp::Lt,
+                        left: Operand::Copy(Place::Local(idx_local)),
+                        right: Operand::Copy(Place::Local(len_local)),
+                    },
+                );
+                self.builder.branch(
+                    Operand::Copy(Place::Local(cond_local)),
+                    bb_body,
+                    bb_exit,
+                );
+
+                // 6. Body: let <binding> = __coll[__idx]; <body_expr>
+                self.builder.set_current_block(bb_body);
+
+                // Bind the loop variable: declare a local and assign __coll[__idx] to it
+                let elem_local = self.builder.declare_local(None, elem_ty, None, false);
+                self.builder.assign(
+                    Place::local(elem_local),
+                    Rvalue::Use(Operand::Copy(Place::Index {
+                        base: Box::new(Place::local(coll_local)),
+                        index: idx_local,
+                        kind: IndexKind::Array,
+                    })),
+                );
+                // Now bind the pattern to the element local
+                self.bind_pattern(elem_local, binding);
+
+                // Lower the body expression (result discarded)
+                let body_temp = self.builder.temp(Ty::Void { attr: TyAttr::default() });
+                self.lower_expr(body, Place::local(body_temp));
+
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(bb_after);
+                }
+
+                // 7. After: __idx += 1
+                self.builder.set_current_block(bb_after);
+                self.builder.assign(
+                    Place::local(idx_local),
+                    Rvalue::BinaryOp {
+                        op: BinOp::Add,
+                        left: Operand::Copy(Place::Local(idx_local)),
+                        right: Operand::Constant(Constant::Int(1)),
+                    },
+                );
+                self.builder.goto(bb_header);
+
+                // 8. Exit block
+                self.loop_context = prev_loop;
+                self.builder.set_current_block(bb_exit);
+            }
+
+            AstStmt::Return(expr) => {
+                let ret = Local(0); // _0 is always the return place
+                if let Some(e) = expr {
+                    self.lower_expr(e, Place::local(ret));
+                }
+                // Unwatch all watched locals before returning
+                let watched = self.watched_locals_stack.clone();
+                for &local in watched.iter().rev() {
+                    self.builder.unwatch(local);
+                }
+                let exit = self.builder.create_block();
+                self.builder.goto(exit);
+                self.builder.set_current_block(exit);
+                self.builder.return_();
+                // Current block is now terminated — Block loop will break on next iteration
+            }
+
+            AstStmt::Throw { value } => {
+                let val_op = self.lower_to_operand(value);
+                self.builder.throw(val_op);
+                let dead = self.builder.create_block();
+                self.builder.set_current_block(dead);
+            }
+
+            AstStmt::Break => {
+                if let Some(ref loop_ctx) = self.loop_context {
+                    let target = loop_ctx.break_target;
+                    let depth = loop_ctx.watched_locals_depth;
+                    let watched: Vec<Local> = self.watched_locals_stack[depth..].to_vec();
+                    for &local in watched.iter().rev() {
+                        self.builder.unwatch(local);
+                    }
+                    self.builder.goto(target);
+                }
+                let dead = self.builder.create_block();
+                self.builder.set_current_block(dead);
+            }
+
+            AstStmt::Continue => {
+                if let Some(ref loop_ctx) = self.loop_context {
+                    let target = loop_ctx.continue_target;
+                    let depth = loop_ctx.watched_locals_depth;
+                    let watched: Vec<Local> = self.watched_locals_stack[depth..].to_vec();
+                    for &local in watched.iter().rev() {
+                        self.builder.unwatch(local);
+                    }
+                    self.builder.goto(target);
+                }
+                let dead = self.builder.create_block();
+                self.builder.set_current_block(dead);
+            }
+
+            AstStmt::Assign { target, value } => {
+                let place = self.lower_lvalue(target);
+                self.lower_expr(value, place);
+            }
+
+            AstStmt::AssignOp { target, op, value } => {
+                let place = self.lower_lvalue(target);
+                let current = Operand::Copy(place.clone());
+                let rhs = self.lower_to_operand(value);
+                let mir_op = Self::convert_assign_op(&op);
+                self.builder.assign(place, Rvalue::BinaryOp { op: mir_op, left: current, right: rhs });
+            }
+
+            AstStmt::Assert { condition } => {
+                let cond_op = self.lower_to_operand(condition);
+                self.builder.assert(cond_op);
+            }
+
+            AstStmt::Missing => {
+                let callee = Operand::Constant(Constant::Function(
+                    ItemRef::Free {
+                        package: Name::new("baml"),
+                        namespace: vec![Name::new("sys")],
+                        name: Name::new("panic"),
+                    },
+                ));
+                let msg = Operand::Constant(Constant::String("missing statement".to_string()));
+                let temp = self.builder.temp(Ty::Null { attr: TyAttr::default() });
+                let unreachable_block = self.builder.create_block();
+                self.builder.call(callee, vec![msg], Place::local(temp), unreachable_block, None);
+                self.builder.set_current_block(unreachable_block);
+                self.builder.unreachable();
+                let dead = self.builder.create_block();
+                self.builder.set_current_block(dead);
+            }
+
+            AstStmt::HeaderComment { name, level } => {
+                self.builder.push_statement(
+                    StatementKind::NotifyBlock { name: name.clone(), level },
+                    None,
+                );
+            }
+        }
+    }
+
+    fn convert_assign_op(op: &AstAssignOp) -> BinOp {
+        match op {
+            AstAssignOp::Add => BinOp::Add,
+            AstAssignOp::Sub => BinOp::Sub,
+            AstAssignOp::Mul => BinOp::Mul,
+            AstAssignOp::Div => BinOp::Div,
+            AstAssignOp::Mod => BinOp::Mod,
+            AstAssignOp::BitAnd => BinOp::BitAnd,
+            AstAssignOp::BitOr => BinOp::BitOr,
+            AstAssignOp::BitXor => BinOp::BitXor,
+            AstAssignOp::Shl => BinOp::Shl,
+            AstAssignOp::Shr => BinOp::Shr,
+        }
+    }
+
+    fn lower_lvalue(&mut self, expr_id: AstExprId) -> Place {
+        let expr = self.body.exprs[expr_id].clone();
+        match &expr {
+            AstExpr::Path(segments) if segments.len() == 1 => {
+                if let Some(&local) = self.locals.get(&segments[0]) {
+                    Place::Local(local)
+                } else {
+                    let temp = self.builder.temp(Ty::Null { attr: TyAttr::default() });
+                    Place::Local(temp)
+                }
+            }
+            AstExpr::FieldAccess { base, field } => {
+                let base_id = *base;
+                let field_name = field.clone();
+                let base_place = self.lower_lvalue(base_id);
+                let base_ty = self.expr_ty(base_id);
+                if let Ty::Class(ref tn, _) = base_ty {
+                    if let Some(fields) = self.class_fields.get(tn.name.as_str()) {
+                        if let Some(&idx) = fields.get(field_name.as_str()) {
+                            return Place::Field { base: Box::new(base_place), field: idx };
+                        }
+                    }
+                }
+                let key_local = self.builder.temp(Ty::String { attr: TyAttr::default() });
+                self.builder.assign(
+                    Place::local(key_local),
+                    Rvalue::Use(Operand::Constant(Constant::String(field_name.to_string()))),
+                );
+                Place::Index { base: Box::new(base_place), index: key_local, kind: IndexKind::Map }
+            }
+            AstExpr::Index { base, index } => {
+                let base_id = *base;
+                let index_id = *index;
+                let base_place = self.lower_lvalue(base_id);
+                let index_op = self.lower_to_operand(index_id);
+                let base_ty = self.expr_ty(base_id);
+                let index_ty = self.expr_ty(index_id);
+                let index_local = self.operand_to_local(index_op, index_ty);
+                let kind = if matches!(base_ty, Ty::List(..)) { IndexKind::Array } else { IndexKind::Map };
+                Place::Index { base: Box::new(base_place), index: index_local, kind }
+            }
+            _ => {
+                let ty = self.expr_ty(expr_id);
+                let temp = self.builder.temp(ty);
+                Place::Local(temp)
+            }
+        }
+    }
+}
+
+// ─── Match lowering ───────────────────────────────────────────────────────────
+
+impl<'db> LoweringContext<'db> {
+    fn lower_match(
+        &mut self,
+        _expr_id: AstExprId,
+        scrutinee: AstExprId,
+        arm_ids: &[baml_compiler2_ast::MatchArmId],
+        dest: Place,
+    ) {
+        // If scrutinee is a simple variable reference, reuse the local directly
+        // instead of copying into a temp (matches MIR1 behavior).
+        let scrutinee_local = self.try_resolve_to_local(scrutinee)
+            .unwrap_or_else(|| {
+                let op = self.lower_to_operand(scrutinee);
+                let ty = self.expr_ty(scrutinee);
+                self.operand_to_local(op, ty)
+            });
+
+        let bb_join = self.builder.create_block();
+
+        // Collect arms from arena
+        let arms: Vec<baml_compiler2_ast::MatchArm> = arm_ids.iter()
+            .map(|&id| self.body.match_arms[id].clone())
+            .collect();
+
+        // Try switch optimization: if all non-wildcard arms are integer literals
+        // with no guards, emit a single Switch terminator.
+        if self.try_lower_match_as_switch(scrutinee_local, &arms, dest.clone(), bb_join) {
+            self.builder.set_current_block(bb_join);
+            return;
+        }
+
+        self.lower_match_chain(scrutinee_local, &arms, dest, bb_join);
+
+        self.builder.set_current_block(bb_join);
+    }
+
+    /// Attempt to lower a match as a Switch terminator.
+    /// Returns true if successful, false if the match isn't switch-eligible.
+    fn try_lower_match_as_switch(
+        &mut self,
+        scrutinee: Local,
+        arms: &[baml_compiler2_ast::MatchArm],
+        dest: Place,
+        join: BlockId,
+    ) -> bool {
+        use baml_base::Literal;
+
+        if arms.is_empty() {
+            return false;
+        }
+
+        // Classify arms: collect (i64_value, arm_index) for int literal patterns,
+        // and check for a trailing wildcard/binding.
+        let mut int_arms: Vec<(i64, usize)> = Vec::new();
+        let mut otherwise_idx: Option<usize> = None;
+
+        for (i, arm) in arms.iter().enumerate() {
+            // Guards disqualify switch optimization
+            if arm.guard.is_some() {
+                return false;
+            }
+            let pat = &self.body.patterns[arm.pattern];
+            match pat {
+                AstPattern::Literal(Literal::Int(val)) => {
+                    int_arms.push((*val, i));
+                }
+                AstPattern::Binding(_) => {
+                    // Wildcard/binding must be last arm
+                    if i != arms.len() - 1 {
+                        return false;
+                    }
+                    otherwise_idx = Some(i);
+                }
+                _ => return false, // Non-int-literal, non-wildcard pattern
+            }
+        }
+
+        // Need at least one int arm to justify a switch
+        if int_arms.is_empty() {
+            return false;
+        }
+
+        // Save the entry block — this is where the switch terminator goes
+        let bb_entry = self.builder.current_block();
+
+        // Build body blocks for each int arm
+        let bb_otherwise = self.builder.create_block();
+        let mut switch_arms: Vec<(i64, BlockId)> = Vec::new();
+        let mut arm_names: Vec<(i64, String)> = Vec::new();
+
+        for &(val, arm_idx) in &int_arms {
+            let bb_body = self.builder.create_block();
+            switch_arms.push((val, bb_body));
+            arm_names.push((val, val.to_string()));
+
+            self.builder.set_current_block(bb_body);
+            self.bind_pattern(scrutinee, arms[arm_idx].pattern);
+            self.lower_expr(arms[arm_idx].body, dest.clone());
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(join);
+            }
+        }
+
+        // Lower the otherwise arm (wildcard) or emit a default null
+        self.builder.set_current_block(bb_otherwise);
+        if let Some(idx) = otherwise_idx {
+            self.bind_pattern(scrutinee, arms[idx].pattern);
+            self.lower_expr(arms[idx].body, dest.clone());
+        } else {
+            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+        }
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(join);
+        }
+
+        // Emit the switch terminator in the entry block
+        self.builder.set_current_block(bb_entry);
+        let exhaustive = otherwise_idx.is_some();
+        self.builder.switch(
+            Operand::Copy(Place::Local(scrutinee)),
+            switch_arms,
+            bb_otherwise,
+            exhaustive,
+            arm_names,
+        );
+
+        true
+    }
+
+    fn lower_match_chain(
+        &mut self,
+        scrutinee: Local,
+        arms: &[baml_compiler2_ast::MatchArm],
+        dest: Place,
+        join: BlockId,
+    ) {
+        if arms.is_empty() {
+            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(join);
+            }
+            return;
+        }
+
+        let arm = &arms[0];
+        let rest = &arms[1..];
+
+        let bb_body = self.builder.create_block();
+        let bb_next = self.builder.create_block();
+
+        self.lower_pattern_test(scrutinee, arm.pattern, bb_body, bb_next);
+
+        self.builder.set_current_block(bb_body);
+        self.bind_pattern(scrutinee, arm.pattern);
+        if let Some(guard) = arm.guard {
+            let guard_op = self.lower_to_operand(guard);
+            let bb_guarded = self.builder.create_block();
+            self.builder.branch(guard_op, bb_guarded, bb_next);
+            self.builder.set_current_block(bb_guarded);
+        }
+        self.lower_expr(arm.body, dest.clone());
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(join);
+        }
+
+        self.builder.set_current_block(bb_next);
+        self.lower_match_chain(scrutinee, rest, dest, join);
+    }
+
+    fn lower_pattern_test(
+        &mut self,
+        scrutinee: Local,
+        pat_id: AstPatId,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        let pat = self.body.patterns[pat_id].clone();
+        match pat {
+            AstPattern::Binding(_) => {
+                // Always matches
+                self.builder.goto(success);
+            }
+            AstPattern::TypedBinding { ty, .. } => {
+                // Resolve the type annotation directly from the AST TypeExpr,
+                // since TIR may not populate bindings for catch/match arm patterns.
+                let annotation_ty = self.resolve_type_annotation(&ty);
+                let test = Rvalue::IsType {
+                    operand: Operand::Copy(Place::Local(scrutinee)),
+                    ty: annotation_ty,
+                };
+                let test_local = self.builder.temp(Ty::Bool { attr: TyAttr::default() });
+                self.builder.assign(Place::local(test_local), test);
+                self.builder.branch(Operand::Copy(Place::Local(test_local)), success, failure);
+            }
+            AstPattern::Literal(lit) => {
+                let constant = self.lower_literal(&lit);
+                let test = Rvalue::BinaryOp {
+                    op: BinOp::Eq,
+                    left: Operand::Copy(Place::Local(scrutinee)),
+                    right: Operand::Constant(constant),
+                };
+                let test_local = self.builder.temp(Ty::Bool { attr: TyAttr::default() });
+                self.builder.assign(Place::local(test_local), test);
+                self.builder.branch(Operand::Copy(Place::Local(test_local)), success, failure);
+            }
+            AstPattern::Null => {
+                let test = Rvalue::BinaryOp {
+                    op: BinOp::Eq,
+                    left: Operand::Copy(Place::Local(scrutinee)),
+                    right: Operand::Constant(Constant::Null),
+                };
+                let test_local = self.builder.temp(Ty::Bool { attr: TyAttr::default() });
+                self.builder.assign(Place::local(test_local), test);
+                self.builder.branch(Operand::Copy(Place::Local(test_local)), success, failure);
+            }
+            AstPattern::EnumVariant { enum_name, variant } => {
+                let test = Rvalue::BinaryOp {
+                    op: BinOp::Eq,
+                    left: Operand::Copy(Place::Local(scrutinee)),
+                    right: Operand::Constant(Constant::EnumVariant {
+                        enum_ref: ItemRef::EnumType {
+                            package: Name::new("user"),
+                            namespace: vec![],
+                            name: enum_name.clone(),
+                        },
+                        variant: variant.clone(),
+                    }),
+                };
+                let test_local = self.builder.temp(Ty::Bool { attr: TyAttr::default() });
+                self.builder.assign(Place::local(test_local), test);
+                self.builder.branch(Operand::Copy(Place::Local(test_local)), success, failure);
+            }
+            AstPattern::Union(sub_pats) => {
+                if sub_pats.is_empty() {
+                    self.builder.goto(failure);
+                    return;
+                }
+                let n = sub_pats.len();
+                for (i, &sub_pat) in sub_pats.iter().enumerate() {
+                    let next = if i + 1 < n {
+                        self.builder.create_block()
+                    } else {
+                        failure
+                    };
+                    self.lower_pattern_test(scrutinee, sub_pat, success, next);
+                    if i + 1 < n {
+                        self.builder.set_current_block(next);
+                    }
+                }
+            }
+        }
+    }
+
+    fn bind_pattern(&mut self, scrutinee: Local, pat_id: AstPatId) {
+        let pat = self.body.patterns[pat_id].clone();
+        match pat {
+            AstPattern::Binding(name) if name.as_str() != "_" => {
+                // Prefer TIR-inferred type; fall back to the scrutinee's declared type
+                // rather than Null, so catch bindings get the error's type (unknown) not null.
+                let ty = self.pat_types.get(&pat_id)
+                    .map(convert_tir2_ty)
+                    .unwrap_or_else(|| self.builder.local_ty(scrutinee));
+                let local = self.builder.declare_local(Some(name.clone()), ty, None, false);
+                self.builder.assign(Place::local(local), Rvalue::Use(Operand::Copy(Place::Local(scrutinee))));
+                self.locals.insert(name, local);
+            }
+            AstPattern::TypedBinding { name, ty, .. } if name.as_str() != "_" => {
+                let resolved_ty = self.resolve_type_annotation(&ty);
+                let local = self.builder.declare_local(Some(name.clone()), resolved_ty, None, false);
+                self.builder.assign(Place::local(local), Rvalue::Use(Operand::Copy(Place::Local(scrutinee))));
+                self.locals.insert(name, local);
+            }
+            _ => {
+                // Wildcard `_`, Literal, Null, EnumVariant, Union — no binding needed
+            }
+        }
+    }
+}
+
+// ─── Catch lowering ───────────────────────────────────────────────────────────
+
+impl<'db> LoweringContext<'db> {
+    fn lower_catch(
+        &mut self,
+        _expr_id: AstExprId,
+        base: AstExprId,
+        clauses: &[baml_compiler2_ast::CatchClause],
+        dest: Place,
+    ) {
+        let bb_join = self.builder.create_block();
+        let bb_handler = self.builder.create_block();
+        let error_local = self.builder.temp(Ty::BuiltinUnknown { attr: TyAttr::default() });
+        self.builder.unwind_error_locals.insert(bb_handler, error_local);
+
+        let prev_catch = self.catch_context.take();
+        self.catch_context = Some(CatchContext {
+            unwind_target: bb_handler,
+            error_local,
+        });
+
+        self.lower_expr(base, dest.clone());
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(bb_join);
+        }
+
+        self.catch_context = prev_catch;
+
+        self.builder.set_current_block(bb_handler);
+        for clause in clauses {
+            // Bind the clause's binding pattern to the error local
+            self.bind_pattern(error_local, clause.binding);
+            // Lower each catch arm
+            for &arm_id in &clause.arms {
+                let arm = self.body.catch_arms[arm_id].clone();
+                // Test the arm's pattern against the error local
+                let bb_arm_body = self.builder.create_block();
+                let bb_arm_next = self.builder.create_block();
+                self.lower_pattern_test(error_local, arm.pattern, bb_arm_body, bb_arm_next);
+                self.builder.set_current_block(bb_arm_body);
+                self.bind_pattern(error_local, arm.pattern);
+                self.lower_expr(arm.body, dest.clone());
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(bb_join);
+                }
+                self.builder.set_current_block(bb_arm_next);
+            }
+        }
+
+        // If no clause matched, re-throw
+        if !self.builder.is_current_terminated() {
+            self.builder.throw(Operand::Copy(Place::Local(error_local)));
+        }
+
+        self.builder.set_current_block(bb_join);
+    }
+}
+
+// ─── 3.7: Entry point ─────────────────────────────────────────────────────────
 
 pub fn lower_function<'db>(
     db: &'db dyn crate::Db,
     func_loc: FunctionLoc<'db>,
 ) -> Option<MirFunction> {
-    todo!("lower_function: not yet implemented")
+    let body = function_body(db, func_loc);
+    let source_map = function_body_source_map(db, func_loc);
+
+    match body.as_ref() {
+        FunctionBody::Expr(expr_body) => {
+            let mut ctx =
+                LoweringContext::new(db, func_loc, expr_body.clone(), source_map);
+            Some(ctx.lower_function_body())
+        }
+        FunctionBody::Builtin(_kind) => None,
+        FunctionBody::Missing => None,
+    }
 }

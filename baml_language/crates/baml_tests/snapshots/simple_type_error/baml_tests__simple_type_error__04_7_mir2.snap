@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn Foo() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: 1
+    let _2: "foo"
+
+    bb0: {
+        _1 = const 1_i64;
+        _2 = const "foo";
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

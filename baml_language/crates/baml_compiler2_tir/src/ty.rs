@@ -15,17 +15,25 @@ pub struct QualifiedTypeName {
     pub pkg: Name,
     /// The short/local name of the type (e.g. `"Foo"`).
     pub name: Name,
+    /// Unresolved generic type parameter names (e.g. `["T"]` for `Array<T>`).
+    /// Empty for non-generic types or when concrete type args are substituted.
+    pub generic_params: Vec<Name>,
 }
 
 impl QualifiedTypeName {
     pub fn new(pkg: Name, name: Name) -> Self {
-        Self { pkg, name }
+        Self { pkg, name, generic_params: Vec::new() }
     }
 }
 
 impl fmt::Display for QualifiedTypeName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}", self.pkg, self.name)
+        write!(f, "{}.{}", self.pkg, self.name)?;
+        if !self.generic_params.is_empty() {
+            let params: Vec<_> = self.generic_params.iter().map(|p| p.to_string()).collect();
+            write!(f, "<{}>", params.join(", "))?;
+        }
+        Ok(())
     }
 }
 
@@ -137,6 +145,17 @@ pub enum Ty {
     /// This is distinct from `Ty::Unknown` (which means "type inference failed") —
     /// `RustType` is intentional and well-formed in the builtin stubs.
     RustType,
+    /// The `type` metatype keyword — represents a BAML type value at runtime.
+    ///
+    /// Modeled as a dedicated variant (like `RustType`) rather than collapsing to
+    /// `BuiltinUnknown`, because:
+    /// - `type` is semantically distinct from `unknown` (a string is not a type value)
+    /// - Future methods (`.name()`, `.fields()`) need a concrete type to dispatch on
+    /// - Maps to `Ty::Opaque("baml.reflect.Type")` at the MIR level
+    ///
+    /// Follows the same pattern as `RustType`: opaque builtin, leaf type, no inner
+    /// structure. Group with `RustType` in match arms.
+    Type,
     /// Error recovery — the type is structurally unknown (e.g., name unresolved).
     Unknown,
     /// Error sentinel — a hard error was emitted for this expression.
@@ -283,6 +302,7 @@ impl fmt::Display for Ty {
             Ty::Void => write!(f, "void"),
             Ty::BuiltinUnknown => write!(f, "unknown"),
             Ty::RustType => write!(f, "$rust_type"),
+            Ty::Type => write!(f, "type"),
             Ty::Unknown => write!(f, "unknown"),
             Ty::Error => write!(f, "!error"),
         }

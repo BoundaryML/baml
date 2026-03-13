@@ -115,19 +115,26 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
             span: te.syntax().text_range(),
         });
 
-    let body = if let Some(llm) = func.llm_body() {
-        Some(FunctionBodyDef::Llm(lower_llm_body(&llm)))
+    let (body, llm_meta) = if let Some(llm) = func.llm_body() {
+        let llm_body_def = lower_llm_body(&llm);
+        let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
+        let (expr_body, source_map) = synthesize_llm_call_body(
+            name.as_str(),
+            &param_names,
+            llm_body_def.span,
+        );
+        (Some(FunctionBodyDef::Expr(expr_body, source_map)), Some(llm_body_def))
     } else if let Some(expr) = func.expr_body() {
         // Check if the body is `$rust_function` or `$rust_io_function` before lowering
         if let Some(builtin_kind) = check_builtin_body(expr.syntax()) {
-            Some(FunctionBodyDef::Builtin(builtin_kind))
+            (Some(FunctionBodyDef::Builtin(builtin_kind)), None)
         } else {
             let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
             let (expr_body, source_map) = lower_expr_body::lower(&expr, &param_names);
-            Some(FunctionBodyDef::Expr(expr_body, source_map))
+            (Some(FunctionBodyDef::Expr(expr_body, source_map)), None)
         }
     } else {
-        None
+        (None, None)
     };
 
     let attributes = lower_attributes_from_node(node);
@@ -139,6 +146,7 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
         return_type,
         throws,
         body,
+        llm_meta,
         attributes,
         span: node.text_range(),
         name_span,
@@ -209,6 +217,84 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
         prompt,
         span,
     }
+}
+
+/// Build a synthetic expression body equivalent to:
+/// `baml.llm.call_llm_function("FunctionName", { "param1": param1, "param2": param2 })`
+///
+/// All synthetic spans point to `llm_span` (the LLM body block).
+fn synthesize_llm_call_body(
+    function_name: &str,
+    param_names: &[Name],
+    llm_span: text_size::TextRange,
+) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
+    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
+    use la_arena::Arena;
+
+    let mut exprs = Arena::new();
+    let mut expr_spans = Arena::new();
+
+    // Helper: allocate an expr + its span
+    let mut alloc = |expr: Expr| -> crate::ast::ExprId {
+        let id = exprs.alloc(expr);
+        expr_spans.alloc(llm_span);
+        id
+    };
+
+    // 1. Function name literal: "FunctionName"
+    let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
+
+    // 2. Map entries: { "param1": param1, "param2": param2 }
+    let entries: Vec<(crate::ast::ExprId, crate::ast::ExprId)> = param_names
+        .iter()
+        .map(|name| {
+            let key = alloc(Expr::Literal(Literal::String(name.as_str().to_string())));
+            let value = alloc(Expr::Path(vec![name.clone()]));
+            (key, value)
+        })
+        .collect();
+    let args_map = alloc(Expr::Map { entries });
+
+    // 3. Callee: baml.llm.call_llm_function
+    // The v2 TIR only handles single-segment Path expressions; multi-segment
+    // access must be represented as chained FieldAccess nodes.
+    //   baml  ->  .llm  ->  .call_llm_function
+    let baml_expr = alloc(Expr::Path(vec![Name::new("baml")]));
+    let llm_expr = alloc(Expr::FieldAccess {
+        base: baml_expr,
+        field: Name::new("llm"),
+    });
+    let callee = alloc(Expr::FieldAccess {
+        base: llm_expr,
+        field: Name::new("call_llm_function"),
+    });
+
+    // 4. Call expression
+    let call = alloc(Expr::Call {
+        callee,
+        args: vec![fn_name_expr, args_map],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        catch_arms: Arena::new(),
+        type_annotations: Arena::new(),
+        root_expr: Some(call),
+    };
+
+    let source_map = AstSourceMap {
+        expr_spans,
+        stmt_spans: Arena::new(),
+        pattern_spans: Arena::new(),
+        match_arm_spans: Arena::new(),
+        type_annotation_spans: Arena::new(),
+        catch_arm_spans: Arena::new(),
+    };
+
+    (body, source_map)
 }
 
 fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {

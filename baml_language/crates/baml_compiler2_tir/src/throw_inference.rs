@@ -274,7 +274,8 @@ fn collect_throw_facts_from_ty(ty: &Ty, out: &mut BTreeSet<ThrowFact>) {
         | Ty::EvolvingList(_)
         | Ty::EvolvingMap(_, _)
         | Ty::Function { .. }
-        | Ty::RustType => out.insert(ty.to_string()),
+        | Ty::RustType
+        | Ty::Type => out.insert(ty.to_string()),
     };
 }
 

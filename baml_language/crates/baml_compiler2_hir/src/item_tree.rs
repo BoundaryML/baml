@@ -33,8 +33,10 @@ pub struct Function {
     pub return_type: Option<ast::SpannedTypeExpr>,
     /// Throws contract type with its source span.
     pub throws: Option<ast::SpannedTypeExpr>,
-    /// Function body — either LLM or expression.
+    /// Function body — either an expression or a builtin.
     pub body: Option<ast::FunctionBodyDef>,
+    /// LLM function metadata, if this function was declared with LLM syntax.
+    pub llm_meta: Option<ast::LlmBodyDef>,
     /// Full source span of the function.
     pub span: TextRange,
 }
@@ -187,6 +189,7 @@ impl ItemTree {
                 return_type: f.return_type.clone(),
                 throws: f.throws.clone(),
                 body: f.body.clone(),
+                llm_meta: f.llm_meta.clone(),
                 span: f.span,
             },
         );

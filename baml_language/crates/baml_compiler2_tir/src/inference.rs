@@ -17,7 +17,7 @@ use baml_compiler2_ast::{ExprId, PatId};
 use baml_compiler2_hir::{
     body::FunctionBody,
     contributions::Definition,
-    loc::{ClassLoc, TypeAliasLoc},
+    loc::{ClassLoc, FunctionLoc, TypeAliasLoc},
     package::{PackageId, PackageItems, package_items},
     scope::{ScopeId, ScopeKind},
 };
@@ -28,6 +28,35 @@ use crate::{
     infer_context::{InferContext, TypeCheckDiagnostics},
     ty::Ty,
 };
+
+// ── Method Resolution ─────────────────────────────────────────────────────
+
+/// Records what a field-access expression resolved to during type inference.
+///
+/// Stored per-ExprId alongside the `Ty`, so MIR can emit the correct
+/// `Constant::Function(QualifiedName)` without re-doing resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MethodResolution<'db> {
+    /// A free item accessed via a package/namespace path.
+    /// e.g. `env.get` → package="env", namespace=[], name="get"
+    Free {
+        package: Name,
+        namespace: Vec<Name>,
+        name: Name,
+        func_loc: FunctionLoc<'db>,
+    },
+    /// A method on a class (user-defined or builtin).
+    /// e.g. `arr.length` → package="baml", namespace=[], class="Array", name="length"
+    /// e.g. `baz.Greeting` → package="user", namespace=[], class="Baz", name="Greeting"
+    Method {
+        package: Name,
+        namespace: Vec<Name>,
+        class: Name,
+        name: Name,
+        class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+}
 
 // ── Per-Scope Inference Result ─────────────────────────────────────────────
 
@@ -46,6 +75,10 @@ pub struct ScopeInference<'db> {
     /// May differ from the initializer expression type (e.g. `let x = 1` has
     /// expression type `Literal(1, Fresh)` but binding type `int`).
     bindings: FxHashMap<PatId, Ty>,
+    /// Method resolutions: for field-access expressions that resolved to a
+    /// method or free function, records the structural path (package, namespace,
+    /// class, name) so MIR can emit the correct QualifiedName.
+    resolutions: FxHashMap<ExprId, MethodResolution<'db>>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
 }
@@ -86,6 +119,26 @@ impl<'db> ScopeInference<'db> {
     /// which may differ from the initializer expression type due to widening).
     pub fn binding_type(&self, pat_id: PatId) -> Option<&Ty> {
         self.bindings.get(&pat_id)
+    }
+
+    /// Iterate over all (ExprId, Ty) pairs for expressions in this scope.
+    pub fn iter_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
+        self.expressions.iter()
+    }
+
+    /// Iterate over all (PatId, Ty) pairs for pattern bindings in this scope.
+    pub fn iter_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
+        self.bindings.iter()
+    }
+
+    /// Look up the method resolution for an expression in this scope.
+    pub fn resolution(&self, expr_id: ExprId) -> Option<&MethodResolution<'db>> {
+        self.resolutions.get(&expr_id)
+    }
+
+    /// Iterate over all (ExprId, MethodResolution) pairs for this scope.
+    pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MethodResolution<'db>)> {
+        self.resolutions.iter()
     }
 
     /// Get diagnostics for this scope (empty slice if none).
@@ -269,7 +322,7 @@ pub fn infer_scope_types<'db>(
         }
     }
 
-    let (expressions, bindings, diagnostics) = builder.finish();
+    let (expressions, bindings, resolutions, diagnostics) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
         None
@@ -280,6 +333,7 @@ pub fn infer_scope_types<'db>(
     ScopeInference {
         expressions,
         bindings,
+        resolutions,
         extra,
     }
 }

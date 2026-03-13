@@ -364,7 +364,8 @@ fn normalize_impl(
         // `$rust_type` — opaque Rust-managed state. Treated as Unknown
         // in the structural type system (cannot be constructed or destructured
         // by user code).
-        Ty::RustType => StructuralTy::Unknown,
+        // `type` — the BAML metatype keyword. Also opaque in the structural system.
+        Ty::RustType | Ty::Type => StructuralTy::Unknown,
     }
 }
 

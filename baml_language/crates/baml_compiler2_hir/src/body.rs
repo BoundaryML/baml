@@ -10,21 +10,12 @@ use baml_compiler2_ast::{AstSourceMap, BuiltinKind, ExprBody, FunctionBodyDef};
 
 use crate::loc::FunctionLoc;
 
-/// Semantic LLM function body — client name + prompt text.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LlmBody {
-    pub client: Option<baml_base::Name>,
-    pub prompt: Option<baml_compiler2_ast::RawPrompt>,
-}
-
-/// Semantic function body — either an LLM prompt, an expression body, or missing.
+/// Semantic function body — either an expression body, a builtin, or missing.
 ///
 /// No spans — those live in the companion `AstSourceMap` returned by
 /// `function_body_source_map`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionBody {
-    /// LLM function body (client + prompt template).
-    Llm(LlmBody),
     /// Expression body (semantic arena, no spans).
     Expr(ExprBody),
     /// Rust-bound builtin implementation (`$rust_function` or `$rust_io_function`).
@@ -47,10 +38,6 @@ pub fn function_body<'db>(db: &'db dyn crate::Db, function: FunctionLoc<'db>) ->
         Some(FunctionBodyDef::Expr(expr_body, _source_map)) => {
             FunctionBody::Expr(expr_body.clone())
         }
-        Some(FunctionBodyDef::Llm(llm)) => FunctionBody::Llm(LlmBody {
-            client: llm.client.clone(),
-            prompt: llm.prompt.clone(),
-        }),
         Some(FunctionBodyDef::Builtin(kind)) => FunctionBody::Builtin(*kind),
         None => FunctionBody::Missing,
     };

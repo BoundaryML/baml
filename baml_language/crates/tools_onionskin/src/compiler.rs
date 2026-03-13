@@ -1576,11 +1576,14 @@ impl CompilerRunner {
                             .as_ref()
                             .map(|te| hir2_type_expr_to_string(&te.expr))
                             .unwrap_or_else(|| "?".to_string());
-                        let body_kind = match &f.body {
-                            Some(FunctionBodyDef::Expr(_, _)) => "expr",
-                            Some(FunctionBodyDef::Llm(_)) => "llm",
-                            Some(FunctionBodyDef::Builtin(_)) => "builtin",
-                            None => "-",
+                        let body_kind = if f.llm_meta.is_some() {
+                            "llm"
+                        } else {
+                            match &f.body {
+                                Some(FunctionBodyDef::Expr(_, _)) => "expr",
+                                Some(FunctionBodyDef::Builtin(_)) => "builtin",
+                                None => "-",
+                            }
                         };
                         let sig = format!("({}) -> {}", params_str.join(", "), ret_str);
                         let mut detail = vec![
@@ -2387,6 +2390,30 @@ impl CompilerRunner {
                                 status,
                             );
                         }
+                        Stmt::For {
+                            binding,
+                            collection,
+                            body: for_body,
+                        } => {
+                            let coll_desc = expr_desc(*collection, body);
+                            let bind_name = match &body.patterns[*binding] {
+                                baml_compiler2_ast::Pattern::Binding(n) => n.to_string(),
+                                baml_compiler2_ast::Pattern::TypedBinding { name, .. } => name.to_string(),
+                                _ => "_".to_string(),
+                            };
+                            let line = format!("{pad}for {bind_name} in {coll_desc}");
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            render_expr(
+                                *for_body,
+                                body,
+                                inference,
+                                indent + 2,
+                                output,
+                                output_annotated,
+                                status,
+                            );
+                        }
                         Stmt::Assign { target, value } => {
                             let target_desc = expr_desc(*target, body);
                             let val_desc = expr_desc(*value, body);
@@ -3041,6 +3068,21 @@ impl CompilerRunner {
                             line.push(DetailSpan::Code(")".into()));
                             lines.push(line);
                             Self::render_expr_to_lines(*wb, body, inference, indent + 4, lines);
+                        }
+                        Stmt::For {
+                            binding,
+                            collection,
+                            body: for_body,
+                        } => {
+                            let bind_name = match &body.patterns[*binding] {
+                                baml_compiler2_ast::Pattern::Binding(n) => n.to_string(),
+                                baml_compiler2_ast::Pattern::TypedBinding { name, .. } => name.to_string(),
+                                _ => "_".to_string(),
+                            };
+                            let mut line = vec![DetailSpan::Code(format!("{pad}  for {bind_name} in "))];
+                            line.extend(expr_desc_spans(*collection, body, inference));
+                            lines.push(line);
+                            Self::render_expr_to_lines(*for_body, body, inference, indent + 4, lines);
                         }
                         Stmt::Assign { target, value } => {
                             let mut line = vec![DetailSpan::Code(format!("{pad}  "))];

@@ -1912,15 +1912,46 @@ impl LoweringContext {
     }
 
     fn lower_for_stmt(&mut self, node: &SyntaxNode) -> StmtId {
-        // FOR_EXPR: KW_FOR WORD KW_IN expr BLOCK_EXPR
-        // Desugar into a while loop (simplified)
+        // FOR_EXPR can take two forms:
+        //   Iterator-style:  for (let var in <expr>) { <body> }
+        //   C-style:         for (let i = 0; cond; update) { <body> }
+        //
+        // Detection: C-style has no KW_IN token among FOR_EXPR's direct children.
+        // The C-style LET_STMT child contains EQUALS and SEMICOLON tokens.
+        //
+        // C-style is desugared to:
+        //   Stmt::Let { ... }   // init
+        //   Stmt::While { condition, body, after: Some(update_stmt), origin: LoopOrigin::For }
+        // These two statements are wrapped in Expr::Block → Stmt::Expr so the
+        // function can return a single StmtId.
         let range = node.text_range();
 
-        // Find the iter expression and body
-        let mut _iter_name = Name::new("_iter");
+        // Determine if this is a C-style for loop by checking for KW_IN.
+        let is_c_style = !node
+            .children_with_tokens()
+            .any(|e| matches!(&e, rowan::NodeOrToken::Token(t) if t.kind() == SyntaxKind::KW_IN));
+
+        if is_c_style {
+            return self.lower_c_style_for(node, range);
+        }
+
+        // --- Iterator-style for loop ---
+        //
+        // Parenthesized:     for (let var in <expr>) { <body> }
+        // Non-parenthesized: for var in <expr> { <body> }
+        //
+        // In the parenthesized form, the variable binding is wrapped in a
+        // LET_STMT child node (from `parse_for_in_pattern`). In the
+        // non-parenthesized form, the variable is a bare WORD token.
+        //
+        // We emit a first-class Stmt::For (NOT desugared to While here).
+        // Desugaring to index-based basic blocks happens at MIR lowering time.
+
+        let mut iter_name = Name::new("_iter_var");
         let mut iter_expr_opt = None;
-        let mut body = None;
+        let mut body_opt = None;
         let mut seen_in = false;
+        let mut seen_let_stmt = false;
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -1928,8 +1959,9 @@ impl LoweringContext {
                     SyntaxKind::KW_IN => {
                         seen_in = true;
                     }
+                    // Non-parenthesized form: `for i in xs` — bare WORD before KW_IN
                     SyntaxKind::WORD if !seen_in => {
-                        _iter_name = Name::new(token.text());
+                        iter_name = Name::new(token.text());
                     }
                     _ => {
                         if seen_in && iter_expr_opt.is_none() {
@@ -1938,29 +1970,124 @@ impl LoweringContext {
                     }
                 },
                 rowan::NodeOrToken::Node(child) => {
-                    if seen_in && iter_expr_opt.is_none() {
+                    if !seen_in && !seen_let_stmt && child.kind() == SyntaxKind::LET_STMT {
+                        // Parenthesized form: `for (let var in xs)` — variable is
+                        // inside a LET_STMT child node produced by parse_for_in_pattern.
+                        // Extract the variable name from the first WORD token in the node.
+                        for t in child.children_with_tokens() {
+                            if let rowan::NodeOrToken::Token(tok) = t {
+                                if tok.kind() == SyntaxKind::WORD {
+                                    iter_name = Name::new(tok.text());
+                                    break;
+                                }
+                            }
+                        }
+                        seen_let_stmt = true;
+                    } else if seen_in && iter_expr_opt.is_none() {
                         iter_expr_opt = Some(self.lower_expr(&child));
-                    } else if iter_expr_opt.is_some() && body.is_none() {
-                        body = Some(self.lower_expr(&child));
+                    } else if iter_expr_opt.is_some() && body_opt.is_none() {
+                        body_opt = Some(self.lower_expr(&child));
                     }
                 }
             }
         }
 
-        let _iter_expr = iter_expr_opt.unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
-        let body = body.unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
+        let collection = iter_expr_opt.unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
+        let body = body_opt.unwrap_or_else(|| self.alloc_expr(Expr::Missing, range));
+        let binding = self.alloc_pattern(Pattern::Binding(iter_name), range);
 
-        // For simplicity, represent as a While loop with a synthetic condition
-        let cond = self.alloc_expr(Expr::Literal(Literal::Bool(true)), range);
         self.alloc_stmt(
+            Stmt::For { binding, collection, body },
+            range,
+        )
+    }
+
+    /// Desugar a C-style for loop `for (let i = 0; cond; update) { body }`
+    /// into:
+    ///   ```
+    ///   {
+    ///     let i = 0;                // init_stmt  (Stmt::Let)
+    ///     while cond {              // Stmt::While
+    ///       body;
+    ///     } after { update; }
+    ///   }
+    ///   ```
+    /// The two statements are wrapped in an `Expr::Block` so this function can
+    /// return a single `StmtId` (as `Stmt::Expr(block)`).
+    fn lower_c_style_for(&mut self, node: &SyntaxNode, range: text_size::TextRange) -> StmtId {
+        // C-style CST structure (direct children of FOR_EXPR):
+        //   KW_FOR  L_PAREN  LET_STMT  BINARY_EXPR(cond)  SEMICOLON  BINARY_EXPR(update)  R_PAREN  BLOCK_EXPR
+        //
+        // We collect child nodes in order; the three significant nodes are:
+        //   [0] LET_STMT      — initializer
+        //   [1] BINARY_EXPR   — condition
+        //   [2] BINARY_EXPR   — update
+        //   [3] BLOCK_EXPR    — body
+        let child_nodes: Vec<SyntaxNode> = node.children().collect();
+
+        // Pull out init (LET_STMT), cond, update, body nodes by position.
+        // child_nodes order: LET_STMT, BINARY_EXPR(cond), BINARY_EXPR(update), BLOCK_EXPR
+        let init_node = child_nodes.iter().find(|n| n.kind() == SyntaxKind::LET_STMT).cloned();
+        // BINARY_EXPRs appear in document order: first is condition, second is update.
+        let binary_exprs: Vec<SyntaxNode> = child_nodes
+            .iter()
+            .filter(|n| n.kind() == SyntaxKind::BINARY_EXPR)
+            .cloned()
+            .collect();
+        let block_node = child_nodes.iter().find(|n| n.kind() == SyntaxKind::BLOCK_EXPR).cloned();
+
+        // Lower the initializer as a Let statement.
+        let init_stmt = if let Some(let_node) = init_node {
+            self.lower_let_stmt(&let_node, false)
+        } else {
+            self.alloc_stmt(Stmt::Missing, range)
+        };
+
+        // Lower the condition expression (first BINARY_EXPR).
+        let condition = if let Some(cond_node) = binary_exprs.first() {
+            self.lower_expr(cond_node)
+        } else {
+            self.alloc_expr(Expr::Missing, range)
+        };
+
+        // Lower the update expression (second BINARY_EXPR) as a statement.
+        // `i += 1` is an assignment-op, so try_lower_assignment handles it.
+        let after_stmt = if let Some(update_node) = binary_exprs.get(1) {
+            let update_range = update_node.text_range();
+            let stmt_opt = self.try_lower_assignment(update_node);
+            Some(stmt_opt.unwrap_or_else(|| {
+                // Plain expression update (e.g. function call)
+                let expr_id = self.lower_expr(update_node);
+                self.alloc_stmt(Stmt::Expr(expr_id), update_range)
+            }))
+        } else {
+            None
+        };
+
+        // Lower the loop body.
+        let body = if let Some(blk) = block_node {
+            self.lower_expr(&blk)
+        } else {
+            self.alloc_expr(Expr::Missing, range)
+        };
+
+        // Build Stmt::While.
+        let while_stmt = self.alloc_stmt(
             Stmt::While {
-                condition: cond,
+                condition,
                 body,
-                after: None,
+                after: after_stmt,
                 origin: LoopOrigin::For,
             },
             range,
-        )
+        );
+
+        // Wrap both statements in a block expression so we return one StmtId.
+        let block_expr = self.alloc_expr(
+            Expr::Block { stmts: vec![init_stmt, while_stmt], tail_expr: None },
+            range,
+        );
+        self.alloc_stmt(Stmt::Expr(block_expr), range)
     }
 
     fn lower_assert_stmt(&mut self, node: &SyntaxNode) -> StmtId {
@@ -1978,23 +2105,16 @@ impl LoweringContext {
     }
 
     fn lower_header_comment(&mut self, node: &SyntaxNode) -> StmtId {
-        // HEADER_COMMENT: # level heading Name
-        let mut name = Name::new("_");
-        let mut level = 1usize;
-
-        for elem in node.children_with_tokens() {
-            if let rowan::NodeOrToken::Token(token) = elem {
-                match token.kind() {
-                    SyntaxKind::WORD => {
-                        name = Name::new(token.text());
-                    }
-                    SyntaxKind::HASH => {
-                        level += 1;
-                    }
-                    _ => {}
-                }
-            }
-        }
+        // HEADER_COMMENT raw text looks like: //# Title or //## Section Name
+        // Strip the leading "//" prefix, then count '#' characters for the level
+        // (number_of_hashes + 1 so that //# => level=2, //## => level=3, etc.),
+        // and use the remaining text (trimmed) as the name.
+        let raw = node.text().to_string();
+        let after_slashes = raw.strip_prefix("//").unwrap_or(&raw);
+        let hash_count = after_slashes.chars().take_while(|c| *c == '#').count();
+        let level = hash_count + 1;
+        let title = after_slashes[hash_count..].trim();
+        let name = if title.is_empty() { Name::new("_") } else { Name::new(title) };
 
         self.alloc_stmt(Stmt::HeaderComment { name, level }, node.text_range())
     }

@@ -1,0 +1,77 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn Foo() -> foo {
+    // Locals:
+    let _0: foo // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn Baz() -> Json {
+    // Locals:
+    let _0: Json // _0 // return
+
+    bb0: {
+        _0 = const "hello";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn Bar() -> foo {
+    // Locals:
+    let _0: foo // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn EchoJSON(i: JSON) -> JSON {
+    // Locals:
+    let _0: JSON // _0 // return
+    let _1: JSON // i // param
+    let _2: "Whoops"
+
+    bb0: {
+        _2 = const "Whoops";
+        _0 = NotJSON { copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn MakeJSON(i: NotJSON) -> JSON {
+    // Locals:
+    let _0: JSON // _0 // return
+    let _1: NotJSON // i // param
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

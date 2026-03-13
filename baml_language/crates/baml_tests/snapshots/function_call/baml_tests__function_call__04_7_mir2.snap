@@ -1,0 +1,159 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn array_length() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: 1 | 2 | 3[] // array
+    let _2: 1
+    let _3: 2
+    let _4: 3
+    let _5: (baml.Array<T>) -> int
+    let _6: 1 | 2 | 3[]
+
+    bb0: {
+        _2 = const 1_i64;
+        _3 = const 2_i64;
+        _4 = const 3_i64;
+        _1 = [copy _2, copy _3, copy _4];
+        _5 = const fn baml.Array.length;
+        _6 = copy _1;
+        _0 = call copy _5(copy _6) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn Foo(x: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
+    let _2: int
+    let _3: 1
+
+    bb0: {
+        _2 = copy _1;
+        _3 = const 1_i64;
+        _0 = copy _2 + copy _3;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn GreetBaz(n: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // n // param
+    let _2: Baz // baz
+    let _3: string
+    let _4: Baz
+    let _5: (Baz) -> string
+
+    bb0: {
+        _3 = copy _1;
+        _2 = Baz { copy _3 };
+        _4 = copy _2;
+        _5 = const fn user.Baz.Greeting;
+        _0 = call copy _5(copy _4) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        goto -> bb1;
+    }
+}
+
+fn param_in_if_statement(b: bool) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: bool // b // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1;
+        branch copy _2 -> [bb2, bb3];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = const 1_i64;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _0 = const 2_i64;
+        goto -> bb4;
+    }
+
+    bb4: {
+        goto -> bb1;
+    }
+}
+
+fn Baz.Greeting(self: Baz) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Baz // self // param
+    let _2: string
+    let _3: "Hello, "
+    let _4: string
+    let _5: Baz
+    let _6: "!"
+
+    bb0: {
+        _3 = const "Hello, ";
+        _5 = copy _1;
+        _4 = copy _5.0;
+        _2 = copy _3 + copy _4;
+        _6 = const "!";
+        _0 = copy _2 + copy _6;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn Bar() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+    let _2: (int) -> int
+    let _3: 1
+
+    bb0: {
+        _2 = const fn user.Foo;
+        _3 = const 1_i64;
+        _1 = call copy _2(copy _3) -> [bb2];
+    }
+
+    bb1: {
+        return;
+    }
+
+    bb2: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+}
