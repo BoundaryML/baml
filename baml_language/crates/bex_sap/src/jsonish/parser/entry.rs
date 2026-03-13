@@ -66,12 +66,9 @@ pub(super) fn parse_func(
                         .pop()
                         .unwrap_or_else(|| unreachable!("We just checked the length"));
                     if let MarkdownResult::CodeBlock(s, v) = res {
+                        let completion_state = *v.completion_state();
                         return Ok(Value::AnyOf(
-                            vec![Value::Markdown(
-                                s.into(),
-                                Box::new(v),
-                                CompletionState::Incomplete,
-                            )],
+                            vec![Value::Markdown(s.into(), Box::new(v), completion_state)],
                             str.to_string().into(),
                         ));
                     }

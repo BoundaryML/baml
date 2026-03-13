@@ -127,7 +127,7 @@ impl<'s, 'v, 't, N: TypeIdent> BamlValueWithFlags<'s, 'v, 't, N> {
                 base + arr
                     .value
                     .iter()
-                    .map(super::super::baml_value::ValueWithMeta::score)
+                    .map(crate::baml_value::ValueWithMeta::score)
                     .sum::<i32>()
             }
             BamlValue::Map(map) => base + map.value.iter().map(|(_, v)| v.score()).sum::<i32>(),

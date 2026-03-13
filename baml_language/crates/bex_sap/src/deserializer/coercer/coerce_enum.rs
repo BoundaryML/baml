@@ -146,7 +146,7 @@ where
                     )));
                 }
                 None => {
-                    add_flags.push(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
+                    add_flags.push(Flag::Incomplete);
                 }
             }
         }

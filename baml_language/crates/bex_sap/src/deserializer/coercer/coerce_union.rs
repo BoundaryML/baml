@@ -78,16 +78,18 @@ where
 
             if let Ok(Some(mut val)) = result
                 && val.score() == 0
+                && hinted_option.meta.expect_asserts(&val.value, ctx).is_ok()
             {
                 // If the hinted variant gives a perfect match, return immediately
                 // Add UnionMatch flag so subsequent array elements can use this hint
                 val.add_flag(Flag::UnionMatch(hint_idx, vec![]));
-                return Ok(Some(val));
+                return Ok(Some(val.with_flags(add_flags)));
             }
         }
 
         // Standard path: try all variants with early termination on perfect match
-        let mut variants: Vec<Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>> = Vec::new();
+        let mut variants: Vec<Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError>> =
+            Vec::new();
 
         for (i, option) in all_variants.iter().enumerate() {
             let parsed = ctx
@@ -98,7 +100,7 @@ where
             match parsed {
                 Ok(None) => {
                     // Variant type with `in_progress = never` means we ignore this variant until it is complete.
-                    continue;
+                    variants.push(Ok(None));
                 }
                 Ok(Some(mut val)) => {
                     if let Err(e) = option.meta.expect_asserts(&val.value, ctx) {
@@ -110,9 +112,9 @@ where
                     if score == 0 {
                         // Add UnionMatch flag so subsequent array elements can use this hint
                         val.add_flag(Flag::UnionMatch(i, vec![]));
-                        return Ok(Some(val));
+                        return Ok(Some(val.with_flags(add_flags)));
                     }
-                    variants.push(Ok(val));
+                    variants.push(Ok(Some(val)));
                 }
                 Err(e) => {
                     variants.push(Err(e));
@@ -125,7 +127,7 @@ where
             TyWithMeta::new(TyResolvedRef::Union(target.ty), target.meta),
             variants,
         );
-        best.map(|v| v.with_flags(add_flags)).map(Some)
+        best.map(|v| v.map(|v| v.with_flags(add_flags)))
     }
 
     fn try_cast(
@@ -193,19 +195,25 @@ where
             .collect::<Result<_, _>>()
             .ok()?;
 
+        // Carry original indices through the filter so UnionMatch flags
+        // and hints use the same index space as coerce().
         let all_options: Vec<_> = variants
             .iter()
-            .filter(|v| !matches!(v.ty, TyResolvedRef::Null(_)))
+            .enumerate()
+            .filter(|(_, v)| !matches!(v.ty, TyResolvedRef::Null(_)))
             .collect();
 
         // Optimization: If we have a hint from a previous array element, try that variant first.
+        // The hint index is in the original (unfiltered) index space, so look it up in `variants`.
         if let Some(hint_idx) = ctx.union_variant_hint {
-            if let Some(hint_variant) = all_options.get(hint_idx) {
-                let opt_ref = TyWithMeta::new(hint_variant.ty, hint_variant.meta);
-                if let Some(mut cast_result) = TyResolvedRef::try_cast(ctx, opt_ref, value) {
-                    if cast_result.score() == 0 {
-                        cast_result.add_flag(Flag::UnionMatch(hint_idx, vec![]));
-                        return Some(cast_result);
+            if let Some(hint_variant) = variants.get(hint_idx) {
+                if !matches!(hint_variant.ty, TyResolvedRef::Null(_)) {
+                    let opt_ref = TyWithMeta::new(hint_variant.ty, hint_variant.meta);
+                    if let Some(mut cast_result) = TyResolvedRef::try_cast(ctx, opt_ref, value) {
+                        if cast_result.score() == 0 {
+                            cast_result.add_flag(Flag::UnionMatch(hint_idx, vec![]));
+                            return Some(cast_result);
+                        }
                     }
                 }
             }
@@ -213,19 +221,19 @@ where
 
         // Collect try_cast results, short-circuit if we find a perfect match (score 0)
         let mut filtered_options: Vec<(usize, BamlValueWithFlags<'s, 'v, 't, N>)> = Vec::new();
-        for (i, opt) in all_options.iter().enumerate() {
+        for &(orig_idx, opt) in &all_options {
             let opt_ref = TyWithMeta::new(opt.ty, opt.meta);
             if let Some(mut cast_result) = TyResolvedRef::try_cast(ctx, opt_ref, value) {
                 let score = cast_result.score();
                 // Perfect match - no need to try other options
                 if score == 0 {
-                    cast_result.add_flag(Flag::UnionMatch(i, vec![]));
+                    cast_result.add_flag(Flag::UnionMatch(orig_idx, vec![]));
                     return Some(cast_result);
                 }
                 // Add the flag with the CORRECT original index before storing.
                 // This prevents pick_best from adding a flag with wrong (filtered list) index.
-                cast_result.add_flag(Flag::UnionMatch(i, vec![]));
-                filtered_options.push((i, cast_result));
+                cast_result.add_flag(Flag::UnionMatch(orig_idx, vec![]));
+                filtered_options.push((orig_idx, cast_result));
             }
         }
 
@@ -242,10 +250,11 @@ where
                 TyWithMeta::new(TyResolvedRef::Union(target.ty), target.meta),
                 filtered_options
                     .into_iter()
-                    .map(|(_, v)| Ok(v))
+                    .map(|(_, v)| Ok(Some(v)))
                     .collect::<Vec<_>>(),
             )
             .ok()
+            .flatten()
             .map(|v| v.with_flags(flags.flags)),
         }
     }

@@ -372,7 +372,7 @@ impl<'s, 'v, 't, N: TypeIdent> DeserializerConditions<'s, 'v, 't, N> {
         Self { flags: Vec::new() }
     }
 
-    pub fn flags(&self) -> &Vec<Flag<'s, 'v, 't, N>> {
+    pub fn flags(&self) -> &[Flag<'s, 'v, 't, N>] {
         &self.flags
     }
 }

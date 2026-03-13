@@ -42,9 +42,13 @@ pub(super) fn matches_string_to_string<N: TypeIdent>(
     }
 
     // Strip punctuation and try again
-    let stripped_value = without_punctuation(&unaccented_value_str);
-    let stripped_target = without_punctuation(&unaccented_target);
-    std::iter::zip(stripped_value, stripped_target).all(|(a, b)| a.eq_ignore_ascii_case(&b))
+    let stripped_value: String = without_punctuation(&unaccented_value_str)
+        .flat_map(|c| c.to_lowercase())
+        .collect();
+    let stripped_target: String = without_punctuation(&unaccented_target)
+        .flat_map(|c| c.to_lowercase())
+        .collect();
+    stripped_value == stripped_target
 }
 
 /// Heuristic match of different possible values against an input string.

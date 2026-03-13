@@ -385,16 +385,17 @@ where
                     array_helper::pick_best(
                         ctx,
                         TyWithMeta::new(TyResolvedRef::Class(class_ty), meta),
-                        completed,
+                        completed.into_iter().map(|r| r.map(Some)).collect(),
                     )
                     .map_err(|e| ctx.error_unexpected_type(&target, value).with_cause(e))
                     .map(|v| {
-                        v.map_value(|v| match v {
-                            BamlValue::Class(cls) => cls,
-                            _ => unreachable!("We just wrapped it in a BamlValue::Class"),
+                        v.map(|v| {
+                            v.map_value(|v| match v {
+                                BamlValue::Class(cls) => cls,
+                                _ => unreachable!("We just wrapped it in a BamlValue::Class"),
+                            })
                         })
                     })
-                    .map(Some)
                 }
             }
             (x, _) if class_ty.fields.len() == 1 => {

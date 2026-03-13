@@ -2033,7 +2033,7 @@ fn parse_sap_attr_value(attr: &baml_compiler_syntax::ast::Attribute) -> SapAttrV
                 SapAttrValue::ConstValueExpr(SapConstValue::Int(i))
             } else if s.parse::<f64>().is_ok() && !s.contains(|c: char| c.is_alphabetic()) {
                 SapAttrValue::ConstValueExpr(SapConstValue::Float(s.to_string()))
-            } else if let Some((left, right)) = s.split_once('.') {
+            } else if let Some((left, right)) = s.rsplit_once('.') {
                 // Enum value pattern: Foo.Bar
                 SapAttrValue::ConstValueExpr(SapConstValue::EnumValue {
                     enum_name: left.into(),
@@ -2064,7 +2064,7 @@ fn parse_sap_block_attr_value(
                 SapAttrValue::ConstValueExpr(SapConstValue::Int(i))
             } else if s.parse::<f64>().is_ok() && !s.contains(|c: char| c.is_alphabetic()) {
                 SapAttrValue::ConstValueExpr(SapConstValue::Float(s.to_string()))
-            } else if let Some((left, right)) = s.split_once('.') {
+            } else if let Some((left, right)) = s.rsplit_once('.') {
                 // Enum value pattern: Foo.Bar
                 SapAttrValue::ConstValueExpr(SapConstValue::EnumValue {
                     enum_name: left.into(),

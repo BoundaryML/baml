@@ -139,7 +139,10 @@ fn lower_class(
                 .field_attr
                 .clone()
                 .expect_map_name(|n| expand_to_type_name(n, resolution_ctx))
-                .unwrap_or_default();
+                .unwrap_or_else(|_| {
+                    debug_assert!(false, "schema_lower: failed to expand field_attr names");
+                    Default::default()
+                });
 
             VirField {
                 name: field.name.clone(),
@@ -156,7 +159,10 @@ fn lower_class(
         .ty_attr
         .clone()
         .expect_map_name(|n| expand_to_type_name(n, resolution_ctx))
-        .unwrap_or_default();
+        .unwrap_or_else(|_| {
+            debug_assert!(false, "schema_lower: failed to expand class ty_attr names");
+            Default::default()
+        });
 
     VirClass {
         name: class.name.clone(),
@@ -187,7 +193,10 @@ fn lower_enum(
         .ty_attr
         .clone()
         .expect_map_name(|n| expand_to_type_name(n, resolution_ctx))
-        .unwrap_or_default();
+        .unwrap_or_else(|_| {
+            debug_assert!(false, "schema_lower: failed to expand enum ty_attr names");
+            Default::default()
+        });
 
     VirEnum {
         name: enum_def.name.clone(),

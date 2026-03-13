@@ -106,10 +106,14 @@ where
                 }
                 let res = if let Some(n) = n.as_i64() {
                     BamlInt { value: n } // also covers u64
-                } else if let Some(n) = n.as_f64() {
-                    flags.add_flag(Flag::FloatToInt(n));
+                } else if let Some(f) = n.as_f64() {
+                    let rounded = f.round();
+                    if rounded.is_nan() || rounded > i64::MAX as f64 || rounded < i64::MIN as f64 {
+                        return Err(ctx.error_integer_out_of_bounds(n));
+                    }
+                    flags.add_flag(Flag::FloatToInt(f));
                     BamlInt {
-                        value: n.round() as i64,
+                        value: rounded as i64,
                     }
                 } else {
                     return Err(ctx.error_integer_out_of_bounds(n));

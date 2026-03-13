@@ -270,7 +270,10 @@ pub fn compile_files(
                             .expand_name(n)
                             .map(|qn| baml_type::fqn_to_type_name(&qn))
                     })
-                    .unwrap_or_default();
+                    .unwrap_or_else(|_| {
+                        debug_assert!(false, "emit: failed to expand class ty_attr names");
+                        Default::default()
+                    });
                 let class_obj = Object::Class(Class {
                     name: baml_type::fqn_to_type_name(&fqn),
                     fields,
@@ -327,7 +330,10 @@ pub fn compile_files(
                             .expand_name(n)
                             .map(|qn| baml_type::fqn_to_type_name(&qn))
                     })
-                    .unwrap_or_default();
+                    .unwrap_or_else(|_| {
+                        debug_assert!(false, "emit: failed to expand enum ty_attr names");
+                        Default::default()
+                    });
                 let enum_obj = Object::Enum(Enum {
                     name: baml_type::fqn_to_type_name(&enum_fqn),
                     variants,

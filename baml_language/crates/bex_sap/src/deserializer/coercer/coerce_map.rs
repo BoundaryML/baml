@@ -101,10 +101,20 @@ where
             .resolve_with_meta(map_ty.value.deref().as_ref())
             .ok()?;
 
-        // Try to cast all values
+        let key_ty_with_meta = ctx.db.resolve_with_meta(map_ty.key.deref().as_ref()).ok()?;
+
+        // Try to cast all keys and values
         let items: IndexMap<Cow<'s, str>, BamlValueWithFlags<'s, 'v, 't, N>> = obj
             .iter()
             .map(|(key, value)| {
+                // Validate key against key type
+                let key_as_jsonish = crate::jsonish::Value::String(
+                    key.clone().into_owned().into(),
+                    crate::jsonish::CompletionState::Complete,
+                );
+                let key_ref = TyWithMeta::new(key_ty_with_meta.ty, key_ty_with_meta.meta);
+                TyResolvedRef::try_cast(ctx, key_ref, &key_as_jsonish)?;
+
                 let target_ref = TyWithMeta::new(value_ty_with_meta.ty, value_ty_with_meta.meta);
                 TyResolvedRef::try_cast(ctx, target_ref, value)
                     .map(|cast_value| (key.clone(), cast_value))

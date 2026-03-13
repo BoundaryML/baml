@@ -17,23 +17,11 @@ pub(super) fn coerce_array_to_singular<'s, 'v, 't, N: TypeIdent>(
         &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError>,
 ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError> {
-    let mut had_none = false;
-    let parsed = items
-        .into_iter()
-        .filter_map(|item| match coercion(item) {
-            Ok(None) => {
-                had_none = true;
-                None
-            }
-            other => other.transpose(),
-        })
-        .collect::<Vec<_>>();
+    let parsed: Vec<_> = items.into_iter().map(|item| coercion(item)).collect();
 
-    if parsed.is_empty() && had_none {
+    let Some(mut best) = pick_best(ctx, target, parsed)? else {
         return Ok(None);
-    }
-
-    let mut best = pick_best(ctx, target, parsed)?;
+    };
 
     // Store empty vec - the full results are only used for debugging display
     // TODO: Restore if detailed debugging is needed:
@@ -44,17 +32,38 @@ pub(super) fn coerce_array_to_singular<'s, 'v, 't, N: TypeIdent>(
 }
 
 /// Picks the best value to return for the target type+annotations.
+///
+/// Accepts `Ok(None)` entries (deferred/incomplete values). If all entries
+/// are `Ok(None)`, returns `Ok(None)`. Otherwise, filters them out and
+/// picks the best from the remaining `Ok(Some(...))` and `Err(...)` entries.
 #[allow(clippy::needless_pass_by_value)]
 pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
     ctx: &ParsingContext<'s, 'v, 't, N>,
     target: TyWithMeta<TyResolvedRef<'t, N>, &TypeAnnotations<'t, N>>,
-    res: Vec<Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>>,
-) -> Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError> {
+    res: Vec<Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError>>,
+) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError> {
+    // Filter out Ok(None) entries, tracking whether we saw any.
+    let mut saw_deferred = false;
+    let res: Vec<Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>> = res
+        .into_iter()
+        .filter_map(|r| match r {
+            Ok(None) => {
+                saw_deferred = true;
+                None
+            }
+            Ok(Some(v)) => Some(Ok(v)),
+            Err(e) => Some(Err(e)),
+        })
+        .collect();
+
     if res.is_empty() {
+        if saw_deferred {
+            return Ok(None);
+        }
         return Err(ctx.error_unexpected_empty_array(&target.ty));
     }
     if res.len() == 1 {
-        return res.into_iter().next().unwrap();
+        return res.into_iter().next().unwrap().map(Some);
     }
 
     let res_index = (0..res.len())
@@ -344,7 +353,7 @@ pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
                     });
                 }
             }
-            Ok(v)
+            Ok(Some(v))
         }
         None => {
             if !res.is_empty() {

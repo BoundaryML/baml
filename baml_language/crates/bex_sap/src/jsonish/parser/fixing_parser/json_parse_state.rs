@@ -411,7 +411,7 @@ impl<'s> JsonParseState<'s> {
                             if keys.len() == values.len() {
                                 (true, false, false)
                             } else {
-                                (false, true, true)
+                                (false, true, false)
                             }
                         }
                         JsonCollection::Array(_, _) => (false, false, true),
@@ -556,19 +556,14 @@ impl<'s> JsonParseState<'s> {
                 JsonCollection::TripleQuotedString(_, _) => {
                     // We should be expecting:
                     if token == '"' {
-                        // TODO: this logic is busted. peekable.peek() does not
-                        // advance the iterator (this is easily verified with
-                        // a unit test), but to fix this we need to do a bit of
-                        // refactoring, so for now we'll live with it.
-                        let is_triple_quoted = match next.peek() {
-                            Some((_, '"')) => matches!(next.peek(), Some((_, '"')) | None),
-                            None => true,
-                            _ => false,
-                        };
+                        let is_triple_quoted = next
+                            .next_if(|&(_, c)| c == '"')
+                            .and_then(|_| next.next_if(|&(_, c)| c == '"'))
+                            .is_some();
 
                         if is_triple_quoted {
                             self.complete_collection(CompletionState::Complete);
-                            Ok(3)
+                            Ok(2)
                         } else {
                             self.consume(token)
                         }
