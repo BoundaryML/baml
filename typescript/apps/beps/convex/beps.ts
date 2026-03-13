@@ -1,4 +1,4 @@
-import { query, mutation, internalQuery } from "./_generated/server";
+import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { bepStatus } from "./schema";
 import { internal } from "./_generated/api";
@@ -257,6 +257,11 @@ export const create = mutation({
       createdAt: now,
     });
 
+    // Notify Slack about the new BEP
+    await ctx.scheduler.runAfter(0, internal.slack.notifyBepCreated, {
+      bepId,
+    });
+
     return { bepId, number: bepNumber };
   },
 });
@@ -393,6 +398,12 @@ export const update = mutation({
         previousVersionId: latestVersion._id,
       });
     }
+
+    // Notify Slack about the new version
+    await ctx.scheduler.runAfter(0, internal.slack.notifyBepVersionCreated, {
+      bepId: args.id,
+      versionId: newVersionId,
+    });
   },
 });
 
@@ -407,12 +418,11 @@ export const updateStatus = mutation({
       updatedAt: Date.now(),
     });
 
-    // TODO: Trigger Slack notification
-    // await ctx.scheduler.runAfter(0, internal.notifications.sendSlack, {
-    //   type: "status_change",
-    //   bepId: args.id,
-    //   newStatus: args.status,
-    // });
+    // Notify Slack about the status change
+    await ctx.scheduler.runAfter(0, internal.slack.notifyStatusChanged, {
+      bepId: args.id,
+      newStatus: args.status,
+    });
   },
 });
 
@@ -664,6 +674,12 @@ export const importVersion = mutation({
           previousVersionId: latestVersion._id,
         });
       }
+
+      // 7a. Notify Slack about the new version
+      await ctx.scheduler.runAfter(0, internal.slack.notifyBepVersionCreated, {
+        bepId: args.bepId,
+        versionId,
+      });
 
       return {
         versionId,

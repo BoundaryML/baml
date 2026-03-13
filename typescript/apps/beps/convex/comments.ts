@@ -1,6 +1,7 @@
 import { query, mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { commentType } from "./schema";
+import { internal } from "./_generated/api";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QUERIES
@@ -292,6 +293,12 @@ export const add = mutation({
       resolved: false,
       createdAt: now,
       updatedAt: now,
+    });
+
+    // Notify Slack about the new comment
+    await ctx.scheduler.runAfter(0, internal.slack.notifyCommentAdded, {
+      bepId: args.bepId,
+      commentId,
     });
 
     return commentId;
