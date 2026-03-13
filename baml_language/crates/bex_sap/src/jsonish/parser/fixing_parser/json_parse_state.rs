@@ -1,10 +1,9 @@
 use std::iter::Peekable;
 
 use crate::jsonish::CompletionState;
-use anyhow::Result;
 
 use super::json_collection::JsonCollection;
-use crate::jsonish::{Value, value::Fixes};
+use crate::jsonish::{JsonishError, Value, value::Fixes};
 
 /// Tracks quote and backslash state incrementally for quoted strings
 /// to avoid O(n²) rescanning when determining if a quote closes a string.
@@ -134,7 +133,7 @@ impl<'s> JsonParseState<'s> {
 
     /// Appends a character to the current string-like collection on top of the stack.
     /// Returns `Ok(0)` on success (no additional characters to skip).
-    fn consume(&mut self, token: char) -> Result<usize> {
+    fn consume(&mut self, token: char) -> Result<usize, JsonishError> {
         // First check if we're in a QuotedString and need to update tracking
         // (done before getting mutable borrow to avoid borrow checker conflict)
         let is_quoted_string = matches!(
@@ -148,7 +147,7 @@ impl<'s> JsonParseState<'s> {
 
         // Now get mutable access to push the token
         let Some((last, _)) = self.collection_stack.last_mut() else {
-            return Err(anyhow::anyhow!("No collection to consume token: {token:?}"));
+            return Err(JsonishError::NoCollectionForToken(token));
         };
         match last {
             JsonCollection::QuotedString(s, _)
@@ -523,7 +522,7 @@ impl<'s> JsonParseState<'s> {
         &mut self,
         token: char,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
-    ) -> Result<usize> {
+    ) -> Result<usize, JsonishError> {
         // println!("Processing: {:?}..{:?}", token, next.peek());
         match self.collection_stack.last() {
             Some((last, _)) => match last {
@@ -767,7 +766,7 @@ impl<'s> JsonParseState<'s> {
         &mut self,
         token: char,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
-    ) -> Result<usize> {
+    ) -> Result<usize, JsonishError> {
         match token {
             '{' => {
                 self.collection_stack.push((

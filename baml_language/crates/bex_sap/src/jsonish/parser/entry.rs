@@ -1,8 +1,6 @@
-use anyhow::Result;
-
 use super::ParseOptions;
 use crate::jsonish::{
-    CompletionState, Value,
+    CompletionState, JsonishError, Value,
     parser::{
         fixing_parser,
         markdown_parser::{self, MarkdownResult},
@@ -11,62 +9,63 @@ use crate::jsonish::{
     value::Fixes,
 };
 
-pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) -> Result<Value<'_>> {
+pub(super) fn parse_func(
+    str: &str,
+    mut options: ParseOptions,
+    is_done: bool,
+) -> Result<Value<'_>, JsonishError> {
     options.depth += 1;
     if options.depth > 100 {
-        return Err(anyhow::anyhow!(
-            "Depth limit reached. Likely a circular reference."
-        ));
+        return Err(JsonishError::DepthLimitReached);
     }
 
-    match serde_json::from_str(str) {
-        Ok(mut v) => {
-            match &mut v {
-                Value::String(_, completion_state) => {
-                    // The string must have been contained in quotes in order
-                    // to parse as a JSON string, therefore it is complete.
-                    *completion_state = CompletionState::Complete;
-                }
-                Value::Number(_, completion_state) => {
-                    // A bare number could have more digits coming (e.g. "42"
-                    // might become "420"), so mark it as Incomplete unless the
-                    // caller told us the input is done.
-                    *completion_state = if is_done {
-                        CompletionState::Complete
-                    } else {
-                        CompletionState::Incomplete
-                    };
-                }
-                Value::Boolean(_) => {}
-                Value::Object(_, _) => {}
-                Value::Array(_, _) => {}
-                Value::Null => {}
-                Value::Markdown(_, _, completion_state) => {
-                    *completion_state = if is_done {
-                        CompletionState::Complete
-                    } else {
-                        CompletionState::Incomplete
-                    };
-                }
-                Value::FixedJson(_, _) => {
-                    unreachable!("Serde deserializes into concrete values, not FixedJson")
-                }
-                Value::AnyOf(_, _) => {
-                    unreachable!("Serde deserializes into concrete values, not AnyOf")
-                }
+    if let Ok(mut v) = serde_json::from_str(str) {
+        match &mut v {
+            Value::String(_, completion_state) => {
+                // The string must have been contained in quotes in order
+                // to parse as a JSON string, therefore it is complete.
+                *completion_state = CompletionState::Complete;
             }
-            return Ok(Value::AnyOf(vec![v], str.to_string().into()));
+            Value::Number(_, completion_state) => {
+                // A bare number could have more digits coming (e.g. "42"
+                // might become "420"), so mark it as Incomplete unless the
+                // caller told us the input is done.
+                *completion_state = if is_done {
+                    CompletionState::Complete
+                } else {
+                    CompletionState::Incomplete
+                };
+            }
+            Value::Boolean(_) => {}
+            Value::Object(_, _) => {}
+            Value::Array(_, _) => {}
+            Value::Null => {}
+            Value::Markdown(_, _, completion_state) => {
+                *completion_state = if is_done {
+                    CompletionState::Complete
+                } else {
+                    CompletionState::Incomplete
+                };
+            }
+            Value::FixedJson(_, _) => {
+                unreachable!("Serde deserializes into concrete values, not FixedJson")
+            }
+            Value::AnyOf(_, _) => {
+                unreachable!("Serde deserializes into concrete values, not AnyOf")
+            }
         }
-        Err(_e) => {}
+        return Ok(Value::AnyOf(vec![v], str.to_string().into()));
     }
 
     if options.allow_markdown_json {
         match markdown_parser::parse(str, &options) {
-            Ok(items) => match items.len() {
+            Ok(mut items) => match items.len() {
                 0 => {}
                 1 => {
-                    let res = items.into_iter().next();
-                    if let Some(MarkdownResult::CodeBlock(s, v)) = res {
+                    let res = items
+                        .pop()
+                        .unwrap_or_else(|| unreachable!("We just checked the length"));
+                    if let MarkdownResult::CodeBlock(s, v) = res {
                         return Ok(Value::AnyOf(
                             vec![Value::Markdown(
                                 s.into(),
@@ -134,7 +133,9 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
             Ok(mut items) => match items.len() {
                 0 => {}
                 1 => {
-                    let first = items.pop().expect("Expected 1 item");
+                    let first = items
+                        .pop()
+                        .unwrap_or_else(|| unreachable!("We just checked the length"));
                     match &first {
                         // if the string is the same, then we can drop this condition.
                         Value::String(content, completion_state) if content == str => {}
@@ -166,13 +167,13 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
 
     if options.allow_fixes {
         match fixing_parser::parse(str, &options) {
-            Ok(items) => {
+            Ok(mut items) => {
                 match items.len() {
                     0 => {}
                     1 => {
-                        let (v, fixes) = items.into_iter().next().ok_or_else(|| {
-                            anyhow::anyhow!("Expected 1 item when performing fixes")
-                        })?;
+                        let (v, fixes) = items
+                            .pop()
+                            .unwrap_or_else(|| unreachable!("We just checked the length"));
                         // drop the fix if the string is the same
                         if fixes.is_empty()
                             && matches!(&v, Value::String(content, ..) if content == str)
@@ -223,10 +224,10 @@ pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) ->
         ));
     }
 
-    Err(anyhow::anyhow!("Failed to parse JSON"))
+    Err(JsonishError::ParseFailed)
 }
 
-pub fn parse(str: &str, options: ParseOptions, is_done: bool) -> Result<Value<'_>> {
+pub fn parse(str: &str, options: ParseOptions, is_done: bool) -> Result<Value<'_>, JsonishError> {
     let res = parse_func(str, options, is_done)?;
     Ok(res.simplify(is_done))
 }

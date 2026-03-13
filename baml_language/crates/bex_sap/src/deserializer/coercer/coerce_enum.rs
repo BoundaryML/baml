@@ -1,19 +1,17 @@
 use std::borrow::Cow;
 
+use super::ParsingContext;
 use crate::baml_value::{BamlEnum, BamlValue};
 use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
+use crate::deserializer::{
+    coercer::{ParsingError, TypeCoercer, match_string::match_string},
+    deserialize_flags::Flag,
+};
 use crate::jsonish::{self, CompletionState};
 use crate::sap_model::{
     AnnotatedEnumVariant, AttrLiteral, EnumTy, FromLiteral, TyResolvedRef, TyWithMeta,
     TypeAnnotations, TypeIdent, TypeValue,
-};
-use anyhow::Result;
-
-use super::ParsingContext;
-use crate::deserializer::{
-    coercer::{ParsingError, TypeCoercer, match_string::match_string},
-    deserialize_flags::Flag,
 };
 
 /// Produces a list of (name, candidates) tuples for each enum variant.

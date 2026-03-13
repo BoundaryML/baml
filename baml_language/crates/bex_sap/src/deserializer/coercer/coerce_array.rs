@@ -1,7 +1,5 @@
 use std::borrow::Cow;
 
-use anyhow::Result;
-
 use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::{
     baml_value::{BamlArray, BamlValue},

@@ -7,7 +7,6 @@ use crate::sap_model::{
     AnnotatedField, AttrLiteral, ClassTy, FromLiteral as _, TyResolvedRef, TyWithMeta,
     TypeAnnotations, TypeIdent,
 };
-use anyhow::Result;
 use indexmap::IndexMap;
 
 use super::ParsingContext;

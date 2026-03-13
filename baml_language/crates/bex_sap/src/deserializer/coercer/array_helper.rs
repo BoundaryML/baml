@@ -1,9 +1,7 @@
-use crate::baml_value::BamlValue;
-use crate::sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent};
-use anyhow::Result;
-
 use super::{ParsingContext, ParsingError};
+use crate::baml_value::BamlValue;
 use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
+use crate::sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent};
 
 /// Tries to pick one of the items in the array and returns it.
 ///

@@ -9,7 +9,6 @@ use crate::sap_model::{
     AttrLiteral, FromLiteral as _, MapTy, Ty, TyResolved, TyResolvedRef, TyWithMeta,
     TypeAnnotations, TypeIdent,
 };
-use anyhow::Result;
 use indexmap::IndexMap;
 
 use super::{ParsingContext, ParsingError, TypeCoercer};

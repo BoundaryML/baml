@@ -992,7 +992,6 @@ version = "0.0.0-beta"
 name = "bex_sap"
 version = "0.0.0-beta"
 dependencies = [
- "anyhow",
  "baml_type",
  "derive_more",
  "indexmap",

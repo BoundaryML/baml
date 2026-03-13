@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use super::{ParsingContext, ParsingError};
 use crate::baml_value::{BamlBool, BamlInt, BamlString, BamlValue};
 use crate::deserializer::deserialize_flags::DeserializerConditions;
 use crate::deserializer::types::{DeserializerMeta, ValueWithFlags};
@@ -8,9 +9,6 @@ use crate::sap_model::{
     AttrLiteral, BoolLiteralTy, BoolTy, FromLiteral as _, IntLiteralTy, IntTy, LiteralTy,
     StringLiteralTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
 };
-use anyhow::Result;
-
-use super::{ParsingContext, ParsingError};
 use crate::{
     deserializer::{
         coercer::{TypeCoercer, match_string::match_string},

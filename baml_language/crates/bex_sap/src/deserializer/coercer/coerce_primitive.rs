@@ -7,7 +7,6 @@ use crate::sap_model::{
     AttrLiteral, BoolTy, FloatTy, FromLiteral as _, IntTy, MediaTy, NullTy, PrimitiveTy, StringTy,
     TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
 };
-use anyhow::Result;
 use regex::Regex;
 
 use super::{ParsingContext, ParsingError, array_helper::coerce_array_to_singular};

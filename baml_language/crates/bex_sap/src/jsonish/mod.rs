@@ -8,3 +8,20 @@ mod value;
 
 pub use parser::{ParseOptions, parse};
 pub use value::{CompletionState, Fixes, Value};
+
+/// Error type for JSONish parsing failures.
+#[derive(Debug, thiserror::Error)]
+pub enum JsonishError {
+    #[error("Depth limit reached. Likely a circular reference.")]
+    DepthLimitReached,
+    #[error("No JSON objects found")]
+    NoJsonObjectsFound,
+    #[error("No markdown blocks found")]
+    NoMarkdownBlocksFound,
+    #[error("Mismatched brackets")]
+    MismatchedBrackets,
+    #[error("No collection to consume token: {0:?}")]
+    NoCollectionForToken(char),
+    #[error("Failed to parse JSON")]
+    ParseFailed,
+}

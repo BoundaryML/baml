@@ -1,9 +1,10 @@
-use anyhow::Result;
-
 use super::{ParseOptions, entry};
-use crate::jsonish::Value;
+use crate::jsonish::{JsonishError, Value};
 
-pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Value<'s>>> {
+pub(super) fn parse<'s>(
+    str: &'s str,
+    options: &ParseOptions,
+) -> Result<Vec<Value<'s>>, JsonishError> {
     // Find all balanced JSON objects but w/o any fixes.
     let mut stack = Vec::new();
     let mut json_str_start = None;
@@ -23,7 +24,7 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Valu
                     if *last == expected_open {
                         stack.pop();
                     } else {
-                        return Err(anyhow::anyhow!("Mismatched brackets"));
+                        return Err(JsonishError::MismatchedBrackets);
                     }
                 }
 
@@ -71,7 +72,7 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Valu
     }
 
     match json_objects.len() {
-        0 => Err(anyhow::anyhow!("No JSON objects found")),
+        0 => Err(JsonishError::NoJsonObjectsFound),
         _ => Ok(json_objects),
     }
 }
@@ -91,7 +92,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_parse() -> Result<()> {
+    fn test_parse() -> Result<(), JsonishError> {
         let res = parse(
             r#"```json
 {

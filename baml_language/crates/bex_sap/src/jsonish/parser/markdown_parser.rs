@@ -1,9 +1,7 @@
 use std::sync::LazyLock;
 
-use anyhow::Result;
-
 use super::ParseOptions;
-use crate::jsonish::{Value, parser::ParsingMode};
+use crate::jsonish::{JsonishError, Value, parser::ParsingMode};
 
 #[derive(Debug)]
 pub(super) enum MarkdownResult<'s> {
@@ -23,7 +21,10 @@ static MD_TAG_END: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"(?m)^[ \t]*```(?:\n|$)").expect("Failed to compile md-tag-end regex")
 });
 
-pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<MarkdownResult<'s>>> {
+pub(super) fn parse<'s>(
+    str: &'s str,
+    options: &ParseOptions,
+) -> Result<Vec<MarkdownResult<'s>>, JsonishError> {
     let mut values: Vec<MarkdownResult<'s>> = vec![];
 
     let mut remaining = str;
@@ -104,7 +105,7 @@ pub(super) fn parse<'s>(str: &'s str, options: &ParseOptions) -> Result<Vec<Mark
     }
 
     if values.is_empty() {
-        anyhow::bail!("No markdown blocks found")
+        return Err(JsonishError::NoMarkdownBlocksFound);
     }
     if !remaining.trim().is_empty() {
         values.push(MarkdownResult::String(remaining.to_string()));
@@ -120,7 +121,7 @@ mod test {
     use crate::jsonish::{CompletionState, Value};
 
     #[test]
-    fn basic_parse() -> Result<()> {
+    fn basic_parse() -> Result<(), JsonishError> {
         let res = parse(
             r#"```json
 {
@@ -183,7 +184,7 @@ print("Hello, world!")
     }
 
     //     #[test(should_panic)]
-    //     fn untagged_blocks() -> Result<()> {
+    //     fn untagged_blocks() -> Result<(), JsonishError> {
     //         let res = parse(
     //             r#"
     // lorem ipsum
@@ -210,7 +211,7 @@ print("Hello, world!")
     //     }
 
     #[test]
-    fn utf8_between_blocks() -> Result<()> {
+    fn utf8_between_blocks() -> Result<(), JsonishError> {
         let res = parse(
             r#"
 lorem ipsum
@@ -246,7 +247,7 @@ dolor sit amet
 
     #[test]
     fn fence_like_sequence_inside_triple_backtick_string_does_not_split_markdown_blocks()
-    -> Result<()> {
+    -> Result<(), JsonishError> {
         fn contains_substring(v: &Value, needle: &str) -> bool {
             match v {
                 Value::String(s, _) => s.contains(needle),
@@ -295,7 +296,7 @@ dolor sit amet
     }
 
     #[test]
-    fn multiple_codeblocks_not_merged_when_fence_like_text_present() -> Result<()> {
+    fn multiple_codeblocks_not_merged_when_fence_like_text_present() -> Result<(), JsonishError> {
         let res = parse(
             r#"
 ```json

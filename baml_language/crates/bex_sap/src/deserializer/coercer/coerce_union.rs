@@ -1,5 +1,11 @@
 use std::borrow::Cow;
 
+use super::{ParsingContext, ParsingError, TypeCoercer};
+use crate::deserializer::{
+    coercer::array_helper,
+    deserialize_flags::{DeserializerConditions, Flag},
+    types::{BamlValueWithFlags, DeserializerMeta},
+};
 use crate::{
     baml_value::{BamlNull, BamlValue},
     jsonish::CompletionState,
@@ -7,14 +13,6 @@ use crate::{
         AttrLiteral, FromLiteral as _, NullTy, TyResolvedRef, TyWithMeta, TypeAnnotations,
         TypeIdent, UnionTy,
     },
-};
-use anyhow::Result;
-
-use super::{ParsingContext, ParsingError, TypeCoercer};
-use crate::deserializer::{
-    coercer::array_helper,
-    deserialize_flags::{DeserializerConditions, Flag},
-    types::{BamlValueWithFlags, DeserializerMeta},
 };
 
 impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for UnionTy<'t, N>
