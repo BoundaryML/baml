@@ -2,9 +2,11 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     fmt::{self, Display},
+    fs::OpenOptions,
     io::{self, Write},
+    path::{Path, PathBuf},
     str::FromStr,
-    sync::{Once, RwLock},
+    sync::{Mutex, Once, RwLock},
 };
 
 use colored::*;
@@ -398,6 +400,8 @@ lazy_static! {
     /// Thread-safe configuration with runtime modification support
     static ref CONFIG: RwLock<LogConfig> = RwLock::new(LogConfig::from_env());
     static ref LOGGED_LINES: RwLock<HashSet<(Option<String>, Option<String>, Option<u32>)>> = RwLock::new(HashSet::new());
+    /// Optional log file path — when set, log output goes to this file instead of stdout.
+    static ref LOG_FILE: Mutex<Option<PathBuf>> = Mutex::new(None);
 }
 
 /// Error type for logging operations
@@ -606,6 +610,23 @@ pub fn set_running_in_lsp(running_in_lsp: bool) -> Result<(), LogError> {
     }
 }
 
+/// Redirect all log output to a file instead of stdout.
+///
+/// When set, `log_internal` and `log_event_internal` append to this file
+/// instead of writing to stdout. This is useful when a TUI owns stdout.
+pub fn set_log_file(path: &Path) -> Result<(), LogError> {
+    let mut log_file = LOG_FILE.lock().map_err(|_| LogError::LockError)?;
+    *log_file = Some(path.to_path_buf());
+    Ok(())
+}
+
+/// Stop redirecting log output to a file (reverts to stdout).
+pub fn clear_log_file() -> Result<(), LogError> {
+    let mut log_file = LOG_FILE.lock().map_err(|_| LogError::LockError)?;
+    *log_file = None;
+    Ok(())
+}
+
 /// Reload all configuration from environment variables
 pub fn reload_from_env() -> Result<(), LogError> {
     match CONFIG.write() {
@@ -696,6 +717,16 @@ impl Logger {
             ColorMode::Auto => {} // Use default detection
         }
 
+        // Check if output should go to a log file instead of stdout
+        if let Ok(log_file_guard) = LOG_FILE.lock() {
+            if let Some(ref path) = *log_file_guard {
+                if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+                    let _ = writeln!(file, "{} [BAML {}] {}", now, level.as_str(), message.trim());
+                }
+                return;
+            }
+        }
+
         if self.running_in_lsp {
             // When running in the context of our LSP, we can't write to stdout since that will
             // mess up the LSP communication protocol, which uses stdout/stderr for communication.
@@ -764,6 +795,9 @@ pub fn log_event_internal<T: Loggable>(
         .format("%Y-%m-%dT%H:%M:%S%.3f")
         .to_string();
 
+    // Check if output should go to a log file instead of stdout
+    let log_file_path = LOG_FILE.lock().ok().and_then(|g| g.clone());
+
     if config.use_json {
         // In JSON mode, use the payload directly
         if let Ok(json_value) = payload.as_baml_log_json(&config.max_message_length) {
@@ -784,7 +818,13 @@ pub fn log_event_internal<T: Loggable>(
             }
 
             let json_str = serde_json::to_string(&event_json).unwrap_or_default();
-            let _ = writeln!(io::stdout(), "{json_str}");
+            if let Some(ref path) = log_file_path {
+                if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+                    let _ = writeln!(file, "{json_str}");
+                }
+            } else {
+                let _ = writeln!(io::stdout(), "{json_str}");
+            }
         }
     } else {
         // In regular mode, convert payload to a debug string
@@ -800,42 +840,54 @@ pub fn log_event_internal<T: Loggable>(
             payload_str
         };
 
-        // Configure color control based on mode
-        match config.color_mode {
-            ColorMode::Always => control::set_override(true),
-            ColorMode::Never => control::set_override(false),
-            ColorMode::Auto => {} // Use default detection
-        }
-
-        if !config.running_in_lsp {
-            let _ = writeln!(
-                io::stdout(),
-                "{} [BAML {}] {}",
-                now,
-                level.colored(),
-                payload_str.trim()
-            );
+        if let Some(ref path) = log_file_path {
+            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+                let _ = writeln!(
+                    file,
+                    "{} [BAML {}] {}",
+                    now,
+                    level.as_str(),
+                    payload_str.trim()
+                );
+            }
         } else {
-            match level {
-                Level::Fatal => {
-                    log::error!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+            // Configure color control based on mode
+            match config.color_mode {
+                ColorMode::Always => control::set_override(true),
+                ColorMode::Never => control::set_override(false),
+                ColorMode::Auto => {} // Use default detection
+            }
+
+            if !config.running_in_lsp {
+                let _ = writeln!(
+                    io::stdout(),
+                    "{} [BAML {}] {}",
+                    now,
+                    level.colored(),
+                    payload_str.trim()
+                );
+            } else {
+                match level {
+                    Level::Fatal => {
+                        log::error!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                    }
+                    Level::Error => {
+                        log::error!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                    }
+                    Level::Warn => {
+                        log::warn!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                    }
+                    Level::Info => {
+                        log::info!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                    }
+                    Level::Debug => {
+                        log::debug!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                    }
+                    Level::Trace => {
+                        log::trace!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                    }
+                    Level::Off => {}
                 }
-                Level::Error => {
-                    log::error!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
-                }
-                Level::Warn => {
-                    log::warn!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
-                }
-                Level::Info => {
-                    log::info!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
-                }
-                Level::Debug => {
-                    log::debug!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
-                }
-                Level::Trace => {
-                    log::trace!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
-                }
-                Level::Off => {}
             }
         }
     }
