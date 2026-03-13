@@ -41,6 +41,18 @@ if (!isNode) {
         get: () => browserError('Video'),
         enumerable: true,
     });
+    Object.defineProperty(exports, 'HTTPRequest', {
+        get: () => browserError('HTTPRequest'),
+        enumerable: true,
+    });
+    Object.defineProperty(exports, 'HTTPResponse', {
+        get: () => browserError('HTTPResponse'),
+        enumerable: true,
+    });
+    Object.defineProperty(exports, 'SSEResponse', {
+        get: () => browserError('SSEResponse'),
+        enumerable: true,
+    });
 }
 var native_1 = require("./native");
 Object.defineProperty(exports, "BamlRuntime", { enumerable: true, get: function () { return native_1.BamlRuntime; } });
@@ -56,10 +68,10 @@ Object.defineProperty(exports, "Collector", { enumerable: true, get: function ()
 Object.defineProperty(exports, "FunctionLog", { enumerable: true, get: function () { return native_1.FunctionLog; } });
 Object.defineProperty(exports, "LlmCall", { enumerable: true, get: function () { return native_1.LlmCall; } });
 Object.defineProperty(exports, "LlmStreamCall", { enumerable: true, get: function () { return native_1.LlmStreamCall; } });
-Object.defineProperty(exports, "HTTPRequest", { enumerable: true, get: function () { return native_1.HTTPRequest; } });
-Object.defineProperty(exports, "HTTPResponse", { enumerable: true, get: function () { return native_1.HTTPResponse; } });
-Object.defineProperty(exports, "SSEResponse", { enumerable: true, get: function () { return native_1.SSEResponse; } });
 Object.defineProperty(exports, "Usage", { enumerable: true, get: function () { return native_1.Usage; } });
+Object.defineProperty(exports, "HTTPRequest", { enumerable: true, get: function () { return native_1.HttpRequest; } });
+Object.defineProperty(exports, "HTTPResponse", { enumerable: true, get: function () { return native_1.HttpResponse; } });
+Object.defineProperty(exports, "SSEResponse", { enumerable: true, get: function () { return native_1.SseResponse; } });
 Object.defineProperty(exports, "StreamTiming", { enumerable: true, get: function () { return native_1.StreamTiming; } });
 Object.defineProperty(exports, "Timing", { enumerable: true, get: function () { return native_1.Timing; } });
 Object.defineProperty(exports, "TraceStats", { enumerable: true, get: function () { return native_1.TraceStats; } });

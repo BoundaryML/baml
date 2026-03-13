@@ -34,7 +34,22 @@ if (!isNode) {
     get: () => browserError('Video'),
     enumerable: true,
   });
-  
+
+  Object.defineProperty(exports, 'HTTPRequest', {
+    get: () => browserError('HTTPRequest'),
+    enumerable: true,
+  });
+
+  Object.defineProperty(exports, 'HTTPResponse', {
+    get: () => browserError('HTTPResponse'),
+    enumerable: true,
+  });
+
+  Object.defineProperty(exports, 'SSEResponse', {
+    get: () => browserError('SSEResponse'),
+    enumerable: true,
+  });
+
 }
 
 export {
@@ -53,9 +68,9 @@ export {
   LlmCall,
   LlmStreamCall,
   Usage,
-  HTTPRequest,
-  HTTPResponse,
-  SSEResponse,
+  HttpRequest as HTTPRequest,
+  HttpResponse as HTTPResponse,
+  SseResponse as SSEResponse,
   StreamTiming,
   Timing,
   TraceStats,
