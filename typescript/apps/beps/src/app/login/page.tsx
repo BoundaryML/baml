@@ -68,6 +68,7 @@ function LoginContent() {
     githubId: string;
     name: string;
     avatarUrl?: string;
+    boundaryEmail?: string;
   }) => {
     setIsSubmitting(true);
     setError("");

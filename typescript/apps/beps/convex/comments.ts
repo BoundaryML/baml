@@ -413,6 +413,7 @@ export const getById = internalQuery({
     return {
       ...comment,
       authorName: author?.name ?? "Unknown",
+      authorSlackUserId: author?.slackUserId,
     };
   },
 });

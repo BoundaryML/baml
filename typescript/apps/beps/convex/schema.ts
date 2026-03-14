@@ -46,6 +46,10 @@ export default defineSchema({
     githubId: v.optional(v.string()),
     role: userRole,
     createdAt: v.number(),
+    // Special account fields for BoundaryML team members
+    isSpecialAccount: v.optional(v.boolean()),
+    boundaryEmail: v.optional(v.string()),
+    slackUserId: v.optional(v.string()),
   })
     .index("by_name", ["name"])
     .index("by_github_id", ["githubId"]),

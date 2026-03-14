@@ -142,7 +142,7 @@ export const storeSlackThreadTs = internalMutation({
   },
 });
 
-// Internal query to get version by ID with editor name
+// Internal query to get version by ID with editor name and slackUserId
 export const getVersionById = internalQuery({
   args: { id: v.id("bepVersions") },
   handler: async (ctx, args) => {
@@ -153,6 +153,7 @@ export const getVersionById = internalQuery({
     return {
       ...version,
       editedByName: editor?.name ?? "Unknown",
+      editedBySlackUserId: editor?.slackUserId,
     };
   },
 });

@@ -23,6 +23,13 @@ interface GitHubUser {
   avatar_url: string;
 }
 
+interface GitHubEmail {
+  email: string;
+  verified: boolean;
+  primary: boolean;
+  visibility: string | null;
+}
+
 interface OAuthState {
   nonce: string;
   returnTo: string | null;
@@ -118,11 +125,35 @@ export async function GET(request: NextRequest) {
 
     const githubUser: GitHubUser = await userResponse.json();
 
+    // Fetch all emails to check for @boundaryml.com (special account)
+    let boundaryEmail: string | undefined;
+    try {
+      const emailsResponse = await fetch("https://api.github.com/user/emails", {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+          Accept: "application/vnd.github+json",
+        },
+      });
+
+      if (emailsResponse.ok) {
+        const emails: GitHubEmail[] = await emailsResponse.json();
+        const boundaryEmailObj = emails.find(
+          (e) => e.verified && e.email.endsWith("@boundaryml.com")
+        );
+        if (boundaryEmailObj) {
+          boundaryEmail = boundaryEmailObj.email;
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to fetch GitHub emails:", error);
+    }
+
     const userData = {
       githubId: githubUser.id.toString(),
       name: githubUser.name || githubUser.login,
       avatarUrl: githubUser.avatar_url,
       email: githubUser.email,
+      boundaryEmail,
     };
 
     const encodedUser = encodeURIComponent(JSON.stringify(userData));

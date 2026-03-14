@@ -30,6 +30,16 @@ interface SlackPostResponse {
   error?: string;
 }
 
+interface SlackUserLookupResponse {
+  ok: boolean;
+  user?: {
+    id: string;
+    name: string;
+    real_name?: string;
+  };
+  error?: string;
+}
+
 async function postToSlack(
   blocks: SlackBlock[],
   text: string,
@@ -108,6 +118,7 @@ function getStatusEmoji(status: string): string {
 /**
  * Notify Slack when a new BEP is created.
  * Creates a new thread in #beps and stores the thread_ts.
+ * If shepherds have linked Slack accounts, mentions them directly.
  */
 export const notifyBepCreated = internalAction({
   args: {
@@ -124,7 +135,7 @@ export const notifyBepCreated = internalAction({
     for (const shepherdId of bep.shepherds) {
       const user = await ctx.runQuery(internal.users.getById, { id: shepherdId });
       if (user) {
-        shepherds.push(user.name);
+        shepherds.push(formatAuthorForSlack(user.name, user.slackUserId));
       }
     }
 
@@ -198,6 +209,7 @@ export const notifyBepCreated = internalAction({
 /**
  * Notify Slack when a BEP is updated with a new version.
  * Replies to the existing thread if one exists.
+ * If the editor has a linked Slack account, mentions them directly.
  */
 export const notifyBepVersionCreated = internalAction({
   args: {
@@ -220,6 +232,7 @@ export const notifyBepVersionCreated = internalAction({
     }
 
     const bepUrl = getBepUrl(bep.number);
+    const editorDisplay = formatAuthorForSlack(version.editedByName, version.editedBySlackUserId);
 
     const blocks: SlackBlock[] = [
       {
@@ -234,7 +247,7 @@ export const notifyBepVersionCreated = internalAction({
         fields: [
           {
             type: "mrkdwn",
-            text: `*Edited by:* ${version.editedByName}`,
+            text: `*Edited by:* ${editorDisplay}`,
           },
           {
             type: "mrkdwn",
@@ -260,8 +273,19 @@ export const notifyBepVersionCreated = internalAction({
 });
 
 /**
+ * Format author name for Slack - mentions their Slack account if linked.
+ */
+function formatAuthorForSlack(authorName: string, slackUserId?: string): string {
+  if (slackUserId) {
+    return `<@${slackUserId}>`;
+  }
+  return `*${authorName}*`;
+}
+
+/**
  * Notify Slack when a comment is added to a BEP.
  * Replies to the existing thread if one exists.
+ * If the author has a linked Slack account, mentions them directly.
  */
 export const notifyCommentAdded = internalAction({
   args: {
@@ -284,6 +308,7 @@ export const notifyCommentAdded = internalAction({
     }
 
     const bepUrl = getBepUrl(bep.number);
+    const authorDisplay = formatAuthorForSlack(comment.authorName, comment.authorSlackUserId);
 
     const typeEmoji = {
       discussion: "💬",
@@ -296,7 +321,7 @@ export const notifyCommentAdded = internalAction({
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `${typeEmoji} *${comment.authorName}* ${comment.parentId ? "replied to a comment" : `added a ${comment.type}`} on <${bepUrl}|BEP-${bep.number}>`,
+          text: `${typeEmoji} ${authorDisplay} ${comment.parentId ? "replied to a comment" : `added a ${comment.type}`} on <${bepUrl}|BEP-${bep.number}>`,
         },
       },
       {
@@ -367,3 +392,47 @@ export const notifyStatusChanged = internalAction({
   },
 });
 
+/**
+ * Look up a Slack user by email and link them to a BEPS user.
+ * This is called when a special account (BoundaryML team member) logs in.
+ */
+export const lookupAndLinkSlackUser = internalAction({
+  args: {
+    userId: v.id("users"),
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const token = process.env.SLACK_BOUNDARY_BOT_TOKEN;
+
+    if (!token) {
+      console.warn("SLACK_BOUNDARY_BOT_TOKEN not configured - skipping Slack user lookup");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(args.email)}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const result = (await response.json()) as SlackUserLookupResponse;
+
+      if (result.ok && result.user) {
+        console.log(`Found Slack user ${result.user.id} (${result.user.real_name || result.user.name}) for email ${args.email}`);
+        await ctx.runMutation(internal.users.linkSlackUserId, {
+          userId: args.userId,
+          slackUserId: result.user.id,
+        });
+      } else {
+        console.warn(`Could not find Slack user for email ${args.email}: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Failed to lookup Slack user:", error);
+    }
+  },
+});
