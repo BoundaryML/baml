@@ -69,7 +69,6 @@ pub(crate) fn external_value_to_jinja(
         //         "{MAGIC_MEDIA_DELIMITER}:baml-start-media:{media_id}:baml-end-media:{MAGIC_MEDIA_DELIMITER}"
         //     )))
         // }
-
         BexExternalValue::RustData(_) => Err(RenderPromptError::ConversionError {
             reason: "RustData should not be passed to Jinja templates".to_string(),
         }),

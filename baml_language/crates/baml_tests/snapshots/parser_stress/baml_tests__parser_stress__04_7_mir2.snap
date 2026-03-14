@@ -2877,10 +2877,10 @@ fn Process14(input: string) -> string {
 fn BodyTorture() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: null // x
+    let _1: void // x
     let _2: void
     let _3: void
-    let _4: null
+    let _4: void
     let _5: null
 
     bb0: {

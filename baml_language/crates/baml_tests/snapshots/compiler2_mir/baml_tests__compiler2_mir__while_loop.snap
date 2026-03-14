@@ -10,7 +10,7 @@ fn f(n: int) -> int {
     let _4: bool
     let _5: int
     let _6: void
-    let _7: null
+    let _7: void
     let _8: null
 
     bb0: {

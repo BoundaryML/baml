@@ -14,7 +14,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use baml_base::Name;
 use baml_compiler2_ast::{ExprId, PatId};
-use rustc_hash::FxHashSet;
 use baml_compiler2_hir::{
     body::FunctionBody,
     contributions::Definition,
@@ -22,7 +21,7 @@ use baml_compiler2_hir::{
     package::{PackageId, PackageItems, package_items},
     scope::{ScopeId, ScopeKind},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     builder::TypeInferenceBuilder,

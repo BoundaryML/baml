@@ -290,7 +290,7 @@ fn WhileWithHeaders() -> int {
     let _2: bool
     let _3: int
     let _4: 10
-    let _5: null
+    let _5: void
     let _6: int
 
     bb0: {

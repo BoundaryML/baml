@@ -572,7 +572,11 @@ impl fmt::Display for ItemRef {
         // Always include the package prefix (including "user").
         // All parts are joined with ".".
         match self {
-            ItemRef::Free { package, namespace, name } => {
+            ItemRef::Free {
+                package,
+                namespace,
+                name,
+            } => {
                 let mut parts: Vec<&str> = vec![package.as_str()];
                 for ns in namespace {
                     parts.push(ns.as_str());
@@ -580,7 +584,12 @@ impl fmt::Display for ItemRef {
                 parts.push(name.as_str());
                 write!(f, "{}", parts.join("."))
             }
-            ItemRef::Method { package, namespace, class, name } => {
+            ItemRef::Method {
+                package,
+                namespace,
+                class,
+                name,
+            } => {
                 let mut parts: Vec<&str> = vec![package.as_str()];
                 for ns in namespace {
                     parts.push(ns.as_str());
@@ -589,7 +598,11 @@ impl fmt::Display for ItemRef {
                 parts.push(name.as_str());
                 write!(f, "{}", parts.join("."))
             }
-            ItemRef::EnumType { package, namespace, name } => {
+            ItemRef::EnumType {
+                package,
+                namespace,
+                name,
+            } => {
                 let mut parts: Vec<&str> = vec![package.as_str()];
                 for ns in namespace {
                     parts.push(ns.as_str());

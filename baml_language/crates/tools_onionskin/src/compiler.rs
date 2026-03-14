@@ -2398,7 +2398,9 @@ impl CompilerRunner {
                             let coll_desc = expr_desc(*collection, body);
                             let bind_name = match &body.patterns[*binding] {
                                 baml_compiler2_ast::Pattern::Binding(n) => n.to_string(),
-                                baml_compiler2_ast::Pattern::TypedBinding { name, .. } => name.to_string(),
+                                baml_compiler2_ast::Pattern::TypedBinding { name, .. } => {
+                                    name.to_string()
+                                }
                                 _ => "_".to_string(),
                             };
                             let line = format!("{pad}for {bind_name} in {coll_desc}");
@@ -3076,13 +3078,22 @@ impl CompilerRunner {
                         } => {
                             let bind_name = match &body.patterns[*binding] {
                                 baml_compiler2_ast::Pattern::Binding(n) => n.to_string(),
-                                baml_compiler2_ast::Pattern::TypedBinding { name, .. } => name.to_string(),
+                                baml_compiler2_ast::Pattern::TypedBinding { name, .. } => {
+                                    name.to_string()
+                                }
                                 _ => "_".to_string(),
                             };
-                            let mut line = vec![DetailSpan::Code(format!("{pad}  for {bind_name} in "))];
+                            let mut line =
+                                vec![DetailSpan::Code(format!("{pad}  for {bind_name} in "))];
                             line.extend(expr_desc_spans(*collection, body, inference));
                             lines.push(line);
-                            Self::render_expr_to_lines(*for_body, body, inference, indent + 4, lines);
+                            Self::render_expr_to_lines(
+                                *for_body,
+                                body,
+                                inference,
+                                indent + 4,
+                                lines,
+                            );
                         }
                         Stmt::Assign { target, value } => {
                             let mut line = vec![DetailSpan::Code(format!("{pad}  "))];

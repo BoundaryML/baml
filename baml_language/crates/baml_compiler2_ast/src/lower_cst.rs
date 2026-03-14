@@ -118,12 +118,12 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
     let (body, llm_meta) = if let Some(llm) = func.llm_body() {
         let llm_body_def = lower_llm_body(&llm);
         let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-        let (expr_body, source_map) = synthesize_llm_call_body(
-            name.as_str(),
-            &param_names,
-            llm_body_def.span,
-        );
-        (Some(FunctionBodyDef::Expr(expr_body, source_map)), Some(llm_body_def))
+        let (expr_body, source_map) =
+            synthesize_llm_call_body(name.as_str(), &param_names, llm_body_def.span);
+        (
+            Some(FunctionBodyDef::Expr(expr_body, source_map)),
+            Some(llm_body_def),
+        )
     } else if let Some(expr) = func.expr_body() {
         // Check if the body is `$rust_function` or `$rust_io_function` before lowering
         if let Some(builtin_kind) = check_builtin_body(expr.syntax()) {
@@ -228,8 +228,9 @@ fn synthesize_llm_call_body(
     param_names: &[Name],
     llm_span: text_size::TextRange,
 ) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
-    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
     use la_arena::Arena;
+
+    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
 
     let mut exprs = Arena::new();
     let mut expr_spans = Arena::new();

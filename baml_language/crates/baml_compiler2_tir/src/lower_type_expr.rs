@@ -42,11 +42,10 @@ pub fn lower_type_expr_in_ns(
             // When we have a namespace context, try the qualified path first.
             // e.g. for ns_context=["fs"], segments=["File"], try ["fs", "File"].
             let resolved = if !ns_context.is_empty() {
-                let qualified: Vec<baml_base::Name> = ns_context.iter()
-                    .chain(segments.iter())
-                    .cloned()
-                    .collect();
-                package_items.lookup_type(&qualified)
+                let qualified: Vec<baml_base::Name> =
+                    ns_context.iter().chain(segments.iter()).cloned().collect();
+                package_items
+                    .lookup_type(&qualified)
                     .or_else(|| package_items.lookup_type(segments))
             } else {
                 package_items.lookup_type(segments)
@@ -101,8 +100,20 @@ pub fn lower_type_expr_in_ns(
             diagnostics,
         ))),
         TypeExpr::Map { key, value } => Ty::Map(
-            Box::new(lower_type_expr_in_ns(db, key, package_items, ns_context, diagnostics)),
-            Box::new(lower_type_expr_in_ns(db, value, package_items, ns_context, diagnostics)),
+            Box::new(lower_type_expr_in_ns(
+                db,
+                key,
+                package_items,
+                ns_context,
+                diagnostics,
+            )),
+            Box::new(lower_type_expr_in_ns(
+                db,
+                value,
+                package_items,
+                ns_context,
+                diagnostics,
+            )),
         ),
         TypeExpr::Union(members) => Ty::Union(
             members
@@ -120,7 +131,13 @@ pub fn lower_type_expr_in_ns(
                     )
                 })
                 .collect(),
-            ret: Box::new(lower_type_expr_in_ns(db, ret, package_items, ns_context, diagnostics)),
+            ret: Box::new(lower_type_expr_in_ns(
+                db,
+                ret,
+                package_items,
+                ns_context,
+                diagnostics,
+            )),
         },
         TypeExpr::Literal(lit) => Ty::Literal(lit.clone(), Freshness::Regular),
         TypeExpr::BuiltinUnknown => Ty::BuiltinUnknown,

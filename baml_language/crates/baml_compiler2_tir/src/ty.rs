@@ -22,7 +22,11 @@ pub struct QualifiedTypeName {
 
 impl QualifiedTypeName {
     pub fn new(pkg: Name, name: Name) -> Self {
-        Self { pkg, name, generic_params: Vec::new() }
+        Self {
+            pkg,
+            name,
+            generic_params: Vec::new(),
+        }
     }
 }
 

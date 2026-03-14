@@ -1997,7 +1997,11 @@ impl LoweringContext {
         let binding = self.alloc_pattern(Pattern::Binding(iter_name), range);
 
         self.alloc_stmt(
-            Stmt::For { binding, collection, body },
+            Stmt::For {
+                binding,
+                collection,
+                body,
+            },
             range,
         )
     }
@@ -2027,14 +2031,20 @@ impl LoweringContext {
 
         // Pull out init (LET_STMT), cond, update, body nodes by position.
         // child_nodes order: LET_STMT, BINARY_EXPR(cond), BINARY_EXPR(update), BLOCK_EXPR
-        let init_node = child_nodes.iter().find(|n| n.kind() == SyntaxKind::LET_STMT).cloned();
+        let init_node = child_nodes
+            .iter()
+            .find(|n| n.kind() == SyntaxKind::LET_STMT)
+            .cloned();
         // BINARY_EXPRs appear in document order: first is condition, second is update.
         let binary_exprs: Vec<SyntaxNode> = child_nodes
             .iter()
             .filter(|n| n.kind() == SyntaxKind::BINARY_EXPR)
             .cloned()
             .collect();
-        let block_node = child_nodes.iter().find(|n| n.kind() == SyntaxKind::BLOCK_EXPR).cloned();
+        let block_node = child_nodes
+            .iter()
+            .find(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .cloned();
 
         // Lower the initializer as a Let statement.
         let init_stmt = if let Some(let_node) = init_node {
@@ -2084,7 +2094,10 @@ impl LoweringContext {
 
         // Wrap both statements in a block expression so we return one StmtId.
         let block_expr = self.alloc_expr(
-            Expr::Block { stmts: vec![init_stmt, while_stmt], tail_expr: None },
+            Expr::Block {
+                stmts: vec![init_stmt, while_stmt],
+                tail_expr: None,
+            },
             range,
         );
         self.alloc_stmt(Stmt::Expr(block_expr), range)
@@ -2114,7 +2127,11 @@ impl LoweringContext {
         let hash_count = after_slashes.chars().take_while(|c| *c == '#').count();
         let level = hash_count + 1;
         let title = after_slashes[hash_count..].trim();
-        let name = if title.is_empty() { Name::new("_") } else { Name::new(title) };
+        let name = if title.is_empty() {
+            Name::new("_")
+        } else {
+            Name::new(title)
+        };
 
         self.alloc_stmt(Stmt::HeaderComment { name, level }, node.text_range())
     }

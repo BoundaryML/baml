@@ -9,7 +9,7 @@ use baml_builtins::{PromptAst as BuiltinPromptAst, PromptAstSimple};
 use baml_type::TyAttr;
 use bex_engine::{FunctionCallContextBuilder, Ty};
 use bex_external_types::BexExternalAdt;
-use bex_heap::{BexExternalValue};
+use bex_heap::BexExternalValue;
 
 #[tokio::test]
 async fn test_render_prompt_directly() {
@@ -528,15 +528,14 @@ function test_call_llm() -> unknown {
 
 /// Build a `BexExternalValue` wrapping a simple string `PromptAst`.
 fn prompt_ast_string(s: &str) -> BexExternalValue {
-
-        BexExternalValue::Instance {
-            class_name: "baml.llm.PromptAst".to_string(),
-            fields: indexmap::indexmap! {
-                "_data".to_string() => BexExternalValue::RustData(std::sync::Arc::new(
-                    BuiltinPromptAst::Simple(std::sync::Arc::new(s.to_string().into())),
-                ))
-            },
-        }
+    BexExternalValue::Instance {
+        class_name: "baml.llm.PromptAst".to_string(),
+        fields: indexmap::indexmap! {
+            "_data".to_string() => BexExternalValue::RustData(std::sync::Arc::new(
+                BuiltinPromptAst::Simple(std::sync::Arc::new(s.to_string().into())),
+            ))
+        },
+    }
 }
 
 /// Test that a `template_string` is expanded as a Jinja macro in `render_prompt`.

@@ -150,8 +150,8 @@ fn UnreachableTailStillChecked() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: "error"
-    let _2: null // x
-    let _3: null
+    let _2: void // x
+    let _3: void
     let _4: string
 
     bb0: {

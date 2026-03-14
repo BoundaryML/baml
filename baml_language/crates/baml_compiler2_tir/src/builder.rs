@@ -161,7 +161,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         TypeCheckDiagnostics<'db>,
     ) {
         let diagnostics = self.context.finish();
-        (self.expressions, self.bindings, self.resolutions, self.exhaustive_matches, diagnostics)
+        (
+            self.expressions,
+            self.bindings,
+            self.resolutions,
+            self.exhaustive_matches,
+            diagnostics,
+        )
     }
 
     /// Set the declared return type (for return statement checking).
@@ -713,10 +719,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Ty::List(elem) => *elem.clone(),
                     Ty::EvolvingList(elem) => *elem.clone(),
                     _ => {
-                        self.context.report_simple(
-                            TirTypeError::NotIterable { ty: coll_ty },
-                            *collection,
-                        );
+                        self.context
+                            .report_simple(TirTypeError::NotIterable { ty: coll_ty }, *collection);
                         Ty::Unknown
                     }
                 };
@@ -2037,19 +2041,25 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // Check class methods via the item tree (methods are stored
                 // directly on the Class entry, not in the package namespace).
-                if let Some((ty, class_loc, func_loc)) = self.lookup_class_method(class_name, member) {
+                if let Some((ty, class_loc, func_loc)) =
+                    self.lookup_class_method(class_name, member)
+                {
                     let db = self.context.db();
-                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+                    let pkg_info =
+                        baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
                     let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
                     let class_data = &item_tree[class_loc.id(db)];
-                    self.resolutions.insert(at, crate::inference::MethodResolution::Method {
-                        package: pkg_info.package,
-                        namespace: pkg_info.namespace_path,
-                        class: class_data.name.clone(),
-                        name: member.clone(),
-                        class_loc,
-                        func_loc,
-                    });
+                    self.resolutions.insert(
+                        at,
+                        crate::inference::MethodResolution::Method {
+                            package: pkg_info.package,
+                            namespace: pkg_info.namespace_path,
+                            class: class_data.name.clone(),
+                            name: member.clone(),
+                            class_loc,
+                            func_loc,
+                        },
+                    );
                     return ty;
                 }
 
@@ -2236,26 +2246,27 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 None
             }
-            Ty::List(element_ty) => {
-                self.resolve_builtin_method(&["Array"], &[element_ty.as_ref().clone()], member)
-                    .map(|r| r.into_ty())
-            }
-            Ty::Map(key_ty, val_ty) => self.resolve_builtin_method(
-                &["Map"],
-                &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
-                member,
-            ).map(|r| r.into_ty()),
+            Ty::List(element_ty) => self
+                .resolve_builtin_method(&["Array"], &[element_ty.as_ref().clone()], member)
+                .map(|r| r.into_ty()),
+            Ty::Map(key_ty, val_ty) => self
+                .resolve_builtin_method(
+                    &["Map"],
+                    &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
+                    member,
+                )
+                .map(|r| r.into_ty()),
             Ty::Primitive(PrimitiveType::String)
-            | Ty::Literal(baml_base::Literal::String(_), _) => {
-                self.resolve_builtin_method(&["String"], &[], member)
-                    .map(|r| r.into_ty())
-            }
+            | Ty::Literal(baml_base::Literal::String(_), _) => self
+                .resolve_builtin_method(&["String"], &[], member)
+                .map(|r| r.into_ty()),
             Ty::Primitive(
                 p @ (PrimitiveType::Image
                 | PrimitiveType::Audio
                 | PrimitiveType::Video
                 | PrimitiveType::Pdf),
-            ) => self.resolve_builtin_method(p.builtin_class_path(), &[], member)
+            ) => self
+                .resolve_builtin_method(p.builtin_class_path(), &[], member)
                 .map(|r| r.into_ty()),
             Ty::Optional(inner) => {
                 // Drill through Optional to resolve the member on the inner type
@@ -2290,7 +2301,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         if let Some(def) = pkg_items_for_class.lookup_type_any_ns(&short) {
             if let Definition::Class(class_loc) = def {
                 let file = class_loc.file(self.context.db());
-                let ns_context = baml_compiler2_hir::file_package::file_package(self.context.db(), file).namespace_path;
+                let ns_context =
+                    baml_compiler2_hir::file_package::file_package(self.context.db(), file)
+                        .namespace_path;
                 let item_tree = baml_compiler2_hir::file_item_tree(self.context.db(), file);
                 let class_data = &item_tree[class_loc.id(self.context.db())];
                 for field in &class_data.fields {
@@ -2332,8 +2345,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         if class_pkg.as_str() == self.package_id.name(db).as_str() {
             self.package_items
         } else {
-            let foreign_pkg_id =
-                baml_compiler2_hir::package::PackageId::new(db, class_pkg.clone());
+            let foreign_pkg_id = baml_compiler2_hir::package::PackageId::new(db, class_pkg.clone());
             baml_compiler2_hir::package::package_items(db, foreign_pkg_id)
         }
     }
@@ -2348,7 +2360,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         class_name: &crate::ty::QualifiedTypeName,
         method_name: &Name,
-    ) -> Option<(Ty, baml_compiler2_hir::loc::ClassLoc<'db>, baml_compiler2_hir::loc::FunctionLoc<'db>)> {
+    ) -> Option<(
+        Ty,
+        baml_compiler2_hir::loc::ClassLoc<'db>,
+        baml_compiler2_hir::loc::FunctionLoc<'db>,
+    )> {
         let short = Self::unqualify(class_name);
         let pkg_items_for_class = self.resolve_class_pkg_items(&class_name.pkg);
         let def = pkg_items_for_class.lookup_type_any_ns(&short)?;
@@ -2503,23 +2519,51 @@ impl<'db> TypeInferenceBuilder<'db> {
             // Direct package member: e.g. `env.get` — look up in the package's value namespace
             if let Some(def) = pkg_items.lookup_value(&[member.clone()]) {
                 if let Definition::Function(func_loc) = def {
-                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
+                    let pkg_info =
+                        baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
                     let ns_context = pkg_info.namespace_path.clone();
-                    self.resolutions.insert(at, crate::inference::MethodResolution::Free {
-                        package: pkg_info.package,
-                        namespace: pkg_info.namespace_path,
-                        name: member.clone(),
-                        func_loc,
-                    });
+                    self.resolutions.insert(
+                        at,
+                        crate::inference::MethodResolution::Free {
+                            package: pkg_info.package,
+                            namespace: pkg_info.namespace_path,
+                            name: member.clone(),
+                            func_loc,
+                        },
+                    );
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                     let mut diags = Vec::new();
                     let ty = Ty::Function {
-                        params: sig.params.iter().map(|(n, te)| {
-                            (Some(n.clone()), crate::lower_type_expr::lower_type_expr_in_ns(db, te, pkg_items, &ns_context, &mut diags))
-                        }).collect(),
-                        ret: Box::new(sig.return_type.as_ref()
-                            .map(|te| crate::lower_type_expr::lower_type_expr_in_ns(db, te, pkg_items, &ns_context, &mut diags))
-                            .unwrap_or(Ty::Unknown)),
+                        params: sig
+                            .params
+                            .iter()
+                            .map(|(n, te)| {
+                                (
+                                    Some(n.clone()),
+                                    crate::lower_type_expr::lower_type_expr_in_ns(
+                                        db,
+                                        te,
+                                        pkg_items,
+                                        &ns_context,
+                                        &mut diags,
+                                    ),
+                                )
+                            })
+                            .collect(),
+                        ret: Box::new(
+                            sig.return_type
+                                .as_ref()
+                                .map(|te| {
+                                    crate::lower_type_expr::lower_type_expr_in_ns(
+                                        db,
+                                        te,
+                                        pkg_items,
+                                        &ns_context,
+                                        &mut diags,
+                                    )
+                                })
+                                .unwrap_or(Ty::Unknown),
+                        ),
                     };
                     return Some(ty);
                 }
@@ -2535,23 +2579,33 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Definition::Class(_class_loc) => {
                     if pkg_name.as_str() == self.package_id.name(db).as_str() {
                         // Same package as the user — use resolve_member which looks in self.package_items
-                        let class_qtn = crate::lower_type_expr::qualify_def(db, def, &item_path.last().unwrap());
+                        let class_qtn = crate::lower_type_expr::qualify_def(
+                            db,
+                            def,
+                            &item_path.last().unwrap(),
+                        );
                         let base_ty = Ty::Class(class_qtn);
                         return Some(self.resolve_member(&base_ty, member, at));
                     } else {
                         // Different package — use resolve_builtin_member which looks up in the correct package
                         let class_path: Vec<&str> = item_path.iter().map(|s| s.as_str()).collect();
-                        return self.resolve_builtin_member(&class_path, &[], member, at)
+                        return self
+                            .resolve_builtin_member(&class_path, &[], member, at)
                             .or_else(|| {
                                 // Fall back to enum variant check
-                                let class_qtn = crate::lower_type_expr::qualify_def(db, def, &item_path.last().unwrap());
+                                let class_qtn = crate::lower_type_expr::qualify_def(
+                                    db,
+                                    def,
+                                    &item_path.last().unwrap(),
+                                );
                                 let base_ty = Ty::Class(class_qtn);
                                 Some(self.resolve_member(&base_ty, member, at))
                             });
                     }
                 }
                 Definition::Enum(_) => {
-                    let enum_qtn = crate::lower_type_expr::qualify_def(db, def, &item_path.last().unwrap());
+                    let enum_qtn =
+                        crate::lower_type_expr::qualify_def(db, def, &item_path.last().unwrap());
                     let base_ty = Ty::Enum(enum_qtn);
                     return Some(self.resolve_member(&base_ty, member, at));
                 }
@@ -2560,25 +2614,55 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         // Also try as a value (function) in a nested namespace
-        if let Some(def) = pkg_items.lookup_value(&[item_path.to_vec(), vec![member.clone()]].concat()) {
+        if let Some(def) =
+            pkg_items.lookup_value(&[item_path.to_vec(), vec![member.clone()]].concat())
+        {
             if let Definition::Function(func_loc) = def {
-                let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
+                let pkg_info =
+                    baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
                 let ns_context = pkg_info.namespace_path.clone();
-                self.resolutions.insert(at, crate::inference::MethodResolution::Free {
-                    package: pkg_info.package,
-                    namespace: pkg_info.namespace_path,
-                    name: member.clone(),
-                    func_loc,
-                });
+                self.resolutions.insert(
+                    at,
+                    crate::inference::MethodResolution::Free {
+                        package: pkg_info.package,
+                        namespace: pkg_info.namespace_path,
+                        name: member.clone(),
+                        func_loc,
+                    },
+                );
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                 let mut diags = Vec::new();
                 let ty = Ty::Function {
-                    params: sig.params.iter().map(|(n, te)| {
-                        (Some(n.clone()), crate::lower_type_expr::lower_type_expr_in_ns(db, te, pkg_items, &ns_context, &mut diags))
-                    }).collect(),
-                    ret: Box::new(sig.return_type.as_ref()
-                        .map(|te| crate::lower_type_expr::lower_type_expr_in_ns(db, te, pkg_items, &ns_context, &mut diags))
-                        .unwrap_or(Ty::Unknown)),
+                    params: sig
+                        .params
+                        .iter()
+                        .map(|(n, te)| {
+                            (
+                                Some(n.clone()),
+                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                    db,
+                                    te,
+                                    pkg_items,
+                                    &ns_context,
+                                    &mut diags,
+                                ),
+                            )
+                        })
+                        .collect(),
+                    ret: Box::new(
+                        sig.return_type
+                            .as_ref()
+                            .map(|te| {
+                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                    db,
+                                    te,
+                                    pkg_items,
+                                    &ns_context,
+                                    &mut diags,
+                                )
+                            })
+                            .unwrap_or(Ty::Unknown),
+                    ),
                 };
                 return Some(ty);
             }
@@ -2637,19 +2721,27 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Option<Ty> {
         let result = self.resolve_builtin_method(class_path, type_args, member_name)?;
         match result {
-            BuiltinResolution::Method { ty, class_loc, func_loc } => {
+            BuiltinResolution::Method {
+                ty,
+                class_loc,
+                func_loc,
+            } => {
                 let db = self.context.db();
-                let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+                let pkg_info =
+                    baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
                 let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
                 let class_data = &item_tree[class_loc.id(db)];
-                self.resolutions.insert(at, crate::inference::MethodResolution::Method {
-                    package: pkg_info.package,
-                    namespace: pkg_info.namespace_path,
-                    class: class_data.name.clone(),
-                    name: member_name.clone(),
-                    class_loc,
-                    func_loc,
-                });
+                self.resolutions.insert(
+                    at,
+                    crate::inference::MethodResolution::Method {
+                        package: pkg_info.package,
+                        namespace: pkg_info.namespace_path,
+                        class: class_data.name.clone(),
+                        name: member_name.clone(),
+                        class_loc,
+                        func_loc,
+                    },
+                );
                 Some(ty)
             }
             BuiltinResolution::Field(ty) => Some(ty),
@@ -2711,7 +2803,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 } else if type_args.len() == 2 {
                     match class_data.name.as_str() {
-                        "Map" => Ty::Map(Box::new(type_args[0].clone()), Box::new(type_args[1].clone())),
+                        "Map" => Ty::Map(
+                            Box::new(type_args[0].clone()),
+                            Box::new(type_args[1].clone()),
+                        ),
                         _ => {
                             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
                             Ty::Class(crate::ty::QualifiedTypeName::new(
@@ -2766,7 +2861,10 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // with unresolved-type errors from builtin signatures.
                 drop(diags);
                 return Some(BuiltinResolution::Method {
-                    ty: Ty::Function { params, ret: Box::new(ret) },
+                    ty: Ty::Function {
+                        params,
+                        ret: Box::new(ret),
+                    },
                     class_loc,
                     func_loc,
                 });

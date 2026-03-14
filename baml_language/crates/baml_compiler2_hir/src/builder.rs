@@ -261,7 +261,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                 let scope_id = self.current_scope_id();
                 self.scope_bindings[scope_id.index() as usize]
                     .bindings
-                    .push((name.clone(), DefinitionSite::PatternBinding(arm.pattern), name_range));
+                    .push((
+                        name.clone(),
+                        DefinitionSite::PatternBinding(arm.pattern),
+                        name_range,
+                    ));
             }
 
             self.pop_scope();
@@ -270,7 +274,9 @@ impl<'db> SemanticIndexBuilder<'db> {
         // Register catch clause and catch arm pattern bindings in child scopes.
         // Two-level scoping: CatchClause (holds clause binding) → CatchArm (holds arm pattern).
         for (expr_id, expr) in body.exprs.iter() {
-            let ast::Expr::Catch { clauses, .. } = expr else { continue };
+            let ast::Expr::Catch { clauses, .. } = expr else {
+                continue;
+            };
             let catch_span = source_map.expr_span(expr_id);
 
             for clause in clauses {
@@ -282,7 +288,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                     let scope_id = self.current_scope_id();
                     self.scope_bindings[scope_id.index() as usize]
                         .bindings
-                        .push((name.clone(), DefinitionSite::PatternBinding(clause.binding), name_range));
+                        .push((
+                            name.clone(),
+                            DefinitionSite::PatternBinding(clause.binding),
+                            name_range,
+                        ));
                 }
 
                 // Push CatchArm child scopes — arm pattern visible only in arm body.
@@ -296,7 +306,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                         let scope_id = self.current_scope_id();
                         self.scope_bindings[scope_id.index() as usize]
                             .bindings
-                            .push((name.clone(), DefinitionSite::PatternBinding(arm.pattern), name_range));
+                            .push((
+                                name.clone(),
+                                DefinitionSite::PatternBinding(arm.pattern),
+                                name_range,
+                            ));
                     }
 
                     self.pop_scope(); // CatchArm

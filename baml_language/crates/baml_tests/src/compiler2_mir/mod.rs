@@ -10,8 +10,7 @@ use baml_compiler2_mir::{lower_function, pretty::display_function};
 use baml_project::ProjectDatabase;
 use insta::{assert_snapshot, with_settings};
 
-const SNAPSHOT_PATH: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_mir");
+const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_mir");
 
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();

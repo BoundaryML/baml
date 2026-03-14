@@ -495,7 +495,9 @@ impl Ty {
                 }
                 ret.validate_runtime()
             }
-            Ty::Future(_, _) => Err("Future type should not reach runtime (must be awaited)".to_string()),
+            Ty::Future(_, _) => {
+                Err("Future type should not reach runtime (must be awaited)".to_string())
+            }
             Ty::Int { .. }
             | Ty::Float { .. }
             | Ty::String { .. }

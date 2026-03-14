@@ -40,7 +40,7 @@ fn ExhaustiveLiteralWithBaseType(x: int) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -69,7 +69,7 @@ fn ExhaustiveTrueType(t: AlwaysTrue) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -107,7 +107,7 @@ fn BoolWithCatchAll(b: bool) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -131,7 +131,7 @@ fn DuplicateEnumVariant(s: Status) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -186,7 +186,7 @@ fn NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -208,7 +208,7 @@ fn ExhaustiveSingletonInt(code: HttpOk) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -237,7 +237,7 @@ fn NonExhaustiveEnumMissingMultiple(s: Status) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -291,7 +291,7 @@ fn StringLiteralWithCatchAll(role: Role) -> string {
     }
 
     bb8: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -315,7 +315,7 @@ fn NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -359,7 +359,7 @@ fn NonExhaustiveBoolMissingFalse(b: bool) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -409,7 +409,7 @@ fn NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -476,7 +476,7 @@ fn ExhaustiveNullableEnum(s: Status?) -> string {
     }
 
     bb10: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -520,7 +520,7 @@ fn ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -549,7 +549,7 @@ fn ExhaustiveFalseType(f: AlwaysFalse) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -600,7 +600,7 @@ fn NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
     }
 
     bb8: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -633,7 +633,7 @@ fn NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -675,7 +675,7 @@ fn LiteralAfterTypedPattern(x: int) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -699,7 +699,7 @@ fn NonExhaustiveEnumMissingOne(s: Status) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -731,7 +731,7 @@ fn NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -760,7 +760,7 @@ fn NestedEnumVariantUnions(s: Status) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -787,7 +787,7 @@ fn IntLiteralUnionPattern(code: SuccessCode) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -837,7 +837,7 @@ fn UnreachableAfterCatchAll(x: int) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -879,7 +879,7 @@ fn ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -925,7 +925,7 @@ fn OverlappingWithBindings(r: Result) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -956,7 +956,7 @@ fn PartialUnionPatternCoverage(r: FullResult) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1011,7 +1011,7 @@ fn WrongLiteralTypeBoolWithInt(b: bool) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -1067,7 +1067,7 @@ fn ExhaustiveStringLiterals(role: Role) -> string {
     }
 
     bb8: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1150,7 +1150,7 @@ fn ParenthesizedSingleLiteral(b: bool) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1190,7 +1190,7 @@ fn ExhaustiveCustomBool(b: CustomBool) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1230,7 +1230,7 @@ fn NonExhaustiveStringLiteral(role: Role) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1270,7 +1270,7 @@ fn ExhaustiveOptionalSingleton(code: MaybeOk) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1296,7 +1296,7 @@ fn NestedEnumMatch(s1: Status, s2: Status) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -1309,7 +1309,7 @@ fn NestedEnumMatch(s1: Status, s2: Status) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb5;
     }
 
     bb7: {
@@ -1374,7 +1374,7 @@ fn OverlappingTypedPatterns(r: Result) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1439,7 +1439,7 @@ fn NestedMatchSpans(x: int, y: bool) -> string {
     }
 
     bb11: {
-        unreachable;
+        goto -> bb5;
     }
 }
 
@@ -1468,7 +1468,7 @@ fn NonExhaustiveBoolMissingTrue(b: bool) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1514,7 +1514,7 @@ fn StringLiteralUnionPattern(role: Role) -> string {
     }
 
     bb7: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1554,7 +1554,7 @@ fn ExhaustiveBool(b: bool) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1583,7 +1583,7 @@ fn NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1625,7 +1625,7 @@ fn StringLiteralAfterStringType(s: string) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1684,7 +1684,7 @@ fn ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
     }
 
     bb8: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1732,7 +1732,7 @@ fn ExhaustiveTypeAlias(r: Result) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1785,7 +1785,7 @@ fn UnreachableMultiple(x: int) -> string {
     }
 
     bb8: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1849,7 +1849,7 @@ fn ExhaustiveEnumWithTypedPattern(s: Status) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1900,7 +1900,7 @@ fn DuplicateBoolLiteral(b: bool) -> string {
     }
 
     bb8: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1929,7 +1929,7 @@ fn WrongLiteralTypeIntWithString(x: int) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -1951,7 +1951,7 @@ fn DeeplyNestedLiterals(x: SuccessCode) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -1978,7 +1978,7 @@ fn ExhaustiveIntLiterals(code: SuccessCode) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -2041,7 +2041,7 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2143,7 +2143,7 @@ fn OptionalWithCatchAll(x: int?) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2174,7 +2174,7 @@ fn UnionPatternCoversAll(r: Result) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2198,7 +2198,7 @@ fn HighLineNumberNonExhaustive(s: Status) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -2225,7 +2225,7 @@ fn ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -2294,7 +2294,7 @@ fn NestedTypeAlias(mr: MaybeResult) -> string {
     }
 
     bb8: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2327,7 +2327,7 @@ fn NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2351,7 +2351,7 @@ fn MultipleUnreachableSpans(s: Status) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -2388,7 +2388,7 @@ fn NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -2417,7 +2417,7 @@ fn ExhaustiveEnumAllVariants(s: Status) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -2474,7 +2474,7 @@ fn BoolLiteralAfterTypedBool(b: bool) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2504,7 +2504,7 @@ fn BoolUnionPattern(b: bool) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb5: {
@@ -2563,7 +2563,7 @@ fn GuardedWithFallback(x: int) -> int {
     }
 
     bb7: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2592,7 +2592,7 @@ fn NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2664,7 +2664,7 @@ fn MixedPatterns(x: int) -> string {
     }
 
     bb11: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2688,7 +2688,7 @@ fn JumpTableEnumDiscriminant(state: DispatchState) -> int {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -2778,7 +2778,7 @@ fn JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     }
 
     bb10: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2888,7 +2888,7 @@ fn JumpTableTypeTag(value: int | string | bool | float) -> string {
     }
 
     bb10: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2910,7 +2910,7 @@ fn NonExhaustiveIntLiteral(code: SuccessCode) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -2949,7 +2949,7 @@ fn NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -2979,7 +2979,7 @@ fn MatchFunctionCallScrutinee() -> string {
     }
 
     bb4: {
-        unreachable;
+        goto -> bb3;
     }
 
     bb5: {
@@ -3018,7 +3018,7 @@ fn EnumVariantUnion(s: Status) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb4: {
@@ -3146,7 +3146,7 @@ fn DuplicateStringLiteral(role: Role) -> string {
     }
 
     bb10: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -3188,7 +3188,7 @@ fn PartialUnionPlusCatchAll(r: FullResult) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -3230,7 +3230,7 @@ fn EnumVariantAfterTypedEnum(s: Status) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -3274,7 +3274,7 @@ fn NestedTypeBindings(r: Result) -> int {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -3354,7 +3354,7 @@ fn GuardedOnlyNonExhaustive(x: int) -> int {
     }
 
     bb7: {
-        unreachable;
+        goto -> bb2;
     }
 
     bb8: {
@@ -3437,7 +3437,7 @@ fn ExhaustiveOptional(x: int?) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -3488,7 +3488,7 @@ fn ExhaustiveMixedLiterals(x: MixedLiterals) -> string {
     }
 
     bb8: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -3536,7 +3536,7 @@ fn NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 
@@ -3578,7 +3578,7 @@ fn ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     }
 
     bb6: {
-        unreachable;
+        goto -> bb2;
     }
 }
 

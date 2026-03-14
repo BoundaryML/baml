@@ -21,7 +21,7 @@ fn f(x: int) -> string {
     }
 
     bb3: {
-        unreachable;
+        goto -> bb4;
     }
 
     bb4: {

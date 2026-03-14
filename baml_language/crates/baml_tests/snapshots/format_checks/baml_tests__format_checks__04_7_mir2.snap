@@ -11,56 +11,56 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _4: int // d // param
     let _5: string // s // param
     let _6: bool // flag // param
-    let _7: null
+    let _7: int
     let _8: int
     let _9: int
-    let _10: null
+    let _10: int
     let _11: int
     let _12: int
-    let _13: null
+    let _13: int
     let _14: int
     let _15: int
-    let _16: null
+    let _16: int
     let _17: int
     let _18: int
-    let _19: null
+    let _19: int
     let _20: int
     let _21: int
-    let _22: null
+    let _22: bool
     let _23: int
     let _24: int
-    let _25: null
+    let _25: bool
     let _26: int
     let _27: int
-    let _28: null
+    let _28: bool
     let _29: int
     let _30: int
-    let _31: null
+    let _31: bool
     let _32: int
     let _33: int
-    let _34: null
+    let _34: bool
     let _35: int
     let _36: int
-    let _37: null
+    let _37: bool
     let _38: int
     let _39: int
-    let _40: null
+    let _40: bool
     let _41: bool
-    let _42: null
+    let _42: bool
     let _43: bool
-    let _44: null
+    let _44: int
     let _45: int
     let _46: int
-    let _47: null
+    let _47: int
     let _48: int
     let _49: int
-    let _50: null
+    let _50: int
     let _51: int
     let _52: int
-    let _53: null
+    let _53: int
     let _54: int
     let _55: int
-    let _56: null
+    let _56: int
     let _57: int
     let _58: int
     let _59: int // mut_a
@@ -74,50 +74,50 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _67: int
     let _68: int
     let _69: int
-    let _70: null
+    let _70: int
     let _71: int
     let _72: int
     let _73: int
     let _74: int
-    let _75: null
+    let _75: int
     let _76: int
     let _77: int
     let _78: int
     let _79: int
     let _80: int
     let _81: int
-    let _82: null
+    let _82: int
     let _83: int
     let _84: int
     let _85: int
     let _86: int
     let _87: int
     let _88: int
-    let _89: null
+    let _89: int
     let _90: int
     let _91: int
     let _92: int
     let _93: int
-    let _94: null
+    let _94: int
     let _95: int
     let _96: int
     let _97: int
     let _98: int
     let _99: int
     let _100: int
-    let _101: null
+    let _101: bool
     let _102: bool
     let _103: int
     let _104: 0
     let _105: int
     let _106: 0
-    let _107: null
+    let _107: bool
     let _108: bool
     let _109: int
     let _110: 0
     let _111: int
     let _112: 0
-    let _113: null
+    let _113: bool
     let _114: bool
     let _115: bool
     let _116: int
@@ -126,7 +126,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _119: 0
     let _120: int
     let _121: 0
-    let _122: null
+    let _122: bool
     let _123: bool
     let _124: bool
     let _125: int
@@ -135,7 +135,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _128: 0
     let _129: int
     let _130: 0
-    let _131: null
+    let _131: bool
     let _132: bool
     let _133: bool
     let _134: int
@@ -144,52 +144,52 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _137: 0
     let _138: int
     let _139: 0
-    let _140: null
+    let _140: int
     let _141: int
     let _142: int
     let _143: int
     let _144: int
-    let _145: null
+    let _145: int
     let _146: int
     let _147: int
     let _148: int
     let _149: int
-    let _150: null
+    let _150: int
     let _151: int
     let _152: int
     let _153: int
     let _154: int
     let _155: int
     let _156: int
-    let _157: null
+    let _157: int
     let _158: int
     let _159: int
     let _160: int
     let _161: int
     let _162: int
     let _163: int
-    let _164: null
+    let _164: int
     let _165: int
     let _166: int
     let _167: int
     let _168: int
     let _169: int
     let _170: int
-    let _171: null
+    let _171: int
     let _172: int
     let _173: int
     let _174: int
     let _175: int
     let _176: int
     let _177: int
-    let _178: null
+    let _178: int
     let _179: int
     let _180: int
     let _181: int
     let _182: int
     let _183: int
     let _184: int
-    let _185: null
+    let _185: int
     let _186: int
     let _187: int
     let _188: int
@@ -212,7 +212,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _205: int
     let _206: int
     let _207: int
-    let _208: null
+    let _208: int
     let _209: int
     let _210: int
     let _211: int
@@ -249,18 +249,18 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _242: int
     let _243: int
     let _244: int
-    let _245: null
+    let _245: int
     let _246: int
     let _247: int
-    let _248: null
+    let _248: int
     let _249: int
     let _250: int
-    let _251: null
+    let _251: int
     let _252: int
     let _253: int
     let _254: int
     let _255: int
-    let _256: null
+    let _256: int
     let _257: int
     let _258: int
     let _259: int
@@ -311,7 +311,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _304: int
     let _305: int
     let _306: int
-    let _307: null
+    let _307: bool
     let _308: bool
     let _309: bool
     let _310: bool
@@ -354,7 +354,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _347: 1000
     let _348: 2
     let _349: 3
-    let _350: null
+    let _350: int
     let _351: int
     let _352: int
     let _353: int
@@ -433,7 +433,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _426: int
     let _427: int
     let _428: int
-    let _429: null
+    let _429: bool
     let _430: bool
     let _431: bool
     let _432: bool
@@ -477,7 +477,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _470: 2
     let _471: "aowiefjowiaj"
     let _472: "jfeiowajpwoeifj"
-    let _473: null
+    let _473: "a very long string prefix that is already quite long concatenated with another very long string that together exceeds the line limit easily and comfortably"
     let _474: "a very long string prefix that is already quite long concatenated with "
     let _475: "a very long string prefix that is already quite long"
     let _476: " concatenated with "
@@ -523,7 +523,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _516: int
     let _517: int
     let _518: int
-    let _519: null
+    let _519: int
     let _520: int
     let _521: int
     let _522: int
@@ -546,7 +546,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _539: int
     let _540: int
     let _541: int
-    let _542: null
+    let _542: int
     let _543: int
     let _544: int
     let _545: int
@@ -569,7 +569,7 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _562: int
     let _563: int
     let _564: int
-    let _565: null
+    let _565: bool
     let _566: bool
     let _567: bool
     let _568: bool
@@ -590,27 +590,27 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     let _583: int
     let _584: int
     let _585: int
-    let _586: null
+    let _586: int
     let _587: int
     let _588: int
-    let _589: null
+    let _589: 3
     let _590: 1
     let _591: 2
-    let _592: null
+    let _592: bool
     let _593: int
     let _594: int
-    let _595: null
+    let _595: int
     let _596: int
     let _597: int
-    let _598: null
+    let _598: int
     let _599: int
     let _600: int
     let _601: int
     let _602: int
-    let _603: null
+    let _603: bool
     let _604: int
     let _605: int
-    let _606: null
+    let _606: bool
     let _607: bool
     let _608: int
     let _609: 2
@@ -1541,22 +1541,22 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     let _1: ChainUser // user // param
     let _2: ChainItem[] // items // param
     let _3: map<string, int> // m // param
-    let _4: null
-    let _5: null
+    let _4: ChainUser
+    let _5: string
     let _6: ChainUser
-    let _7: null
+    let _7: string
     let _8: ChainProfile
     let _9: ChainUser
-    let _10: null
+    let _10: string
     let _11: ChainSettings
     let _12: ChainProfile
     let _13: ChainUser
-    let _14: null
+    let _14: string
     let _15: ChainPreferences
     let _16: ChainSettings
     let _17: ChainProfile
     let _18: ChainUser
-    let _19: null
+    let _19: string
     let _20: string[]
     let _21: ChainMetadata
     let _22: ChainItem
@@ -1565,76 +1565,76 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     let _25: ChainUser
     let _26: 0
     let _27: 0
-    let _28: null
+    let _28: string
     let _29: ChainPreferences
     let _30: ChainSettings
     let _31: ChainProfile
     let _32: ChainUser
-    let _33: null
+    let _33: string
     let _34: ChainUser
-    let _35: null
+    let _35: string
     let _36: ChainUser
-    let _37: null
+    let _37: string
     let _38: ChainSettings
     let _39: ChainProfile
     let _40: ChainUser
-    let _41: null
+    let _41: void
     let _42: void
     let _43: string
     let _44: ChainUser
     let _45: string
-    let _46: null
+    let _46: void
     let _47: void
     let _48: ChainItem[]
     let _49: string
-    let _50: null
+    let _50: void
     let _51: void
     let _52: ChainItem[]
     let _53: ChainProfile
     let _54: ChainUser
     let _55: string
     let _56: 0
-    let _57: null
+    let _57: void
     let _58: void
     let _59: ChainItem[]
     let _60: string
     let _61: 0
-    let _62: null
+    let _62: void
     let _63: void
     let _64: ChainItem[]
     let _65: string
     let _66: 0
-    let _67: null
+    let _67: ChainItem
     let _68: ChainItem[]
     let _69: 0
-    let _70: null
+    let _70: string
     let _71: ChainItem
     let _72: ChainItem[]
     let _73: 0
-    let _74: null
+    let _74: string
     let _75: string[]
     let _76: ChainUser
     let _77: 0
-    let _78: null
+    let _78: int
     let _79: int[]
     let _80: int[][]
     let _81: ChainUser
     let _82: 0
     let _83: 1
-    let _84: null
+    let _84: ChainItem
     let _85: ChainItem[]
     let _86: 0
-    let _87: null
+    let _87: ChainItem
     let _88: ChainItem[]
     let _89: 0
-    let _90: null
+    let _90: void
     let _91: void
-    let _92: null
+    let _92: void
     let _93: void
-    let _94: null
+    let _94: void
     let _95: void
-    let _96: null
-    let _97: null
+    let _96: void
+    let _97: ChainItem[]
     let _98: ChainItem[]
     let _99: ChainProfile
     let _100: ChainUser
@@ -1653,24 +1653,24 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     let _113: ChainSettings
     let _114: ChainProfile
     let _115: ChainUser
-    let _116: null
+    let _116: void
     let _117: void
-    let _118: null
+    let _118: void
     let _119: void
-    let _120: null
-    let _121: null
+    let _120: void
+    let _121: int
     let _122: int[]
     let _123: int[][]
     let _124: ChainUser
     let _125: 0
     let _126: 0
-    let _127: null
+    let _127: int
     let _128: int[]
     let _129: int[][]
     let _130: ChainUser
     let _131: 0
     let _132: 1
-    let _133: null
+    let _133: int
     let _134: int[]
     let _135: int[][]
     let _136: ChainUser
@@ -1690,38 +1690,38 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     let _150: 0
     let _151: string
     let _152: 1
-    let _153: null
+    let _153: string
     let _154: ChainUser
-    let _155: null
+    let _155: ChainItem
     let _156: ChainItem[]
     let _157: 0
-    let _158: null
+    let _158: void
     let _159: void
     let _160: ChainItem[]
     let _161: string
     let _162: 0
-    let _163: null
+    let _163: void
     let _164: void
     let _165: string
     let _166: string[]
     let _167: ChainUser
     let _168: 0
     let _169: string
-    let _170: null
+    let _170: int
     let _171: int[]
     let _172: int[][]
     let _173: ChainUser
     let _174: 0
     let _175: 0
-    let _176: null
+    let _176: void
     let _177: void
     let _178: string
     let _179: ChainItem
     let _180: ChainItem[]
     let _181: 0
     let _182: string
-    let _183: null
-    let _184: null
+    let _183: void
+    let _184: void
     let _185: ChainUser
 
     bb0: {
@@ -2089,7 +2089,7 @@ fn MultiStatement(a: int, b: int) -> int {
     let _6: int // y
     let _7: int
     let _8: 2
-    let _9: null
+    let _9: void
     let _10: bool
     let _11: int
     let _12: 10
@@ -2348,11 +2348,11 @@ fn NestedLoops(matrix: int[][]) -> int {
     let _14: int
     let _15: int // val
     let _16: void
-    let _17: null
+    let _17: void
     let _18: bool
     let _19: int
     let _20: 0
-    let _21: null
+    let _21: void
     let _22: bool
     let _23: int
     let _24: 1000
@@ -3320,24 +3320,24 @@ fn MyFunction(a: int, b: int) -> int {
     let _0: int // _0 // return
     let _1: int // a // param
     let _2: int // b // param
-    let _3: null
+    let _3: void
     let _4: bool
     let _5: int
     let _6: int
-    let _7: null
-    let _8: null
-    let _9: null
+    let _7: 1
+    let _8: 1
+    let _9: void
     let _10: bool
     let _11: int
     let _12: int
-    let _13: null
-    let _14: null
-    let _15: null
+    let _13: 1
+    let _14: 1
+    let _15: void
     let _16: bool
     let _17: int
     let _18: int
-    let _19: null
-    let _20: null
+    let _19: 1
+    let _20: 1
 
     bb0: {
         _5 = copy _1;
@@ -4104,17 +4104,17 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _4: bool
     let _5: int
     let _6: 10
-    let _7: null
+    let _7: void
     let _8: int
     let _9: bool
     let _10: bool
     let _11: int
     let _12: 100
-    let _13: null
+    let _13: void
     let _14: int
     let _15: true
-    let _16: null
-    let _17: null
+    let _16: void
+    let _17: void
     let _18: bool
     let _19: int
     let _20: 50
@@ -4122,7 +4122,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _22: bool
     let _23: int
     let _24: 100
-    let _25: null
+    let _25: void
     let _26: int
     let _27: bool
     let _28: int
@@ -4132,31 +4132,31 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _32: bool
     let _33: int
     let _34: 10
-    let _35: null
+    let _35: void
     let _36: int
     let _37: bool
     let _38: int
     let _39: 10
-    let _40: null
+    let _40: void
     let _41: int
     let _42: int // result
-    let _43: null
+    let _43: void
     let _44: int // i
     let _45: bool
     let _46: int
     let _47: 10
-    let _48: null
+    let _48: void
     let _49: int
-    let _50: null
-    let _51: null
+    let _50: void
+    let _51: void
     let _52: int // i
     let _53: bool
     let _54: bool
     let _55: int
     let _56: 100
-    let _57: null
+    let _57: void
     let _58: int
-    let _59: null
+    let _59: void
     let _60: int[]
     let _61: int // __for_idx
     let _62: int
@@ -4201,22 +4201,22 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _101: void
     let _102: 1 | 2 | 3
     let _103: 4 | 5 | 6
-    let _104: null
+    let _104: void
     let _105: int // i
     let _106: bool
     let _107: int
     let _108: 10
-    let _109: null
+    let _109: void
     let _110: int
-    let _111: null
-    let _112: null
+    let _111: void
+    let _112: void
     let _113: int // i
     let _114: bool
     let _115: int
     let _116: 10
-    let _117: null
+    let _117: void
     let _118: int
-    let _119: null
+    let _119: void
     let _120: int[]
     let _121: int // __for_idx
     let _122: int
@@ -4258,7 +4258,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _158: int
     let _159: int
     let _160: 42
-    let _161: null
+    let _161: void
     let _162: int
     let _163: bool
     let _164: bool
@@ -4304,18 +4304,18 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _204: int
     let _205: int
     let _206: 99999
-    let _207: null
+    let _207: void
     let _208: int
-    let _209: null
+    let _209: void
     let _210: int // very_long_variable_name
     let _211: bool
     let _212: bool
     let _213: int
     let _214: 1000
-    let _215: null
+    let _215: void
     let _216: int
-    let _217: null
-    let _218: null
+    let _217: void
+    let _218: void
     let _219: int // extremely_long_loop_counter_variable
     let _220: int
     let _221: int
@@ -4330,11 +4330,11 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _230: 1000000
     let _231: int
     let _232: 0
-    let _233: null
+    let _233: void
     let _234: int
-    let _235: null
-    let _236: null
-    let _237: null
+    let _235: void
+    let _236: void
+    let _237: void
     let _238: "very long string one" | "very long string two" | "very long string three" | "very long string four"[]
     let _239: "very long string one"
     let _240: "very long string two"
@@ -4386,7 +4386,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _286: int
     let _287: int
     let _288: 42
-    let _289: null
+    let _289: void
     let _290: int
     let _291: bool
     let _292: bool
@@ -4413,9 +4413,9 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _313: int
     let _314: int
     let _315: 42
-    let _316: null
+    let _316: void
     let _317: int
-    let _318: null
+    let _318: void
     let _319: int // extremely_long_loop_counter_variable
     let _320: int
     let _321: int
@@ -4430,12 +4430,12 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _330: 1000000
     let _331: int
     let _332: 0
-    let _333: null
+    let _333: void
     let _334: int
-    let _335: null
-    let _336: null
-    let _337: null
-    let _338: null
+    let _335: void
+    let _336: void
+    let _337: void
+    let _338: void
     let _339: int // extremely_long_loop_counter_variable
     let _340: int
     let _341: int
@@ -4450,11 +4450,11 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _350: 1000000
     let _351: int
     let _352: 0
-    let _353: null
+    let _353: void
     let _354: int
-    let _355: null
-    let _356: null
-    let _357: null
+    let _355: void
+    let _356: void
+    let _357: void
     let _358: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
     let _359: "alpha bravo charlie"
     let _360: "delta echo foxtrot"
@@ -4522,17 +4522,17 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _422: bool
     let _423: int
     let _424: 3
-    let _425: null
+    let _425: void
     let _426: int // middle
     let _427: bool
     let _428: int
     let _429: 3
-    let _430: null
+    let _430: void
     let _431: int // inner
     let _432: bool
     let _433: int
     let _434: 3
-    let _435: null
+    let _435: void
     let _436: int
     let _437: int
     let _438: int
@@ -4553,7 +4553,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _453: 1 | 2 | 3 | 4 | 5
     let _454: 1 | 2 | 3 | 4 | 5 // i
     let _455: void
-    let _456: null
+    let _456: void
     let _457: bool
     let _458: 1 | 2 | 3 | 4 | 5
     let _459: 3
@@ -4586,7 +4586,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _486: bool
     let _487: int
     let _488: 2
-    let _489: null
+    let _489: void
     let _490: 1 | 2[]
     let _491: 1
     let _492: 2
@@ -4596,17 +4596,17 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _496: 1 | 2
     let _497: 1 | 2 // lvl2
     let _498: void
-    let _499: null
+    let _499: void
     let _500: int // lvl3
     let _501: bool
     let _502: int
     let _503: 2
-    let _504: null
+    let _504: void
     let _505: int // lvl4
     let _506: bool
     let _507: int
     let _508: 2
-    let _509: null
+    let _509: void
     let _510: void
     let _511: void
     let _512: void
@@ -4615,7 +4615,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _515: int
     let _516: int
     let _517: int
-    let _518: null
+    let _518: void
     let _519: int
     let _520: int[]
     let _521: int // __for_idx
@@ -4624,7 +4624,7 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _524: int
     let _525: int // i
     let _526: void
-    let _527: null
+    let _527: void
     let _528: int // j
     let _529: int
     let _530: int
@@ -4645,13 +4645,13 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _545: 0
     let _546: int
     let _547: 42
-    let _548: null
+    let _548: void
     let _549: int
-    let _550: null
-    let _551: null
-    let _552: null
-    let _553: null
-    let _554: null
+    let _550: void
+    let _551: void
+    let _552: void
+    let _553: void
+    let _554: void
     let _555: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10[]
     let _556: 1
     let _557: 2
@@ -4714,16 +4714,16 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _614: bool
     let _615: int
     let _616: 10
-    let _617: null
+    let _617: void
     let _618: int
-    let _619: null
+    let _619: void
     let _620: int // i
     let _621: bool
     let _622: int
     let _623: 10
-    let _624: null
+    let _624: void
     let _625: int
-    let _626: null
+    let _626: void
     let _627: int[]
     let _628: int // __for_idx
     let _629: int
@@ -5047,78 +5047,86 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _46 = copy _44;
         _47 = const 10_i64;
         _45 = copy _46 < copy _47;
-        branch copy _45 -> [bb31, bb32];
+        branch copy _45 -> [bb31, bb33];
     }
 
     bb31: {
         _49 = copy _44;
         _42 = copy _42 + copy _49;
         _48 = const null;
+        goto -> bb32;
+    }
+
+    bb32: {
         _50 = const 1_i64;
         _44 = copy _44 + copy _50;
         goto -> bb30;
     }
 
-    bb32: {
+    bb33: {
         _43 = const null;
         _52 = const 0_i64;
-        goto -> bb33;
+        goto -> bb34;
     }
 
-    bb33: {
+    bb34: {
         _55 = copy _52;
         _56 = const 100_i64;
         _54 = copy _55 < copy _56;
         _53 = copy _54;
-        branch copy _54 -> [bb36, bb37];
-    }
-
-    bb34: {
-        _58 = copy _52;
-        _42 = copy _42 + copy _58;
-        _57 = const null;
-        _59 = const 2_i64;
-        _52 = copy _52 + copy _59;
-        goto -> bb33;
+        branch copy _54 -> [bb38, bb39];
     }
 
     bb35: {
-        _51 = const null;
-        _60 = copy _1;
-        _61 = const 0_i64;
-        goto -> bb38;
+        _58 = copy _52;
+        _42 = copy _42 + copy _58;
+        _57 = const null;
+        goto -> bb36;
     }
 
     bb36: {
-        _53 = copy _2;
-        goto -> bb37;
+        _59 = const 2_i64;
+        _52 = copy _52 + copy _59;
+        goto -> bb34;
     }
 
     bb37: {
-        branch copy _53 -> [bb34, bb35];
+        _51 = const null;
+        _60 = copy _1;
+        _61 = const 0_i64;
+        goto -> bb40;
     }
 
     bb38: {
-        _62 = len(_60);
-        _63 = copy _61 < copy _62;
-        branch copy _63 -> [bb39, bb41];
+        _53 = copy _2;
+        goto -> bb39;
     }
 
     bb39: {
+        branch copy _53 -> [bb35, bb37];
+    }
+
+    bb40: {
+        _62 = len(_60);
+        _63 = copy _61 < copy _62;
+        branch copy _63 -> [bb41, bb43];
+    }
+
+    bb41: {
         _64 = copy _60[_61];
         _65 = copy _64;
         _67 = copy _65;
         _42 = copy _42 + copy _67;
         _66 = const null;
+        goto -> bb42;
+    }
+
+    bb42: {
+        _61 = copy _61 + const 1_i64;
         goto -> bb40;
     }
 
-    bb40: {
-        _61 = copy _61 + const 1_i64;
-        goto -> bb38;
-    }
-
-    bb41: {
+    bb43: {
         _69 = const 1_i64;
         _70 = const 2_i64;
         _71 = const 3_i64;
@@ -5126,45 +5134,45 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _73 = const 5_i64;
         _68 = [copy _69, copy _70, copy _71, copy _72, copy _73];
         _74 = const 0_i64;
-        goto -> bb42;
+        goto -> bb44;
     }
 
-    bb42: {
+    bb44: {
         _75 = len(_68);
         _76 = copy _74 < copy _75;
-        branch copy _76 -> [bb43, bb45];
+        branch copy _76 -> [bb45, bb47];
     }
 
-    bb43: {
+    bb45: {
         _77 = copy _68[_74];
         _78 = copy _77;
         _80 = copy _78;
         _42 = copy _42 + copy _80;
         _79 = const null;
+        goto -> bb46;
+    }
+
+    bb46: {
+        _74 = copy _74 + const 1_i64;
         goto -> bb44;
     }
 
-    bb44: {
-        _74 = copy _74 + const 1_i64;
-        goto -> bb42;
-    }
-
-    bb45: {
+    bb47: {
         _82 = const 1_i64;
         _83 = const 2_i64;
         _84 = const 3_i64;
         _81 = [copy _82, copy _83, copy _84];
         _85 = const 0_i64;
-        goto -> bb46;
+        goto -> bb48;
     }
 
-    bb46: {
+    bb48: {
         _86 = len(_81);
         _87 = copy _85 < copy _86;
-        branch copy _87 -> [bb47, bb49];
+        branch copy _87 -> [bb49, bb51];
     }
 
-    bb47: {
+    bb49: {
         _88 = copy _81[_85];
         _89 = copy _88;
         _92 = const 4_i64;
@@ -5172,26 +5180,26 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _94 = const 6_i64;
         _91 = [copy _92, copy _93, copy _94];
         _95 = const 0_i64;
-        goto -> bb50;
-    }
-
-    bb48: {
-        _85 = copy _85 + const 1_i64;
-        goto -> bb46;
-    }
-
-    bb49: {
-        _105 = const 0_i64;
-        goto -> bb54;
+        goto -> bb52;
     }
 
     bb50: {
-        _96 = len(_91);
-        _97 = copy _95 < copy _96;
-        branch copy _97 -> [bb51, bb53];
+        _85 = copy _85 + const 1_i64;
+        goto -> bb48;
     }
 
     bb51: {
+        _105 = const 0_i64;
+        goto -> bb56;
+    }
+
+    bb52: {
+        _96 = len(_91);
+        _97 = copy _95 < copy _96;
+        branch copy _97 -> [bb53, bb55];
+    }
+
+    bb53: {
         _98 = copy _91[_95];
         _99 = copy _98;
         _102 = copy _89;
@@ -5199,333 +5207,341 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _101 = copy _102 * copy _103;
         _42 = copy _42 + copy _101;
         _100 = const null;
-        goto -> bb52;
-    }
-
-    bb52: {
-        _95 = copy _95 + const 1_i64;
-        goto -> bb50;
-    }
-
-    bb53: {
-        _90 = const null;
-        goto -> bb48;
-    }
-
-    bb54: {
-        _107 = copy _105;
-        _108 = const 10_i64;
-        _106 = copy _107 < copy _108;
-        branch copy _106 -> [bb55, bb56];
-    }
-
-    bb55: {
-        _110 = copy _105;
-        _42 = copy _42 + copy _110;
-        _109 = const null;
-        _111 = const 1_i64;
-        _105 = copy _105 + copy _111;
         goto -> bb54;
     }
 
+    bb54: {
+        _95 = copy _95 + const 1_i64;
+        goto -> bb52;
+    }
+
+    bb55: {
+        _90 = const null;
+        goto -> bb50;
+    }
+
     bb56: {
-        _104 = const null;
-        _113 = const 0_i64;
-        goto -> bb57;
+        _107 = copy _105;
+        _108 = const 10_i64;
+        _106 = copy _107 < copy _108;
+        branch copy _106 -> [bb57, bb59];
     }
 
     bb57: {
-        _115 = copy _113;
-        _116 = const 10_i64;
-        _114 = copy _115 < copy _116;
-        branch copy _114 -> [bb58, bb59];
+        _110 = copy _105;
+        _42 = copy _42 + copy _110;
+        _109 = const null;
+        goto -> bb58;
     }
 
     bb58: {
-        _118 = copy _113;
-        _42 = copy _42 + copy _118;
-        _117 = const null;
-        _119 = const 1_i64;
-        _113 = copy _113 + copy _119;
-        goto -> bb57;
+        _111 = const 1_i64;
+        _105 = copy _105 + copy _111;
+        goto -> bb56;
     }
 
     bb59: {
-        _112 = const null;
-        _120 = copy _1;
-        _121 = const 0_i64;
+        _104 = const null;
+        _113 = const 0_i64;
         goto -> bb60;
     }
 
     bb60: {
-        _122 = len(_120);
-        _123 = copy _121 < copy _122;
-        branch copy _123 -> [bb61, bb63];
+        _115 = copy _113;
+        _116 = const 10_i64;
+        _114 = copy _115 < copy _116;
+        branch copy _114 -> [bb61, bb63];
     }
 
     bb61: {
+        _118 = copy _113;
+        _42 = copy _42 + copy _118;
+        _117 = const null;
+        goto -> bb62;
+    }
+
+    bb62: {
+        _119 = const 1_i64;
+        _113 = copy _113 + copy _119;
+        goto -> bb60;
+    }
+
+    bb63: {
+        _112 = const null;
+        _120 = copy _1;
+        _121 = const 0_i64;
+        goto -> bb64;
+    }
+
+    bb64: {
+        _122 = len(_120);
+        _123 = copy _121 < copy _122;
+        branch copy _123 -> [bb65, bb67];
+    }
+
+    bb65: {
         _124 = copy _120[_121];
         _125 = copy _124;
         _127 = copy _125;
         _42 = copy _42 + copy _127;
         _126 = const null;
-        goto -> bb62;
+        goto -> bb66;
     }
 
-    bb62: {
+    bb66: {
         _121 = copy _121 + const 1_i64;
-        goto -> bb60;
-    }
-
-    bb63: {
-        _128 = copy _1;
-        _129 = const 0_i64;
         goto -> bb64;
     }
 
-    bb64: {
-        _130 = len(_128);
-        _131 = copy _129 < copy _130;
-        branch copy _131 -> [bb65, bb67];
+    bb67: {
+        _128 = copy _1;
+        _129 = const 0_i64;
+        goto -> bb68;
     }
 
-    bb65: {
+    bb68: {
+        _130 = len(_128);
+        _131 = copy _129 < copy _130;
+        branch copy _131 -> [bb69, bb71];
+    }
+
+    bb69: {
         _132 = copy _128[_129];
         _133 = copy _132;
         _135 = copy _133;
         _42 = copy _42 + copy _135;
         _134 = const null;
-        goto -> bb66;
-    }
-
-    bb66: {
-        _129 = copy _129 + const 1_i64;
-        goto -> bb64;
-    }
-
-    bb67: {
-        goto -> bb68;
-    }
-
-    bb68: {
-        _143 = copy _3;
-        _144 = const 100_i64;
-        _142 = copy _143 < copy _144;
-        _141 = copy _142;
-        branch copy _142 -> [bb71, bb72];
-    }
-
-    bb69: {
-        _162 = const 1_i64;
-        _3 = copy _3 + copy _162;
-        _161 = const null;
-        goto -> bb68;
+        goto -> bb70;
     }
 
     bb70: {
-        goto -> bb83;
+        _129 = copy _129 + const 1_i64;
+        goto -> bb68;
     }
 
     bb71: {
-        _145 = copy _42;
-        _146 = const 0_i64;
-        _141 = copy _145 > copy _146;
         goto -> bb72;
     }
 
     bb72: {
-        _140 = copy _141;
-        branch copy _141 -> [bb73, bb74];
+        _143 = copy _3;
+        _144 = const 100_i64;
+        _142 = copy _143 < copy _144;
+        _141 = copy _142;
+        branch copy _142 -> [bb75, bb76];
     }
 
     bb73: {
-        _140 = copy _2;
-        goto -> bb74;
+        _162 = const 1_i64;
+        _3 = copy _3 + copy _162;
+        _161 = const null;
+        goto -> bb72;
     }
 
     bb74: {
-        _139 = copy _140;
-        branch copy _140 -> [bb75, bb76];
+        goto -> bb87;
     }
 
     bb75: {
-        _147 = copy _3;
-        _148 = copy _42;
-        _139 = copy _147 != copy _148;
+        _145 = copy _42;
+        _146 = const 0_i64;
+        _141 = copy _145 > copy _146;
         goto -> bb76;
     }
 
     bb76: {
-        _138 = copy _139;
-        branch copy _139 -> [bb77, bb78];
+        _140 = copy _141;
+        branch copy _141 -> [bb77, bb78];
     }
 
     bb77: {
+        _140 = copy _2;
+        goto -> bb78;
+    }
+
+    bb78: {
+        _139 = copy _140;
+        branch copy _140 -> [bb79, bb80];
+    }
+
+    bb79: {
+        _147 = copy _3;
+        _148 = copy _42;
+        _139 = copy _147 != copy _148;
+        goto -> bb80;
+    }
+
+    bb80: {
+        _138 = copy _139;
+        branch copy _139 -> [bb81, bb82];
+    }
+
+    bb81: {
         _150 = copy _3;
         _151 = copy _42;
         _149 = copy _150 + copy _151;
         _152 = const 10000_i64;
         _138 = copy _149 < copy _152;
-        goto -> bb78;
+        goto -> bb82;
     }
 
-    bb78: {
+    bb82: {
         _137 = copy _138;
-        branch copy _138 -> [bb79, bb80];
+        branch copy _138 -> [bb83, bb84];
     }
 
-    bb79: {
+    bb83: {
         _154 = copy _3;
         _155 = copy _42;
         _153 = copy _154 * copy _155;
         _156 = const 500_i64;
         _137 = copy _153 > copy _156;
-        goto -> bb80;
+        goto -> bb84;
     }
 
-    bb80: {
+    bb84: {
         _136 = copy _137;
-        branch copy _137 -> [bb81, bb82];
+        branch copy _137 -> [bb85, bb86];
     }
 
-    bb81: {
+    bb85: {
         _158 = copy _3;
         _159 = copy _42;
         _157 = copy _158 - copy _159;
         _160 = const 42_i64;
         _136 = copy _157 != copy _160;
-        goto -> bb82;
+        goto -> bb86;
     }
 
-    bb82: {
-        branch copy _136 -> [bb69, bb70];
+    bb86: {
+        branch copy _136 -> [bb73, bb74];
     }
 
-    bb83: {
+    bb87: {
         _173 = copy _3;
         _174 = const 100_i64;
         _172 = copy _173 < copy _174;
         _171 = copy _172;
-        branch copy _172 -> [bb86, bb87];
-    }
-
-    bb84: {
-        _208 = const 1_i64;
-        _3 = copy _3 + copy _208;
-        _207 = const null;
-        goto -> bb83;
-    }
-
-    bb85: {
-        _210 = const 0_i64;
-        goto -> bb104;
-    }
-
-    bb86: {
-        _175 = copy _42;
-        _176 = const 0_i64;
-        _171 = copy _175 > copy _176;
-        goto -> bb87;
-    }
-
-    bb87: {
-        _170 = copy _171;
-        branch copy _171 -> [bb88, bb89];
+        branch copy _172 -> [bb90, bb91];
     }
 
     bb88: {
-        _170 = copy _2;
-        goto -> bb89;
+        _208 = const 1_i64;
+        _3 = copy _3 + copy _208;
+        _207 = const null;
+        goto -> bb87;
     }
 
     bb89: {
-        _169 = copy _170;
-        branch copy _170 -> [bb90, bb91];
+        _210 = const 0_i64;
+        goto -> bb108;
     }
 
     bb90: {
-        _177 = copy _3;
-        _178 = copy _42;
-        _169 = copy _177 != copy _178;
+        _175 = copy _42;
+        _176 = const 0_i64;
+        _171 = copy _175 > copy _176;
         goto -> bb91;
     }
 
     bb91: {
-        _168 = copy _169;
-        branch copy _169 -> [bb92, bb93];
+        _170 = copy _171;
+        branch copy _171 -> [bb92, bb93];
     }
 
     bb92: {
+        _170 = copy _2;
+        goto -> bb93;
+    }
+
+    bb93: {
+        _169 = copy _170;
+        branch copy _170 -> [bb94, bb95];
+    }
+
+    bb94: {
+        _177 = copy _3;
+        _178 = copy _42;
+        _169 = copy _177 != copy _178;
+        goto -> bb95;
+    }
+
+    bb95: {
+        _168 = copy _169;
+        branch copy _169 -> [bb96, bb97];
+    }
+
+    bb96: {
         _180 = copy _3;
         _181 = copy _42;
         _179 = copy _180 + copy _181;
         _182 = const 10000_i64;
         _168 = copy _179 < copy _182;
-        goto -> bb93;
+        goto -> bb97;
     }
 
-    bb93: {
+    bb97: {
         _167 = copy _168;
-        branch copy _168 -> [bb94, bb95];
+        branch copy _168 -> [bb98, bb99];
     }
 
-    bb94: {
+    bb98: {
         _184 = copy _3;
         _185 = copy _42;
         _183 = copy _184 * copy _185;
         _186 = const 500_i64;
         _167 = copy _183 > copy _186;
-        goto -> bb95;
+        goto -> bb99;
     }
 
-    bb95: {
+    bb99: {
         _166 = copy _167;
-        branch copy _167 -> [bb96, bb97];
+        branch copy _167 -> [bb100, bb101];
     }
 
-    bb96: {
+    bb100: {
         _188 = copy _3;
         _189 = copy _42;
         _187 = copy _188 - copy _189;
         _190 = const 42_i64;
         _166 = copy _187 != copy _190;
-        goto -> bb97;
+        goto -> bb101;
     }
 
-    bb97: {
+    bb101: {
         _165 = copy _166;
-        branch copy _166 -> [bb98, bb99];
+        branch copy _166 -> [bb102, bb103];
     }
 
-    bb98: {
+    bb102: {
         _192 = copy _3;
         _193 = const 7_i64;
         _191 = copy _192 % copy _193;
         _194 = const 0_i64;
         _165 = copy _191 == copy _194;
-        goto -> bb99;
+        goto -> bb103;
     }
 
-    bb99: {
+    bb103: {
         _164 = copy _165;
-        branch copy _165 -> [bb100, bb101];
+        branch copy _165 -> [bb104, bb105];
     }
 
-    bb100: {
+    bb104: {
         _196 = copy _42;
         _197 = const 3_i64;
         _195 = copy _196 % copy _197;
         _198 = const 0_i64;
         _164 = copy _195 == copy _198;
-        goto -> bb101;
+        goto -> bb105;
     }
 
-    bb101: {
+    bb105: {
         _163 = copy _164;
-        branch copy _164 -> [bb102, bb103];
+        branch copy _164 -> [bb106, bb107];
     }
 
-    bb102: {
+    bb106: {
         _201 = copy _3;
         _202 = copy _42;
         _200 = copy _201 + copy _202;
@@ -5535,31 +5551,35 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _199 = copy _200 + copy _203;
         _206 = const 99999_i64;
         _163 = copy _199 > copy _206;
-        goto -> bb103;
+        goto -> bb107;
     }
 
-    bb103: {
-        branch copy _163 -> [bb84, bb85];
+    bb107: {
+        branch copy _163 -> [bb88, bb89];
     }
 
-    bb104: {
+    bb108: {
         _213 = copy _210;
         _214 = const 1000_i64;
         _212 = copy _213 < copy _214;
         _211 = copy _212;
-        branch copy _212 -> [bb107, bb108];
+        branch copy _212 -> [bb112, bb113];
     }
 
-    bb105: {
+    bb109: {
         _216 = copy _210;
         _42 = copy _42 + copy _216;
         _215 = const null;
-        _217 = const 1_i64;
-        _210 = copy _210 + copy _217;
-        goto -> bb104;
+        goto -> bb110;
     }
 
-    bb106: {
+    bb110: {
+        _217 = const 1_i64;
+        _210 = copy _210 + copy _217;
+        goto -> bb108;
+    }
+
+    bb111: {
         _209 = const null;
         _221 = copy _3;
         _222 = copy _3;
@@ -5568,38 +5588,42 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _225 = copy _42;
         _223 = copy _224 * copy _225;
         _219 = copy _220 + copy _223;
-        goto -> bb109;
+        goto -> bb114;
     }
 
-    bb107: {
+    bb112: {
         _211 = copy _2;
-        goto -> bb108;
+        goto -> bb113;
     }
 
-    bb108: {
-        branch copy _211 -> [bb105, bb106];
+    bb113: {
+        branch copy _211 -> [bb109, bb111];
     }
 
-    bb109: {
+    bb114: {
         _229 = copy _219;
         _230 = const 1000000_i64;
         _228 = copy _229 < copy _230;
         _227 = copy _228;
-        branch copy _228 -> [bb112, bb113];
+        branch copy _228 -> [bb118, bb119];
     }
 
-    bb110: {
+    bb115: {
         _234 = copy _219;
         _42 = copy _42 + copy _234;
         _233 = const null;
+        goto -> bb116;
+    }
+
+    bb116: {
         _236 = copy _3;
         _237 = copy _42;
         _235 = copy _236 + copy _237;
         _219 = copy _219 + copy _235;
-        goto -> bb109;
+        goto -> bb114;
     }
 
-    bb111: {
+    bb117: {
         _218 = const null;
         _239 = const "very long string one";
         _240 = const "very long string two";
@@ -5607,51 +5631,51 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _242 = const "very long string four";
         _238 = [copy _239, copy _240, copy _241, copy _242];
         _243 = const 0_i64;
-        goto -> bb116;
+        goto -> bb122;
     }
 
-    bb112: {
+    bb118: {
         _227 = copy _2;
-        goto -> bb113;
+        goto -> bb119;
     }
 
-    bb113: {
+    bb119: {
         _226 = copy _227;
-        branch copy _227 -> [bb114, bb115];
+        branch copy _227 -> [bb120, bb121];
     }
 
-    bb114: {
+    bb120: {
         _231 = copy _3;
         _232 = const 0_i64;
         _226 = copy _231 > copy _232;
-        goto -> bb115;
+        goto -> bb121;
     }
 
-    bb115: {
-        branch copy _226 -> [bb110, bb111];
+    bb121: {
+        branch copy _226 -> [bb115, bb117];
     }
 
-    bb116: {
+    bb122: {
         _244 = len(_238);
         _245 = copy _243 < copy _244;
-        branch copy _245 -> [bb117, bb119];
+        branch copy _245 -> [bb123, bb125];
     }
 
-    bb117: {
+    bb123: {
         _246 = copy _238[_243];
         _247 = copy _246;
         _249 = const 1_i64;
         _42 = copy _42 + copy _249;
         _248 = const null;
-        goto -> bb118;
+        goto -> bb124;
     }
 
-    bb118: {
+    bb124: {
         _243 = copy _243 + const 1_i64;
-        goto -> bb116;
+        goto -> bb122;
     }
 
-    bb119: {
+    bb125: {
         _251 = const "alpha bravo charlie";
         _252 = const "delta echo foxtrot";
         _253 = const "golf hotel india";
@@ -5660,143 +5684,143 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _256 = const "papa quebec romeo";
         _250 = [copy _251, copy _252, copy _253, copy _254, copy _255, copy _256];
         _257 = const 0_i64;
-        goto -> bb120;
+        goto -> bb126;
     }
 
-    bb120: {
+    bb126: {
         _258 = len(_250);
         _259 = copy _257 < copy _258;
-        branch copy _259 -> [bb121, bb123];
+        branch copy _259 -> [bb127, bb129];
     }
 
-    bb121: {
+    bb127: {
         _260 = copy _250[_257];
         _261 = copy _260;
         _263 = const 1_i64;
         _42 = copy _42 + copy _263;
         _262 = const null;
-        goto -> bb122;
-    }
-
-    bb122: {
-        _257 = copy _257 + const 1_i64;
-        goto -> bb120;
-    }
-
-    bb123: {
-        goto -> bb124;
-    }
-
-    bb124: {
-        _271 = copy _3;
-        _272 = const 100_i64;
-        _270 = copy _271 < copy _272;
-        _269 = copy _270;
-        branch copy _270 -> [bb127, bb128];
-    }
-
-    bb125: {
-        _290 = const 1_i64;
-        _3 = copy _3 + copy _290;
-        _289 = const null;
-        goto -> bb124;
-    }
-
-    bb126: {
-        goto -> bb139;
-    }
-
-    bb127: {
-        _273 = copy _42;
-        _274 = const 0_i64;
-        _269 = copy _273 > copy _274;
         goto -> bb128;
     }
 
     bb128: {
-        _268 = copy _269;
-        branch copy _269 -> [bb129, bb130];
+        _257 = copy _257 + const 1_i64;
+        goto -> bb126;
     }
 
     bb129: {
-        _268 = copy _2;
         goto -> bb130;
     }
 
     bb130: {
-        _267 = copy _268;
-        branch copy _268 -> [bb131, bb132];
+        _271 = copy _3;
+        _272 = const 100_i64;
+        _270 = copy _271 < copy _272;
+        _269 = copy _270;
+        branch copy _270 -> [bb133, bb134];
     }
 
     bb131: {
-        _275 = copy _3;
-        _276 = copy _42;
-        _267 = copy _275 != copy _276;
-        goto -> bb132;
+        _290 = const 1_i64;
+        _3 = copy _3 + copy _290;
+        _289 = const null;
+        goto -> bb130;
     }
 
     bb132: {
-        _266 = copy _267;
-        branch copy _267 -> [bb133, bb134];
+        goto -> bb145;
     }
 
     bb133: {
+        _273 = copy _42;
+        _274 = const 0_i64;
+        _269 = copy _273 > copy _274;
+        goto -> bb134;
+    }
+
+    bb134: {
+        _268 = copy _269;
+        branch copy _269 -> [bb135, bb136];
+    }
+
+    bb135: {
+        _268 = copy _2;
+        goto -> bb136;
+    }
+
+    bb136: {
+        _267 = copy _268;
+        branch copy _268 -> [bb137, bb138];
+    }
+
+    bb137: {
+        _275 = copy _3;
+        _276 = copy _42;
+        _267 = copy _275 != copy _276;
+        goto -> bb138;
+    }
+
+    bb138: {
+        _266 = copy _267;
+        branch copy _267 -> [bb139, bb140];
+    }
+
+    bb139: {
         _278 = copy _3;
         _279 = copy _42;
         _277 = copy _278 + copy _279;
         _280 = const 10000_i64;
         _266 = copy _277 < copy _280;
-        goto -> bb134;
+        goto -> bb140;
     }
 
-    bb134: {
+    bb140: {
         _265 = copy _266;
-        branch copy _266 -> [bb135, bb136];
+        branch copy _266 -> [bb141, bb142];
     }
 
-    bb135: {
+    bb141: {
         _282 = copy _3;
         _283 = copy _42;
         _281 = copy _282 * copy _283;
         _284 = const 500_i64;
         _265 = copy _281 > copy _284;
-        goto -> bb136;
+        goto -> bb142;
     }
 
-    bb136: {
+    bb142: {
         _264 = copy _265;
-        branch copy _265 -> [bb137, bb138];
+        branch copy _265 -> [bb143, bb144];
     }
 
-    bb137: {
+    bb143: {
         _286 = copy _3;
         _287 = copy _42;
         _285 = copy _286 - copy _287;
         _288 = const 42_i64;
         _264 = copy _285 != copy _288;
-        goto -> bb138;
+        goto -> bb144;
     }
 
-    bb138: {
-        branch copy _264 -> [bb125, bb126];
+    bb144: {
+        branch copy _264 -> [bb131, bb132];
     }
 
-    bb139: {
+    bb145: {
         _298 = copy _3;
         _299 = const 100_i64;
         _297 = copy _298 < copy _299;
         _296 = copy _297;
-        branch copy _297 -> [bb142, bb143];
+        branch copy _297 -> [bb148, bb149];
     }
 
-    bb140: {
+    bb146: {
         _317 = const 1_i64;
         _3 = copy _3 + copy _317;
         _316 = const null;
-        goto -> bb139;
+        goto -> bb145;
     }
 
-    bb141: {
+    bb147: {
         _321 = copy _3;
         _322 = copy _3;
         _320 = copy _321 * copy _322;
@@ -5804,104 +5828,108 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _325 = copy _42;
         _323 = copy _324 * copy _325;
         _319 = copy _320 + copy _323;
-        goto -> bb154;
-    }
-
-    bb142: {
-        _300 = copy _42;
-        _301 = const 0_i64;
-        _296 = copy _300 > copy _301;
-        goto -> bb143;
-    }
-
-    bb143: {
-        _295 = copy _296;
-        branch copy _296 -> [bb144, bb145];
-    }
-
-    bb144: {
-        _295 = copy _2;
-        goto -> bb145;
-    }
-
-    bb145: {
-        _294 = copy _295;
-        branch copy _295 -> [bb146, bb147];
-    }
-
-    bb146: {
-        _302 = copy _3;
-        _303 = copy _42;
-        _294 = copy _302 != copy _303;
-        goto -> bb147;
-    }
-
-    bb147: {
-        _293 = copy _294;
-        branch copy _294 -> [bb148, bb149];
+        goto -> bb160;
     }
 
     bb148: {
+        _300 = copy _42;
+        _301 = const 0_i64;
+        _296 = copy _300 > copy _301;
+        goto -> bb149;
+    }
+
+    bb149: {
+        _295 = copy _296;
+        branch copy _296 -> [bb150, bb151];
+    }
+
+    bb150: {
+        _295 = copy _2;
+        goto -> bb151;
+    }
+
+    bb151: {
+        _294 = copy _295;
+        branch copy _295 -> [bb152, bb153];
+    }
+
+    bb152: {
+        _302 = copy _3;
+        _303 = copy _42;
+        _294 = copy _302 != copy _303;
+        goto -> bb153;
+    }
+
+    bb153: {
+        _293 = copy _294;
+        branch copy _294 -> [bb154, bb155];
+    }
+
+    bb154: {
         _305 = copy _3;
         _306 = copy _42;
         _304 = copy _305 + copy _306;
         _307 = const 10000_i64;
         _293 = copy _304 < copy _307;
-        goto -> bb149;
+        goto -> bb155;
     }
 
-    bb149: {
+    bb155: {
         _292 = copy _293;
-        branch copy _293 -> [bb150, bb151];
+        branch copy _293 -> [bb156, bb157];
     }
 
-    bb150: {
+    bb156: {
         _309 = copy _3;
         _310 = copy _42;
         _308 = copy _309 * copy _310;
         _311 = const 500_i64;
         _292 = copy _308 > copy _311;
-        goto -> bb151;
+        goto -> bb157;
     }
 
-    bb151: {
+    bb157: {
         _291 = copy _292;
-        branch copy _292 -> [bb152, bb153];
+        branch copy _292 -> [bb158, bb159];
     }
 
-    bb152: {
+    bb158: {
         _313 = copy _3;
         _314 = copy _42;
         _312 = copy _313 - copy _314;
         _315 = const 42_i64;
         _291 = copy _312 != copy _315;
-        goto -> bb153;
+        goto -> bb159;
     }
 
-    bb153: {
-        branch copy _291 -> [bb140, bb141];
+    bb159: {
+        branch copy _291 -> [bb146, bb147];
     }
 
-    bb154: {
+    bb160: {
         _329 = copy _319;
         _330 = const 1000000_i64;
         _328 = copy _329 < copy _330;
         _327 = copy _328;
-        branch copy _328 -> [bb157, bb158];
+        branch copy _328 -> [bb164, bb165];
     }
 
-    bb155: {
+    bb161: {
         _334 = copy _319;
         _42 = copy _42 + copy _334;
         _333 = const null;
+        goto -> bb162;
+    }
+
+    bb162: {
         _336 = copy _3;
         _337 = copy _42;
         _335 = copy _336 + copy _337;
         _319 = copy _319 + copy _335;
-        goto -> bb154;
+        goto -> bb160;
     }
 
-    bb156: {
+    bb163: {
         _318 = const null;
         _341 = copy _3;
         _342 = copy _3;
@@ -5910,50 +5938,54 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _345 = copy _42;
         _343 = copy _344 * copy _345;
         _339 = copy _340 + copy _343;
-        goto -> bb161;
+        goto -> bb168;
     }
 
-    bb157: {
+    bb164: {
         _327 = copy _2;
-        goto -> bb158;
+        goto -> bb165;
     }
 
-    bb158: {
+    bb165: {
         _326 = copy _327;
-        branch copy _327 -> [bb159, bb160];
+        branch copy _327 -> [bb166, bb167];
     }
 
-    bb159: {
+    bb166: {
         _331 = copy _3;
         _332 = const 0_i64;
         _326 = copy _331 > copy _332;
-        goto -> bb160;
+        goto -> bb167;
     }
 
-    bb160: {
-        branch copy _326 -> [bb155, bb156];
+    bb167: {
+        branch copy _326 -> [bb161, bb163];
     }
 
-    bb161: {
+    bb168: {
         _349 = copy _339;
         _350 = const 1000000_i64;
         _348 = copy _349 < copy _350;
         _347 = copy _348;
-        branch copy _348 -> [bb164, bb165];
+        branch copy _348 -> [bb172, bb173];
     }
 
-    bb162: {
+    bb169: {
         _354 = copy _339;
         _42 = copy _42 + copy _354;
         _353 = const null;
+        goto -> bb170;
+    }
+
+    bb170: {
         _356 = copy _3;
         _357 = copy _42;
         _355 = copy _356 + copy _357;
         _339 = copy _339 + copy _355;
-        goto -> bb161;
+        goto -> bb168;
     }
 
-    bb163: {
+    bb171: {
         _338 = const null;
         _359 = const "alpha bravo charlie";
         _360 = const "delta echo foxtrot";
@@ -5963,51 +5995,51 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _364 = const "papa quebec romeo";
         _358 = [copy _359, copy _360, copy _361, copy _362, copy _363, copy _364];
         _365 = const 0_i64;
-        goto -> bb168;
+        goto -> bb176;
     }
 
-    bb164: {
+    bb172: {
         _347 = copy _2;
-        goto -> bb165;
+        goto -> bb173;
     }
 
-    bb165: {
+    bb173: {
         _346 = copy _347;
-        branch copy _347 -> [bb166, bb167];
+        branch copy _347 -> [bb174, bb175];
     }
 
-    bb166: {
+    bb174: {
         _351 = copy _3;
         _352 = const 0_i64;
         _346 = copy _351 > copy _352;
-        goto -> bb167;
+        goto -> bb175;
     }
 
-    bb167: {
-        branch copy _346 -> [bb162, bb163];
+    bb175: {
+        branch copy _346 -> [bb169, bb171];
     }
 
-    bb168: {
+    bb176: {
         _366 = len(_358);
         _367 = copy _365 < copy _366;
-        branch copy _367 -> [bb169, bb171];
+        branch copy _367 -> [bb177, bb179];
     }
 
-    bb169: {
+    bb177: {
         _368 = copy _358[_365];
         _369 = copy _368;
         _371 = const 1_i64;
         _42 = copy _42 + copy _371;
         _370 = const null;
-        goto -> bb170;
+        goto -> bb178;
     }
 
-    bb170: {
+    bb178: {
         _365 = copy _365 + const 1_i64;
-        goto -> bb168;
+        goto -> bb176;
     }
 
-    bb171: {
+    bb179: {
         _373 = const "alpha bravo charlie";
         _374 = const "delta echo foxtrot";
         _375 = const "golf hotel india";
@@ -6016,45 +6048,45 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _378 = const "papa quebec romeo";
         _372 = [copy _373, copy _374, copy _375, copy _376, copy _377, copy _378];
         _379 = const 0_i64;
-        goto -> bb172;
+        goto -> bb180;
     }
 
-    bb172: {
+    bb180: {
         _380 = len(_372);
         _381 = copy _379 < copy _380;
-        branch copy _381 -> [bb173, bb175];
+        branch copy _381 -> [bb181, bb183];
     }
 
-    bb173: {
+    bb181: {
         _382 = copy _372[_379];
         _383 = copy _382;
         _385 = const 1_i64;
         _42 = copy _42 + copy _385;
         _384 = const null;
-        goto -> bb174;
+        goto -> bb182;
     }
 
-    bb174: {
+    bb182: {
         _379 = copy _379 + const 1_i64;
-        goto -> bb172;
+        goto -> bb180;
     }
 
-    bb175: {
+    bb183: {
         _387 = const 1_i64;
         _388 = const 2_i64;
         _389 = const 3_i64;
         _386 = [copy _387, copy _388, copy _389];
         _390 = const 0_i64;
-        goto -> bb176;
+        goto -> bb184;
     }
 
-    bb176: {
+    bb184: {
         _391 = len(_386);
         _392 = copy _390 < copy _391;
-        branch copy _392 -> [bb177, bb179];
+        branch copy _392 -> [bb185, bb187];
     }
 
-    bb177: {
+    bb185: {
         _393 = copy _386[_390];
         _394 = copy _393;
         _397 = const 4_i64;
@@ -6062,26 +6094,26 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _399 = const 6_i64;
         _396 = [copy _397, copy _398, copy _399];
         _400 = const 0_i64;
-        goto -> bb180;
-    }
-
-    bb178: {
-        _390 = copy _390 + const 1_i64;
-        goto -> bb176;
-    }
-
-    bb179: {
-        _421 = const 0_i64;
         goto -> bb188;
     }
 
-    bb180: {
-        _401 = len(_396);
-        _402 = copy _400 < copy _401;
-        branch copy _402 -> [bb181, bb183];
+    bb186: {
+        _390 = copy _390 + const 1_i64;
+        goto -> bb184;
     }
 
-    bb181: {
+    bb187: {
+        _421 = const 0_i64;
+        goto -> bb196;
+    }
+
+    bb188: {
+        _401 = len(_396);
+        _402 = copy _400 < copy _401;
+        branch copy _402 -> [bb189, bb191];
+    }
+
+    bb189: {
         _403 = copy _396[_400];
         _404 = copy _403;
         _407 = const 7_i64;
@@ -6089,26 +6121,26 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _409 = const 9_i64;
         _406 = [copy _407, copy _408, copy _409];
         _410 = const 0_i64;
-        goto -> bb184;
+        goto -> bb192;
     }
 
-    bb182: {
+    bb190: {
         _400 = copy _400 + const 1_i64;
-        goto -> bb180;
+        goto -> bb188;
     }
 
-    bb183: {
+    bb191: {
         _395 = const null;
-        goto -> bb178;
+        goto -> bb186;
     }
 
-    bb184: {
+    bb192: {
         _411 = len(_406);
         _412 = copy _410 < copy _411;
-        branch copy _412 -> [bb185, bb187];
+        branch copy _412 -> [bb193, bb195];
     }
 
-    bb185: {
+    bb193: {
         _413 = copy _406[_410];
         _414 = copy _413;
         _418 = copy _394;
@@ -6118,32 +6150,32 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _416 = copy _417 * copy _420;
         _42 = copy _42 + copy _416;
         _415 = const null;
-        goto -> bb186;
+        goto -> bb194;
     }
 
-    bb186: {
+    bb194: {
         _410 = copy _410 + const 1_i64;
-        goto -> bb184;
+        goto -> bb192;
     }
 
-    bb187: {
+    bb195: {
         _405 = const null;
-        goto -> bb182;
+        goto -> bb190;
     }
 
-    bb188: {
+    bb196: {
         _423 = copy _421;
         _424 = const 3_i64;
         _422 = copy _423 < copy _424;
-        branch copy _422 -> [bb189, bb190];
+        branch copy _422 -> [bb197, bb198];
     }
 
-    bb189: {
+    bb197: {
         _426 = const 0_i64;
-        goto -> bb191;
+        goto -> bb199;
     }
 
-    bb190: {
+    bb198: {
         _445 = const 1_i64;
         _446 = const 2_i64;
         _447 = const 3_i64;
@@ -6151,36 +6183,36 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _449 = const 5_i64;
         _444 = [copy _445, copy _446, copy _447, copy _448, copy _449];
         _450 = const 0_i64;
-        goto -> bb197;
+        goto -> bb205;
     }
 
-    bb191: {
+    bb199: {
         _428 = copy _426;
         _429 = const 3_i64;
         _427 = copy _428 < copy _429;
-        branch copy _427 -> [bb192, bb193];
+        branch copy _427 -> [bb200, bb201];
     }
 
-    bb192: {
+    bb200: {
         _431 = const 0_i64;
-        goto -> bb194;
+        goto -> bb202;
     }
 
-    bb193: {
+    bb201: {
         _443 = const 1_i64;
         _421 = copy _421 + copy _443;
         _425 = const null;
-        goto -> bb188;
+        goto -> bb196;
     }
 
-    bb194: {
+    bb202: {
         _433 = copy _431;
         _434 = const 3_i64;
         _432 = copy _433 < copy _434;
-        branch copy _432 -> [bb195, bb196];
+        branch copy _432 -> [bb203, bb204];
     }
 
-    bb195: {
+    bb203: {
         _438 = copy _421;
         _439 = copy _426;
         _437 = copy _438 + copy _439;
@@ -6190,51 +6222,51 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _441 = const 1_i64;
         _431 = copy _431 + copy _441;
         _435 = const null;
-        goto -> bb194;
+        goto -> bb202;
     }
 
-    bb196: {
+    bb204: {
         _442 = const 1_i64;
         _426 = copy _426 + copy _442;
         _430 = const null;
-        goto -> bb191;
+        goto -> bb199;
     }
 
-    bb197: {
+    bb205: {
         _451 = len(_444);
         _452 = copy _450 < copy _451;
-        branch copy _452 -> [bb198, bb200];
+        branch copy _452 -> [bb206, bb208];
     }
 
-    bb198: {
+    bb206: {
         _453 = copy _444[_450];
         _454 = copy _453;
         _458 = copy _454;
         _459 = const 3_i64;
         _457 = copy _458 == copy _459;
-        branch copy _457 -> [bb201, bb202];
+        branch copy _457 -> [bb209, bb210];
     }
 
-    bb199: {
+    bb207: {
         _450 = copy _450 + const 1_i64;
-        goto -> bb197;
+        goto -> bb205;
     }
 
-    bb200: {
+    bb208: {
         _485 = const 0_i64;
-        goto -> bb219;
+        goto -> bb227;
     }
 
-    bb201: {
-        goto -> bb199;
+    bb209: {
+        goto -> bb207;
     }
 
-    bb202: {
+    bb210: {
         _456 = const null;
-        goto -> bb203;
+        goto -> bb211;
     }
 
-    bb203: {
+    bb211: {
         _461 = const 10_i64;
         _462 = const 20_i64;
         _463 = const 30_i64;
@@ -6242,165 +6274,171 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _465 = const 50_i64;
         _460 = [copy _461, copy _462, copy _463, copy _464, copy _465];
         _466 = const 0_i64;
-        goto -> bb205;
+        goto -> bb213;
     }
 
-    bb204: {
+    bb212: {
         _456 = const null;
-        goto -> bb203;
+        goto -> bb211;
     }
 
-    bb205: {
+    bb213: {
         _467 = len(_460);
         _468 = copy _466 < copy _467;
-        branch copy _468 -> [bb206, bb208];
+        branch copy _468 -> [bb214, bb216];
     }
 
-    bb206: {
+    bb214: {
         _469 = copy _460[_466];
         _470 = copy _469;
         _474 = copy _454;
         _475 = copy _470;
         _473 = copy _474 * copy _475;
         _476 = copy _473 == const 0_i64;
-        branch copy _476 -> [bb210, bb211];
+        branch copy _476 -> [bb218, bb219];
     }
 
-    bb207: {
+    bb215: {
         _466 = copy _466 + const 1_i64;
-        goto -> bb205;
+        goto -> bb213;
     }
 
-    bb208: {
+    bb216: {
         _455 = const null;
-        goto -> bb199;
-    }
-
-    bb209: {
-        _484 = copy _472;
-        _42 = copy _42 + copy _484;
-        _471 = const null;
         goto -> bb207;
     }
 
-    bb210: {
-        goto -> bb208;
+    bb217: {
+        _484 = copy _472;
+        _42 = copy _42 + copy _484;
+        _471 = const null;
+        goto -> bb215;
     }
 
-    bb211: {
+    bb218: {
+        goto -> bb216;
+    }
+
+    bb219: {
         _477 = is_type(copy _473, Int { attr: TyAttr(None) });
-        branch copy _477 -> [bb213, bb214];
+        branch copy _477 -> [bb221, bb222];
     }
 
-    bb212: {
+    bb220: {
         _472 = const 0_i64;
-        goto -> bb209;
+        goto -> bb217;
     }
 
-    bb213: {
+    bb221: {
         _478 = copy _473;
         _480 = copy _478;
         _481 = const 100_i64;
         _479 = copy _480 > copy _481;
-        branch copy _479 -> [bb215, bb214];
+        branch copy _479 -> [bb223, bb222];
     }
 
-    bb214: {
+    bb222: {
         _482 = is_type(copy _473, Int { attr: TyAttr(None) });
-        branch copy _482 -> [bb217, bb218];
+        branch copy _482 -> [bb225, bb226];
     }
 
-    bb215: {
-        goto -> bb207;
+    bb223: {
+        goto -> bb215;
     }
 
-    bb216: {
+    bb224: {
         _472 = copy _478;
-        goto -> bb209;
+        goto -> bb217;
     }
 
-    bb217: {
+    bb225: {
         _483 = copy _473;
         _472 = copy _483;
-        goto -> bb209;
+        goto -> bb217;
     }
 
-    bb218: {
-        unreachable;
+    bb226: {
+        goto -> bb217;
     }
 
-    bb219: {
+    bb227: {
         _487 = copy _485;
         _488 = const 2_i64;
         _486 = copy _487 < copy _488;
-        branch copy _486 -> [bb220, bb221];
+        branch copy _486 -> [bb228, bb229];
     }
 
-    bb220: {
+    bb228: {
         _491 = const 1_i64;
         _492 = const 2_i64;
         _490 = [copy _491, copy _492];
         _493 = const 0_i64;
-        goto -> bb222;
-    }
-
-    bb221: {
-        _520 = copy _1;
-        _521 = const 0_i64;
-        goto -> bb232;
-    }
-
-    bb222: {
-        _494 = len(_490);
-        _495 = copy _493 < copy _494;
-        branch copy _495 -> [bb223, bb225];
-    }
-
-    bb223: {
-        _496 = copy _490[_493];
-        _497 = copy _496;
-        _500 = const 0_i64;
-        goto -> bb226;
-    }
-
-    bb224: {
-        _493 = copy _493 + const 1_i64;
-        goto -> bb222;
-    }
-
-    bb225: {
-        _519 = const 1_i64;
-        _485 = copy _485 + copy _519;
-        _489 = const null;
-        goto -> bb219;
-    }
-
-    bb226: {
-        _502 = copy _500;
-        _503 = const 2_i64;
-        _501 = copy _502 < copy _503;
-        branch copy _501 -> [bb227, bb228];
-    }
-
-    bb227: {
-        _505 = const 0_i64;
-        goto -> bb229;
-    }
-
-    bb228: {
-        _499 = const null;
-        _498 = const null;
-        goto -> bb224;
+        goto -> bb230;
     }
 
     bb229: {
-        _507 = copy _505;
-        _508 = const 2_i64;
-        _506 = copy _507 < copy _508;
-        branch copy _506 -> [bb230, bb231];
+        _520 = copy _1;
+        _521 = const 0_i64;
+        goto -> bb241;
     }
 
     bb230: {
+        _494 = len(_490);
+        _495 = copy _493 < copy _494;
+        branch copy _495 -> [bb231, bb233];
+    }
+
+    bb231: {
+        _496 = copy _490[_493];
+        _497 = copy _496;
+        _500 = const 0_i64;
+        goto -> bb234;
+    }
+
+    bb232: {
+        _493 = copy _493 + const 1_i64;
+        goto -> bb230;
+    }
+
+    bb233: {
+        _519 = const 1_i64;
+        _485 = copy _485 + copy _519;
+        _489 = const null;
+        goto -> bb227;
+    }
+
+    bb234: {
+        _502 = copy _500;
+        _503 = const 2_i64;
+        _501 = copy _502 < copy _503;
+        branch copy _501 -> [bb235, bb237];
+    }
+
+    bb235: {
+        _505 = const 0_i64;
+        goto -> bb238;
+    }
+
+    bb236: {
+        _518 = const 1_i64;
+        _500 = copy _500 + copy _518;
+        goto -> bb234;
+    }
+
+    bb237: {
+        _499 = const null;
+        _498 = const null;
+        goto -> bb232;
+    }
+
+    bb238: {
+        _507 = copy _505;
+        _508 = const 2_i64;
+        _506 = copy _507 < copy _508;
+        branch copy _506 -> [bb239, bb240];
+    }
+
+    bb239: {
         _513 = copy _485;
         _514 = copy _497;
         _512 = copy _513 + copy _514;
@@ -6412,23 +6450,21 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _517 = const 1_i64;
         _505 = copy _505 + copy _517;
         _509 = const null;
-        goto -> bb229;
+        goto -> bb238;
     }
 
-    bb231: {
+    bb240: {
         _504 = const null;
-        _518 = const 1_i64;
-        _500 = copy _500 + copy _518;
-        goto -> bb226;
+        goto -> bb236;
     }
 
-    bb232: {
+    bb241: {
         _522 = len(_520);
         _523 = copy _521 < copy _522;
-        branch copy _523 -> [bb233, bb235];
+        branch copy _523 -> [bb242, bb244];
     }
 
-    bb233: {
+    bb242: {
         _524 = copy _520[_521];
         _525 = copy _524;
         _530 = copy _525;
@@ -6438,15 +6474,15 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _534 = copy _42;
         _532 = copy _533 * copy _534;
         _528 = copy _529 + copy _532;
-        goto -> bb236;
+        goto -> bb245;
     }
 
-    bb234: {
+    bb243: {
         _521 = copy _521 + const 1_i64;
-        goto -> bb232;
+        goto -> bb241;
     }
 
-    bb235: {
+    bb244: {
         _556 = const 1_i64;
         _557 = const 2_i64;
         _558 = const 3_i64;
@@ -6459,88 +6495,92 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _565 = const 10_i64;
         _555 = [copy _556, copy _557, copy _558, copy _559, copy _560, copy _561, copy _562, copy _563, copy _564, copy _565];
         _566 = const 0_i64;
-        goto -> bb247;
+        goto -> bb257;
     }
 
-    bb236: {
+    bb245: {
         _540 = copy _528;
         _541 = const 1000000_i64;
         _539 = copy _540 < copy _541;
         _538 = copy _539;
-        branch copy _539 -> [bb239, bb240];
+        branch copy _539 -> [bb249, bb250];
     }
 
-    bb237: {
+    bb246: {
         _549 = copy _528;
         _42 = copy _42 + copy _549;
         _548 = const null;
+        goto -> bb247;
+    }
+
+    bb247: {
         _552 = copy _525;
         _553 = copy _42;
         _551 = copy _552 + copy _553;
         _554 = const 1_i64;
         _550 = copy _551 + copy _554;
         _528 = copy _528 + copy _550;
-        goto -> bb236;
-    }
-
-    bb238: {
-        _527 = const null;
-        _526 = const null;
-        goto -> bb234;
-    }
-
-    bb239: {
-        _538 = copy _2;
-        goto -> bb240;
-    }
-
-    bb240: {
-        _537 = copy _538;
-        branch copy _538 -> [bb241, bb242];
-    }
-
-    bb241: {
-        _542 = copy _525;
-        _543 = const 0_i64;
-        _537 = copy _542 > copy _543;
-        goto -> bb242;
-    }
-
-    bb242: {
-        _536 = copy _537;
-        branch copy _537 -> [bb243, bb244];
-    }
-
-    bb243: {
-        _544 = copy _42;
-        _545 = const 0_i64;
-        _536 = copy _544 > copy _545;
-        goto -> bb244;
-    }
-
-    bb244: {
-        _535 = copy _536;
-        branch copy _536 -> [bb245, bb246];
-    }
-
-    bb245: {
-        _546 = copy _528;
-        _547 = const 42_i64;
-        _535 = copy _546 != copy _547;
-        goto -> bb246;
-    }
-
-    bb246: {
-        branch copy _535 -> [bb237, bb238];
-    }
-
-    bb247: {
-        _567 = len(_555);
-        _568 = copy _566 < copy _567;
-        branch copy _568 -> [bb248, bb250];
+        goto -> bb245;
     }
 
     bb248: {
+        _527 = const null;
+        _526 = const null;
+        goto -> bb243;
+    }
+
+    bb249: {
+        _538 = copy _2;
+        goto -> bb250;
+    }
+
+    bb250: {
+        _537 = copy _538;
+        branch copy _538 -> [bb251, bb252];
+    }
+
+    bb251: {
+        _542 = copy _525;
+        _543 = const 0_i64;
+        _537 = copy _542 > copy _543;
+        goto -> bb252;
+    }
+
+    bb252: {
+        _536 = copy _537;
+        branch copy _537 -> [bb253, bb254];
+    }
+
+    bb253: {
+        _544 = copy _42;
+        _545 = const 0_i64;
+        _536 = copy _544 > copy _545;
+        goto -> bb254;
+    }
+
+    bb254: {
+        _535 = copy _536;
+        branch copy _536 -> [bb255, bb256];
+    }
+
+    bb255: {
+        _546 = copy _528;
+        _547 = const 42_i64;
+        _535 = copy _546 != copy _547;
+        goto -> bb256;
+    }
+
+    bb256: {
+        branch copy _535 -> [bb246, bb248];
+    }
+
+    bb257: {
+        _567 = len(_555);
+        _568 = copy _566 < copy _567;
+        branch copy _568 -> [bb258, bb260];
+    }
+
+    bb258: {
         _569 = copy _555[_566];
         _570 = copy _569;
         _573 = const 10_i64;
@@ -6555,25 +6595,25 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _582 = const 100_i64;
         _572 = [copy _573, copy _574, copy _575, copy _576, copy _577, copy _578, copy _579, copy _580, copy _581, copy _582];
         _583 = const 0_i64;
-        goto -> bb251;
+        goto -> bb261;
     }
 
-    bb249: {
+    bb259: {
         _566 = copy _566 + const 1_i64;
-        goto -> bb247;
+        goto -> bb257;
     }
 
-    bb250: {
-        goto -> bb264;
+    bb260: {
+        goto -> bb274;
     }
 
-    bb251: {
+    bb261: {
         _584 = len(_572);
         _585 = copy _583 < copy _584;
-        branch copy _585 -> [bb252, bb254];
+        branch copy _585 -> [bb262, bb264];
     }
 
-    bb252: {
+    bb262: {
         _586 = copy _572[_583];
         _587 = copy _586;
         _593 = copy _570;
@@ -6582,143 +6622,147 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _595 = const 500_i64;
         _591 = copy _592 > copy _595;
         _590 = copy _591;
-        branch copy _591 -> [bb255, bb256];
+        branch copy _591 -> [bb265, bb266];
     }
 
-    bb253: {
+    bb263: {
         _583 = copy _583 + const 1_i64;
-        goto -> bb251;
+        goto -> bb261;
     }
 
-    bb254: {
+    bb264: {
         _571 = const null;
-        goto -> bb249;
+        goto -> bb259;
     }
 
-    bb255: {
+    bb265: {
         _597 = copy _570;
         _598 = copy _587;
         _596 = copy _597 + copy _598;
         _599 = const 100_i64;
         _590 = copy _596 < copy _599;
-        goto -> bb256;
+        goto -> bb266;
     }
 
-    bb256: {
-        branch copy _590 -> [bb257, bb258];
+    bb266: {
+        branch copy _590 -> [bb267, bb268];
     }
 
-    bb257: {
+    bb267: {
         _601 = copy _570;
         _602 = const 3_i64;
         _600 = copy _601 % copy _602;
-        switch copy _600 [0: bb262, 1: bb263, otherwise: bb261];
+        switch copy _600 [0: bb272, 1: bb273, otherwise: bb271];
     }
 
-    bb258: {
+    bb268: {
         _589 = const 0_i64;
-        goto -> bb259;
+        goto -> bb269;
     }
 
-    bb259: {
+    bb269: {
         _613 = copy _589;
         _42 = copy _42 + copy _613;
         _588 = const null;
-        goto -> bb253;
+        goto -> bb263;
     }
 
-    bb260: {
-        goto -> bb259;
+    bb270: {
+        goto -> bb269;
     }
 
-    bb261: {
+    bb271: {
         _611 = copy _570;
         _612 = copy _587;
         _589 = copy _611 * copy _612;
-        goto -> bb260;
+        goto -> bb270;
     }
 
-    bb262: {
+    bb272: {
         _604 = copy _570;
         _605 = copy _587;
         _603 = copy _604 * copy _605;
         _606 = copy _42;
         _589 = copy _603 + copy _606;
-        goto -> bb260;
+        goto -> bb270;
     }
 
-    bb263: {
+    bb273: {
         _608 = copy _570;
         _609 = copy _587;
         _607 = copy _608 * copy _609;
         _610 = copy _42;
         _589 = copy _607 - copy _610;
-        goto -> bb260;
-    }
-
-    bb264: {
-        _615 = copy _3;
-        _616 = const 10_i64;
-        _614 = copy _615 < copy _616;
-        branch copy _614 -> [bb265, bb266];
-    }
-
-    bb265: {
-        _618 = const 1_i64;
-        _3 = copy _3 + copy _618;
-        _617 = const null;
-        goto -> bb264;
-    }
-
-    bb266: {
-        _620 = const 0_i64;
-        goto -> bb267;
-    }
-
-    bb267: {
-        _622 = copy _620;
-        _623 = const 10_i64;
-        _621 = copy _622 < copy _623;
-        branch copy _621 -> [bb268, bb269];
-    }
-
-    bb268: {
-        _625 = copy _620;
-        _42 = copy _42 + copy _625;
-        _624 = const null;
-        _626 = const 1_i64;
-        _620 = copy _620 + copy _626;
-        goto -> bb267;
-    }
-
-    bb269: {
-        _619 = const null;
-        _627 = copy _1;
-        _628 = const 0_i64;
         goto -> bb270;
     }
 
-    bb270: {
-        _629 = len(_627);
-        _630 = copy _628 < copy _629;
-        branch copy _630 -> [bb271, bb273];
+    bb274: {
+        _615 = copy _3;
+        _616 = const 10_i64;
+        _614 = copy _615 < copy _616;
+        branch copy _614 -> [bb275, bb276];
     }
 
-    bb271: {
+    bb275: {
+        _618 = const 1_i64;
+        _3 = copy _3 + copy _618;
+        _617 = const null;
+        goto -> bb274;
+    }
+
+    bb276: {
+        _620 = const 0_i64;
+        goto -> bb277;
+    }
+
+    bb277: {
+        _622 = copy _620;
+        _623 = const 10_i64;
+        _621 = copy _622 < copy _623;
+        branch copy _621 -> [bb278, bb280];
+    }
+
+    bb278: {
+        _625 = copy _620;
+        _42 = copy _42 + copy _625;
+        _624 = const null;
+        goto -> bb279;
+    }
+
+    bb279: {
+        _626 = const 1_i64;
+        _620 = copy _620 + copy _626;
+        goto -> bb277;
+    }
+
+    bb280: {
+        _619 = const null;
+        _627 = copy _1;
+        _628 = const 0_i64;
+        goto -> bb281;
+    }
+
+    bb281: {
+        _629 = len(_627);
+        _630 = copy _628 < copy _629;
+        branch copy _630 -> [bb282, bb284];
+    }
+
+    bb282: {
         _631 = copy _627[_628];
         _632 = copy _631;
         _634 = copy _632;
         _42 = copy _42 + copy _634;
         _633 = const null;
-        goto -> bb272;
+        goto -> bb283;
     }
 
-    bb272: {
+    bb283: {
         _628 = copy _628 + const 1_i64;
-        goto -> bb270;
+        goto -> bb281;
     }
 
-    bb273: {
+    bb284: {
         _635 = const 1_i64;
         _636 = const 2_i64;
         _638 = copy _3;
@@ -6860,10 +6904,10 @@ fn LoopStmts(items: int[], flag: bool) -> int {
         _770 = copy _771 * copy _774;
         _736 = copy _737 + copy _770;
         _0 = copy _42;
-        goto -> bb274;
+        goto -> bb285;
     }
 
-    bb274: {
+    bb285: {
         return;
     }
 }
@@ -6875,59 +6919,59 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     let _2: MatchStatus // s // param
     let _3: MatchResult // r // param
     let _4: bool // b // param
-    let _5: null
-    let _6: null
-    let _7: null
-    let _8: null
+    let _5: "zero" | "other"
+    let _6: "zero" | "one" | "two" | "three" | "four" | "other"
+    let _7: void
+    let _8: "zero"
     let _9: int // y
     let _10: int
     let _11: 1
-    let _12: null
-    let _13: null
-    let _14: null
-    let _15: null
+    let _12: "other"
+    let _13: "zero" | "other"
+    let _14: "zero" | "other"
+    let _15: "positive" | "other"
     let _16: bool
     let _17: int // n
     let _18: bool
     let _19: int
     let _20: 0
-    let _21: null
+    let _21: "positive" | "other"
     let _22: bool
     let _23: int // n
     let _24: bool
     let _25: int
     let _26: 0
-    let _27: null
-    let _28: null
+    let _27: "zero" | "one" | "the answer" | "unknown"
+    let _28: "greeting" | "farewell" | "other"
     let _29: "hello"
     let _30: bool
     let _31: bool
-    let _32: null
+    let _32: "yes" | "no"
     let _33: bool
     let _34: bool
-    let _35: null
+    let _35: "zero" | "nonzero"
     let _36: int // n
-    let _37: null
+    let _37: "an integer"
     let _38: bool
     let _39: int // n
-    let _40: null
+    let _40: "active" | "inactive" | "pending"
     let _41: int
-    let _42: null
-    let _43: null
-    let _44: null
+    let _42: "binary" | "small" | "big"
+    let _43: "zero" | "small" | "other"
+    let _44: "actionable" | "done"
     let _45: int
-    let _46: null
+    let _46: string
     let _47: bool
     let _48: MatchSuccess // s
     let _49: MatchSuccess
     let _50: bool
     let _51: MatchFailure // f
     let _52: MatchFailure
-    let _53: null
+    let _53: "something"
     let _54: bool
     let _55: MatchSuccess | MatchFailure // x
-    let _56: null
-    let _57: null
+    let _56: "small" | "big"
+    let _57: "positive" | "negative" | "zero"
     let _58: bool
     let _59: int // n
     let _60: bool
@@ -6938,7 +6982,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     let _65: bool
     let _66: int
     let _67: 0
-    let _68: null
+    let _68: "acceptable small positive number that passes all the filters" | "other"
     let _69: bool
     let _70: int // n
     let _71: bool
@@ -6959,14 +7003,14 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     let _86: 7
     let _87: int
     let _88: 99
-    let _89: null
-    let _90: null
-    let _91: null
+    let _89: "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now" | "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm" | "short"
+    let _90: "lots of literals" | "other"
+    let _91: "this arm has many long enum variant names that together push past the limit easily"
     let _92: int
-    let _93: null
+    let _93: "this is the true branch with a very long string" | "this is the false branch also very long" | "short"
     let _94: "this is the true branch with a very long string" | "this is the false branch also very long" // result
     let _95: bool
-    let _96: null
+    let _96: "acceptable small positive number that passes all the defined filter conditions" | "other"
     let _97: bool
     let _98: int // n
     let _99: bool
@@ -6984,7 +7028,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     let _111: 13
     let _112: int
     let _113: 7
-    let _114: null
+    let _114: "acceptable small positive number that passes all the defined filter conditions" | "other"
     let _115: bool
     let _116: int // n
     let _117: bool
@@ -7002,11 +7046,11 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     let _129: 13
     let _130: int
     let _131: 7
-    let _132: null
+    let _132: "was minus one" | "other"
     let _133: int
     let _134: int
     let _135: 1
-    let _136: null
+    let _136: "zero polynomial" | "nonzero"
     let _137: void
     let _138: void
     let _139: void
@@ -7046,15 +7090,15 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     let _173: bool
     let _174: int
     let _175: bool
-    let _176: null
+    let _176: "whitespace" | "other"
     let _177: int
     let _178: int
     let _179: 1
-    let _180: null
-    let _181: null
+    let _180: "zero" | "other"
+    let _181: "zero-true" | "zero-false" | "nonzero"
     let _182: bool
     let _183: bool
-    let _184: null
+    let _184: "zero-true-active" | "zero-true-inactive" | "zero-true-pending" | "zero-false" | string | "one-success-false" | "other"
     let _185: bool
     let _186: int
     let _187: bool
@@ -7066,7 +7110,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     let _193: bool
     let _194: MatchFailure // f
     let _195: MatchFailure
-    let _196: null
+    let _196: "active" | "inactive" | "pending" | "not bool" | "other"
     let _197: bool
     let _198: int
 
@@ -7202,7 +7246,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb26: {
-        unreachable;
+        goto -> bb21;
     }
 
     bb27: {
@@ -7232,7 +7276,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb32: {
-        unreachable;
+        goto -> bb27;
     }
 
     bb33: {
@@ -7291,7 +7335,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb44: {
-        unreachable;
+        goto -> bb38;
     }
 
     bb45: {
@@ -7314,7 +7358,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb49: {
-        unreachable;
+        goto -> bb45;
     }
 
     bb50: {
@@ -7345,7 +7389,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb55: {
-        unreachable;
+        goto -> bb53;
     }
 
     bb56: {
@@ -7353,7 +7397,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb57: {
-        unreachable;
+        goto -> bb56;
     }
 
     bb58: {
@@ -7416,7 +7460,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb70: {
-        unreachable;
+        goto -> bb69;
     }
 
     bb71: {
@@ -7454,7 +7498,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb77: {
-        unreachable;
+        goto -> bb73;
     }
 
     bb78: {
@@ -7468,7 +7512,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb80: {
-        unreachable;
+        goto -> bb78;
     }
 
     bb81: {
@@ -7532,7 +7576,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb92: {
-        unreachable;
+        goto -> bb84;
     }
 
     bb93: {
@@ -7622,7 +7666,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb108: {
-        unreachable;
+        goto -> bb93;
     }
 
     bb109: {
@@ -7664,7 +7708,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb117: {
-        unreachable;
+        goto -> bb116;
     }
 
     bb118: {
@@ -7778,7 +7822,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb138: {
-        unreachable;
+        goto -> bb125;
     }
 
     bb139: {
@@ -7859,7 +7903,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb152: {
-        unreachable;
+        goto -> bb139;
     }
 
     bb153: {
@@ -7994,7 +8038,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb172: {
-        unreachable;
+        goto -> bb168;
     }
 
     bb173: {
@@ -8030,7 +8074,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb180: {
-        unreachable;
+        goto -> bb179;
     }
 
     bb181: {
@@ -8054,7 +8098,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb185: {
-        unreachable;
+        goto -> bb176;
     }
 
     bb186: {
@@ -8098,7 +8142,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb194: {
-        unreachable;
+        goto -> bb190;
     }
 
     bb195: {
@@ -8109,7 +8153,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb196: {
-        unreachable;
+        goto -> bb187;
     }
 
     bb197: {
@@ -8145,7 +8189,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb204: {
-        unreachable;
+        goto -> bb203;
     }
 
     bb205: {
@@ -8183,35 +8227,39 @@ fn OtherExprs(a: int, b: int) -> int {
     let _0: int // _0 // return
     let _1: int // a // param
     let _2: int // b // param
-    let _3: null
-    let _4: null
-    let _5: null
-    let _6: null
-    let _7: null
-    let _8: null
-    let _9: null
-    let _10: null
-    let _11: null
-    let _12: null
-    let _13: null
-    let _14: null
+    let _3: 0
+    let _4: 1
+    let _5: 42
+    let _6: 999999
+    let _7: 0.0
+    let _8: 3.14
+    let _9: 99.999
+    let _10: "hello"
+    let _11: "a short string"
+    let _12: "a much longer string that contains quite a lot of text and definitely exceeds one hundred characters to test how the formatter handles longer string literals in expressions"
+    let _13: true
+    let _14: false
     let _15: null
-    let _16: null
-    let _17: null
-    let _18: null
-    let _19: null
-    let _20: null
+    let _16: "raw string"
+    let _17: "raw string with "quotes" inside"
+    let _18: "
+        multi-line raw string
+        with several lines
+        of content
+    "
+    let _19: int
+    let _20: int
     let _21: int
     let _22: int
-    let _23: null
-    let _24: null
+    let _23: int
+    let _24: int
     let _25: int
     let _26: int
     let _27: int
     let _28: int
     let _29: int
     let _30: int
-    let _31: null
+    let _31: int
     let _32: int
     let _33: int
     let _34: int
@@ -8242,40 +8290,40 @@ fn OtherExprs(a: int, b: int) -> int {
     let _59: int
     let _60: int
     let _61: int
-    let _62: null
-    let _63: null
-    let _64: null
+    let _62: int
+    let _63: int
+    let _64: int
     let _65: int
-    let _66: null
+    let _66: false
     let _67: true
-    let _68: null
+    let _68: int
     let _69: int
     let _70: int
-    let _71: null
+    let _71: bool
     let _72: bool
     let _73: int
     let _74: int
-    let _75: null
+    let _75: int
     let _76: int
-    let _77: null
+    let _77: int
     let _78: int
-    let _79: null
-    let _80: null
+    let _79: void[]
+    let _80: 1[]
     let _81: 1
-    let _82: null
+    let _82: 1 | 2 | 3[]
     let _83: 1
     let _84: 2
     let _85: 3
-    let _86: null
+    let _86: 1 | 2 | 3 | 4 | 5[]
     let _87: 1
     let _88: 2
     let _89: 3
     let _90: 4
     let _91: 5
-    let _92: null
+    let _92: "short" | "array"[]
     let _93: "short"
     let _94: "array"
-    let _95: null
+    let _95: "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q"[]
     let _96: "a"
     let _97: "b"
     let _98: "c"
@@ -8293,12 +8341,12 @@ fn OtherExprs(a: int, b: int) -> int {
     let _110: "o"
     let _111: "p"
     let _112: "q"
-    let _113: null
+    let _113: "this is a long string element" | "another long string value here" | "yet another one that is quite long" | "and one more string element here too"[]
     let _114: "this is a long string element"
     let _115: "another long string value here"
     let _116: "yet another one that is quite long"
     let _117: "and one more string element here too"
-    let _118: null
+    let _118: "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima" | "mike" | "november" | "oscar" | "papa"[]
     let _119: "alpha"
     let _120: "bravo"
     let _121: "charlie"
@@ -8315,14 +8363,14 @@ fn OtherExprs(a: int, b: int) -> int {
     let _132: "november"
     let _133: "oscar"
     let _134: "papa"
-    let _135: null
+    let _135: 1 | 2[] | 3 | 4[][]
     let _136: 1 | 2[]
     let _137: 1
     let _138: 2
     let _139: 3 | 4[]
     let _140: 3
     let _141: 4
-    let _142: null
+    let _142: 1 | 2 | 3[] | 4 | 5 | 6[] | 7 | 8 | 9[][]
     let _143: 1 | 2 | 3[]
     let _144: 1
     let _145: 2
@@ -8335,7 +8383,7 @@ fn OtherExprs(a: int, b: int) -> int {
     let _152: 7
     let _153: 8
     let _154: 9
-    let _155: null
+    let _155: 1 | 2[] | 3 | 4[][] | 5 | 6[] | 7 | 8[][] | 9 | 10[] | 11 | 12[][] | 13 | 14[] | 15 | 16[][][]
     let _156: 1 | 2[] | 3 | 4[][]
     let _157: 1 | 2[]
     let _158: 1
@@ -8364,31 +8412,31 @@ fn OtherExprs(a: int, b: int) -> int {
     let _181: 15 | 16[]
     let _182: 15
     let _183: 16
-    let _184: null
+    let _184: 1 | 2[]
     let _185: 1
     let _186: 2
-    let _187: null
+    let _187: 1 | 2[]
     let _188: 1
     let _189: 2
-    let _190: null
+    let _190: "this is a long string" | "another long string value" | "yet another that is quite long" | "and one more string element"[]
     let _191: "this is a long string"
     let _192: "another long string value"
     let _193: "yet another that is quite long"
     let _194: "and one more string element"
-    let _195: null
+    let _195: "this is a long string" | "another long string value" | "yet another that is quite long" | "and one more string element"[]
     let _196: "this is a long string"
     let _197: "another long string value"
     let _198: "yet another that is quite long"
     let _199: "and one more string element"
-    let _200: null
+    let _200: map<"key", 1>
     let _201: "key"
     let _202: 1
-    let _203: null
+    let _203: map<"a" | "b", 1 | 2>
     let _204: "a"
     let _205: 1
     let _206: "b"
     let _207: 2
-    let _208: null
+    let _208: map<"a" | "b" | "c" | "d" | "e", 1 | 2 | 3 | 4 | 5>
     let _209: "a"
     let _210: 1
     let _211: "b"
@@ -8399,7 +8447,7 @@ fn OtherExprs(a: int, b: int) -> int {
     let _216: 4
     let _217: "e"
     let _218: 5
-    let _219: null
+    let _219: map<"first_key" | "second_key" | "third_key" | "fourth_key" | "fifth_key", "first value" | "second value" | "third value" | "fourth value" | "fifth">
     let _220: "first_key"
     let _221: "first value"
     let _222: "second_key"
@@ -8410,7 +8458,7 @@ fn OtherExprs(a: int, b: int) -> int {
     let _227: "fourth value"
     let _228: "fifth_key"
     let _229: "fifth"
-    let _230: null
+    let _230: map<"outer" | "other", map<"inner_a" | "inner_b" | "inner_c", 1 | 2 | 3> | map<"inner_d" | "inner_e" | "inner_f", 4 | 5 | 6>>
     let _231: "outer"
     let _232: map<"inner_a" | "inner_b" | "inner_c", 1 | 2 | 3>
     let _233: "inner_a"
@@ -8427,30 +8475,30 @@ fn OtherExprs(a: int, b: int) -> int {
     let _244: 5
     let _245: "inner_f"
     let _246: 6
-    let _247: null
+    let _247: map<"k", 1>
     let _248: "k"
     let _249: 1
-    let _250: null
+    let _250: map<"k", 1>
     let _251: "k"
     let _252: 1
-    let _253: null
+    let _253: OtherPoint
     let _254: 1
     let _255: 2
-    let _256: null
+    let _256: OtherVec
     let _257: OtherPoint
     let _258: 1
     let _259: 2
     let _260: OtherPoint
     let _261: 3
     let _262: 4
-    let _263: null
+    let _263: OtherVec
     let _264: OtherPoint
     let _265: 100000
     let _266: 200000
     let _267: OtherPoint
     let _268: 300000
     let _269: 400000
-    let _270: null
+    let _270: OtherTriple
     let _271: OtherVec
     let _272: OtherPoint
     let _273: 1
@@ -8472,31 +8520,31 @@ fn OtherExprs(a: int, b: int) -> int {
     let _289: OtherPoint
     let _290: 11
     let _291: 12
-    let _292: null
+    let _292: OtherPoint
     let _293: 1
     let _294: 2
-    let _295: null
+    let _295: OtherPoint
     let _296: 1
     let _297: 2
-    let _298: null
+    let _298: OtherVec
     let _299: OtherPoint
     let _300: 100000
     let _301: 200000
     let _302: OtherPoint
     let _303: 300000
     let _304: 400000
-    let _305: null
+    let _305: int
     let _306: int // x
     let _307: int
     let _308: 1
-    let _309: null
+    let _309: int
     let _310: int // x
     let _311: int
     let _312: int
     let _313: int // y
     let _314: int
     let _315: 2
-    let _316: null
+    let _316: int
     let _317: int // x
     let _318: int // y
     let _319: int // z
@@ -8508,7 +8556,7 @@ fn OtherExprs(a: int, b: int) -> int {
     let _325: int
     let _326: int
     let _327: int
-    let _328: null
+    let _328: int
     let _329: int // x
     let _330: bool
     let _331: int
@@ -8518,14 +8566,14 @@ fn OtherExprs(a: int, b: int) -> int {
     let _335: 2
     let _336: int
     let _337: 1
-    let _338: null
+    let _338: 1 | 2 | 3[]
     let _339: 1
     let _340: 2
     let _341: 3
-    let _342: null
+    let _342: map<"k", 1>
     let _343: "k"
     let _344: 1
-    let _345: null
+    let _345: OtherPoint
     let _346: 1
     let _347: 2
     let _348: int
