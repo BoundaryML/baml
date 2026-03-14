@@ -1,6 +1,7 @@
-import { query, mutation, internalQuery } from "./_generated/server";
+import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { userRole } from "./schema";
+import { internal } from "./_generated/api";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QUERIES
@@ -80,8 +81,11 @@ export const getOrCreateFromGitHub = mutation({
     githubId: v.string(),
     name: v.string(),
     avatarUrl: v.optional(v.string()),
+    boundaryEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    const isSpecialAccount = !!args.boundaryEmail;
+
     // Check if user exists by GitHub ID
     const existingByGithub = await ctx.db
       .query("users")
@@ -89,10 +93,31 @@ export const getOrCreateFromGitHub = mutation({
       .unique();
 
     if (existingByGithub) {
+      const updates: Record<string, unknown> = {};
+
       // Update avatar if changed
       if (args.avatarUrl && existingByGithub.avatarUrl !== args.avatarUrl) {
-        await ctx.db.patch(existingByGithub._id, { avatarUrl: args.avatarUrl });
+        updates.avatarUrl = args.avatarUrl;
       }
+
+      // Update special account status and boundaryEmail if they have one
+      if (isSpecialAccount) {
+        updates.isSpecialAccount = true;
+        updates.boundaryEmail = args.boundaryEmail;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await ctx.db.patch(existingByGithub._id, updates);
+      }
+
+      // Schedule Slack lookup if special account and no slackUserId yet
+      if (isSpecialAccount && !existingByGithub.slackUserId) {
+        await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
+          userId: existingByGithub._id,
+          email: args.boundaryEmail!,
+        });
+      }
+
       return existingByGithub._id;
     }
 
@@ -104,10 +129,26 @@ export const getOrCreateFromGitHub = mutation({
 
     if (existingByName) {
       // Link existing user to GitHub
-      await ctx.db.patch(existingByName._id, {
+      const updates: Record<string, unknown> = {
         githubId: args.githubId,
         avatarUrl: args.avatarUrl,
-      });
+      };
+
+      if (isSpecialAccount) {
+        updates.isSpecialAccount = true;
+        updates.boundaryEmail = args.boundaryEmail;
+      }
+
+      await ctx.db.patch(existingByName._id, updates);
+
+      // Schedule Slack lookup if special account
+      if (isSpecialAccount && !existingByName.slackUserId) {
+        await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
+          userId: existingByName._id,
+          email: args.boundaryEmail!,
+        });
+      }
+
       return existingByName._id;
     }
 
@@ -118,7 +159,17 @@ export const getOrCreateFromGitHub = mutation({
       avatarUrl: args.avatarUrl,
       role: "member",
       createdAt: Date.now(),
+      isSpecialAccount,
+      boundaryEmail: args.boundaryEmail,
     });
+
+    // Schedule Slack lookup if special account
+    if (isSpecialAccount) {
+      await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
+        userId,
+        email: args.boundaryEmail!,
+      });
+    }
 
     return userId;
   },
@@ -157,5 +208,16 @@ export const updateAvatar = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, { avatarUrl: args.avatarUrl });
+  },
+});
+
+// Internal mutation to link Slack user ID
+export const linkSlackUserId = internalMutation({
+  args: {
+    userId: v.id("users"),
+    slackUserId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.userId, { slackUserId: args.slackUserId });
   },
 });
