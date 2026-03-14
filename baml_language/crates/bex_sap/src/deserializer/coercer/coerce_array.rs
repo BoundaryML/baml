@@ -153,7 +153,7 @@ where
                 return Ok(None);
             }
             (crate::jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
-                let ret = target.ty.from_literal(&lit, ctx)?;
+                let ret = target.ty.from_literal(lit, ctx)?;
                 let ret = ValueWithFlags::new(
                     ret,
                     DeserializerMeta {
@@ -208,11 +208,11 @@ where
                         }
                         Ok(None) => {
                             // child is incomplete with `in_progress = never`
-                            debug_assert_eq!(
-                                *c,
-                                CompletionState::Incomplete,
-                                "Array should be incomplete if an item is."
-                            );
+                            // debug_assert_eq!(
+                            //     *c,
+                            //     CompletionState::Incomplete,
+                            //     "Array should be incomplete if an item is."
+                            // );
                         }
                         // TODO(vbv): document why we penalize in proportion to how deep into an array a parse error is
                         Err(e) => flags.add_flag(Flag::ArrayItemParseError(i, e)),

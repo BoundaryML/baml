@@ -57,7 +57,12 @@ where
                 .resolve_with_meta(parse_as_ty.as_ref().as_ref())
                 .map_err(|ident| ctx.error_type_resolution(ident))?;
             debug_assert!(
-                parse_as.meta.parse_as.as_ref().map(|p| p.as_ref()) != Some(parse_as_ty.as_ref()),
+                parse_as
+                    .meta
+                    .parse_as
+                    .as_ref()
+                    .map(std::convert::AsRef::as_ref)
+                    != Some(parse_as_ty.as_ref()),
                 "If parse_as is the same, it should be `None`."
             );
             let Some(value) = TyResolvedRef::coerce(ctx, parse_as.clone(), value)? else {
@@ -165,12 +170,15 @@ where
                 .resolve_with_meta(parse_as_ty.as_ref().as_ref())
                 .ok()?;
             debug_assert!(
-                parse_as.meta.parse_as.as_ref().map(|p| p.as_ref()) != Some(parse_as_ty.as_ref()),
+                parse_as
+                    .meta
+                    .parse_as
+                    .as_ref()
+                    .map(std::convert::AsRef::as_ref)
+                    != Some(parse_as_ty.as_ref()),
                 "If parse_as is the same, it should be `None`."
             );
-            let Some(value) = TyResolvedRef::try_cast(&ctx, parse_as.clone(), value) else {
-                return None;
-            };
+            let value = TyResolvedRef::try_cast(ctx, parse_as.clone(), value)?;
             let Ok(true) = parse_as.meta.check_asserts(&value.value, ctx) else {
                 return None;
             };

@@ -76,7 +76,7 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
         }
     }
 
-    pub fn resolved_from_ident(&'t self, ident: &'t N) -> Option<TyResolvedRef<'t, N>> {
+    pub fn resolved_from_ident(&'t self, ident: &N) -> Option<TyResolvedRef<'t, N>> {
         self.types.get(ident).map(TyResolved::as_ref)
     }
 

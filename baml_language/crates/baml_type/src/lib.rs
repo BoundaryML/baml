@@ -191,14 +191,10 @@ impl Ty {
     // --- TyAttr accessor ---
 
     /// Replace the TyAttr on this type, returning a new Ty with the given attr.
-    /// Short-circuits if the attr is default (avoids unnecessary cloning).
     ///
     /// Used during HIR lowering to apply SAP attributes (sap_in_progress) to the
     /// resolved type of generated stream_* class fields.
     pub fn with_attr(self, attr: TyAttr) -> Ty {
-        if attr.is_default() {
-            return self;
-        }
         match self {
             Ty::Int { .. } => Ty::Int { attr },
             Ty::Float { .. } => Ty::Float { attr },

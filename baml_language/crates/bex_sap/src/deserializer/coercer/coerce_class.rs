@@ -254,7 +254,7 @@ where
                 let BamlValue::Class(ret) = value else {
                     unreachable!("we just wrapped it in a BamlValue::Class");
                 };
-                return Ok(Some(ValueWithFlags::new(ret, obj.meta)));
+                Ok(Some(ValueWithFlags::new(ret, obj.meta)))
             }
             (jsonish::Value::Object(obj, c), None) => {
                 let mut flags = DeserializerConditions::new();

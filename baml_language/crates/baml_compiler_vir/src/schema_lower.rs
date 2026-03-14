@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use ::baml_base::{FieldAttr, TyAttr};
 use baml_base::{Name, Span};
 use baml_compiler_hir::{
     self, Attribute, FunctionBody, ItemId, file_item_tree, file_items, function_body,
@@ -141,7 +142,7 @@ fn lower_class(
                 .expect_map_name(|n| expand_to_type_name(n, resolution_ctx))
                 .unwrap_or_else(|_| {
                     debug_assert!(false, "schema_lower: failed to expand field_attr names");
-                    Default::default()
+                    FieldAttr::default()
                 });
 
             VirField {
@@ -161,7 +162,7 @@ fn lower_class(
         .expect_map_name(|n| expand_to_type_name(n, resolution_ctx))
         .unwrap_or_else(|_| {
             debug_assert!(false, "schema_lower: failed to expand class ty_attr names");
-            Default::default()
+            TyAttr::default()
         });
 
     VirClass {
@@ -195,7 +196,7 @@ fn lower_enum(
         .expect_map_name(|n| expand_to_type_name(n, resolution_ctx))
         .unwrap_or_else(|_| {
             debug_assert!(false, "schema_lower: failed to expand enum ty_attr names");
-            Default::default()
+            TyAttr::default()
         });
 
     VirEnum {

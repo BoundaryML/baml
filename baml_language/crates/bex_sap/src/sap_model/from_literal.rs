@@ -327,20 +327,24 @@ where
         literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
-        let AttrLiteral::Object { name, data } = literal else {
-            return Err(ctx.error_internal(format!(
-                "attribute literal must match the type: {}",
-                self.type_name()
-            )));
+        let (name, data) = match literal {
+            AttrLiteral::Object { name, data } if **name == self.name => (name, data),
+            _ => {
+                return Err(ctx.error_internal(format!(
+                    "attribute literal must match the type: {}",
+                    self.type_name()
+                )));
+            }
         };
+
         let mut field_data = IndexMap::new();
         for field in &self.fields {
             let AnnotatedField { name, ty, .. } = field;
+            let ty = ctx
+                .db
+                .resolve_with_meta(ty.as_ref())
+                .map_err(|ident| ctx.error_type_resolution(ident))?;
             if let Some(value) = data.get(name.as_ref()) {
-                let ty = ctx
-                    .db
-                    .resolve_with_meta(ty.as_ref())
-                    .map_err(|ident| ctx.error_type_resolution(ident))?;
                 let value = match TyResolvedRef::from_literal(ty.ty, value, ctx) {
                     Ok(ok) => ok,
                     Err(e) => {
@@ -357,7 +361,13 @@ where
                     ty,
                 };
                 field_data.insert(&**name, BamlValueWithFlags::new(value, meta));
-            } else if !field.ty.ty.is_optional(ctx.db) {
+            } else if field.ty.ty.is_optional(ctx.db) {
+                // Add null for missing optional fields.
+                field_data.insert(
+                    &**name,
+                    BamlValueWithFlags::new(BamlValue::Null(BamlNull), DeserializerMeta::new(ty)),
+                );
+            } else {
                 // FromLiteral does not add for missing fields.
                 return Err(ctx.error_internal("Provided literal is missing one or more fields."));
             }
@@ -378,32 +388,33 @@ where
         literal: &'t AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
-        let AttrLiteral::String(s) = literal else {
-            return Err(ctx.error_internal(format!(
-                "attribute literal must match the type: {}",
-                self.type_name()
-            )));
-        };
-        let value = self
-            .variants
-            .iter()
-            .find_map(|variant| {
-                if variant.name == *s {
-                    Some(&*variant.name)
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| {
-                ctx.error_internal(format!(
+        let (enum_name, variant_name) = match literal {
+            AttrLiteral::EnumVariant {
+                enum_name,
+                variant_name,
+            } if **enum_name == self.name => (enum_name, variant_name),
+            _ => {
+                return Err(ctx.error_internal(format!(
                     "attribute literal must match the type: {}",
                     self.type_name()
-                ))
-            })?;
-        Ok(BamlEnum {
-            name: &self.name,
-            value,
-        })
+                )));
+            }
+        };
+
+        if self
+            .variants
+            .iter()
+            .any(|variant| variant.name == *variant_name)
+        {
+            Ok(BamlEnum {
+                name: &self.name,
+                value: variant_name.as_ref(),
+            })
+        } else {
+            Err(ctx.error_internal(format!(
+                "unknown enum variant '{enum_name}.{variant_name}' in attribute literal"
+            )))
+        }
     }
 }
 

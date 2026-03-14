@@ -17,7 +17,7 @@ pub(super) fn coerce_array_to_singular<'s, 'v, 't, N: TypeIdent>(
         &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError>,
 ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError> {
-    let parsed: Vec<_> = items.into_iter().map(|item| coercion(item)).collect();
+    let parsed: Vec<_> = items.into_iter().map(coercion).collect();
 
     let Some(mut best) = pick_best(ctx, target, parsed)? else {
         return Ok(None);

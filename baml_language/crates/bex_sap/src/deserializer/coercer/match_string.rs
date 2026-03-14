@@ -43,10 +43,10 @@ pub(super) fn matches_string_to_string<N: TypeIdent>(
 
     // Strip punctuation and try again
     let stripped_value: String = without_punctuation(&unaccented_value_str)
-        .flat_map(|c| c.to_lowercase())
+        .flat_map(char::to_lowercase)
         .collect();
     let stripped_target: String = without_punctuation(&unaccented_target)
-        .flat_map(|c| c.to_lowercase())
+        .flat_map(char::to_lowercase)
         .collect();
     stripped_value == stripped_target
 }

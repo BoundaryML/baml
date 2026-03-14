@@ -25,6 +25,7 @@ mod pull_semantics;
 mod stack_carry;
 mod verifier;
 
+use ::baml_base::TyAttr;
 pub use analysis::OptLevel;
 use bex_vm_types::ObjectPool;
 pub(crate) use emit::compile_mir_function;
@@ -272,7 +273,7 @@ pub fn compile_files(
                     })
                     .unwrap_or_else(|_| {
                         debug_assert!(false, "emit: failed to expand class ty_attr names");
-                        Default::default()
+                        TyAttr::default()
                     });
                 let class_obj = Object::Class(Class {
                     name: baml_type::fqn_to_type_name(&fqn),
@@ -332,7 +333,7 @@ pub fn compile_files(
                     })
                     .unwrap_or_else(|_| {
                         debug_assert!(false, "emit: failed to expand enum ty_attr names");
-                        Default::default()
+                        TyAttr::default()
                     });
                 let enum_obj = Object::Enum(Enum {
                     name: baml_type::fqn_to_type_name(&enum_fqn),

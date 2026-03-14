@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::LazyLock};
 
 use regex::Regex;
 
@@ -108,6 +108,7 @@ where
                     BamlInt { value: n } // also covers u64
                 } else if let Some(f) = n.as_f64() {
                     let rounded = f.round();
+                    #[allow(clippy::cast_precision_loss)]
                     if rounded.is_nan() || rounded > i64::MAX as f64 || rounded < i64::MIN as f64 {
                         return Err(ctx.error_integer_out_of_bounds(n));
                     }
@@ -809,20 +810,6 @@ where
         };
         // TODO: media
         Err(e)
-        // match &target.meta.on_error {
-        //     Literal::Never => Err(e),
-        //     lit => match target.ty.from_literal(&lit, ctx) {
-        //         Ok(ret) => {
-        //             let meta = DeserializerMeta {
-        //                 flags: DeserializerConditions::new()
-        //                     .with_flag(Flag::DefaultButHadUnparseableValue(e)),
-        //                 ty: target.map_ty(|_| TyResolvedRef::Primitive(PrimitiveTy::Media(*target.ty))),
-        //             };
-        //             Ok(Some(ValueWithFlags::new(ret, meta)))
-        //         }
-        //         Err(lit_err) => Err(lit_err.with_cause(e)),
-        //     },
-        // }
     }
 
     fn try_cast(
@@ -848,10 +835,12 @@ fn float_from_maybe_fraction(value: &str) -> Option<f64> {
     }
 }
 
+static COMMA_SEPARATED_NUMBER_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"([-+]?)\$?(?:\d+(?:,\d+)*(?:\.\d+)?|\d+\.\d+|\d+|\.\d+)(?:e[-+]?\d+)?").unwrap()
+});
+static CURRENCY_SYMBOL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\p{Sc}").unwrap());
 fn float_from_comma_separated(value: &str) -> Option<f64> {
-    let re = Regex::new(r"([-+]?)\$?(?:\d+(?:,\d+)*(?:\.\d+)?|\d+\.\d+|\d+|\.\d+)(?:e[-+]?\d+)?")
-        .unwrap();
-    let matches: Vec<_> = re.find_iter(value).collect();
+    let matches: Vec<_> = COMMA_SEPARATED_NUMBER_RE.find_iter(value).collect();
 
     if matches.len() != 1 {
         return None;
@@ -860,177 +849,143 @@ fn float_from_comma_separated(value: &str) -> Option<f64> {
     let number_str = matches[0].as_str();
     let without_commas = number_str.replace(',', "");
     // Remove all Unicode currency symbols
-    let re_currency = Regex::new(r"\p{Sc}").unwrap();
-    let without_currency = re_currency.replace_all(&without_commas, "");
+    let without_currency = CURRENCY_SYMBOL_RE.replace_all(&without_commas, "");
 
     without_currency.parse::<f64>().ok()
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use std::borrow::Cow;
 
-//     #[test]
-//     fn test_float_from_comma_separated() {
-//         // Note we don't handle european numbers correctly.
-//         let test_cases = vec![
-//             // European Formats
-//             // Valid German format (comma as decimal separator)
-//             ("3,14", Some(314.0)),
-//             ("1.234,56", None),
-//             ("1.234.567,89", None),
-//             ("€1.234,56", None),
-//             ("-€1.234,56", None),
-//             ("€1.234", Some(1.234)), // TODO - technically incorrect
-//             ("1.234€", Some(1.234)), // TODO - technically incorrect
-//             // Valid currencies with European formatting
-//             ("€1.234,56", None),
-//             ("€1,234.56", Some(1234.56)), // Incorrect format for Euro
-//             // US Formats
-//             // Valid US format (comma as thousands separator)
-//             ("3,000", Some(3000.0)),
-//             ("3,100.00", Some(3100.00)),
-//             ("1,234.56", Some(1234.56)),
-//             ("1,234,567.89", Some(1234567.89)),
-//             ("$1,234.56", Some(1234.56)),
-//             ("-$1,234.56", Some(-1234.56)),
-//             ("$1,234", Some(1234.0)),
-//             ("1,234$", Some(1234.0)),
-//             ("$1,234.56", Some(1234.56)),
-//             ("+$1,234.56", Some(1234.56)),
-//             ("-$1,234.56", Some(-1234.56)),
-//             ("$9,999,999,999", Some(9999999999.0)),
-//             ("$1.23.456", None),
-//             ("$1.234.567.890", None),
-//             // Valid currencies with US formatting
-//             ("$1,234", Some(1234.0)),
-//             ("$314", Some(314.0)),
-//             // Indian Formats
-//             // Assuming Indian numbering system (not present in original tests, added for categorization)
-//             ("$1,23,456", Some(123456.0)),
-//             // Additional Indian format test cases can be added here
+    use super::*;
+    use crate::sap_model::TypeRefDb;
 
-//             // Percentages and Strings with Numbers
-//             // Percentages
-//             ("50%", Some(50.0)),
-//             ("3.15%", Some(3.15)),
-//             (".009%", Some(0.009)),
-//             ("1.234,56%", None),
-//             ("$1,234.56%", Some(1234.56)),
-//             // Strings containing numbers
-//             ("The answer is 10,000", Some(10000.0)),
-//             ("The total is €1.234,56 today", None),
-//             ("You owe $3,000 for the service", Some(3000.0)),
-//             ("Save up to 20% on your purchase", Some(20.0)),
-//             ("Revenue grew by 1,234.56 this quarter", Some(1234.56)),
-//             ("Profit is -€1.234,56 in the last month", None),
-//             // Sentences with Multiple Numbers
-//             ("The answer is 10,000 and $3,000", None),
-//             ("We earned €1.234,56 and $2,345.67 this year", None),
-//             ("Increase of 5% and a profit of $1,000", None),
-//             ("Loss of -€500 and a gain of 1,200.50", None),
-//             ("Targets: 2,000 units and €3.000,75 revenue", None),
-//             // trailing periods and commas
-//             ("12,111,123.", Some(12111123.0)),
-//             ("12,111,123,", Some(12111123.0)),
-//         ];
+    #[test]
+    fn test_float_from_comma_separated() {
+        // Note we don't handle european numbers correctly.
+        let test_cases = vec![
+            // European Formats
+            // Valid German format (comma as decimal separator)
+            ("3,14", Some(314.0)),
+            ("1.234,56", None),
+            ("1.234.567,89", None),
+            ("€1.234,56", None),
+            ("-€1.234,56", None),
+            ("€1.234", Some(1.234)), // TODO - technically incorrect
+            ("1.234€", Some(1.234)), // TODO - technically incorrect
+            // Valid currencies with European formatting
+            ("€1.234,56", None),
+            ("€1,234.56", Some(1234.56)), // Incorrect format for Euro
+            // US Formats
+            // Valid US format (comma as thousands separator)
+            ("3,000", Some(3000.0)),
+            ("3,100.00", Some(3100.00)),
+            ("1,234.56", Some(1234.56)),
+            ("1,234,567.89", Some(1_234_567.89)),
+            ("$1,234.56", Some(1234.56)),
+            ("-$1,234.56", Some(-1234.56)),
+            ("$1,234", Some(1234.0)),
+            ("1,234$", Some(1234.0)),
+            ("$1,234.56", Some(1234.56)),
+            ("+$1,234.56", Some(1234.56)),
+            ("-$1,234.56", Some(-1234.56)),
+            ("$9,999,999,999", Some(9_999_999_999.0)),
+            ("$1.23.456", None),
+            ("$1.234.567.890", None),
+            // Valid currencies with US formatting
+            ("$1,234", Some(1234.0)),
+            ("$314", Some(314.0)),
+            // Indian Formats
+            // Assuming Indian numbering system (not present in original tests, added for categorization)
+            ("$1,23,456", Some(123_456.0)),
+            // Additional Indian format test cases can be added here
 
-//         for (input, expected) in test_cases {
-//             let result = float_from_comma_separated(input);
-//             assert_eq!(
-//                 result, expected,
-//                 "Failed to parse '{input}'. Expected {expected:?}, got {result:?}"
-//             );
-//         }
-//     }
+            // Percentages and Strings with Numbers
+            // Percentages
+            ("50%", Some(50.0)),
+            ("3.15%", Some(3.15)),
+            (".009%", Some(0.009)),
+            ("1.234,56%", None),
+            ("$1,234.56%", Some(1234.56)),
+            // Strings containing numbers
+            ("The answer is 10,000", Some(10000.0)),
+            ("The total is €1.234,56 today", None),
+            ("You owe $3,000 for the service", Some(3000.0)),
+            ("Save up to 20% on your purchase", Some(20.0)),
+            ("Revenue grew by 1,234.56 this quarter", Some(1234.56)),
+            ("Profit is -€1.234,56 in the last month", None),
+            // Sentences with Multiple Numbers
+            ("The answer is 10,000 and $3,000", None),
+            ("We earned €1.234,56 and $2,345.67 this year", None),
+            ("Increase of 5% and a profit of $1,000", None),
+            ("Loss of -€500 and a gain of 1,200.50", None),
+            ("Targets: 2,000 units and €3.000,75 revenue", None),
+            // trailing periods and commas
+            ("12,111,123.", Some(12_111_123.0)),
+            ("12,111,123,", Some(12_111_123.0)),
+        ];
 
-//     #[test]
-//     fn test_coerce_anyof_to_string() {
-//         use crate::{
-//             helpers::{load_test_ir, render_output_format},
-//             jsonish::Value,
-//             sap_model::AnnotatedTy,
-//         };
+        for (input, expected) in test_cases {
+            let result = float_from_comma_separated(input);
+            assert_eq!(
+                result, expected,
+                "Failed to parse '{input}'. Expected {expected:?}, got {result:?}"
+            );
+        }
+    }
 
-//         // Create an AnyOf value similar to what the parser creates
-//         let anyof_value = Value::AnyOf(
-//             vec![
-//                 Value::String("[json\n".to_string(), CompletionState::Incomplete),
-//                 Value::Object(vec![], CompletionState::Incomplete),
-//             ],
-//             "[json\nAnyOf[{,AnyOf[{,{},],]".to_string(), // This is the raw string
-//         );
+    #[test]
+    fn test_coerce_anyof_to_string() {
+        // Create an AnyOf value similar to what the parser creates
+        let anyof_value = jsonish::Value::AnyOf(
+            vec![
+                jsonish::Value::String(Cow::Borrowed("[json\n"), CompletionState::Incomplete),
+                jsonish::Value::Object(vec![], CompletionState::Incomplete),
+            ],
+            Cow::Borrowed("[json\nAnyOf[{,AnyOf[{,{},],]"), // This is the raw string
+        );
 
-//         let ir = load_test_ir("");
-//         let target = AnnotatedTy::Primitive(PrimitiveTy::String, Default::default());
-//         let output_format = render_output_format(
-//             &ir,
-//             &target,
-//             &Default::default(),
-//             crate::StreamingMode::Streaming,
-//         )
-//         .unwrap();
-//         let ctx = ParsingContext::new(&output_format, crate::StreamingMode::Streaming);
+        let db: TypeRefDb<'_, &str> = TypeRefDb::new();
+        let ctx = ParsingContext::new(&db);
 
-//         let annotations = Default::default();
-//         let result = StringTy::coerce(
-//             &ctx,
-//             TyWithMeta::new(&StringTy, &annotations),
-//             Some(&anyof_value),
-//         );
+        let annotations: TypeAnnotations<'_, &str> = TypeAnnotations::default();
+        let result = StringTy::coerce(&ctx, TyWithMeta::new(&StringTy, &annotations), &anyof_value);
 
-//         // The bug would cause this to return "AnyOf[..."
-//         // The fix should prefer the String variant from the choices if available
-//         assert!(result.is_ok());
-//         let baml_value = result.unwrap();
-//         // Should NOT start with "AnyOf[" - that's the bug!
-//         assert!(
-//             !baml_value.value.value.starts_with("AnyOf["),
-//             "Got parsing artifact in string: {}",
-//             baml_value.value.value
-//         );
-//         // Should be the String variant from the choices, not the Display repr
-//         assert_eq!(baml_value.value.value, "[json\n");
-//     }
+        // The bug would cause this to return "AnyOf[..."
+        // The fix should prefer the String variant from the choices if available
+        assert!(result.is_ok());
+        let baml_value = result.unwrap().unwrap();
+        // Should NOT start with "AnyOf[" - that's the bug!
+        assert!(
+            !baml_value.value.value.starts_with("AnyOf["),
+            "Got parsing artifact in string: {}",
+            baml_value.value.value
+        );
+        // Should be the String variant from the choices, not the Display repr
+        assert_eq!(&*baml_value.value.value, "[json\n");
+    }
 
-//     #[test]
-//     fn test_coerce_anyof_to_string_no_string_variant() {
-//         use crate::{
-//             helpers::{load_test_ir, render_output_format},
-//             jsonish::Value,
-//             sap_model::AnnotatedTy,
-//         };
+    #[test]
+    fn test_coerce_anyof_to_string_no_string_variant() {
+        // Create an AnyOf value with NO string variant - should fall back to raw string
+        let anyof_value = jsonish::Value::AnyOf(
+            vec![
+                jsonish::Value::Object(vec![], CompletionState::Incomplete),
+                jsonish::Value::Array(vec![], CompletionState::Incomplete),
+            ],
+            Cow::Borrowed("some raw input"),
+        );
 
-//         // Create an AnyOf value with NO string variant - should fall back to raw string
-//         let anyof_value = Value::AnyOf(
-//             vec![
-//                 Value::Object(vec![], CompletionState::Incomplete),
-//                 Value::Array(vec![], CompletionState::Incomplete),
-//             ],
-//             "some raw input".to_string(),
-//         );
+        let db: TypeRefDb<'_, &str> = TypeRefDb::new();
+        let ctx = ParsingContext::new(&db);
 
-//         let ir = load_test_ir("");
-//         let target = AnnotatedTy::Primitive(PrimitiveTy::String, Default::default());
-//         let output_format = render_output_format(
-//             &ir,
-//             &target,
-//             &Default::default(),
-//             crate::StreamingMode::Streaming,
-//         )
-//         .unwrap();
-//         let ctx = ParsingContext::new(&output_format, crate::StreamingMode::Streaming);
+        let annotations: TypeAnnotations<'_, &str> = TypeAnnotations::default();
+        let result = StringTy::coerce(&ctx, TyWithMeta::new(&StringTy, &annotations), &anyof_value);
 
-//         let annotations = Default::default();
-//         let result = StringTy::coerce(
-//             &ctx,
-//             TyWithMeta::new(&StringTy, &annotations),
-//             Some(&anyof_value),
-//         );
-
-//         assert!(result.is_ok());
-//         let baml_value = result.unwrap();
-//         // Should fall back to the raw input string
-//         assert_eq!(baml_value.value.value, "some raw input");
-//     }
-// }
+        assert!(result.is_ok());
+        let baml_value = result.unwrap().unwrap();
+        // Should fall back to the raw input string
+        assert_eq!(&*baml_value.value.value, "some raw input");
+    }
+}

@@ -112,11 +112,8 @@ where
                     key.clone().into_owned().into(),
                     crate::jsonish::CompletionState::Complete,
                 );
-                let key_ref = TyWithMeta::new(key_ty_with_meta.ty, key_ty_with_meta.meta);
-                TyResolvedRef::try_cast(ctx, key_ref, &key_as_jsonish)?;
-
-                let target_ref = TyWithMeta::new(value_ty_with_meta.ty, value_ty_with_meta.meta);
-                TyResolvedRef::try_cast(ctx, target_ref, value)
+                TyResolvedRef::try_cast(ctx, key_ty_with_meta.clone(), &key_as_jsonish)?;
+                TyResolvedRef::try_cast(ctx, value_ty_with_meta.clone(), value)
                     .map(|cast_value| (key.clone(), cast_value))
             })
             .collect::<Option<_>>()?;

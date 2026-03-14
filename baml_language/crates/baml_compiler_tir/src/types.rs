@@ -234,12 +234,8 @@ impl Ty {
     }
 
     /// Replace the `TyAttr` on this type, returning a new Ty with the given attr.
-    /// Short-circuits if the attr is default (avoids unnecessary cloning).
     #[must_use]
     pub fn with_attr(self, attr: TyAttr<QualifiedName>) -> Self {
-        if attr.is_default() {
-            return self;
-        }
         match self {
             Ty::Int { .. } => Ty::Int { attr },
             Ty::Float { .. } => Ty::Float { attr },

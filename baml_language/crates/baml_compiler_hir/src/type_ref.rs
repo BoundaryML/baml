@@ -158,8 +158,8 @@ impl TypeRef {
             | TypeRef::Type { attr }
             | TypeRef::Map { attr, .. }
             | TypeRef::Function { attr, .. }
-            | TypeRef::Generic { attr, .. } => attr,
-            TypeRef::Path(_, attr)
+            | TypeRef::Generic { attr, .. }
+            | TypeRef::Path(_, attr)
             | TypeRef::Media(_, attr)
             | TypeRef::Optional(_, attr)
             | TypeRef::List(_, attr)
@@ -173,12 +173,8 @@ impl TypeRef {
     }
 
     /// Replace the `TyAttr` on this type reference, returning a new `TypeRef`.
-    /// Short-circuits if the attr is default.
     #[must_use]
     pub fn with_attr(self, attr: TyAttr<Name>) -> Self {
-        if attr.is_default() {
-            return self;
-        }
         match self {
             TypeRef::Int { .. } => TypeRef::Int { attr },
             TypeRef::Float { .. } => TypeRef::Float { attr },
