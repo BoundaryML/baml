@@ -34,7 +34,7 @@ fn caller() -> bool {
     }
 
     bb5: {
-        _0 = const null;
+        _0 = copy _3;
         goto -> bb7;
     }
 

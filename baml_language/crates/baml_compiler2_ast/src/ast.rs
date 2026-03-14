@@ -178,6 +178,16 @@ impl AstSourceMap {
             .unwrap_or_default()
     }
 
+    /// Look up the source span of a match arm by its `MatchArmId`.
+    pub fn match_arm_span(&self, id: MatchArmId) -> TextRange {
+        let raw: u32 = id.into_raw().into_u32();
+        self.match_arm_spans
+            .iter()
+            .nth(raw as usize)
+            .map(|(_, &span)| span)
+            .unwrap_or_default()
+    }
+
     /// Look up the source span of a type annotation by its `TypeAnnotId`.
     pub fn type_annotation_span(&self, id: TypeAnnotId) -> TextRange {
         let raw: u32 = id.into_raw().into_u32();

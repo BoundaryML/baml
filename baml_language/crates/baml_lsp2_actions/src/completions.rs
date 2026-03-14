@@ -743,6 +743,10 @@ fn local_variable_ty(
                 None
             })
         }
+        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_) => {
+            // Pattern bindings — type not yet available via this path.
+            None
+        }
     }
 }
 

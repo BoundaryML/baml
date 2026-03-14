@@ -54,7 +54,7 @@ fn MayFailIntOrString(x: int) -> string {
     let _3: 1
 
     bb0: {
-        switch copy _1 [0: bb4, 1: bb6, otherwise: bb3] (exhaustive);
+        switch copy _1 [0: bb4, 1: bb6, otherwise: bb3];
     }
 
     bb1: {
@@ -165,7 +165,7 @@ fn CatchAndRethrow(x: int) -> string {
     }
 
     bb5: {
-        _6 = const null;
+        _6 = copy _5;
         throw copy _6;
     }
 
@@ -435,7 +435,7 @@ fn MayFail(x: int) -> string {
     let _2: "string error"
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb3] (exhaustive);
+        switch copy _1 [0: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -523,7 +523,7 @@ fn AlsoMayFail(x: int) -> string {
     let _2: "secondary error"
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb3] (exhaustive);
+        switch copy _1 [0: bb4, otherwise: bb3];
     }
 
     bb1: {

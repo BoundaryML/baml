@@ -2460,7 +2460,7 @@ fn NestedLoops(matrix: int[][]) -> int {
         _27 = copy _15;
         _28 = const 3_i64;
         _26 = copy _27 % copy _28;
-        switch copy _26 [0: bb20, 1: bb21, otherwise: bb19] (exhaustive);
+        switch copy _26 [0: bb20, 1: bb21, otherwise: bb19];
     }
 
     bb17: {
@@ -2935,7 +2935,7 @@ fn ManyNestedExprs(items: int[]) -> int {
     }
 
     bb4: {
-        switch copy _8 [0: bb7, otherwise: bb6] (exhaustive);
+        switch copy _8 [0: bb7, otherwise: bb6];
     }
 
     bb5: {
@@ -4579,169 +4579,169 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _479: bool
     let _480: int
     let _481: 100
-    let _482: null
-    let _483: bool
-    let _484: int // n
-    let _485: int
-    let _486: int // lvl1
-    let _487: bool
-    let _488: int
-    let _489: 2
-    let _490: null
-    let _491: 1 | 2[]
-    let _492: 1
-    let _493: 2
-    let _494: int // __for_idx
-    let _495: int
-    let _496: bool
-    let _497: 1 | 2
-    let _498: 1 | 2 // lvl2
-    let _499: void
-    let _500: null
-    let _501: int // lvl3
-    let _502: bool
-    let _503: int
-    let _504: 2
-    let _505: null
-    let _506: int // lvl4
-    let _507: bool
-    let _508: int
-    let _509: 2
-    let _510: null
+    let _482: bool
+    let _483: int // n
+    let _484: int
+    let _485: int // lvl1
+    let _486: bool
+    let _487: int
+    let _488: 2
+    let _489: null
+    let _490: 1 | 2[]
+    let _491: 1
+    let _492: 2
+    let _493: int // __for_idx
+    let _494: int
+    let _495: bool
+    let _496: 1 | 2
+    let _497: 1 | 2 // lvl2
+    let _498: void
+    let _499: null
+    let _500: int // lvl3
+    let _501: bool
+    let _502: int
+    let _503: 2
+    let _504: null
+    let _505: int // lvl4
+    let _506: bool
+    let _507: int
+    let _508: 2
+    let _509: null
+    let _510: void
     let _511: void
     let _512: void
-    let _513: void
-    let _514: int
-    let _515: 1 | 2
+    let _513: int
+    let _514: 1 | 2
+    let _515: int
     let _516: int
     let _517: int
-    let _518: int
-    let _519: null
-    let _520: int
-    let _521: int[]
-    let _522: int // __for_idx
-    let _523: int
-    let _524: bool
-    let _525: int
-    let _526: int // i
-    let _527: void
-    let _528: null
-    let _529: int // j
+    let _518: null
+    let _519: int
+    let _520: int[]
+    let _521: int // __for_idx
+    let _522: int
+    let _523: bool
+    let _524: int
+    let _525: int // i
+    let _526: void
+    let _527: null
+    let _528: int // j
+    let _529: int
     let _530: int
     let _531: int
     let _532: int
     let _533: int
     let _534: int
-    let _535: int
+    let _535: bool
     let _536: bool
     let _537: bool
     let _538: bool
     let _539: bool
-    let _540: bool
-    let _541: int
-    let _542: 1000000
-    let _543: int
-    let _544: 0
-    let _545: int
-    let _546: 0
-    let _547: int
-    let _548: 42
-    let _549: null
-    let _550: int
+    let _540: int
+    let _541: 1000000
+    let _542: int
+    let _543: 0
+    let _544: int
+    let _545: 0
+    let _546: int
+    let _547: 42
+    let _548: null
+    let _549: int
+    let _550: null
     let _551: null
     let _552: null
     let _553: null
     let _554: null
-    let _555: null
-    let _556: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10[]
-    let _557: 1
-    let _558: 2
-    let _559: 3
-    let _560: 4
-    let _561: 5
-    let _562: 6
-    let _563: 7
-    let _564: 8
-    let _565: 9
-    let _566: 10
-    let _567: int // __for_idx
-    let _568: int
-    let _569: bool
-    let _570: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _571: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 // i
-    let _572: void
-    let _573: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100[]
-    let _574: 10
-    let _575: 20
-    let _576: 30
-    let _577: 40
-    let _578: 50
-    let _579: 60
-    let _580: 70
-    let _581: 80
-    let _582: 90
-    let _583: 100
-    let _584: int // __for_idx
-    let _585: int
-    let _586: bool
-    let _587: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _588: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100 // j
-    let _589: void
-    let _590: void | 0 // computation
+    let _555: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10[]
+    let _556: 1
+    let _557: 2
+    let _558: 3
+    let _559: 4
+    let _560: 5
+    let _561: 6
+    let _562: 7
+    let _563: 8
+    let _564: 9
+    let _565: 10
+    let _566: int // __for_idx
+    let _567: int
+    let _568: bool
+    let _569: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _570: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 // i
+    let _571: void
+    let _572: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100[]
+    let _573: 10
+    let _574: 20
+    let _575: 30
+    let _576: 40
+    let _577: 50
+    let _578: 60
+    let _579: 70
+    let _580: 80
+    let _581: 90
+    let _582: 100
+    let _583: int // __for_idx
+    let _584: int
+    let _585: bool
+    let _586: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _587: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100 // j
+    let _588: void
+    let _589: void | 0 // computation
+    let _590: bool
     let _591: bool
-    let _592: bool
-    let _593: void
-    let _594: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _595: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _596: 500
-    let _597: void
-    let _598: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _599: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _600: 100
-    let _601: void
-    let _602: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _603: 3
-    let _604: void
-    let _605: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _606: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _607: int
-    let _608: void
-    let _609: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _610: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _611: int
-    let _612: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _613: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _614: void
-    let _615: bool
-    let _616: int
-    let _617: 10
-    let _618: null
-    let _619: int
-    let _620: null
-    let _621: int // i
-    let _622: bool
-    let _623: int
-    let _624: 10
-    let _625: null
-    let _626: int
-    let _627: null
-    let _628: int[]
-    let _629: int // __for_idx
-    let _630: int
-    let _631: bool
-    let _632: int
-    let _633: int // item
-    let _634: void
-    let _635: int
-    let _636: int // plain
-    let _637: 2 // typed
-    let _638: int // complex_init
+    let _592: void
+    let _593: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _594: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _595: 500
+    let _596: void
+    let _597: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _598: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _599: 100
+    let _600: void
+    let _601: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _602: 3
+    let _603: void
+    let _604: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _605: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _606: int
+    let _607: void
+    let _608: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _609: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _610: int
+    let _611: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _612: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _613: void
+    let _614: bool
+    let _615: int
+    let _616: 10
+    let _617: null
+    let _618: int
+    let _619: null
+    let _620: int // i
+    let _621: bool
+    let _622: int
+    let _623: 10
+    let _624: null
+    let _625: int
+    let _626: null
+    let _627: int[]
+    let _628: int // __for_idx
+    let _629: int
+    let _630: bool
+    let _631: int
+    let _632: int // item
+    let _633: void
+    let _634: int
+    let _635: int // plain
+    let _636: 2 // typed
+    let _637: int // complex_init
+    let _638: int
     let _639: int
-    let _640: int
-    let _641: map<string, int | string | bool | float | null> // very_long_variable_name_for_testing_wrapping
-    let _642: "key"
-    let _643: 42
-    let _644: int // another_extremely_long_variable_name
+    let _640: map<string, int | string | bool | float | null> // very_long_variable_name_for_testing_wrapping
+    let _641: "key"
+    let _642: 42
+    let _643: int // another_extremely_long_variable_name
+    let _644: int
     let _645: int
     let _646: int
     let _647: int
@@ -4779,23 +4779,23 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _679: int
     let _680: int
     let _681: int
-    let _682: int
-    let _683: map<string, map<string, map<string, int | string | bool>>> // deeply_typed
-    let _684: "outer"
-    let _685: map<string, map<string, int | string | bool>>
-    let _686: "inner"
-    let _687: map<string, int | string | bool>
-    let _688: "deep"
-    let _689: 42
-    let _690: 42 // trivia_var
-    let _691: 42 // trivia_var_block
-    let _692: map<string, int | string | bool | float | null> // very_long_variable_name_for_testing_wrapping
-    let _693: "key"
-    let _694: 42
-    let _695: map<string, int | string | bool | float | null> // very_long_variable_name_for_testing_wrapping
-    let _696: "key"
-    let _697: 42
-    let _698: int // another_extremely_long_variable_name
+    let _682: map<string, map<string, map<string, int | string | bool>>> // deeply_typed
+    let _683: "outer"
+    let _684: map<string, map<string, int | string | bool>>
+    let _685: "inner"
+    let _686: map<string, int | string | bool>
+    let _687: "deep"
+    let _688: 42
+    let _689: 42 // trivia_var
+    let _690: 42 // trivia_var_block
+    let _691: map<string, int | string | bool | float | null> // very_long_variable_name_for_testing_wrapping
+    let _692: "key"
+    let _693: 42
+    let _694: map<string, int | string | bool | float | null> // very_long_variable_name_for_testing_wrapping
+    let _695: "key"
+    let _696: 42
+    let _697: int // another_extremely_long_variable_name
+    let _698: int
     let _699: int
     let _700: int
     let _701: int
@@ -4833,8 +4833,8 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _733: int
     let _734: int
     let _735: int
-    let _736: int
-    let _737: int // another_extremely_long_variable_name
+    let _736: int // another_extremely_long_variable_name
+    let _737: int
     let _738: int
     let _739: int
     let _740: int
@@ -4872,7 +4872,6 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     let _772: int
     let _773: int
     let _774: int
-    let _775: int
 
     bb0: {
         _3 = const 0_i64;
@@ -6222,8 +6221,8 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb200: {
-        _486 = const 0_i64;
-        goto -> bb221;
+        _485 = const 0_i64;
+        goto -> bb219;
     }
 
     bb201: {
@@ -6278,8 +6277,8 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb209: {
-        _485 = copy _472;
-        _42 = copy _42 + copy _485;
+        _484 = copy _472;
+        _42 = copy _42 + copy _484;
         _471 = const null;
         goto -> bb207;
     }
@@ -6300,15 +6299,15 @@ fn LoopStmts(items: int[], flag: bool) -> int {
 
     bb213: {
         _478 = copy _473;
-        _480 = const null;
+        _480 = copy _478;
         _481 = const 100_i64;
         _479 = copy _480 > copy _481;
         branch copy _479 -> [bb215, bb214];
     }
 
     bb214: {
-        _483 = is_type(copy _473, Int { attr: TyAttr(None) });
-        branch copy _483 -> [bb219, bb220];
+        _482 = is_type(copy _473, Int { attr: TyAttr(None) });
+        branch copy _482 -> [bb217, bb218];
     }
 
     bb215: {
@@ -6316,563 +6315,555 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb216: {
-        _482 = call const fn baml.sys.panic(const "unresolved name: n") -> [bb217];
+        _472 = copy _478;
+        goto -> bb209;
     }
 
     bb217: {
-        unreachable;
+        _483 = copy _473;
+        _472 = copy _483;
+        goto -> bb209;
     }
 
     bb218: {
-        goto -> bb209;
+        unreachable;
     }
 
     bb219: {
-        _484 = copy _473;
-        _472 = const null;
-        goto -> bb209;
+        _487 = copy _485;
+        _488 = const 2_i64;
+        _486 = copy _487 < copy _488;
+        branch copy _486 -> [bb220, bb221];
     }
 
     bb220: {
-        _472 = const null;
-        goto -> bb209;
+        _491 = const 1_i64;
+        _492 = const 2_i64;
+        _490 = [copy _491, copy _492];
+        _493 = const 0_i64;
+        goto -> bb222;
     }
 
     bb221: {
-        _488 = copy _486;
-        _489 = const 2_i64;
-        _487 = copy _488 < copy _489;
-        branch copy _487 -> [bb222, bb223];
+        _520 = copy _1;
+        _521 = const 0_i64;
+        goto -> bb232;
     }
 
     bb222: {
-        _492 = const 1_i64;
-        _493 = const 2_i64;
-        _491 = [copy _492, copy _493];
-        _494 = const 0_i64;
-        goto -> bb224;
+        _494 = len(_490);
+        _495 = copy _493 < copy _494;
+        branch copy _495 -> [bb223, bb225];
     }
 
     bb223: {
-        _521 = copy _1;
-        _522 = const 0_i64;
-        goto -> bb234;
-    }
-
-    bb224: {
-        _495 = len(_491);
-        _496 = copy _494 < copy _495;
-        branch copy _496 -> [bb225, bb227];
-    }
-
-    bb225: {
-        _497 = copy _491[_494];
-        _498 = copy _497;
-        _501 = const 0_i64;
-        goto -> bb228;
-    }
-
-    bb226: {
-        _494 = copy _494 + const 1_i64;
-        goto -> bb224;
-    }
-
-    bb227: {
-        _520 = const 1_i64;
-        _486 = copy _486 + copy _520;
-        _490 = const null;
-        goto -> bb221;
-    }
-
-    bb228: {
-        _503 = copy _501;
-        _504 = const 2_i64;
-        _502 = copy _503 < copy _504;
-        branch copy _502 -> [bb229, bb230];
-    }
-
-    bb229: {
-        _506 = const 0_i64;
-        goto -> bb231;
-    }
-
-    bb230: {
-        _500 = const null;
-        _499 = const null;
+        _496 = copy _490[_493];
+        _497 = copy _496;
+        _500 = const 0_i64;
         goto -> bb226;
     }
 
+    bb224: {
+        _493 = copy _493 + const 1_i64;
+        goto -> bb222;
+    }
+
+    bb225: {
+        _519 = const 1_i64;
+        _485 = copy _485 + copy _519;
+        _489 = const null;
+        goto -> bb219;
+    }
+
+    bb226: {
+        _502 = copy _500;
+        _503 = const 2_i64;
+        _501 = copy _502 < copy _503;
+        branch copy _501 -> [bb227, bb228];
+    }
+
+    bb227: {
+        _505 = const 0_i64;
+        goto -> bb229;
+    }
+
+    bb228: {
+        _499 = const null;
+        _498 = const null;
+        goto -> bb224;
+    }
+
+    bb229: {
+        _507 = copy _505;
+        _508 = const 2_i64;
+        _506 = copy _507 < copy _508;
+        branch copy _506 -> [bb230, bb231];
+    }
+
+    bb230: {
+        _513 = copy _485;
+        _514 = copy _497;
+        _512 = copy _513 + copy _514;
+        _515 = copy _500;
+        _511 = copy _512 + copy _515;
+        _516 = copy _505;
+        _510 = copy _511 + copy _516;
+        _42 = copy _42 + copy _510;
+        _517 = const 1_i64;
+        _505 = copy _505 + copy _517;
+        _509 = const null;
+        goto -> bb229;
+    }
+
     bb231: {
-        _508 = copy _506;
-        _509 = const 2_i64;
-        _507 = copy _508 < copy _509;
-        branch copy _507 -> [bb232, bb233];
+        _504 = const null;
+        _518 = const 1_i64;
+        _500 = copy _500 + copy _518;
+        goto -> bb226;
     }
 
     bb232: {
-        _514 = copy _486;
-        _515 = copy _498;
-        _513 = copy _514 + copy _515;
-        _516 = copy _501;
-        _512 = copy _513 + copy _516;
-        _517 = copy _506;
-        _511 = copy _512 + copy _517;
-        _42 = copy _42 + copy _511;
-        _518 = const 1_i64;
-        _506 = copy _506 + copy _518;
-        _510 = const null;
-        goto -> bb231;
+        _522 = len(_520);
+        _523 = copy _521 < copy _522;
+        branch copy _523 -> [bb233, bb235];
     }
 
     bb233: {
-        _505 = const null;
-        _519 = const 1_i64;
-        _501 = copy _501 + copy _519;
-        goto -> bb228;
-    }
-
-    bb234: {
-        _523 = len(_521);
-        _524 = copy _522 < copy _523;
-        branch copy _524 -> [bb235, bb237];
-    }
-
-    bb235: {
-        _525 = copy _521[_522];
-        _526 = copy _525;
-        _531 = copy _526;
-        _532 = copy _526;
-        _530 = copy _531 * copy _532;
+        _524 = copy _520[_521];
+        _525 = copy _524;
+        _530 = copy _525;
+        _531 = copy _525;
+        _529 = copy _530 * copy _531;
+        _533 = copy _42;
         _534 = copy _42;
-        _535 = copy _42;
-        _533 = copy _534 * copy _535;
-        _529 = copy _530 + copy _533;
-        goto -> bb238;
-    }
-
-    bb236: {
-        _522 = copy _522 + const 1_i64;
-        goto -> bb234;
-    }
-
-    bb237: {
-        _557 = const 1_i64;
-        _558 = const 2_i64;
-        _559 = const 3_i64;
-        _560 = const 4_i64;
-        _561 = const 5_i64;
-        _562 = const 6_i64;
-        _563 = const 7_i64;
-        _564 = const 8_i64;
-        _565 = const 9_i64;
-        _566 = const 10_i64;
-        _556 = [copy _557, copy _558, copy _559, copy _560, copy _561, copy _562, copy _563, copy _564, copy _565, copy _566];
-        _567 = const 0_i64;
-        goto -> bb249;
-    }
-
-    bb238: {
-        _541 = copy _529;
-        _542 = const 1000000_i64;
-        _540 = copy _541 < copy _542;
-        _539 = copy _540;
-        branch copy _540 -> [bb241, bb242];
-    }
-
-    bb239: {
-        _550 = copy _529;
-        _42 = copy _42 + copy _550;
-        _549 = const null;
-        _553 = copy _526;
-        _554 = copy _42;
-        _552 = copy _553 + copy _554;
-        _555 = const 1_i64;
-        _551 = copy _552 + copy _555;
-        _529 = copy _529 + copy _551;
-        goto -> bb238;
-    }
-
-    bb240: {
-        _528 = const null;
-        _527 = const null;
+        _532 = copy _533 * copy _534;
+        _528 = copy _529 + copy _532;
         goto -> bb236;
     }
 
+    bb234: {
+        _521 = copy _521 + const 1_i64;
+        goto -> bb232;
+    }
+
+    bb235: {
+        _556 = const 1_i64;
+        _557 = const 2_i64;
+        _558 = const 3_i64;
+        _559 = const 4_i64;
+        _560 = const 5_i64;
+        _561 = const 6_i64;
+        _562 = const 7_i64;
+        _563 = const 8_i64;
+        _564 = const 9_i64;
+        _565 = const 10_i64;
+        _555 = [copy _556, copy _557, copy _558, copy _559, copy _560, copy _561, copy _562, copy _563, copy _564, copy _565];
+        _566 = const 0_i64;
+        goto -> bb247;
+    }
+
+    bb236: {
+        _540 = copy _528;
+        _541 = const 1000000_i64;
+        _539 = copy _540 < copy _541;
+        _538 = copy _539;
+        branch copy _539 -> [bb239, bb240];
+    }
+
+    bb237: {
+        _549 = copy _528;
+        _42 = copy _42 + copy _549;
+        _548 = const null;
+        _552 = copy _525;
+        _553 = copy _42;
+        _551 = copy _552 + copy _553;
+        _554 = const 1_i64;
+        _550 = copy _551 + copy _554;
+        _528 = copy _528 + copy _550;
+        goto -> bb236;
+    }
+
+    bb238: {
+        _527 = const null;
+        _526 = const null;
+        goto -> bb234;
+    }
+
+    bb239: {
+        _538 = copy _2;
+        goto -> bb240;
+    }
+
+    bb240: {
+        _537 = copy _538;
+        branch copy _538 -> [bb241, bb242];
+    }
+
     bb241: {
-        _539 = copy _2;
+        _542 = copy _525;
+        _543 = const 0_i64;
+        _537 = copy _542 > copy _543;
         goto -> bb242;
     }
 
     bb242: {
-        _538 = copy _539;
-        branch copy _539 -> [bb243, bb244];
+        _536 = copy _537;
+        branch copy _537 -> [bb243, bb244];
     }
 
     bb243: {
-        _543 = copy _526;
-        _544 = const 0_i64;
-        _538 = copy _543 > copy _544;
+        _544 = copy _42;
+        _545 = const 0_i64;
+        _536 = copy _544 > copy _545;
         goto -> bb244;
     }
 
     bb244: {
-        _537 = copy _538;
-        branch copy _538 -> [bb245, bb246];
+        _535 = copy _536;
+        branch copy _536 -> [bb245, bb246];
     }
 
     bb245: {
-        _545 = copy _42;
-        _546 = const 0_i64;
-        _537 = copy _545 > copy _546;
+        _546 = copy _528;
+        _547 = const 42_i64;
+        _535 = copy _546 != copy _547;
         goto -> bb246;
     }
 
     bb246: {
-        _536 = copy _537;
-        branch copy _537 -> [bb247, bb248];
+        branch copy _535 -> [bb237, bb238];
     }
 
     bb247: {
-        _547 = copy _529;
-        _548 = const 42_i64;
-        _536 = copy _547 != copy _548;
-        goto -> bb248;
+        _567 = len(_555);
+        _568 = copy _566 < copy _567;
+        branch copy _568 -> [bb248, bb250];
     }
 
     bb248: {
-        branch copy _536 -> [bb239, bb240];
-    }
-
-    bb249: {
-        _568 = len(_556);
-        _569 = copy _567 < copy _568;
-        branch copy _569 -> [bb250, bb252];
-    }
-
-    bb250: {
-        _570 = copy _556[_567];
-        _571 = copy _570;
-        _574 = const 10_i64;
-        _575 = const 20_i64;
-        _576 = const 30_i64;
-        _577 = const 40_i64;
-        _578 = const 50_i64;
-        _579 = const 60_i64;
-        _580 = const 70_i64;
-        _581 = const 80_i64;
-        _582 = const 90_i64;
-        _583 = const 100_i64;
-        _573 = [copy _574, copy _575, copy _576, copy _577, copy _578, copy _579, copy _580, copy _581, copy _582, copy _583];
-        _584 = const 0_i64;
-        goto -> bb253;
-    }
-
-    bb251: {
-        _567 = copy _567 + const 1_i64;
-        goto -> bb249;
-    }
-
-    bb252: {
-        goto -> bb266;
-    }
-
-    bb253: {
-        _585 = len(_573);
-        _586 = copy _584 < copy _585;
-        branch copy _586 -> [bb254, bb256];
-    }
-
-    bb254: {
-        _587 = copy _573[_584];
-        _588 = copy _587;
-        _594 = copy _571;
-        _595 = copy _588;
-        _593 = copy _594 * copy _595;
-        _596 = const 500_i64;
-        _592 = copy _593 > copy _596;
-        _591 = copy _592;
-        branch copy _592 -> [bb257, bb258];
-    }
-
-    bb255: {
-        _584 = copy _584 + const 1_i64;
-        goto -> bb253;
-    }
-
-    bb256: {
-        _572 = const null;
+        _569 = copy _555[_566];
+        _570 = copy _569;
+        _573 = const 10_i64;
+        _574 = const 20_i64;
+        _575 = const 30_i64;
+        _576 = const 40_i64;
+        _577 = const 50_i64;
+        _578 = const 60_i64;
+        _579 = const 70_i64;
+        _580 = const 80_i64;
+        _581 = const 90_i64;
+        _582 = const 100_i64;
+        _572 = [copy _573, copy _574, copy _575, copy _576, copy _577, copy _578, copy _579, copy _580, copy _581, copy _582];
+        _583 = const 0_i64;
         goto -> bb251;
     }
 
+    bb249: {
+        _566 = copy _566 + const 1_i64;
+        goto -> bb247;
+    }
+
+    bb250: {
+        goto -> bb264;
+    }
+
+    bb251: {
+        _584 = len(_572);
+        _585 = copy _583 < copy _584;
+        branch copy _585 -> [bb252, bb254];
+    }
+
+    bb252: {
+        _586 = copy _572[_583];
+        _587 = copy _586;
+        _593 = copy _570;
+        _594 = copy _587;
+        _592 = copy _593 * copy _594;
+        _595 = const 500_i64;
+        _591 = copy _592 > copy _595;
+        _590 = copy _591;
+        branch copy _591 -> [bb255, bb256];
+    }
+
+    bb253: {
+        _583 = copy _583 + const 1_i64;
+        goto -> bb251;
+    }
+
+    bb254: {
+        _571 = const null;
+        goto -> bb249;
+    }
+
+    bb255: {
+        _597 = copy _570;
+        _598 = copy _587;
+        _596 = copy _597 + copy _598;
+        _599 = const 100_i64;
+        _590 = copy _596 < copy _599;
+        goto -> bb256;
+    }
+
+    bb256: {
+        branch copy _590 -> [bb257, bb258];
+    }
+
     bb257: {
-        _598 = copy _571;
-        _599 = copy _588;
-        _597 = copy _598 + copy _599;
-        _600 = const 100_i64;
-        _591 = copy _597 < copy _600;
-        goto -> bb258;
+        _601 = copy _570;
+        _602 = const 3_i64;
+        _600 = copy _601 % copy _602;
+        switch copy _600 [0: bb262, 1: bb263, otherwise: bb261];
     }
 
     bb258: {
-        branch copy _591 -> [bb259, bb260];
+        _589 = const 0_i64;
+        goto -> bb259;
     }
 
     bb259: {
-        _602 = copy _571;
-        _603 = const 3_i64;
-        _601 = copy _602 % copy _603;
-        switch copy _601 [0: bb264, 1: bb265, otherwise: bb263] (exhaustive);
+        _613 = copy _589;
+        _42 = copy _42 + copy _613;
+        _588 = const null;
+        goto -> bb253;
     }
 
     bb260: {
-        _590 = const 0_i64;
-        goto -> bb261;
+        goto -> bb259;
     }
 
     bb261: {
-        _614 = copy _590;
-        _42 = copy _42 + copy _614;
-        _589 = const null;
-        goto -> bb255;
+        _611 = copy _570;
+        _612 = copy _587;
+        _589 = copy _611 * copy _612;
+        goto -> bb260;
     }
 
     bb262: {
-        goto -> bb261;
+        _604 = copy _570;
+        _605 = copy _587;
+        _603 = copy _604 * copy _605;
+        _606 = copy _42;
+        _589 = copy _603 + copy _606;
+        goto -> bb260;
     }
 
     bb263: {
-        _612 = copy _571;
-        _613 = copy _588;
-        _590 = copy _612 * copy _613;
-        goto -> bb262;
+        _608 = copy _570;
+        _609 = copy _587;
+        _607 = copy _608 * copy _609;
+        _610 = copy _42;
+        _589 = copy _607 - copy _610;
+        goto -> bb260;
     }
 
     bb264: {
-        _605 = copy _571;
-        _606 = copy _588;
-        _604 = copy _605 * copy _606;
-        _607 = copy _42;
-        _590 = copy _604 + copy _607;
-        goto -> bb262;
+        _615 = copy _3;
+        _616 = const 10_i64;
+        _614 = copy _615 < copy _616;
+        branch copy _614 -> [bb265, bb266];
     }
 
     bb265: {
-        _609 = copy _571;
-        _610 = copy _588;
-        _608 = copy _609 * copy _610;
-        _611 = copy _42;
-        _590 = copy _608 - copy _611;
-        goto -> bb262;
+        _618 = const 1_i64;
+        _3 = copy _3 + copy _618;
+        _617 = const null;
+        goto -> bb264;
     }
 
     bb266: {
-        _616 = copy _3;
-        _617 = const 10_i64;
-        _615 = copy _616 < copy _617;
-        branch copy _615 -> [bb267, bb268];
+        _620 = const 0_i64;
+        goto -> bb267;
     }
 
     bb267: {
-        _619 = const 1_i64;
-        _3 = copy _3 + copy _619;
-        _618 = const null;
-        goto -> bb266;
+        _622 = copy _620;
+        _623 = const 10_i64;
+        _621 = copy _622 < copy _623;
+        branch copy _621 -> [bb268, bb269];
     }
 
     bb268: {
-        _621 = const 0_i64;
-        goto -> bb269;
+        _625 = copy _620;
+        _42 = copy _42 + copy _625;
+        _624 = const null;
+        _626 = const 1_i64;
+        _620 = copy _620 + copy _626;
+        goto -> bb267;
     }
 
     bb269: {
-        _623 = copy _621;
-        _624 = const 10_i64;
-        _622 = copy _623 < copy _624;
-        branch copy _622 -> [bb270, bb271];
+        _619 = const null;
+        _627 = copy _1;
+        _628 = const 0_i64;
+        goto -> bb270;
     }
 
     bb270: {
-        _626 = copy _621;
-        _42 = copy _42 + copy _626;
-        _625 = const null;
-        _627 = const 1_i64;
-        _621 = copy _621 + copy _627;
-        goto -> bb269;
+        _629 = len(_627);
+        _630 = copy _628 < copy _629;
+        branch copy _630 -> [bb271, bb273];
     }
 
     bb271: {
-        _620 = const null;
-        _628 = copy _1;
-        _629 = const 0_i64;
+        _631 = copy _627[_628];
+        _632 = copy _631;
+        _634 = copy _632;
+        _42 = copy _42 + copy _634;
+        _633 = const null;
         goto -> bb272;
     }
 
     bb272: {
-        _630 = len(_628);
-        _631 = copy _629 < copy _630;
-        branch copy _631 -> [bb273, bb275];
+        _628 = copy _628 + const 1_i64;
+        goto -> bb270;
     }
 
     bb273: {
-        _632 = copy _628[_629];
-        _633 = copy _632;
-        _635 = copy _633;
-        _42 = copy _42 + copy _635;
-        _634 = const null;
+        _635 = const 1_i64;
+        _636 = const 2_i64;
+        _638 = copy _3;
+        _639 = copy _42;
+        _637 = copy _638 + copy _639;
+        _641 = const "key";
+        _642 = const 42_i64;
+        _640 = { copy _641: copy _642 };
+        _652 = copy _3;
+        _653 = copy _3;
+        _651 = copy _652 * copy _653;
+        _655 = copy _42;
+        _656 = copy _42;
+        _654 = copy _655 * copy _656;
+        _650 = copy _651 + copy _654;
+        _658 = copy _3;
+        _659 = copy _42;
+        _657 = copy _658 * copy _659;
+        _649 = copy _650 + copy _657;
+        _660 = copy _3;
+        _648 = copy _649 + copy _660;
+        _661 = copy _42;
+        _647 = copy _648 + copy _661;
+        _664 = copy _3;
+        _665 = copy _3;
+        _663 = copy _664 * copy _665;
+        _666 = copy _3;
+        _662 = copy _663 * copy _666;
+        _646 = copy _647 + copy _662;
+        _669 = copy _42;
+        _670 = copy _42;
+        _668 = copy _669 * copy _670;
+        _671 = copy _42;
+        _667 = copy _668 * copy _671;
+        _645 = copy _646 + copy _667;
+        _674 = copy _3;
+        _675 = copy _42;
+        _673 = copy _674 * copy _675;
+        _676 = copy _3;
+        _672 = copy _673 * copy _676;
+        _644 = copy _645 + copy _672;
+        _679 = copy _42;
+        _680 = copy _3;
+        _678 = copy _679 * copy _680;
+        _681 = copy _42;
+        _677 = copy _678 * copy _681;
+        _643 = copy _644 + copy _677;
+        _683 = const "outer";
+        _685 = const "inner";
+        _687 = const "deep";
+        _688 = const 42_i64;
+        _686 = { copy _687: copy _688 };
+        _684 = { copy _685: copy _686 };
+        _682 = { copy _683: copy _684 };
+        _689 = const 42_i64;
+        _690 = const 42_i64;
+        _692 = const "key";
+        _693 = const 42_i64;
+        _691 = { copy _692: copy _693 };
+        _695 = const "key";
+        _696 = const 42_i64;
+        _694 = { copy _695: copy _696 };
+        _706 = copy _3;
+        _707 = copy _3;
+        _705 = copy _706 * copy _707;
+        _709 = copy _42;
+        _710 = copy _42;
+        _708 = copy _709 * copy _710;
+        _704 = copy _705 + copy _708;
+        _712 = copy _3;
+        _713 = copy _42;
+        _711 = copy _712 * copy _713;
+        _703 = copy _704 + copy _711;
+        _714 = copy _3;
+        _702 = copy _703 + copy _714;
+        _715 = copy _42;
+        _701 = copy _702 + copy _715;
+        _718 = copy _3;
+        _719 = copy _3;
+        _717 = copy _718 * copy _719;
+        _720 = copy _3;
+        _716 = copy _717 * copy _720;
+        _700 = copy _701 + copy _716;
+        _723 = copy _42;
+        _724 = copy _42;
+        _722 = copy _723 * copy _724;
+        _725 = copy _42;
+        _721 = copy _722 * copy _725;
+        _699 = copy _700 + copy _721;
+        _728 = copy _3;
+        _729 = copy _42;
+        _727 = copy _728 * copy _729;
+        _730 = copy _3;
+        _726 = copy _727 * copy _730;
+        _698 = copy _699 + copy _726;
+        _733 = copy _42;
+        _734 = copy _3;
+        _732 = copy _733 * copy _734;
+        _735 = copy _42;
+        _731 = copy _732 * copy _735;
+        _697 = copy _698 + copy _731;
+        _745 = copy _3;
+        _746 = copy _3;
+        _744 = copy _745 * copy _746;
+        _748 = copy _42;
+        _749 = copy _42;
+        _747 = copy _748 * copy _749;
+        _743 = copy _744 + copy _747;
+        _751 = copy _3;
+        _752 = copy _42;
+        _750 = copy _751 * copy _752;
+        _742 = copy _743 + copy _750;
+        _753 = copy _3;
+        _741 = copy _742 + copy _753;
+        _754 = copy _42;
+        _740 = copy _741 + copy _754;
+        _757 = copy _3;
+        _758 = copy _3;
+        _756 = copy _757 * copy _758;
+        _759 = copy _3;
+        _755 = copy _756 * copy _759;
+        _739 = copy _740 + copy _755;
+        _762 = copy _42;
+        _763 = copy _42;
+        _761 = copy _762 * copy _763;
+        _764 = copy _42;
+        _760 = copy _761 * copy _764;
+        _738 = copy _739 + copy _760;
+        _767 = copy _3;
+        _768 = copy _42;
+        _766 = copy _767 * copy _768;
+        _769 = copy _3;
+        _765 = copy _766 * copy _769;
+        _737 = copy _738 + copy _765;
+        _772 = copy _42;
+        _773 = copy _3;
+        _771 = copy _772 * copy _773;
+        _774 = copy _42;
+        _770 = copy _771 * copy _774;
+        _736 = copy _737 + copy _770;
+        _0 = copy _42;
         goto -> bb274;
     }
 
     bb274: {
-        _629 = copy _629 + const 1_i64;
-        goto -> bb272;
-    }
-
-    bb275: {
-        _636 = const 1_i64;
-        _637 = const 2_i64;
-        _639 = copy _3;
-        _640 = copy _42;
-        _638 = copy _639 + copy _640;
-        _642 = const "key";
-        _643 = const 42_i64;
-        _641 = { copy _642: copy _643 };
-        _653 = copy _3;
-        _654 = copy _3;
-        _652 = copy _653 * copy _654;
-        _656 = copy _42;
-        _657 = copy _42;
-        _655 = copy _656 * copy _657;
-        _651 = copy _652 + copy _655;
-        _659 = copy _3;
-        _660 = copy _42;
-        _658 = copy _659 * copy _660;
-        _650 = copy _651 + copy _658;
-        _661 = copy _3;
-        _649 = copy _650 + copy _661;
-        _662 = copy _42;
-        _648 = copy _649 + copy _662;
-        _665 = copy _3;
-        _666 = copy _3;
-        _664 = copy _665 * copy _666;
-        _667 = copy _3;
-        _663 = copy _664 * copy _667;
-        _647 = copy _648 + copy _663;
-        _670 = copy _42;
-        _671 = copy _42;
-        _669 = copy _670 * copy _671;
-        _672 = copy _42;
-        _668 = copy _669 * copy _672;
-        _646 = copy _647 + copy _668;
-        _675 = copy _3;
-        _676 = copy _42;
-        _674 = copy _675 * copy _676;
-        _677 = copy _3;
-        _673 = copy _674 * copy _677;
-        _645 = copy _646 + copy _673;
-        _680 = copy _42;
-        _681 = copy _3;
-        _679 = copy _680 * copy _681;
-        _682 = copy _42;
-        _678 = copy _679 * copy _682;
-        _644 = copy _645 + copy _678;
-        _684 = const "outer";
-        _686 = const "inner";
-        _688 = const "deep";
-        _689 = const 42_i64;
-        _687 = { copy _688: copy _689 };
-        _685 = { copy _686: copy _687 };
-        _683 = { copy _684: copy _685 };
-        _690 = const 42_i64;
-        _691 = const 42_i64;
-        _693 = const "key";
-        _694 = const 42_i64;
-        _692 = { copy _693: copy _694 };
-        _696 = const "key";
-        _697 = const 42_i64;
-        _695 = { copy _696: copy _697 };
-        _707 = copy _3;
-        _708 = copy _3;
-        _706 = copy _707 * copy _708;
-        _710 = copy _42;
-        _711 = copy _42;
-        _709 = copy _710 * copy _711;
-        _705 = copy _706 + copy _709;
-        _713 = copy _3;
-        _714 = copy _42;
-        _712 = copy _713 * copy _714;
-        _704 = copy _705 + copy _712;
-        _715 = copy _3;
-        _703 = copy _704 + copy _715;
-        _716 = copy _42;
-        _702 = copy _703 + copy _716;
-        _719 = copy _3;
-        _720 = copy _3;
-        _718 = copy _719 * copy _720;
-        _721 = copy _3;
-        _717 = copy _718 * copy _721;
-        _701 = copy _702 + copy _717;
-        _724 = copy _42;
-        _725 = copy _42;
-        _723 = copy _724 * copy _725;
-        _726 = copy _42;
-        _722 = copy _723 * copy _726;
-        _700 = copy _701 + copy _722;
-        _729 = copy _3;
-        _730 = copy _42;
-        _728 = copy _729 * copy _730;
-        _731 = copy _3;
-        _727 = copy _728 * copy _731;
-        _699 = copy _700 + copy _727;
-        _734 = copy _42;
-        _735 = copy _3;
-        _733 = copy _734 * copy _735;
-        _736 = copy _42;
-        _732 = copy _733 * copy _736;
-        _698 = copy _699 + copy _732;
-        _746 = copy _3;
-        _747 = copy _3;
-        _745 = copy _746 * copy _747;
-        _749 = copy _42;
-        _750 = copy _42;
-        _748 = copy _749 * copy _750;
-        _744 = copy _745 + copy _748;
-        _752 = copy _3;
-        _753 = copy _42;
-        _751 = copy _752 * copy _753;
-        _743 = copy _744 + copy _751;
-        _754 = copy _3;
-        _742 = copy _743 + copy _754;
-        _755 = copy _42;
-        _741 = copy _742 + copy _755;
-        _758 = copy _3;
-        _759 = copy _3;
-        _757 = copy _758 * copy _759;
-        _760 = copy _3;
-        _756 = copy _757 * copy _760;
-        _740 = copy _741 + copy _756;
-        _763 = copy _42;
-        _764 = copy _42;
-        _762 = copy _763 * copy _764;
-        _765 = copy _42;
-        _761 = copy _762 * copy _765;
-        _739 = copy _740 + copy _761;
-        _768 = copy _3;
-        _769 = copy _42;
-        _767 = copy _768 * copy _769;
-        _770 = copy _3;
-        _766 = copy _767 * copy _770;
-        _738 = copy _739 + copy _766;
-        _773 = copy _42;
-        _774 = copy _3;
-        _772 = copy _773 * copy _774;
-        _775 = copy _42;
-        _771 = copy _772 * copy _775;
-        _737 = copy _738 + copy _771;
-        _0 = copy _42;
-        goto -> bb276;
-    }
-
-    bb276: {
         return;
     }
 }
@@ -6920,216 +6911,167 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     let _38: bool
     let _39: int // n
     let _40: null
-    let _41: bool
-    let _42: bool
-    let _43: bool
+    let _41: int
+    let _42: null
+    let _43: null
     let _44: null
-    let _45: bool
-    let _46: bool
+    let _45: int
+    let _46: null
     let _47: bool
-    let _48: bool
-    let _49: bool
-    let _50: null
-    let _51: bool
-    let _52: bool
-    let _53: bool
-    let _54: null
-    let _55: bool
-    let _56: bool
-    let _57: bool
-    let _58: null
-    let _59: bool
-    let _60: MatchSuccess // s
-    let _61: MatchSuccess
-    let _62: bool
-    let _63: MatchFailure // f
-    let _64: MatchFailure
-    let _65: null
-    let _66: bool
-    let _67: MatchSuccess | MatchFailure // x
+    let _48: MatchSuccess // s
+    let _49: MatchSuccess
+    let _50: bool
+    let _51: MatchFailure // f
+    let _52: MatchFailure
+    let _53: null
+    let _54: bool
+    let _55: MatchSuccess | MatchFailure // x
+    let _56: null
+    let _57: null
+    let _58: bool
+    let _59: int // n
+    let _60: bool
+    let _61: int
+    let _62: 0
+    let _63: bool
+    let _64: int // n
+    let _65: bool
+    let _66: int
+    let _67: 0
     let _68: null
     let _69: bool
-    let _70: bool
+    let _70: int // n
     let _71: bool
     let _72: bool
     let _73: bool
     let _74: bool
-    let _75: null
+    let _75: bool
     let _76: bool
-    let _77: int // n
-    let _78: bool
+    let _77: int
+    let _78: 0
     let _79: int
-    let _80: 0
-    let _81: bool
-    let _82: int // n
-    let _83: bool
-    let _84: int
-    let _85: 0
-    let _86: null
-    let _87: bool
-    let _88: int // n
-    let _89: bool
-    let _90: bool
-    let _91: bool
-    let _92: bool
-    let _93: bool
-    let _94: bool
-    let _95: int
-    let _96: 0
-    let _97: int
-    let _98: 100
-    let _99: int
-    let _100: 42
-    let _101: int
-    let _102: 13
-    let _103: int
-    let _104: 7
-    let _105: int
-    let _106: 99
-    let _107: null
-    let _108: null
-    let _109: bool
-    let _110: bool
-    let _111: bool
-    let _112: bool
-    let _113: bool
-    let _114: bool
+    let _80: 100
+    let _81: int
+    let _82: 42
+    let _83: int
+    let _84: 13
+    let _85: int
+    let _86: 7
+    let _87: int
+    let _88: 99
+    let _89: null
+    let _90: null
+    let _91: null
+    let _92: int
+    let _93: null
+    let _94: "this is the true branch with a very long string" | "this is the false branch also very long" // result
+    let _95: bool
+    let _96: null
+    let _97: bool
+    let _98: int // n
+    let _99: bool
+    let _100: bool
+    let _101: bool
+    let _102: bool
+    let _103: bool
+    let _104: int
+    let _105: 0
+    let _106: int
+    let _107: 100
+    let _108: int
+    let _109: 42
+    let _110: int
+    let _111: 13
+    let _112: int
+    let _113: 7
+    let _114: null
     let _115: bool
-    let _116: bool
+    let _116: int // n
     let _117: bool
     let _118: bool
     let _119: bool
     let _120: bool
     let _121: bool
-    let _122: bool
-    let _123: bool
-    let _124: bool
-    let _125: bool
-    let _126: bool
-    let _127: bool
-    let _128: bool
-    let _129: bool
-    let _130: bool
-    let _131: bool
-    let _132: bool
-    let _133: bool
-    let _134: null
-    let _135: bool
-    let _136: bool
-    let _137: bool
-    let _138: null
-    let _139: "this is the true branch with a very long string" | "this is the false branch also very long" // result
-    let _140: bool
-    let _141: null
-    let _142: bool
-    let _143: int // n
-    let _144: bool
-    let _145: bool
-    let _146: bool
-    let _147: bool
-    let _148: bool
-    let _149: int
-    let _150: 0
-    let _151: int
-    let _152: 100
-    let _153: int
-    let _154: 42
-    let _155: int
-    let _156: 13
+    let _122: int
+    let _123: 0
+    let _124: int
+    let _125: 100
+    let _126: int
+    let _127: 42
+    let _128: int
+    let _129: 13
+    let _130: int
+    let _131: 7
+    let _132: null
+    let _133: int
+    let _134: int
+    let _135: 1
+    let _136: null
+    let _137: void
+    let _138: void
+    let _139: void
+    let _140: void
+    let _141: void
+    let _142: void
+    let _143: void
+    let _144: void
+    let _145: int
+    let _146: int
+    let _147: int
+    let _148: void
+    let _149: bool
+    let _150: bool
+    let _151: void
+    let _152: int
+    let _153: bool
+    let _154: int
+    let _155: bool
+    let _156: int
     let _157: int
-    let _158: 7
-    let _159: null
-    let _160: bool
-    let _161: int // n
-    let _162: bool
+    let _158: int
+    let _159: int
+    let _160: int
+    let _161: void
+    let _162: void
     let _163: bool
     let _164: bool
     let _165: bool
-    let _166: bool
-    let _167: int
-    let _168: 0
-    let _169: int
-    let _170: 100
-    let _171: int
-    let _172: 42
-    let _173: int
-    let _174: 13
-    let _175: int
-    let _176: 7
-    let _177: null
+    let _166: void
+    let _167: void
+    let _168: int
+    let _169: bool
+    let _170: int
+    let _171: void
+    let _172: void
+    let _173: bool
+    let _174: int
+    let _175: bool
+    let _176: null
+    let _177: int
     let _178: int
-    let _179: int
-    let _180: 1
+    let _179: 1
+    let _180: null
     let _181: null
-    let _182: void
-    let _183: void
-    let _184: void
-    let _185: void
-    let _186: void
-    let _187: void
-    let _188: void
-    let _189: void
-    let _190: int
-    let _191: int
-    let _192: int
-    let _193: void
-    let _194: bool
-    let _195: bool
-    let _196: void
-    let _197: int
-    let _198: bool
-    let _199: int
-    let _200: bool
-    let _201: int
-    let _202: int
-    let _203: int
-    let _204: int
-    let _205: int
-    let _206: void
-    let _207: void
-    let _208: bool
-    let _209: bool
-    let _210: bool
-    let _211: void
-    let _212: void
-    let _213: int
-    let _214: bool
-    let _215: int
-    let _216: void
-    let _217: void
-    let _218: bool
-    let _219: int
-    let _220: bool
-    let _221: null
-    let _222: int
-    let _223: int
-    let _224: 1
-    let _225: null
-    let _226: null
-    let _227: bool
-    let _228: bool
-    let _229: null
-    let _230: bool
-    let _231: bool
-    let _232: bool
-    let _233: bool
-    let _234: bool
-    let _235: bool
-    let _236: MatchSuccess // s
-    let _237: bool
-    let _238: MatchSuccess
-    let _239: bool
-    let _240: bool
-    let _241: MatchFailure // f
-    let _242: MatchFailure
-    let _243: null
-    let _244: bool
-    let _245: bool
-    let _246: bool
-    let _247: bool
+    let _182: bool
+    let _183: bool
+    let _184: null
+    let _185: bool
+    let _186: int
+    let _187: bool
+    let _188: bool
+    let _189: MatchSuccess // s
+    let _190: bool
+    let _191: MatchSuccess
+    let _192: bool
+    let _193: bool
+    let _194: MatchFailure // f
+    let _195: MatchFailure
+    let _196: null
+    let _197: bool
+    let _198: int
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb3] (exhaustive);
+        switch copy _1 [0: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -7137,7 +7079,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb2: {
-        switch copy _1 [0: bb7, 1: bb8, 2: bb9, 3: bb10, 4: bb11, otherwise: bb6] (exhaustive);
+        switch copy _1 [0: bb7, 1: bb8, 2: bb9, 3: bb10, 4: bb11, otherwise: bb6];
     }
 
     bb3: {
@@ -7151,7 +7093,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb5: {
-        switch copy _1 [0: bb14, otherwise: bb13] (exhaustive);
+        switch copy _1 [0: bb14, otherwise: bb13];
     }
 
     bb6: {
@@ -7185,7 +7127,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb12: {
-        switch copy _1 [0: bb17, otherwise: bb16] (exhaustive);
+        switch copy _1 [0: bb17, otherwise: bb16];
     }
 
     bb13: {
@@ -7204,7 +7146,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb15: {
-        switch copy _1 [0: bb20, otherwise: bb19] (exhaustive);
+        switch copy _1 [0: bb20, otherwise: bb19];
     }
 
     bb16: {
@@ -7239,7 +7181,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
 
     bb22: {
         _17 = copy _1;
-        _19 = const null;
+        _19 = copy _17;
         _20 = const 0_i64;
         _18 = copy _19 > copy _20;
         branch copy _18 -> [bb24, bb23];
@@ -7260,17 +7202,16 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb26: {
-        _15 = const null;
-        goto -> bb21;
+        unreachable;
     }
 
     bb27: {
-        switch copy _1 [0: bb35, 1: bb36, 42: bb37, otherwise: bb34] (exhaustive);
+        switch copy _1 [0: bb35, 1: bb36, 42: bb37, otherwise: bb34];
     }
 
     bb28: {
         _23 = copy _1;
-        _25 = const null;
+        _25 = copy _23;
         _26 = const 0_i64;
         _24 = copy _25 > copy _26;
         branch copy _24 -> [bb30, bb29];
@@ -7291,8 +7232,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb32: {
-        _21 = const null;
-        goto -> bb27;
+        unreachable;
     }
 
     bb33: {
@@ -7351,12 +7291,11 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb44: {
-        _28 = const null;
-        goto -> bb38;
+        unreachable;
     }
 
     bb45: {
-        switch copy _1 [0: bb52, otherwise: bb51] (exhaustive);
+        switch copy _1 [0: bb52, otherwise: bb51];
     }
 
     bb46: {
@@ -7375,8 +7314,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb49: {
-        _32 = const null;
-        goto -> bb45;
+        unreachable;
     }
 
     bb50: {
@@ -7396,8 +7334,8 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb53: {
-        _41 = copy _2 == const user.MatchStatus.Active;
-        branch copy _41 -> [bb57, bb58];
+        _41 = discriminant(_2);
+        switch copy _41 [MatchStatus.Active: bb58, MatchStatus.Inactive: bb59, MatchStatus.Pending: bb60, otherwise: bb57] (exhaustive);
     }
 
     bb54: {
@@ -7407,23 +7345,20 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb55: {
-        _37 = const null;
-        goto -> bb53;
+        unreachable;
     }
 
     bb56: {
-        _45 = copy _1 == const 0_i64;
-        branch copy _45 -> [bb64, bb66];
+        switch copy _1 [0: bb63, 1: bb63, 2: bb64, 3: bb64, 4: bb64, otherwise: bb62];
     }
 
     bb57: {
-        _40 = const "active";
-        goto -> bb56;
+        unreachable;
     }
 
     bb58: {
-        _42 = copy _2 == const user.MatchStatus.Inactive;
-        branch copy _42 -> [bb59, bb60];
+        _40 = const "active";
+        goto -> bb56;
     }
 
     bb59: {
@@ -7432,1092 +7367,814 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb60: {
-        _43 = copy _2 == const user.MatchStatus.Pending;
-        branch copy _43 -> [bb61, bb62];
-    }
-
-    bb61: {
         _40 = const "pending";
         goto -> bb56;
     }
 
+    bb61: {
+        switch copy _1 [0: bb67, 1: bb68, 2: bb68, otherwise: bb66];
+    }
+
     bb62: {
-        _40 = const null;
-        goto -> bb56;
+        _42 = const "big";
+        goto -> bb61;
     }
 
     bb63: {
-        _51 = copy _1 == const 0_i64;
-        branch copy _51 -> [bb74, bb75];
+        _42 = const "binary";
+        goto -> bb61;
     }
 
     bb64: {
-        _44 = const "binary";
-        goto -> bb63;
+        _42 = const "small";
+        goto -> bb61;
     }
 
     bb65: {
-        _47 = copy _1 == const 2_i64;
-        branch copy _47 -> [bb67, bb69];
+        _45 = discriminant(_2);
+        switch copy _45 [MatchStatus.Active: bb71, MatchStatus.Pending: bb71, MatchStatus.Inactive: bb72, otherwise: bb70] (exhaustive);
     }
 
     bb66: {
-        _46 = copy _1 == const 1_i64;
-        branch copy _46 -> [bb64, bb65];
+        _43 = const "other";
+        goto -> bb65;
     }
 
     bb67: {
-        _44 = const "small";
-        goto -> bb63;
+        _43 = const "zero";
+        goto -> bb65;
     }
 
     bb68: {
-        goto -> bb71;
+        _43 = const "small";
+        goto -> bb65;
     }
 
     bb69: {
-        _48 = copy _1 == const 3_i64;
-        branch copy _48 -> [bb67, bb70];
+        _47 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)));
+        branch copy _47 -> [bb74, bb75];
     }
 
     bb70: {
-        _49 = copy _1 == const 4_i64;
-        branch copy _49 -> [bb67, bb68];
+        unreachable;
     }
 
     bb71: {
-        _44 = const "big";
-        goto -> bb63;
+        _44 = const "actionable";
+        goto -> bb69;
     }
 
     bb72: {
-        _44 = const null;
-        goto -> bb63;
+        _44 = const "done";
+        goto -> bb69;
     }
 
     bb73: {
-        _55 = copy _2 == const user.MatchStatus.Active;
-        branch copy _55 -> [bb82, bb84];
+        _54 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)), Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None))], TyAttr(None)));
+        branch copy _54 -> [bb79, bb80];
     }
 
     bb74: {
-        _50 = const "zero";
+        _48 = copy _3;
+        _49 = copy _48;
+        _46 = copy _49.0;
         goto -> bb73;
     }
 
     bb75: {
-        _52 = copy _1 == const 1_i64;
-        branch copy _52 -> [bb76, bb78];
+        _50 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None)));
+        branch copy _50 -> [bb76, bb77];
     }
 
     bb76: {
-        _50 = const "small";
+        _51 = copy _3;
+        _52 = copy _51;
+        _46 = copy _52.0;
         goto -> bb73;
     }
 
     bb77: {
-        goto -> bb79;
+        unreachable;
     }
 
     bb78: {
-        _53 = copy _1 == const 2_i64;
-        branch copy _53 -> [bb76, bb77];
+        switch copy _55 [0: bb83, 1: bb83, 2: bb83, 3: bb83, 4: bb83, 5: bb83, otherwise: bb82];
     }
 
     bb79: {
-        _50 = const "other";
-        goto -> bb73;
+        _55 = copy _3;
+        _53 = const "something";
+        goto -> bb78;
     }
 
     bb80: {
-        _50 = const null;
-        goto -> bb73;
+        unreachable;
     }
 
     bb81: {
-        _59 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)));
-        branch copy _59 -> [bb88, bb89];
+        _58 = is_type(copy _55, Int { attr: TyAttr(None) });
+        branch copy _58 -> [bb85, bb86];
     }
 
     bb82: {
-        _54 = const "actionable";
+        _56 = const "big";
         goto -> bb81;
     }
 
     bb83: {
-        _57 = copy _2 == const user.MatchStatus.Inactive;
-        branch copy _57 -> [bb85, bb86];
+        _56 = const "small";
+        goto -> bb81;
     }
 
     bb84: {
-        _56 = copy _2 == const user.MatchStatus.Pending;
-        branch copy _56 -> [bb82, bb83];
+        _69 = is_type(copy _55, Int { attr: TyAttr(None) });
+        branch copy _69 -> [bb94, bb95];
     }
 
     bb85: {
-        _54 = const "done";
-        goto -> bb81;
+        _59 = copy _55;
+        _61 = copy _59;
+        _62 = const 0_i64;
+        _60 = copy _61 > copy _62;
+        branch copy _60 -> [bb87, bb86];
     }
 
     bb86: {
-        _54 = const null;
-        goto -> bb81;
+        _63 = is_type(copy _55, Int { attr: TyAttr(None) });
+        branch copy _63 -> [bb88, bb89];
     }
 
     bb87: {
-        _66 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)), Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None))], TyAttr(None)));
-        branch copy _66 -> [bb93, bb94];
+        _57 = const "positive";
+        goto -> bb84;
     }
 
     bb88: {
-        _60 = copy _3;
-        _61 = copy _60;
-        _58 = copy _61.0;
-        goto -> bb87;
+        _64 = copy _55;
+        _66 = copy _64;
+        _67 = const 0_i64;
+        _65 = copy _66 < copy _67;
+        branch copy _65 -> [bb90, bb89];
     }
 
     bb89: {
-        _62 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None)));
-        branch copy _62 -> [bb90, bb91];
+        goto -> bb91;
     }
 
     bb90: {
-        _63 = copy _3;
-        _64 = const null;
-        _58 = copy _64.0;
-        goto -> bb87;
+        _57 = const "negative";
+        goto -> bb84;
     }
 
     bb91: {
-        _58 = const null;
-        goto -> bb87;
+        _57 = const "zero";
+        goto -> bb84;
     }
 
     bb92: {
-        _69 = copy _67 == const 0_i64;
-        branch copy _69 -> [bb96, bb98];
+        unreachable;
     }
 
     bb93: {
-        _67 = copy _3;
-        _65 = const "something";
-        goto -> bb92;
+        switch copy _55 [0: bb111, 1: bb112, otherwise: bb110];
     }
 
     bb94: {
-        _65 = const null;
-        goto -> bb92;
+        _70 = copy _55;
+        _77 = copy _70;
+        _78 = const 0_i64;
+        _76 = copy _77 > copy _78;
+        _75 = copy _76;
+        branch copy _76 -> [bb96, bb97];
     }
 
     bb95: {
-        _76 = is_type(copy _67, Int { attr: TyAttr(None) });
-        branch copy _76 -> [bb106, bb107];
+        goto -> bb107;
     }
 
     bb96: {
-        _68 = const "small";
-        goto -> bb95;
+        _79 = copy _70;
+        _80 = const 100_i64;
+        _75 = copy _79 < copy _80;
+        goto -> bb97;
     }
 
     bb97: {
-        goto -> bb103;
+        _74 = copy _75;
+        branch copy _75 -> [bb98, bb99];
     }
 
     bb98: {
-        _70 = copy _67 == const 1_i64;
-        branch copy _70 -> [bb96, bb99];
+        _81 = copy _70;
+        _82 = const 42_i64;
+        _74 = copy _81 != copy _82;
+        goto -> bb99;
     }
 
     bb99: {
-        _71 = copy _67 == const 2_i64;
-        branch copy _71 -> [bb96, bb100];
+        _73 = copy _74;
+        branch copy _74 -> [bb100, bb101];
     }
 
     bb100: {
-        _72 = copy _67 == const 3_i64;
-        branch copy _72 -> [bb96, bb101];
+        _83 = copy _70;
+        _84 = const 13_i64;
+        _73 = copy _83 != copy _84;
+        goto -> bb101;
     }
 
     bb101: {
-        _73 = copy _67 == const 4_i64;
-        branch copy _73 -> [bb96, bb102];
+        _72 = copy _73;
+        branch copy _73 -> [bb102, bb103];
     }
 
     bb102: {
-        _74 = copy _67 == const 5_i64;
-        branch copy _74 -> [bb96, bb97];
+        _85 = copy _70;
+        _86 = const 7_i64;
+        _72 = copy _85 != copy _86;
+        goto -> bb103;
     }
 
     bb103: {
-        _68 = const "big";
-        goto -> bb95;
+        _71 = copy _72;
+        branch copy _72 -> [bb104, bb105];
     }
 
     bb104: {
-        _68 = const null;
-        goto -> bb95;
+        _87 = copy _70;
+        _88 = const 99_i64;
+        _71 = copy _87 != copy _88;
+        goto -> bb105;
     }
 
     bb105: {
-        _87 = is_type(copy _67, Int { attr: TyAttr(None) });
-        branch copy _87 -> [bb115, bb116];
+        branch copy _71 -> [bb106, bb95];
     }
 
     bb106: {
-        _77 = copy _67;
-        _79 = const null;
-        _80 = const 0_i64;
-        _78 = copy _79 > copy _80;
-        branch copy _78 -> [bb108, bb107];
+        _68 = const "acceptable small positive number that passes all the filters";
+        goto -> bb93;
     }
 
     bb107: {
-        _81 = is_type(copy _67, Int { attr: TyAttr(None) });
-        branch copy _81 -> [bb109, bb110];
+        _68 = const "other";
+        goto -> bb93;
     }
 
     bb108: {
-        _75 = const "positive";
-        goto -> bb105;
+        unreachable;
     }
 
     bb109: {
-        _82 = copy _67;
-        _84 = const null;
-        _85 = const 0_i64;
-        _83 = copy _84 < copy _85;
-        branch copy _83 -> [bb111, bb110];
+        switch copy _55 [0: bb115, 1: bb115, 2: bb115, 3: bb115, 4: bb115, 5: bb115, 6: bb115, 7: bb115, 8: bb115, 9: bb115, 10: bb115, 11: bb115, 12: bb115, 13: bb115, 14: bb115, 15: bb115, 16: bb115, 17: bb115, 18: bb115, 19: bb115, 20: bb115, 21: bb115, 22: bb115, 23: bb115, 24: bb115, otherwise: bb114];
     }
 
     bb110: {
-        goto -> bb112;
+        _89 = const "short";
+        goto -> bb109;
     }
 
     bb111: {
-        _75 = const "negative";
-        goto -> bb105;
+        _89 = const "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now";
+        goto -> bb109;
     }
 
     bb112: {
-        _75 = const "zero";
-        goto -> bb105;
+        _89 = const "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm";
+        goto -> bb109;
     }
 
     bb113: {
-        _75 = const null;
-        goto -> bb105;
+        _92 = discriminant(_48);
+        switch copy _92 [MatchStatus.Active: bb118, MatchStatus.Inactive: bb118, MatchStatus.Pending: bb118, otherwise: bb117] (exhaustive);
     }
 
     bb114: {
-        switch copy _67 [0: bb132, 1: bb133, otherwise: bb131] (exhaustive);
+        _90 = const "other";
+        goto -> bb113;
     }
 
     bb115: {
-        _88 = copy _67;
-        _95 = const null;
-        _96 = const 0_i64;
-        _94 = copy _95 > copy _96;
-        _93 = copy _94;
-        branch copy _94 -> [bb117, bb118];
+        _90 = const "lots of literals";
+        goto -> bb113;
     }
 
     bb116: {
-        goto -> bb128;
+        switch copy _55 [0: bb121, otherwise: bb120];
     }
 
     bb117: {
-        _97 = const null;
-        _98 = const 100_i64;
-        _93 = copy _97 < copy _98;
-        goto -> bb118;
+        unreachable;
     }
 
     bb118: {
-        _92 = copy _93;
-        branch copy _93 -> [bb119, bb120];
+        _91 = const "this arm has many long enum variant names that together push past the limit easily";
+        goto -> bb116;
     }
 
     bb119: {
-        _99 = const null;
-        _100 = const 42_i64;
-        _92 = copy _99 != copy _100;
-        goto -> bb120;
+        _97 = is_type(copy _55, Int { attr: TyAttr(None) });
+        branch copy _97 -> [bb126, bb127];
     }
 
     bb120: {
-        _91 = copy _92;
-        branch copy _92 -> [bb121, bb122];
+        _93 = const "short";
+        goto -> bb119;
     }
 
     bb121: {
-        _101 = const null;
-        _102 = const 13_i64;
-        _91 = copy _101 != copy _102;
-        goto -> bb122;
+        _95 = copy _4;
+        branch copy _95 -> [bb122, bb123];
     }
 
     bb122: {
-        _90 = copy _91;
-        branch copy _91 -> [bb123, bb124];
+        _94 = const "this is the true branch with a very long string";
+        goto -> bb124;
     }
 
     bb123: {
-        _103 = const null;
-        _104 = const 7_i64;
-        _90 = copy _103 != copy _104;
+        _94 = const "this is the false branch also very long";
         goto -> bb124;
     }
 
     bb124: {
-        _89 = copy _90;
-        branch copy _90 -> [bb125, bb126];
+        _93 = copy _94;
+        goto -> bb119;
     }
 
     bb125: {
-        _105 = const null;
-        _106 = const 99_i64;
-        _89 = copy _105 != copy _106;
-        goto -> bb126;
+        _115 = is_type(copy _55, Int { attr: TyAttr(None) });
+        branch copy _115 -> [bb140, bb141];
     }
 
     bb126: {
-        branch copy _89 -> [bb127, bb116];
+        _98 = copy _55;
+        _104 = copy _98;
+        _105 = const 0_i64;
+        _103 = copy _104 > copy _105;
+        _102 = copy _103;
+        branch copy _103 -> [bb128, bb129];
     }
 
     bb127: {
-        _86 = const "acceptable small positive number that passes all the filters";
-        goto -> bb114;
+        goto -> bb137;
     }
 
     bb128: {
-        _86 = const "other";
-        goto -> bb114;
+        _106 = copy _98;
+        _107 = const 100_i64;
+        _102 = copy _106 < copy _107;
+        goto -> bb129;
     }
 
     bb129: {
-        _86 = const null;
-        goto -> bb114;
+        _101 = copy _102;
+        branch copy _102 -> [bb130, bb131];
     }
 
     bb130: {
-        _109 = copy _67 == const 0_i64;
-        branch copy _109 -> [bb135, bb137];
+        _108 = copy _98;
+        _109 = const 42_i64;
+        _101 = copy _108 != copy _109;
+        goto -> bb131;
     }
 
     bb131: {
-        _107 = const "short";
-        goto -> bb130;
+        _100 = copy _101;
+        branch copy _101 -> [bb132, bb133];
     }
 
     bb132: {
-        _107 = const "this is a very long string result that should push the arm width past the default line limit of one hundred columns easily right now";
-        goto -> bb130;
+        _110 = copy _98;
+        _111 = const 13_i64;
+        _100 = copy _110 != copy _111;
+        goto -> bb133;
     }
 
     bb133: {
-        _107 = const "another long string result that also exceeds one hundred columns to test wrapping on the second arm as well as the first arm";
-        goto -> bb130;
+        _99 = copy _100;
+        branch copy _100 -> [bb134, bb135];
     }
 
     bb134: {
-        _135 = copy _60 == const user.MatchStatus.Active;
-        branch copy _135 -> [bb164, bb166];
+        _112 = copy _98;
+        _113 = const 7_i64;
+        _99 = copy _112 != copy _113;
+        goto -> bb135;
     }
 
     bb135: {
-        _108 = const "lots of literals";
-        goto -> bb134;
+        branch copy _99 -> [bb136, bb127];
     }
 
     bb136: {
-        goto -> bb161;
+        _96 = const "acceptable small positive number that passes all the defined filter conditions";
+        goto -> bb125;
     }
 
     bb137: {
-        _110 = copy _67 == const 1_i64;
-        branch copy _110 -> [bb135, bb138];
+        _96 = const "other";
+        goto -> bb125;
     }
 
     bb138: {
-        _111 = copy _67 == const 2_i64;
-        branch copy _111 -> [bb135, bb139];
+        unreachable;
     }
 
     bb139: {
-        _112 = copy _67 == const 3_i64;
-        branch copy _112 -> [bb135, bb140];
+        _134 = copy _55;
+        _135 = const 1_i64;
+        _133 = copy _134 + copy _135;
+        switch copy _133 [0: bb155, otherwise: bb154];
     }
 
     bb140: {
-        _113 = copy _67 == const 4_i64;
-        branch copy _113 -> [bb135, bb141];
+        _116 = copy _55;
+        _122 = copy _116;
+        _123 = const 0_i64;
+        _121 = copy _122 > copy _123;
+        _120 = copy _121;
+        branch copy _121 -> [bb142, bb143];
     }
 
     bb141: {
-        _114 = copy _67 == const 5_i64;
-        branch copy _114 -> [bb135, bb142];
+        goto -> bb151;
     }
 
     bb142: {
-        _115 = copy _67 == const 6_i64;
-        branch copy _115 -> [bb135, bb143];
+        _124 = copy _116;
+        _125 = const 100_i64;
+        _120 = copy _124 < copy _125;
+        goto -> bb143;
     }
 
     bb143: {
-        _116 = copy _67 == const 7_i64;
-        branch copy _116 -> [bb135, bb144];
+        _119 = copy _120;
+        branch copy _120 -> [bb144, bb145];
     }
 
     bb144: {
-        _117 = copy _67 == const 8_i64;
-        branch copy _117 -> [bb135, bb145];
+        _126 = copy _116;
+        _127 = const 42_i64;
+        _119 = copy _126 != copy _127;
+        goto -> bb145;
     }
 
     bb145: {
-        _118 = copy _67 == const 9_i64;
-        branch copy _118 -> [bb135, bb146];
+        _118 = copy _119;
+        branch copy _119 -> [bb146, bb147];
     }
 
     bb146: {
-        _119 = copy _67 == const 10_i64;
-        branch copy _119 -> [bb135, bb147];
+        _128 = copy _116;
+        _129 = const 13_i64;
+        _118 = copy _128 != copy _129;
+        goto -> bb147;
     }
 
     bb147: {
-        _120 = copy _67 == const 11_i64;
-        branch copy _120 -> [bb135, bb148];
+        _117 = copy _118;
+        branch copy _118 -> [bb148, bb149];
     }
 
     bb148: {
-        _121 = copy _67 == const 12_i64;
-        branch copy _121 -> [bb135, bb149];
+        _130 = copy _116;
+        _131 = const 7_i64;
+        _117 = copy _130 != copy _131;
+        goto -> bb149;
     }
 
     bb149: {
-        _122 = copy _67 == const 13_i64;
-        branch copy _122 -> [bb135, bb150];
+        branch copy _117 -> [bb150, bb141];
     }
 
     bb150: {
-        _123 = copy _67 == const 14_i64;
-        branch copy _123 -> [bb135, bb151];
+        _114 = const "acceptable small positive number that passes all the defined filter conditions";
+        goto -> bb139;
     }
 
     bb151: {
-        _124 = copy _67 == const 15_i64;
-        branch copy _124 -> [bb135, bb152];
+        _114 = const "other";
+        goto -> bb139;
     }
 
     bb152: {
-        _125 = copy _67 == const 16_i64;
-        branch copy _125 -> [bb135, bb153];
+        unreachable;
     }
 
     bb153: {
-        _126 = copy _67 == const 17_i64;
-        branch copy _126 -> [bb135, bb154];
+        _146 = copy _55;
+        _147 = copy _55;
+        _145 = copy _146 * copy _147;
+        _149 = copy _4;
+        _150 = copy _4;
+        _148 = copy _149 * copy _150;
+        _144 = copy _145 + copy _148;
+        _152 = copy _55;
+        _153 = copy _4;
+        _151 = copy _152 * copy _153;
+        _143 = copy _144 + copy _151;
+        _154 = copy _55;
+        _142 = copy _143 + copy _154;
+        _155 = copy _4;
+        _141 = copy _142 + copy _155;
+        _158 = copy _55;
+        _159 = copy _55;
+        _157 = copy _158 * copy _159;
+        _160 = copy _55;
+        _156 = copy _157 * copy _160;
+        _140 = copy _141 + copy _156;
+        _163 = copy _4;
+        _164 = copy _4;
+        _162 = copy _163 * copy _164;
+        _165 = copy _4;
+        _161 = copy _162 * copy _165;
+        _139 = copy _140 + copy _161;
+        _168 = copy _55;
+        _169 = copy _4;
+        _167 = copy _168 * copy _169;
+        _170 = copy _55;
+        _166 = copy _167 * copy _170;
+        _138 = copy _139 + copy _166;
+        _173 = copy _4;
+        _174 = copy _55;
+        _172 = copy _173 * copy _174;
+        _175 = copy _4;
+        _171 = copy _172 * copy _175;
+        _137 = copy _138 + copy _171;
+        switch copy _137 [0: bb158, otherwise: bb157];
     }
 
     bb154: {
-        _127 = copy _67 == const 18_i64;
-        branch copy _127 -> [bb135, bb155];
+        _132 = const "other";
+        goto -> bb153;
     }
 
     bb155: {
-        _128 = copy _67 == const 19_i64;
-        branch copy _128 -> [bb135, bb156];
+        _132 = const "was minus one";
+        goto -> bb153;
     }
 
     bb156: {
-        _129 = copy _67 == const 20_i64;
-        branch copy _129 -> [bb135, bb157];
+        _178 = copy _55;
+        _179 = const 1_i64;
+        _177 = copy _178 + copy _179;
+        switch copy _177 [0: bb161, otherwise: bb160];
     }
 
     bb157: {
-        _130 = copy _67 == const 21_i64;
-        branch copy _130 -> [bb135, bb158];
+        _136 = const "nonzero";
+        goto -> bb156;
     }
 
     bb158: {
-        _131 = copy _67 == const 22_i64;
-        branch copy _131 -> [bb135, bb159];
+        _136 = const "zero polynomial";
+        goto -> bb156;
     }
 
     bb159: {
-        _132 = copy _67 == const 23_i64;
-        branch copy _132 -> [bb135, bb160];
+        switch copy _55 [0: bb164, otherwise: bb163];
     }
 
     bb160: {
-        _133 = copy _67 == const 24_i64;
-        branch copy _133 -> [bb135, bb136];
+        _176 = const "other";
+        goto -> bb159;
     }
 
     bb161: {
-        _108 = const "other";
-        goto -> bb134;
+        _176 = const "whitespace";
+        goto -> bb159;
     }
 
     bb162: {
-        _108 = const null;
-        goto -> bb134;
+        switch copy _55 [0: bb167, otherwise: bb166];
     }
 
     bb163: {
-        switch copy _67 [0: bb170, otherwise: bb169] (exhaustive);
+        _180 = const "other";
+        goto -> bb162;
     }
 
     bb164: {
-        _134 = const "this arm has many long enum variant names that together push past the limit easily";
-        goto -> bb163;
+        _180 = const "zero";
+        goto -> bb162;
     }
 
     bb165: {
-        _134 = const null;
-        goto -> bb163;
+        switch copy _55 [0: bb175, 1: bb186, otherwise: bb174];
     }
 
     bb166: {
-        _136 = copy _60 == const user.MatchStatus.Inactive;
-        branch copy _136 -> [bb164, bb167];
+        _181 = const "nonzero";
+        goto -> bb165;
     }
 
     bb167: {
-        _137 = copy _60 == const user.MatchStatus.Pending;
-        branch copy _137 -> [bb164, bb165];
+        _182 = copy _4 == const true;
+        branch copy _182 -> [bb169, bb170];
     }
 
     bb168: {
-        _142 = is_type(copy _67, Int { attr: TyAttr(None) });
-        branch copy _142 -> [bb175, bb176];
+        goto -> bb165;
     }
 
     bb169: {
-        _138 = const "short";
+        _181 = const "zero-true";
         goto -> bb168;
     }
 
     bb170: {
-        _140 = copy _4;
-        branch copy _140 -> [bb171, bb172];
+        _183 = copy _4 == const false;
+        branch copy _183 -> [bb171, bb172];
     }
 
     bb171: {
-        _139 = const "this is the true branch with a very long string";
-        goto -> bb173;
-    }
-
-    bb172: {
-        _139 = const "this is the false branch also very long";
-        goto -> bb173;
-    }
-
-    bb173: {
-        _138 = copy _139;
+        _181 = const "zero-false";
         goto -> bb168;
     }
 
+    bb172: {
+        unreachable;
+    }
+
+    bb173: {
+        switch copy _55 [0: bb199, otherwise: bb198];
+    }
+
     bb174: {
-        _160 = is_type(copy _67, Int { attr: TyAttr(None) });
-        branch copy _160 -> [bb189, bb190];
+        _184 = const "other";
+        goto -> bb173;
     }
 
     bb175: {
-        _143 = copy _67;
-        _149 = const null;
-        _150 = const 0_i64;
-        _148 = copy _149 > copy _150;
-        _147 = copy _148;
-        branch copy _148 -> [bb177, bb178];
+        _185 = copy _4 == const true;
+        branch copy _185 -> [bb177, bb178];
     }
 
     bb176: {
-        goto -> bb186;
+        goto -> bb173;
     }
 
     bb177: {
-        _151 = const null;
-        _152 = const 100_i64;
-        _147 = copy _151 < copy _152;
-        goto -> bb178;
+        _186 = discriminant(_48);
+        switch copy _186 [MatchStatus.Active: bb181, MatchStatus.Inactive: bb182, MatchStatus.Pending: bb183, otherwise: bb180] (exhaustive);
     }
 
     bb178: {
-        _146 = copy _147;
-        branch copy _147 -> [bb179, bb180];
+        _187 = copy _4 == const false;
+        branch copy _187 -> [bb184, bb185];
     }
 
     bb179: {
-        _153 = const null;
-        _154 = const 42_i64;
-        _146 = copy _153 != copy _154;
-        goto -> bb180;
+        goto -> bb176;
     }
 
     bb180: {
-        _145 = copy _146;
-        branch copy _146 -> [bb181, bb182];
+        unreachable;
     }
 
     bb181: {
-        _155 = const null;
-        _156 = const 13_i64;
-        _145 = copy _155 != copy _156;
-        goto -> bb182;
+        _184 = const "zero-true-active";
+        goto -> bb179;
     }
 
     bb182: {
-        _144 = copy _145;
-        branch copy _145 -> [bb183, bb184];
+        _184 = const "zero-true-inactive";
+        goto -> bb179;
     }
 
     bb183: {
-        _157 = const null;
-        _158 = const 7_i64;
-        _144 = copy _157 != copy _158;
-        goto -> bb184;
+        _184 = const "zero-true-pending";
+        goto -> bb179;
     }
 
     bb184: {
-        branch copy _144 -> [bb185, bb176];
+        _184 = const "zero-false";
+        goto -> bb176;
     }
 
     bb185: {
-        _141 = const "acceptable small positive number that passes all the defined filter conditions";
-        goto -> bb174;
+        unreachable;
     }
 
     bb186: {
-        _141 = const "other";
-        goto -> bb174;
+        _188 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)));
+        branch copy _188 -> [bb188, bb189];
     }
 
     bb187: {
-        _141 = const null;
-        goto -> bb174;
+        goto -> bb173;
     }
 
     bb188: {
-        _179 = copy _67;
-        _180 = const 1_i64;
-        _178 = copy _179 + copy _180;
-        switch copy _178 [0: bb204, otherwise: bb203] (exhaustive);
+        _189 = copy _3;
+        _190 = copy _4 == const true;
+        branch copy _190 -> [bb191, bb192];
     }
 
     bb189: {
-        _161 = copy _67;
-        _167 = const null;
-        _168 = const 0_i64;
-        _166 = copy _167 > copy _168;
-        _165 = copy _166;
-        branch copy _166 -> [bb191, bb192];
+        _193 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None)));
+        branch copy _193 -> [bb195, bb196];
     }
 
     bb190: {
-        goto -> bb200;
+        goto -> bb187;
     }
 
     bb191: {
-        _169 = const null;
-        _170 = const 100_i64;
-        _165 = copy _169 < copy _170;
-        goto -> bb192;
+        _191 = copy _189;
+        _184 = copy _191.0;
+        goto -> bb190;
     }
 
     bb192: {
-        _164 = copy _165;
-        branch copy _165 -> [bb193, bb194];
+        _192 = copy _4 == const false;
+        branch copy _192 -> [bb193, bb194];
     }
 
     bb193: {
-        _171 = const null;
-        _172 = const 42_i64;
-        _164 = copy _171 != copy _172;
-        goto -> bb194;
+        _184 = const "one-success-false";
+        goto -> bb190;
     }
 
     bb194: {
-        _163 = copy _164;
-        branch copy _164 -> [bb195, bb196];
+        unreachable;
     }
 
     bb195: {
-        _173 = const null;
-        _174 = const 13_i64;
-        _163 = copy _173 != copy _174;
-        goto -> bb196;
+        _194 = copy _3;
+        _195 = const null;
+        _184 = copy _195.0;
+        goto -> bb187;
     }
 
     bb196: {
-        _162 = copy _163;
-        branch copy _163 -> [bb197, bb198];
+        unreachable;
     }
 
     bb197: {
-        _175 = const null;
-        _176 = const 7_i64;
-        _162 = copy _175 != copy _176;
-        goto -> bb198;
+        switch copy _55 [0: bb210, otherwise: bb209];
     }
 
     bb198: {
-        branch copy _162 -> [bb199, bb190];
+        _196 = const "other";
+        goto -> bb197;
     }
 
     bb199: {
-        _159 = const "acceptable small positive number that passes all the defined filter conditions";
-        goto -> bb188;
+        _197 = copy _4;
+        branch copy _197 -> [bb200, bb201];
     }
 
     bb200: {
-        _159 = const "other";
-        goto -> bb188;
+        _198 = discriminant(_189);
+        switch copy _198 [MatchStatus.Active: bb205, MatchStatus.Inactive: bb206, MatchStatus.Pending: bb207, otherwise: bb204] (exhaustive);
     }
 
     bb201: {
-        _159 = const null;
-        goto -> bb188;
+        _196 = const "not bool";
+        goto -> bb202;
     }
 
     bb202: {
-        _191 = copy _67;
-        _192 = copy _67;
-        _190 = copy _191 * copy _192;
-        _194 = copy _4;
-        _195 = copy _4;
-        _193 = copy _194 * copy _195;
-        _189 = copy _190 + copy _193;
-        _197 = copy _67;
-        _198 = copy _4;
-        _196 = copy _197 * copy _198;
-        _188 = copy _189 + copy _196;
-        _199 = copy _67;
-        _187 = copy _188 + copy _199;
-        _200 = copy _4;
-        _186 = copy _187 + copy _200;
-        _203 = copy _67;
-        _204 = copy _67;
-        _202 = copy _203 * copy _204;
-        _205 = copy _67;
-        _201 = copy _202 * copy _205;
-        _185 = copy _186 + copy _201;
-        _208 = copy _4;
-        _209 = copy _4;
-        _207 = copy _208 * copy _209;
-        _210 = copy _4;
-        _206 = copy _207 * copy _210;
-        _184 = copy _185 + copy _206;
-        _213 = copy _67;
-        _214 = copy _4;
-        _212 = copy _213 * copy _214;
-        _215 = copy _67;
-        _211 = copy _212 * copy _215;
-        _183 = copy _184 + copy _211;
-        _218 = copy _4;
-        _219 = copy _67;
-        _217 = copy _218 * copy _219;
-        _220 = copy _4;
-        _216 = copy _217 * copy _220;
-        _182 = copy _183 + copy _216;
-        switch copy _182 [0: bb207, otherwise: bb206] (exhaustive);
+        goto -> bb197;
     }
 
     bb203: {
-        _177 = const "other";
         goto -> bb202;
     }
 
     bb204: {
-        _177 = const "was minus one";
-        goto -> bb202;
+        unreachable;
     }
 
     bb205: {
-        _223 = copy _67;
-        _224 = const 1_i64;
-        _222 = copy _223 + copy _224;
-        switch copy _222 [0: bb210, otherwise: bb209] (exhaustive);
+        _196 = const "active";
+        goto -> bb203;
     }
 
     bb206: {
-        _181 = const "nonzero";
-        goto -> bb205;
+        _196 = const "inactive";
+        goto -> bb203;
     }
 
     bb207: {
-        _181 = const "zero polynomial";
-        goto -> bb205;
+        _196 = const "pending";
+        goto -> bb203;
     }
 
     bb208: {
-        switch copy _67 [0: bb213, otherwise: bb212] (exhaustive);
+        goto -> bb1;
     }
 
     bb209: {
-        _221 = const "other";
+        _0 = const "other";
         goto -> bb208;
     }
 
     bb210: {
-        _221 = const "whitespace";
-        goto -> bb208;
-    }
-
-    bb211: {
-        switch copy _67 [0: bb216, otherwise: bb215] (exhaustive);
-    }
-
-    bb212: {
-        _225 = const "other";
-        goto -> bb211;
-    }
-
-    bb213: {
-        _225 = const "zero";
-        goto -> bb211;
-    }
-
-    bb214: {
-        switch copy _67 [0: bb224, 1: bb237, otherwise: bb223] (exhaustive);
-    }
-
-    bb215: {
-        _226 = const "nonzero";
-        goto -> bb214;
-    }
-
-    bb216: {
-        _227 = copy _4 == const true;
-        branch copy _227 -> [bb218, bb219];
-    }
-
-    bb217: {
-        goto -> bb214;
-    }
-
-    bb218: {
-        _226 = const "zero-true";
-        goto -> bb217;
-    }
-
-    bb219: {
-        _228 = copy _4 == const false;
-        branch copy _228 -> [bb220, bb221];
-    }
-
-    bb220: {
-        _226 = const "zero-false";
-        goto -> bb217;
-    }
-
-    bb221: {
-        _226 = const null;
-        goto -> bb217;
-    }
-
-    bb222: {
-        switch copy _67 [0: bb250, otherwise: bb249] (exhaustive);
-    }
-
-    bb223: {
-        _229 = const "other";
-        goto -> bb222;
-    }
-
-    bb224: {
-        _230 = copy _4 == const true;
-        branch copy _230 -> [bb226, bb227];
-    }
-
-    bb225: {
-        goto -> bb222;
-    }
-
-    bb226: {
-        _231 = copy _60 == const user.MatchStatus.Active;
-        branch copy _231 -> [bb229, bb230];
-    }
-
-    bb227: {
-        _234 = copy _4 == const false;
-        branch copy _234 -> [bb235, bb236];
-    }
-
-    bb228: {
-        goto -> bb225;
-    }
-
-    bb229: {
-        _229 = const "zero-true-active";
-        goto -> bb228;
-    }
-
-    bb230: {
-        _232 = copy _60 == const user.MatchStatus.Inactive;
-        branch copy _232 -> [bb231, bb232];
-    }
-
-    bb231: {
-        _229 = const "zero-true-inactive";
-        goto -> bb228;
-    }
-
-    bb232: {
-        _233 = copy _60 == const user.MatchStatus.Pending;
-        branch copy _233 -> [bb233, bb234];
-    }
-
-    bb233: {
-        _229 = const "zero-true-pending";
-        goto -> bb228;
-    }
-
-    bb234: {
-        _229 = const null;
-        goto -> bb228;
-    }
-
-    bb235: {
-        _229 = const "zero-false";
-        goto -> bb225;
-    }
-
-    bb236: {
-        _229 = const null;
-        goto -> bb225;
-    }
-
-    bb237: {
-        _235 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)));
-        branch copy _235 -> [bb239, bb240];
-    }
-
-    bb238: {
-        goto -> bb222;
-    }
-
-    bb239: {
-        _236 = copy _3;
-        _237 = copy _4 == const true;
-        branch copy _237 -> [bb242, bb243];
-    }
-
-    bb240: {
-        _240 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None)));
-        branch copy _240 -> [bb246, bb247];
-    }
-
-    bb241: {
-        goto -> bb238;
-    }
-
-    bb242: {
-        _238 = copy _236;
-        _229 = copy _238.0;
-        goto -> bb241;
-    }
-
-    bb243: {
-        _239 = copy _4 == const false;
-        branch copy _239 -> [bb244, bb245];
-    }
-
-    bb244: {
-        _229 = const "one-success-false";
-        goto -> bb241;
-    }
-
-    bb245: {
-        _229 = const null;
-        goto -> bb241;
-    }
-
-    bb246: {
-        _241 = copy _3;
-        _242 = const null;
-        _229 = copy _242.0;
-        goto -> bb238;
-    }
-
-    bb247: {
-        _229 = const null;
-        goto -> bb238;
-    }
-
-    bb248: {
-        switch copy _67 [0: bb263, otherwise: bb262] (exhaustive);
-    }
-
-    bb249: {
-        _243 = const "other";
-        goto -> bb248;
-    }
-
-    bb250: {
-        _244 = copy _4;
-        branch copy _244 -> [bb251, bb252];
-    }
-
-    bb251: {
-        _245 = copy _236 == const user.MatchStatus.Active;
-        branch copy _245 -> [bb255, bb256];
-    }
-
-    bb252: {
-        _243 = const "not bool";
-        goto -> bb253;
-    }
-
-    bb253: {
-        goto -> bb248;
-    }
-
-    bb254: {
-        goto -> bb253;
-    }
-
-    bb255: {
-        _243 = const "active";
-        goto -> bb254;
-    }
-
-    bb256: {
-        _246 = copy _236 == const user.MatchStatus.Inactive;
-        branch copy _246 -> [bb257, bb258];
-    }
-
-    bb257: {
-        _243 = const "inactive";
-        goto -> bb254;
-    }
-
-    bb258: {
-        _247 = copy _236 == const user.MatchStatus.Pending;
-        branch copy _247 -> [bb259, bb260];
-    }
-
-    bb259: {
-        _243 = const "pending";
-        goto -> bb254;
-    }
-
-    bb260: {
-        _243 = const null;
-        goto -> bb254;
-    }
-
-    bb261: {
-        goto -> bb1;
-    }
-
-    bb262: {
-        _0 = const "other";
-        goto -> bb261;
-    }
-
-    bb263: {
         _0 = const "zero";
-        goto -> bb261;
+        goto -> bb208;
     }
 }
 
@@ -9211,7 +8868,7 @@ fn OtherExprs(a: int, b: int) -> int {
     }
 
     bb2: {
-        switch copy _1 [0: bb7, otherwise: bb6] (exhaustive);
+        switch copy _1 [0: bb7, otherwise: bb6];
     }
 
     bb3: {

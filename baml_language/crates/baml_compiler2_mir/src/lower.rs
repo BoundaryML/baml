@@ -261,6 +261,8 @@ struct LoweringContext<'db> {
     pat_types: FxHashMap<AstPatId, Tir2Ty>,
     // Method resolutions from TIR: ExprId → MethodResolution
     resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MethodResolution<'db>>,
+    // Match expressions that TIR determined are exhaustive
+    exhaustive_matches: rustc_hash::FxHashSet<AstExprId>,
 
     // AST expression body and source map
     body: AstExprBody,
@@ -299,15 +301,17 @@ impl<'db> LoweringContext<'db> {
         let index = file_semantic_index(db, file);
         let func_scope_id: FileScopeId = index.scope_at_offset(func_span.start());
 
-        // --- Eagerly aggregate expr_types, pat_types, and resolutions from all scopes ---
+        // --- Eagerly aggregate expr_types, pat_types, resolutions, and exhaustive_matches from all scopes ---
         let mut expr_types: FxHashMap<AstExprId, Tir2Ty> = FxHashMap::default();
         let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MethodResolution<'db>> = FxHashMap::default();
+        let mut exhaustive_matches: rustc_hash::FxHashSet<AstExprId> = rustc_hash::FxHashSet::default();
 
         let merge_scope = |fsi: FileScopeId,
                            expr_types: &mut FxHashMap<AstExprId, Tir2Ty>,
                            pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
-                           resolutions: &mut FxHashMap<AstExprId, baml_compiler2_tir::inference::MethodResolution<'db>>| {
+                           resolutions: &mut FxHashMap<AstExprId, baml_compiler2_tir::inference::MethodResolution<'db>>,
+                           exhaustive_matches: &mut rustc_hash::FxHashSet<AstExprId>| {
             let scope_id = index.scope_ids[fsi.index() as usize];
             let inference = infer_scope_types(db, scope_id);
             for (&expr_id, ty) in inference.iter_expressions() {
@@ -319,10 +323,13 @@ impl<'db> LoweringContext<'db> {
             for (&expr_id, res) in inference.iter_resolutions() {
                 resolutions.insert(expr_id, res.clone());
             }
+            for &expr_id in inference.iter_exhaustive_matches() {
+                exhaustive_matches.insert(expr_id);
+            }
         };
 
         // Include the function scope itself
-        merge_scope(func_scope_id, &mut expr_types, &mut pat_types, &mut resolutions);
+        merge_scope(func_scope_id, &mut expr_types, &mut pat_types, &mut resolutions, &mut exhaustive_matches);
 
         // Include all descendant scopes (blocks, lambdas, etc.)
         let func_scope = &index.scopes[func_scope_id.index() as usize];
@@ -334,6 +341,7 @@ impl<'db> LoweringContext<'db> {
                 &mut expr_types,
                 &mut pat_types,
                 &mut resolutions,
+                &mut exhaustive_matches,
             );
         }
 
@@ -414,6 +422,7 @@ impl<'db> LoweringContext<'db> {
             expr_types,
             pat_types,
             resolutions,
+            exhaustive_matches,
             body: expr_body,
             source_map,
             file,
@@ -1567,11 +1576,13 @@ impl<'db> LoweringContext<'db> {
 impl<'db> LoweringContext<'db> {
     fn lower_match(
         &mut self,
-        _expr_id: AstExprId,
+        expr_id: AstExprId,
         scrutinee: AstExprId,
         arm_ids: &[baml_compiler2_ast::MatchArmId],
         dest: Place,
     ) {
+        let is_exhaustive = self.exhaustive_matches.contains(&expr_id);
+
         // If scrutinee is a simple variable reference, reuse the local directly
         // instead of copying into a temp (matches MIR1 behavior).
         let scrutinee_local = self.try_resolve_to_local(scrutinee)
@@ -1590,7 +1601,7 @@ impl<'db> LoweringContext<'db> {
 
         // Try switch optimization: if all non-wildcard arms are integer literals
         // with no guards, emit a single Switch terminator.
-        if self.try_lower_match_as_switch(scrutinee_local, &arms, dest.clone(), bb_join) {
+        if self.try_lower_match_as_switch(scrutinee_local, &arms, dest.clone(), bb_join, is_exhaustive) {
             self.builder.set_current_block(bb_join);
             return;
         }
@@ -1608,17 +1619,27 @@ impl<'db> LoweringContext<'db> {
         arms: &[baml_compiler2_ast::MatchArm],
         dest: Place,
         join: BlockId,
+        is_exhaustive: bool,
     ) -> bool {
         use baml_base::Literal;
+        use std::collections::HashSet;
 
         if arms.is_empty() {
             return false;
         }
 
-        // Classify arms: collect (i64_value, arm_index) for int literal patterns,
-        // and check for a trailing wildcard/binding.
+        // Classify arms: collect (i64_value, arm_index) for int literal or enum variant
+        // patterns, and check for a trailing wildcard/binding.
+        //
+        // switch_kind tracks what kind of switch is being built:
+        //   None          = not yet determined
+        //   Some(None)    = integer literal switch
+        //   Some(Some(n)) = enum discriminant switch on enum named `n`
+        let mut switch_kind: Option<Option<Name>> = None;
         let mut int_arms: Vec<(i64, usize)> = Vec::new();
         let mut otherwise_idx: Option<usize> = None;
+        // Deduplicate discriminant values so union patterns don't produce duplicate switch arms.
+        let mut seen_values: HashSet<i64> = HashSet::new();
 
         for (i, arm) in arms.iter().enumerate() {
             // Guards disqualify switch optimization
@@ -1628,7 +1649,75 @@ impl<'db> LoweringContext<'db> {
             let pat = &self.body.patterns[arm.pattern];
             match pat {
                 AstPattern::Literal(Literal::Int(val)) => {
-                    int_arms.push((*val, i));
+                    // Integer arm: verify kind consistency
+                    match &switch_kind {
+                        None => switch_kind = Some(None),
+                        Some(None) => {}
+                        Some(Some(_)) => return false, // Mixed int + enum
+                    }
+                    let v = *val;
+                    if seen_values.insert(v) {
+                        int_arms.push((v, i));
+                    }
+                }
+                AstPattern::EnumVariant { enum_name, variant } => {
+                    // Enum variant arm: verify enum consistency
+                    let enum_name = enum_name.clone();
+                    let variant = variant.clone();
+                    match &switch_kind {
+                        None => switch_kind = Some(Some(enum_name.clone())),
+                        Some(Some(n)) if *n == enum_name => {}
+                        _ => return false, // Different enum or mixed with int
+                    }
+                    // Look up variant index
+                    let idx = self.enum_variants
+                        .get(enum_name.as_str())
+                        .and_then(|m| m.get(variant.as_str()))
+                        .copied();
+                    let Some(idx) = idx else { return false };
+                    let disc = idx as i64;
+                    if seen_values.insert(disc) {
+                        int_arms.push((disc, i));
+                    }
+                }
+                AstPattern::Union(sub_pats) => {
+                    // Union pattern: each sub-pattern maps to the same arm body.
+                    // All sub-patterns must be the same kind (int or enum variant).
+                    for sub_pat_id in sub_pats {
+                        let sub_pat = &self.body.patterns[*sub_pat_id];
+                        match sub_pat {
+                            AstPattern::Literal(Literal::Int(val)) => {
+                                match &switch_kind {
+                                    None => switch_kind = Some(None),
+                                    Some(None) => {}
+                                    Some(Some(_)) => return false,
+                                }
+                                let v = *val;
+                                if seen_values.insert(v) {
+                                    int_arms.push((v, i));
+                                }
+                            }
+                            AstPattern::EnumVariant { enum_name, variant } => {
+                                let enum_name = enum_name.clone();
+                                let variant = variant.clone();
+                                match &switch_kind {
+                                    None => switch_kind = Some(Some(enum_name.clone())),
+                                    Some(Some(n)) if *n == enum_name => {}
+                                    _ => return false,
+                                }
+                                let idx = self.enum_variants
+                                    .get(enum_name.as_str())
+                                    .and_then(|m| m.get(variant.as_str()))
+                                    .copied();
+                                let Some(idx) = idx else { return false };
+                                let disc = idx as i64;
+                                if seen_values.insert(disc) {
+                                    int_arms.push((disc, i));
+                                }
+                            }
+                            _ => return false,
+                        }
+                    }
                 }
                 AstPattern::Binding(_) => {
                     // Wildcard/binding must be last arm
@@ -1646,34 +1735,85 @@ impl<'db> LoweringContext<'db> {
             return false;
         }
 
+        // Exhaustiveness is determined by TIR's type checker, not re-derived here.
+        // `(exhaustive)` means: no wildcard arm AND TIR confirmed all cases covered.
+        let is_switch_exhaustive = otherwise_idx.is_none() && is_exhaustive;
+
         // Save the entry block — this is where the switch terminator goes
         let bb_entry = self.builder.current_block();
 
-        // Build body blocks for each int arm
+        // For enum switches, emit the discriminant extraction before building arm blocks.
+        // We must do this before create_block() calls so the assignment goes into bb_entry.
+        let switch_operand = match &switch_kind {
+            Some(Some(_enum_name)) => {
+                let disc = self.builder.temp(Ty::Int { attr: TyAttr::default() });
+                self.builder.assign(
+                    Place::local(disc),
+                    Rvalue::Discriminant(Place::local(scrutinee)),
+                );
+                Operand::Copy(Place::Local(disc))
+            }
+            _ => Operand::Copy(Place::Local(scrutinee)),
+        };
+
+        // Build body blocks for each arm. Union sub-patterns sharing the same
+        // arm_idx reuse a single block (e.g. Active | Pending → same bb).
         let bb_otherwise = self.builder.create_block();
         let mut switch_arms: Vec<(i64, BlockId)> = Vec::new();
-        let mut arm_names: Vec<(i64, String)> = Vec::new();
+        let mut arm_blocks: std::collections::HashMap<usize, BlockId> = std::collections::HashMap::new();
 
         for &(val, arm_idx) in &int_arms {
-            let bb_body = self.builder.create_block();
-            switch_arms.push((val, bb_body));
-            arm_names.push((val, val.to_string()));
+            if let Some(&existing_bb) = arm_blocks.get(&arm_idx) {
+                // Union sub-pattern: reuse the same body block
+                switch_arms.push((val, existing_bb));
+            } else {
+                let bb_body = self.builder.create_block();
+                switch_arms.push((val, bb_body));
+                arm_blocks.insert(arm_idx, bb_body);
 
-            self.builder.set_current_block(bb_body);
-            self.bind_pattern(scrutinee, arms[arm_idx].pattern);
-            self.lower_expr(arms[arm_idx].body, dest.clone());
-            if !self.builder.is_current_terminated() {
-                self.builder.goto(join);
+                self.builder.set_current_block(bb_body);
+                self.bind_pattern(scrutinee, arms[arm_idx].pattern);
+                self.lower_expr(arms[arm_idx].body, dest.clone());
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(join);
+                }
             }
         }
 
-        // Lower the otherwise arm (wildcard) or emit a default null
+        // Build arm_names: symbolic labels for the switch arms (debug metadata).
+        // For enum switches: "EnumName.VariantName"; for int switches: the integer value.
+        let arm_names: Vec<(i64, String)> = match &switch_kind {
+            Some(Some(enum_name)) => {
+                if let Some(variants) = self.enum_variants.get(enum_name.as_str()) {
+                    // Build reverse map: variant_idx -> variant_name
+                    let reverse: std::collections::HashMap<i64, &str> = variants
+                        .iter()
+                        .map(|(name, idx)| (*idx as i64, name.as_str()))
+                        .collect();
+                    int_arms.iter()
+                        .filter_map(|(val, _)| {
+                            reverse.get(val).map(|vname| {
+                                (*val, format!("{}.{}", enum_name, vname))
+                            })
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                }
+            }
+            _ => int_arms.iter().map(|(v, _)| (*v, v.to_string())).collect(),
+        };
+
+        // Lower the otherwise arm:
+        // - Wildcard present → lower the wildcard body
+        // - No wildcard → emit unreachable (the otherwise block is structurally dead;
+        //   if non-exhaustive, the type checker already reported the error)
         self.builder.set_current_block(bb_otherwise);
         if let Some(idx) = otherwise_idx {
             self.bind_pattern(scrutinee, arms[idx].pattern);
             self.lower_expr(arms[idx].body, dest.clone());
         } else {
-            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            self.builder.unreachable();
         }
         if !self.builder.is_current_terminated() {
             self.builder.goto(join);
@@ -1681,9 +1821,9 @@ impl<'db> LoweringContext<'db> {
 
         // Emit the switch terminator in the entry block
         self.builder.set_current_block(bb_entry);
-        let exhaustive = otherwise_idx.is_some();
+        let exhaustive = is_switch_exhaustive;
         self.builder.switch(
-            Operand::Copy(Place::Local(scrutinee)),
+            switch_operand,
             switch_arms,
             bb_otherwise,
             exhaustive,
@@ -1701,10 +1841,12 @@ impl<'db> LoweringContext<'db> {
         join: BlockId,
     ) {
         if arms.is_empty() {
-            self.builder.assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-            if !self.builder.is_current_terminated() {
-                self.builder.goto(join);
-            }
+            // No more arms to test. This block is structurally dead — either
+            // a preceding wildcard/binding arm consumed all inputs, or the
+            // match is non-exhaustive (type checker already reported the error).
+            // The caller immediately switches to bb_join after we return,
+            // so no dead block is needed.
+            self.builder.unreachable();
             return;
         }
 

@@ -14,6 +14,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use baml_base::Name;
 use baml_compiler2_ast::{ExprId, PatId};
+use rustc_hash::FxHashSet;
 use baml_compiler2_hir::{
     body::FunctionBody,
     contributions::Definition,
@@ -79,6 +80,8 @@ pub struct ScopeInference<'db> {
     /// method or free function, records the structural path (package, namespace,
     /// class, name) so MIR can emit the correct QualifiedName.
     resolutions: FxHashMap<ExprId, MethodResolution<'db>>,
+    /// Match expressions that the exhaustiveness checker determined cover all cases.
+    exhaustive_matches: FxHashSet<ExprId>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
 }
@@ -139,6 +142,16 @@ impl<'db> ScopeInference<'db> {
     /// Iterate over all (ExprId, MethodResolution) pairs for this scope.
     pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MethodResolution<'db>)> {
         self.resolutions.iter()
+    }
+
+    /// Check whether a match expression was determined to be exhaustive by TIR.
+    pub fn is_exhaustive_match(&self, expr_id: ExprId) -> bool {
+        self.exhaustive_matches.contains(&expr_id)
+    }
+
+    /// Iterate over all exhaustive match ExprIds in this scope.
+    pub fn iter_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
+        self.exhaustive_matches.iter()
     }
 
     /// Get diagnostics for this scope (empty slice if none).
@@ -322,7 +335,7 @@ pub fn infer_scope_types<'db>(
         }
     }
 
-    let (expressions, bindings, resolutions, diagnostics) = builder.finish();
+    let (expressions, bindings, resolutions, exhaustive_matches, diagnostics) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
         None
@@ -334,6 +347,7 @@ pub fn infer_scope_types<'db>(
         expressions,
         bindings,
         resolutions,
+        exhaustive_matches,
         extra,
     }
 }

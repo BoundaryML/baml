@@ -71,6 +71,12 @@ pub enum ScopeKind {
     Lambda,
     /// Client, test, generator, template string, retry policy body.
     Item,
+    /// Match arm body — holds pattern bindings visible to the arm body and guard.
+    MatchArm,
+    /// Catch clause — wraps all arms of a catch clause, holds the clause-level binding.
+    CatchClause,
+    /// Catch arm body — holds arm-level pattern bindings.
+    CatchArm,
 }
 
 /// A single scope node in the per-file scope tree.

@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use baml_base::Name;
-use baml_compiler2_ast::{ExprId, StmtId};
+use baml_compiler2_ast::{ExprId, PatId, StmtId};
 use text_size::{TextRange, TextSize};
 
 use crate::{
@@ -26,6 +26,8 @@ pub enum DefinitionSite {
     Statement(StmtId),
     /// Defined as a function parameter (with its index).
     Parameter(usize),
+    /// Defined by a pattern binding (match arm, catch arm, catch clause, etc.).
+    PatternBinding(PatId),
 }
 
 // ── ScopeBindings ────────────────────────────────────────────────────────────

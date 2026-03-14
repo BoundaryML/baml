@@ -22,7 +22,7 @@ use baml_compiler2_hir::{
     package::{PackageId, PackageItems},
     scope::ScopeId,
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
 
 use crate::{
@@ -121,6 +121,8 @@ pub struct TypeInferenceBuilder<'db> {
     aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
     /// Residual throw facts for each catch expression after applying all clauses.
     catch_residual_throws: FxHashMap<ExprId, BTreeSet<String>>,
+    /// Match expressions that the exhaustiveness checker determined cover all cases.
+    exhaustive_matches: FxHashSet<ExprId>,
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
@@ -144,6 +146,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             declared_types: FxHashMap::default(),
             aliases,
             catch_residual_throws: FxHashMap::default(),
+            exhaustive_matches: FxHashSet::default(),
         }
     }
 
@@ -154,10 +157,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         FxHashMap<ExprId, Ty>,
         FxHashMap<PatId, Ty>,
         FxHashMap<ExprId, crate::inference::MethodResolution<'db>>,
+        FxHashSet<ExprId>,
         TypeCheckDiagnostics<'db>,
     ) {
         let diagnostics = self.context.finish();
-        (self.expressions, self.bindings, self.resolutions, diagnostics)
+        (self.expressions, self.bindings, self.resolutions, self.exhaustive_matches, diagnostics)
     }
 
     /// Set the declared return type (for return statement checking).
@@ -982,12 +986,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         if let Some(required) = required_cases {
-            if !catch_all_seen {
+            if catch_all_seen {
+                // Catch-all covers everything — exhaustive.
+                self.exhaustive_matches.insert(match_expr_id);
+            } else {
                 let missing: Vec<String> = required
                     .difference(&covered_cases)
                     .map(std::string::ToString::to_string)
                     .collect();
-                if !missing.is_empty() {
+                if missing.is_empty() {
+                    // All required cases covered explicitly — exhaustive.
+                    self.exhaustive_matches.insert(match_expr_id);
+                } else {
                     self.context.report_simple(
                         TirTypeError::NonExhaustiveMatch {
                             scrutinee_type: scrutinee_ty.clone(),

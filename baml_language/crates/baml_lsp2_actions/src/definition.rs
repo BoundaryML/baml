@@ -144,5 +144,11 @@ fn local_definition_location(
             let range = sig_map.param_spans.get(param_idx).copied()?;
             Some(Location { file, range })
         }
+        DefinitionSite::PatternBinding(pat_id) => {
+            // Navigate to the pattern binding.
+            let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
+            let range = source_map.pattern_span(pat_id);
+            Some(Location { file, range })
+        }
     }
 }

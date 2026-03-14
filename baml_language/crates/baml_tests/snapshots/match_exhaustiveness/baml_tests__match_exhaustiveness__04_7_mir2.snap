@@ -40,8 +40,7 @@ fn ExhaustiveLiteralWithBaseType(x: int) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -70,8 +69,7 @@ fn ExhaustiveTrueType(t: AlwaysTrue) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -109,8 +107,7 @@ fn BoolWithCatchAll(b: bool) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -118,14 +115,11 @@ fn DuplicateEnumVariant(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-    let _5: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb4];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, Status.Inactive: bb5, Status.Pending: bb6, otherwise: bb3] (exhaustive);
     }
 
     bb1: {
@@ -137,42 +131,21 @@ fn DuplicateEnumVariant(s: Status) -> string {
     }
 
     bb3: {
+        unreachable;
+    }
+
+    bb4: {
         _0 = const "first";
         goto -> bb2;
     }
 
-    bb4: {
-        _3 = copy _1 == const user.Status.Active;
-        branch copy _3 -> [bb5, bb6];
-    }
-
     bb5: {
-        _0 = const "second";
-        goto -> bb2;
-    }
-
-    bb6: {
-        _4 = copy _1 == const user.Status.Inactive;
-        branch copy _4 -> [bb7, bb8];
-    }
-
-    bb7: {
         _0 = const "inactive";
         goto -> bb2;
     }
 
-    bb8: {
-        _5 = copy _1 == const user.Status.Pending;
-        branch copy _5 -> [bb9, bb10];
-    }
-
-    bb9: {
+    bb6: {
         _0 = const "pending";
-        goto -> bb2;
-    }
-
-    bb10: {
-        _0 = const null;
         goto -> bb2;
     }
 }
@@ -213,8 +186,7 @@ fn NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -236,8 +208,7 @@ fn ExhaustiveSingletonInt(code: HttpOk) -> string {
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
@@ -250,11 +221,11 @@ fn NonExhaustiveEnumMissingMultiple(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb4];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -266,12 +237,11 @@ fn NonExhaustiveEnumMissingMultiple(s: Status) -> string {
     }
 
     bb3: {
-        _0 = const "active";
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
-        _0 = const null;
+        _0 = const "active";
         goto -> bb2;
     }
 }
@@ -321,8 +291,7 @@ fn StringLiteralWithCatchAll(role: Role) -> string {
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -330,13 +299,11 @@ fn NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status? // s // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb4];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, Status.Inactive: bb5, Status.Pending: bb6, otherwise: bb3];
     }
 
     bb1: {
@@ -348,13 +315,12 @@ fn NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
     }
 
     bb3: {
-        _0 = const "active";
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
-        _3 = copy _1 == const user.Status.Inactive;
-        branch copy _3 -> [bb5, bb6];
+        _0 = const "active";
+        goto -> bb2;
     }
 
     bb5: {
@@ -363,17 +329,7 @@ fn NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
     }
 
     bb6: {
-        _4 = copy _1 == const user.Status.Pending;
-        branch copy _4 -> [bb7, bb8];
-    }
-
-    bb7: {
         _0 = const "pending";
-        goto -> bb2;
-    }
-
-    bb8: {
-        _0 = const null;
         goto -> bb2;
     }
 }
@@ -403,8 +359,7 @@ fn NonExhaustiveBoolMissingFalse(b: bool) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -414,7 +369,7 @@ fn DuplicateIntLiteral(x: int) -> string {
     let _1: int // x // param
 
     bb0: {
-        switch copy _1 [1: bb4, 1: bb5, otherwise: bb3] (exhaustive);
+        switch copy _1 [1: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -432,11 +387,6 @@ fn DuplicateIntLiteral(x: int) -> string {
 
     bb4: {
         _0 = const "first one";
-        goto -> bb2;
-    }
-
-    bb5: {
-        _0 = const "second one";
         goto -> bb2;
     }
 }
@@ -459,8 +409,7 @@ fn NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
@@ -527,8 +476,7 @@ fn ExhaustiveNullableEnum(s: Status?) -> string {
     }
 
     bb10: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -556,7 +504,7 @@ fn ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
 
     bb3: {
         _3 = copy _1;
-        _4 = const null;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
@@ -572,8 +520,7 @@ fn ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -602,8 +549,7 @@ fn ExhaustiveFalseType(f: AlwaysFalse) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -654,8 +600,7 @@ fn NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -682,14 +627,13 @@ fn NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
 
     bb3: {
         _3 = copy _1;
-        _4 = const null;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -731,8 +675,7 @@ fn LiteralAfterTypedPattern(x: int) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -740,12 +683,11 @@ fn NonExhaustiveEnumMissingOne(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb4];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, Status.Inactive: bb5, otherwise: bb3];
     }
 
     bb1: {
@@ -757,22 +699,16 @@ fn NonExhaustiveEnumMissingOne(s: Status) -> string {
     }
 
     bb3: {
+        unreachable;
+    }
+
+    bb4: {
         _0 = const "active";
         goto -> bb2;
     }
 
-    bb4: {
-        _3 = copy _1 == const user.Status.Inactive;
-        branch copy _3 -> [bb5, bb6];
-    }
-
     bb5: {
         _0 = const "inactive";
-        goto -> bb2;
-    }
-
-    bb6: {
-        _0 = const null;
         goto -> bb2;
     }
 }
@@ -795,8 +731,7 @@ fn NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
@@ -809,13 +744,11 @@ fn NestedEnumVariantUnions(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb5];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, Status.Pending: bb4, Status.Inactive: bb4, otherwise: bb3] (exhaustive);
     }
 
     bb1: {
@@ -827,23 +760,12 @@ fn NestedEnumVariantUnions(s: Status) -> string {
     }
 
     bb3: {
-        _0 = const "all statuses";
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
-        _0 = const null;
+        _0 = const "all statuses";
         goto -> bb2;
-    }
-
-    bb5: {
-        _3 = copy _1 == const user.Status.Pending;
-        branch copy _3 -> [bb3, bb6];
-    }
-
-    bb6: {
-        _4 = copy _1 == const user.Status.Inactive;
-        branch copy _4 -> [bb3, bb4];
     }
 }
 
@@ -851,13 +773,9 @@ fn IntLiteralUnionPattern(code: SuccessCode) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: SuccessCode // code // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
 
     bb0: {
-        _2 = copy _1 == const 200_i64;
-        branch copy _2 -> [bb3, bb5];
+        switch copy _1 [200: bb4, 201: bb4, 204: bb5, otherwise: bb3];
     }
 
     bb1: {
@@ -869,27 +787,16 @@ fn IntLiteralUnionPattern(code: SuccessCode) -> string {
     }
 
     bb3: {
+        unreachable;
+    }
+
+    bb4: {
         _0 = const "success with body";
         goto -> bb2;
     }
 
-    bb4: {
-        _4 = copy _1 == const 204_i64;
-        branch copy _4 -> [bb6, bb7];
-    }
-
     bb5: {
-        _3 = copy _1 == const 201_i64;
-        branch copy _3 -> [bb3, bb4];
-    }
-
-    bb6: {
         _0 = const "no content";
-        goto -> bb2;
-    }
-
-    bb7: {
-        _0 = const null;
         goto -> bb2;
     }
 }
@@ -930,8 +837,7 @@ fn UnreachableAfterCatchAll(x: int) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -958,7 +864,7 @@ fn ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
 
     bb3: {
         _3 = copy _1;
-        _4 = const null;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
@@ -973,8 +879,7 @@ fn ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1003,7 +908,7 @@ fn OverlappingWithBindings(r: Result) -> string {
 
     bb3: {
         _3 = copy _1;
-        _4 = const null;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
@@ -1020,8 +925,7 @@ fn OverlappingWithBindings(r: Result) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1052,8 +956,7 @@ fn PartialUnionPatternCoverage(r: FullResult) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1061,19 +964,9 @@ fn NestedLiteralUnions(code: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // code // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-    let _5: bool
-    let _6: bool
-    let _7: bool
-    let _8: bool
-    let _9: bool
-    let _10: bool
 
     bb0: {
-        _2 = copy _1 == const 200_i64;
-        branch copy _2 -> [bb3, bb5];
+        switch copy _1 [200: bb4, 201: bb4, 202: bb4, 204: bb4, 400: bb5, 404: bb5, 405: bb5, 406: bb5, 409: bb5, otherwise: bb3];
     }
 
     bb1: {
@@ -1085,66 +978,17 @@ fn NestedLiteralUnions(code: int) -> string {
     }
 
     bb3: {
-        _0 = const "success";
-        goto -> bb2;
-    }
-
-    bb4: {
-        _6 = copy _1 == const 400_i64;
-        branch copy _6 -> [bb8, bb10];
-    }
-
-    bb5: {
-        _3 = copy _1 == const 201_i64;
-        branch copy _3 -> [bb3, bb6];
-    }
-
-    bb6: {
-        _4 = copy _1 == const 202_i64;
-        branch copy _4 -> [bb3, bb7];
-    }
-
-    bb7: {
-        _5 = copy _1 == const 204_i64;
-        branch copy _5 -> [bb3, bb4];
-    }
-
-    bb8: {
-        _0 = const "client error";
-        goto -> bb2;
-    }
-
-    bb9: {
-        goto -> bb14;
-    }
-
-    bb10: {
-        _7 = copy _1 == const 404_i64;
-        branch copy _7 -> [bb8, bb11];
-    }
-
-    bb11: {
-        _8 = copy _1 == const 405_i64;
-        branch copy _8 -> [bb8, bb12];
-    }
-
-    bb12: {
-        _9 = copy _1 == const 406_i64;
-        branch copy _9 -> [bb8, bb13];
-    }
-
-    bb13: {
-        _10 = copy _1 == const 409_i64;
-        branch copy _10 -> [bb8, bb9];
-    }
-
-    bb14: {
         _0 = const "other";
         goto -> bb2;
     }
 
-    bb15: {
-        _0 = const null;
+    bb4: {
+        _0 = const "success";
+        goto -> bb2;
+    }
+
+    bb5: {
+        _0 = const "client error";
         goto -> bb2;
     }
 }
@@ -1167,8 +1011,7 @@ fn WrongLiteralTypeBoolWithInt(b: bool) -> string {
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
@@ -1224,8 +1067,7 @@ fn ExhaustiveStringLiterals(role: Role) -> string {
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1245,7 +1087,7 @@ fn MatchComplexScrutinee(x: int) -> string {
         _3 = copy _4 * copy _5;
         _6 = const 1_i64;
         _2 = copy _3 + copy _6;
-        switch copy _2 [1: bb4, 3: bb5, otherwise: bb3] (exhaustive);
+        switch copy _2 [1: bb4, 3: bb5, otherwise: bb3];
     }
 
     bb1: {
@@ -1308,8 +1150,7 @@ fn ParenthesizedSingleLiteral(b: bool) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1349,8 +1190,7 @@ fn ExhaustiveCustomBool(b: CustomBool) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1390,8 +1230,7 @@ fn NonExhaustiveStringLiteral(role: Role) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1431,8 +1270,7 @@ fn ExhaustiveOptionalSingleton(code: MaybeOk) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1441,16 +1279,12 @@ fn NestedEnumMatch(s1: Status, s2: Status) -> string {
     let _0: string // _0 // return
     let _1: Status // s1 // param
     let _2: Status // s2 // param
-    let _3: bool
-    let _4: bool
-    let _5: bool
-    let _6: bool
-    let _7: bool
-    let _8: bool
+    let _3: int
+    let _4: int
 
     bb0: {
-        _3 = copy _1 == const user.Status.Active;
-        branch copy _3 -> [bb3, bb4];
+        _3 = discriminant(_1);
+        switch copy _3 [Status.Active: bb4, Status.Inactive: bb10, Status.Pending: bb11, otherwise: bb3] (exhaustive);
     }
 
     bb1: {
@@ -1462,13 +1296,12 @@ fn NestedEnumMatch(s1: Status, s2: Status) -> string {
     }
 
     bb3: {
-        _4 = copy _2 == const user.Status.Active;
-        branch copy _4 -> [bb6, bb7];
+        unreachable;
     }
 
     bb4: {
-        _7 = copy _1 == const user.Status.Inactive;
-        branch copy _7 -> [bb12, bb13];
+        _4 = discriminant(_2);
+        switch copy _4 [Status.Active: bb7, Status.Inactive: bb8, Status.Pending: bb9, otherwise: bb6] (exhaustive);
     }
 
     bb5: {
@@ -1476,13 +1309,12 @@ fn NestedEnumMatch(s1: Status, s2: Status) -> string {
     }
 
     bb6: {
-        _0 = const "both active";
-        goto -> bb5;
+        unreachable;
     }
 
     bb7: {
-        _5 = copy _2 == const user.Status.Inactive;
-        branch copy _5 -> [bb8, bb9];
+        _0 = const "both active";
+        goto -> bb5;
     }
 
     bb8: {
@@ -1491,37 +1323,17 @@ fn NestedEnumMatch(s1: Status, s2: Status) -> string {
     }
 
     bb9: {
-        _6 = copy _2 == const user.Status.Pending;
-        branch copy _6 -> [bb10, bb11];
-    }
-
-    bb10: {
         _0 = const "first active, second pending";
         goto -> bb5;
     }
 
-    bb11: {
-        _0 = const null;
-        goto -> bb5;
-    }
-
-    bb12: {
+    bb10: {
         _0 = const "first inactive";
         goto -> bb2;
     }
 
-    bb13: {
-        _8 = copy _1 == const user.Status.Pending;
-        branch copy _8 -> [bb14, bb15];
-    }
-
-    bb14: {
+    bb11: {
         _0 = const "first pending";
-        goto -> bb2;
-    }
-
-    bb15: {
-        _0 = const null;
         goto -> bb2;
     }
 }
@@ -1562,8 +1374,7 @@ fn OverlappingTypedPatterns(r: Result) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1577,7 +1388,7 @@ fn NestedMatchSpans(x: int, y: bool) -> string {
     let _5: bool
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb3] (exhaustive);
+        switch copy _1 [0: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -1628,8 +1439,7 @@ fn NestedMatchSpans(x: int, y: bool) -> string {
     }
 
     bb11: {
-        _0 = const null;
-        goto -> bb5;
+        unreachable;
     }
 }
 
@@ -1658,8 +1468,7 @@ fn NonExhaustiveBoolMissingTrue(b: bool) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1705,8 +1514,7 @@ fn StringLiteralUnionPattern(role: Role) -> string {
     }
 
     bb7: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1746,8 +1554,7 @@ fn ExhaustiveBool(b: bool) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1776,8 +1583,7 @@ fn NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1819,8 +1625,7 @@ fn StringLiteralAfterStringType(s: string) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1851,7 +1656,7 @@ fn ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
 
     bb3: {
         _3 = copy _1;
-        _4 = const null;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
@@ -1863,7 +1668,7 @@ fn ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
 
     bb5: {
         _6 = copy _1;
-        _7 = const null;
+        _7 = copy _6;
         _0 = copy _7.0;
         goto -> bb2;
     }
@@ -1879,8 +1684,7 @@ fn ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1910,7 +1714,7 @@ fn ExhaustiveTypeAlias(r: Result) -> string {
 
     bb3: {
         _3 = copy _1;
-        _4 = const null;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
@@ -1922,14 +1726,13 @@ fn ExhaustiveTypeAlias(r: Result) -> string {
 
     bb5: {
         _6 = copy _1;
-        _7 = const null;
+        _7 = copy _6;
         _0 = copy _7.0;
         goto -> bb2;
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1982,8 +1785,7 @@ fn UnreachableMultiple(x: int) -> string {
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -1993,7 +1795,7 @@ fn ExhaustiveWithUnderscore(x: int) -> int {
     let _1: int // x // param
 
     bb0: {
-        switch copy _1 [1: bb4, 2: bb5, otherwise: bb3] (exhaustive);
+        switch copy _1 [1: bb4, 2: bb5, otherwise: bb3];
     }
 
     bb1: {
@@ -2047,8 +1849,7 @@ fn ExhaustiveEnumWithTypedPattern(s: Status) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2099,8 +1900,7 @@ fn DuplicateBoolLiteral(b: bool) -> string {
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2129,8 +1929,7 @@ fn WrongLiteralTypeIntWithString(x: int) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2138,13 +1937,9 @@ fn DeeplyNestedLiterals(x: SuccessCode) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: SuccessCode // x // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
 
     bb0: {
-        _2 = copy _1 == const 200_i64;
-        branch copy _2 -> [bb3, bb5];
+        switch copy _1 [200: bb4, 201: bb4, 204: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -2156,23 +1951,12 @@ fn DeeplyNestedLiterals(x: SuccessCode) -> string {
     }
 
     bb3: {
-        _0 = const "all success codes";
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
-        _0 = const null;
+        _0 = const "all success codes";
         goto -> bb2;
-    }
-
-    bb5: {
-        _3 = copy _1 == const 201_i64;
-        branch copy _3 -> [bb3, bb6];
-    }
-
-    bb6: {
-        _4 = copy _1 == const 204_i64;
-        branch copy _4 -> [bb3, bb4];
     }
 }
 
@@ -2194,8 +1978,7 @@ fn ExhaustiveIntLiterals(code: SuccessCode) -> string {
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
@@ -2240,7 +2023,7 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
 
     bb3: {
         _3 = copy _1;
-        _4 = const null;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
@@ -2252,14 +2035,13 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
 
     bb5: {
         _6 = copy _1;
-        _7 = const null;
+        _7 = copy _6;
         _0 = copy _7.0;
         goto -> bb2;
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2272,7 +2054,7 @@ fn ExhaustiveWithNamedCatchAll(x: int) -> int {
     let _4: 1
 
     bb0: {
-        switch copy _1 [1: bb4, otherwise: bb3] (exhaustive);
+        switch copy _1 [1: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -2285,7 +2067,7 @@ fn ExhaustiveWithNamedCatchAll(x: int) -> int {
 
     bb3: {
         _2 = copy _1;
-        _3 = const null;
+        _3 = copy _2;
         _4 = const 1_i64;
         _0 = copy _3 + copy _4;
         goto -> bb2;
@@ -2301,12 +2083,11 @@ fn EnumVariantUnionWithCatchAll(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb5];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, Status.Pending: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -2318,26 +2099,12 @@ fn EnumVariantUnionWithCatchAll(s: Status) -> string {
     }
 
     bb3: {
-        _0 = const "actionable";
-        goto -> bb2;
-    }
-
-    bb4: {
-        goto -> bb6;
-    }
-
-    bb5: {
-        _3 = copy _1 == const user.Status.Pending;
-        branch copy _3 -> [bb3, bb4];
-    }
-
-    bb6: {
         _0 = const "other";
         goto -> bb2;
     }
 
-    bb7: {
-        _0 = const null;
+    bb4: {
+        _0 = const "actionable";
         goto -> bb2;
     }
 }
@@ -2376,8 +2143,7 @@ fn OptionalWithCatchAll(x: int?) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2408,8 +2174,7 @@ fn UnionPatternCoversAll(r: Result) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2417,11 +2182,11 @@ fn HighLineNumberNonExhaustive(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb4];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -2433,12 +2198,11 @@ fn HighLineNumberNonExhaustive(s: Status) -> string {
     }
 
     bb3: {
-        _0 = const "active only";
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
-        _0 = const null;
+        _0 = const "active only";
         goto -> bb2;
     }
 }
@@ -2461,8 +2225,7 @@ fn ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
@@ -2503,7 +2266,7 @@ fn NestedTypeAlias(mr: MaybeResult) -> string {
 
     bb3: {
         _3 = copy _1;
-        _4 = const null;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
@@ -2515,7 +2278,7 @@ fn NestedTypeAlias(mr: MaybeResult) -> string {
 
     bb5: {
         _6 = copy _1;
-        _7 = const null;
+        _7 = copy _6;
         _0 = copy _7.0;
         goto -> bb2;
     }
@@ -2531,8 +2294,7 @@ fn NestedTypeAlias(mr: MaybeResult) -> string {
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2559,14 +2321,13 @@ fn NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
 
     bb3: {
         _3 = copy _1;
-        _4 = const null;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2574,15 +2335,11 @@ fn MultipleUnreachableSpans(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-    let _5: bool
-    let _6: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb4];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, Status.Inactive: bb5, Status.Pending: bb6, otherwise: bb3] (exhaustive);
     }
 
     bb1: {
@@ -2594,52 +2351,21 @@ fn MultipleUnreachableSpans(s: Status) -> string {
     }
 
     bb3: {
+        unreachable;
+    }
+
+    bb4: {
         _0 = const "active";
         goto -> bb2;
     }
 
-    bb4: {
-        _3 = copy _1 == const user.Status.Active;
-        branch copy _3 -> [bb5, bb6];
-    }
-
     bb5: {
-        _0 = const "duplicate 1";
-        goto -> bb2;
-    }
-
-    bb6: {
-        _4 = copy _1 == const user.Status.Inactive;
-        branch copy _4 -> [bb7, bb8];
-    }
-
-    bb7: {
         _0 = const "inactive";
         goto -> bb2;
     }
 
-    bb8: {
-        _5 = copy _1 == const user.Status.Active;
-        branch copy _5 -> [bb9, bb10];
-    }
-
-    bb9: {
-        _0 = const "duplicate 2";
-        goto -> bb2;
-    }
-
-    bb10: {
-        _6 = copy _1 == const user.Status.Pending;
-        branch copy _6 -> [bb11, bb12];
-    }
-
-    bb11: {
+    bb6: {
         _0 = const "pending";
-        goto -> bb2;
-    }
-
-    bb12: {
-        _0 = const null;
         goto -> bb2;
     }
 }
@@ -2662,8 +2388,7 @@ fn NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
@@ -2676,13 +2401,11 @@ fn ExhaustiveEnumAllVariants(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb4];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, Status.Inactive: bb5, Status.Pending: bb6, otherwise: bb3] (exhaustive);
     }
 
     bb1: {
@@ -2694,13 +2417,12 @@ fn ExhaustiveEnumAllVariants(s: Status) -> string {
     }
 
     bb3: {
-        _0 = const "active";
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
-        _3 = copy _1 == const user.Status.Inactive;
-        branch copy _3 -> [bb5, bb6];
+        _0 = const "active";
+        goto -> bb2;
     }
 
     bb5: {
@@ -2709,17 +2431,7 @@ fn ExhaustiveEnumAllVariants(s: Status) -> string {
     }
 
     bb6: {
-        _4 = copy _1 == const user.Status.Pending;
-        branch copy _4 -> [bb7, bb8];
-    }
-
-    bb7: {
         _0 = const "pending";
-        goto -> bb2;
-    }
-
-    bb8: {
-        _0 = const null;
         goto -> bb2;
     }
 }
@@ -2762,8 +2474,7 @@ fn BoolLiteralAfterTypedBool(b: bool) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2793,8 +2504,7 @@ fn BoolUnionPattern(b: bool) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb5: {
@@ -2830,7 +2540,7 @@ fn GuardedWithFallback(x: int) -> int {
 
     bb3: {
         _3 = copy _1;
-        _5 = const null;
+        _5 = copy _3;
         _6 = const 0_i64;
         _4 = copy _5 > copy _6;
         branch copy _4 -> [bb5, bb4];
@@ -2841,7 +2551,7 @@ fn GuardedWithFallback(x: int) -> int {
     }
 
     bb5: {
-        _7 = const null;
+        _7 = copy _3;
         _8 = const 2_i64;
         _0 = copy _7 * copy _8;
         goto -> bb2;
@@ -2853,8 +2563,7 @@ fn GuardedWithFallback(x: int) -> int {
     }
 
     bb7: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2883,8 +2592,7 @@ fn NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2935,7 +2643,7 @@ fn MixedPatterns(x: int) -> string {
 
     bb7: {
         _5 = copy _1;
-        _7 = const null;
+        _7 = copy _5;
         _8 = const 0_i64;
         _6 = copy _7 > copy _8;
         branch copy _6 -> [bb9, bb8];
@@ -2956,8 +2664,7 @@ fn MixedPatterns(x: int) -> string {
     }
 
     bb11: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -2965,14 +2672,11 @@ fn JumpTableEnumDiscriminant(state: DispatchState) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: DispatchState // state // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-    let _5: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.DispatchState.Alpha;
-        branch copy _2 -> [bb3, bb4];
+        _2 = discriminant(_1);
+        switch copy _2 [DispatchState.Alpha: bb4, DispatchState.Beta: bb5, DispatchState.Gamma: bb6, DispatchState.Delta: bb7, otherwise: bb3] (exhaustive);
     }
 
     bb1: {
@@ -2984,13 +2688,12 @@ fn JumpTableEnumDiscriminant(state: DispatchState) -> int {
     }
 
     bb3: {
-        _0 = const 10_i64;
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
-        _3 = copy _1 == const user.DispatchState.Beta;
-        branch copy _3 -> [bb5, bb6];
+        _0 = const 10_i64;
+        goto -> bb2;
     }
 
     bb5: {
@@ -2999,27 +2702,12 @@ fn JumpTableEnumDiscriminant(state: DispatchState) -> int {
     }
 
     bb6: {
-        _4 = copy _1 == const user.DispatchState.Gamma;
-        branch copy _4 -> [bb7, bb8];
-    }
-
-    bb7: {
         _0 = const 30_i64;
         goto -> bb2;
     }
 
-    bb8: {
-        _5 = copy _1 == const user.DispatchState.Delta;
-        branch copy _5 -> [bb9, bb10];
-    }
-
-    bb9: {
+    bb7: {
         _0 = const 40_i64;
-        goto -> bb2;
-    }
-
-    bb10: {
-        _0 = const null;
         goto -> bb2;
     }
 }
@@ -3090,8 +2778,7 @@ fn JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     }
 
     bb10: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3108,7 +2795,7 @@ fn MatchArithmeticScrutinee(a: int, b: int) -> string {
         _4 = copy _1;
         _5 = copy _2;
         _3 = copy _4 + copy _5;
-        switch copy _3 [0: bb4, 1: bb5, otherwise: bb3] (exhaustive);
+        switch copy _3 [0: bb4, 1: bb5, otherwise: bb3];
     }
 
     bb1: {
@@ -3201,8 +2888,7 @@ fn JumpTableTypeTag(value: int | string | bool | float) -> string {
     }
 
     bb10: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3224,8 +2910,7 @@ fn NonExhaustiveIntLiteral(code: SuccessCode) -> string {
     }
 
     bb3: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb4: {
@@ -3264,8 +2949,7 @@ fn NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3274,9 +2958,7 @@ fn MatchFunctionCallScrutinee() -> string {
     let _0: string // _0 // return
     let _1: Status
     let _2: () -> Status
-    let _3: bool
-    let _4: bool
-    let _5: bool
+    let _3: int
 
     bb0: {
         _2 = const fn user.GetStatus;
@@ -3288,8 +2970,8 @@ fn MatchFunctionCallScrutinee() -> string {
     }
 
     bb2: {
-        _3 = copy _1 == const user.Status.Active;
-        branch copy _3 -> [bb4, bb5];
+        _3 = discriminant(_1);
+        switch copy _3 [Status.Active: bb5, Status.Inactive: bb6, Status.Pending: bb7, otherwise: bb4] (exhaustive);
     }
 
     bb3: {
@@ -3297,13 +2979,12 @@ fn MatchFunctionCallScrutinee() -> string {
     }
 
     bb4: {
-        _0 = const "active";
-        goto -> bb3;
+        unreachable;
     }
 
     bb5: {
-        _4 = copy _1 == const user.Status.Inactive;
-        branch copy _4 -> [bb6, bb7];
+        _0 = const "active";
+        goto -> bb3;
     }
 
     bb6: {
@@ -3312,17 +2993,7 @@ fn MatchFunctionCallScrutinee() -> string {
     }
 
     bb7: {
-        _5 = copy _1 == const user.Status.Pending;
-        branch copy _5 -> [bb8, bb9];
-    }
-
-    bb8: {
         _0 = const "pending";
-        goto -> bb3;
-    }
-
-    bb9: {
-        _0 = const null;
         goto -> bb3;
     }
 }
@@ -3331,13 +3002,11 @@ fn EnumVariantUnion(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb5];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, Status.Pending: bb4, Status.Inactive: bb5, otherwise: bb3] (exhaustive);
     }
 
     bb1: {
@@ -3349,27 +3018,16 @@ fn EnumVariantUnion(s: Status) -> string {
     }
 
     bb3: {
+        unreachable;
+    }
+
+    bb4: {
         _0 = const "actionable";
         goto -> bb2;
     }
 
-    bb4: {
-        _4 = copy _1 == const user.Status.Inactive;
-        branch copy _4 -> [bb6, bb7];
-    }
-
     bb5: {
-        _3 = copy _1 == const user.Status.Pending;
-        branch copy _3 -> [bb3, bb4];
-    }
-
-    bb6: {
         _0 = const "inactive";
-        goto -> bb2;
-    }
-
-    bb7: {
-        _0 = const null;
         goto -> bb2;
     }
 }
@@ -3382,7 +3040,7 @@ fn ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     let _3: int // z // param
 
     bb0: {
-        switch copy _1 [0: bb4, otherwise: bb3] (exhaustive);
+        switch copy _1 [0: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -3399,7 +3057,7 @@ fn ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     }
 
     bb4: {
-        switch copy _2 [0: bb7, otherwise: bb6] (exhaustive);
+        switch copy _2 [0: bb7, otherwise: bb6];
     }
 
     bb5: {
@@ -3412,7 +3070,7 @@ fn ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     }
 
     bb7: {
-        switch copy _3 [0: bb10, otherwise: bb9] (exhaustive);
+        switch copy _3 [0: bb10, otherwise: bb9];
     }
 
     bb8: {
@@ -3488,8 +3146,7 @@ fn DuplicateStringLiteral(role: Role) -> string {
     }
 
     bb10: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3531,8 +3188,7 @@ fn PartialUnionPlusCatchAll(r: FullResult) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3574,8 +3230,7 @@ fn EnumVariantAfterTypedEnum(s: Status) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3619,8 +3274,7 @@ fn NestedTypeBindings(r: Result) -> int {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3673,7 +3327,7 @@ fn GuardedOnlyNonExhaustive(x: int) -> int {
 
     bb3: {
         _3 = copy _1;
-        _5 = const null;
+        _5 = copy _3;
         _6 = const 0_i64;
         _4 = copy _5 > copy _6;
         branch copy _4 -> [bb5, bb4];
@@ -3685,7 +3339,7 @@ fn GuardedOnlyNonExhaustive(x: int) -> int {
     }
 
     bb5: {
-        _7 = const null;
+        _7 = copy _3;
         _8 = const 2_i64;
         _0 = copy _7 * copy _8;
         goto -> bb2;
@@ -3693,19 +3347,18 @@ fn GuardedOnlyNonExhaustive(x: int) -> int {
 
     bb6: {
         _10 = copy _1;
-        _12 = const null;
+        _12 = copy _10;
         _13 = const 0_i64;
         _11 = copy _12 < copy _13;
         branch copy _11 -> [bb8, bb7];
     }
 
     bb7: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb8: {
-        _14 = const null;
+        _14 = copy _10;
         _16 = const 1_i64;
         _15 = -copy _16;
         _0 = copy _14 * copy _15;
@@ -3717,14 +3370,9 @@ fn LiteralUnionWithCatchAll(code: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // code // param
-    let _2: bool
-    let _3: bool
-    let _4: bool
-    let _5: bool
 
     bb0: {
-        _2 = copy _1 == const 200_i64;
-        branch copy _2 -> [bb3, bb5];
+        switch copy _1 [200: bb4, 201: bb4, 400: bb5, 404: bb5, otherwise: bb3];
     }
 
     bb1: {
@@ -3736,41 +3384,17 @@ fn LiteralUnionWithCatchAll(code: int) -> string {
     }
 
     bb3: {
-        _0 = const "success";
-        goto -> bb2;
-    }
-
-    bb4: {
-        _4 = copy _1 == const 400_i64;
-        branch copy _4 -> [bb6, bb8];
-    }
-
-    bb5: {
-        _3 = copy _1 == const 201_i64;
-        branch copy _3 -> [bb3, bb4];
-    }
-
-    bb6: {
-        _0 = const "client error";
-        goto -> bb2;
-    }
-
-    bb7: {
-        goto -> bb9;
-    }
-
-    bb8: {
-        _5 = copy _1 == const 404_i64;
-        branch copy _5 -> [bb6, bb7];
-    }
-
-    bb9: {
         _0 = const "other";
         goto -> bb2;
     }
 
-    bb10: {
-        _0 = const null;
+    bb4: {
+        _0 = const "success";
+        goto -> bb2;
+    }
+
+    bb5: {
+        _0 = const "client error";
         goto -> bb2;
     }
 }
@@ -3813,8 +3437,7 @@ fn ExhaustiveOptional(x: int?) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3865,8 +3488,7 @@ fn ExhaustiveMixedLiterals(x: MixedLiterals) -> string {
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3896,7 +3518,7 @@ fn NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
 
     bb3: {
         _3 = copy _1;
-        _4 = const null;
+        _4 = copy _3;
         _0 = copy _4.0;
         goto -> bb2;
     }
@@ -3908,14 +3530,13 @@ fn NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
 
     bb5: {
         _6 = copy _1;
-        _7 = const null;
+        _7 = copy _6;
         _0 = copy _7.0;
         goto -> bb2;
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3957,8 +3578,7 @@ fn ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     }
 
     bb6: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 
@@ -3966,11 +3586,11 @@ fn ExhaustiveEnumWithCatchAll(s: Status) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: Status // s // param
-    let _2: bool
+    let _2: int
 
     bb0: {
-        _2 = copy _1 == const user.Status.Active;
-        branch copy _2 -> [bb3, bb4];
+        _2 = discriminant(_1);
+        switch copy _2 [Status.Active: bb4, otherwise: bb3];
     }
 
     bb1: {
@@ -3982,21 +3602,12 @@ fn ExhaustiveEnumWithCatchAll(s: Status) -> string {
     }
 
     bb3: {
-        _0 = const "active";
-        goto -> bb2;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
         _0 = const "other";
         goto -> bb2;
     }
 
-    bb6: {
-        _0 = const null;
+    bb4: {
+        _0 = const "active";
         goto -> bb2;
     }
 }

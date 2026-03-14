@@ -28,8 +28,7 @@ fn Broken.MixedLiteralAndTyped(x: int) -> string {
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 
     bb5: {
@@ -84,8 +83,7 @@ fn Broken.BadUnionPattern(x: int | bool) -> string {
     }
 
     bb8: {
-        _0 = const null;
-        goto -> bb2;
+        unreachable;
     }
 }
 

@@ -11,6 +11,7 @@ use std::sync::Arc;
 use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::diagnostic::DiagnosticId;
 use baml_compiler2_ast as ast;
+use la_arena;
 use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
@@ -247,6 +248,75 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
 
         self.emit_duplicate_diagnostics(seen);
+
+        // Register match-arm pattern bindings in child scopes.
+        // The MatchArm scope's TextRange covers the arm span, so
+        // scope_at_offset will find it for names used inside the arm body.
+        for (arm_id, arm) in body.match_arms.iter() {
+            let arm_span = source_map.match_arm_span(arm_id);
+            self.push_scope(ScopeKind::MatchArm, None, arm_span);
+
+            if let Some(name) = Self::pattern_binding_name(&body.patterns, arm.pattern) {
+                let name_range = source_map.pattern_span(arm.pattern);
+                let scope_id = self.current_scope_id();
+                self.scope_bindings[scope_id.index() as usize]
+                    .bindings
+                    .push((name.clone(), DefinitionSite::PatternBinding(arm.pattern), name_range));
+            }
+
+            self.pop_scope();
+        }
+
+        // Register catch clause and catch arm pattern bindings in child scopes.
+        // Two-level scoping: CatchClause (holds clause binding) → CatchArm (holds arm pattern).
+        for (expr_id, expr) in body.exprs.iter() {
+            let ast::Expr::Catch { clauses, .. } = expr else { continue };
+            let catch_span = source_map.expr_span(expr_id);
+
+            for clause in clauses {
+                // Push CatchClause scope — clause binding visible to all arms.
+                self.push_scope(ScopeKind::CatchClause, None, catch_span);
+
+                if let Some(name) = Self::pattern_binding_name(&body.patterns, clause.binding) {
+                    let name_range = source_map.pattern_span(clause.binding);
+                    let scope_id = self.current_scope_id();
+                    self.scope_bindings[scope_id.index() as usize]
+                        .bindings
+                        .push((name.clone(), DefinitionSite::PatternBinding(clause.binding), name_range));
+                }
+
+                // Push CatchArm child scopes — arm pattern visible only in arm body.
+                for &arm_id in &clause.arms {
+                    let arm = &body.catch_arms[arm_id];
+                    let arm_span = source_map.catch_arm_span(arm_id);
+                    self.push_scope(ScopeKind::CatchArm, None, arm_span);
+
+                    if let Some(name) = Self::pattern_binding_name(&body.patterns, arm.pattern) {
+                        let name_range = source_map.pattern_span(arm.pattern);
+                        let scope_id = self.current_scope_id();
+                        self.scope_bindings[scope_id.index() as usize]
+                            .bindings
+                            .push((name.clone(), DefinitionSite::PatternBinding(arm.pattern), name_range));
+                    }
+
+                    self.pop_scope(); // CatchArm
+                }
+
+                self.pop_scope(); // CatchClause
+            }
+        }
+    }
+
+    /// Extract the binding name from a pattern, if it has one.
+    fn pattern_binding_name<'a>(
+        patterns: &'a la_arena::Arena<ast::Pattern>,
+        pat_id: ast::PatId,
+    ) -> Option<&'a Name> {
+        match &patterns[pat_id] {
+            ast::Pattern::Binding(name) if name.as_str() != "_" => Some(name),
+            ast::Pattern::TypedBinding { name, .. } if name.as_str() != "_" => Some(name),
+            _ => None,
+        }
     }
 
     // ── Item lowering ────────────────────────────────────────────────────────
