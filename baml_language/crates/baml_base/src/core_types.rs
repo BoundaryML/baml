@@ -106,7 +106,7 @@ impl fmt::Display for MediaKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Literal {
     Int(i64),
     Float(String),

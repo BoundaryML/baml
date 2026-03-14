@@ -204,6 +204,7 @@ impl OutputFormatContent {
 
             // Compiler-only variants should never reach runtime
             Ty::TypeAlias(..)
+            | Ty::EnumVariant(..)
             | Ty::Function { .. }
             | Ty::Void { .. }
             | Ty::WatchAccessor(..)

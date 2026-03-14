@@ -9,7 +9,7 @@ use baml_base::Name;
 /// Used in `Ty::Class`, `Ty::Enum`, and `Ty::TypeAlias` to unambiguously
 /// identify a type by its definition's package (e.g. `"user"`, `"baml"`)
 /// and its short name (e.g. `"Foo"`, `"PrimitiveClient"`).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct QualifiedTypeName {
     /// The package this type is defined in (e.g. `"user"`, `"baml"`).
     pub pkg: Name,
@@ -42,7 +42,7 @@ impl fmt::Display for QualifiedTypeName {
 }
 
 /// Resolved type — the output of type resolution (Pass 2).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Ty {
     /// A class type — just the name, no expansion.
     Class(QualifiedTypeName),
@@ -166,7 +166,7 @@ pub enum Ty {
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PrimitiveType {
     Int,
     Float,
@@ -217,7 +217,7 @@ impl PrimitiveType {
 ///
 /// Freshness is **ignored** by the subtype checker — `Literal(1, Fresh)` and
 /// `Literal(1, Regular)` are structurally identical for assignability.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Freshness {
     Fresh,
     Regular,

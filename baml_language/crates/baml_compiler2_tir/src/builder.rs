@@ -54,8 +54,8 @@ enum PatternMatchStrength {
 
 #[derive(Debug, Default, Clone)]
 struct ThrowPatternMatches {
-    may_match: BTreeSet<String>,
-    definitely_handled: BTreeSet<String>,
+    may_match: BTreeSet<Ty>,
+    definitely_handled: BTreeSet<Ty>,
 }
 
 /// Result of resolving a member on a builtin class (Array, Map, String, media types).
@@ -120,7 +120,7 @@ pub struct TypeInferenceBuilder<'db> {
     /// Used by the normalizer for structural subtype checking.
     aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
     /// Residual throw facts for each catch expression after applying all clauses.
-    catch_residual_throws: FxHashMap<ExprId, BTreeSet<String>>,
+    catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
     /// Match expressions that the exhaustiveness checker determined cover all cases.
     exhaustive_matches: FxHashSet<ExprId>,
 }
@@ -1033,7 +1033,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             let clause_binding_ty = if residual.is_empty() {
                 Ty::Unknown
             } else {
-                self.throw_facts_to_ty(&residual)
+                self.facts_to_ty(&residual)
             };
             // Record the clause binding type in the bindings map so MIR can read it.
             self.bindings.insert(clause.binding, clause_binding_ty);
@@ -1063,7 +1063,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }
 
-                let narrowed_binding_ty = self.throw_facts_to_ty(&matches.may_match);
+                let narrowed_binding_ty = self.facts_to_ty(&matches.may_match);
                 let mut saved = Vec::new();
                 if let Some(name) = &binding_name {
                     saved.push((name.clone(), self.locals.get(name).cloned()));
@@ -1137,11 +1137,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.context.report_at_span(diag, span);
         }
 
-        let declared = crate::throw_inference::throw_facts_from_ty(&declared_ty);
+        let declared = crate::throw_inference::flatten_ty_to_facts(&declared_ty);
         let effective = self.collect_effective_throws(body);
 
-        let mut extra: Vec<String> = effective.difference(&declared).cloned().collect();
-        let mut extraneous: Vec<String> = declared.difference(&effective).cloned().collect();
+        let mut extra: Vec<String> = effective.difference(&declared).map(|t| t.to_string()).collect();
+        let mut extraneous: Vec<String> = declared.difference(&effective).map(|t| t.to_string()).collect();
         extra.sort();
         extraneous.sort();
 
@@ -1384,58 +1384,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         ) || self.package_items.lookup_type(&[name.clone()]).is_some()
     }
 
-    fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<String> {
+    fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
         let mut out = BTreeSet::new();
         self.collect_throw_facts_from_expr(base_expr_id, body, &mut out);
         out
     }
 
-    fn throw_facts_to_ty(&self, facts: &BTreeSet<String>) -> Ty {
+    /// Join a set of throw fact types into a single type.
+    fn facts_to_ty(&self, facts: &BTreeSet<Ty>) -> Ty {
         if facts.is_empty() {
             return Ty::Never;
         }
-        let tys: Vec<Ty> = facts.iter().map(|f| self.throw_fact_to_ty(f)).collect();
+        let tys: Vec<Ty> = facts.iter().cloned().collect();
         self.join_all(&tys)
-    }
-
-    fn throw_fact_to_ty(&self, fact: &str) -> Ty {
-        match fact {
-            "int" => Ty::Primitive(PrimitiveType::Int),
-            "float" => Ty::Primitive(PrimitiveType::Float),
-            "string" => Ty::Primitive(PrimitiveType::String),
-            "bool" => Ty::Primitive(PrimitiveType::Bool),
-            "null" => Ty::Primitive(PrimitiveType::Null),
-            "unknown" => Ty::Unknown,
-            _ => {
-                let name = Name::new(fact);
-                if let Some(def) = self.package_items.lookup_type(&[name.clone()]) {
-                    match def {
-                        Definition::Class(_) => Ty::Class(crate::lower_type_expr::qualify_def(
-                            self.context.db(),
-                            def,
-                            &name,
-                        )),
-                        Definition::Enum(_) => Ty::Enum(crate::lower_type_expr::qualify_def(
-                            self.context.db(),
-                            def,
-                            &name,
-                        )),
-                        Definition::TypeAlias(_) => Ty::TypeAlias(
-                            crate::lower_type_expr::qualify_def(self.context.db(), def, &name),
-                        ),
-                        _ => Ty::Unknown,
-                    }
-                } else {
-                    Ty::Unknown
-                }
-            }
-        }
     }
 
     fn match_throw_types_for_pattern(
         &mut self,
         pattern_id: PatId,
-        throw_types: &BTreeSet<String>,
+        throw_types: &BTreeSet<Ty>,
         body: &ExprBody,
         at_expr: ExprId,
     ) -> ThrowPatternMatches {
@@ -1458,19 +1425,20 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn pattern_match_strength(
         &mut self,
         pattern_id: PatId,
-        throw_fact: &str,
+        throw_fact: &Ty,
         body: &ExprBody,
         at_expr: ExprId,
     ) -> PatternMatchStrength {
+        let is_unknown = matches!(throw_fact, Ty::Unknown | Ty::BuiltinUnknown | Ty::Error);
         let pattern = &body.patterns[pattern_id];
         match pattern {
             baml_compiler2_ast::Pattern::Binding(name) => {
                 if self.is_bare_type_sugar_binding(name) {
                     let lowered =
                         self.lower_pattern_type_expr(&TypeExpr::Path(vec![name.clone()]), at_expr);
-                    if self.ty_matches_throw_fact(&lowered, throw_fact) {
+                    if self.ty_covers_fact(&lowered, throw_fact) {
                         PatternMatchStrength::DefiniteMatch
-                    } else if throw_fact == "unknown" {
+                    } else if is_unknown {
                         PatternMatchStrength::MayMatch
                     } else {
                         PatternMatchStrength::NoMatch
@@ -1481,33 +1449,38 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
                 let lowered = self.lower_pattern_type_expr(ty, at_expr);
-                if self.ty_matches_throw_fact(&lowered, throw_fact) {
+                if self.ty_covers_fact(&lowered, throw_fact) {
                     PatternMatchStrength::DefiniteMatch
-                } else if throw_fact == "unknown" {
+                } else if is_unknown {
                     PatternMatchStrength::MayMatch
                 } else {
                     PatternMatchStrength::NoMatch
                 }
             }
             baml_compiler2_ast::Pattern::Literal(lit) => {
-                if self.literal_throw_fact(lit) == throw_fact || throw_fact == "unknown" {
+                let lit_ty = Ty::Primitive(PrimitiveType::from_literal(lit));
+                if &lit_ty == throw_fact || is_unknown {
                     PatternMatchStrength::DefiniteMatch
                 } else {
                     PatternMatchStrength::NoMatch
                 }
             }
             baml_compiler2_ast::Pattern::Null => {
-                if throw_fact == "null" || throw_fact == "unknown" {
+                if matches!(throw_fact, Ty::Primitive(PrimitiveType::Null)) || is_unknown {
                     PatternMatchStrength::DefiniteMatch
                 } else {
                     PatternMatchStrength::NoMatch
                 }
             }
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
-                let exact = format!("{enum_name}.{variant}");
-                if throw_fact == exact || throw_fact == enum_name.as_str() {
+                let matches_variant = match throw_fact {
+                    Ty::EnumVariant(qn, v) => qn.name == *enum_name && v == variant,
+                    Ty::Enum(qn) => qn.name == *enum_name,
+                    _ => false,
+                };
+                if matches_variant {
                     PatternMatchStrength::DefiniteMatch
-                } else if throw_fact == "unknown" {
+                } else if is_unknown {
                     PatternMatchStrength::MayMatch
                 } else {
                     PatternMatchStrength::NoMatch
@@ -1533,44 +1506,40 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn ty_matches_throw_fact(&self, ty: &Ty, throw_fact: &str) -> bool {
-        match ty {
-            Ty::Primitive(p) => p.to_string() == throw_fact,
-            Ty::Literal(lit, _) => self.literal_throw_fact(lit) == throw_fact,
+    /// Check if a pattern type covers a throw fact type.
+    fn ty_covers_fact(&self, pattern_ty: &Ty, fact: &Ty) -> bool {
+        match pattern_ty {
+            Ty::Primitive(p) => match fact {
+                Ty::Primitive(fp) => p == fp,
+                Ty::Literal(lit, _) => *p == PrimitiveType::from_literal(lit),
+                _ => false,
+            },
+            Ty::Literal(lit, _) => {
+                let widened = Ty::Primitive(PrimitiveType::from_literal(lit));
+                &widened == fact
+            }
             Ty::Optional(inner) => {
-                throw_fact == "null" || self.ty_matches_throw_fact(inner, throw_fact)
+                matches!(fact, Ty::Primitive(PrimitiveType::Null))
+                    || self.ty_covers_fact(inner, fact)
             }
-            Ty::Union(parts) => parts
-                .iter()
-                .any(|part| self.ty_matches_throw_fact(part, throw_fact)),
-            Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => {
-                throw_fact == qn.name.as_str() || throw_fact == qn.to_string()
-            }
+            Ty::Union(parts) => parts.iter().any(|part| self.ty_covers_fact(part, fact)),
+            Ty::Class(qn) => matches!(fact, Ty::Class(fqn) if fqn == qn),
+            Ty::Enum(qn) => match fact {
+                Ty::Enum(fqn) => fqn == qn,
+                Ty::EnumVariant(fqn, _) => fqn == qn,
+                _ => false,
+            },
+            Ty::TypeAlias(qn) => matches!(fact, Ty::TypeAlias(fqn) if fqn == qn),
             Ty::EnumVariant(qn, variant) => {
-                throw_fact == format!("{}.{}", qn.name, variant) || throw_fact == qn.name.as_str()
+                matches!(fact, Ty::EnumVariant(fqn, fv) if fqn == qn && fv == variant)
+                    || matches!(fact, Ty::Enum(fqn) if fqn == qn)
             }
             Ty::BuiltinUnknown | Ty::Unknown | Ty::Error => true,
-            Ty::Never | Ty::Void => false,
-            Ty::List(_)
-            | Ty::Map(_, _)
-            | Ty::EvolvingList(_)
-            | Ty::EvolvingMap(_, _)
-            | Ty::Function { .. }
-            | Ty::RustType
-            | Ty::Type => false,
+            _ => false,
         }
     }
 
-    fn literal_throw_fact(&self, lit: &baml_base::Literal) -> &'static str {
-        match lit {
-            baml_base::Literal::Int(_) => "int",
-            baml_base::Literal::Float(_) => "float",
-            baml_base::Literal::String(_) => "string",
-            baml_base::Literal::Bool(_) => "bool",
-        }
-    }
-
-    fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<String> {
+    fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<Ty> {
         let mut out = BTreeSet::new();
         if let Some(root) = body.root_expr {
             self.collect_effective_throws_from_expr(root, body, &mut out);
@@ -1582,7 +1551,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         expr_id: ExprId,
         body: &ExprBody,
-        out: &mut BTreeSet<String>,
+        out: &mut BTreeSet<Ty>,
     ) {
         match &body.exprs[expr_id] {
             Expr::Throw { value } => {
@@ -1689,7 +1658,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         stmt_id: StmtId,
         body: &ExprBody,
-        out: &mut BTreeSet<String>,
+        out: &mut BTreeSet<Ty>,
     ) {
         match &body.stmts[stmt_id] {
             Stmt::Expr(expr) => self.collect_effective_throws_from_expr(*expr, body, out),
@@ -1742,7 +1711,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         expr_id: ExprId,
         body: &ExprBody,
-        out: &mut BTreeSet<String>,
+        out: &mut BTreeSet<Ty>,
     ) {
         match &body.exprs[expr_id] {
             Expr::Throw { value } => {
@@ -1837,7 +1806,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         stmt_id: StmtId,
         body: &ExprBody,
-        out: &mut BTreeSet<String>,
+        out: &mut BTreeSet<Ty>,
     ) {
         match &body.stmts[stmt_id] {
             Stmt::Expr(expr_id) => self.collect_throw_facts_from_expr(*expr_id, body, out),
@@ -1884,10 +1853,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn collect_throw_facts_from_value(&self, value_expr_id: ExprId, out: &mut BTreeSet<String>) {
+    fn collect_throw_facts_from_value(&self, value_expr_id: ExprId, out: &mut BTreeSet<Ty>) {
         let unknown_ty = Ty::Unknown;
         let thrown_ty = self.expressions.get(&value_expr_id).unwrap_or(&unknown_ty);
-        out.extend(crate::throw_inference::throw_facts_from_ty(thrown_ty));
+        out.extend(crate::throw_inference::flatten_ty_to_facts(thrown_ty));
     }
 
     fn call_target_name(&self, callee_expr_id: ExprId, body: &ExprBody) -> Option<Name> {

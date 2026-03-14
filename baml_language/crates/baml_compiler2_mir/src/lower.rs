@@ -105,8 +105,10 @@ fn convert_tir2_ty(ty: &Tir2Ty) -> Ty {
         Tir2Ty::Enum(qtn) => Ty::Enum(qtn_to_type_name(qtn), attr),
         Tir2Ty::TypeAlias(qtn) => Ty::TypeAlias(qtn_to_type_name(qtn), attr),
 
-        // EnumVariant → collapse to parent Enum type
-        Tir2Ty::EnumVariant(qtn, _variant) => Ty::Enum(qtn_to_type_name(qtn), attr),
+        // EnumVariant → preserve variant-level type info
+        Tir2Ty::EnumVariant(qtn, variant) => {
+            Ty::EnumVariant(qtn_to_type_name(qtn), variant.clone(), attr)
+        }
 
         // Containers
         Tir2Ty::List(inner) => Ty::List(Box::new(convert_tir2_ty(inner)), attr),

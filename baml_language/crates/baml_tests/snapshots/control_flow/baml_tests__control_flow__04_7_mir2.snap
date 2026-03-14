@@ -9,7 +9,7 @@ fn IfElseWithHeaders(flag: bool) -> string {
     let _2: bool
 
     bb0: {
-        notify_block(Check flag, level=2);
+        notify_block(Check flag, level=1);
         _2 = copy _1;
         branch copy _2 -> [bb2, bb3];
     }
@@ -19,13 +19,13 @@ fn IfElseWithHeaders(flag: bool) -> string {
     }
 
     bb2: {
-        notify_block(True branch, level=2);
+        notify_block(True branch, level=1);
         _0 = const "yes";
         goto -> bb4;
     }
 
     bb3: {
-        notify_block(False branch, level=2);
+        notify_block(False branch, level=1);
         _0 = const "no";
         goto -> bb4;
     }
@@ -53,19 +53,19 @@ fn MatchExpression(x: int) -> string {
     }
 
     bb3: {
-        notify_block(Default, level=2);
+        notify_block(Default, level=1);
         _0 = const "other";
         goto -> bb2;
     }
 
     bb4: {
-        notify_block(One, level=2);
+        notify_block(One, level=1);
         _0 = const "one";
         goto -> bb2;
     }
 
     bb5: {
-        notify_block(Two, level=2);
+        notify_block(Two, level=1);
         _0 = const "two";
         goto -> bb2;
     }
@@ -84,11 +84,11 @@ fn Headers() -> string {
     let _8: string
 
     bb0: {
-        notify_block(Setup, level=2);
+        notify_block(Setup, level=1);
         _1 = const 1_i64;
-        notify_block(Configuration, level=3);
+        notify_block(Configuration, level=2);
         _2 = const 2_i64;
-        notify_block(Processing, level=2);
+        notify_block(Processing, level=1);
         _4 = copy _1;
         _5 = copy _2;
         _3 = copy _4 + copy _5;
@@ -133,7 +133,7 @@ fn ElseIfChain(x: int) -> string {
     }
 
     bb2: {
-        notify_block(Case one, level=2);
+        notify_block(Case one, level=1);
         _0 = const "one";
         goto -> bb4;
     }
@@ -150,7 +150,7 @@ fn ElseIfChain(x: int) -> string {
     }
 
     bb5: {
-        notify_block(Case two, level=2);
+        notify_block(Case two, level=1);
         _0 = const "two";
         goto -> bb7;
     }
@@ -167,13 +167,13 @@ fn ElseIfChain(x: int) -> string {
     }
 
     bb8: {
-        notify_block(Case three, level=2);
+        notify_block(Case three, level=1);
         _0 = const "three";
         goto -> bb10;
     }
 
     bb9: {
-        notify_block(Default case, level=2);
+        notify_block(Default case, level=1);
         _0 = const "other";
         goto -> bb10;
     }
@@ -195,7 +195,7 @@ fn NestedControlFlow(x: int) -> string {
     let _7: 100
 
     bb0: {
-        notify_block(Outer, level=2);
+        notify_block(Outer, level=1);
         _3 = copy _1;
         _4 = const 0_i64;
         _2 = copy _3 > copy _4;
@@ -207,7 +207,7 @@ fn NestedControlFlow(x: int) -> string {
     }
 
     bb2: {
-        notify_block(Positive, level=2);
+        notify_block(Positive, level=1);
         _6 = copy _1;
         _7 = const 100_i64;
         _5 = copy _6 > copy _7;
@@ -215,7 +215,7 @@ fn NestedControlFlow(x: int) -> string {
     }
 
     bb3: {
-        notify_block(Non-positive, level=2);
+        notify_block(Non-positive, level=1);
         _0 = const "zero or negative";
         goto -> bb4;
     }
@@ -225,13 +225,13 @@ fn NestedControlFlow(x: int) -> string {
     }
 
     bb5: {
-        notify_block(Large, level=2);
+        notify_block(Large, level=1);
         _0 = const "large";
         goto -> bb7;
     }
 
     bb6: {
-        notify_block(Small, level=2);
+        notify_block(Small, level=1);
         _0 = const "small";
         goto -> bb7;
     }
@@ -294,9 +294,9 @@ fn WhileWithHeaders() -> int {
     let _6: int
 
     bb0: {
-        notify_block(Initialize, level=2);
+        notify_block(Initialize, level=1);
         _1 = const 0_i64;
-        notify_block(Loop, level=2);
+        notify_block(Loop, level=1);
         goto -> bb2;
     }
 
@@ -312,7 +312,7 @@ fn WhileWithHeaders() -> int {
     }
 
     bb3: {
-        notify_block(Iteration, level=2);
+        notify_block(Iteration, level=1);
         _6 = const 1_i64;
         _1 = copy _1 + copy _6;
         _5 = const null;
@@ -320,7 +320,7 @@ fn WhileWithHeaders() -> int {
     }
 
     bb4: {
-        notify_block(Done, level=2);
+        notify_block(Done, level=1);
         _0 = copy _1;
         goto -> bb1;
     }

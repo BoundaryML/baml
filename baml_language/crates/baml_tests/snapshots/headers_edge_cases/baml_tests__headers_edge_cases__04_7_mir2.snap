@@ -7,12 +7,12 @@ fn ConsecutiveHeaders() -> string {
     let _0: string // _0 // return
 
     bb0: {
-        notify_block(First Header, level=2);
-        notify_block(Second Header, level=2);
-        notify_block(Third Header, level=2);
-        notify_block(Subsection A, level=3);
-        notify_block(Subsection B, level=3);
-        notify_block(Subsection C, level=3);
+        notify_block(First Header, level=1);
+        notify_block(Second Header, level=1);
+        notify_block(Third Header, level=1);
+        notify_block(Subsection A, level=2);
+        notify_block(Subsection B, level=2);
+        notify_block(Subsection C, level=2);
         _0 = const "multiple consecutive headers";
         goto -> bb1;
     }
@@ -42,10 +42,10 @@ fn HeadersAroundExpressions() -> string {
     let _15: void
 
     bb0: {
-        notify_block(Before Let, level=2);
+        notify_block(Before Let, level=1);
         _1 = const 5_i64;
-        notify_block(After Let, level=3);
-        notify_block(Before If, level=4);
+        notify_block(After Let, level=2);
+        notify_block(Before If, level=3);
         _4 = copy _1;
         _5 = const 0_i64;
         _3 = copy _4 > copy _5;
@@ -57,20 +57,20 @@ fn HeadersAroundExpressions() -> string {
     }
 
     bb2: {
-        notify_block(Inside If, level=5);
+        notify_block(Inside If, level=4);
         _2 = copy _1;
         goto -> bb4;
     }
 
     bb3: {
-        notify_block(Inside Else, level=5);
+        notify_block(Inside Else, level=4);
         _2 = const 0_i64;
         goto -> bb4;
     }
 
     bb4: {
-        notify_block(After If, level=4);
-        notify_block(Before For, level=3);
+        notify_block(After If, level=3);
+        notify_block(Before For, level=2);
         _7 = const 1_i64;
         _8 = const 2_i64;
         _9 = const 3_i64;
@@ -88,7 +88,7 @@ fn HeadersAroundExpressions() -> string {
     bb6: {
         _13 = copy _6[_10];
         _14 = copy _13;
-        notify_block(Inside For, level=4);
+        notify_block(Inside For, level=3);
         _15 = copy _14;
         goto -> bb7;
     }
@@ -99,8 +99,8 @@ fn HeadersAroundExpressions() -> string {
     }
 
     bb8: {
-        notify_block(After For, level=3);
-        notify_block(Final Section, level=2);
+        notify_block(After For, level=2);
+        notify_block(Final Section, level=1);
         _0 = copy _1;
         goto -> bb1;
     }
@@ -111,9 +111,9 @@ fn UnicodeHeaders() -> string {
     let _0: string // _0 // return
 
     bb0: {
-        notify_block(你好世界, level=2);
-        notify_block(Émojis 🎉🎊, level=3);
-        notify_block(Special «Characters» ™, level=4);
+        notify_block(你好世界, level=1);
+        notify_block(Émojis 🎉🎊, level=2);
+        notify_block(Special «Characters» ™, level=3);
         _0 = const "test";
         goto -> bb1;
     }
@@ -128,8 +128,8 @@ fn VeryLongHeaderTitle() -> string {
     let _0: string // _0 // return
 
     bb0: {
-        notify_block(This Is An Extremely Long Header Title That Goes On And On And On And Contains Many Words To Test How The Parser Handles Very Long Header Titles That Might Span Multiple Lines In Some Editors But Should Still Be Parsed As A Single Header, level=2);
-        notify_block(Another Long Title With Special Characters !@#$%^&*()_+-=[]{}|;':",./<>? And Numbers 1234567890, level=3);
+        notify_block(This Is An Extremely Long Header Title That Goes On And On And On And Contains Many Words To Test How The Parser Handles Very Long Header Titles That Might Span Multiple Lines In Some Editors But Should Still Be Parsed As A Single Header, level=1);
+        notify_block(Another Long Title With Special Characters !@#$%^&*()_+-=[]{}|;':",./<>? And Numbers 1234567890, level=2);
         _0 = const "long headers";
         goto -> bb1;
     }
@@ -148,8 +148,8 @@ fn HeadersInComplexNesting() -> string {
     let _4: string // deep
 
     bb0: {
-        notify_block(Main Function, level=2);
-        notify_block(Inside Block Expression, level=3);
+        notify_block(Main Function, level=1);
+        notify_block(Inside Block Expression, level=2);
         _3 = const true;
         branch copy _3 -> [bb2, bb3];
     }
@@ -159,24 +159,24 @@ fn HeadersInComplexNesting() -> string {
     }
 
     bb2: {
-        notify_block(Inside If True, level=4);
-        notify_block(Very Deep Block, level=5);
+        notify_block(Inside If True, level=3);
+        notify_block(Very Deep Block, level=4);
         _4 = const "deep value";
-        notify_block(Back to If Level, level=4);
+        notify_block(Back to If Level, level=3);
         _2 = copy _4;
         goto -> bb4;
     }
 
     bb3: {
-        notify_block(Inside Else, level=4);
+        notify_block(Inside Else, level=3);
         _2 = const "else value";
         goto -> bb4;
     }
 
     bb4: {
-        notify_block(Back to Block Level, level=3);
+        notify_block(Back to Block Level, level=2);
         _1 = copy _2;
-        notify_block(Back to Function Level, level=2);
+        notify_block(Back to Function Level, level=1);
         _0 = copy _1;
         goto -> bb1;
     }
@@ -188,10 +188,10 @@ fn HeadersAndComments() -> string {
     let _1: string // x
 
     bb0: {
-        notify_block(Header Before Comment, level=2);
+        notify_block(Header Before Comment, level=1);
         _1 = const "test";
-        notify_block(Header After Comment, level=3);
-        notify_block(Header After Doc Comment, level=4);
+        notify_block(Header After Comment, level=2);
+        notify_block(Header After Doc Comment, level=3);
         _0 = copy _1;
         goto -> bb1;
     }
@@ -206,12 +206,12 @@ fn HeadersWithSpecialChars() -> string {
     let _0: string // _0 // return
 
     bb0: {
-        notify_block(Header-With-Dashes, level=2);
-        notify_block(Header_With_Underscores, level=3);
-        notify_block(Header.With.Dots, level=4);
-        notify_block(Header/With/Slashes, level=5);
-        notify_block(Header\With\Backslashes, level=6);
-        notify_block(Header|With|Pipes, level=7);
+        notify_block(Header-With-Dashes, level=1);
+        notify_block(Header_With_Underscores, level=2);
+        notify_block(Header.With.Dots, level=3);
+        notify_block(Header/With/Slashes, level=4);
+        notify_block(Header\With\Backslashes, level=5);
+        notify_block(Header|With|Pipes, level=6);
         _0 = const "special chars";
         goto -> bb1;
     }
@@ -226,15 +226,15 @@ fn HeaderLevels() -> string {
     let _0: string // _0 // return
 
     bb0: {
-        notify_block(Level 1, level=2);
-        notify_block(Level 2, level=3);
-        notify_block(Level 3, level=4);
-        notify_block(Level 4, level=5);
-        notify_block(Level 5, level=6);
-        notify_block(Level 6, level=7);
-        notify_block(Level 7 - More than 6 levels, level=8);
-        notify_block(Level 8, level=9);
-        notify_block(Level 9, level=10);
+        notify_block(Level 1, level=1);
+        notify_block(Level 2, level=2);
+        notify_block(Level 3, level=3);
+        notify_block(Level 4, level=4);
+        notify_block(Level 5, level=5);
+        notify_block(Level 6, level=6);
+        notify_block(Level 7 - More than 6 levels, level=7);
+        notify_block(Level 8, level=8);
+        notify_block(Level 9, level=9);
         _0 = const "deep nesting";
         goto -> bb1;
     }
@@ -249,12 +249,12 @@ fn HeaderOnlyFunction() -> string {
     let _0: string // _0 // return
 
     bb0: {
-        notify_block(Just Headers, level=2);
-        notify_block(No Code, level=3);
-        notify_block(Only Documentation, level=4);
-        notify_block(Pure Annotation, level=5);
-        notify_block(No Expressions, level=6);
-        notify_block(Until The End, level=7);
+        notify_block(Just Headers, level=1);
+        notify_block(No Code, level=2);
+        notify_block(Only Documentation, level=3);
+        notify_block(Pure Annotation, level=4);
+        notify_block(No Expressions, level=5);
+        notify_block(Until The End, level=6);
         _0 = const "default";
         goto -> bb1;
     }
@@ -270,12 +270,12 @@ fn HeadersWithWhitespace() -> string {
     let _1: string // x
 
     bb0: {
-        notify_block(Extra Spaces Before Title, level=2);
-        notify_block(Mixed Tabs And Spaces, level=3);
-        notify_block(All Tabs, level=4);
+        notify_block(Extra Spaces Before Title, level=1);
+        notify_block(Mixed Tabs And Spaces, level=2);
+        notify_block(All Tabs, level=3);
         _1 = const "whitespace test";
-        notify_block(Trailing Spaces, level=2);
-        notify_block(Multiple  Spaces  Between  Words, level=3);
+        notify_block(Trailing Spaces, level=1);
+        notify_block(Multiple  Spaces  Between  Words, level=2);
         _0 = copy _1;
         goto -> bb1;
     }

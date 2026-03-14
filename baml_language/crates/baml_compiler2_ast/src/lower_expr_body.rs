@@ -2125,7 +2125,7 @@ impl LoweringContext {
         let raw = node.text().to_string();
         let after_slashes = raw.strip_prefix("//").unwrap_or(&raw);
         let hash_count = after_slashes.chars().take_while(|c| *c == '#').count();
-        let level = hash_count + 1;
+        let level = hash_count;
         let title = after_slashes[hash_count..].trim();
         let name = if title.is_empty() {
             Name::new("_")

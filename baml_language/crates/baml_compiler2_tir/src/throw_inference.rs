@@ -8,15 +8,19 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, Stmt, TypeExpr};
+use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageId, package_items},
+    package::{PackageId, PackageItems, package_items},
 };
 
-use crate::{lower_type_expr::lower_type_expr, ty::Ty};
+use crate::{
+    lower_type_expr::{lower_type_expr, qualify_def},
+    ty::{PrimitiveType, Ty},
+};
 
-pub type ThrowFact = String;
+/// A throw fact is now a proper `Ty` — no more lossy string round-trips.
+pub type ThrowFact = Ty;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionThrowSets {
@@ -82,13 +86,13 @@ pub fn function_throw_sets<'db>(
                 // These diagnostics are reported at the signature site by inference;
                 // throw graph propagation still uses best-effort lowering.
                 drop(diags);
-                throw_facts_from_ty(&lowered)
+                flatten_ty_to_facts(&lowered)
             });
 
             let direct = if let Some(declared) = declared_throws.clone() {
                 declared
             } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                collect_direct_throws(expr_body)
+                collect_direct_throws(db, pkg_items, expr_body)
             } else {
                 BTreeSet::new()
             };
@@ -145,26 +149,47 @@ fn function_key<'db>(
     }
 }
 
-pub fn collect_direct_throws(body: &ExprBody) -> BTreeSet<ThrowFact> {
+pub fn collect_direct_throws<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    body: &ExprBody,
+) -> BTreeSet<ThrowFact> {
     let mut facts = BTreeSet::new();
 
     for (_, expr) in body.exprs.iter() {
         if let Expr::Throw { value } = expr {
-            facts.insert(throw_fact_from_expr(*value, body));
+            facts.insert(throw_fact_from_expr(db, pkg_items, *value, body));
         }
     }
     for (_, stmt) in body.stmts.iter() {
-        if let Stmt::Throw { value } = stmt {
-            facts.insert(throw_fact_from_expr(*value, body));
+        if let baml_compiler2_ast::Stmt::Throw { value } = stmt {
+            facts.insert(throw_fact_from_expr(db, pkg_items, *value, body));
         }
     }
 
+    // Remove facts that correspond to catch binding variable names.
+    // This is a heuristic: if a binding name happens to shadow a type name,
+    // the corresponding fact is suppressed.
     let catch_bindings = collect_catch_binding_names(body);
     if !catch_bindings.is_empty() {
-        facts.retain(|fact| !catch_bindings.contains(fact.as_str()));
+        facts.retain(|fact| {
+            let name = fact_display_name(fact);
+            !catch_bindings.contains(name.as_str())
+        });
     }
 
     facts
+}
+
+/// Get a display name for a throw fact, used for the catch binding name filter.
+fn fact_display_name(fact: &Ty) -> String {
+    match fact {
+        Ty::Primitive(p) => p.to_string(),
+        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.name.as_str().to_string(),
+        Ty::EnumVariant(qn, variant) => format!("{}.{}", qn.name, variant),
+        Ty::Unknown => "unknown".to_string(),
+        _ => format!("{fact}"),
+    }
 }
 
 pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
@@ -180,33 +205,85 @@ pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
     targets
 }
 
-fn throw_fact_from_expr(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> ThrowFact {
+/// Convert a thrown expression to a `Ty` directly, using pkg_items to resolve
+/// paths to their actual types (enum variants, classes, etc).
+fn throw_fact_from_expr<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    expr_id: baml_compiler2_ast::ExprId,
+    body: &ExprBody,
+) -> Ty {
     match &body.exprs[expr_id] {
-        Expr::Literal(Literal::String(_)) => "string".into(),
-        Expr::Literal(Literal::Int(_)) => "int".into(),
-        Expr::Literal(Literal::Float(_)) => "float".into(),
-        Expr::Literal(Literal::Bool(_)) => "bool".into(),
-        Expr::Null => "null".into(),
-        Expr::Path(segments) if !segments.is_empty() => segments
-            .iter()
-            .map(Name::as_str)
-            .collect::<Vec<_>>()
-            .join("."),
+        Expr::Literal(Literal::String(_)) => Ty::Primitive(PrimitiveType::String),
+        Expr::Literal(Literal::Int(_)) => Ty::Primitive(PrimitiveType::Int),
+        Expr::Literal(Literal::Float(_)) => Ty::Primitive(PrimitiveType::Float),
+        Expr::Literal(Literal::Bool(_)) => Ty::Primitive(PrimitiveType::Bool),
+        Expr::Null => Ty::Primitive(PrimitiveType::Null),
+        Expr::Path(segments) if !segments.is_empty() => {
+            resolve_path_to_ty(db, pkg_items, segments)
+        }
         Expr::FieldAccess { .. } => expr_to_path(expr_id, body)
-            .map(|segments| {
-                segments
-                    .iter()
-                    .map(Name::as_str)
-                    .collect::<Vec<_>>()
-                    .join(".")
-            })
-            .unwrap_or_else(|| "unknown".into()),
+            .map(|segments| resolve_path_to_ty(db, pkg_items, &segments))
+            .unwrap_or(Ty::Unknown),
         Expr::Object {
             type_name: Some(name),
             ..
-        } => name.as_str().into(),
-        _ => "unknown".into(),
+        } => {
+            if let Some(def) = pkg_items.lookup_type(&[name.clone()]) {
+                match def {
+                    Definition::Class(_) => Ty::Class(qualify_def(db, def, name)),
+                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name)),
+                    _ => Ty::Unknown,
+                }
+            } else {
+                Ty::Unknown
+            }
+        }
+        _ => Ty::Unknown,
     }
+}
+
+/// Resolve a path like `["Status", "HttpError"]` or `["ns", "Status", "HttpError"]`
+/// or `["Status"]` to a `Ty`.
+fn resolve_path_to_ty<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    segments: &[Name],
+) -> Ty {
+    // Try treating the last segment as an enum variant and the prefix as
+    // the enum path. We try progressively shorter prefixes so that
+    // ["ns", "Status", "HttpError"] → enum_path=["ns", "Status"], variant="HttpError"
+    // works alongside ["Status", "HttpError"] → enum_path=["Status"], variant="HttpError".
+    //
+    // This must run BEFORE the generic lookup because the namespace system
+    // registers enum variants as types in a child namespace, so
+    // `lookup_type(&["Status", "HttpError"])` would incorrectly match
+    // "HttpError" as a standalone enum rather than a variant of Status.
+    if segments.len() >= 2 {
+        let enum_path = &segments[..segments.len() - 1];
+        let variant = &segments[segments.len() - 1];
+        if let Some(def) = pkg_items.lookup_type(enum_path) {
+            if let Definition::Enum(_) = def {
+                let enum_name = &enum_path[enum_path.len() - 1];
+                let qtn = qualify_def(db, def, enum_name);
+                return Ty::EnumVariant(qtn, variant.clone());
+            }
+        }
+    }
+
+    // Try the full path as a type lookup (handles namespaced types and
+    // single-segment names).
+    if let Some(def) = pkg_items.lookup_type(segments) {
+        let name = segments.last().unwrap();
+        return match def {
+            Definition::Class(_) => Ty::Class(qualify_def(db, def, name)),
+            Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name)),
+            Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, name)),
+            _ => Ty::Unknown,
+        };
+    }
+
+    Ty::Unknown
 }
 
 fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
@@ -238,45 +315,37 @@ fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<
     }
 }
 
-pub fn throw_facts_from_ty(ty: &Ty) -> BTreeSet<ThrowFact> {
+/// Flatten a compound `Ty` into its leaf throw facts.
+/// Unions and optionals are decomposed; leaf types are kept as-is.
+pub fn flatten_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
     let mut out = BTreeSet::new();
-    collect_throw_facts_from_ty(ty, &mut out);
+    collect_leaf_types(ty, &mut out);
     out
 }
 
-fn collect_throw_facts_from_ty(ty: &Ty, out: &mut BTreeSet<ThrowFact>) {
+fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
     match ty {
-        Ty::Primitive(p) => out.insert(p.to_string()),
-        Ty::Literal(lit, _) => out.insert(match lit {
-            baml_base::Literal::String(_) => "string".to_string(),
-            baml_base::Literal::Int(_) => "int".to_string(),
-            baml_base::Literal::Float(_) => "float".to_string(),
-            baml_base::Literal::Bool(_) => "bool".to_string(),
-        }),
-        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => {
-            out.insert(qn.name.as_str().to_string())
-        }
-        Ty::EnumVariant(qn, variant) => out.insert(format!("{}.{}", qn.name, variant)),
+        // Compound types: decompose
         Ty::Optional(inner) => {
-            collect_throw_facts_from_ty(inner, out);
-            out.insert("null".to_string())
+            collect_leaf_types(inner, out);
+            out.insert(Ty::Primitive(PrimitiveType::Null));
         }
         Ty::Union(members) => {
             for member in members {
-                collect_throw_facts_from_ty(member, out);
+                collect_leaf_types(member, out);
             }
-            true
         }
-        Ty::Unknown | Ty::Error | Ty::BuiltinUnknown => out.insert("unknown".to_string()),
-        Ty::Never | Ty::Void => true,
-        Ty::List(_)
-        | Ty::Map(_, _)
-        | Ty::EvolvingList(_)
-        | Ty::EvolvingMap(_, _)
-        | Ty::Function { .. }
-        | Ty::RustType
-        | Ty::Type => out.insert(ty.to_string()),
-    };
+        // Literal types: widen to primitive for throw fact purposes
+        Ty::Literal(lit, _) => {
+            out.insert(Ty::Primitive(PrimitiveType::from_literal(lit)));
+        }
+        // Bottom/void: no facts
+        Ty::Never | Ty::Void => {}
+        // Everything else: keep as-is
+        _ => {
+            out.insert(ty.clone());
+        }
+    }
 }
 
 pub fn is_banned_catch_binding_type(ty: &TypeExpr) -> Option<&'static str> {

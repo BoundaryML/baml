@@ -103,6 +103,9 @@ pub enum Ty {
     Literal(Literal, TyAttr),
     Class(TypeName, TyAttr),
     Enum(TypeName, TyAttr),
+    /// A specific enum variant — `Status.HttpError`.
+    /// Compiler-only: should not reach runtime.
+    EnumVariant(TypeName, Name, TyAttr),
     Optional(Box<Ty>, TyAttr),
     List(Box<Ty>, TyAttr),
     Map {
@@ -192,6 +195,7 @@ impl Ty {
             Ty::Literal(lit, _) => Ty::Literal(lit, attr),
             Ty::Class(tn, _) => Ty::Class(tn, attr),
             Ty::Enum(tn, _) => Ty::Enum(tn, attr),
+            Ty::EnumVariant(tn, v, _) => Ty::EnumVariant(tn, v, attr),
             Ty::Optional(inner, _) => Ty::Optional(inner, attr),
             Ty::List(inner, _) => Ty::List(inner, attr),
             Ty::Map { key, value, .. } => Ty::Map { key, value, attr },
@@ -220,6 +224,7 @@ impl Ty {
             | Ty::Literal(_, attr)
             | Ty::Class(_, attr)
             | Ty::Enum(_, attr)
+            | Ty::EnumVariant(_, _, attr)
             | Ty::Optional(_, attr)
             | Ty::List(_, attr)
             | Ty::Union(_, attr)
@@ -507,6 +512,7 @@ impl Ty {
             | Ty::Literal(..)
             | Ty::Class(..)
             | Ty::Enum(..)
+            | Ty::EnumVariant(..)
             | Ty::Opaque(..) => Ok(()),
         }
     }
@@ -529,6 +535,7 @@ impl fmt::Display for Ty {
             },
             Ty::Class(tn, _) => write!(f, "{tn}"),
             Ty::Enum(tn, _) => write!(f, "{tn}"),
+            Ty::EnumVariant(tn, variant, _) => write!(f, "{tn}.{variant}"),
             Ty::Opaque(tn, _) => write!(f, "{tn}"),
             Ty::TypeAlias(tn, _) => write!(f, "{tn}"),
             Ty::Optional(inner, _) => write!(f, "{inner}?"),
