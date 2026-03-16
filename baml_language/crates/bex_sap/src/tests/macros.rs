@@ -1,9 +1,9 @@
 /// Tests that `raw_string` successfully deserializes to the expected JSON value.
 ///
 /// The pipeline is:
-/// 1. `jsonish::parse(raw_string, Default::default(), true)` to parse the raw string.
+/// 1. `jsonish::parse(raw_string, ::core::default::Default::default(), true)` to parse the raw string.
 /// 2. `TyResolvedRef::coerce(&ctx, target, &parsed)` to coerce the parsed value to the target type.
-/// 3. `serde_json::to_value(&result.value)` to serialize the result.
+/// 3. `::serde_json::to_value(&result.value)` to serialize the result.
 /// 4. `assert_eq!(json_value, expected)` to compare.
 ///
 /// Arguments:
@@ -11,14 +11,14 @@
 /// - `$raw_string`: raw LLM output string
 /// - `$target_ty`: expression returning a `TyResolved<'_, &str>`
 /// - `$db`: expression returning a `TypeRefDb<'_, &str>`
-/// - `$($json)+`: expected JSON value (passed to `serde_json::json!`)
+/// - `$($json)+`: expected JSON value (passed to `::serde_json::json!`)
 macro_rules! test_deserializer {
     ($name:ident, $raw_string:expr, $target_ty:expr, $db:expr, $($json:tt)+) => {
         #[test]
         fn $name() {
             let target_ty: $crate::sap_model::AnnotatedTy<'_, &str> = $target_ty;
             let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
-            let parsed = $crate::jsonish::parse($raw_string, Default::default(), true)
+            let parsed = $crate::jsonish::parse($raw_string, ::core::default::Default::default(), true)
                 .expect("jsonish::parse failed");
             let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
 
@@ -28,8 +28,8 @@ macro_rules! test_deserializer {
             let value = result.unwrap();
             assert!(value.is_some(), "Coercion returned None (in_progress=never?)");
             let value = value.unwrap();
-            let json_value = serde_json::to_value(&value).unwrap();
-            let expected = serde_json::json!($($json)+);
+            let json_value = ::serde_json::to_value(&value).unwrap();
+            let expected = ::serde_json::json!($($json)+);
             assert_eq!(json_value, expected);
         }
     };
@@ -42,19 +42,20 @@ macro_rules! test_failing_deserializer {
         fn $name() {
             let target_ty: $crate::sap_model::AnnotatedTy<'_, &str> = $target_ty;
             let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
-            let parsed = $crate::jsonish::parse($raw_string, Default::default(), true)
-                .expect("jsonish::parse failed");
+            let parsed =
+                $crate::jsonish::parse($raw_string, ::core::default::Default::default(), true)
+                    .expect("jsonish::parse failed");
             let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
 
             let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
             let result = $crate::sap_model::TyResolvedRef::coerce(&ctx, target_ty, &parsed);
             match result {
                 Ok(Some(v)) => {
-                    let json = serde_json::to_value(&v).unwrap();
+                    let json = ::serde_json::to_value(&v).unwrap();
                     panic!("Parsing should have failed, got: {json}");
                 }
                 Ok(None) => {
-                    // This is also acceptable for a "failing" test - coercion returned None
+                    panic!("Parsing should have failed, got: None");
                 }
                 Err(_) => {
                     // Expected: parsing failed
@@ -78,7 +79,7 @@ macro_rules! test_partial_deserializer {
         fn $name() {
             let target_ty: $crate::sap_model::AnnotatedTy<'_, &str> = $target_ty;
             let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
-            let parsed = $crate::jsonish::parse($raw_string, Default::default(), false)
+            let parsed = $crate::jsonish::parse($raw_string, ::core::default::Default::default(), false)
                 .expect("jsonish::parse failed");
             let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
 
@@ -88,8 +89,8 @@ macro_rules! test_partial_deserializer {
             let value = result.unwrap();
             assert!(value.is_some(), "Coercion returned None (in_progress=never?)");
             let value = value.unwrap();
-            let json_value = serde_json::to_value(&value).unwrap();
-            let expected = serde_json::json!($($json)+);
+            let json_value = ::serde_json::to_value(&value).unwrap();
+            let expected = ::serde_json::json!($($json)+);
             assert_eq!(json_value, expected);
         }
     };
@@ -103,15 +104,16 @@ macro_rules! test_partial_none_deserializer {
             let target_ty: $crate::sap_model::AnnotatedTy<'_, &str> = $target_ty;
             let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
 
-            let parsed = $crate::jsonish::parse($raw_string, Default::default(), false)
-                .expect("jsonish::parse failed");
+            let parsed =
+                $crate::jsonish::parse($raw_string, ::core::default::Default::default(), false)
+                    .expect("jsonish::parse failed");
             let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
 
             let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
             let result = $crate::sap_model::TyResolvedRef::coerce(&ctx, target_ty, &parsed);
             match result {
                 Ok(Some(v)) => {
-                    let json = serde_json::to_value(&v).unwrap();
+                    let json = ::serde_json::to_value(&v).unwrap();
                     panic!("Parsing should have returned None, got: {json}");
                 }
                 Ok(None) => {
@@ -134,15 +136,16 @@ macro_rules! test_partial_failing_deserializer {
             let target_ty: $crate::sap_model::AnnotatedTy<'_, &str> = $target_ty;
             let db: $crate::sap_model::TypeRefDb<'_, &str> = $db;
 
-            let parsed = $crate::jsonish::parse($raw_string, Default::default(), false)
-                .expect("jsonish::parse failed");
+            let parsed =
+                $crate::jsonish::parse($raw_string, ::core::default::Default::default(), false)
+                    .expect("jsonish::parse failed");
             let ctx = $crate::deserializer::coercer::ParsingContext::new(&db);
 
             let target_ty = db.resolve_with_meta(target_ty.as_ref()).unwrap();
             let result = $crate::sap_model::TyResolvedRef::coerce(&ctx, target_ty, &parsed);
             match result {
                 Ok(Some(v)) => {
-                    let json = serde_json::to_value(&v).unwrap();
+                    let json = ::serde_json::to_value(&v).unwrap();
                     panic!("Parsing should have failed, got: {json}");
                 }
                 Ok(None) => {

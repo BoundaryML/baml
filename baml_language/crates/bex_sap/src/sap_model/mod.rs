@@ -280,9 +280,9 @@ where
 
 #[derive(Clone, From)]
 pub enum Ty<'t, N: TypeIdent> {
-    #[from(TyResolved<'t, N>, LiteralTy<'t>, StringLiteralTy<'t>, IntLiteralTy, BoolLiteralTy, ArrayTy<'t, N>, MapTy<'t, N>, ClassTy<'t, N>, EnumTy<'t, N>, UnionTy<'t, N>)]
+    #[from(TyResolved<'t, N>, LiteralTy<'t>, StringLiteralTy<'t>, IntLiteralTy, BoolLiteralTy, ArrayTy<'t, N>, MapTy<'t, N>, ClassTy<'t, N>, EnumTy<'t, N>, UnionTy<'t, N>, StreamStateTy<'t, N>)]
     Resolved(TyResolved<'t, N>),
-    #[from(TyResolvedRef<'t, N>, PrimitiveTy, IntTy, FloatTy, StringTy, BoolTy, NullTy, MediaTy, &'t LiteralTy<'t>, &'t StringLiteralTy<'t>, &'t IntLiteralTy, &'t BoolLiteralTy, &'t ArrayTy<'t, N>, &'t MapTy<'t, N>, &'t ClassTy<'t, N>, &'t EnumTy<'t, N>, &'t UnionTy<'t, N>)]
+    #[from(TyResolvedRef<'t, N>, PrimitiveTy, IntTy, FloatTy, StringTy, BoolTy, NullTy, MediaTy, &'t LiteralTy<'t>, &'t StringLiteralTy<'t>, &'t IntLiteralTy, &'t BoolLiteralTy, &'t ArrayTy<'t, N>, &'t MapTy<'t, N>, &'t ClassTy<'t, N>, &'t EnumTy<'t, N>, &'t UnionTy<'t, N>, &'t StreamStateTy<'t, N>)]
     ResolvedRef(TyResolvedRef<'t, N>),
     /// Type needs to be looked up in the [`TypeRefDb`].
     /// This is since types may be recursive so we need some indirection.
@@ -506,7 +506,7 @@ pub enum LiteralTy<'t> {
     Int(IntLiteralTy),
     Bool(BoolLiteralTy),
 }
-impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for LiteralTy<'_>
+impl<'s, 'v, 't> TypeValue<'s, 'v, 't> for LiteralTy<'t>
 where
     's: 'v,
 {

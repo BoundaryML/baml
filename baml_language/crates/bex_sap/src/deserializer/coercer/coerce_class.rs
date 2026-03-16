@@ -89,9 +89,10 @@ where
 
         let ctx = {
             let cls_value_pair = (name.to_string(), value);
+            let ptr_pair = (name.to_string(), ::core::ptr::from_ref(value));
 
             // If this combination has been visited bail out.
-            if ctx.visited_during_try_cast.contains(&cls_value_pair) {
+            if ctx.visited_during_try_cast.contains(&ptr_pair) {
                 return None;
             }
 
@@ -187,9 +188,10 @@ where
         // TODO: is this necessary? we should be recusing over the finite input data, not the potentially infinite type structure
 
         let cls_value_pair = (class_ty.name.to_string(), value);
+        let ptr_pair = (class_ty.name.to_string(), ::core::ptr::from_ref(value));
 
         // If this combination has been visited bail out.
-        if ctx.visited_during_coerce.contains(&cls_value_pair) {
+        if ctx.visited_during_coerce.contains(&ptr_pair) {
             return Err(ctx.error_circular_reference(&class_ty.name.to_string(), value));
         }
 
@@ -256,7 +258,7 @@ where
                 };
                 Ok(Some(ValueWithFlags::new(ret, obj.meta)))
             }
-            (jsonish::Value::Object(obj, c), None) => {
+            (jsonish::Value::Object(obj, c), _) => {
                 let mut flags = DeserializerConditions::new();
                 if c == &CompletionState::Incomplete {
                     flags.add_flag(Flag::Incomplete);
@@ -331,7 +333,7 @@ where
                     flags,
                 )
             }
-            (jsonish::Value::Array(items, c), None) => {
+            (jsonish::Value::Array(items, c), _) => {
                 let mut completed = Vec::new();
                 if let [field] = class_ty.fields.as_slice()
                     && let scope = ctx.enter_scope(&format!("<implied:{}>", field.name))

@@ -124,7 +124,7 @@ test_deserializer!(
       ]
 );
 
-test_deserializer!(
+test_partial_deserializer!(
     test_list_streaming,
     r#"[1234, 5678"#,
     baml_tyannotated!([int]),
@@ -132,7 +132,7 @@ test_deserializer!(
     [1234, 5678]
 );
 
-test_deserializer!(
+test_partial_deserializer!(
     test_list_streaming_2,
     r#"[1234"#,
     baml_tyannotated!([int]),
@@ -140,7 +140,7 @@ test_deserializer!(
     [1234]
 );
 
-test_deserializer!(
+test_partial_deserializer!(
     test_list_streaming_inside_json_block,
     r#"```json
 ["a","#,

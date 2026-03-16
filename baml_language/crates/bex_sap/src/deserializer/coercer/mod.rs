@@ -10,7 +10,7 @@ mod coerce_ty;
 mod coerce_union;
 mod match_string;
 
-use std::{borrow::Cow, collections::HashSet};
+use std::{borrow::Cow, collections::HashSet, marker::PhantomData};
 
 // use baml_types::{BamlValue, Constraint, JinjaExpression};
 // use internal_baml_core::ir::jinja_helpers::evaluate_predicate;
@@ -27,13 +27,19 @@ use crate::{
 
 pub struct ParsingContext<'s, 'v, 't, N: TypeIdent> {
     pub scope: Vec<String>,
-    visited_during_coerce: HashSet<(String, &'v jsonish::Value<'s>)>,
-    visited_during_try_cast: HashSet<(String, &'v jsonish::Value<'s>)>,
+    // Use pointer identity (*const) rather than structural Hash/Eq so that
+    // two distinct but structurally identical subtrees are NOT treated as the
+    // same visited node. This prevents false-positive circular-reference
+    // errors when the input contains repeated equal objects or arrays.
+    visited_during_coerce: HashSet<(String, *const jsonish::Value<'s>)>,
+    visited_during_try_cast: HashSet<(String, *const jsonish::Value<'s>)>,
     pub db: &'t TypeRefDb<'t, N>,
     /// Hint for union coercion: the variant index that succeeded on the previous
     /// array element. Used to optimize arrays of unions by trying the likely
     /// variant first.
     pub union_variant_hint: Option<usize>,
+    /// Tie `'v` to the struct so callers still parameterize over the value lifetime.
+    _phantom: PhantomData<&'v ()>,
 }
 
 impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
@@ -44,14 +50,14 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
         self.scope.join(".")
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn new(db: &'t TypeRefDb<'t, N>) -> Self {
+    pub fn new(db: &'t TypeRefDb<'t, N>) -> Self {
         ParsingContext {
             scope: Vec::new(),
             visited_during_coerce: HashSet::new(),
             visited_during_try_cast: HashSet::new(),
             db,
             union_variant_hint: None,
+            _phantom: PhantomData,
         }
     }
 
@@ -65,6 +71,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             db: self.db,
             // Don't propagate hint to nested scopes by default
             union_variant_hint: None,
+            _phantom: PhantomData,
         }
     }
 
@@ -79,6 +86,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_try_cast: self.visited_during_try_cast.clone(),
             db: self.db,
             union_variant_hint: hint,
+            _phantom: PhantomData,
         }
     }
 
@@ -90,12 +98,13 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
         cls_value_pair: (String, &'v jsonish::Value<'s>),
         is_coerce: bool,
     ) -> Self {
+        let ptr_pair = (cls_value_pair.0, ::core::ptr::from_ref(cls_value_pair.1));
         let mut new_visited_coerce = self.visited_during_coerce.clone();
         let mut new_visited_try_cast = self.visited_during_try_cast.clone();
         if is_coerce {
-            new_visited_coerce.insert(cls_value_pair);
+            new_visited_coerce.insert(ptr_pair);
         } else {
-            new_visited_try_cast.insert(cls_value_pair);
+            new_visited_try_cast.insert(ptr_pair);
         }
         ParsingContext {
             scope: self.scope.clone(),
@@ -103,6 +112,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
             visited_during_try_cast: new_visited_try_cast,
             db: self.db,
             union_variant_hint: None,
+            _phantom: PhantomData,
         }
     }
 

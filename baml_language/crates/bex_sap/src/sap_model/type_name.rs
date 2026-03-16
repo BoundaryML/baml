@@ -154,7 +154,7 @@ impl<N: TypeIdent> TypeName for TyResolved<'_, N> {
             TyResolved::Class(c) => c.type_name(),
             TyResolved::Enum(e) => e.type_name(),
             TyResolved::Union(u) => u.type_name(),
-            TyResolved::StreamState(s) => Cow::Owned(format!("stream_state<{}>", s.type_name())),
+            TyResolved::StreamState(s) => s.type_name(),
         }
     }
 }

@@ -103,7 +103,7 @@ fn class_missing_never_db() -> TypeRefDb<'static, &'static str> {
     baml_db! {
         class Item {
             id: int @class_in_progress_field_missing(never) @class_completed_field_missing(never),
-            label: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+            label: (string | null) @parse_as(string) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
         }
     }
 }

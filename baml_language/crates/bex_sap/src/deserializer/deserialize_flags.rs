@@ -93,7 +93,7 @@ where
     /// `int` value was converted from a parsed non-integer number
     FloatToInt(f64),
 
-    // X -> Object convertions.
+    // X -> Object conversions.
     NoFields(Option<Cow<'v, crate::jsonish::Value<'s>>>),
 
     // /// Constraint results (only contains checks)

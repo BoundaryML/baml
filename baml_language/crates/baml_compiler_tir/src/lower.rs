@@ -119,7 +119,10 @@ impl<'a> TypeLoweringContextResolved<'a> {
     fn lower_attr(&self, attr: &TyAttr<Name>) -> TyAttr<QualifiedName> {
         attr.clone()
             .expect_map_name(|n| self.expand_name(n))
-            .unwrap_or_default()
+            .unwrap_or_else(|err| {
+                debug_assert!(false, "failed to resolve type name: {err}");
+                TyAttr::default()
+            })
     }
 }
 

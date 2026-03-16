@@ -2,6 +2,7 @@
 
 use std::ops::Deref;
 
+use ::std::borrow::Cow;
 use indexmap::IndexMap;
 
 use crate::{
@@ -31,7 +32,7 @@ where
     #[allow(clippy::wrong_self_convention)]
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError>;
 }
@@ -43,7 +44,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
@@ -59,7 +60,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
@@ -75,7 +76,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
@@ -91,7 +92,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
@@ -109,7 +110,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
@@ -125,7 +126,7 @@ where
 {
     fn from_literal(
         &'t self,
-        _literal: &'t AttrLiteral<'t, N>,
+        _literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         Err(ctx.error_internal("media literals are not currently supported"))
@@ -138,7 +139,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match self {
@@ -158,7 +159,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
@@ -177,7 +178,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
@@ -196,7 +197,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match literal {
@@ -217,7 +218,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         match self {
@@ -235,7 +236,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let AttrLiteral::Array(items) = literal else {
@@ -251,7 +252,7 @@ where
         let items = items
             .iter()
             .map(|item| {
-                self.ty.ty.from_literal(item, ctx).map(|item| {
+                ty.ty.from_literal(item, ctx).map(|item| {
                     BamlValueWithFlags::new(
                         item,
                         DeserializerMeta {
@@ -281,7 +282,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let AttrLiteral::Map(data) = literal else {
@@ -290,6 +291,10 @@ where
                 self.type_name()
             )));
         };
+        let key_ty = ctx
+            .db
+            .resolve_with_meta(self.key.deref().as_ref())
+            .map_err(|ident| ctx.error_type_resolution(ident))?;
         let value_ty = ctx
             .db
             .resolve_with_meta(self.value.deref().as_ref())
@@ -297,12 +302,20 @@ where
         let data = data
             .iter()
             .map(|(key, value)| {
+                let key = key_ty
+                    .ty
+                    .from_literal(&AttrLiteral::String(key.clone()), ctx)?;
+                let key = match key {
+                    BamlValue::String(s) => s.value,
+                    BamlValue::Enum(e) => Cow::Borrowed(e.value), // uses variant name, not aliases
+                    _ => return Err(ctx.error_internal("key must be a string-like type")),
+                };
                 let value = self.value.ty.from_literal(value, ctx)?;
                 let meta = DeserializerMeta {
                     flags: DeserializerConditions::new(),
                     ty: value_ty.clone(),
                 };
-                Ok((key.to_string().into(), BamlValueWithFlags::new(value, meta)))
+                Ok((key, BamlValueWithFlags::new(value, meta)))
             })
             .collect::<Result<IndexMap<_, _>, _>>();
         match data {
@@ -324,7 +337,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let (name, data) = match literal {
@@ -385,7 +398,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let (enum_name, variant_name) = match literal {
@@ -401,14 +414,14 @@ where
             }
         };
 
-        if self
+        if let Some(enum_variant) = self
             .variants
             .iter()
-            .any(|variant| variant.name == *variant_name)
+            .find(|variant| variant.name == *variant_name)
         {
             Ok(BamlEnum {
                 name: &self.name,
-                value: variant_name.as_ref(),
+                value: &enum_variant.name,
             })
         } else {
             Err(ctx.error_internal(format!(
@@ -425,7 +438,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         for TyWithMeta { ty, .. } in &self.variants {
@@ -447,7 +460,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let inner_ty = ctx
@@ -503,7 +516,7 @@ where
 {
     pub fn from_literal(
         self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<BamlValue<'s, 'v, 't, N>, ParsingError> {
         match self {
@@ -579,7 +592,7 @@ where
 {
     fn from_literal(
         &'t self,
-        literal: &'t AttrLiteral<'t, N>,
+        literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
         let resolved = ctx

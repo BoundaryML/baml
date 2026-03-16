@@ -16,8 +16,6 @@ mod test_partials;
 mod test_streaming;
 mod test_unions;
 
-use std::borrow::Cow;
-
 use crate::{baml_db, baml_tyannotated, sap_model::*};
 
 // ---------------------------------------------------------------------------

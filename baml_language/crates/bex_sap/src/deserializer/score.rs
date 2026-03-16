@@ -12,7 +12,7 @@ pub trait WithScore {
 impl<N: TypeIdent> WithScore for Flag<'_, '_, '_, N> {
     fn score(&self) -> i32 {
         match self {
-            Flag::InferedObject(_) => 0, // Dont penalize for this but instead handle it at the top level
+            Flag::InferedObject(_) => 0, // Don't penalize for this but instead handle it at the top level
             Flag::OptionalDefaultFromNoValue => 1,
             Flag::DefaultFromNoValue => 100,
             Flag::DefaultFromInProgress(_) => 0,

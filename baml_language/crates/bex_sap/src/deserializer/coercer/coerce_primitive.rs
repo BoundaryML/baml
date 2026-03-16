@@ -106,6 +106,8 @@ where
                 }
                 let res = if let Some(n) = n.as_i64() {
                     BamlInt { value: n } // also covers u64
+                } else if n.as_u64().is_some() {
+                    return Err(ctx.error_integer_out_of_bounds(n));
                 } else if let Some(f) = n.as_f64() {
                     let rounded = f.round();
                     #[allow(clippy::cast_precision_loss)]
@@ -144,20 +146,29 @@ where
                         return Err(ctx.error_integer_out_of_bounds(&serde_json::Number::from(n)));
                     };
                     BamlInt { value: n }
-                } else if let Ok(n) = s.parse::<f64>() {
+                } else if let Some(n) = s
+                    .parse::<f64>()
+                    .ok()
+                    .or_else(|| float_from_maybe_fraction(s))
+                    .or_else(|| float_from_comma_separated(s))
+                {
+                    if !n.is_finite() {
+                        return Err(ctx.error_unexpected_type(&target, &value));
+                    }
+                    let rounded = n.round();
+                    #[allow(clippy::cast_precision_loss)]
+                    if rounded < (i64::MIN as f64) || (i64::MAX as f64) < rounded {
+                        return Err(ctx.error_integer_out_of_bounds(
+                            &serde_json::Number::from_f64(rounded).unwrap_or_else(|| {
+                                unreachable!(
+                                    "serde_json::Number::from_f64 only fails on non-finite floats"
+                                )
+                            }),
+                        ));
+                    }
                     flags.add_flag(Flag::FloatToInt(n));
                     BamlInt {
-                        value: n.round() as i64,
-                    }
-                } else if let Some(frac) = float_from_maybe_fraction(s) {
-                    flags.add_flag(Flag::FloatToInt(frac));
-                    BamlInt {
-                        value: frac.round() as i64,
-                    }
-                } else if let Some(frac) = float_from_comma_separated(s) {
-                    flags.add_flag(Flag::FloatToInt(frac));
-                    BamlInt {
-                        value: frac.round() as i64,
+                        value: rounded as i64,
                     }
                 } else {
                     return Err(ctx.error_unexpected_type(&target, &value));

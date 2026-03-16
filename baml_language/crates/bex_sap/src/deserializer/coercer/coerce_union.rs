@@ -65,10 +65,11 @@ where
                     != Some(parse_as_ty.as_ref()),
                 "If parse_as is the same, it should be `None`."
             );
+            // recursed coercion should handle all the flags.
             let Some(value) = TyResolvedRef::coerce(ctx, parse_as.clone(), value)? else {
                 return Ok(None);
             };
-            parse_as.meta.expect_asserts(&value.value, ctx)?;
+            target.meta.expect_asserts(&value.value, ctx)?; // already ran inner `parse_as`` asserts, need to run outer `target` asserts
             return Ok(Some(value));
         }
 
@@ -179,7 +180,7 @@ where
                 "If parse_as is the same, it should be `None`."
             );
             let value = TyResolvedRef::try_cast(ctx, parse_as.clone(), value)?;
-            let Ok(true) = parse_as.meta.check_asserts(&value.value, ctx) else {
+            let Ok(true) = target.meta.check_asserts(&value.value, ctx) else {
                 return None;
             };
             return Some(value);
@@ -236,7 +237,7 @@ where
                 // Perfect match - no need to try other options
                 if score == 0 {
                     cast_result.add_flag(Flag::UnionMatch(orig_idx, vec![]));
-                    return Some(cast_result);
+                    return Some(cast_result.with_flags(flags.flags));
                 }
                 // Add the flag with the CORRECT original index before storing.
                 // This prevents pick_best from adding a flag with wrong (filtered list) index.
@@ -250,7 +251,7 @@ where
             1 => {
                 let (_, v) = filtered_options.remove(0);
                 // Flag already added above with correct index
-                Some(v)
+                Some(v.with_flags(flags.flags))
             }
             // pick_best will see the existing UnionMatch flag and won't add a duplicate
             _ => array_helper::pick_best(

@@ -42,7 +42,7 @@ pub enum Value<'s> {
 }
 
 impl Hash for Value<'_> {
-    // Hashing a Value ignores CompletationState.
+    // Hashing a Value ignores CompletionState.
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
 

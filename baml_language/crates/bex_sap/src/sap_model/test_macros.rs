@@ -44,7 +44,7 @@ macro_rules! baml_tyannotated {
         )
     };
     ($($tt:tt)+) => {{
-        let mut vec = Vec::new();
+        let mut vec = ::std::vec::Vec::new();
         let attrs = $crate::__baml_tyannotated_union_muncher!(vec <= ($($tt)+));
         $crate::sap_model::AnnotatedTy::new(
             $crate::sap_model::Ty::Resolved($crate::sap_model::TyResolved::Union($crate::sap_model::UnionTy { variants: vec })),
@@ -213,7 +213,7 @@ macro_rules! __parse_attr_literal {
     {><><KV ($map:ident)><>< {}} => {};
     // Map/object recursion: class
     {><><KV ($map:ident)><>< {$key:literal: $cls_key:ident {$($cls_inner:tt)*}$(, $($rest:tt)*)?}} => {
-        $map.insert(::std::borrow::Cow::Borrowed($key), $crate::__parse_attr_literal!{$cls_key:ident {$($cls_inner:tt)*}});
+        $map.insert(::std::borrow::Cow::Borrowed($key), $crate::__parse_attr_literal!{$cls_key {$($cls_inner)*}});
         $crate::__parse_attr_literal!{><><KV ($map)><>< {$($rest)*}}
     };
     // Map/object recursion: enum variant
@@ -278,8 +278,8 @@ macro_rules! baml_tyresolved {
     (null) => {
         $crate::sap_model::TyResolved::Null($crate::sap_model::NullTy)
     };
-    (($(ty:tt)+)) => {
-        $crate::baml_tyresolved!($(ty)+)
+    (($($ty:tt)+)) => {
+        $crate::baml_tyresolved!($($ty)+)
     };
     // TODO: media
     // Using rust-like syntax for array types
@@ -308,7 +308,7 @@ macro_rules! baml_tyresolved {
     ($($tt:tt)+) => {
         $crate::sap_model::TyResolved::Union($crate::sap_model::UnionTy {
             variants: {
-                let mut vec = Vec::new();
+                let mut vec = ::std::vec::Vec::new();
                 $crate::__baml_resolved_union_muncher!(vec <= ($($tt)+));
                 vec
             },
@@ -321,7 +321,6 @@ macro_rules! __baml_resolved_union_muncher {
     // last as StreamState
     ($vec:ident <= (StreamState<$inner:tt $(@$attr_name:ident($($attr_args:tt)*))*>)) => {{
         $vec.push($crate::baml_tyannotated!(StreamState<$inner $(@$attr_name($($attr_args)*))*>));
-        $crate::__parse_ty_attrs!{$(@$last_attr($($last_attr_args)*))*}
     }};
     // last as map
     ($vec:ident <= (
@@ -404,8 +403,8 @@ macro_rules! __baml_db_item {
             name: stringify!($name),
             variants: vec![
                 $($crate::sap_model::AnnotatedEnumVariant {
-                    name: std::borrow::Cow::Borrowed(stringify!($variant)),
-                    aliases: vec![$(std::borrow::Cow::Borrowed($alias)),*],
+                    name: ::std::borrow::Cow::Borrowed(stringify!($variant)),
+                    aliases: vec![$(::std::borrow::Cow::Borrowed($alias)),*],
                 }),+
             ],
         })).ok().unwrap();
@@ -418,14 +417,14 @@ macro_rules! __baml_db_item {
         $db.try_add(stringify!($name), $crate::baml_tyresolved!($ty)).ok().unwrap();
         $crate::__baml_db_item!($db => $($rest)*);
     };
-    {db => } => {}
+    {$db:ident => } => {}
 }
 
 /// We require that unions be wrapped in `()`
 #[macro_export]
 macro_rules! __class_fields {
     {} => {
-        Vec::new()
+        ::std::vec::Vec::new()
     };
     {
         $name:ident: StreamState<
@@ -437,11 +436,11 @@ macro_rules! __class_fields {
             let mut fields = $crate::__class_fields!($($rest)*);
             let (aliases, _, class_in_progress_field_missing, class_completed_field_missing) = $crate::__class_field_args!($(@$field_attr_name($($field_attr_args)*))*);
             let field = $crate::sap_model::AnnotatedField {
-                name: Cow::Borrowed({
+                name: ::std::borrow::Cow::Borrowed({
                     let raw = stringify!($name);
                     match raw.strip_prefix("r#") {
-                        Some(stripped) => stripped,
-                        None => raw,
+                        ::std::option::Option::Some(stripped) => stripped,
+                        ::std::option::Option::None => raw,
                     }
                 }),
                 ty: $crate::baml_tyannotated!(StreamState<$ty $(@$attr_name($($attr_args)*))*>),

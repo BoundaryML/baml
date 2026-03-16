@@ -66,10 +66,7 @@ pub(super) fn parse<'s>(
                         state
                             .completed_values
                             .into_iter()
-                            .map(|f| {
-                                let _completion_state = *f.1.completion_state();
-                                Value::FixedJson(f.1.into(), f.2)
-                            })
+                            .map(|f| Value::FixedJson(f.1.into(), f.2))
                             .collect(),
                         CompletionState::Incomplete, // TODO: Is it complete?
                     ),

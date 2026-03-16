@@ -122,16 +122,6 @@ where
         return try_match_only_once(ctx, target, string_match, flags);
     }
 
-    // Third attempt, case sensitive match without punctuation.
-    if let Some(string_match) = string_match_strategy(
-        &match_context,
-        &candidates,
-        &mut flags,
-        allow_substring_match,
-    ) {
-        return try_match_only_once(ctx, target, string_match, flags);
-    }
-
     // Last hope, case insensitive match without punctuation. This could yield
     // wrong results since the name of a candidate could appear as a "normal"
     // word used by the LLM to explain the output.
@@ -233,16 +223,32 @@ fn string_match_strategy<'t, N: TypeIdent>(
         }
     }
 
-    // Strategy 2: Try unaccented case-sensitive match
+    // Strategy 2: Try unaccented case-sensitive match.
+    // Collect all matches because remove_accents() can collapse distinct
+    // aliases to the same token (e.g. "résumé" and "resume" both become
+    // "resume"), and we need to surface ambiguity rather than silently
+    // picking declaration order.
     let unaccented_value_str = remove_accents(value_str);
-    for (candidate, valid_values) in candidates {
-        if valid_values
-            .iter()
-            .any(|v| remove_accents(v.as_ref()) == unaccented_value_str)
-        {
-            // No flags since we found an exact match.
-            return Some(candidate);
-        }
+    let unaccented_matches: Vec<&'t str> = candidates
+        .iter()
+        .filter(|(_, valid_values)| {
+            valid_values
+                .iter()
+                .any(|v| remove_accents(v.as_ref()) == unaccented_value_str)
+        })
+        .map(|(candidate, _)| *candidate)
+        .collect();
+
+    if unaccented_matches.len() == 1 {
+        return Some(unaccented_matches[0]);
+    } else if unaccented_matches.len() > 1 {
+        flags.add_flag(Flag::StrMatchOneFromMany(
+            unaccented_matches
+                .iter()
+                .map(|c| (Cow::Borrowed(*c), 1))
+                .collect(),
+        ));
+        return Some(unaccented_matches[0]);
     }
 
     if !allow_substring_match {
@@ -271,7 +277,7 @@ fn string_match_strategy<'t, N: TypeIdent>(
             for valid_name in valid_names {
                 let unaccented_valid_name = remove_accents(valid_name.as_ref());
                 for (start_idx, _) in unaccented_value_str.match_indices(&unaccented_valid_name) {
-                    let end_idx = start_idx + valid_name.as_ref().len();
+                    let end_idx = start_idx + unaccented_valid_name.len();
                     all_matches.push((start_idx, end_idx, valid_name.as_ref(), variant));
                 }
             }

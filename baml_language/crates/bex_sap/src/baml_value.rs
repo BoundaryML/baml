@@ -100,26 +100,26 @@ pub struct BamlBool {
 pub struct BamlNull;
 #[derive(Debug, Clone)]
 pub struct BamlMedia;
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct BamlArray<'s, 'v, 't, N: TypeIdent>
 where
     's: 'v,
 {
     pub value: Vec<BamlValueWithFlags<'s, 'v, 't, N>>,
 }
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct BamlMap<'s, 'v, 't, N: TypeIdent>
 where
     's: 'v,
 {
     pub value: IndexMap<Cow<'s, str>, BamlValueWithFlags<'s, 'v, 't, N>>,
 }
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct BamlEnum<'t, N: TypeIdent + 't> {
     pub name: &'t N,
     pub value: &'t str,
 }
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct BamlClass<'s, 'v, 't, N: TypeIdent>
 where
     's: 'v,
@@ -135,7 +135,7 @@ where
 ///   This means either:
 ///   - Value has `in_progress=<value>`, we return `Incomplete(<value>)`
 ///   - Value has `in_progress=None`, we return `Incomplete(<partial_value>)`
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum BamlStreamState<'s, 'v, 't, N: TypeIdent>
 where
     's: 'v,
