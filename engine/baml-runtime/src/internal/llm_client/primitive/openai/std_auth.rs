@@ -59,7 +59,9 @@ impl AzureAuth {
         // Create new credential
         let credential: Arc<dyn TokenCredential> = match auth_strategy {
             ResolvedAzureAuthStrategy::ApiKey => {
-                anyhow::bail!("AzureAuth::get_or_create called for ApiKey strategy — this is a bug");
+                anyhow::bail!(
+                    "AzureAuth::get_or_create called for ApiKey strategy — this is a bug"
+                );
             }
             ResolvedAzureAuthStrategy::EntraId {
                 tenant_id,
@@ -98,10 +100,7 @@ impl AzureAuth {
                         // Eagerly probe the credential by requesting a token.
                         // On a machine without managed identity (dev laptop), IMDS will time out.
                         // We accept the latency here (once per process lifetime due to caching).
-                        match cred
-                            .get_token(&[AZURE_OPENAI_TOKEN_SCOPE], None)
-                            .await
-                        {
+                        match cred.get_token(&[AZURE_OPENAI_TOKEN_SCOPE], None).await {
                             Ok(_) => {
                                 log::debug!(
                                     "Azure SystemDefault: ManagedIdentityCredential succeeded"

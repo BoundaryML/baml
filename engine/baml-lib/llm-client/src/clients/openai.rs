@@ -447,12 +447,10 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             }
         };
 
-        let mut instance = Self::create_common(properties, base_url, None, azure_auth, http_config)?;
+        let mut instance =
+            Self::create_common(properties, base_url, None, azure_auth, http_config)?;
         instance.query_params = query_params;
         if let Some(key) = api_key_for_header {
-            instance.headers.entry("api-key".to_string()).or_insert(key);
-        } else if let Some(key) = api_key {
-            // User explicitly provided api_key
             instance.headers.entry("api-key".to_string()).or_insert(key);
         }
 

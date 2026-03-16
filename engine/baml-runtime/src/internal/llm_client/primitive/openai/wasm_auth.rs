@@ -17,9 +17,8 @@ impl AzureAuth {
                     "AzureAuth::get_or_create called for ApiKey strategy — this is a bug"
                 );
             }
-            ResolvedAzureAuthStrategy::EntraId { .. } | ResolvedAzureAuthStrategy::SystemDefault => {
-                Ok(AzureAuth)
-            }
+            ResolvedAzureAuthStrategy::EntraId { .. }
+            | ResolvedAzureAuthStrategy::SystemDefault => Ok(AzureAuth),
         }
     }
 

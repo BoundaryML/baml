@@ -462,9 +462,7 @@ impl RequestBuilder for OpenAIClient {
                         self.properties.azure_auth.as_ref().unwrap(),
                     )
                     .await
-                    .map_err(|e| {
-                        anyhow::anyhow!("Azure Entra ID authentication failed: {e}")
-                    })?;
+                    .map_err(|e| anyhow::anyhow!("Azure Entra ID authentication failed: {e}"))?;
                     let token = azure_auth.token().await.map_err(|e| {
                         anyhow::anyhow!("Azure Entra ID token acquisition failed: {e}")
                     })?;
