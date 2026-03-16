@@ -450,6 +450,31 @@ impl RequestBuilder for OpenAIClient {
             req = req.bearer_auth(key.render(expose_secrets));
         }
 
+        // Entra ID bearer token acquisition (native only — WASM support added in Phase 3)
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use internal_llm_client::openai::ResolvedAzureAuthStrategy;
+            match &self.properties.azure_auth {
+                Some(
+                    ResolvedAzureAuthStrategy::EntraId { .. }
+                    | ResolvedAzureAuthStrategy::SystemDefault,
+                ) => {
+                    let azure_auth = super::std_auth::AzureAuth::get_or_create(
+                        self.properties.azure_auth.as_ref().unwrap(),
+                    )
+                    .await
+                    .map_err(|e| {
+                        anyhow::anyhow!("Azure Entra ID authentication failed: {e}")
+                    })?;
+                    let token = azure_auth.token().await.map_err(|e| {
+                        anyhow::anyhow!("Azure Entra ID token acquisition failed: {e}")
+                    })?;
+                    req = req.bearer_auth(&token);
+                }
+                _ => {}
+            }
+        }
+
         // Don't attach BAML creds to localhost requests, i.e. ollama
         if allow_proxy {
             req = req.header("baml-original-url", self.properties.base_url.as_str());
