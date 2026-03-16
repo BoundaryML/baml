@@ -116,6 +116,10 @@ fn media_to_content_block_json(media: &BamlMedia) -> Result<serde_json::Value> {
     }
 }
 
+fn has_cache_control(meta: &std::collections::HashMap<String, serde_json::Value>) -> bool {
+    meta.contains_key("cache_control")
+}
+
 fn system_part_to_json(part: &ChatMessagePart) -> Result<serde_json::Value> {
     match part {
         ChatMessagePart::Text(t) => Ok(json!({ "text": t })),
@@ -124,12 +128,40 @@ fn system_part_to_json(part: &ChatMessagePart) -> Result<serde_json::Value> {
     }
 }
 
+/// Convert system parts to JSON, appending cachePoint blocks where cache_control metadata is present.
+fn system_parts_to_json(parts: &[ChatMessagePart]) -> Result<Vec<serde_json::Value>> {
+    let mut blocks = Vec::new();
+    for part in parts {
+        blocks.push(system_part_to_json(part)?);
+        if let ChatMessagePart::WithMeta(_, meta) = part {
+            if has_cache_control(meta) {
+                blocks.push(json!({ "cachePoint": { "type": "default" } }));
+            }
+        }
+    }
+    Ok(blocks)
+}
+
 fn chat_part_to_json(part: &ChatMessagePart) -> Result<serde_json::Value> {
     match part {
         ChatMessagePart::Text(t) => Ok(json!({ "text": t })),
         ChatMessagePart::Media(media) => media_to_content_block_json(media),
         ChatMessagePart::WithMeta(inner, _) => chat_part_to_json(inner),
     }
+}
+
+/// Convert chat message parts to JSON, appending cachePoint blocks where cache_control metadata is present.
+fn chat_parts_to_json(parts: &[ChatMessagePart]) -> Result<Vec<serde_json::Value>> {
+    let mut blocks = Vec::new();
+    for part in parts {
+        blocks.push(chat_part_to_json(part)?);
+        if let ChatMessagePart::WithMeta(_, meta) = part {
+            if has_cache_control(meta) {
+                blocks.push(json!({ "cachePoint": { "type": "default" } }));
+            }
+        }
+    }
+    Ok(blocks)
 }
 
 // represents client that interacts with the Bedrock API
@@ -338,21 +370,14 @@ impl AwsClient {
 
         if let Some((first, remainder)) = chat_slice.split_first() {
             if first.role == "system" {
-                let mut blocks = Vec::new();
-                for part in &first.parts {
-                    blocks.push(system_part_to_json(part)?);
-                }
-                system_blocks = Some(blocks);
+                system_blocks = Some(system_parts_to_json(&first.parts)?);
                 chat_slice = remainder;
             }
         }
 
         let mut messages_json: Vec<serde_json::Value> = Vec::new();
         for message in chat_slice {
-            let mut content_blocks = Vec::new();
-            for part in &message.parts {
-                content_blocks.push(chat_part_to_json(part)?);
-            }
+            let content_blocks = chat_parts_to_json(&message.parts)?;
             messages_json.push(json!({
                 "role": message.role,
                 "content": content_blocks,
@@ -696,7 +721,7 @@ impl AwsClient {
                 bedrock::types::ContentBlock::ToolUse(_) => "toolUse",
                 bedrock::types::ContentBlock::Text(_) => "text",
                 bedrock::types::ContentBlock::ReasoningContent(_) => "reasoningContent",
-                // bedrock::types::ContentBlock::CachePoint(_) => "cachePoint",
+                bedrock::types::ContentBlock::CachePoint(_) => "cachePoint",
                 bedrock::types::ContentBlock::Document(_) => "document",
                 bedrock::types::ContentBlock::Video(_) => "video",
                 _ => "unknown",
@@ -714,13 +739,7 @@ impl AwsClient {
 
         if let Some((first, remainder_slice)) = chat_slice.split_first() {
             if first.role == "system" {
-                system_message = Some(
-                    first
-                        .parts
-                        .iter()
-                        .map(Self::part_to_system_message)
-                        .collect::<Result<_>>()?,
-                );
+                system_message = Some(Self::parts_to_system_message(&first.parts)?);
                 chat_slice = remainder_slice;
             }
         }
@@ -1068,8 +1087,9 @@ impl WithStreamChat for AwsClient {
                                             Some(usage.output_tokens() as u64);
                                         new_state.metadata.total_tokens =
                                             Some((usage.total_tokens()) as u64);
-                                        // AWS Bedrock does not currently support cached tokens
-                                        new_state.metadata.cached_input_tokens = None;
+                                        new_state.metadata.cached_input_tokens = usage
+                                            .cache_read_input_tokens
+                                            .and_then(|v| v.try_into().ok());
                                     }
                                 }
                                 _ => {
@@ -1245,11 +1265,7 @@ impl AwsClient {
     }
 
     fn role_to_message(&self, msg: &RenderedChatMessage) -> Result<bedrock::types::Message> {
-        let content = msg
-            .parts
-            .iter()
-            .map(|part| self.part_to_message(part))
-            .collect::<Result<Vec<_>>>()?;
+        let content = self.parts_to_message(&msg.parts)?;
 
         bedrock::types::Message::builder()
             .set_role(Some(msg.role.as_str().into()))
@@ -1271,26 +1287,53 @@ impl AwsClient {
         }
     }
 
+    /// Convert system message parts to SDK types, appending CachePoint blocks where cache_control metadata is present.
+    fn parts_to_system_message(
+        parts: &[ChatMessagePart],
+    ) -> Result<Vec<bedrock::types::SystemContentBlock>> {
+        let mut blocks = Vec::new();
+        for part in parts {
+            blocks.push(Self::part_to_system_message(part)?);
+            if let ChatMessagePart::WithMeta(_, meta) = part {
+                if has_cache_control(meta) {
+                    blocks.push(bedrock::types::SystemContentBlock::CachePoint(
+                        bedrock::types::CachePointBlock::builder()
+                            .r#type(bedrock::types::CachePointType::Default)
+                            .build()?,
+                    ));
+                }
+            }
+        }
+        Ok(blocks)
+    }
+
     fn part_to_message(&self, part: &ChatMessagePart) -> Result<bedrock::types::ContentBlock> {
         match part {
             ChatMessagePart::Text(t) => self.to_chat_message(t),
             ChatMessagePart::Media(m) => self.to_media_message(m),
-            ChatMessagePart::WithMeta(p, _) => {
-                // All metadata is dropped as AWS does not support it
-                // this means caching, etc.
-                self.part_to_message(p)
-            }
+            ChatMessagePart::WithMeta(p, _) => self.part_to_message(p),
         }
     }
 
+    /// Convert chat message parts to SDK types, appending CachePoint blocks where cache_control metadata is present.
     fn parts_to_message(
         &self,
         parts: &[ChatMessagePart],
     ) -> Result<Vec<bedrock::types::ContentBlock>> {
-        parts
-            .iter()
-            .map(|p| self.part_to_message(p))
-            .collect::<Result<Vec<_>>>()
+        let mut blocks = Vec::new();
+        for part in parts {
+            blocks.push(self.part_to_message(part)?);
+            if let ChatMessagePart::WithMeta(_, meta) = part {
+                if has_cache_control(meta) {
+                    blocks.push(bedrock::types::ContentBlock::CachePoint(
+                        bedrock::types::CachePointBlock::builder()
+                            .r#type(bedrock::types::CachePointType::Default)
+                            .build()?,
+                    ));
+                }
+            }
+        }
+        Ok(blocks)
     }
 }
 
@@ -1426,7 +1469,11 @@ impl WithChat for AwsClient {
                         .usage
                         .as_ref()
                         .and_then(|i| i.total_tokens.try_into().ok()),
-                    cached_input_tokens: None, // AWS Bedrock does not currently support cached tokens
+                    cached_input_tokens: response
+                        .usage
+                        .as_ref()
+                        .and_then(|u| u.cache_read_input_tokens)
+                        .and_then(|v| v.try_into().ok()),
                 },
             }),
             Err(e) => LLMResponse::LLMFailure(LLMErrorResponse {
