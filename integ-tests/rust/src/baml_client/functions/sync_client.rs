@@ -410,6 +410,10 @@ baml_function_sync!(TestAwsVideoDescribe(video_input: &types::Video, ) -> (Strin
 
 baml_function_sync!(TestAzure(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
+baml_function_sync!(TestAzureEntraId(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
+
+baml_function_sync!(TestAzureEntraIdSystemDefault(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
+
 baml_function_sync!(TestAzureFailure(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
 
 baml_function_sync!(TestAzureO1NoMaxTokens(input: impl AsRef<str> + BamlEncode, ) -> (String, String));
@@ -1001,6 +1005,10 @@ pub struct BamlSyncClient {
     pub TestAwsVideoDescribe: TestAwsVideoDescribe,
 
     pub TestAzure: TestAzure,
+
+    pub TestAzureEntraId: TestAzureEntraId,
+
+    pub TestAzureEntraIdSystemDefault: TestAzureEntraIdSystemDefault,
 
     pub TestAzureFailure: TestAzureFailure,
 
@@ -1594,6 +1602,10 @@ impl BamlSyncClient {
             TestAwsVideoDescribe: TestAwsVideoDescribe::new(),
 
             TestAzure: TestAzure::new(),
+
+            TestAzureEntraId: TestAzureEntraId::new(),
+
+            TestAzureEntraIdSystemDefault: TestAzureEntraIdSystemDefault::new(),
 
             TestAzureFailure: TestAzureFailure::new(),
 
@@ -2477,6 +2489,14 @@ impl BamlSyncClient {
             },
 
             TestAzure: TestAzure {
+                options: options.clone(),
+            },
+
+            TestAzureEntraId: TestAzureEntraId {
+                options: options.clone(),
+            },
+
+            TestAzureEntraIdSystemDefault: TestAzureEntraIdSystemDefault {
                 options: options.clone(),
             },
 

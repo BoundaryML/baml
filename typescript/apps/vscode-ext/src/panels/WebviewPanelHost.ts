@@ -1,3 +1,4 @@
+import { DefaultAzureCredential } from '@azure/identity';
 import { fromIni } from '@aws-sdk/credential-providers'; // ES6 import
 import type { StringSpan } from '@baml/common';
 import {
@@ -700,6 +701,49 @@ export class WebviewPanelHost {
                 });
               } catch (error) {
                 console.error('Error loading gcp creds:', error);
+                if (error instanceof Error) {
+                  this._panel.webview.postMessage({
+                    rpcId: message.rpcId,
+                    rpcMethod: vscodeCommand,
+                    data: {
+                      error: {
+                        ...error,
+                        name: error.name,
+                        message: error.message,
+                      },
+                    },
+                  });
+                } else {
+                  this._panel.webview.postMessage({
+                    rpcId: message.rpcId,
+                    rpcMethod: vscodeCommand,
+                    data: { error },
+                  });
+                }
+              }
+            })();
+            return;
+          case 'LOAD_AZURE_CREDS':
+            (async () => {
+              try {
+                const credential = new DefaultAzureCredential();
+                const tokenResponse = await credential.getToken(
+                  'https://ai.azure.com/.default',
+                );
+                if (!tokenResponse?.token) {
+                  throw new Error('Azure Entra ID: no token in response');
+                }
+                this._panel.webview.postMessage({
+                  rpcId: message.rpcId,
+                  rpcMethod: vscodeCommand,
+                  data: {
+                    ok: {
+                      accessToken: tokenResponse.token,
+                    },
+                  },
+                });
+              } catch (error) {
+                console.error('Error loading Azure Entra ID creds:', error);
                 if (error instanceof Error) {
                   this._panel.webview.postMessage({
                     rpcId: message.rpcId,

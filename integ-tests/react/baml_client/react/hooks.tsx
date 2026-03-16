@@ -7605,6 +7605,106 @@ export function useTestAzure(
   }
 }
 /**
+ * A specialized hook for the TestAzureEntraId BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestAzureEntraId({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestAzureEntraId({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestAzureEntraId(props: HookInput<'TestAzureEntraId', { stream: false }>): HookOutput<'TestAzureEntraId', { stream: false }>
+export function useTestAzureEntraId(props?: HookInput<'TestAzureEntraId', { stream?: true }>): HookOutput<'TestAzureEntraId', { stream: true }>
+export function useTestAzureEntraId(
+  props: HookInput<'TestAzureEntraId', { stream?: boolean }> = {},
+): HookOutput<'TestAzureEntraId', { stream: true }> | HookOutput<'TestAzureEntraId', { stream: false }> {
+  let action: ServerAction = Actions.TestAzureEntraId;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestAzureEntraId;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestAzureEntraId', { stream: false }>)
+  }
+}
+/**
+ * A specialized hook for the TestAzureEntraIdSystemDefault BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestAzureEntraIdSystemDefault({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestAzureEntraIdSystemDefault({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestAzureEntraIdSystemDefault(props: HookInput<'TestAzureEntraIdSystemDefault', { stream: false }>): HookOutput<'TestAzureEntraIdSystemDefault', { stream: false }>
+export function useTestAzureEntraIdSystemDefault(props?: HookInput<'TestAzureEntraIdSystemDefault', { stream?: true }>): HookOutput<'TestAzureEntraIdSystemDefault', { stream: true }>
+export function useTestAzureEntraIdSystemDefault(
+  props: HookInput<'TestAzureEntraIdSystemDefault', { stream?: boolean }> = {},
+): HookOutput<'TestAzureEntraIdSystemDefault', { stream: true }> | HookOutput<'TestAzureEntraIdSystemDefault', { stream: false }> {
+  let action: ServerAction = Actions.TestAzureEntraIdSystemDefault;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestAzureEntraIdSystemDefault;
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'TestAzureEntraIdSystemDefault', { stream: false }>)
+  }
+}
+/**
  * A specialized hook for the TestAzureFailure BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

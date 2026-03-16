@@ -2242,6 +2242,36 @@ class BamlAsyncClient:
                 "input": input,
             })
             return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestAzureEntraId(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestAzureEntraId(input=input,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestAzureEntraId", args={
+                "input": input,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    async def TestAzureEntraIdSystemDefault(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            __stream__ = self.stream.TestAzureEntraIdSystemDefault(input=input,
+                baml_options=baml_options)
+            return await __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = await self.__options.merge_options(baml_options).call_function_async(function_name="TestAzureEntraIdSystemDefault", args={
+                "input": input,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
     async def TestAzureFailure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -6199,6 +6229,30 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
+    def TestAzureEntraId(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestAzureEntraId", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          __result__,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestAzureEntraIdSystemDefault(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[str, str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_async_stream(function_name="TestAzureEntraIdSystemDefault", args={
+            "input": input,
+        })
+        return baml_py.BamlStream[str, str](
+          __result__,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
     def TestAzureFailure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[str, str]:
@@ -8991,6 +9045,20 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return __result__
+    async def TestAzureEntraId(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAzureEntraId", args={
+            "input": input,
+        }, mode="request")
+        return __result__
+    async def TestAzureEntraIdSystemDefault(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAzureEntraIdSystemDefault", args={
+            "input": input,
+        }, mode="request")
+        return __result__
     async def TestAzureFailure(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -11040,6 +11108,20 @@ class BamlHttpStreamRequestClient:
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAzure", args={
+            "input": input,
+        }, mode="stream")
+        return __result__
+    async def TestAzureEntraId(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAzureEntraId", args={
+            "input": input,
+        }, mode="stream")
+        return __result__
+    async def TestAzureEntraIdSystemDefault(self, input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = await self.__options.merge_options(baml_options).create_http_request_async(function_name="TestAzureEntraIdSystemDefault", args={
             "input": input,
         }, mode="stream")
         return __result__
