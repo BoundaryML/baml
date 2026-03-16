@@ -591,53 +591,54 @@ impl OptimizeArgs {
                 Ok(OptimizeRunResult::Success)
             }
             Err(e) => {
+                // Build a detailed error message from the full anyhow chain
+                let mut detail = String::new();
+                for (i, cause) in e.chain().enumerate() {
+                    if i == 0 {
+                        detail.push_str(&format!("{cause}\n"));
+                    } else {
+                        detail.push_str(&format!("  Caused by: {cause}\n"));
+                    }
+                }
+
                 // Signal the error to the TUI via file, then wait for it to close
                 if let Some(handle) = tui_handle {
                     // Stop redirecting logs before writing error
                     let _ = baml_log::clear_log_file();
 
+                    // Append unique error/warning lines from the log file
+                    let log_path = run_dir.join("optimize.log");
+                    if let Ok(log_content) = std::fs::read_to_string(&log_path) {
+                        let mut seen = std::collections::HashSet::new();
+                        let error_lines: Vec<&str> = log_content
+                            .lines()
+                            .rev()
+                            .filter(|line| {
+                                line.contains("ERROR")
+                                    || line.contains("WARN")
+                                    || line.contains("error")
+                            })
+                            .filter(|line| seen.insert(*line))
+                            .take(15)
+                            .collect();
+                        if !error_lines.is_empty() {
+                            detail.push_str("\nRecent log errors:\n");
+                            for line in error_lines.into_iter().rev() {
+                                detail.push_str(&format!("  {line}\n"));
+                            }
+                        }
+                    }
+
                     if let Ok(storage) =
                         crate::optimize::storage::OptimizationStorage::from_existing(&run_dir)
                     {
-                        // Build a detailed error message from the full anyhow chain
-                        let mut detail = String::new();
-                        for (i, cause) in e.chain().enumerate() {
-                            if i == 0 {
-                                detail.push_str(&format!("{cause}\n"));
-                            } else {
-                                detail.push_str(&format!("  Caused by: {cause}\n"));
-                            }
-                        }
-
-                        // Append unique error/warning lines from the log file
-                        let log_path = run_dir.join("optimize.log");
-                        if let Ok(log_content) = std::fs::read_to_string(&log_path) {
-                            let mut seen = std::collections::HashSet::new();
-                            let error_lines: Vec<&str> = log_content
-                                .lines()
-                                .rev()
-                                .filter(|line| {
-                                    line.contains("ERROR")
-                                        || line.contains("WARN")
-                                        || line.contains("error")
-                                })
-                                .filter(|line| seen.insert(*line))
-                                .take(15)
-                                .collect();
-                            if !error_lines.is_empty() {
-                                detail.push_str("\nRecent log errors:\n");
-                                for line in error_lines.into_iter().rev() {
-                                    detail.push_str(&format!("  {line}\n"));
-                                }
-                            }
-                        }
-
                         let _ = storage.write_error(&detail);
                     }
+                    // TUI will detect error.json and quit; wait for it
                     let _ = handle.join();
                 }
 
-                eprintln!("\nOptimization failed: {e}");
+                eprintln!("\nOptimization failed:\n{detail}");
                 Ok(OptimizeRunResult::Failed)
             }
         }

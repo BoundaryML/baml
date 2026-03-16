@@ -26,8 +26,8 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
     widgets::{
-        Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation,
-        ScrollbarState, Wrap,
+        Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Wrap,
     },
     Frame, Terminal,
 };
@@ -226,11 +226,12 @@ impl App {
             return;
         };
 
-        // Check for error signal from orchestrator
+        // Check for error signal from orchestrator — quit TUI so error shows in plain terminal
         if let Some(error_message) = storage.load_error() {
             self.status = OptimizationStatus::Failed {
                 message: error_message,
             };
+            self.should_quit = true;
             return;
         }
 
@@ -565,56 +566,6 @@ fn render_ui(frame: &mut Frame, app: &mut App) {
     render_tree_panel(frame, app, content_chunks[0]);
     render_details_panel(frame, app, content_chunks[1]);
     render_footer(frame, app, main_chunks[2]);
-
-    // Render error modal overlay if the optimization has failed
-    if let OptimizationStatus::Failed { ref message } = app.status {
-        render_error_modal(frame, message);
-    }
-}
-
-/// Render a centered error modal overlay
-fn render_error_modal(frame: &mut Frame, message: &str) {
-    let area = frame.area();
-
-    // Size the modal to fill most of the screen
-    let modal_width = area.width.saturating_sub(4);
-    let modal_height = area.height.saturating_sub(4);
-    let x = (area.width.saturating_sub(modal_width)) / 2;
-    let y = (area.height.saturating_sub(modal_height)) / 2;
-    let modal_area = Rect::new(x, y, modal_width, modal_height);
-
-    // Clear the area behind the modal
-    frame.render_widget(Clear, modal_area);
-
-    let block = Block::default()
-        .title(" Optimization Error ")
-        .title_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
-        .borders(Borders::ALL)
-        .border_type(BorderType::Double)
-        .border_style(Style::default().fg(Color::Red));
-
-    let inner = block.inner(modal_area);
-    frame.render_widget(block, modal_area);
-
-    // Build the error text with a hint at the bottom
-    let mut lines: Vec<Line> = Vec::new();
-    lines.push(Line::from(""));
-    for text_line in message.lines() {
-        lines.push(Line::from(Span::raw(format!(" {text_line}"))));
-    }
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled(
-        " Press 'q' to exit",
-        Style::default()
-            .fg(Color::DarkGray)
-            .add_modifier(Modifier::ITALIC),
-    )));
-
-    let paragraph = Paragraph::new(lines)
-        .style(Style::default().fg(Color::White))
-        .wrap(Wrap { trim: false });
-
-    frame.render_widget(paragraph, inner);
 }
 
 /// Spinner frames for running status
