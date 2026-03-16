@@ -728,7 +728,7 @@ export class WebviewPanelHost {
               try {
                 const credential = new DefaultAzureCredential();
                 const tokenResponse = await credential.getToken(
-                  'https://ai.azure.com/.default',
+                  'https://cognitiveservices.azure.com/.default',
                 );
                 if (!tokenResponse?.token) {
                   throw new Error('Azure Entra ID: no token in response');

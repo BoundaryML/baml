@@ -5,10 +5,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use azure_core::credentials::{Secret, TokenCredential};
-use azure_identity::{
-    AzureCliCredential, AzureCliCredentialOptions, ClientSecretCredential,
-    ClientSecretCredentialOptions, ManagedIdentityCredential,
-};
+use azure_identity::{AzureCliCredential, ClientSecretCredential, ManagedIdentityCredential};
 use internal_llm_client::openai::ResolvedAzureAuthStrategy;
 use once_cell::sync::Lazy;
 
@@ -112,17 +109,14 @@ impl AzureAuth {
                                 log::debug!(
                                     "Azure SystemDefault: ManagedIdentityCredential failed, trying AzureCliCredential"
                                 );
-                                match AzureCliCredential::new(None)
-                                    .context("Failed to create AzureCliCredential")?
-                                    .get_token(&[AZURE_OPENAI_TOKEN_SCOPE], None)
-                                    .await
-                                {
+                                let cli_cred = AzureCliCredential::new(None)
+                                    .context("Failed to create AzureCliCredential")?;
+                                match cli_cred.get_token(&[AZURE_OPENAI_TOKEN_SCOPE], None).await {
                                     Ok(_) => {
                                         log::debug!(
                                             "Azure SystemDefault: AzureCliCredential succeeded"
                                         );
-                                        AzureCliCredential::new(None)
-                                            .context("Failed to create AzureCliCredential")?
+                                        cli_cred
                                     }
                                     Err(e) => {
                                         errors.push(format!("AzureCliCredential: {e}"));

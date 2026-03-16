@@ -39,10 +39,9 @@ client<llm> MyClient {
 ```
 
 <Note>
-  When `tenant_id` or `client_id` is present, BAML uses Microsoft Entra ID (formerly Azure Active Directory)
-  OAuth2 bearer token authentication instead of the static `api-key` header. The `api_key` field is ignored
-  when Entra ID auth is configured. You cannot provide both `api_key` and `tenant_id`/`client_id` — doing so
-  will produce a compile error.
+  When `tenant_id` and `client_id` are present, BAML uses Microsoft Entra ID (formerly Azure Active Directory)
+  OAuth2 bearer token authentication instead of the static `api-key` header. You cannot provide both `api_key`
+  and `tenant_id`/`client_id` — doing so will produce a compile error.
 </Note>
 
 <Warning>

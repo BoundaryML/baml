@@ -313,7 +313,7 @@ mod tests {
     fn test_azure_cred_result_deserialize_ok() {
         let json = json!({
             "ok": {
-                "accessToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test"
+                "accessToken": "azure_test_access_token"
             }
         });
 
@@ -323,7 +323,7 @@ mod tests {
         assert_eq!(
             result,
             JsCallbackResult::Ok(AzureCredResult {
-                access_token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test".into(),
+                access_token: "azure_test_access_token".into(),
             })
         );
     }

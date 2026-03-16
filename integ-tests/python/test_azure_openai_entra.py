@@ -59,7 +59,7 @@ def main() -> None:
         )
     token_provider = get_bearer_token_provider(
         credential,
-        "https://ai.azure.com/.default",  # data-plane scope for Azure OpenAI
+        "https://cognitiveservices.azure.com/.default",
     )
 
     client = AzureOpenAI(
