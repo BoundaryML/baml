@@ -453,22 +453,21 @@ impl RequestBuilder for OpenAIClient {
         // Entra ID bearer token acquisition — uses azure_identity on native, JS callback bridge on WASM.
         {
             use internal_llm_client::openai::ResolvedAzureAuthStrategy;
-            match &self.properties.azure_auth {
-                Some(
-                    ResolvedAzureAuthStrategy::EntraId { .. }
-                    | ResolvedAzureAuthStrategy::SystemDefault,
-                ) => {
-                    let azure_auth = super::azure_auth::AzureAuth::get_or_create(
-                        self.properties.azure_auth.as_ref().unwrap(),
-                    )
+            if let Some(
+                ResolvedAzureAuthStrategy::EntraId { .. }
+                | ResolvedAzureAuthStrategy::SystemDefault,
+            ) = &self.properties.azure_auth
+            {
+                let azure_auth = super::azure_auth::AzureAuth::get_or_create(
+                    self.properties.azure_auth.as_ref().unwrap(),
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("Azure Entra ID authentication failed: {e}"))?;
+                let token = azure_auth
+                    .token()
                     .await
-                    .map_err(|e| anyhow::anyhow!("Azure Entra ID authentication failed: {e}"))?;
-                    let token = azure_auth.token().await.map_err(|e| {
-                        anyhow::anyhow!("Azure Entra ID token acquisition failed: {e}")
-                    })?;
-                    req = req.bearer_auth(&token);
-                }
-                _ => {}
+                    .map_err(|e| anyhow::anyhow!("Azure Entra ID token acquisition failed: {e}"))?;
+                req = req.bearer_auth(&token);
             }
         }
 
