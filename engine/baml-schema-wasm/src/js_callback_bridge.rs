@@ -1,6 +1,6 @@
 use baml_runtime::{
     js_callback_provider::{set_js_callback_provider, GcpCredResult, JsCallbackResult},
-    AwsCredResult, JsCallbackProvider, RuntimeCallbackError,
+    AwsCredResult, AzureCredResult, JsCallbackProvider, RuntimeCallbackError,
 };
 use js_sys::Promise;
 use wasm_bindgen::prelude::*;
@@ -77,6 +77,13 @@ impl JsCallbackBridge for GcpCredProvider {
     const CALLBACK_NAME: &'static str = "loadGcpCreds";
 }
 
+struct AzureCredProvider;
+
+impl JsCallbackBridge for AzureCredProvider {
+    type TCallbackResult = AzureCredResult;
+    const CALLBACK_NAME: &'static str = "loadAzureCreds";
+}
+
 // TODO: trait-ify the loop method (but I think it's actually more boilerplate to trait-ify it than to just copy-paste right now)
 async fn loop_aws_cred_provider(
     load_aws_creds_cb: js_sys::Function,
@@ -104,6 +111,19 @@ async fn loop_gcp_cred_provider(
     )));
 }
 
+async fn loop_azure_cred_provider(
+    load_azure_creds_cb: js_sys::Function,
+    mut req_rx: tokio::sync::mpsc::Receiver<Option<String>>,
+    resp_tx: tokio::sync::broadcast::Sender<Result<AzureCredResult, RuntimeCallbackError>>,
+) {
+    while (req_rx.recv().await).is_some() {
+        let _ = resp_tx.send(AzureCredProvider::invoke(&load_azure_creds_cb, None).await);
+    }
+    let _ = resp_tx.send(Err(RuntimeCallbackError::RecvError(
+        "request channel closed".to_string(),
+    )));
+}
+
 #[wasm_bindgen]
 /// This allows us to invoke JS callbacks from Rust.
 ///
@@ -113,6 +133,7 @@ async fn loop_gcp_cred_provider(
 pub fn init_js_callback_bridge(
     load_aws_creds_cb: js_sys::Function,
     load_gcp_creds_cb: js_sys::Function,
+    load_azure_creds_cb: js_sys::Function,
 ) {
     let (aws_req_tx, aws_req_rx) = tokio::sync::mpsc::channel::<Option<String>>(100);
     let (aws_resp_tx, aws_resp_rx) =
@@ -120,12 +141,17 @@ pub fn init_js_callback_bridge(
     let (gcp_req_tx, gcp_req_rx) = tokio::sync::mpsc::channel::<Option<String>>(100);
     let (gcp_resp_tx, gcp_resp_rx) =
         tokio::sync::broadcast::channel::<Result<GcpCredResult, RuntimeCallbackError>>(100);
+    let (azure_req_tx, azure_req_rx) = tokio::sync::mpsc::channel::<Option<String>>(100);
+    let (azure_resp_tx, azure_resp_rx) =
+        tokio::sync::broadcast::channel::<Result<AzureCredResult, RuntimeCallbackError>>(100);
 
     set_js_callback_provider(JsCallbackProvider::new(
         aws_req_tx,
         aws_resp_rx,
         gcp_req_tx,
         gcp_resp_rx,
+        azure_req_tx,
+        azure_resp_rx,
     ));
     wasm_bindgen_futures::spawn_local(loop_aws_cred_provider(
         load_aws_creds_cb,
@@ -136,5 +162,10 @@ pub fn init_js_callback_bridge(
         load_gcp_creds_cb,
         gcp_req_rx,
         gcp_resp_tx,
+    ));
+    wasm_bindgen_futures::spawn_local(loop_azure_cred_provider(
+        load_azure_creds_cb,
+        azure_req_rx,
+        azure_resp_tx,
     ));
 }

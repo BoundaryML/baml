@@ -97,6 +97,23 @@ export type LoadGcpCredsResponse =
     };
   };
 
+export interface LoadAzureCredsRequest {
+  vscodeCommand: 'LOAD_AZURE_CREDS';
+}
+
+export type LoadAzureCredsResponse =
+  | {
+    ok: {
+      accessToken: string;
+    };
+  }
+  | {
+    error: {
+      name: string;
+      message: string;
+    };
+  };
+
 export interface InitializedRequest {
   vscodeCommand: 'INITIALIZED';
 }
@@ -165,6 +182,7 @@ type ApiPairs = [
   [GetPlaygroundPortRequest, GetPlaygroundPortResponse],
   [LoadAwsCredsRequest, LoadAwsCredsResponse],
   [LoadGcpCredsRequest, LoadGcpCredsResponse],
+  [LoadAzureCredsRequest, LoadAzureCredsResponse],
   [InitializedRequest, InitializedResponse],
   [OpenPlaygroundRequest, OpenPlaygroundResponse],
   [JumpToFileRequest, JumpToFileResponse],

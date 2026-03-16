@@ -450,8 +450,7 @@ impl RequestBuilder for OpenAIClient {
             req = req.bearer_auth(key.render(expose_secrets));
         }
 
-        // Entra ID bearer token acquisition (native only — WASM support added in Phase 3)
-        #[cfg(not(target_arch = "wasm32"))]
+        // Entra ID bearer token acquisition — uses azure_identity on native, JS callback bridge on WASM.
         {
             use internal_llm_client::openai::ResolvedAzureAuthStrategy;
             match &self.properties.azure_auth {
@@ -459,7 +458,7 @@ impl RequestBuilder for OpenAIClient {
                     ResolvedAzureAuthStrategy::EntraId { .. }
                     | ResolvedAzureAuthStrategy::SystemDefault,
                 ) => {
-                    let azure_auth = super::std_auth::AzureAuth::get_or_create(
+                    let azure_auth = super::azure_auth::AzureAuth::get_or_create(
                         self.properties.azure_auth.as_ref().unwrap(),
                     )
                     .await
