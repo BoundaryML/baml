@@ -918,6 +918,7 @@ mod tests {
             properties: ResolvedOpenAI {
                 base_url: "https://api.openai.com/v1".to_string(),
                 api_key: None,
+                azure_auth: None,
                 role_selection: RolesSelection::default(),
                 allowed_metadata: AllowedRoleMetadata::All,
                 supported_request_modes: SupportedRequestModes::default(),
@@ -972,6 +973,7 @@ mod tests {
             properties: ResolvedOpenAI {
                 base_url: "https://api.openai.com/v1".to_string(),
                 api_key: None,
+                azure_auth: None,
                 role_selection: RolesSelection::default(),
                 allowed_metadata: AllowedRoleMetadata::All,
                 supported_request_modes: SupportedRequestModes::default(),
@@ -1068,6 +1070,7 @@ mod tests {
             properties: ResolvedOpenAI {
                 base_url: "https://api.openai.com/v1".to_string(),
                 api_key: None,
+                azure_auth: None,
                 role_selection: RolesSelection::default(),
                 allowed_metadata: AllowedRoleMetadata::All,
                 supported_request_modes: SupportedRequestModes::default(),

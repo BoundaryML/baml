@@ -13,9 +13,32 @@ use crate::{
 };
 
 #[derive(Debug, Clone, BamlHash)]
+pub enum UnresolvedAzureAuthStrategy {
+    ApiKey(StringOr),
+    EntraId {
+        tenant_id: StringOr,
+        client_id: StringOr,
+        client_secret: Option<StringOr>,
+    },
+    SystemDefault,
+}
+
+#[derive(Debug, Clone)]
+pub enum ResolvedAzureAuthStrategy {
+    ApiKey, // api_key is already in headers for Azure, this is just a marker
+    EntraId {
+        tenant_id: String,
+        client_id: String,
+        client_secret: Option<String>,
+    },
+    SystemDefault,
+}
+
+#[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedOpenAI<Meta> {
     base_url: Option<either::Either<UnresolvedUrl, (StringOr, StringOr)>>,
     api_key: Option<StringOr>,
+    azure_auth: Option<UnresolvedAzureAuthStrategy>,
     role_selection: UnresolvedRolesSelection,
     allowed_role_metadata: UnresolvedAllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
@@ -36,6 +59,7 @@ impl<Meta> UnresolvedOpenAI<Meta> {
         UnresolvedOpenAI {
             base_url: self.base_url.clone(),
             api_key: self.api_key.clone(),
+            azure_auth: self.azure_auth.clone(),
             role_selection: self.role_selection.clone(),
             allowed_role_metadata: self.allowed_role_metadata.clone(),
             supported_request_modes: self.supported_request_modes.clone(),
@@ -65,6 +89,7 @@ impl<Meta> UnresolvedOpenAI<Meta> {
 pub struct ResolvedOpenAI {
     pub base_url: String,
     pub api_key: Option<ApiKeyWithProvenance>,
+    pub azure_auth: Option<ResolvedAzureAuthStrategy>,
     pub role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
     pub supported_request_modes: SupportedRequestModes,
@@ -140,6 +165,25 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         if let Some(key) = self.api_key.as_ref() {
             env_vars.extend(key.required_env_vars())
         }
+        if let Some(azure_auth) = &self.azure_auth {
+            match azure_auth {
+                UnresolvedAzureAuthStrategy::EntraId {
+                    tenant_id,
+                    client_id,
+                    client_secret,
+                } => {
+                    env_vars.extend(tenant_id.required_env_vars());
+                    env_vars.extend(client_id.required_env_vars());
+                    if let Some(secret) = client_secret {
+                        env_vars.extend(secret.required_env_vars());
+                    }
+                }
+                UnresolvedAzureAuthStrategy::ApiKey(key) => {
+                    env_vars.extend(key.required_env_vars());
+                }
+                UnresolvedAzureAuthStrategy::SystemDefault => {}
+            }
+        }
         env_vars.extend(self.role_selection.required_env_vars());
         env_vars.extend(self.allowed_role_metadata.required_env_vars());
         env_vars.extend(self.supported_request_modes.required_env_vars());
@@ -186,6 +230,31 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             .map(|key| key.resolve_api_key(ctx))
             .transpose()?;
 
+        let azure_auth: Option<ResolvedAzureAuthStrategy> = self
+            .azure_auth
+            .as_ref()
+            .map(|auth| -> anyhow::Result<ResolvedAzureAuthStrategy> {
+                match auth {
+                    UnresolvedAzureAuthStrategy::ApiKey(_) => Ok(ResolvedAzureAuthStrategy::ApiKey),
+                    UnresolvedAzureAuthStrategy::EntraId {
+                        tenant_id,
+                        client_id,
+                        client_secret,
+                    } => Ok(ResolvedAzureAuthStrategy::EntraId {
+                        tenant_id: tenant_id.resolve(ctx)?,
+                        client_id: client_id.resolve(ctx)?,
+                        client_secret: client_secret
+                            .as_ref()
+                            .map(|s| s.resolve(ctx))
+                            .transpose()?,
+                    }),
+                    UnresolvedAzureAuthStrategy::SystemDefault => {
+                        Ok(ResolvedAzureAuthStrategy::SystemDefault)
+                    }
+                }
+            })
+            .transpose()?;
+
         let role_selection = self.role_selection.resolve(ctx)?;
 
         let headers = self
@@ -230,6 +299,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         Ok(ResolvedOpenAI {
             base_url,
             api_key,
+            azure_auth,
             role_selection,
             allowed_metadata: self.allowed_role_metadata.resolve(ctx)?,
             supported_request_modes: self.supported_request_modes.clone(),
@@ -265,6 +335,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             properties,
             Some(either::Either::Left(base_url)),
             api_key,
+            None,
             http_config,
         )
     }
@@ -314,9 +385,53 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             }
         };
 
-        let api_key = properties
-            .ensure_api_key()
-            .unwrap_or_else(|| StringOr::EnvVar("AZURE_OPENAI_API_KEY".to_string()));
+        let api_key = properties.ensure_api_key();
+        let tenant_id = properties
+            .ensure_string("tenant_id", false)
+            .map(|(_, v, _)| v.clone());
+        let client_id = properties
+            .ensure_string("client_id", false)
+            .map(|(_, v, _)| v.clone());
+        let client_secret = properties
+            .ensure_string("client_secret", false)
+            .map(|(_, v, _)| v.clone());
+
+        let (azure_auth, api_key_for_header) = match (&api_key, &tenant_id, &client_id) {
+            // Both api_key and Entra ID fields provided — error
+            (Some(_), Some(_), _) | (Some(_), _, Some(_)) => {
+                properties.push_option_error(
+                    "Cannot specify both api_key and tenant_id/client_id. Use either API key auth or Entra ID auth, not both.",
+                );
+                (None, None)
+            }
+            // Entra ID: tenant_id or client_id present (without api_key)
+            (None, Some(_), _) | (None, _, Some(_)) => (
+                Some(UnresolvedAzureAuthStrategy::EntraId {
+                    tenant_id: tenant_id
+                        .unwrap_or_else(|| StringOr::EnvVar("AZURE_TENANT_ID".into())),
+                    client_id: client_id
+                        .unwrap_or_else(|| StringOr::EnvVar("AZURE_CLIENT_ID".into())),
+                    client_secret,
+                }),
+                None,
+            ),
+            // Explicit api_key provided, no Entra ID fields
+            (Some(_), None, None) => {
+                let key = api_key.clone().unwrap();
+                (
+                    Some(UnresolvedAzureAuthStrategy::ApiKey(key.clone())),
+                    Some(key),
+                )
+            }
+            // Neither — default to API key auth (current behavior)
+            (None, None, None) => {
+                let key = StringOr::EnvVar("AZURE_OPENAI_API_KEY".to_string());
+                (
+                    Some(UnresolvedAzureAuthStrategy::ApiKey(key.clone())),
+                    Some(key),
+                )
+            }
+        };
 
         let http_config = properties.ensure_http_config("azure");
 
@@ -332,12 +447,14 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             }
         };
 
-        let mut instance = Self::create_common(properties, base_url, None, http_config)?;
+        let mut instance = Self::create_common(properties, base_url, None, azure_auth, http_config)?;
         instance.query_params = query_params;
-        instance
-            .headers
-            .entry("api-key".to_string())
-            .or_insert(api_key);
+        if let Some(key) = api_key_for_header {
+            instance.headers.entry("api-key".to_string()).or_insert(key);
+        } else if let Some(key) = api_key {
+            // User explicitly provided api_key
+            instance.headers.entry("api-key".to_string()).or_insert(key);
+        }
 
         Ok(instance)
     }
@@ -353,6 +470,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             properties,
             base_url.map(|url| either::Either::Left(url.1)),
             api_key,
+            None,
             http_config,
         )
     }
@@ -369,6 +487,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             properties,
             Some(either::Either::Left(base_url)),
             api_key,
+            None,
             http_config,
         )?;
         // Ollama uses smaller models many of which prefer the user role
@@ -397,6 +516,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             properties,
             Some(either::Either::Left(base_url)),
             api_key,
+            None,
             http_config,
         )?;
 
@@ -441,6 +561,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             properties,
             Some(either::Either::Left(base_url)),
             api_key,
+            None,
             http_config,
         )
     }
@@ -449,6 +570,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         mut properties: PropertyHandler<Meta>,
         base_url: Option<either::Either<UnresolvedUrl, (StringOr, StringOr)>>,
         api_key: Option<StringOr>,
+        azure_auth: Option<UnresolvedAzureAuthStrategy>,
         http_config: HttpConfig,
     ) -> Result<Self, Vec<Error<Meta>>> {
         let role_selection = properties.ensure_roles_selection();
@@ -468,6 +590,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         Ok(Self {
             base_url,
             api_key,
+            azure_auth,
             role_selection,
             allowed_role_metadata: allowed_metadata,
             supported_request_modes,
