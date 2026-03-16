@@ -7,14 +7,10 @@ fn f() -> int {
 
     bb0: {
         _0 = const 42_i64;
-        goto -> bb2;
+        goto -> bb1;
     }
 
     bb1: {
-        return;
-    }
-
-    bb2: {
         return;
     }
 }

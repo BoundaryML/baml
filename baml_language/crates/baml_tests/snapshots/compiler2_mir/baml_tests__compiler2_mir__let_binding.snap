@@ -6,22 +6,14 @@ fn f(x: int) -> int {
     let _0: int // _0 // return
     let _1: int // x // param
     let _2: int // y
-    let _3: int
-    let _4: 1
 
     bb0: {
-        _3 = copy _1;
-        _4 = const 1_i64;
-        _2 = copy _3 + copy _4;
+        _2 = copy _1 + const 1_i64;
         _0 = copy _2;
-        goto -> bb2;
+        goto -> bb1;
     }
 
     bb1: {
-        return;
-    }
-
-    bb2: {
         return;
     }
 }

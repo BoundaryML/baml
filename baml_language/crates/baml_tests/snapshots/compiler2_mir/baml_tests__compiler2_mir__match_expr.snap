@@ -5,30 +5,13 @@ fn f(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: void
-    let _3: null
+    let _2: null
 
     bb0: {
-        _3 = call const fn baml.sys.panic(const "parse error") -> [bb2];
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
     }
 
     bb1: {
-        return;
-    }
-
-    bb2: {
         unreachable;
-    }
-
-    bb3: {
-        goto -> bb4;
-    }
-
-    bb4: {
-        goto -> bb5;
-    }
-
-    bb5: {
-        return;
     }
 }

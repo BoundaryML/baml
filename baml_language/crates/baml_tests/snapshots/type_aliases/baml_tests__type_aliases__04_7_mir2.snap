@@ -48,11 +48,9 @@ fn EchoJSON(i: JSON) -> JSON {
     // Locals:
     let _0: JSON // _0 // return
     let _1: JSON // i // param
-    let _2: "Whoops"
 
     bb0: {
-        _2 = const "Whoops";
-        _0 = NotJSON { copy _2 };
+        _0 = NotJSON { const "Whoops" };
         goto -> bb1;
     }
 
@@ -65,11 +63,9 @@ fn MakeJSON(i: NotJSON) -> JSON {
     // Locals:
     let _0: JSON // _0 // return
     let _1: NotJSON // i // param
-    let _2: NotJSON
 
     bb0: {
-        _2 = copy _1;
-        _0 = copy _2.0;
+        _0 = copy _1.0;
         goto -> bb1;
     }
 

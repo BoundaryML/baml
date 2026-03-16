@@ -4,7 +4,7 @@ use baml_base::Name;
 use baml_compiler2_ast::ExprId;
 use baml_type::{MediaKind, Ty, TyAttr, TypeName};
 
-use crate::{builder::MirBuilder, ir::*};
+use crate::{builder::MirBuilder, cleanup, ir::*};
 
 // --- Helper enums carried forward from old code ---
 
@@ -228,11 +228,10 @@ fn resolution_to_item_ref(res: &baml_compiler2_tir::inference::MethodResolution<
 // ─── LoweringContext ─────────────────────────────────────────────────────────
 
 // Re-use ExprId from baml_compiler2_ast (already imported above via ExprId)
-use baml_compiler2_ast::ExprId as AstExprId;
 use baml_compiler2_ast::{
     AssignOp as AstAssignOp, AstSourceMap, BinaryOp as AstBinaryOp, Expr as AstExpr,
-    ExprBody as AstExprBody, Literal as AstLiteral, PatId as AstPatId, Pattern as AstPattern,
-    Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
+    ExprBody as AstExprBody, ExprId as AstExprId, Literal as AstLiteral, PatId as AstPatId,
+    Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
     body::{FunctionBody, function_body, function_body_source_map},
@@ -254,6 +253,7 @@ struct LoweringContext<'db> {
     locals: HashMap<Name, Local>,
     loop_context: Option<LoopContext>,
     catch_context: Option<CatchContext>,
+    exit_block: BlockId,
 
     // Eagerly aggregated type maps from all scopes in the function
     expr_types: FxHashMap<AstExprId, Tir2Ty>,
@@ -435,6 +435,7 @@ impl<'db> LoweringContext<'db> {
             locals: HashMap::new(),
             loop_context: None,
             catch_context: None,
+            exit_block: BlockId(0), // placeholder; overwritten in lower_function_body
             expr_types,
             pat_types,
             resolutions,
@@ -566,6 +567,7 @@ impl<'db> LoweringContext<'db> {
         // Entry and exit blocks
         let entry = self.builder.create_block();
         let exit = self.builder.create_block();
+        self.exit_block = exit;
         self.builder.set_current_block(entry);
 
         // Lower root expression into return place
@@ -581,15 +583,17 @@ impl<'db> LoweringContext<'db> {
 
         // Goto exit, emit Return terminator
         if !self.builder.is_current_terminated() {
-            self.builder.goto(exit);
+            self.builder.goto(self.exit_block);
         }
-        self.builder.set_current_block(exit);
+        self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
         // Take the builder out of self to call `build()` which consumes it
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
-        builder.build()
+        let mut mir = builder.build();
+        cleanup::cleanup_function(&mut mir);
+        mir
     }
 }
 
@@ -1643,11 +1647,14 @@ impl<'db> LoweringContext<'db> {
                 for &local in watched.iter().rev() {
                     self.builder.unwatch(local);
                 }
-                let exit = self.builder.create_block();
-                self.builder.goto(exit);
-                self.builder.set_current_block(exit);
-                self.builder.return_();
-                // Current block is now terminated — Block loop will break on next iteration
+                self.builder.goto(self.exit_block);
+                // Create a dead successor block for the builder cursor
+                // (subsequent statements in the same block-list are dead code)
+                let dead = self.builder.create_block();
+                self.builder.set_current_block(dead);
+                // Dead block is unterminated — subsequent stmts are lowered as
+                // dead code (matching AstStmt::Throw behavior at lower.rs:1653-1658).
+                // Phase 1 eliminates unreachable blocks.
             }
 
             AstStmt::Throw { value } => {
@@ -2077,14 +2084,23 @@ impl<'db> LoweringContext<'db> {
         };
 
         // Lower the otherwise arm:
-        // - Wildcard present → lower the wildcard body
-        // - No wildcard → jump to join (non-exhaustive match fallthrough)
+        // - Wildcard present → lower the wildcard body, then goto join
+        // - No wildcard + exhaustive → unreachable (all cases covered by switch arms)
+        // - No wildcard + non-exhaustive → goto join (runtime fallthrough)
         self.builder.set_current_block(bb_otherwise);
         if let Some(idx) = otherwise_idx {
             self.bind_pattern(scrutinee, arms[idx].pattern);
             self.lower_expr(arms[idx].body, dest.clone());
-        }
-        if !self.builder.is_current_terminated() {
+            if !self.builder.is_current_terminated() {
+                self.builder.goto(join);
+            }
+        } else if is_switch_exhaustive {
+            // No wildcard arm AND exhaustive: this block is provably unreachable.
+            // Marking it Unreachable satisfies the verifier invariant (check 5) and
+            // matches V1's lower_match_as_switch behavior (crates/baml_compiler_mir).
+            self.builder.unreachable();
+        } else {
+            // No wildcard, non-exhaustive: fall through to join.
             self.builder.goto(join);
         }
 

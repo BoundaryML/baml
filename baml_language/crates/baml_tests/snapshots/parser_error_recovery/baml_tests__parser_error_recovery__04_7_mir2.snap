@@ -22,14 +22,10 @@ fn NextFunction() -> string {
 
     bb0: {
         _0 = const "parsed";
-        goto -> bb2;
+        goto -> bb1;
     }
 
     bb1: {
-        return;
-    }
-
-    bb2: {
         return;
     }
 }

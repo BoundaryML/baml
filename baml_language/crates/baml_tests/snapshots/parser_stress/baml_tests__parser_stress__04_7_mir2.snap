@@ -8,14 +8,10 @@ fn ComplexType() -> map<string, map<string, map<string, int[]?>>> {
 
     bb0: {
         _0 = {  };
-        goto -> bb2;
+        goto -> bb1;
     }
 
     bb1: {
-        return;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -31,45 +27,21 @@ fn DeepExpression() -> int {
     let _6: 5
     let _7: 9
     let _8: 3
-    let _9: 1
-    let _10: 2
-    let _11: 3
-    let _12: 4
-    let _13: 5
-    let _14: 6
-    let _15: 7
-    let _16: 8
-    let _17: 9
-    let _18: 10
 
     bb0: {
-        _9 = const 1_i64;
-        _10 = const 2_i64;
-        _8 = copy _9 + copy _10;
-        _11 = const 3_i64;
-        _7 = copy _8 * copy _11;
-        _12 = const 4_i64;
-        _6 = copy _7 - copy _12;
-        _13 = const 5_i64;
-        _5 = copy _6 / copy _13;
-        _14 = const 6_i64;
-        _4 = copy _5 + copy _14;
-        _15 = const 7_i64;
-        _3 = copy _4 * copy _15;
-        _16 = const 8_i64;
-        _2 = copy _3 - copy _16;
-        _17 = const 9_i64;
-        _1 = copy _2 / copy _17;
-        _18 = const 10_i64;
-        _0 = copy _1 + copy _18;
-        goto -> bb2;
+        _8 = const 1_i64 + const 2_i64;
+        _7 = copy _8 * const 3_i64;
+        _6 = copy _7 - const 4_i64;
+        _5 = copy _6 / const 5_i64;
+        _4 = copy _5 + const 6_i64;
+        _3 = copy _4 * const 7_i64;
+        _2 = copy _3 - const 8_i64;
+        _1 = copy _2 / const 9_i64;
+        _0 = copy _1 + const 10_i64;
+        goto -> bb1;
     }
 
     bb1: {
-        return;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -78,27 +50,19 @@ fn Process33(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process33"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process33";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process33", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -106,27 +70,19 @@ fn Process60(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process60"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process60";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process60", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -134,27 +90,19 @@ fn Process67(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process67"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process67";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process67", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -162,27 +110,19 @@ fn Process4(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process4"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process4";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process4", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -190,27 +130,19 @@ fn Process19(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process19"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process19";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process19", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -218,27 +150,19 @@ fn Process28(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process28"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process28";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process28", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -246,27 +170,19 @@ fn Process38(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process38"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process38";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process38", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -274,27 +190,19 @@ fn Process29(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process29"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process29";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process29", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -302,27 +210,19 @@ fn Process27(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process27"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process27";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process27", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -330,27 +230,19 @@ fn Process58(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process58"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process58";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process58", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -358,27 +250,19 @@ fn Process56(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process56"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process56";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process56", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -386,27 +270,19 @@ fn Process74(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process74"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process74";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process74", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -414,27 +290,19 @@ fn Process93(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process93"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process93";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process93", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -442,27 +310,19 @@ fn Process13(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process13"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process13";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process13", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -470,27 +330,19 @@ fn Process5(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process5"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process5";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process5", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -498,27 +350,19 @@ fn Process36(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process36"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process36";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process36", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -526,27 +370,19 @@ fn Process6(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process6"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process6";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process6", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -554,27 +390,19 @@ fn Process45(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process45"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process45";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process45", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -582,27 +410,19 @@ fn Process79(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process79"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process79";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process79", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -610,27 +430,19 @@ fn Process16(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process16"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process16";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process16", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -638,27 +450,19 @@ fn Process1(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process1"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process1";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process1", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -666,27 +470,19 @@ fn Process34(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process34"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process34";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process34", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -694,27 +490,19 @@ fn Process39(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process39"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process39";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process39", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -722,27 +510,19 @@ fn Process49(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process49"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process49";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process49", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -750,27 +530,19 @@ fn Process63(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process63"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process63";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process63", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -778,27 +550,19 @@ fn Process18(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process18"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process18";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process18", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -806,27 +570,19 @@ fn Process68(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process68"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process68";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process68", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -834,27 +590,19 @@ fn Process30(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process30"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process30";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process30", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -862,27 +610,19 @@ fn Process2(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process2"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process2";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process2", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -890,27 +630,19 @@ fn Process62(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process62"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process62";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process62", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -918,27 +650,19 @@ fn Process73(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process73"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process73";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process73", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -946,27 +670,19 @@ fn Process53(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process53"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process53";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process53", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -974,27 +690,19 @@ fn Process76(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process76"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process76";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process76", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1002,27 +710,19 @@ fn Process83(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process83"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process83";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process83", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1030,27 +730,19 @@ fn Process10(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process10"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process10";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process10", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1058,27 +750,19 @@ fn Process85(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process85"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process85";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process85", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1086,27 +770,19 @@ fn Process95(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process95"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process95";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process95", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1114,27 +790,19 @@ fn Process98(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process98"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process98";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process98", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1142,27 +810,19 @@ fn Process84(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process84"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process84";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process84", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1170,27 +830,19 @@ fn Process90(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process90"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process90";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process90", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1198,27 +850,19 @@ fn Process8(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process8"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process8";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process8", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1226,27 +870,19 @@ fn Process26(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process26"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process26";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process26", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1254,27 +890,19 @@ fn Process69(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process69"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process69";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process69", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1282,27 +910,19 @@ fn Process99(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process99"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process99";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process99", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1310,27 +930,19 @@ fn Process87(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process87"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process87";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process87", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1338,27 +950,19 @@ fn Process3(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process3"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process3";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process3", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1366,27 +970,19 @@ fn Process20(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process20"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process20";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process20", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1394,27 +990,19 @@ fn Process32(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process32"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process32";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process32", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1422,27 +1010,19 @@ fn Process40(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process40"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process40";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process40", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1450,27 +1030,19 @@ fn Process17(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process17"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process17";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process17", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1478,27 +1050,19 @@ fn Process59(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process59"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process59";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process59", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1506,27 +1070,19 @@ fn Process89(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process89"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process89";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process89", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1534,27 +1090,19 @@ fn Process15(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process15"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process15";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process15", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1562,27 +1110,19 @@ fn Process35(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process35"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process35";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process35", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1590,27 +1130,19 @@ fn Process25(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process25"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process25";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process25", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1618,27 +1150,19 @@ fn Process7(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process7"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process7";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process7", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1646,27 +1170,19 @@ fn Process42(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process42"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process42";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process42", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1674,27 +1190,19 @@ fn Process82(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process82"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process82";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process82", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1702,27 +1210,19 @@ fn Process100(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process100"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process100";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process100", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1730,27 +1230,19 @@ fn Process91(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process91"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process91";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process91", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1758,27 +1250,19 @@ fn Process50(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process50"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process50";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process50", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1786,27 +1270,19 @@ fn Process70(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process70"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process70";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process70", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1814,27 +1290,19 @@ fn Process12(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process12"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process12";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process12", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1842,27 +1310,19 @@ fn Process23(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process23"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process23";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process23", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1870,27 +1330,19 @@ fn Process48(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process48"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process48";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process48", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1898,27 +1350,19 @@ fn Process96(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process96"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process96";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process96", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1926,27 +1370,19 @@ fn Process44(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process44"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process44";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process44", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1954,27 +1390,19 @@ fn Process61(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process61"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process61";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process61", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -1982,27 +1410,19 @@ fn Process64(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process64"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process64";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process64", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2010,27 +1430,19 @@ fn Process94(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process94"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process94";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process94", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2038,27 +1450,19 @@ fn Process54(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process54"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process54";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process54", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2066,27 +1470,19 @@ fn Process80(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process80"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process80";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process80", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2094,27 +1490,19 @@ fn Process65(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process65"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process65";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process65", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2122,27 +1510,19 @@ fn Process88(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process88"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process88";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process88", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2150,27 +1530,19 @@ fn Process81(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process81"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process81";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process81", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2178,27 +1550,19 @@ fn Process9(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process9"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process9";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process9", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2206,27 +1570,19 @@ fn Process11(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process11"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process11";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process11", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2234,27 +1590,19 @@ fn Process43(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process43"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process43";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process43", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2262,27 +1610,19 @@ fn Process55(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process55"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process55";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process55", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2290,27 +1630,19 @@ fn Process72(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process72"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process72";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process72", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2318,27 +1650,19 @@ fn Process22(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process22"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process22";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process22", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2346,27 +1670,19 @@ fn Process47(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process47"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process47";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process47", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2374,27 +1690,19 @@ fn Process92(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process92"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process92";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process92", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2402,27 +1710,19 @@ fn Process97(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process97"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process97";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process97", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2430,27 +1730,19 @@ fn Process71(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process71"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process71";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process71", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2458,27 +1750,19 @@ fn Process24(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process24"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process24";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process24", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2486,27 +1770,19 @@ fn Process66(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process66"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process66";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process66", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2514,27 +1790,19 @@ fn Process21(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process21"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process21";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process21", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2542,27 +1810,19 @@ fn Process51(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process51"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process51";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process51", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2570,27 +1830,19 @@ fn Process77(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process77"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process77";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process77", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2598,27 +1850,19 @@ fn Process75(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process75"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process75";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process75", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2626,27 +1870,19 @@ fn Process31(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process31"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process31";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process31", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2654,27 +1890,19 @@ fn Process57(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process57"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process57";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process57", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2682,27 +1910,19 @@ fn Process86(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process86"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process86";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process86", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2710,27 +1930,19 @@ fn Process78(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process78"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process78";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process78", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2738,27 +1950,19 @@ fn Process46(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process46"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process46";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process46", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2766,27 +1970,19 @@ fn Process52(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process52"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process52";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process52", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2794,27 +1990,19 @@ fn Process37(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process37"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process37";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process37", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2822,27 +2010,19 @@ fn Process41(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process41"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process41";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process41", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2850,27 +2030,19 @@ fn Process14(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "Process14"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "Process14";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "Process14", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -2878,41 +2050,32 @@ fn BodyTorture() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: void // x
-    let _2: void
-    let _3: void
-    let _4: void
-    let _5: null
+    let _2: null
 
     bb0: {
         _1 = const null;
-        goto -> bb2;
+        goto -> bb1;
     }
 
     bb1: {
-        return;
+        _1 = copy _1 + const 1_i64;
+        branch const null -> [bb4, bb2];
     }
 
     bb2: {
-        _3 = const 1_i64;
-        _1 = copy _1 + copy _3;
-        _2 = const null;
-        branch copy _2 -> [bb3, bb4];
+        _0 = const null;
+        goto -> bb3;
     }
 
     bb3: {
-        _5 = call const fn baml.sys.panic(const "parse error") -> [bb5];
+        return;
     }
 
     bb4: {
-        _0 = const null;
-        goto -> bb1;
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb5];
     }
 
     bb5: {
         unreachable;
-    }
-
-    bb6: {
-        goto -> bb2;
     }
 }

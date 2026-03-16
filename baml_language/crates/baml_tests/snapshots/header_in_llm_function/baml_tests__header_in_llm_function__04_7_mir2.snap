@@ -6,26 +6,18 @@ fn FetchDatax(user_id: string) -> Hi {
     // Locals:
     let _0: Hi // _0 // return
     let _1: string // user_id // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "FetchDatax"
-    let _4: map<string, unknown>
-    let _5: "user_id"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "FetchDatax";
-        _5 = const "user_id";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "user_id": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "FetchDatax", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }

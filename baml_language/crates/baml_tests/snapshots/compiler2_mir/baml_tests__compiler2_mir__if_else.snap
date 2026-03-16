@@ -6,39 +6,23 @@ fn f(x: int) -> string {
     let _0: string // _0 // return
     let _1: int // x // param
     let _2: bool
-    let _3: int
-    let _4: 0
 
     bb0: {
-        _3 = copy _1;
-        _4 = const 0_i64;
-        _2 = copy _3 > copy _4;
-        branch copy _2 -> [bb2, bb3];
+        _2 = copy _1 > const 0_i64;
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        return;
+        _0 = const "non-positive";
+        goto -> bb3;
     }
 
     bb2: {
         _0 = const "positive";
-        goto -> bb5;
+        goto -> bb3;
     }
 
     bb3: {
-        _0 = const "non-positive";
-        goto -> bb6;
-    }
-
-    bb4: {
-        goto -> bb1;
-    }
-
-    bb5: {
-        return;
-    }
-
-    bb6: {
         return;
     }
 }

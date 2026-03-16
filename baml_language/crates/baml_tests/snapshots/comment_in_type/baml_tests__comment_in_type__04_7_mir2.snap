@@ -5,23 +5,19 @@ source: crates/baml_tests/src/generated_tests.rs
 fn CommentAfterArrow() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: (string, map<string, unknown>) -> unknown
-    let _2: "CommentAfterArrow"
-    let _3: map<string, unknown>
+    let _1: map<string, unknown>
 
     bb0: {
-        _1 = const fn baml.llm.call_llm_function;
-        _2 = const "CommentAfterArrow";
-        _3 = {  };
-        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+        _1 = {  };
+        _0 = call const fn baml.llm.call_llm_function(const "CommentAfterArrow", copy _1) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -30,30 +26,18 @@ fn FunctionWithComments(a: string, b: int) -> string {
     let _0: string // _0 // return
     let _1: string // a // param
     let _2: int // b // param
-    let _3: (string, map<string, unknown>) -> unknown
-    let _4: "FunctionWithComments"
-    let _5: map<string, unknown>
-    let _6: "a"
-    let _7: string
-    let _8: "b"
-    let _9: int
+    let _3: map<string, unknown>
 
     bb0: {
-        _3 = const fn baml.llm.call_llm_function;
-        _4 = const "FunctionWithComments";
-        _6 = const "a";
-        _7 = copy _1;
-        _8 = const "b";
-        _9 = copy _2;
-        _5 = { copy _6: copy _7, copy _8: copy _9 };
-        _0 = call copy _3(copy _4, copy _5) -> [bb2];
+        _3 = { const "a": copy _1, const "b": copy _2 };
+        _0 = call const fn baml.llm.call_llm_function(const "FunctionWithComments", copy _3) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }

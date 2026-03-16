@@ -6,43 +6,37 @@ fn caller() -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: unknown
-    let _2: () -> bool
-    let _3: Errors // e
-    let _4: bool
+    let _2: Errors // e
+    let _3: bool
 
     bb0: {
-        _2 = const fn user.callee;
-        _0 = call copy _2() -> [bb4, unwind: bb3];
+        _0 = call const fn user.callee() -> [bb4, unwind: bb1];
     }
 
     bb1: {
-        return;
+        _2 = copy _1;
+        _3 = copy _1 == const user.Errors.AuthenticationError;
+        branch copy _3 -> [bb3, bb2];
     }
 
     bb2: {
-        goto -> bb1;
-    }
-
-    bb3: {
-        _3 = copy _1;
-        _4 = copy _1 == const user.Errors.AuthenticationError;
-        branch copy _4 -> [bb5, bb6];
-    }
-
-    bb4: {
-        goto -> bb2;
-    }
-
-    bb5: {
-        _0 = copy _3;
-        goto -> bb7;
-    }
-
-    bb6: {
         throw copy _1;
     }
 
-    bb7: {
+    bb3: {
+        _0 = copy _2;
+        goto -> bb6;
+    }
+
+    bb4: {
+        goto -> bb5;
+    }
+
+    bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
         return;
     }
 }
@@ -53,14 +47,10 @@ fn callee() -> bool {
 
     bb0: {
         _0 = const true;
-        goto -> bb2;
+        goto -> bb1;
     }
 
     bb1: {
-        return;
-    }
-
-    bb2: {
         return;
     }
 }

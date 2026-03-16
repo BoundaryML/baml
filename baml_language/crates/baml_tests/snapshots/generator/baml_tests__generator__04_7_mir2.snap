@@ -5,22 +5,18 @@ source: crates/baml_tests/src/generated_tests.rs
 fn GetUser() -> MyClass {
     // Locals:
     let _0: MyClass // _0 // return
-    let _1: (string, map<string, unknown>) -> unknown
-    let _2: "GetUser"
-    let _3: map<string, unknown>
+    let _1: map<string, unknown>
 
     bb0: {
-        _1 = const fn baml.llm.call_llm_function;
-        _2 = const "GetUser";
-        _3 = {  };
-        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+        _1 = {  };
+        _0 = call const fn baml.llm.call_llm_function(const "GetUser", copy _1) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }

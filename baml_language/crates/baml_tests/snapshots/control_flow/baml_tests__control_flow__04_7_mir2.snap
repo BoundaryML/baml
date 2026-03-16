@@ -6,32 +6,30 @@ fn IfElseWithHeaders(flag: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // flag // param
-    let _2: bool
 
     bb0: {
         notify_block(Check flag, level=1);
-        _2 = copy _1;
-        branch copy _2 -> [bb2, bb3];
+        branch copy _1 -> [bb2, bb1];
     }
 
     bb1: {
-        return;
+        notify_block(False branch, level=1);
+        _0 = const "no";
+        goto -> bb3;
     }
 
     bb2: {
         notify_block(True branch, level=1);
         _0 = const "yes";
-        goto -> bb4;
+        goto -> bb3;
     }
 
     bb3: {
-        notify_block(False branch, level=1);
-        _0 = const "no";
         goto -> bb4;
     }
 
     bb4: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -41,33 +39,33 @@ fn MatchExpression(x: int) -> string {
     let _1: int // x // param
 
     bb0: {
-        switch copy _1 [1: bb4, 2: bb5, otherwise: bb3];
+        switch copy _1 [1: bb3, 2: bb2, otherwise: bb1];
     }
 
     bb1: {
-        return;
+        notify_block(Default, level=1);
+        _0 = const "other";
+        goto -> bb4;
     }
 
     bb2: {
-        goto -> bb1;
+        notify_block(Two, level=1);
+        _0 = const "two";
+        goto -> bb4;
     }
 
     bb3: {
-        notify_block(Default, level=1);
-        _0 = const "other";
-        goto -> bb2;
+        notify_block(One, level=1);
+        _0 = const "one";
+        goto -> bb4;
     }
 
     bb4: {
-        notify_block(One, level=1);
-        _0 = const "one";
-        goto -> bb2;
+        goto -> bb5;
     }
 
     bb5: {
-        notify_block(Two, level=1);
-        _0 = const "two";
-        goto -> bb2;
+        return;
     }
 }
 
@@ -93,17 +91,16 @@ fn Headers() -> string {
         _5 = copy _2;
         _3 = copy _4 + copy _5;
         _7 = copy _3;
-        _8 = const "to_string";
         _6 = copy _7[_8];
-        _0 = call copy _6() -> [bb2];
+        _0 = call copy _6() -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -112,74 +109,62 @@ fn ElseIfChain(x: int) -> string {
     let _0: string // _0 // return
     let _1: int // x // param
     let _2: bool
-    let _3: int
-    let _4: 1
-    let _5: bool
-    let _6: int
-    let _7: 2
-    let _8: bool
-    let _9: int
-    let _10: 3
+    let _3: bool
+    let _4: bool
 
     bb0: {
-        _3 = copy _1;
-        _4 = const 1_i64;
-        _2 = copy _3 == copy _4;
-        branch copy _2 -> [bb2, bb3];
+        _2 = copy _1 == const 1_i64;
+        branch copy _2 -> [bb8, bb1];
     }
 
     bb1: {
-        return;
+        _3 = copy _1 == const 2_i64;
+        branch copy _3 -> [bb6, bb2];
     }
 
     bb2: {
-        notify_block(Case one, level=1);
-        _0 = const "one";
-        goto -> bb4;
+        _4 = copy _1 == const 3_i64;
+        branch copy _4 -> [bb4, bb3];
     }
 
     bb3: {
-        _6 = copy _1;
-        _7 = const 2_i64;
-        _5 = copy _6 == copy _7;
-        branch copy _5 -> [bb5, bb6];
+        notify_block(Default case, level=1);
+        _0 = const "other";
+        goto -> bb5;
     }
 
     bb4: {
-        goto -> bb1;
+        notify_block(Case three, level=1);
+        _0 = const "three";
+        goto -> bb5;
     }
 
     bb5: {
+        goto -> bb7;
+    }
+
+    bb6: {
         notify_block(Case two, level=1);
         _0 = const "two";
         goto -> bb7;
     }
 
-    bb6: {
-        _9 = copy _1;
-        _10 = const 3_i64;
-        _8 = copy _9 == copy _10;
-        branch copy _8 -> [bb8, bb9];
-    }
-
     bb7: {
-        goto -> bb4;
+        goto -> bb9;
     }
 
     bb8: {
-        notify_block(Case three, level=1);
-        _0 = const "three";
-        goto -> bb10;
+        notify_block(Case one, level=1);
+        _0 = const "one";
+        goto -> bb9;
     }
 
     bb9: {
-        notify_block(Default case, level=1);
-        _0 = const "other";
         goto -> bb10;
     }
 
     bb10: {
-        goto -> bb7;
+        return;
     }
 }
 
@@ -188,56 +173,48 @@ fn NestedControlFlow(x: int) -> string {
     let _0: string // _0 // return
     let _1: int // x // param
     let _2: bool
-    let _3: int
-    let _4: 0
-    let _5: bool
-    let _6: int
-    let _7: 100
+    let _3: bool
 
     bb0: {
         notify_block(Outer, level=1);
-        _3 = copy _1;
-        _4 = const 0_i64;
-        _2 = copy _3 > copy _4;
-        branch copy _2 -> [bb2, bb3];
+        _2 = copy _1 > const 0_i64;
+        branch copy _2 -> [bb2, bb1];
     }
 
     bb1: {
-        return;
+        notify_block(Non-positive, level=1);
+        _0 = const "zero or negative";
+        goto -> bb6;
     }
 
     bb2: {
         notify_block(Positive, level=1);
-        _6 = copy _1;
-        _7 = const 100_i64;
-        _5 = copy _6 > copy _7;
-        branch copy _5 -> [bb5, bb6];
+        _3 = copy _1 > const 100_i64;
+        branch copy _3 -> [bb4, bb3];
     }
 
     bb3: {
-        notify_block(Non-positive, level=1);
-        _0 = const "zero or negative";
-        goto -> bb4;
+        notify_block(Small, level=1);
+        _0 = const "small";
+        goto -> bb5;
     }
 
     bb4: {
-        goto -> bb1;
+        notify_block(Large, level=1);
+        _0 = const "large";
+        goto -> bb5;
     }
 
     bb5: {
-        notify_block(Large, level=1);
-        _0 = const "large";
-        goto -> bb7;
+        goto -> bb6;
     }
 
     bb6: {
-        notify_block(Small, level=1);
-        _0 = const "small";
         goto -> bb7;
     }
 
     bb7: {
-        goto -> bb4;
+        return;
     }
 }
 
@@ -245,27 +222,19 @@ fn LlmFunction(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "LlmFunction"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "LlmFunction";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "LlmFunction", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
@@ -289,39 +258,33 @@ fn WhileWithHeaders() -> int {
     let _1: int // count
     let _2: bool
     let _3: int
-    let _4: 10
-    let _5: void
-    let _6: int
 
     bb0: {
         notify_block(Initialize, level=1);
         _1 = const 0_i64;
         notify_block(Loop, level=1);
-        goto -> bb2;
+        goto -> bb1;
     }
 
     bb1: {
-        return;
+        _3 = copy _1;
+        _2 = copy _3 < const 10_i64;
+        branch copy _2 -> [bb4, bb2];
     }
 
     bb2: {
-        _3 = copy _1;
-        _4 = const 10_i64;
-        _2 = copy _3 < copy _4;
-        branch copy _2 -> [bb3, bb4];
+        notify_block(Done, level=1);
+        _0 = copy _1;
+        goto -> bb3;
     }
 
     bb3: {
-        notify_block(Iteration, level=1);
-        _6 = const 1_i64;
-        _1 = copy _1 + copy _6;
-        _5 = const null;
-        goto -> bb2;
+        return;
     }
 
     bb4: {
-        notify_block(Done, level=1);
-        _0 = copy _1;
+        notify_block(Iteration, level=1);
+        _1 = copy _1 + const 1_i64;
         goto -> bb1;
     }
 }
