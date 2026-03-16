@@ -251,7 +251,7 @@ pub struct Class {
     /// @@description("text") - documentation for the class
     pub description: Attribute<String>,
     /// Class-level type attribute (e.g., from @@stream.done).
-    pub ty_attr: TyAttr,
+    pub ty_attr: TyAttr<Name>,
     // Note: Generic parameters are queried separately via generic_params()
     // for incrementality - changes to generics don't invalidate ItemTree
 }
@@ -270,7 +270,7 @@ pub struct Field {
     /// @skip - exclude field from serialization
     pub skip: Attribute<()>,
     /// Field attributes for streaming (e.g., from @sap.*)
-    pub field_attr: FieldAttr,
+    pub field_attr: FieldAttr<Name>,
 }
 
 /// An enum definition.
@@ -283,7 +283,7 @@ pub struct Enum {
     /// @@alias("name") - alternative name for serialization
     pub alias: Attribute<String>,
     /// Enum-level type attribute.
-    pub ty_attr: TyAttr,
+    pub ty_attr: TyAttr<Name>,
     // Note: Generic parameters are queried separately via generic_params()
 }
 

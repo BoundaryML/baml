@@ -25,6 +25,7 @@ mod pull_semantics;
 mod stack_carry;
 mod verifier;
 
+use ::baml_base::TyAttr;
 pub use analysis::OptLevel;
 use bex_vm_types::ObjectPool;
 pub(crate) use emit::compile_mir_function;
@@ -203,7 +204,7 @@ pub fn compile_files(
 
         // Add Class object to program and record its index
         let class_obj = Object::Class(Class {
-            name: builtin.path.to_string(),
+            name: baml_type::TypeName::from_dotted_path(builtin.path),
             fields,
             description: None,
             alias: None,
@@ -262,13 +263,25 @@ pub fn compile_files(
                 class_type_tags.insert(class_name.clone(), type_tag);
 
                 // Add Class object to program and record its index
+                let ty_attr = class
+                    .ty_attr
+                    .clone()
+                    .expect_map_name(|n| {
+                        resolution_ctx
+                            .expand_name(n)
+                            .map(|qn| baml_type::fqn_to_type_name(&qn))
+                    })
+                    .unwrap_or_else(|_| {
+                        debug_assert!(false, "emit: failed to expand class ty_attr names");
+                        TyAttr::default()
+                    });
                 let class_obj = Object::Class(Class {
-                    name: class_name.clone(),
+                    name: baml_type::fqn_to_type_name(&fqn),
                     fields,
                     description: class.description.value().cloned(),
                     alias: class.alias.value().cloned(),
                     type_tag,
-                    ty_attr: class.ty_attr.clone(),
+                    ty_attr,
                 });
                 class_type_tag_counter += 1;
                 let class_obj_idx = program.add_object(class_obj);
@@ -292,7 +305,8 @@ pub fn compile_files(
             if let ItemId::Enum(enum_loc) = item {
                 let item_tree = baml_compiler_hir::file_item_tree(db, enum_loc.file(db));
                 let enum_def = &item_tree[enum_loc.id(db)];
-                let enum_name = enum_def.name.to_string();
+                let enum_fqn = baml_compiler_hir::enum_qualified_name(db, *enum_loc);
+                let enum_name = enum_fqn.display();
 
                 let mut variant_indices = HashMap::new();
                 let mut variants = Vec::new();
@@ -309,12 +323,24 @@ pub fn compile_files(
                 }
 
                 // Add Enum object to program and record its index
+                let ty_attr = enum_def
+                    .ty_attr
+                    .clone()
+                    .expect_map_name(|n| {
+                        resolution_ctx
+                            .expand_name(n)
+                            .map(|qn| baml_type::fqn_to_type_name(&qn))
+                    })
+                    .unwrap_or_else(|_| {
+                        debug_assert!(false, "emit: failed to expand enum ty_attr names");
+                        TyAttr::default()
+                    });
                 let enum_obj = Object::Enum(Enum {
-                    name: enum_name.clone(),
+                    name: baml_type::fqn_to_type_name(&enum_fqn),
                     variants,
                     description: None, // HIR Enum doesn't carry description
                     alias: enum_def.alias.value().cloned(),
-                    ty_attr: enum_def.ty_attr.clone(),
+                    ty_attr,
                 });
                 let enum_obj_idx = program.add_object(enum_obj);
                 enum_object_indices.insert(enum_name.clone(), enum_obj_idx);
@@ -344,7 +370,7 @@ pub fn compile_files(
             variant_indices.insert(v.to_string(), idx);
         }
         let enum_obj = Object::Enum(Enum {
-            name: builtin_enum.path.to_string(),
+            name: baml_type::TypeName::from_dotted_path(builtin_enum.path),
             variants,
             description: None,
             alias: None,
@@ -747,7 +773,7 @@ pub fn compile_files(
             {
                 program
                     .recursive_type_alias_defs
-                    .insert(alias_name.to_string(), target_ty);
+                    .insert(baml_type::TypeName::local(alias_name.clone()), target_ty);
             }
         }
     }

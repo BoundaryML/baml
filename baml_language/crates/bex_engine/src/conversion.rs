@@ -150,7 +150,7 @@ impl BexEngine {
                         .collect();
 
                 Ok(BexExternalValue::Instance {
-                    class_name: class.name.clone(),
+                    class_name: class.name.to_string(),
                     fields: fields?,
                 })
             }
@@ -173,7 +173,7 @@ impl BexEngine {
                             variant.index,
                         ),
                     })?;
-                let enum_name = enm.name.clone();
+                let enum_name = enm.name.to_string();
 
                 Ok(BexExternalValue::Variant {
                     enum_name,
@@ -504,7 +504,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     if let Object::Class(class) = class_obj {
                         members
                             .iter()
-                            .find(|m| matches!(m, Ty::Class(tn, _) if tn.display_name.as_str() == class.name.as_str()))
+                            .find(|m| matches!(m, Ty::Class(tn, _) if *tn == class.name))
                     } else {
                         None
                     }
@@ -514,7 +514,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     if let Object::Enum(enm) = enum_obj {
                         members
                             .iter()
-                            .find(|m| matches!(m, Ty::Enum(tn, _) if tn.display_name.as_str() == enm.name.as_str()))
+                            .find(|m| matches!(m, Ty::Enum(tn, _) if *tn == enm.name))
                     } else {
                         None
                     }
@@ -588,7 +588,7 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                     // Get class name from the class object
                     let class_obj = vm.get_object(instance.class);
                     let class_name = match class_obj {
-                        Object::Class(class) => class.name.clone(),
+                        Object::Class(class) => class.name.to_string(),
                         _ => panic!("Instance class pointer doesn't point to a Class"),
                     };
 

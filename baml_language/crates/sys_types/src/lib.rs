@@ -386,17 +386,17 @@ pub struct SysOpContext {
     pub cancel: CancellationToken,
 
     /// Pre-extracted class definitions for output format rendering.
-    /// Keyed by class name (e.g., "Person").
-    pub class_definitions: Arc<indexmap::IndexMap<String, ClassDefinition>>,
+    /// Keyed by `TypeName` for consistent identity with `Ty::Class`.
+    pub class_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, ClassDefinition>>,
 
     /// Pre-extracted enum definitions for output format rendering.
-    /// Keyed by enum name (e.g., "Color").
-    pub enum_definitions: Arc<indexmap::IndexMap<String, EnumDefinition>>,
+    /// Keyed by `TypeName` for consistent identity with `Ty::Enum`.
+    pub enum_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, EnumDefinition>>,
 
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<String, baml_type::Ty>>,
+    /// Keyed by `TypeName` for consistent identity with `Ty::TypeAlias`.
+    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>>,
 }
 
 /// Pre-extracted metadata for building a Client tree at runtime.
@@ -1043,9 +1043,9 @@ fn tarjan_scc<'a>(
 /// class and enum definitions populated.
 fn build_output_format(
     return_type: &baml_type::Ty,
-    class_defs: &indexmap::IndexMap<String, ClassDefinition>,
-    enum_defs: &indexmap::IndexMap<String, EnumDefinition>,
-    type_alias_defs: &indexmap::IndexMap<String, baml_type::Ty>,
+    class_defs: &indexmap::IndexMap<baml_type::TypeName, ClassDefinition>,
+    enum_defs: &indexmap::IndexMap<baml_type::TypeName, EnumDefinition>,
+    type_alias_defs: &indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>,
 ) -> sys_llm::OutputFormatContent {
     let mut content = sys_llm::OutputFormatContent::new(return_type.clone());
 
@@ -1055,9 +1055,8 @@ fn build_output_format(
     while let Some(ty) = stack.pop() {
         match &ty {
             baml_type::Ty::Class(tn, _) => {
-                let name = tn.display_name.as_str();
-                if visited.insert(name.to_string()) {
-                    if let Some(cls_def) = class_defs.get(name) {
+                if visited.insert(tn.clone()) {
+                    if let Some(cls_def) = class_defs.get(tn) {
                         for field in &cls_def.fields {
                             if !field.skip {
                                 stack.push(field.field_type.clone());
@@ -1083,9 +1082,8 @@ fn build_output_format(
                 }
             }
             baml_type::Ty::Enum(tn, _) => {
-                let name = tn.display_name.as_str();
-                if visited.insert(name.to_string()) {
-                    if let Some(enum_def) = enum_defs.get(name) {
+                if visited.insert(tn.clone()) {
+                    if let Some(enum_def) = enum_defs.get(tn) {
                         content = content.with_enum(sys_llm::OutputEnum {
                             name: enum_def.name.clone(),
                             alias: enum_def.alias.clone(),
@@ -1104,14 +1102,13 @@ fn build_output_format(
                 }
             }
             baml_type::Ty::TypeAlias(tn, _) => {
-                let name = tn.display_name.as_str();
-                if visited.insert(name.to_string()) {
-                    if let Some(target) = type_alias_defs.get(name) {
+                if visited.insert(tn.clone()) {
+                    if let Some(target) = type_alias_defs.get(tn) {
                         // Walk into the target type to collect referenced classes/enums
                         stack.push(target.clone());
                         // Register as recursive type alias for hoisted rendering
-                        content =
-                            content.with_recursive_type_alias(name.to_string(), target.clone());
+                        content = content
+                            .with_recursive_type_alias(tn.display_name.to_string(), target.clone());
                     }
                 }
             }
@@ -1404,12 +1401,20 @@ mod tests {
     // build_output_format tests
     // ========================================================================
 
-    fn make_class_defs(defs: Vec<ClassDefinition>) -> indexmap::IndexMap<String, ClassDefinition> {
-        defs.into_iter().map(|d| (d.name.clone(), d)).collect()
+    fn make_class_defs(
+        defs: Vec<ClassDefinition>,
+    ) -> indexmap::IndexMap<baml_type::TypeName, ClassDefinition> {
+        defs.into_iter()
+            .map(|d| (baml_type::TypeName::local(d.name.as_str().into()), d))
+            .collect()
     }
 
-    fn make_enum_defs(defs: Vec<EnumDefinition>) -> indexmap::IndexMap<String, EnumDefinition> {
-        defs.into_iter().map(|d| (d.name.clone(), d)).collect()
+    fn make_enum_defs(
+        defs: Vec<EnumDefinition>,
+    ) -> indexmap::IndexMap<baml_type::TypeName, EnumDefinition> {
+        defs.into_iter()
+            .map(|d| (baml_type::TypeName::local(d.name.as_str().into()), d))
+            .collect()
     }
 
     #[test]
@@ -1654,6 +1659,10 @@ mod tests {
             attr: baml_type::TyAttr::default(),
         }
     }
+    fn tn(name: &str) -> baml_type::TypeName {
+        baml_type::TypeName::local(name.into())
+    }
+
     fn ty_class(name: &str) -> baml_type::Ty {
         baml_type::Ty::Class(
             baml_type::TypeName::local(name.into()),
@@ -1749,7 +1758,7 @@ mod tests {
     #[test]
     fn test_build_output_format_detects_self_referential() {
         let class_defs = indexmap::IndexMap::from([(
-            "Node".to_string(),
+            tn("Node"),
             ClassDefinition {
                 name: "Node".to_string(),
                 description: None,
@@ -1787,7 +1796,7 @@ mod tests {
     fn test_build_output_format_detects_mutual_recursion() {
         let class_defs = indexmap::IndexMap::from([
             (
-                "Tree".to_string(),
+                tn("Tree"),
                 ClassDefinition {
                     name: "Tree".to_string(),
                     description: None,
@@ -1811,7 +1820,7 @@ mod tests {
                 },
             ),
             (
-                "Forest".to_string(),
+                tn("Forest"),
                 ClassDefinition {
                     name: "Forest".to_string(),
                     description: None,
@@ -1845,7 +1854,7 @@ mod tests {
     fn test_build_output_format_full_pipeline_renders_hoisted() {
         let class_defs = indexmap::IndexMap::from([
             (
-                "Node".to_string(),
+                tn("Node"),
                 ClassDefinition {
                     name: "Node".to_string(),
                     description: None,
@@ -1869,7 +1878,7 @@ mod tests {
                 },
             ),
             (
-                "LinkedList".to_string(),
+                tn("LinkedList"),
                 ClassDefinition {
                     name: "LinkedList".to_string(),
                     description: None,

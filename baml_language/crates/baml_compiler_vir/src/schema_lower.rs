@@ -2,13 +2,14 @@
 
 use std::collections::{HashMap, HashSet};
 
+use ::baml_base::{FieldAttr, TyAttr};
 use baml_base::{Name, Span};
 use baml_compiler_hir::{
     self, Attribute, FunctionBody, ItemId, file_item_tree, file_items, function_body,
     function_signature,
 };
 use baml_compiler_tir::TypeResolutionContext;
-use baml_type::Ty;
+use baml_type::{Ty, fqn_to_type_name};
 
 use crate::schema::{
     VirClass, VirEnum, VirEnumVariant, VirField, VirFunction, VirFunctionBodyKind, VirParam,
@@ -51,7 +52,7 @@ pub(crate) fn lower_schema(
                 ItemId::Enum(enum_loc) => {
                     let item_tree = file_item_tree(db, enum_loc.file(db));
                     let enum_def = &item_tree[enum_loc.id(db)];
-                    enums.push(lower_enum(enum_def));
+                    enums.push(lower_enum(enum_def, &resolution_ctx));
                 }
                 ItemId::Function(func_loc) => {
                     let signature = function_signature(db, *func_loc);
@@ -109,6 +110,19 @@ fn convert_ty(
         })
 }
 
+/// Convert a `Name` to a `TypeName` via the resolution context.
+///
+/// Used as the mapping function for `TyAttr`/`FieldAttr` name conversion
+/// when lowering from HIR (`Name`) to VIR (`TypeName`).
+fn expand_to_type_name(
+    name: &Name,
+    resolution_ctx: &TypeResolutionContext,
+) -> Option<baml_type::TypeName> {
+    resolution_ctx
+        .expand_name(name)
+        .map(|qn| fqn_to_type_name(&qn))
+}
+
 fn lower_class(
     class: &baml_compiler_hir::Class,
     resolution_ctx: &TypeResolutionContext,
@@ -121,8 +135,15 @@ fn lower_class(
         .map(|field| {
             let (tir_ty, _) = resolution_ctx.lower_type_ref(&field.type_ref, Span::default());
             let ty = convert_ty(&tir_ty, type_aliases, recursive_aliases);
-            // TyAttr now flows structurally: TypeRef.attr → Ty.attr → baml_type::Ty.attr.
-            // No workaround needed.
+
+            let field_attr = field
+                .field_attr
+                .clone()
+                .expect_map_name(|n| expand_to_type_name(n, resolution_ctx))
+                .unwrap_or_else(|_| {
+                    debug_assert!(false, "schema_lower: failed to expand field_attr names");
+                    FieldAttr::default()
+                });
 
             VirField {
                 name: field.name.clone(),
@@ -130,10 +151,19 @@ fn lower_class(
                 description: attr_to_option(&field.description),
                 alias: attr_to_option(&field.alias),
                 skip: attr_to_bool(&field.skip),
-                field_attr: field.field_attr.clone(),
+                field_attr,
             }
         })
         .collect();
+
+    let ty_attr = class
+        .ty_attr
+        .clone()
+        .expect_map_name(|n| expand_to_type_name(n, resolution_ctx))
+        .unwrap_or_else(|_| {
+            debug_assert!(false, "schema_lower: failed to expand class ty_attr names");
+            TyAttr::default()
+        });
 
     VirClass {
         name: class.name.clone(),
@@ -141,11 +171,14 @@ fn lower_class(
         is_dynamic: attr_to_bool(&class.is_dynamic),
         description: attr_to_option(&class.description),
         alias: attr_to_option(&class.alias),
-        ty_attr: class.ty_attr.clone(),
+        ty_attr,
     }
 }
 
-fn lower_enum(enum_def: &baml_compiler_hir::Enum) -> VirEnum {
+fn lower_enum(
+    enum_def: &baml_compiler_hir::Enum,
+    resolution_ctx: &TypeResolutionContext,
+) -> VirEnum {
     let variants = enum_def
         .variants
         .iter()
@@ -157,12 +190,21 @@ fn lower_enum(enum_def: &baml_compiler_hir::Enum) -> VirEnum {
         })
         .collect();
 
+    let ty_attr = enum_def
+        .ty_attr
+        .clone()
+        .expect_map_name(|n| expand_to_type_name(n, resolution_ctx))
+        .unwrap_or_else(|_| {
+            debug_assert!(false, "schema_lower: failed to expand enum ty_attr names");
+            TyAttr::default()
+        });
+
     VirEnum {
         name: enum_def.name.clone(),
         variants,
         description: None, // HIR Enum has no @@description
         alias: attr_to_option(&enum_def.alias),
-        ty_attr: enum_def.ty_attr.clone(),
+        ty_attr,
     }
 }
 

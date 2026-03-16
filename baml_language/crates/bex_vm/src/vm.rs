@@ -333,7 +333,7 @@ pub struct BytecodeProgram {
     /// Compiled test cases.
     pub test_cases: Vec<bex_vm_types::TestCase>,
     /// Recursive type alias definitions for output format rendering.
-    pub recursive_type_alias_defs: indexmap::IndexMap<String, baml_type::Ty>,
+    pub recursive_type_alias_defs: indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -361,10 +361,10 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
                 resolved_function_names.insert(func.name.clone(), (obj_idx, func.kind));
             }
             Object::Class(class) => {
-                resolved_class_names.insert(class.name.clone(), obj_idx);
+                resolved_class_names.insert(class.name.to_string(), obj_idx);
             }
             Object::Enum(enum_def) => {
-                resolved_enums_names.insert(enum_def.name.clone(), obj_idx);
+                resolved_enums_names.insert(enum_def.name.to_string(), obj_idx);
             }
             _ => {}
         }

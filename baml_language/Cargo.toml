@@ -62,6 +62,7 @@ bex_vm = { path = "crates/bex_vm" }
 bex_vm_types = { path = "crates/bex_vm_types" }
 bex_external_types = { path = "crates/bex_external_types" }
 bex_heap = { path = "crates/bex_heap" }
+bex_sap = { path = "crates/bex_sap" }
 bridge_ctypes = { path = "crates/bridge_ctypes" }
 bridge_cffi = { path = "crates/bridge_cffi" }
 bridge_python = { path = "crates/bridge_python" }
@@ -98,6 +99,7 @@ console_error_panic_hook = "0.1"
 crossbeam = { version = "0.8.4", features = [ "crossbeam-channel" ] }
 crossterm = "0.28"
 ctrlc = "3.4"
+derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 flate2 = { version = "1" }
 futures = { version = "0.3.30", features = [ "executor" ] }
@@ -160,6 +162,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
   "env-filter",
   "fmt",
 ] }
+unicode-normalization = "0.1.25"
 url = "2.5.2"
 uuid = { version = "1", features = [ "v4" ] }
 walkdir = { version = "2.4" }

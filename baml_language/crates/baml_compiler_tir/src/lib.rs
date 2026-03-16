@@ -15,7 +15,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_base::{FileId, Name, Span, TyAttr};
+use baml_base::{FieldAttr, FileId, Name, Span, TyAttr};
 use baml_compiler_diagnostics::TypeError;
 use baml_compiler_hir::{
     ErrorLocation, ExprBody, ExprId, FunctionBody, FunctionLoc, FunctionSignature, HirSourceMap,
@@ -64,7 +64,7 @@ use text_size::TextRange;
 pub use types::*;
 
 /// Shorthand for `TyAttr::default()` to reduce verbosity.
-fn d() -> TyAttr {
+fn d() -> TyAttr<QualifiedName> {
     TyAttr::default()
 }
 
@@ -803,6 +803,30 @@ impl TypeResolutionContext {
             &self.enum_names,
             location,
         )
+    }
+
+    /// Resolve a `Name` to a `QualifiedName` by checking class and enum name maps.
+    pub fn expand_name(&self, name: &Name) -> Option<baml_compiler_hir::QualifiedName> {
+        self.class_names
+            .get(name)
+            .cloned()
+            .or_else(|| self.enum_names.get(name).cloned())
+    }
+
+    /// Lower a `TyAttr<Name>` to `TyAttr<QualifiedName>`.
+    pub fn lower_ty_attr(
+        &self,
+        attr: TyAttr<Name>,
+    ) -> Result<TyAttr<baml_compiler_hir::QualifiedName>, Name> {
+        attr.expect_map_name(|n| self.expand_name(n))
+    }
+
+    /// Lower a `FieldAttr<Name>` to `FieldAttr<QualifiedName>`.
+    pub fn lower_field_attr(
+        &self,
+        attr: FieldAttr<Name>,
+    ) -> Result<FieldAttr<baml_compiler_hir::QualifiedName>, Name> {
+        attr.expect_map_name(|n| self.expand_name(n))
     }
 }
 
