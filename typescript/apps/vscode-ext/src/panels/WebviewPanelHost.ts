@@ -744,25 +744,15 @@ export class WebviewPanelHost {
                 });
               } catch (error) {
                 console.error('Error loading Azure Entra ID creds:', error);
-                if (error instanceof Error) {
-                  this._panel.webview.postMessage({
-                    rpcId: message.rpcId,
-                    rpcMethod: vscodeCommand,
-                    data: {
-                      error: {
-                        ...error,
-                        name: error.name,
-                        message: error.message,
-                      },
-                    },
-                  });
-                } else {
-                  this._panel.webview.postMessage({
-                    rpcId: message.rpcId,
-                    rpcMethod: vscodeCommand,
-                    data: { error },
-                  });
-                }
+                const errPayload =
+                  error instanceof Error
+                    ? { name: error.name, message: error.message }
+                    : { name: 'UnknownError', message: String(error) };
+                this._panel.webview.postMessage({
+                  rpcId: message.rpcId,
+                  rpcMethod: vscodeCommand,
+                  data: { error: errPayload },
+                });
               }
             })();
             return;

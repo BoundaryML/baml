@@ -78,8 +78,7 @@ You can use this to modify the azure api key, base url, and api version for exam
   Set to `env.AZURE_TENANT_ID` to read from the environment.
 
   If `client_secret` is also provided, BAML uses service principal (client credentials) authentication.
-  If `client_secret` is omitted, BAML uses the system default credential chain (managed identity first,
-  then Azure CLI / azd CLI).
+  If `client_secret` is omitted, BAML uses managed identity authentication.
 </ParamField>
 
 <ParamField
@@ -100,8 +99,8 @@ You can use this to modify the azure api key, base url, and api version for exam
 
   Set to `env.AZURE_CLIENT_SECRET` to read from the environment.
 
-  If omitted when `tenant_id`/`client_id` are set, BAML uses the system default credential chain:
-  managed identity (Azure VMs, App Service, AKS) first, then developer tools (Azure CLI / azd CLI).
+  If omitted when `tenant_id`/`client_id` are set, BAML uses managed identity authentication
+  (Azure VMs, App Service, AKS).
 </ParamField>
 
 <ParamField

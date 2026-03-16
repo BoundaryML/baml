@@ -56,31 +56,7 @@ infisical run --env=test -- uv run pytest tests/test_functions.py -k "test_name"
 infisical run --env=test -- uv run pytest
 ```
 
-- Alternatively, you can use a .env file:
-
-### Azure Entra ID (optional)
-To run the Azure OpenAI Entra ID test script or tests that use `AzureEntraId` / `AzureEntraIdSystemDefault`, add these secrets to Infisical for the `test` environment (they are not set by default):
-
-| Secret name | Example / source |
-|-------------|------------------|
-| `AZURE_TENANT_ID` | `az account show --query tenantId --output tsv` |
-| `AZURE_CLIENT_ID` | App (client) ID from your Azure AD app registration |
-| `AZURE_CLIENT_SECRET` | Create via `az ad app credential reset --id <appId> --append` (save the `password` from the output once; it cannot be retrieved later) |
-| `AZURE_OPENAI_RESOURCE_NAME` | e.g. `boundarydev-resource`; list with `az cognitiveservices account list --query "[].{name:name,resourceGroup:resourceGroup}"` |
-| `AZURE_OPENAI_DEPLOYMENT_ID` | Deployment name; list with `az cognitiveservices account deployment list -g <resourceGroup> -n <resourceName>` |
-
-Set in Infisical (after `infisical login`):
-```bash
-infisical secrets set --env=test AZURE_TENANT_ID=<value> AZURE_CLIENT_ID=<value> AZURE_CLIENT_SECRET=<value> AZURE_OPENAI_RESOURCE_NAME=boundarydev-resource AZURE_OPENAI_DEPLOYMENT_ID=gpt-5-mini
-```
-Or set each key in the Infisical dashboard for the project’s `test` environment.
-
-Quick test (single-file script, no BAML client):
-```bash
-infisical run --env=test -- uv run test_azure_openai_entra.py
-```
-
-- Alternatively, you can use a .env file:
+Alternatively, you can use a .env file:
 ```bash
 uv run pytest
 ```
