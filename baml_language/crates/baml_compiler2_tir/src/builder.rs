@@ -1140,8 +1140,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         let declared = crate::throw_inference::flatten_ty_to_facts(&declared_ty);
         let effective = self.collect_effective_throws(body);
 
-        let mut extra: Vec<String> = effective.difference(&declared).map(|t| t.to_string()).collect();
-        let mut extraneous: Vec<String> = declared.difference(&effective).map(|t| t.to_string()).collect();
+        let mut extra: Vec<String> = effective
+            .difference(&declared)
+            .map(|t| t.to_string())
+            .collect();
+        let mut extraneous: Vec<String> = declared
+            .difference(&effective)
+            .map(|t| t.to_string())
+            .collect();
         extra.sort();
         extraneous.sort();
 

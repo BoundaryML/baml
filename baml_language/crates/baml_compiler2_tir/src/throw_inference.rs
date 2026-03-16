@@ -219,9 +219,7 @@ fn throw_fact_from_expr<'db>(
         Expr::Literal(Literal::Float(_)) => Ty::Primitive(PrimitiveType::Float),
         Expr::Literal(Literal::Bool(_)) => Ty::Primitive(PrimitiveType::Bool),
         Expr::Null => Ty::Primitive(PrimitiveType::Null),
-        Expr::Path(segments) if !segments.is_empty() => {
-            resolve_path_to_ty(db, pkg_items, segments)
-        }
+        Expr::Path(segments) if !segments.is_empty() => resolve_path_to_ty(db, pkg_items, segments),
         Expr::FieldAccess { .. } => expr_to_path(expr_id, body)
             .map(|segments| resolve_path_to_ty(db, pkg_items, &segments))
             .unwrap_or(Ty::Unknown),
