@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 2452
 ---
 === MIR2 ===
-fn MayFailIntOrString(x: int) -> string {
+fn user.MayFailIntOrString(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -33,7 +34,7 @@ fn MayFailIntOrString(x: int) -> string {
     }
 }
 
-fn CatchAllWildcard(x: int) -> string {
+fn user.CatchAllWildcard(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -65,7 +66,7 @@ fn CatchAllWildcard(x: int) -> string {
     }
 }
 
-fn CatchAllTyped(x: int) -> string {
+fn user.CatchAllTyped(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -114,7 +115,7 @@ fn CatchAllTyped(x: int) -> string {
     }
 }
 
-fn PartialCatch(x: int) -> string {
+fn user.PartialCatch(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -152,7 +153,7 @@ fn PartialCatch(x: int) -> string {
     }
 }
 
-fn CatchThenCatchAll(x: int) -> string {
+fn user.CatchThenCatchAll(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param

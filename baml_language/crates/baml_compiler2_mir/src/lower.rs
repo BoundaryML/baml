@@ -63,16 +63,8 @@ impl VizContext {
 use baml_compiler2_tir::ty::{PrimitiveType, QualifiedTypeName, Ty as Tir2Ty};
 
 fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
-    let module_path: Vec<Name> = match qtn.pkg.as_str() {
-        "baml" => vec![Name::new("baml")],
-        "env" => vec![Name::new("env")],
-        _ => vec![], // "user" or other → local
-    };
-    let base_display = if module_path.is_empty() {
-        qtn.name.to_string()
-    } else {
-        format!("{}.{}", qtn.pkg, qtn.name)
-    };
+    let module_path = vec![qtn.pkg.clone()];
+    let base_display = format!("{}.{}", qtn.pkg, qtn.name);
     let display_name = if qtn.generic_params.is_empty() {
         Name::new(base_display)
     } else {
@@ -172,7 +164,7 @@ fn convert_tir2_ty(ty: &Tir2Ty) -> Ty {
 
 use baml_compiler2_hir::{contributions::Definition, file_item_tree, file_package::file_package};
 
-fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef {
+pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> ItemRef {
     let file = def.file(db);
     let pkg_info = file_package(db, file);
     let item_tree = file_item_tree(db, file);
@@ -2360,16 +2352,53 @@ impl<'db> LoweringContext<'db> {
 pub fn lower_function<'db>(
     db: &'db dyn crate::Db,
     func_loc: FunctionLoc<'db>,
-) -> Option<MirFunction> {
+) -> MirFunction {
     let body = function_body(db, func_loc);
     let source_map = function_body_source_map(db, func_loc);
+    let item_ref = def_to_item_ref(db, baml_compiler2_hir::contributions::Definition::Function(func_loc));
+    let sig = function_signature(db, func_loc);
+    let arity = sig.params.len();
 
     match body.as_ref() {
         FunctionBody::Expr(expr_body) => {
             let mut ctx = LoweringContext::new(db, func_loc, expr_body.clone(), source_map);
-            Some(ctx.lower_function_body())
+            let mut mir = ctx.lower_function_body();
+            mir.item_ref = item_ref;
+            mir
         }
-        FunctionBody::Builtin(_kind) => None,
-        FunctionBody::Missing => None,
+        FunctionBody::Builtin(kind) => MirFunction {
+            arity,
+            span: None,
+            item_ref,
+            kind: MirFunctionKind::Builtin(*kind),
+        },
+        FunctionBody::Missing => MirFunction {
+            arity,
+            span: None,
+            item_ref,
+            kind: MirFunctionKind::Bytecode(MirFunctionBody {
+                blocks: vec![BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::Unreachable),
+                    span: None,
+                    terminator_span: None,
+                }],
+                entry: BlockId(0),
+                locals: (0..=arity)
+                    .map(|_| LocalDecl {
+                        name: None,
+                        ty: baml_type::Ty::Void {
+                            attr: baml_type::TyAttr::default(),
+                        },
+                        span: None,
+                        scope_span: None,
+                        is_watched: false,
+                    })
+                    .collect(),
+                unwind_error_locals: std::collections::HashMap::new(),
+                viz_nodes: vec![],
+            }),
+        },
     }
 }

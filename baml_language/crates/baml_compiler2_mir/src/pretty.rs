@@ -23,8 +23,8 @@
 use std::fmt::{self, Write};
 
 use crate::{
-    AggregateKind, BasicBlock, Constant, Local, LocalDecl, MirFunction, Operand, Rvalue, Statement,
-    StatementKind, Terminator,
+    AggregateKind, BasicBlock, BuiltinKind, Constant, Local, LocalDecl, MirFunction,
+    MirFunctionBody, MirFunctionKind, Operand, Rvalue, Statement, StatementKind, Terminator,
 };
 
 /// Pretty print a MIR function.
@@ -36,8 +36,26 @@ pub fn display_function(func: &MirFunction) -> String {
 
 /// Write a MIR function to a formatter.
 pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
+    match &func.kind {
+        MirFunctionKind::Builtin(kind) => {
+            let kind_str = match kind {
+                BuiltinKind::Io => "io",
+                BuiltinKind::Vm => "vm",
+            };
+            writeln!(f, "fn {} = builtin({kind_str})", func.item_ref)
+        }
+        MirFunctionKind::Bytecode(body) => write_bytecode_function(f, func, body),
+    }
+}
+
+/// Write the bytecode body of a MIR function.
+fn write_bytecode_function(
+    f: &mut impl Write,
+    func: &MirFunction,
+    body: &MirFunctionBody,
+) -> fmt::Result {
     // Function header
-    write!(f, "fn {}(", func.name)?;
+    write!(f, "fn {}(", func.item_ref)?;
 
     // Parameters (_1 through _arity)
     for i in 1..=func.arity {
@@ -45,8 +63,8 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
             write!(f, ", ")?;
         }
         // Guard against missing locals in error recovery cases
-        if i < func.locals.len() {
-            let local = &func.locals[i];
+        if i < body.locals.len() {
+            let local = &body.locals[i];
             write_local_decl_inline(f, Local(i), local)?;
         } else {
             write!(f, "_{i}: <missing>")?;
@@ -55,15 +73,15 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
 
     // Return type from _0
     write!(f, ")")?;
-    if !func.locals.is_empty() {
-        let ret = &func.locals[0];
+    if !body.locals.is_empty() {
+        let ret = &body.locals[0];
         write!(f, " -> {}", ret.ty)?;
     }
     writeln!(f, " {{")?;
 
     // Local declarations
     writeln!(f, "    // Locals:")?;
-    for (i, local) in func.locals.iter().enumerate() {
+    for (i, local) in body.locals.iter().enumerate() {
         write!(f, "    let _{i}: {}", local.ty)?;
         if let Some(name) = &local.name {
             write!(f, " // {name}")?;
@@ -78,9 +96,9 @@ pub fn write_function(f: &mut impl Write, func: &MirFunction) -> fmt::Result {
     writeln!(f)?;
 
     // Basic blocks
-    for (i, block) in func.blocks.iter().enumerate() {
+    for (i, block) in body.blocks.iter().enumerate() {
         write_block(f, block)?;
-        if i + 1 < func.blocks.len() {
+        if i + 1 < body.blocks.len() {
             writeln!(f)?;
         }
     }

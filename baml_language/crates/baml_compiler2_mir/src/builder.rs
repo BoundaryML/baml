@@ -32,8 +32,8 @@ use baml_base::{Name, Span};
 use baml_type::Ty;
 
 use crate::{
-    BasicBlock, BlockId, Constant, Local, LocalDecl, MirFunction, Operand, Place, Rvalue,
-    Statement, StatementKind, Terminator, VizNode,
+    BasicBlock, BlockId, Constant, ItemRef, Local, LocalDecl, MirFunction, MirFunctionBody,
+    MirFunctionKind, Operand, Place, Rvalue, Statement, StatementKind, Terminator, VizNode,
 };
 
 /// Builder for constructing MIR functions.
@@ -390,6 +390,9 @@ impl MirBuilder {
     /// Panics if:
     /// - No blocks were created
     /// - Any block is unterminated
+    ///
+    /// The `item_ref` field is set to a placeholder — `lower_function` overwrites
+    /// it with the real fully-qualified reference after calling `build()`.
     pub(crate) fn build(self) -> MirFunction {
         assert!(!self.blocks.is_empty(), "function has no blocks");
 
@@ -398,28 +401,43 @@ impl MirBuilder {
         }
 
         MirFunction {
-            name: self.name,
             arity: self.arity,
-            blocks: self.blocks,
-            entry: BlockId(0),
-            locals: self.locals,
             span: self.span,
-            viz_nodes: self.viz_nodes,
-            unwind_error_locals: self.unwind_error_locals,
+            item_ref: ItemRef::Free {
+                package: baml_base::Name::new(""),
+                namespace: vec![],
+                name: self.name,
+            },
+            kind: MirFunctionKind::Bytecode(MirFunctionBody {
+                blocks: self.blocks,
+                entry: BlockId(0),
+                locals: self.locals,
+                unwind_error_locals: self.unwind_error_locals,
+                viz_nodes: self.viz_nodes,
+            }),
         }
     }
 
     /// Build without checking termination (for incremental construction).
+    ///
+    /// The `item_ref` field is set to a placeholder — `lower_function` overwrites
+    /// it with the real fully-qualified reference after calling `build_unchecked()`.
     pub(crate) fn build_unchecked(self) -> MirFunction {
         MirFunction {
-            name: self.name,
             arity: self.arity,
-            blocks: self.blocks,
-            entry: BlockId(0),
-            locals: self.locals,
             span: self.span,
-            viz_nodes: self.viz_nodes,
-            unwind_error_locals: self.unwind_error_locals,
+            item_ref: ItemRef::Free {
+                package: baml_base::Name::new(""),
+                namespace: vec![],
+                name: self.name,
+            },
+            kind: MirFunctionKind::Bytecode(MirFunctionBody {
+                blocks: self.blocks,
+                entry: BlockId(0),
+                locals: self.locals,
+                unwind_error_locals: self.unwind_error_locals,
+                viz_nodes: self.viz_nodes,
+            }),
         }
     }
 

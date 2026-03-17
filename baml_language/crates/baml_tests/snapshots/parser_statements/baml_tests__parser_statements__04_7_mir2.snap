@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 18749
 ---
 === MIR2 ===
-fn assign_in_loop() -> int {
+fn user.assign_in_loop() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // sum
@@ -40,7 +41,7 @@ fn assign_in_loop() -> int {
     }
 }
 
-fn block_with_tail() -> int {
+fn user.block_with_tail() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x
@@ -64,7 +65,7 @@ fn block_with_tail() -> int {
     }
 }
 
-fn simple_assign() -> int {
+fn user.simple_assign() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x
@@ -81,7 +82,7 @@ fn simple_assign() -> int {
     }
 }
 
-fn mul_assign() -> int {
+fn user.mul_assign() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x
@@ -98,7 +99,7 @@ fn mul_assign() -> int {
     }
 }
 
-fn sub_assign() -> int {
+fn user.sub_assign() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x
@@ -115,7 +116,7 @@ fn sub_assign() -> int {
     }
 }
 
-fn multi_assign() -> int {
+fn user.multi_assign() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a
@@ -139,7 +140,7 @@ fn multi_assign() -> int {
     }
 }
 
-fn add_assign() -> int {
+fn user.add_assign() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x
@@ -156,7 +157,7 @@ fn add_assign() -> int {
     }
 }
 
-fn break_in_for() -> int {
+fn user.break_in_for() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // i
@@ -188,7 +189,7 @@ fn break_in_for() -> int {
     }
 }
 
-fn continue_in_for() -> int {
+fn user.continue_in_for() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // i
@@ -227,7 +228,7 @@ fn continue_in_for() -> int {
     }
 }
 
-fn simple_continue() -> int {
+fn user.simple_continue() -> int {
     // Locals:
     let _0: int // _0 // return
 
@@ -253,7 +254,7 @@ fn simple_continue() -> int {
     }
 }
 
-fn simple_break() -> int {
+fn user.simple_break() -> int {
     // Locals:
     let _0: int // _0 // return
 
@@ -279,7 +280,7 @@ fn simple_break() -> int {
     }
 }
 
-fn break_with_locals() -> int {
+fn user.break_with_locals() -> int {
     // Locals:
     let _0: int // _0 // return
 
@@ -317,7 +318,7 @@ fn break_with_locals() -> int {
     }
 }
 
-fn continue_with_locals() -> int {
+fn user.continue_with_locals() -> int {
     // Locals:
     let _0: int // _0 // return
 
@@ -355,7 +356,7 @@ fn continue_with_locals() -> int {
     }
 }
 
-fn nested_break() -> int {
+fn user.nested_break() -> int {
     // Locals:
     let _0: int // _0 // return
 
@@ -393,7 +394,7 @@ fn nested_break() -> int {
     }
 }
 
-fn nested_for_loop() -> int {
+fn user.nested_for_loop() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // result
@@ -474,7 +475,7 @@ fn nested_for_loop() -> int {
     }
 }
 
-fn c_style_for_loop() -> int {
+fn user.c_style_for_loop() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // result
@@ -516,7 +517,7 @@ fn c_style_for_loop() -> int {
     }
 }
 
-fn iterator_style_for_loop() -> int {
+fn user.iterator_style_for_loop() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // result
@@ -564,7 +565,7 @@ fn iterator_style_for_loop() -> int {
     }
 }
 
-fn ConditionalLogic(age: int) -> string {
+fn user.ConditionalLogic(age: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // age // param
@@ -601,14 +602,14 @@ fn ConditionalLogic(age: int) -> string {
     }
 }
 
-fn let_statements() -> int {
+fn user.let_statements() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: Point // point
+    let _1: user.Point // point
     let _2: int
-    let _3: Point
+    let _3: user.Point
     let _4: int
-    let _5: Point
+    let _5: user.Point
 
     bb0: {
         _1 = Point { const 1_i64, const 2_i64 };
@@ -625,7 +626,7 @@ fn let_statements() -> int {
     }
 }
 
-fn simple_while_loop() -> int {
+fn user.simple_while_loop() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // i
@@ -660,7 +661,7 @@ fn simple_while_loop() -> int {
     }
 }
 
-fn nested_while_loop() -> int {
+fn user.nested_while_loop() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // i

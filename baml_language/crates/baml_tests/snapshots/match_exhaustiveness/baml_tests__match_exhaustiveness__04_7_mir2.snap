@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12866
 ---
 === MIR2 ===
-fn ExhaustiveLiteralWithBaseType(x: int) -> string {
+fn user.ExhaustiveLiteralWithBaseType(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -42,10 +43,10 @@ fn ExhaustiveLiteralWithBaseType(x: int) -> string {
     }
 }
 
-fn ExhaustiveTrueType(t: AlwaysTrue) -> string {
+fn user.ExhaustiveTrueType(t: user.AlwaysTrue) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: AlwaysTrue // t // param
+    let _1: user.AlwaysTrue // t // param
     let _2: bool
 
     bb0: {
@@ -71,7 +72,7 @@ fn ExhaustiveTrueType(t: AlwaysTrue) -> string {
     }
 }
 
-fn BoolWithCatchAll(b: bool) -> string {
+fn user.BoolWithCatchAll(b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // b // param
@@ -105,10 +106,10 @@ fn BoolWithCatchAll(b: bool) -> string {
     }
 }
 
-fn DuplicateEnumVariant(s: Status) -> string {
+fn user.DuplicateEnumVariant(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: int
 
     bb0: {
@@ -144,10 +145,10 @@ fn DuplicateEnumVariant(s: Status) -> string {
     }
 }
 
-fn NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
+fn user.NonExhaustiveMixedLiterals(x: user.MixedLiterals) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: MixedLiterals // x // param
+    let _1: user.MixedLiterals // x // param
     let _2: bool
     let _3: bool
 
@@ -184,10 +185,10 @@ fn NonExhaustiveMixedLiterals(x: MixedLiterals) -> string {
     }
 }
 
-fn ExhaustiveSingletonInt(code: HttpOk) -> string {
+fn user.ExhaustiveSingletonInt(code: user.HttpOk) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: HttpOk // code // param
+    let _1: user.HttpOk // code // param
 
     bb0: {
         switch copy _1 [200: bb2, otherwise: bb1];
@@ -211,10 +212,10 @@ fn ExhaustiveSingletonInt(code: HttpOk) -> string {
     }
 }
 
-fn NonExhaustiveEnumMissingMultiple(s: Status) -> string {
+fn user.NonExhaustiveEnumMissingMultiple(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: int
 
     bb0: {
@@ -240,10 +241,10 @@ fn NonExhaustiveEnumMissingMultiple(s: Status) -> string {
     }
 }
 
-fn StringLiteralWithCatchAll(role: Role) -> string {
+fn user.StringLiteralWithCatchAll(role: user.Role) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Role // role // param
+    let _1: user.Role // role // param
     let _2: bool
     let _3: bool
 
@@ -285,10 +286,10 @@ fn StringLiteralWithCatchAll(role: Role) -> string {
     }
 }
 
-fn NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
+fn user.NonExhaustiveNullableEnumMissingNull(s: user.Status?) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status? // s // param
+    let _1: user.Status? // s // param
     let _2: int
 
     bb0: {
@@ -324,7 +325,7 @@ fn NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
     }
 }
 
-fn NonExhaustiveBoolMissingFalse(b: bool) -> string {
+fn user.NonExhaustiveBoolMissingFalse(b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // b // param
@@ -353,7 +354,7 @@ fn NonExhaustiveBoolMissingFalse(b: bool) -> string {
     }
 }
 
-fn DuplicateIntLiteral(x: int) -> string {
+fn user.DuplicateIntLiteral(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -381,10 +382,10 @@ fn DuplicateIntLiteral(x: int) -> string {
     }
 }
 
-fn NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
+fn user.NonExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: OkOrCreated // code // param
+    let _1: user.OkOrCreated // code // param
 
     bb0: {
         switch copy _1 [200: bb2, otherwise: bb1];
@@ -408,10 +409,10 @@ fn NonExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
     }
 }
 
-fn ExhaustiveNullableEnum(s: Status?) -> string {
+fn user.ExhaustiveNullableEnum(s: user.Status?) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status? // s // param
+    let _1: user.Status? // s // param
     let _2: bool
     let _3: bool
     let _4: bool
@@ -470,17 +471,17 @@ fn ExhaustiveNullableEnum(s: Status?) -> string {
     }
 }
 
-fn ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
+fn user.ExhaustiveClassPlusLiteral(x: user.SuccessOr200) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: SuccessOr200 // x // param
+    let _1: user.SuccessOr200 // x // param
     let _2: bool
-    let _3: Success // s
-    let _4: Success
+    let _3: user.Success // s
+    let _4: user.Success
     let _5: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb4, bb1];
     }
 
@@ -514,10 +515,10 @@ fn ExhaustiveClassPlusLiteral(x: SuccessOr200) -> string {
     }
 }
 
-fn ExhaustiveFalseType(f: AlwaysFalse) -> string {
+fn user.ExhaustiveFalseType(f: user.AlwaysFalse) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: AlwaysFalse // f // param
+    let _1: user.AlwaysFalse // f // param
     let _2: bool
 
     bb0: {
@@ -543,10 +544,10 @@ fn ExhaustiveFalseType(f: AlwaysFalse) -> string {
     }
 }
 
-fn NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
+fn user.NonExhaustiveNullableEnumMissingVariant(s: user.Status?) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status? // s // param
+    let _1: user.Status? // s // param
     let _2: bool
     let _3: bool
     let _4: bool
@@ -594,16 +595,16 @@ fn NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
     }
 }
 
-fn NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
+fn user.NonExhaustiveClassPlusLiteralMissingLiteral(x: user.SuccessOr200) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: SuccessOr200 // x // param
+    let _1: user.SuccessOr200 // x // param
     let _2: bool
-    let _3: Success // s
-    let _4: Success
+    let _3: user.Success // s
+    let _4: user.Success
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb2, bb1];
     }
 
@@ -627,7 +628,7 @@ fn NonExhaustiveClassPlusLiteralMissingLiteral(x: SuccessOr200) -> string {
     }
 }
 
-fn LiteralAfterTypedPattern(x: int) -> string {
+fn user.LiteralAfterTypedPattern(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -667,10 +668,10 @@ fn LiteralAfterTypedPattern(x: int) -> string {
     }
 }
 
-fn NonExhaustiveEnumMissingOne(s: Status) -> string {
+fn user.NonExhaustiveEnumMissingOne(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: int
 
     bb0: {
@@ -701,10 +702,10 @@ fn NonExhaustiveEnumMissingOne(s: Status) -> string {
     }
 }
 
-fn NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
+fn user.NonExhaustiveClassPlusLiteralMissingClass(x: user.SuccessOr200) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: SuccessOr200 // x // param
+    let _1: user.SuccessOr200 // x // param
 
     bb0: {
         switch copy _1 [200: bb2, otherwise: bb1];
@@ -728,10 +729,10 @@ fn NonExhaustiveClassPlusLiteralMissingClass(x: SuccessOr200) -> string {
     }
 }
 
-fn NestedEnumVariantUnions(s: Status) -> string {
+fn user.NestedEnumVariantUnions(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: int
 
     bb0: {
@@ -757,10 +758,10 @@ fn NestedEnumVariantUnions(s: Status) -> string {
     }
 }
 
-fn IntLiteralUnionPattern(code: SuccessCode) -> string {
+fn user.IntLiteralUnionPattern(code: user.SuccessCode) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: SuccessCode // code // param
+    let _1: user.SuccessCode // code // param
 
     bb0: {
         switch copy _1 [200: bb3, 201: bb3, 204: bb2, otherwise: bb1];
@@ -789,7 +790,7 @@ fn IntLiteralUnionPattern(code: SuccessCode) -> string {
     }
 }
 
-fn UnreachableAfterCatchAll(x: int) -> string {
+fn user.UnreachableAfterCatchAll(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -812,16 +813,16 @@ fn UnreachableAfterCatchAll(x: int) -> string {
     }
 }
 
-fn ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
+fn user.ExhaustiveTypeAliasWithCatchAll(r: user.Result) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Result // r // param
+    let _1: user.Result // r // param
     let _2: bool
-    let _3: Success // s
-    let _4: Success
+    let _3: user.Success // s
+    let _4: user.Success
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb3, bb1];
     }
 
@@ -850,22 +851,22 @@ fn ExhaustiveTypeAliasWithCatchAll(r: Result) -> string {
     }
 }
 
-fn OverlappingWithBindings(r: Result) -> string {
+fn user.OverlappingWithBindings(r: user.Result) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Result // r // param
+    let _1: user.Result // r // param
     let _2: bool
-    let _3: Success // s
-    let _4: Success
+    let _3: user.Success // s
+    let _4: user.Success
     let _5: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
+        _5 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _5 -> [bb3, bb2];
     }
 
@@ -894,14 +895,14 @@ fn OverlappingWithBindings(r: Result) -> string {
     }
 }
 
-fn PartialUnionPatternCoverage(r: FullResult) -> string {
+fn user.PartialUnionPatternCoverage(r: user.FullResult) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: FullResult // r // param
+    let _1: user.FullResult // r // param
     let _2: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _2 -> [bb2, bb1];
     }
 
@@ -923,7 +924,7 @@ fn PartialUnionPatternCoverage(r: FullResult) -> string {
     }
 }
 
-fn NestedLiteralUnions(code: int) -> string {
+fn user.NestedLiteralUnions(code: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // code // param
@@ -956,7 +957,7 @@ fn NestedLiteralUnions(code: int) -> string {
     }
 }
 
-fn WrongLiteralTypeBoolWithInt(b: bool) -> string {
+fn user.WrongLiteralTypeBoolWithInt(b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // b // param
@@ -983,10 +984,10 @@ fn WrongLiteralTypeBoolWithInt(b: bool) -> string {
     }
 }
 
-fn ExhaustiveStringLiterals(role: Role) -> string {
+fn user.ExhaustiveStringLiterals(role: user.Role) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Role // role // param
+    let _1: user.Role // role // param
     let _2: bool
     let _3: bool
     let _4: bool
@@ -1034,7 +1035,7 @@ fn ExhaustiveStringLiterals(role: Role) -> string {
     }
 }
 
-fn MatchComplexScrutinee(x: int) -> string {
+fn user.MatchComplexScrutinee(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -1071,7 +1072,7 @@ fn MatchComplexScrutinee(x: int) -> string {
     }
 }
 
-fn ParenthesizedSingleLiteral(b: bool) -> string {
+fn user.ParenthesizedSingleLiteral(b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // b // param
@@ -1111,10 +1112,10 @@ fn ParenthesizedSingleLiteral(b: bool) -> string {
     }
 }
 
-fn ExhaustiveCustomBool(b: CustomBool) -> string {
+fn user.ExhaustiveCustomBool(b: user.CustomBool) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: CustomBool // b // param
+    let _1: user.CustomBool // b // param
     let _2: bool
     let _3: bool
 
@@ -1151,10 +1152,10 @@ fn ExhaustiveCustomBool(b: CustomBool) -> string {
     }
 }
 
-fn NonExhaustiveStringLiteral(role: Role) -> string {
+fn user.NonExhaustiveStringLiteral(role: user.Role) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Role // role // param
+    let _1: user.Role // role // param
     let _2: bool
     let _3: bool
 
@@ -1191,10 +1192,10 @@ fn NonExhaustiveStringLiteral(role: Role) -> string {
     }
 }
 
-fn ExhaustiveOptionalSingleton(code: MaybeOk) -> string {
+fn user.ExhaustiveOptionalSingleton(code: user.MaybeOk) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: MaybeOk // code // param
+    let _1: user.MaybeOk // code // param
     let _2: bool
     let _3: bool
 
@@ -1231,11 +1232,11 @@ fn ExhaustiveOptionalSingleton(code: MaybeOk) -> string {
     }
 }
 
-fn NestedEnumMatch(s1: Status, s2: Status) -> string {
+fn user.NestedEnumMatch(s1: user.Status, s2: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s1 // param
-    let _2: Status // s2 // param
+    let _1: user.Status // s1 // param
+    let _2: user.Status // s2 // param
     let _3: int
     let _4: int
 
@@ -1295,20 +1296,20 @@ fn NestedEnumMatch(s1: Status, s2: Status) -> string {
     }
 }
 
-fn OverlappingTypedPatterns(r: Result) -> string {
+fn user.OverlappingTypedPatterns(r: user.Result) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Result // r // param
+    let _1: user.Result // r // param
     let _2: bool
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
+        _3 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _3 -> [bb3, bb2];
     }
 
@@ -1335,7 +1336,7 @@ fn OverlappingTypedPatterns(r: Result) -> string {
     }
 }
 
-fn NestedMatchSpans(x: int, y: bool) -> string {
+fn user.NestedMatchSpans(x: int, y: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -1400,7 +1401,7 @@ fn NestedMatchSpans(x: int, y: bool) -> string {
     }
 }
 
-fn NonExhaustiveBoolMissingTrue(b: bool) -> string {
+fn user.NonExhaustiveBoolMissingTrue(b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // b // param
@@ -1429,10 +1430,10 @@ fn NonExhaustiveBoolMissingTrue(b: bool) -> string {
     }
 }
 
-fn StringLiteralUnionPattern(role: Role) -> string {
+fn user.StringLiteralUnionPattern(role: user.Role) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Role // role // param
+    let _1: user.Role // role // param
     let _2: bool
     let _3: bool
     let _4: bool
@@ -1475,7 +1476,7 @@ fn StringLiteralUnionPattern(role: Role) -> string {
     }
 }
 
-fn ExhaustiveBool(b: bool) -> string {
+fn user.ExhaustiveBool(b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // b // param
@@ -1515,10 +1516,10 @@ fn ExhaustiveBool(b: bool) -> string {
     }
 }
 
-fn NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
+fn user.NonExhaustiveTrueTypeWrongLiteral(t: user.AlwaysTrue) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: AlwaysTrue // t // param
+    let _1: user.AlwaysTrue // t // param
     let _2: bool
 
     bb0: {
@@ -1544,7 +1545,7 @@ fn NonExhaustiveTrueTypeWrongLiteral(t: AlwaysTrue) -> string {
     }
 }
 
-fn StringLiteralAfterStringType(s: string) -> string {
+fn user.StringLiteralAfterStringType(s: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // s // param
@@ -1584,25 +1585,25 @@ fn StringLiteralAfterStringType(s: string) -> string {
     }
 }
 
-fn ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
+fn user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: DoubleMaybe // dm // param
+    let _1: user.DoubleMaybe // dm // param
     let _2: bool
-    let _3: Success // s
-    let _4: Success
+    let _3: user.Success // s
+    let _4: user.Success
     let _5: bool
-    let _6: Failure // f
-    let _7: Failure
+    let _6: user.Failure // f
+    let _7: user.Failure
     let _8: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None)));
         branch copy _5 -> [bb5, bb2];
     }
 
@@ -1643,24 +1644,24 @@ fn ExhaustiveDoubleMaybe(dm: DoubleMaybe) -> string {
     }
 }
 
-fn ExhaustiveTypeAlias(r: Result) -> string {
+fn user.ExhaustiveTypeAlias(r: user.Result) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Result // r // param
+    let _1: user.Result // r // param
     let _2: bool
-    let _3: Success // s
-    let _4: Success
+    let _3: user.Success // s
+    let _4: user.Success
     let _5: bool
-    let _6: Failure // f
-    let _7: Failure
+    let _6: user.Failure // f
+    let _7: user.Failure
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None)));
         branch copy _5 -> [bb3, bb2];
     }
 
@@ -1691,7 +1692,7 @@ fn ExhaustiveTypeAlias(r: Result) -> string {
     }
 }
 
-fn UnreachableMultiple(x: int) -> string {
+fn user.UnreachableMultiple(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -1714,7 +1715,7 @@ fn UnreachableMultiple(x: int) -> string {
     }
 }
 
-fn ExhaustiveWithUnderscore(x: int) -> int {
+fn user.ExhaustiveWithUnderscore(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param
@@ -1747,14 +1748,14 @@ fn ExhaustiveWithUnderscore(x: int) -> int {
     }
 }
 
-fn ExhaustiveEnumWithTypedPattern(s: Status) -> string {
+fn user.ExhaustiveEnumWithTypedPattern(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: bool
 
     bb0: {
-        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: [], display_name: "Status" }, TyAttr(None)));
+        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "user.Status" }, TyAttr(None)));
         branch copy _2 -> [bb2, bb1];
     }
 
@@ -1776,7 +1777,7 @@ fn ExhaustiveEnumWithTypedPattern(s: Status) -> string {
     }
 }
 
-fn DuplicateBoolLiteral(b: bool) -> string {
+fn user.DuplicateBoolLiteral(b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // b // param
@@ -1827,7 +1828,7 @@ fn DuplicateBoolLiteral(b: bool) -> string {
     }
 }
 
-fn WrongLiteralTypeIntWithString(x: int) -> string {
+fn user.WrongLiteralTypeIntWithString(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -1856,10 +1857,10 @@ fn WrongLiteralTypeIntWithString(x: int) -> string {
     }
 }
 
-fn DeeplyNestedLiterals(x: SuccessCode) -> string {
+fn user.DeeplyNestedLiterals(x: user.SuccessCode) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: SuccessCode // x // param
+    let _1: user.SuccessCode // x // param
 
     bb0: {
         switch copy _1 [200: bb2, 201: bb2, 204: bb2, otherwise: bb1];
@@ -1883,10 +1884,10 @@ fn DeeplyNestedLiterals(x: SuccessCode) -> string {
     }
 }
 
-fn ExhaustiveIntLiterals(code: SuccessCode) -> string {
+fn user.ExhaustiveIntLiterals(code: user.SuccessCode) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: SuccessCode // code // param
+    let _1: user.SuccessCode // code // param
 
     bb0: {
         switch copy _1 [200: bb4, 201: bb3, 204: bb2, otherwise: bb1];
@@ -1920,24 +1921,24 @@ fn ExhaustiveIntLiterals(code: SuccessCode) -> string {
     }
 }
 
-fn NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
+fn user.NonExhaustiveDoubleMaybeMissingNull(dm: user.DoubleMaybe) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: DoubleMaybe // dm // param
+    let _1: user.DoubleMaybe // dm // param
     let _2: bool
-    let _3: Success // s
-    let _4: Success
+    let _3: user.Success // s
+    let _4: user.Success
     let _5: bool
-    let _6: Failure // f
-    let _7: Failure
+    let _6: user.Failure // f
+    let _7: user.Failure
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None)));
         branch copy _5 -> [bb3, bb2];
     }
 
@@ -1968,7 +1969,7 @@ fn NonExhaustiveDoubleMaybeMissingNull(dm: DoubleMaybe) -> string {
     }
 }
 
-fn ExhaustiveWithNamedCatchAll(x: int) -> int {
+fn user.ExhaustiveWithNamedCatchAll(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param
@@ -2000,10 +2001,10 @@ fn ExhaustiveWithNamedCatchAll(x: int) -> int {
     }
 }
 
-fn EnumVariantUnionWithCatchAll(s: Status) -> string {
+fn user.EnumVariantUnionWithCatchAll(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: int
 
     bb0: {
@@ -2030,7 +2031,7 @@ fn EnumVariantUnionWithCatchAll(s: Status) -> string {
     }
 }
 
-fn OptionalWithCatchAll(x: int?) -> string {
+fn user.OptionalWithCatchAll(x: int?) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int? // x // param
@@ -2064,14 +2065,14 @@ fn OptionalWithCatchAll(x: int?) -> string {
     }
 }
 
-fn UnionPatternCoversAll(r: Result) -> string {
+fn user.UnionPatternCoversAll(r: user.Result) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Result // r // param
+    let _1: user.Result // r // param
     let _2: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _2 -> [bb2, bb1];
     }
 
@@ -2093,10 +2094,10 @@ fn UnionPatternCoversAll(r: Result) -> string {
     }
 }
 
-fn HighLineNumberNonExhaustive(s: Status) -> string {
+fn user.HighLineNumberNonExhaustive(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: int
 
     bb0: {
@@ -2122,10 +2123,10 @@ fn HighLineNumberNonExhaustive(s: Status) -> string {
     }
 }
 
-fn ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
+fn user.ExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: OkOrCreated // code // param
+    let _1: user.OkOrCreated // code // param
 
     bb0: {
         switch copy _1 [200: bb3, 201: bb2, otherwise: bb1];
@@ -2154,25 +2155,25 @@ fn ExhaustiveAliasOfLiterals(code: OkOrCreated) -> string {
     }
 }
 
-fn NestedTypeAlias(mr: MaybeResult) -> string {
+fn user.NestedTypeAlias(mr: user.MaybeResult) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: MaybeResult // mr // param
+    let _1: user.MaybeResult // mr // param
     let _2: bool
-    let _3: Success // s
-    let _4: Success
+    let _3: user.Success // s
+    let _4: user.Success
     let _5: bool
-    let _6: Failure // f
-    let _7: Failure
+    let _6: user.Failure // f
+    let _7: user.Failure
     let _8: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb6, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None)));
         branch copy _5 -> [bb5, bb2];
     }
 
@@ -2213,16 +2214,16 @@ fn NestedTypeAlias(mr: MaybeResult) -> string {
     }
 }
 
-fn NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
+fn user.NonExhaustiveTypeAliasMissingOne(r: user.Result) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Result // r // param
+    let _1: user.Result // r // param
     let _2: bool
-    let _3: Success // s
-    let _4: Success
+    let _3: user.Success // s
+    let _4: user.Success
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb2, bb1];
     }
 
@@ -2246,10 +2247,10 @@ fn NonExhaustiveTypeAliasMissingOne(r: Result) -> string {
     }
 }
 
-fn MultipleUnreachableSpans(s: Status) -> string {
+fn user.MultipleUnreachableSpans(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: int
 
     bb0: {
@@ -2285,10 +2286,10 @@ fn MultipleUnreachableSpans(s: Status) -> string {
     }
 }
 
-fn NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
+fn user.NonExhaustiveOptionalMissingNull(code: user.MaybeOk) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: MaybeOk // code // param
+    let _1: user.MaybeOk // code // param
 
     bb0: {
         switch copy _1 [200: bb2, otherwise: bb1];
@@ -2312,10 +2313,10 @@ fn NonExhaustiveOptionalMissingNull(code: MaybeOk) -> string {
     }
 }
 
-fn ExhaustiveEnumAllVariants(s: Status) -> string {
+fn user.ExhaustiveEnumAllVariants(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: int
 
     bb0: {
@@ -2351,7 +2352,7 @@ fn ExhaustiveEnumAllVariants(s: Status) -> string {
     }
 }
 
-fn BoolLiteralAfterTypedBool(b: bool) -> string {
+fn user.BoolLiteralAfterTypedBool(b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // b // param
@@ -2391,7 +2392,7 @@ fn BoolLiteralAfterTypedBool(b: bool) -> string {
     }
 }
 
-fn BoolUnionPattern(b: bool) -> string {
+fn user.BoolUnionPattern(b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // b // param
@@ -2426,7 +2427,7 @@ fn BoolUnionPattern(b: bool) -> string {
     }
 }
 
-fn GuardedWithFallback(x: int) -> int {
+fn user.GuardedWithFallback(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param
@@ -2472,10 +2473,10 @@ fn GuardedWithFallback(x: int) -> int {
     }
 }
 
-fn NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
+fn user.NonExhaustiveCustomBoolMissing(b: user.CustomBool) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: CustomBool // b // param
+    let _1: user.CustomBool // b // param
     let _2: bool
 
     bb0: {
@@ -2501,7 +2502,7 @@ fn NonExhaustiveCustomBoolMissing(b: CustomBool) -> string {
     }
 }
 
-fn MixedPatterns(x: int) -> string {
+fn user.MixedPatterns(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -2567,10 +2568,10 @@ fn MixedPatterns(x: int) -> string {
     }
 }
 
-fn JumpTableEnumDiscriminant(state: DispatchState) -> int {
+fn user.JumpTableEnumDiscriminant(state: user.DispatchState) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: DispatchState // state // param
+    let _1: user.DispatchState // state // param
     let _2: int
 
     bb0: {
@@ -2611,32 +2612,32 @@ fn JumpTableEnumDiscriminant(state: DispatchState) -> int {
     }
 }
 
-fn JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
+fn user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.Fish) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Cat | Dog | Bird | Fish // pet // param
+    let _1: user.Cat | user.Dog | user.Bird | user.Fish // pet // param
     let _2: bool
     let _3: bool
     let _4: bool
     let _5: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Cat", module_path: [], display_name: "Cat" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Cat", module_path: ["user"], display_name: "user.Cat" }, TyAttr(None)));
         branch copy _2 -> [bb8, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Class(TypeName { name: "Dog", module_path: [], display_name: "Dog" }, TyAttr(None)));
+        _3 = is_type(copy _1, Class(TypeName { name: "Dog", module_path: ["user"], display_name: "user.Dog" }, TyAttr(None)));
         branch copy _3 -> [bb7, bb2];
     }
 
     bb2: {
-        _4 = is_type(copy _1, Class(TypeName { name: "Bird", module_path: [], display_name: "Bird" }, TyAttr(None)));
+        _4 = is_type(copy _1, Class(TypeName { name: "Bird", module_path: ["user"], display_name: "user.Bird" }, TyAttr(None)));
         branch copy _4 -> [bb6, bb3];
     }
 
     bb3: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Fish", module_path: [], display_name: "Fish" }, TyAttr(None)));
+        _5 = is_type(copy _1, Class(TypeName { name: "Fish", module_path: ["user"], display_name: "user.Fish" }, TyAttr(None)));
         branch copy _5 -> [bb5, bb4];
     }
 
@@ -2673,7 +2674,7 @@ fn JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     }
 }
 
-fn MatchArithmeticScrutinee(a: int, b: int) -> string {
+fn user.MatchArithmeticScrutinee(a: int, b: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // a // param
@@ -2709,7 +2710,7 @@ fn MatchArithmeticScrutinee(a: int, b: int) -> string {
     }
 }
 
-fn JumpTableTypeTag(value: int | string | bool | float) -> string {
+fn user.JumpTableTypeTag(value: int | string | bool | float) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int | string | bool | float // value // param
@@ -2771,10 +2772,10 @@ fn JumpTableTypeTag(value: int | string | bool | float) -> string {
     }
 }
 
-fn NonExhaustiveIntLiteral(code: SuccessCode) -> string {
+fn user.NonExhaustiveIntLiteral(code: user.SuccessCode) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: SuccessCode // code // param
+    let _1: user.SuccessCode // code // param
 
     bb0: {
         switch copy _1 [200: bb3, 201: bb2, otherwise: bb1];
@@ -2803,10 +2804,10 @@ fn NonExhaustiveIntLiteral(code: SuccessCode) -> string {
     }
 }
 
-fn NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
+fn user.NonExhaustiveOptionalMissingValue(code: user.MaybeOk) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: MaybeOk // code // param
+    let _1: user.MaybeOk // code // param
     let _2: bool
 
     bb0: {
@@ -2832,10 +2833,10 @@ fn NonExhaustiveOptionalMissingValue(code: MaybeOk) -> string {
     }
 }
 
-fn MatchFunctionCallScrutinee() -> string {
+fn user.MatchFunctionCallScrutinee() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status
+    let _1: user.Status
     let _2: int
 
     bb0: {
@@ -2875,10 +2876,10 @@ fn MatchFunctionCallScrutinee() -> string {
     }
 }
 
-fn EnumVariantUnion(s: Status) -> string {
+fn user.EnumVariantUnion(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: int
 
     bb0: {
@@ -2909,7 +2910,7 @@ fn EnumVariantUnion(s: Status) -> string {
     }
 }
 
-fn ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
+fn user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -2965,10 +2966,10 @@ fn ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     }
 }
 
-fn DuplicateStringLiteral(role: Role) -> string {
+fn user.DuplicateStringLiteral(role: user.Role) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Role // role // param
+    let _1: user.Role // role // param
     let _2: bool
     let _3: bool
     let _4: bool
@@ -3027,20 +3028,20 @@ fn DuplicateStringLiteral(role: Role) -> string {
     }
 }
 
-fn PartialUnionPlusCatchAll(r: FullResult) -> string {
+fn user.PartialUnionPlusCatchAll(r: user.FullResult) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: FullResult // r // param
+    let _1: user.FullResult // r // param
     let _2: bool
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Class(TypeName { name: "Pending", module_path: [], display_name: "Pending" }, TyAttr(None)));
+        _3 = is_type(copy _1, Class(TypeName { name: "Pending", module_path: ["user"], display_name: "user.Pending" }, TyAttr(None)));
         branch copy _3 -> [bb3, bb2];
     }
 
@@ -3067,15 +3068,15 @@ fn PartialUnionPlusCatchAll(r: FullResult) -> string {
     }
 }
 
-fn EnumVariantAfterTypedEnum(s: Status) -> string {
+fn user.EnumVariantAfterTypedEnum(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: bool
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: [], display_name: "Status" }, TyAttr(None)));
+        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "user.Status" }, TyAttr(None)));
         branch copy _2 -> [bb4, bb1];
     }
 
@@ -3107,20 +3108,20 @@ fn EnumVariantAfterTypedEnum(s: Status) -> string {
     }
 }
 
-fn NestedTypeBindings(r: Result) -> int {
+fn user.NestedTypeBindings(r: user.Result) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: Result // r // param
+    let _1: user.Result // r // param
     let _2: bool
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None))], TyAttr(None)));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None))], TyAttr(None)));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
+        _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None)));
         branch copy _3 -> [bb3, bb2];
     }
 
@@ -3147,9 +3148,9 @@ fn NestedTypeBindings(r: Result) -> int {
     }
 }
 
-fn GetStatus() -> Status {
+fn user.GetStatus() -> user.Status {
     // Locals:
-    let _0: Status // _0 // return
+    let _0: user.Status // _0 // return
 
     bb0: {
         _0 = const user.Status.Active;
@@ -3161,7 +3162,7 @@ fn GetStatus() -> Status {
     }
 }
 
-fn GuardedOnlyNonExhaustive(x: int) -> int {
+fn user.GuardedOnlyNonExhaustive(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param
@@ -3227,7 +3228,7 @@ fn GuardedOnlyNonExhaustive(x: int) -> int {
     }
 }
 
-fn LiteralUnionWithCatchAll(code: int) -> string {
+fn user.LiteralUnionWithCatchAll(code: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // code // param
@@ -3260,7 +3261,7 @@ fn LiteralUnionWithCatchAll(code: int) -> string {
     }
 }
 
-fn ExhaustiveOptional(x: int?) -> string {
+fn user.ExhaustiveOptional(x: int?) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int? // x // param
@@ -3300,10 +3301,10 @@ fn ExhaustiveOptional(x: int?) -> string {
     }
 }
 
-fn ExhaustiveMixedLiterals(x: MixedLiterals) -> string {
+fn user.ExhaustiveMixedLiterals(x: user.MixedLiterals) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: MixedLiterals // x // param
+    let _1: user.MixedLiterals // x // param
     let _2: bool
     let _3: bool
     let _4: bool
@@ -3351,24 +3352,24 @@ fn ExhaustiveMixedLiterals(x: MixedLiterals) -> string {
     }
 }
 
-fn NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
+fn user.NonExhaustiveFullResultMissingOne(r: user.FullResult) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: FullResult // r // param
+    let _1: user.FullResult // r // param
     let _2: bool
-    let _3: Success // s
-    let _4: Success
+    let _3: user.Success // s
+    let _4: user.Success
     let _5: bool
-    let _6: Failure // f
-    let _7: Failure
+    let _6: user.Failure // f
+    let _7: user.Failure
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: [], display_name: "Success" }, TyAttr(None)));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "user.Success" }, TyAttr(None)));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: [], display_name: "Failure" }, TyAttr(None)));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "user.Failure" }, TyAttr(None)));
         branch copy _5 -> [bb3, bb2];
     }
 
@@ -3399,15 +3400,15 @@ fn NonExhaustiveFullResultMissingOne(r: FullResult) -> string {
     }
 }
 
-fn ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
+fn user.ExhaustiveNullableEnumWithTypedPattern(s: user.Status?) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status? // s // param
+    let _1: user.Status? // s // param
     let _2: bool
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: [], display_name: "Status" }, TyAttr(None)));
+        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "user.Status" }, TyAttr(None)));
         branch copy _2 -> [bb4, bb1];
     }
 
@@ -3439,10 +3440,10 @@ fn ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     }
 }
 
-fn ExhaustiveEnumWithCatchAll(s: Status) -> string {
+fn user.ExhaustiveEnumWithCatchAll(s: user.Status) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Status // s // param
+    let _1: user.Status // s // param
     let _2: int
 
     bb0: {

@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 4896
 ---
 === MIR2 ===
-fn CommentAfterArrow() -> string {
+fn user.CommentAfterArrow() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: map<string, unknown>
@@ -21,7 +22,7 @@ fn CommentAfterArrow() -> string {
     }
 }
 
-fn FunctionWithComments(a: string, b: int) -> string {
+fn user.FunctionWithComments(a: string, b: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // a // param

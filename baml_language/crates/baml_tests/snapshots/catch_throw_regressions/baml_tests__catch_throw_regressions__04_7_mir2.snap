@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 3922
 ---
 === MIR2 ===
-fn RecA(n: int) -> string {
+fn user.RecA(n: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // n // param
@@ -32,7 +33,7 @@ fn RecA(n: int) -> string {
     }
 }
 
-fn RecB(n: int) -> string {
+fn user.RecB(n: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // n // param
@@ -50,9 +51,9 @@ fn RecB(n: int) -> string {
     }
 }
 
-fn AlwaysThrowsStatus(n: int) -> Status {
+fn user.AlwaysThrowsStatus(n: int) -> user.Status {
     // Locals:
-    let _0: Status // _0 // return
+    let _0: user.Status // _0 // return
     let _1: int // n // param
 
     bb0: {
@@ -68,7 +69,7 @@ fn AlwaysThrowsStatus(n: int) -> Status {
     }
 }
 
-fn CatchRecursiveThrow(n: int) -> string {
+fn user.CatchRecursiveThrow(n: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // n // param
@@ -106,7 +107,7 @@ fn CatchRecursiveThrow(n: int) -> string {
     }
 }
 
-fn UnreachableTailStillChecked() -> string {
+fn user.UnreachableTailStillChecked() -> string {
     // Locals:
     let _0: string // _0 // return
 
@@ -115,7 +116,7 @@ fn UnreachableTailStillChecked() -> string {
     }
 }
 
-fn CatchAlwaysThrows(n: int) -> string {
+fn user.CatchAlwaysThrows(n: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // n // param
@@ -164,9 +165,9 @@ fn CatchAlwaysThrows(n: int) -> string {
     }
 }
 
-fn ThrowsAllStatusVariants(n: int) -> Status {
+fn user.ThrowsAllStatusVariants(n: int) -> user.Status {
     // Locals:
-    let _0: Status // _0 // return
+    let _0: user.Status // _0 // return
     let _1: int // n // param
 
     bb0: {
@@ -190,9 +191,9 @@ fn ThrowsAllStatusVariants(n: int) -> Status {
     }
 }
 
-fn WrapperAlwaysThrows(n: int) -> Status {
+fn user.WrapperAlwaysThrows(n: int) -> user.Status {
     // Locals:
-    let _0: Status // _0 // return
+    let _0: user.Status // _0 // return
     let _1: int // n // param
 
     bb0: {
@@ -208,7 +209,7 @@ fn WrapperAlwaysThrows(n: int) -> Status {
     }
 }
 
-fn CatchAllStatusVariants(n: int) -> string {
+fn user.CatchAllStatusVariants(n: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // n // param

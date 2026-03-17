@@ -1,10 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 1008
 ---
 === MIR2 ===
-fn GetUser(id: int) -> User {
+fn user.GetUser(id: int) -> user.User {
     // Locals:
-    let _0: User // _0 // return
+    let _0: user.User // _0 // return
     let _1: int // id // param
     let _2: map<string, unknown>
 
@@ -22,7 +23,7 @@ fn GetUser(id: int) -> User {
     }
 }
 
-fn GetMixedMap() -> map<string, int | string> {
+fn user.GetMixedMap() -> map<string, int | string> {
     // Locals:
     let _0: map<string, int | string> // _0 // return
     let _1: map<string, unknown>
@@ -41,9 +42,9 @@ fn GetMixedMap() -> map<string, int | string> {
     }
 }
 
-fn GetStatus() -> Status {
+fn user.GetStatus() -> user.Status {
     // Locals:
-    let _0: Status // _0 // return
+    let _0: user.Status // _0 // return
     let _1: map<string, unknown>
 
     bb0: {
@@ -60,7 +61,7 @@ fn GetStatus() -> Status {
     }
 }
 
-fn GetMixedList() -> int | string[] {
+fn user.GetMixedList() -> int | string[] {
     // Locals:
     let _0: int | string[] // _0 // return
     let _1: map<string, unknown>

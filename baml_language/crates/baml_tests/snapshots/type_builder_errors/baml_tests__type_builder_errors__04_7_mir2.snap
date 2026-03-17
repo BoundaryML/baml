@@ -1,10 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 27401
 ---
 === MIR2 ===
-fn TypeBuilderFn(from_text: string) -> Resume {
+fn user.TypeBuilderFn(from_text: string) -> user.Resume {
     // Locals:
-    let _0: Resume // _0 // return
+    let _0: user.Resume // _0 // return
     let _1: string // from_text // param
     let _2: map<string, unknown>
 

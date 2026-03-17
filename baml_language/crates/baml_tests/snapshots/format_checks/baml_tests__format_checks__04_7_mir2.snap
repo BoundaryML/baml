@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 8478
 ---
 === MIR2 ===
-fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
+fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -711,30 +712,30 @@ fn BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     }
 }
 
-fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> string {
+fn user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<string, int>) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: ChainUser // user // param
-    let _2: ChainItem[] // items // param
+    let _1: user.ChainUser // user // param
+    let _2: user.ChainItem[] // items // param
     let _3: map<string, int> // m // param
-    let _4: ChainProfile
-    let _5: ChainSettings
-    let _6: ChainProfile
-    let _7: ChainPreferences
-    let _8: ChainSettings
-    let _9: ChainProfile
+    let _4: user.ChainProfile
+    let _5: user.ChainSettings
+    let _6: user.ChainProfile
+    let _7: user.ChainPreferences
+    let _8: user.ChainSettings
+    let _9: user.ChainProfile
     let _10: string[]
-    let _11: ChainMetadata
-    let _12: ChainItem
-    let _13: ChainItem[]
-    let _14: ChainProfile
+    let _11: user.ChainMetadata
+    let _12: user.ChainItem
+    let _13: user.ChainItem[]
+    let _14: user.ChainProfile
     let _15: 0
     let _16: 0
-    let _17: ChainPreferences
-    let _18: ChainSettings
-    let _19: ChainProfile
-    let _20: ChainSettings
-    let _21: ChainProfile
+    let _17: user.ChainPreferences
+    let _18: user.ChainSettings
+    let _19: user.ChainProfile
+    let _20: user.ChainSettings
+    let _21: user.ChainProfile
     let _22: void
     let _23: void
     let _24: string
@@ -744,8 +745,8 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     let _28: string
     let _29: void
     let _30: void
-    let _31: ChainItem[]
-    let _32: ChainProfile
+    let _31: user.ChainItem[]
+    let _32: user.ChainProfile
     let _33: string
     let _34: void
     let _35: void
@@ -754,7 +755,7 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     let _38: void
     let _39: string
     let _40: 0
-    let _41: ChainItem
+    let _41: user.ChainItem
     let _42: 0
     let _43: string[]
     let _44: 0
@@ -767,19 +768,19 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     let _51: void
     let _52: void
     let _53: void
-    let _54: ChainItem[]
-    let _55: ChainItem[]
-    let _56: ChainProfile
+    let _54: user.ChainItem[]
+    let _55: user.ChainItem[]
+    let _56: user.ChainProfile
     let _57: void
     let _58: void
     let _59: void
-    let _60: ChainItem[]
-    let _61: ChainProfile
+    let _60: user.ChainItem[]
+    let _61: user.ChainProfile
     let _62: string
     let _63: int
-    let _64: ChainPreferences
-    let _65: ChainSettings
-    let _66: ChainProfile
+    let _64: user.ChainPreferences
+    let _65: user.ChainSettings
+    let _66: user.ChainProfile
     let _67: void
     let _68: void
     let _69: int[]
@@ -821,7 +822,7 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     let _105: void
     let _106: void
     let _107: string
-    let _108: ChainItem
+    let _108: user.ChainItem
     let _109: 0
     let _110: string
 
@@ -963,7 +964,7 @@ fn ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> strin
     }
 }
 
-fn WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
+fn user.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
     // Locals:
     let _0: map<string, int | string | bool> // _0 // return
     let _1: map<string, int> // first_input // param
@@ -980,7 +981,7 @@ fn WithLongMethod.processData(first_input: map<string, int>, second_input: int |
     }
 }
 
-fn WithMethod.greet() -> string {
+fn user.greet() -> string {
     // Locals:
     let _0: string // _0 // return
 
@@ -994,7 +995,7 @@ fn WithMethod.greet() -> string {
     }
 }
 
-fn TestTarget() -> string {
+fn user.TestTarget() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: map<string, unknown>
@@ -1013,7 +1014,7 @@ fn TestTarget() -> string {
     }
 }
 
-fn TriviaFunc(x: int) -> int {
+fn user.TriviaFunc(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param
@@ -1028,7 +1029,7 @@ fn TriviaFunc(x: int) -> int {
     }
 }
 
-fn TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+fn user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
     // Locals:
     let _0: map<string, int | string | bool | float | null> // _0 // return
     let _1: map<string, int> // first_long_param // param
@@ -1044,7 +1045,7 @@ fn TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int
     }
 }
 
-fn TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+fn user.TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // first_parameter // param
@@ -1062,7 +1063,7 @@ fn TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_p
     }
 }
 
-fn MultiStatement(a: int, b: int) -> int {
+fn user.MultiStatement(a: int, b: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -1101,7 +1102,7 @@ fn MultiStatement(a: int, b: int) -> int {
     }
 }
 
-fn Minimal() -> int {
+fn user.Minimal() -> int {
     // Locals:
     let _0: int // _0 // return
 
@@ -1115,7 +1116,7 @@ fn Minimal() -> int {
     }
 }
 
-fn LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>> {
+fn user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>> {
     // Locals:
     let _0: map<string, map<string, int | string | bool | float | null>> // _0 // return
     let _1: int // x // param
@@ -1132,7 +1133,7 @@ fn LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<str
     }
 }
 
-fn EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+fn user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
     // Locals:
     let _0: map<string, int | string | bool | float | null> // _0 // return
     let _1: map<string, int> // first_long_param // param
@@ -1148,7 +1149,7 @@ fn EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, sec
     }
 }
 
-fn SingleParam(x: int) -> int {
+fn user.SingleParam(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param
@@ -1163,7 +1164,7 @@ fn SingleParam(x: int) -> int {
     }
 }
 
-fn VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string {
+fn user.VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // extremely_long_parameter_name // param
@@ -1180,7 +1181,7 @@ fn VeryLongParamList(extremely_long_parameter_name: int, another_very_long_param
     }
 }
 
-fn TriviaFuncBlock(x: int) -> int {
+fn user.TriviaFuncBlock(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param
@@ -1195,7 +1196,7 @@ fn TriviaFuncBlock(x: int) -> int {
     }
 }
 
-fn ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int {
+fn user.ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int {
     // Locals:
     let _0: int // _0 // return
 
@@ -1209,7 +1210,7 @@ fn ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithN
     }
 }
 
-fn ComplexReturn(x: int) -> int | string | null {
+fn user.ComplexReturn(x: int) -> int | string | null {
     // Locals:
     let _0: int | string | null // _0 // return
     let _1: int // x // param
@@ -1224,7 +1225,7 @@ fn ComplexReturn(x: int) -> int | string | null {
     }
 }
 
-fn TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+fn user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
     // Locals:
     let _0: map<string, int | string | bool | float | null> // _0 // return
     let _1: map<string, int> // first_long_param // param
@@ -1240,7 +1241,7 @@ fn TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string
     }
 }
 
-fn NestedGenericReturn() -> map<string, map<string, map<string, int | string | bool | null | float>>> {
+fn user.NestedGenericReturn() -> map<string, map<string, map<string, int | string | bool | null | float>>> {
     // Locals:
     let _0: map<string, map<string, map<string, int | string | bool | null | float>>> // _0 // return
     let _1: map<string, map<string, int | string | bool | null | float>>
@@ -1258,7 +1259,7 @@ fn NestedGenericReturn() -> map<string, map<string, map<string, int | string | b
     }
 }
 
-fn TriviaWrapReturnType(x: int) -> int | string | bool | null {
+fn user.TriviaWrapReturnType(x: int) -> int | string | bool | null {
     // Locals:
     let _0: int | string | bool | null // _0 // return
     let _1: int // x // param
@@ -1273,7 +1274,7 @@ fn TriviaWrapReturnType(x: int) -> int | string | bool | null {
     }
 }
 
-fn NestedLoops(matrix: int[][]) -> int {
+fn user.NestedLoops(matrix: int[][]) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int[][] // matrix // param
@@ -1409,7 +1410,7 @@ fn NestedLoops(matrix: int[][]) -> int {
     }
 }
 
-fn ConstrainedParams(name: string, score: int) -> string {
+fn user.ConstrainedParams(name: string, score: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // name // param
@@ -1425,7 +1426,7 @@ fn ConstrainedParams(name: string, score: int) -> string {
     }
 }
 
-fn DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
+fn user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -1512,7 +1513,7 @@ fn DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
     }
 }
 
-fn ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+fn user.ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // first_parameter // param
@@ -1530,7 +1531,7 @@ fn ManyParams(first_parameter: int, second_parameter: string, third_parameter: b
     }
 }
 
-fn DeeplyNestedBody(a: int, b: int, c: int) -> int {
+fn user.DeeplyNestedBody(a: int, b: int, c: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -1610,7 +1611,7 @@ fn DeeplyNestedBody(a: int, b: int, c: int) -> int {
     }
 }
 
-fn LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, second_argument: int, third_argument: bool) -> string {
+fn user.LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, second_argument: int, third_argument: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // first_argument // param
@@ -1627,7 +1628,7 @@ fn LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, s
     }
 }
 
-fn ManyNestedExprs(items: int[]) -> int {
+fn user.ManyNestedExprs(items: int[]) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int[] // items // param
@@ -1714,7 +1715,7 @@ fn ManyNestedExprs(items: int[]) -> int {
     }
 }
 
-fn LlmBasic(name: string) -> string {
+fn user.LlmBasic(name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // name // param
@@ -1734,7 +1735,7 @@ fn LlmBasic(name: string) -> string {
     }
 }
 
-fn DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> {
+fn user.DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> {
     // Locals:
     let _0: (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> // _0 // return
 
@@ -1748,7 +1749,7 @@ fn DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | strin
     }
 }
 
-fn MultiParamTriviaBlock(a: int, b: string) -> int {
+fn user.MultiParamTriviaBlock(a: int, b: string) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -1764,7 +1765,7 @@ fn MultiParamTriviaBlock(a: int, b: string) -> int {
     }
 }
 
-fn TriviaWrapParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+fn user.TriviaWrapParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // first_parameter // param
@@ -1782,7 +1783,7 @@ fn TriviaWrapParams(first_parameter: int, second_parameter: string, third_parame
     }
 }
 
-fn TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
+fn user.TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
     // Locals:
     let _0: int | string | bool | null // _0 // return
     let _1: int // x // param
@@ -1797,7 +1798,7 @@ fn TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
     }
 }
 
-fn LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+fn user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // first_context // param
@@ -1820,7 +1821,7 @@ fn LlmWithLongSignature(first_context: string, second_context: string, third_con
     }
 }
 
-fn MultipleParams(a: int, b: int, c: string) -> int {
+fn user.MultipleParams(a: int, b: int, c: string) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -1837,7 +1838,7 @@ fn MultipleParams(a: int, b: int, c: string) -> int {
     }
 }
 
-fn LlmStringClient(text: string) -> string {
+fn user.LlmStringClient(text: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
@@ -1857,7 +1858,7 @@ fn LlmStringClient(text: string) -> string {
     }
 }
 
-fn DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (int) -> (int) -> (int) -> string) -> string {
+fn user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (int) -> (int) -> (int) -> string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: map<string, map<string, map<string, int[]>>> // nested // param
@@ -1873,7 +1874,7 @@ fn DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback
     }
 }
 
-fn SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+fn user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: map<string, int> // first_parameter_name // param
@@ -1893,7 +1894,7 @@ fn SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: 
     }
 }
 
-fn FinalExpr(a: int, b: int) -> int {
+fn user.FinalExpr(a: int, b: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -1909,7 +1910,7 @@ fn FinalExpr(a: int, b: int) -> int {
     }
 }
 
-fn LlmMultiLine(text: string) -> string {
+fn user.LlmMultiLine(text: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
@@ -1929,7 +1930,7 @@ fn LlmMultiLine(text: string) -> string {
     }
 }
 
-fn LlmReversedOrder(text: string) -> string {
+fn user.LlmReversedOrder(text: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
@@ -1949,7 +1950,7 @@ fn LlmReversedOrder(text: string) -> string {
     }
 }
 
-fn MultiParamTrivia(a: int, b: string) -> int {
+fn user.MultiParamTrivia(a: int, b: string) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -1965,7 +1966,7 @@ fn MultiParamTrivia(a: int, b: string) -> int {
     }
 }
 
-fn F() -> int {
+fn user.F() -> int {
     // Locals:
     let _0: int // _0 // return
 
@@ -1979,7 +1980,7 @@ fn F() -> int {
     }
 }
 
-fn ExtraWhitespace(a: int, b: int) -> int {
+fn user.ExtraWhitespace(a: int, b: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -1995,7 +1996,7 @@ fn ExtraWhitespace(a: int, b: int) -> int {
     }
 }
 
-fn MyFunction(a: int, b: int) -> int {
+fn user.MyFunction(a: int, b: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -2053,7 +2054,7 @@ fn MyFunction(a: int, b: int) -> int {
     }
 }
 
-fn AssertStmts(x: int, y: int) -> int {
+fn user.AssertStmts(x: int, y: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param
@@ -2524,7 +2525,7 @@ fn AssertStmts(x: int, y: int) -> int {
     }
 }
 
-fn LoopStmts(items: int[], flag: bool) -> int {
+fn user.LoopStmts(items: int[], flag: bool) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int[] // items // param
@@ -4769,12 +4770,12 @@ fn LoopStmts(items: int[], flag: bool) -> int {
     }
 }
 
-fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
+fn user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: MatchStatus // s // param
-    let _3: MatchResult // r // param
+    let _2: user.MatchStatus // s // param
+    let _3: user.MatchResult // r // param
     let _4: bool // b // param
     let _5: bool
     let _6: int // n
@@ -4793,13 +4794,13 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     let _19: int
     let _20: int
     let _21: bool
-    let _22: MatchSuccess // s
-    let _23: MatchSuccess
+    let _22: user.MatchSuccess // s
+    let _23: user.MatchSuccess
     let _24: bool
-    let _25: MatchFailure // f
-    let _26: MatchFailure
+    let _25: user.MatchFailure // f
+    let _26: user.MatchFailure
     let _27: bool
-    let _28: MatchSuccess | MatchFailure // x
+    let _28: user.MatchSuccess | user.MatchFailure // x
     let _29: bool
     let _30: int // n
     let _31: bool
@@ -4887,12 +4888,12 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     let _113: int
     let _114: bool
     let _115: bool
-    let _116: MatchSuccess // s
+    let _116: user.MatchSuccess // s
     let _117: bool
-    let _118: MatchSuccess
+    let _118: user.MatchSuccess
     let _119: bool
     let _120: bool
-    let _121: MatchFailure
+    let _121: user.MatchFailure
     let _122: int
 
     bb0: {
@@ -5184,12 +5185,12 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb68: {
-        _21 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)));
+        _21 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "user.MatchSuccess" }, TyAttr(None)));
         branch copy _21 -> [bb72, bb69];
     }
 
     bb69: {
-        _24 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None)));
+        _24 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "user.MatchFailure" }, TyAttr(None)));
         branch copy _24 -> [bb71, bb70];
     }
 
@@ -5210,7 +5211,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb73: {
-        _27 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)), Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None))], TyAttr(None)));
+        _27 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "user.MatchSuccess" }, TyAttr(None)), Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "user.MatchFailure" }, TyAttr(None))], TyAttr(None)));
         branch copy _27 -> [bb75, bb74];
     }
 
@@ -5681,12 +5682,12 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 
     bb166: {
-        _115 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: [], display_name: "MatchSuccess" }, TyAttr(None)));
+        _115 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "user.MatchSuccess" }, TyAttr(None)));
         branch copy _115 -> [bb170, bb167];
     }
 
     bb167: {
-        _120 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: [], display_name: "MatchFailure" }, TyAttr(None)));
+        _120 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "user.MatchFailure" }, TyAttr(None)));
         branch copy _120 -> [bb169, bb168];
     }
 
@@ -5845,7 +5846,7 @@ fn MatchExprs(x: int, s: MatchStatus, r: MatchResult, b: bool) -> string {
     }
 }
 
-fn OtherExprs(a: int, b: int) -> int {
+fn user.OtherExprs(a: int, b: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -5887,21 +5888,21 @@ fn OtherExprs(a: int, b: int) -> int {
     let _37: 15 | 16[]
     let _38: map<"inner_a" | "inner_b" | "inner_c", 1 | 2 | 3>
     let _39: map<"inner_d" | "inner_e" | "inner_f", 4 | 5 | 6>
-    let _40: OtherPoint
-    let _41: OtherPoint
-    let _42: OtherPoint
-    let _43: OtherPoint
-    let _44: OtherVec
-    let _45: OtherPoint
-    let _46: OtherPoint
-    let _47: OtherVec
-    let _48: OtherPoint
-    let _49: OtherPoint
-    let _50: OtherVec
-    let _51: OtherPoint
-    let _52: OtherPoint
-    let _53: OtherPoint
-    let _54: OtherPoint
+    let _40: user.OtherPoint
+    let _41: user.OtherPoint
+    let _42: user.OtherPoint
+    let _43: user.OtherPoint
+    let _44: user.OtherVec
+    let _45: user.OtherPoint
+    let _46: user.OtherPoint
+    let _47: user.OtherVec
+    let _48: user.OtherPoint
+    let _49: user.OtherPoint
+    let _50: user.OtherVec
+    let _51: user.OtherPoint
+    let _52: user.OtherPoint
+    let _53: user.OtherPoint
+    let _54: user.OtherPoint
     let _55: int // x
     let _56: int
     let _57: int // x

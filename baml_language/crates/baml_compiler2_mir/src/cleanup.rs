@@ -7,17 +7,20 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::{BasicBlock, BlockId, Local, MirFunction, Operand, Place, Terminator};
+use crate::{BasicBlock, BlockId, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Terminator};
 
 /// Run all cleanup phases on a MIR function.
 pub(crate) fn cleanup_function(func: &mut MirFunction) {
-    eliminate_dead_blocks(func);
-    propagate_copies(func);
-    eliminate_dead_locals(func);
-    reorder_blocks_rpo(func);
+    let MirFunctionKind::Bytecode(body) = &mut func.kind else {
+        return; // nothing to clean up on builtins
+    };
+    eliminate_dead_blocks(body);
+    propagate_copies(body, func.arity);
+    eliminate_dead_locals(body, func.arity);
+    reorder_blocks_rpo(body);
 
     #[cfg(debug_assertions)]
-    verify_mir(func);
+    verify_mir(body, &func.item_ref);
 }
 
 // ============================================================================
@@ -25,15 +28,15 @@ pub(crate) fn cleanup_function(func: &mut MirFunction) {
 // ============================================================================
 
 /// Phase 1: Remove unreachable blocks via BFS from entry.
-fn eliminate_dead_blocks(func: &mut MirFunction) {
+fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
     // BFS to find all reachable blocks
     let mut reachable = HashSet::new();
     let mut queue = VecDeque::new();
-    queue.push_back(func.entry);
-    reachable.insert(func.entry);
+    queue.push_back(body.entry);
+    reachable.insert(body.entry);
 
     while let Some(block_id) = queue.pop_front() {
-        if let Some(term) = &func.blocks[block_id.0].terminator {
+        if let Some(term) = &body.blocks[block_id.0].terminator {
             for succ in term.successors() {
                 if reachable.insert(succ) {
                     queue.push_back(succ);
@@ -43,14 +46,14 @@ fn eliminate_dead_blocks(func: &mut MirFunction) {
     }
 
     // If all blocks are reachable, nothing to do
-    if reachable.len() == func.blocks.len() {
+    if reachable.len() == body.blocks.len() {
         return;
     }
 
     // Build old -> new BlockId mapping (only reachable blocks, preserving order)
-    let mut old_to_new: Vec<Option<BlockId>> = vec![None; func.blocks.len()];
+    let mut old_to_new: Vec<Option<BlockId>> = vec![None; body.blocks.len()];
     let mut new_blocks: Vec<BasicBlock> = Vec::new();
-    for block in &func.blocks {
+    for block in &body.blocks {
         if reachable.contains(&block.id) {
             let new_id = BlockId(new_blocks.len());
             old_to_new[block.id.0] = Some(new_id);
@@ -68,17 +71,17 @@ fn eliminate_dead_blocks(func: &mut MirFunction) {
     }
 
     // Rewrite entry block
-    func.entry = old_to_new[func.entry.0].expect("entry block must be reachable");
+    body.entry = old_to_new[body.entry.0].expect("entry block must be reachable");
 
     // Rewrite unwind_error_locals keys
-    let old_unwind = std::mem::take(&mut func.unwind_error_locals);
+    let old_unwind = std::mem::take(&mut body.unwind_error_locals);
     for (old_block, local) in old_unwind {
         if let Some(new_block) = old_to_new[old_block.0] {
-            func.unwind_error_locals.insert(new_block, local);
+            body.unwind_error_locals.insert(new_block, local);
         }
     }
 
-    func.blocks = new_blocks;
+    body.blocks = new_blocks;
 }
 
 /// Rewrite all BlockId references in a terminator using old->new mapping.
@@ -129,10 +132,10 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
 // ============================================================================
 
 /// Count uses of each Local across all blocks and unwind_error_locals.
-fn count_local_uses(func: &MirFunction) -> Vec<usize> {
-    let mut uses = vec![0usize; func.locals.len()];
+fn count_local_uses(body: &MirFunctionBody) -> Vec<usize> {
+    let mut uses = vec![0usize; body.locals.len()];
 
-    for block in &func.blocks {
+    for block in &body.blocks {
         for stmt in &block.statements {
             count_in_statement(stmt, &mut uses);
         }
@@ -142,7 +145,7 @@ fn count_local_uses(func: &MirFunction) -> Vec<usize> {
     }
 
     // Count uses in unwind_error_locals values
-    for (_, local) in &func.unwind_error_locals {
+    for (_, local) in &body.unwind_error_locals {
         uses[local.0] += 1;
     }
 
@@ -287,9 +290,9 @@ fn count_in_terminator(term: &Terminator, uses: &mut Vec<usize>) {
 }
 
 /// Phase 2a: Propagate trivial copies and single-use constants.
-fn propagate_copies(func: &mut MirFunction) {
+fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
     // Build substitution map: Local -> replacement Operand
-    let uses = count_local_uses(func);
+    let uses = count_local_uses(body);
     let mut subst: HashMap<Local, Operand> = HashMap::new();
 
     // Scan for copy-of-param: `_X = copy _Y` where Y is a param (1..=arity)
@@ -300,7 +303,7 @@ fn propagate_copies(func: &mut MirFunction) {
     // AstStmt::Let) can be reassigned via AstStmt::Assign or AstStmt::AssignOp,
     // making propagation unsound. Unnamed temps are always fresh single-definition
     // locals, so this is safe.
-    for block in &func.blocks {
+    for block in &body.blocks {
         for stmt in &block.statements {
             if let crate::StatementKind::Assign {
                 destination: Place::Local(dest),
@@ -308,12 +311,12 @@ fn propagate_copies(func: &mut MirFunction) {
             } = &stmt.kind
             {
                 // Skip named locals — they may be reassigned
-                if func.locals[dest.0].name.is_some() {
+                if body.locals[dest.0].name.is_some() {
                     continue;
                 }
 
                 match operand {
-                    Operand::Copy(Place::Local(src)) if src.0 >= 1 && src.0 <= func.arity => {
+                    Operand::Copy(Place::Local(src)) if src.0 >= 1 && src.0 <= arity => {
                         // Copy of param — substitute
                         subst.insert(*dest, Operand::Copy(Place::Local(*src)));
                     }
@@ -349,7 +352,7 @@ fn propagate_copies(func: &mut MirFunction) {
     }
 
     // Apply substitutions to all operands across all blocks
-    for block in &mut func.blocks {
+    for block in &mut body.blocks {
         for stmt in &mut block.statements {
             apply_subst_to_statement(stmt, &subst);
         }
@@ -359,7 +362,7 @@ fn propagate_copies(func: &mut MirFunction) {
     }
 
     // Remove the dead assignment statements (where dest is in subst)
-    for block in &mut func.blocks {
+    for block in &mut body.blocks {
         block.statements.retain(|stmt| {
             if let crate::StatementKind::Assign {
                 destination: Place::Local(dest),
@@ -494,13 +497,13 @@ fn apply_subst_to_terminator(term: &mut Terminator, subst: &HashMap<Local, Opera
 // ============================================================================
 
 /// Phase 2b: Remove dead locals and renumber densely.
-fn eliminate_dead_locals(func: &mut MirFunction) {
-    let mut uses = count_local_uses(func);
+fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
+    let mut uses = count_local_uses(body);
 
     // Force-alive: terminator destination locals can't be removed because
     // the terminator has side effects (Call, Await, DispatchFuture).
     // Even if the destination local has 0 read-uses, we must keep it.
-    for block in &func.blocks {
+    for block in &body.blocks {
         if let Some(term) = &block.terminator {
             let dest_local = match term {
                 Terminator::Call { destination, .. } => Some(destination.base_local()),
@@ -515,13 +518,13 @@ fn eliminate_dead_locals(func: &mut MirFunction) {
     }
 
     // Determine which locals to keep: _0 (return) + params + any with uses > 0
-    let mut old_to_new: Vec<Option<Local>> = vec![None; func.locals.len()];
+    let mut old_to_new: Vec<Option<Local>> = vec![None; body.locals.len()];
     let mut new_locals: Vec<crate::LocalDecl> = Vec::new();
 
-    for (i, local_decl) in func.locals.iter().enumerate() {
+    for (i, local_decl) in body.locals.iter().enumerate() {
         let keep = i == 0              // return place
-            || i <= func.arity         // parameter
-            || uses[i] > 0             // has uses (including force-alive)
+            || i <= arity              // parameter
+            || uses[i] > 0            // has uses (including force-alive)
             || local_decl.is_watched; // watched variable
         if keep {
             let new_id = Local(new_locals.len());
@@ -531,7 +534,7 @@ fn eliminate_dead_locals(func: &mut MirFunction) {
     }
 
     // If nothing was removed, skip rewriting
-    if new_locals.len() == func.locals.len() {
+    if new_locals.len() == body.locals.len() {
         return;
     }
 
@@ -539,7 +542,7 @@ fn eliminate_dead_locals(func: &mut MirFunction) {
     // a dead plain-Local. All Rvalue variants are pure (no side effects), so
     // this is always safe. This prevents rewrite_locals_in_statement from
     // encountering a dead local (old_to_new = None) and panicking.
-    for block in &mut func.blocks {
+    for block in &mut body.blocks {
         block.statements.retain(|stmt| {
             if let crate::StatementKind::Assign {
                 destination: Place::Local(l),
@@ -554,7 +557,7 @@ fn eliminate_dead_locals(func: &mut MirFunction) {
     }
 
     // Rewrite all Local references
-    for block in &mut func.blocks {
+    for block in &mut body.blocks {
         for stmt in &mut block.statements {
             rewrite_locals_in_statement(stmt, &old_to_new);
         }
@@ -564,14 +567,14 @@ fn eliminate_dead_locals(func: &mut MirFunction) {
     }
 
     // Rewrite unwind_error_locals values
-    let old_unwind = std::mem::take(&mut func.unwind_error_locals);
+    let old_unwind = std::mem::take(&mut body.unwind_error_locals);
     for (block_id, old_local) in old_unwind {
         if let Some(new_local) = old_to_new[old_local.0] {
-            func.unwind_error_locals.insert(block_id, new_local);
+            body.unwind_error_locals.insert(block_id, new_local);
         }
     }
 
-    func.locals = new_locals;
+    body.locals = new_locals;
 }
 
 fn remap_local(l: &mut Local, map: &[Option<Local>]) {
@@ -690,10 +693,6 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
 }
 
 // ============================================================================
-// Phase 3: RPO block reordering
-// ============================================================================
-
-// ============================================================================
 // Phase 4: Post-cleanup MIR validation (debug only)
 // ============================================================================
 
@@ -702,34 +701,34 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
 /// Debug-only — catches invariant drift between lowering, cleanup, and
 /// downstream consumers. Modeled after V1's `verifier.rs`.
 #[cfg(debug_assertions)]
-fn verify_mir(func: &MirFunction) {
-    let num_blocks = func.blocks.len();
-    let num_locals = func.locals.len();
+fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
+    let num_blocks = body.blocks.len();
+    let num_locals = body.locals.len();
 
     // 1. Block ID / index density: block.id must equal its position.
     //    (Same as V1 verifier.rs:20-28)
-    for (idx, block) in func.blocks.iter().enumerate() {
+    for (idx, block) in body.blocks.iter().enumerate() {
         assert!(
             block.id == BlockId(idx),
             "block id/index mismatch in {}: block.id={:?}, index=bb{}",
-            func.name,
+            name,
             block.id,
             idx,
         );
     }
 
     // 2. Every block must be terminated.
-    for block in &func.blocks {
+    for block in &body.blocks {
         assert!(
             block.terminator.is_some(),
             "unterminated block {:?} in MIR function {}",
             block.id,
-            func.name,
+            name,
         );
     }
 
     // 3. All BlockId references in terminators must be in-range.
-    for block in &func.blocks {
+    for block in &body.blocks {
         if let Some(term) = &block.terminator {
             for succ in term.successors() {
                 assert!(
@@ -737,7 +736,7 @@ fn verify_mir(func: &MirFunction) {
                     "dangling BlockId {:?} in terminator of {:?} in MIR function {}",
                     succ,
                     block.id,
-                    func.name,
+                    name,
                 );
             }
         }
@@ -751,7 +750,7 @@ fn verify_mir(func: &MirFunction) {
             "dangling Local {} in {} of MIR function {}",
             l,
             ctx,
-            func.name,
+            name,
         );
     };
 
@@ -777,7 +776,7 @@ fn verify_mir(func: &MirFunction) {
         Operand::Constant(_) => {}
     };
 
-    for block in &func.blocks {
+    for block in &body.blocks {
         let blk = format!("{:?}", block.id);
         for stmt in &block.statements {
             match &stmt.kind {
@@ -826,7 +825,7 @@ fn verify_mir(func: &MirFunction) {
     }
 
     // 4b. Also check Local references in terminators.
-    for block in &func.blocks {
+    for block in &body.blocks {
         let blk = format!("{:?}", block.id);
         if let Some(term) = &block.terminator {
             match term {
@@ -872,7 +871,7 @@ fn verify_mir(func: &MirFunction) {
 
     // 5. Exhaustive switches must have Unreachable otherwise block.
     //    (Same as V1 verifier.rs:72-88)
-    for block in &func.blocks {
+    for block in &body.blocks {
         if let Some(Terminator::Switch {
             otherwise,
             exhaustive,
@@ -880,13 +879,13 @@ fn verify_mir(func: &MirFunction) {
         }) = &block.terminator
         {
             if *exhaustive {
-                let otherwise_block = &func.blocks[otherwise.0];
+                let otherwise_block = &body.blocks[otherwise.0];
                 let is_unreachable = otherwise_block.statements.is_empty()
                     && matches!(otherwise_block.terminator, Some(Terminator::Unreachable));
                 assert!(
                     is_unreachable,
                     "exhaustive switch in {:?} has non-unreachable default block {:?} in MIR function {}",
-                    block.id, otherwise, func.name,
+                    block.id, otherwise, name,
                 );
             }
         }
@@ -895,18 +894,18 @@ fn verify_mir(func: &MirFunction) {
     // 6. Watch invariants: watched locals must have names, watch statements
     //    must reference watched locals.
     //    (Same as V1 verifier.rs:90-145)
-    for (idx, decl) in func.locals.iter().enumerate() {
+    for (idx, decl) in body.locals.iter().enumerate() {
         if decl.is_watched {
             assert!(
                 decl.name.is_some(),
                 "watched local _{} must have a user-visible name in MIR function {}",
                 idx,
-                func.name,
+                name,
             );
         }
     }
 
-    for block in &func.blocks {
+    for block in &body.blocks {
         for stmt in &block.statements {
             let watch_local = match &stmt.kind {
                 crate::StatementKind::Unwatch(l)
@@ -915,38 +914,38 @@ fn verify_mir(func: &MirFunction) {
                 _ => None,
             };
             if let Some(local) = watch_local {
-                let decl = &func.locals[local.0];
+                let decl = &body.locals[local.0];
                 assert!(
                     decl.is_watched,
                     "watch statement references non-watched local _{} in MIR function {}",
-                    local.0, func.name,
+                    local.0, name,
                 );
             }
         }
     }
 
     // 7. unwind_error_locals: keys must be valid BlockIds, values must be valid Locals.
-    for (&block_id, &local) in &func.unwind_error_locals {
+    for (&block_id, &local) in &body.unwind_error_locals {
         assert!(
             block_id.0 < num_blocks,
             "dangling BlockId {:?} in unwind_error_locals of MIR function {}",
             block_id,
-            func.name,
+            name,
         );
         assert!(
             local.0 < num_locals,
             "dangling Local {} in unwind_error_locals of MIR function {}",
             local,
-            func.name,
+            name,
         );
     }
 
     // 8. Entry block must be valid.
     assert!(
-        func.entry.0 < num_blocks,
+        body.entry.0 < num_blocks,
         "entry block {:?} out of range in MIR function {}",
-        func.entry,
-        func.name,
+        body.entry,
+        name,
     );
 }
 
@@ -960,8 +959,8 @@ fn verify_mir(func: &MirFunction) {
 /// IDs still follow allocation order rather than execution order. RPO reordering
 /// ensures that `bb0 → bb1 → bb2 → ...` corresponds to typical execution flow,
 /// making the MIR output much more readable.
-fn reorder_blocks_rpo(func: &mut MirFunction) {
-    let num_blocks = func.blocks.len();
+fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
+    let num_blocks = body.blocks.len();
     if num_blocks <= 1 {
         return;
     }
@@ -969,7 +968,7 @@ fn reorder_blocks_rpo(func: &mut MirFunction) {
     // Compute RPO via iterative DFS
     let mut visited = vec![false; num_blocks];
     let mut post_order: Vec<BlockId> = Vec::with_capacity(num_blocks);
-    let mut stack: Vec<(BlockId, bool)> = vec![(func.entry, false)];
+    let mut stack: Vec<(BlockId, bool)> = vec![(body.entry, false)];
 
     while let Some((block_id, processed)) = stack.pop() {
         if processed {
@@ -982,7 +981,7 @@ fn reorder_blocks_rpo(func: &mut MirFunction) {
         visited[block_id.0] = true;
         stack.push((block_id, true)); // push for post-order recording
 
-        if let Some(term) = &func.blocks[block_id.0].terminator {
+        if let Some(term) = &body.blocks[block_id.0].terminator {
             // Push successors in reverse order so first successor is visited first
             let succs = term.successors();
             for &succ in succs.iter().rev() {
@@ -1011,7 +1010,7 @@ fn reorder_blocks_rpo(func: &mut MirFunction) {
     // Reorder blocks and rewrite internal BlockId references
     let mut new_blocks: Vec<BasicBlock> = Vec::with_capacity(post_order.len());
     for &old_id in &post_order {
-        let mut block = func.blocks[old_id.0].clone();
+        let mut block = body.blocks[old_id.0].clone();
         block.id = old_to_new[old_id.0].unwrap();
         if let Some(term) = &mut block.terminator {
             rewrite_block_ids_in_terminator(term, &old_to_new);
@@ -1020,15 +1019,15 @@ fn reorder_blocks_rpo(func: &mut MirFunction) {
     }
 
     // Rewrite entry
-    func.entry = old_to_new[func.entry.0].expect("entry must be in RPO");
+    body.entry = old_to_new[body.entry.0].expect("entry must be in RPO");
 
     // Rewrite unwind_error_locals keys
-    let old_unwind = std::mem::take(&mut func.unwind_error_locals);
+    let old_unwind = std::mem::take(&mut body.unwind_error_locals);
     for (old_block, local) in old_unwind {
         if let Some(new_block) = old_to_new[old_block.0] {
-            func.unwind_error_locals.insert(new_block, local);
+            body.unwind_error_locals.insert(new_block, local);
         }
     }
 
-    func.blocks = new_blocks;
+    body.blocks = new_blocks;
 }

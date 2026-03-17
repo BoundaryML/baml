@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 15088
 ---
 === MIR2 ===
-fn Foo() -> void {
+fn user.Foo() -> void {
     // Locals:
     let _0: void // _0 // return
 
@@ -16,7 +17,17 @@ fn Foo() -> void {
     }
 }
 
-fn NextFunction() -> string {
+fn user.Incomplete(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.NextFunction() -> string {
     // Locals:
     let _0: string // _0 // return
 

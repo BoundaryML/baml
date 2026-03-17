@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 26211
 ---
 === MIR2 ===
-fn test_type_annotation(function_name: string) -> string {
+fn user.test_type_annotation(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param
@@ -27,7 +28,7 @@ fn test_type_annotation(function_name: string) -> string {
     }
 }
 
-fn test_optional(function_name: string) -> string {
+fn user.test_optional(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param
@@ -42,7 +43,7 @@ fn test_optional(function_name: string) -> string {
     }
 }
 
-fn test_param(t: type) -> string {
+fn user.test_param(t: type) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: type // t // param
@@ -57,7 +58,7 @@ fn test_param(t: type) -> string {
     }
 }
 
-fn test_return_type(function_name: string) -> type {
+fn user.test_return_type(function_name: string) -> type {
     // Locals:
     let _0: type // _0 // return
     let _1: string // function_name // param
@@ -80,7 +81,7 @@ fn test_return_type(function_name: string) -> type {
     }
 }
 
-fn test_let_binding(function_name: string) -> string {
+fn user.test_let_binding(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param
@@ -105,7 +106,7 @@ fn test_let_binding(function_name: string) -> string {
     }
 }
 
-fn test_map(function_name: string) -> string {
+fn user.test_map(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param
@@ -120,7 +121,7 @@ fn test_map(function_name: string) -> string {
     }
 }
 
-fn test_union(function_name: string) -> string {
+fn user.test_union(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param
@@ -135,7 +136,7 @@ fn test_union(function_name: string) -> string {
     }
 }
 
-fn test_list(function_name: string) -> string {
+fn user.test_list(function_name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // function_name // param

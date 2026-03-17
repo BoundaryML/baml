@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 1829
 ---
 === MIR2 ===
-fn ReadAndClose() -> string {
+fn user.ReadAndClose() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.File // f
@@ -50,7 +51,7 @@ fn ReadAndClose() -> string {
     }
 }
 
-fn ReadFile() -> string {
+fn user.ReadFile() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.File // f
@@ -84,7 +85,7 @@ fn ReadFile() -> string {
     }
 }
 
-fn ReadFileInline() -> string {
+fn user.ReadFileInline() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.File
@@ -116,7 +117,7 @@ fn ReadFileInline() -> string {
     }
 }
 
-fn ReadMultipleFiles() -> string {
+fn user.ReadMultipleFiles() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.File // f1
@@ -178,7 +179,7 @@ fn ReadMultipleFiles() -> string {
     }
 }
 
-fn ConnectAndRead() -> string {
+fn user.ConnectAndRead() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.Socket // sock
@@ -212,7 +213,7 @@ fn ConnectAndRead() -> string {
     }
 }
 
-fn ConnectAndReadInline() -> string {
+fn user.ConnectAndReadInline() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.Socket
@@ -244,7 +245,7 @@ fn ConnectAndReadInline() -> string {
     }
 }
 
-fn MultipleConnections() -> string {
+fn user.MultipleConnections() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.Socket // s1
@@ -306,7 +307,7 @@ fn MultipleConnections() -> string {
     }
 }
 
-fn ConnectReadAndClose() -> string {
+fn user.ConnectReadAndClose() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.Socket // sock
@@ -354,7 +355,7 @@ fn ConnectReadAndClose() -> string {
     }
 }
 
-fn ChainCommands() -> string {
+fn user.ChainCommands() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // result1
@@ -394,7 +395,7 @@ fn ChainCommands() -> string {
     }
 }
 
-fn RunCommandWithVar() -> string {
+fn user.RunCommandWithVar() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // cmd
@@ -420,7 +421,7 @@ fn RunCommandWithVar() -> string {
     }
 }
 
-fn RunCommand() -> string {
+fn user.RunCommand() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: future<string>

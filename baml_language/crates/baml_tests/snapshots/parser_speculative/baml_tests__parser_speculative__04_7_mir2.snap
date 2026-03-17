@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17394
 ---
 === MIR2 ===
-fn AnotherLLM(input: string) -> string {
+fn user.AnotherLLM(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
@@ -22,7 +23,7 @@ fn AnotherLLM(input: string) -> string {
     }
 }
 
-fn Ambiguous(input: string) -> string {
+fn user.Ambiguous(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
@@ -42,10 +43,10 @@ fn Ambiguous(input: string) -> string {
     }
 }
 
-fn ProcessData(data: JsonData) -> string {
+fn user.ProcessData(data: user.JsonData) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: JsonData // data // param
+    let _1: user.JsonData // data // param
     let _2: int // result
     let _3: int
     let _4: int
@@ -80,9 +81,9 @@ fn ProcessData(data: JsonData) -> string {
     }
 }
 
-fn ExtractData(text: string) -> JsonData {
+fn user.ExtractData(text: string) -> user.JsonData {
     // Locals:
-    let _0: JsonData // _0 // return
+    let _0: user.JsonData // _0 // return
     let _1: string // text // param
     let _2: map<string, unknown>
 
@@ -100,7 +101,7 @@ fn ExtractData(text: string) -> JsonData {
     }
 }
 
-fn SimpleCalc(a: int, b: int) -> int {
+fn user.SimpleCalc(a: int, b: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a // param
@@ -118,7 +119,7 @@ fn SimpleCalc(a: int, b: int) -> int {
     }
 }
 
-fn ChainedProcess(input: string) -> string {
+fn user.ChainedProcess(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
@@ -138,9 +139,9 @@ fn ChainedProcess(input: string) -> string {
     }
 }
 
-fn LLMAnalyze(text: string) -> Analysis {
+fn user.LLMAnalyze(text: string) -> user.Analysis {
     // Locals:
-    let _0: Analysis // _0 // return
+    let _0: user.Analysis // _0 // return
     let _1: string // text // param
     let _2: map<string, unknown>
 
@@ -158,10 +159,10 @@ fn LLMAnalyze(text: string) -> Analysis {
     }
 }
 
-fn ProcessAnalysis(analysis: Analysis) -> string {
+fn user.ProcessAnalysis(analysis: user.Analysis) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: Analysis // analysis // param
+    let _1: user.Analysis // analysis // param
     let _2: float // score
     let _3: bool
     let _4: float

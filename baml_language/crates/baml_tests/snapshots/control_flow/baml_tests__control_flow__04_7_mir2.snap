@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 5872
 ---
 === MIR2 ===
-fn IfElseWithHeaders(flag: bool) -> string {
+fn user.IfElseWithHeaders(flag: bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: bool // flag // param
@@ -33,7 +34,7 @@ fn IfElseWithHeaders(flag: bool) -> string {
     }
 }
 
-fn MatchExpression(x: int) -> string {
+fn user.MatchExpression(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -69,7 +70,7 @@ fn MatchExpression(x: int) -> string {
     }
 }
 
-fn Headers() -> string {
+fn user.Headers() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x
@@ -104,7 +105,7 @@ fn Headers() -> string {
     }
 }
 
-fn ElseIfChain(x: int) -> string {
+fn user.ElseIfChain(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -168,7 +169,7 @@ fn ElseIfChain(x: int) -> string {
     }
 }
 
-fn NestedControlFlow(x: int) -> string {
+fn user.NestedControlFlow(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -218,7 +219,7 @@ fn NestedControlFlow(x: int) -> string {
     }
 }
 
-fn LlmFunction(input: string) -> string {
+fn user.LlmFunction(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
@@ -238,7 +239,7 @@ fn LlmFunction(input: string) -> string {
     }
 }
 
-fn SimpleFunction() -> int {
+fn user.SimpleFunction() -> int {
     // Locals:
     let _0: int // _0 // return
 
@@ -252,7 +253,7 @@ fn SimpleFunction() -> int {
     }
 }
 
-fn WhileWithHeaders() -> int {
+fn user.WhileWithHeaders() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // count

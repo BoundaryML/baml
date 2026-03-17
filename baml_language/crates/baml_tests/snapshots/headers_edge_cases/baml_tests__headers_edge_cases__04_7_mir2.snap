@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 12324
 ---
 === MIR2 ===
-fn ConsecutiveHeaders() -> string {
+fn user.ConsecutiveHeaders() -> string {
     // Locals:
     let _0: string // _0 // return
 
@@ -22,7 +23,7 @@ fn ConsecutiveHeaders() -> string {
     }
 }
 
-fn HeadersAroundExpressions() -> string {
+fn user.HeadersAroundExpressions() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x
@@ -93,7 +94,7 @@ fn HeadersAroundExpressions() -> string {
     }
 }
 
-fn UnicodeHeaders() -> string {
+fn user.UnicodeHeaders() -> string {
     // Locals:
     let _0: string // _0 // return
 
@@ -110,7 +111,7 @@ fn UnicodeHeaders() -> string {
     }
 }
 
-fn VeryLongHeaderTitle() -> string {
+fn user.VeryLongHeaderTitle() -> string {
     // Locals:
     let _0: string // _0 // return
 
@@ -126,7 +127,7 @@ fn VeryLongHeaderTitle() -> string {
     }
 }
 
-fn HeadersInComplexNesting() -> string {
+fn user.HeadersInComplexNesting() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string | "else value" // result
@@ -167,7 +168,7 @@ fn HeadersInComplexNesting() -> string {
     }
 }
 
-fn HeadersAndComments() -> string {
+fn user.HeadersAndComments() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // x
@@ -186,7 +187,7 @@ fn HeadersAndComments() -> string {
     }
 }
 
-fn HeadersWithSpecialChars() -> string {
+fn user.HeadersWithSpecialChars() -> string {
     // Locals:
     let _0: string // _0 // return
 
@@ -206,7 +207,7 @@ fn HeadersWithSpecialChars() -> string {
     }
 }
 
-fn HeaderLevels() -> string {
+fn user.HeaderLevels() -> string {
     // Locals:
     let _0: string // _0 // return
 
@@ -229,7 +230,7 @@ fn HeaderLevels() -> string {
     }
 }
 
-fn HeaderOnlyFunction() -> string {
+fn user.HeaderOnlyFunction() -> string {
     // Locals:
     let _0: string // _0 // return
 
@@ -249,7 +250,7 @@ fn HeaderOnlyFunction() -> string {
     }
 }
 
-fn HeadersWithWhitespace() -> string {
+fn user.HeadersWithWhitespace() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // x

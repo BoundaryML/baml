@@ -1,10 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 11837
 ---
 === MIR2 ===
-fn FetchDatax(user_id: string) -> Hi {
+fn user.FetchDatax(user_id: string) -> user.Hi {
     // Locals:
-    let _0: Hi // _0 // return
+    let _0: user.Hi // _0 // return
     let _1: string // user_id // param
     let _2: map<string, unknown>
 

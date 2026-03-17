@@ -1,12 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 2940
 ---
 === MIR2 ===
-fn caller() -> bool {
+fn user.caller() -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: unknown
-    let _2: Errors // e
+    let _2: user.Errors // e
     let _3: bool
 
     bb0: {
@@ -41,7 +42,7 @@ fn caller() -> bool {
     }
 }
 
-fn callee() -> bool {
+fn user.callee() -> bool {
     // Locals:
     let _0: bool // _0 // return
 

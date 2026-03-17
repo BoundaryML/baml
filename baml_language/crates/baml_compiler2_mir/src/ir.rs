@@ -8,33 +8,33 @@ use std::fmt;
 use baml_base::{Name, Span};
 use baml_type::Ty;
 
+pub use baml_compiler2_ast::BuiltinKind;
+
 // ============================================================================
 // Function
 // ============================================================================
 
-/// A function represented as a control flow graph.
+/// The bytecode body of a MIR function — blocks, locals, and associated data.
+///
+/// This is the inner data for `MirFunctionKind::Bytecode`. All field accessors
+/// live here, so callers destructure the `MirFunctionKind` first and then work
+/// with `&MirFunctionBody` / `&mut MirFunctionBody` directly — no panics.
 #[derive(Debug, Clone)]
-pub struct MirFunction {
-    /// Function name (qualified for methods, e.g., "ClassName.methodName").
-    pub name: Name,
-    /// Parameter count.
-    pub arity: usize,
+pub struct MirFunctionBody {
     /// All basic blocks in the function.
     pub blocks: Vec<BasicBlock>,
     /// Entry block index (always 0 by convention).
     pub entry: BlockId,
     /// Local variable declarations.
     pub locals: Vec<LocalDecl>,
-    /// Source span for error reporting.
-    pub span: Option<Span>,
-    /// Visualization nodes for control flow visualization.
-    pub viz_nodes: Vec<VizNode>,
     /// Maps unwind handler block IDs to the error local that receives the error value.
     /// Populated during catch lowering so the emitter doesn't have to infer it.
     pub unwind_error_locals: std::collections::HashMap<BlockId, Local>,
+    /// Visualization nodes for control flow visualization.
+    pub viz_nodes: Vec<VizNode>,
 }
 
-impl MirFunction {
+impl MirFunctionBody {
     /// Get a basic block by ID.
     pub fn block(&self, id: BlockId) -> &BasicBlock {
         &self.blocks[id.0]
@@ -49,6 +49,28 @@ impl MirFunction {
     pub fn local(&self, id: Local) -> &LocalDecl {
         &self.locals[id.0]
     }
+}
+
+/// Whether a MIR function has a bytecode body or is a Rust-bound builtin.
+#[derive(Debug, Clone)]
+pub enum MirFunctionKind {
+    /// Has a body that will be compiled to bytecode.
+    Bytecode(MirFunctionBody),
+    /// Rust-bound builtin — SysOp (Io) or NativeUnresolved (Vm).
+    Builtin(BuiltinKind),
+}
+
+/// A function represented as a control flow graph.
+#[derive(Debug, Clone)]
+pub struct MirFunction {
+    /// Parameter count.
+    pub arity: usize,
+    /// Source span for error reporting.
+    pub span: Option<Span>,
+    /// Fully-qualified identity (e.g., "user.my_func", "baml.sys.panic").
+    pub item_ref: ItemRef,
+    /// Whether this function has bytecode or is a builtin.
+    pub kind: MirFunctionKind,
 }
 
 // ============================================================================

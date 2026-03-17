@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 16243
 ---
 === MIR2 ===
-fn Calculate() -> int {
+fn user.Calculate() -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // a
@@ -38,14 +39,14 @@ fn Calculate() -> int {
     }
 }
 
-fn FieldAccess(user: User) -> string {
+fn user.FieldAccess(user: user.User) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: User // user // param
-    let _2: Profile
+    let _1: user.User // user // param
+    let _2: user.Profile
     let _3: string // theme
-    let _4: Settings
-    let _5: Profile
+    let _4: user.Settings
+    let _5: user.Profile
     let _6: string[]
     let _7: 0
 
@@ -64,18 +65,18 @@ fn FieldAccess(user: User) -> string {
     }
 }
 
-fn IndexAccess(users: IndexUser[]) -> string {
+fn user.IndexAccess(users: user.IndexUser[]) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: IndexUser[] // users // param
+    let _1: user.IndexUser[] // users // param
     let _2: 0
     let _3: int // idx
     let _4: int
     let _5: string // firstName
-    let _6: IndexUser
+    let _6: user.IndexUser
     let _7: 0
     let _8: string[]
-    let _9: IndexUser
+    let _9: user.IndexUser
     let _10: 0
     let _11: 0
 
@@ -95,7 +96,7 @@ fn IndexAccess(users: IndexUser[]) -> string {
     }
 }
 
-fn TestPrecedence() -> bool {
+fn user.TestPrecedence() -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: int // a

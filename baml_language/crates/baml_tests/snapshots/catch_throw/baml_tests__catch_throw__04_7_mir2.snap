@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 3435
 ---
 === MIR2 ===
-fn CatchWithTypedArm(x: int) -> string {
+fn user.CatchWithTypedArm(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -40,7 +41,7 @@ fn CatchWithTypedArm(x: int) -> string {
     }
 }
 
-fn MayFailIntOrString(x: int) -> string {
+fn user.MayFailIntOrString(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -71,7 +72,7 @@ fn MayFailIntOrString(x: int) -> string {
     }
 }
 
-fn SingleCatchWildcard(x: int) -> string {
+fn user.SingleCatchWildcard(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -103,7 +104,7 @@ fn SingleCatchWildcard(x: int) -> string {
     }
 }
 
-fn CatchAndRethrow(x: int) -> string {
+fn user.CatchAndRethrow(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -138,7 +139,7 @@ fn CatchAndRethrow(x: int) -> string {
     }
 }
 
-fn CatchWithFallback(x: int) -> string {
+fn user.CatchWithFallback(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -187,7 +188,7 @@ fn CatchWithFallback(x: int) -> string {
     }
 }
 
-fn ThrowStatement(x: int) -> string {
+fn user.ThrowStatement(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -197,7 +198,7 @@ fn ThrowStatement(x: int) -> string {
     }
 }
 
-fn SingleCatchTyped(x: int) -> string {
+fn user.SingleCatchTyped(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -235,7 +236,7 @@ fn SingleCatchTyped(x: int) -> string {
     }
 }
 
-fn NestedCatch(x: int) -> string {
+fn user.NestedCatch(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -286,7 +287,7 @@ fn NestedCatch(x: int) -> string {
     }
 }
 
-fn ChainedCatchClauses(x: int) -> string {
+fn user.ChainedCatchClauses(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -335,7 +336,7 @@ fn ChainedCatchClauses(x: int) -> string {
     }
 }
 
-fn MayFail(x: int) -> string {
+fn user.MayFail(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -362,7 +363,7 @@ fn MayFail(x: int) -> string {
     }
 }
 
-fn MultipleCatchArms(x: int) -> string {
+fn user.MultipleCatchArms(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -411,7 +412,7 @@ fn MultipleCatchArms(x: int) -> string {
     }
 }
 
-fn AlsoMayFail(x: int) -> string {
+fn user.AlsoMayFail(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param

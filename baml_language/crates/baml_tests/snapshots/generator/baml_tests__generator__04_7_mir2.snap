@@ -1,10 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 10862
 ---
 === MIR2 ===
-fn GetUser() -> MyClass {
+fn user.GetUser() -> user.MyClass {
     // Locals:
-    let _0: MyClass // _0 // return
+    let _0: user.MyClass // _0 // return
     let _1: map<string, unknown>
 
     bb0: {

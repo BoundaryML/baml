@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 23310
 ---
 === MIR2 ===
-fn HelloWorld(name: string) -> string {
+fn user.HelloWorld(name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // name // param

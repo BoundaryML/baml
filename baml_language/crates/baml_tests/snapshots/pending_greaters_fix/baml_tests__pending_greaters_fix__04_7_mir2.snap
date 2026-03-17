@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 22335
 ---
 === MIR2 ===
-fn BadReturnType() -> map<string, int> {
+fn user.BadReturnType() -> map<string, int> {
     // Locals:
     let _0: map<string, int> // _0 // return
     let _1: map<string, unknown>
@@ -21,7 +22,7 @@ fn BadReturnType() -> map<string, int> {
     }
 }
 
-fn BadParam(x: map<string, int>) -> string {
+fn user.BadParam(x: map<string, int>) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: map<string, int> // x // param

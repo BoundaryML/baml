@@ -1,8 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6901
 ---
 === MIR2 ===
-fn Broken.MixedLiteralAndTyped(x: int) -> string {
+fn user.MixedLiteralAndTyped(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
@@ -37,7 +38,7 @@ fn Broken.MixedLiteralAndTyped(x: int) -> string {
     }
 }
 
-fn Broken.BadUnionPattern(x: int | bool) -> string {
+fn user.BadUnionPattern(x: int | bool) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int | bool // x // param
@@ -75,7 +76,7 @@ fn Broken.BadUnionPattern(x: int | bool) -> string {
     }
 }
 
-fn Broken.Invalid() -> null {
+fn user.Invalid() -> null {
     // Locals:
     let _0: null // _0 // return
 

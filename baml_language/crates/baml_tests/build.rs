@@ -651,14 +651,8 @@ fn generate_mir2_test(project: &TestProject) -> TokenStream {
                 let item_tree = file_item_tree(&db, *source_file);
                 for (local_id, _func_data) in item_tree.functions.iter() {
                     let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
-                    match lower_function(&db, func_loc) {
-                        Some(mir) => {
-                            writeln!(output, "{}", display_function(&mir)).unwrap();
-                        }
-                        None => {
-                            // LLM/Builtin/Missing — skip
-                        }
-                    }
+                    let mir = lower_function(&db, func_loc);
+                    writeln!(output, "{}", display_function(&mir)).unwrap();
                 }
             }
 
