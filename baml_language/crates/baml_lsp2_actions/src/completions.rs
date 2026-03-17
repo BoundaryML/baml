@@ -686,7 +686,7 @@ fn local_variable_ty(
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
 
     // Find the enclosing Function scope.
-    let scope_id = index.scope_at_offset(at_offset);
+    let scope_id = index.scope_at_offset(at_offset, None);
     let enclosing_func_scope = index
         .ancestor_scopes(scope_id)
         .into_iter()
@@ -767,7 +767,7 @@ fn completions_for_value_position(
 
     // ── Locals (innermost scope first) ───────────────────────────────────────
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let scope_id = index.scope_at_offset(offset);
+    let scope_id = index.scope_at_offset(offset, None);
 
     let mut sort_prefix = 0usize;
     for ancestor_id in index.ancestor_scopes(scope_id) {

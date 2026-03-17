@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 11837
 ---
 === MIR2 ===
 fn user.FetchDatax(user_id: string) -> user.Hi {
@@ -12,6 +11,46 @@ fn user.FetchDatax(user_id: string) -> user.Hi {
     bb0: {
         _2 = { const "user_id": copy _1 };
         _0 = call const fn baml.llm.call_llm_function(const "FetchDatax", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // user_id // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "user_id": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "FetchDatax", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.FetchDatax$build_request(user_id: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // user_id // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "user_id": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "FetchDatax", copy _2) -> [bb1];
     }
 
     bb1: {

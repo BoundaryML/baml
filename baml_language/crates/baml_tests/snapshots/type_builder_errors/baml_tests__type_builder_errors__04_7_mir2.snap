@@ -1,8 +1,27 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 27401
 ---
 === MIR2 ===
+fn user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // from_text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "from_text": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "TypeBuilderFn", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.TypeBuilderFn(from_text: string) -> user.Resume {
     // Locals:
     let _0: user.Resume // _0 // return
@@ -12,6 +31,26 @@ fn user.TypeBuilderFn(from_text: string) -> user.Resume {
     bb0: {
         _2 = { const "from_text": copy _1 };
         _0 = call const fn baml.llm.call_llm_function(const "TypeBuilderFn", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // from_text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "from_text": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "TypeBuilderFn", copy _2) -> [bb1];
     }
 
     bb1: {

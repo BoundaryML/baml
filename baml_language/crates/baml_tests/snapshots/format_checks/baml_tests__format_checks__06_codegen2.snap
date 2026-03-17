@@ -1172,12 +1172,48 @@ function user.LlmBasic(name: string) -> string {
     return
 }
 
+function user.LlmBasic$build_request(name: string) -> baml.http.Request {
+    load_const "LlmBasic"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
+    load_const "LlmBasic"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function user.LlmMultiLine(text: string) -> string {
     load_const "LlmMultiLine"
     load_var text
     load_const "text"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
+    load_const "LlmMultiLine"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const "LlmMultiLine"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -1190,12 +1226,48 @@ function user.LlmReversedOrder(text: string) -> string {
     return
 }
 
+function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request {
+    load_const "LlmReversedOrder"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const "LlmReversedOrder"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function user.LlmStringClient(text: string) -> string {
     load_const "LlmStringClient"
     load_var text
     load_const "text"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function user.LlmStringClient$build_request(text: string) -> baml.http.Request {
+    load_const "LlmStringClient"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const "LlmStringClient"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -1211,6 +1283,36 @@ function user.LlmWithLongSignature(first_context: string, second_context: string
     load_const "user_query"
     alloc_map 4
     call baml.llm.call_llm_function
+    return
+}
+
+function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request {
+    load_const "LlmWithLongSignature"
+    load_var first_context
+    load_var second_context
+    load_var third_context
+    load_var user_query
+    load_const "first_context"
+    load_const "second_context"
+    load_const "third_context"
+    load_const "user_query"
+    alloc_map 4
+    call baml.llm.build_request
+    return
+}
+
+function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
+    load_const "LlmWithLongSignature"
+    load_var first_context
+    load_var second_context
+    load_var third_context
+    load_var user_query
+    load_const "first_context"
+    load_const "second_context"
+    load_const "third_context"
+    load_const "user_query"
+    alloc_map 4
+    call baml.llm.render_prompt
     return
 }
 
@@ -3893,6 +3995,20 @@ function user.TestTarget() -> string {
     load_const "TestTarget"
     alloc_map 0
     call baml.llm.call_llm_function
+    return
+}
+
+function user.TestTarget$build_request() -> baml.http.Request {
+    load_const "TestTarget"
+    alloc_map 0
+    call baml.llm.build_request
+    return
+}
+
+function user.TestTarget$render_prompt() -> baml.llm.PromptAst {
+    load_const "TestTarget"
+    alloc_map 0
+    call baml.llm.render_prompt
     return
 }
 

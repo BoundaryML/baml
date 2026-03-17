@@ -10,12 +10,48 @@ function user.Ambiguous(input: string) -> string {
     return
 }
 
+function user.Ambiguous$build_request(input: string) -> baml.http.Request {
+    load_const "Ambiguous"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "Ambiguous"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function user.AnotherLLM(input: string) -> string {
     load_const "AnotherLLM"
     load_var input
     load_const "input"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function user.AnotherLLM$build_request(input: string) -> baml.http.Request {
+    load_const "AnotherLLM"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.AnotherLLM$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "AnotherLLM"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 
@@ -28,6 +64,24 @@ function user.ChainedProcess(input: string) -> string {
     return
 }
 
+function user.ChainedProcess$build_request(input: string) -> baml.http.Request {
+    load_const "ChainedProcess"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "ChainedProcess"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function user.ExtractData(text: string) -> user.JsonData {
     load_const "ExtractData"
     load_var text
@@ -37,12 +91,48 @@ function user.ExtractData(text: string) -> user.JsonData {
     return
 }
 
+function user.ExtractData$build_request(text: string) -> baml.http.Request {
+    load_const "ExtractData"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const "ExtractData"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function user.LLMAnalyze(text: string) -> user.Analysis {
     load_const "LLMAnalyze"
     load_var text
     load_const "text"
     alloc_map 1
     call baml.llm.call_llm_function
+    return
+}
+
+function user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
+    load_const "LLMAnalyze"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const "LLMAnalyze"
+    load_var text
+    load_const "text"
+    alloc_map 1
+    call baml.llm.render_prompt
     return
 }
 

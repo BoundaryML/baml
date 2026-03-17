@@ -20,6 +20,7 @@ use crate::{
         RawPrompt, RetryPolicyDef, SpannedTypeExpr, TemplateStringDef, TestDef, TypeAliasDef,
         VariantDef,
     },
+    companions::expand_companions,
     lower_expr_body, lower_type_expr,
 };
 
@@ -37,7 +38,9 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<HirDiagnostic>) {
         match child.kind() {
             baml_compiler_syntax::SyntaxKind::FUNCTION_DEF => {
                 if let Some(func) = lower_function(&child) {
+                    let companions = expand_companions(&func);
                     items.push(Item::Function(func));
+                    items.extend(companions.into_iter().map(Item::Function));
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLASS_DEF => {
@@ -118,8 +121,12 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
     let (body, llm_meta) = if let Some(llm) = func.llm_body() {
         let llm_body_def = lower_llm_body(&llm);
         let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-        let (expr_body, source_map) =
-            synthesize_llm_call_body(name.as_str(), &param_names, llm_body_def.span);
+        let (expr_body, source_map) = synthesize_llm_builtin_call(
+            "call_llm_function",
+            name.as_str(),
+            &param_names,
+            llm_body_def.span,
+        );
         (
             Some(FunctionBodyDef::Expr(expr_body, source_map)),
             Some(llm_body_def),
@@ -220,13 +227,14 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
 }
 
 /// Build a synthetic expression body equivalent to:
-/// `baml.llm.call_llm_function("FunctionName", { "param1": param1, "param2": param2 })`
+/// `baml.llm.<builtin_name>("FunctionName", { "param1": param1, "param2": param2 })`
 ///
-/// All synthetic spans point to `llm_span` (the LLM body block).
-fn synthesize_llm_call_body(
+/// All synthetic spans point to `span`.
+pub(crate) fn synthesize_llm_builtin_call(
+    builtin_name: &str,
     function_name: &str,
     param_names: &[Name],
-    llm_span: text_size::TextRange,
+    span: text_size::TextRange,
 ) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
     use la_arena::Arena;
 
@@ -238,7 +246,7 @@ fn synthesize_llm_call_body(
     // Helper: allocate an expr + its span
     let mut alloc = |expr: Expr| -> crate::ast::ExprId {
         let id = exprs.alloc(expr);
-        expr_spans.alloc(llm_span);
+        expr_spans.alloc(span);
         id
     };
 
@@ -256,21 +264,13 @@ fn synthesize_llm_call_body(
         .collect();
     let args_map = alloc(Expr::Map { entries });
 
-    // 3. Callee: baml.llm.call_llm_function
-    // The v2 TIR only handles single-segment Path expressions; multi-segment
-    // access must be represented as chained FieldAccess nodes.
-    //   baml  ->  .llm  ->  .call_llm_function
-    let baml_expr = alloc(Expr::Path(vec![Name::new("baml")]));
-    let llm_expr = alloc(Expr::FieldAccess {
-        base: baml_expr,
-        field: Name::new("llm"),
-    });
-    let callee = alloc(Expr::FieldAccess {
-        base: llm_expr,
-        field: Name::new("call_llm_function"),
-    });
+    // Callee: baml.llm.<builtin_name> as a multi-segment Path
+    let callee = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new(builtin_name),
+    ]));
 
-    // 4. Call expression
     let call = alloc(Expr::Call {
         callee,
         args: vec![fn_name_expr, args_map],
@@ -366,10 +366,13 @@ fn lower_class(node: &SyntaxNode) -> Option<crate::ast::ClassDef> {
         })
         .collect();
 
-    // Class methods (functions defined inside the class body)
     let methods = class
         .methods()
         .filter_map(|f| lower_function(f.syntax()))
+        .flat_map(|func| {
+            let companions = expand_companions(&func);
+            std::iter::once(func).chain(companions)
+        })
         .collect();
 
     Some(crate::ast::ClassDef {

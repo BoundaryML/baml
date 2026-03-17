@@ -86,6 +86,24 @@ function user.LlmFunction(input: string) -> string {
     return
 }
 
+function user.LlmFunction$build_request(input: string) -> baml.http.Request {
+    load_const "LlmFunction"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.build_request
+    return
+}
+
+function user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const "LlmFunction"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.render_prompt
+    return
+}
+
 function user.MatchExpression(x: int) -> string {
     load_var x
     copy 0

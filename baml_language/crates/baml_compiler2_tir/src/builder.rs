@@ -1907,13 +1907,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn infer_path(&mut self, segments: &[Name], _body: &ExprBody, expr_id: ExprId) -> Ty {
-        // After AST lowering, Path is always single-segment (a bare identifier).
-        // Multi-segment paths like Color.Red or x.field are desugared to FieldAccess chains.
-        debug_assert!(
-            segments.len() == 1,
-            "multi-segment Path should have been desugared to FieldAccess: {:?}",
-            segments
-        );
         if segments.len() == 1 {
             let name = &segments[0];
             let ty = self.infer_single_name(name);
@@ -1926,9 +1919,128 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .report_simple(TirTypeError::UnresolvedName { name: name.clone() }, expr_id);
             }
             ty
+        } else if segments.len() >= 2 {
+            self.infer_multi_segment_path(segments, expr_id)
         } else {
             Ty::Unknown
         }
+    }
+
+    /// Resolve a multi-segment path like `baml.llm.render_prompt`.
+    ///
+    /// The first segment must be a known package name. The remaining
+    /// segments are resolved through that package's namespaces.
+    fn infer_multi_segment_path(&mut self, segments: &[Name], expr_id: ExprId) -> Ty {
+        let pkg_name = &segments[0];
+        if self.locals.contains_key(pkg_name) {
+            return Ty::Unknown;
+        }
+
+        let db = self.context.db();
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name.clone());
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+
+        if pkg_items.namespaces.is_empty() {
+            return Ty::Unknown;
+        }
+
+        let after_pkg = &segments[1..];
+        self.resolve_package_item(pkg_items, after_pkg, expr_id)
+            .unwrap_or(Ty::Unknown)
+    }
+
+    /// Shared helper: resolve a value or type within a package's namespace.
+    ///
+    /// `path` contains all segments after the package name. The last segment
+    /// is the item name; preceding segments are the namespace path.
+    ///
+    /// Used by both `infer_multi_segment_path` (for `Expr::Path`) and
+    /// `try_package_access` (for `Expr::FieldAccess` chains).
+    fn resolve_package_item(
+        &mut self,
+        pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+        path: &[Name],
+        expr_id: ExprId,
+    ) -> Option<Ty> {
+        use baml_compiler2_hir::contributions::Definition;
+
+        if path.is_empty() {
+            return None;
+        }
+
+        // Try as a value (function) in a nested namespace
+        if let Some(def) = pkg_items.lookup_value(path) {
+            if let Definition::Function(func_loc) = def {
+                let db = self.context.db();
+                let member = path.last().unwrap();
+                let pkg_info =
+                    baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
+                let ns_context = pkg_info.namespace_path.clone();
+                self.resolutions.insert(
+                    expr_id,
+                    crate::inference::MethodResolution::Free {
+                        package: pkg_info.package,
+                        namespace: pkg_info.namespace_path,
+                        name: member.clone(),
+                        func_loc,
+                    },
+                );
+                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                let mut diags = Vec::new();
+                let ty = Ty::Function {
+                    params: sig
+                        .params
+                        .iter()
+                        .map(|(n, te)| {
+                            (
+                                Some(n.clone()),
+                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                    db,
+                                    te,
+                                    pkg_items,
+                                    &ns_context,
+                                    &mut diags,
+                                ),
+                            )
+                        })
+                        .collect(),
+                    ret: Box::new(
+                        sig.return_type
+                            .as_ref()
+                            .map(|te| {
+                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                    db,
+                                    te,
+                                    pkg_items,
+                                    &ns_context,
+                                    &mut diags,
+                                )
+                            })
+                            .unwrap_or(Ty::Unknown),
+                    ),
+                };
+                return Some(ty);
+            }
+        }
+
+        // Try as a type (class/enum)
+        if let Some(def) = pkg_items.lookup_type(path) {
+            let db = self.context.db();
+            let name = path.last().unwrap();
+            match def {
+                Definition::Class(_) => {
+                    let class_qtn = crate::lower_type_expr::qualify_def(db, def, name);
+                    return Some(Ty::Class(class_qtn));
+                }
+                Definition::Enum(_) => {
+                    let enum_qtn = crate::lower_type_expr::qualify_def(db, def, name);
+                    return Some(Ty::Enum(enum_qtn));
+                }
+                _ => {}
+            }
+        }
+
+        None
     }
 
     /// Resolve a single name to its type.
@@ -2496,160 +2608,58 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
 
-        if item_path.is_empty() {
-            // Direct package member: e.g. `env.get` — look up in the package's value namespace
-            if let Some(def) = pkg_items.lookup_value(&[member.clone()]) {
-                if let Definition::Function(func_loc) = def {
-                    let pkg_info =
-                        baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
-                    let ns_context = pkg_info.namespace_path.clone();
-                    self.resolutions.insert(
-                        at,
-                        crate::inference::MethodResolution::Free {
-                            package: pkg_info.package,
-                            namespace: pkg_info.namespace_path,
-                            name: member.clone(),
-                            func_loc,
-                        },
-                    );
-                    let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                    let mut diags = Vec::new();
-                    let ty = Ty::Function {
-                        params: sig
-                            .params
-                            .iter()
-                            .map(|(n, te)| {
-                                (
-                                    Some(n.clone()),
-                                    crate::lower_type_expr::lower_type_expr_in_ns(
+        // When there is a non-empty item_path, try class/enum member resolution
+        // first (e.g. `baml.Array.length` → Array class, then method "length").
+        if !item_path.is_empty() {
+            if let Some(def) = pkg_items.lookup_type(item_path) {
+                match def {
+                    Definition::Class(_class_loc) => {
+                        if pkg_name.as_str() == self.package_id.name(db).as_str() {
+                            let class_qtn = crate::lower_type_expr::qualify_def(
+                                db,
+                                def,
+                                &item_path.last().unwrap(),
+                            );
+                            let base_ty = Ty::Class(class_qtn);
+                            return Some(self.resolve_member(&base_ty, member, at));
+                        } else {
+                            let class_path: Vec<&str> =
+                                item_path.iter().map(|s| s.as_str()).collect();
+                            return self
+                                .resolve_builtin_member(&class_path, &[], member, at)
+                                .or_else(|| {
+                                    let class_qtn = crate::lower_type_expr::qualify_def(
                                         db,
-                                        te,
-                                        pkg_items,
-                                        &ns_context,
-                                        &mut diags,
-                                    ),
-                                )
-                            })
-                            .collect(),
-                        ret: Box::new(
-                            sig.return_type
-                                .as_ref()
-                                .map(|te| {
-                                    crate::lower_type_expr::lower_type_expr_in_ns(
-                                        db,
-                                        te,
-                                        pkg_items,
-                                        &ns_context,
-                                        &mut diags,
-                                    )
-                                })
-                                .unwrap_or(Ty::Unknown),
-                        ),
-                    };
-                    return Some(ty);
-                }
-            }
-            return None;
-        }
-
-        // Try to resolve the item_path as a type in the package.
-        // For class types, look up the method/field directly in the same package.
-        // e.g. ["Array"] → look up Array class in baml, then resolve "length" on it.
-        if let Some(def) = pkg_items.lookup_type(item_path) {
-            match def {
-                Definition::Class(_class_loc) => {
-                    if pkg_name.as_str() == self.package_id.name(db).as_str() {
-                        // Same package as the user — use resolve_member which looks in self.package_items
-                        let class_qtn = crate::lower_type_expr::qualify_def(
+                                        def,
+                                        &item_path.last().unwrap(),
+                                    );
+                                    let base_ty = Ty::Class(class_qtn);
+                                    Some(self.resolve_member(&base_ty, member, at))
+                                });
+                        }
+                    }
+                    Definition::Enum(_) => {
+                        let enum_qtn = crate::lower_type_expr::qualify_def(
                             db,
                             def,
                             &item_path.last().unwrap(),
                         );
-                        let base_ty = Ty::Class(class_qtn);
+                        let base_ty = Ty::Enum(enum_qtn);
                         return Some(self.resolve_member(&base_ty, member, at));
-                    } else {
-                        // Different package — use resolve_builtin_member which looks up in the correct package
-                        let class_path: Vec<&str> = item_path.iter().map(|s| s.as_str()).collect();
-                        return self
-                            .resolve_builtin_member(&class_path, &[], member, at)
-                            .or_else(|| {
-                                // Fall back to enum variant check
-                                let class_qtn = crate::lower_type_expr::qualify_def(
-                                    db,
-                                    def,
-                                    &item_path.last().unwrap(),
-                                );
-                                let base_ty = Ty::Class(class_qtn);
-                                Some(self.resolve_member(&base_ty, member, at))
-                            });
                     }
+                    _ => {}
                 }
-                Definition::Enum(_) => {
-                    let enum_qtn =
-                        crate::lower_type_expr::qualify_def(db, def, &item_path.last().unwrap());
-                    let base_ty = Ty::Enum(enum_qtn);
-                    return Some(self.resolve_member(&base_ty, member, at));
-                }
-                _ => {}
             }
         }
 
-        // Also try as a value (function) in a nested namespace
-        if let Some(def) =
-            pkg_items.lookup_value(&[item_path.to_vec(), vec![member.clone()]].concat())
-        {
-            if let Definition::Function(func_loc) = def {
-                let pkg_info =
-                    baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
-                let ns_context = pkg_info.namespace_path.clone();
-                self.resolutions.insert(
-                    at,
-                    crate::inference::MethodResolution::Free {
-                        package: pkg_info.package,
-                        namespace: pkg_info.namespace_path,
-                        name: member.clone(),
-                        func_loc,
-                    },
-                );
-                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                let mut diags = Vec::new();
-                let ty = Ty::Function {
-                    params: sig
-                        .params
-                        .iter()
-                        .map(|(n, te)| {
-                            (
-                                Some(n.clone()),
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    te,
-                                    pkg_items,
-                                    &ns_context,
-                                    &mut diags,
-                                ),
-                            )
-                        })
-                        .collect(),
-                    ret: Box::new(
-                        sig.return_type
-                            .as_ref()
-                            .map(|te| {
-                                crate::lower_type_expr::lower_type_expr_in_ns(
-                                    db,
-                                    te,
-                                    pkg_items,
-                                    &ns_context,
-                                    &mut diags,
-                                )
-                            })
-                            .unwrap_or(Ty::Unknown),
-                    ),
-                };
-                return Some(ty);
-            }
-        }
-
-        None
+        // Fall back to the shared value/type resolution for free functions
+        // in nested namespaces (e.g. `env.get`, `baml.llm.render_prompt`).
+        let full_path: Vec<Name> = item_path
+            .iter()
+            .chain(std::iter::once(member))
+            .cloned()
+            .collect();
+        self.resolve_package_item(pkg_items, &full_path, at)
     }
 
     fn try_primitive_static_access(

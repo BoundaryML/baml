@@ -6,9 +6,8 @@
 use std::fmt;
 
 use baml_base::{Name, Span};
-use baml_type::Ty;
-
 pub use baml_compiler2_ast::BuiltinKind;
+use baml_type::Ty;
 
 // ============================================================================
 // Function

@@ -109,7 +109,7 @@ fn local_definition_location(
     let item_tree = baml_compiler2_hir::file_item_tree(db, file);
 
     // Find the enclosing Function scope to locate the function in the item tree.
-    let scope_id = index.scope_at_offset(at_offset);
+    let scope_id = index.scope_at_offset(at_offset, None);
     let enclosing_func_scope = index
         .ancestor_scopes(scope_id)
         .into_iter()

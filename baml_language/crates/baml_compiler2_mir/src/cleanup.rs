@@ -7,7 +7,10 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use crate::{BasicBlock, BlockId, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Terminator};
+use crate::{
+    BasicBlock, BlockId, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place,
+    Terminator,
+};
 
 /// Run all cleanup phases on a MIR function.
 pub(crate) fn cleanup_function(func: &mut MirFunction) {

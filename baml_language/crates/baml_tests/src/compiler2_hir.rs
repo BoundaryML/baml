@@ -280,9 +280,12 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // One conflict with 3 definitions
-        assert_eq!(ns.conflicts().len(), 1);
-        assert_eq!(ns.conflicts()[0].entries.len(), 3);
+        // Three conflicts: greet, greet$render_prompt, greet$build_request
+        // Each LLM function expands to companions, all duplicated across 3 files.
+        assert_eq!(ns.conflicts().len(), 3);
+        for conflict in ns.conflicts() {
+            assert_eq!(conflict.entries.len(), 3);
+        }
     }
 
     /// Different item kinds competing for the same type name (class vs enum).

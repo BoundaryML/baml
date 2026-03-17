@@ -377,7 +377,10 @@ impl ItemTree {
         id
     }
 
-    pub fn alloc_template_string(&mut self, ts: &ast::TemplateStringDef) -> LocalItemId<TemplateStringMarker> {
+    pub fn alloc_template_string(
+        &mut self,
+        ts: &ast::TemplateStringDef,
+    ) -> LocalItemId<TemplateStringMarker> {
         let id = self.alloc_id(ItemKind::TemplateString, &ts.name);
         let params = ts.params.iter().map(|p| p.name.clone()).collect();
         let body = ts.body.as_ref().map(|b| b.text.clone());
@@ -392,7 +395,10 @@ impl ItemTree {
         id
     }
 
-    pub fn alloc_retry_policy(&mut self, rp: &ast::RetryPolicyDef) -> LocalItemId<RetryPolicyMarker> {
+    pub fn alloc_retry_policy(
+        &mut self,
+        rp: &ast::RetryPolicyDef,
+    ) -> LocalItemId<RetryPolicyMarker> {
         let id = self.alloc_id(ItemKind::RetryPolicy, &rp.name);
         let get_field = |key: &str| -> Option<String> {
             rp.config_items

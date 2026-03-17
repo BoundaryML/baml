@@ -208,12 +208,13 @@ pub fn infer_scope_types<'db>(
     // Dispatch based on scope kind
     match &scope.kind {
         ScopeKind::Function => {
-            // Find the function by matching scope range against item_tree functions.
-            // This works for both top-level functions AND class methods.
+            // Find the function by matching scope range AND name against item_tree functions.
+            // Both checks are required to disambiguate companion functions that
+            // share the parent's span.
             let item_tree = baml_compiler2_hir::file_item_tree(db, file);
             let mut found = false;
             for (local_id, func_data) in &item_tree.functions {
-                if func_data.span == scope.range {
+                if func_data.span == scope.range && scope.name.as_ref() == Some(&func_data.name) {
                     let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
                     let body = baml_compiler2_hir::body::function_body(db, func_loc);
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);

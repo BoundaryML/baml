@@ -1,7 +1,10 @@
 //! `TypeExpr → Ty` lowering using package-level name resolution.
 
 use baml_compiler2_ast::TypeExpr;
-use baml_compiler2_hir::{contributions::Definition, package::PackageItems};
+use baml_compiler2_hir::{
+    contributions::Definition,
+    package::{PackageId, PackageItems},
+};
 
 use crate::{
     infer_context::TirTypeError,
@@ -50,6 +53,21 @@ pub fn lower_type_expr_in_ns(
             } else {
                 package_items.lookup_type(segments)
             };
+            // Cross-package fallback: if not found in the current package and
+            // the first segment is a known package name, look in that package
+            // using the remaining segments. This supports synthetic type
+            // references like `baml.llm.PromptAst` in companion functions.
+            let resolved = resolved.or_else(|| {
+                if segments.len() >= 2 {
+                    let first = segments[0].clone();
+                    let pkg_id = PackageId::new(db, first);
+                    let pkg = baml_compiler2_hir::package::package_items(db, pkg_id);
+                    pkg.lookup_type(&segments[1..])
+                } else {
+                    None
+                }
+            });
+
             if let Some(def) = resolved {
                 let short = segments.last().expect("non-empty path");
                 match def {
@@ -59,7 +77,6 @@ pub fn lower_type_expr_in_ns(
                     _ => Ty::Unknown,
                 }
             } else {
-                // Not found in type namespace — unresolved
                 let name = segments
                     .iter()
                     .map(|n| n.as_str())

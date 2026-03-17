@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use baml_compiler2_mir::{Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator};
+use baml_compiler2_mir::{
+    Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind, Terminator,
+};
 
 use crate::{
     analysis::{LocalClassification, LocalDefUse, StatementRef, UseLocation},

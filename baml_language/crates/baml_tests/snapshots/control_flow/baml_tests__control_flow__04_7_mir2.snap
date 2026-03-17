@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 5872
 ---
 === MIR2 ===
 fn user.IfElseWithHeaders(flag: bool) -> string {
@@ -66,6 +65,26 @@ fn user.MatchExpression(x: int) -> string {
     }
 
     bb5: {
+        return;
+    }
+}
+
+fn user.LlmFunction$build_request(input: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "LlmFunction", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }
@@ -287,5 +306,25 @@ fn user.WhileWithHeaders() -> int {
         notify_block(Iteration, level=1);
         _1 = copy _1 + const 1_i64;
         goto -> bb1;
+    }
+}
+
+fn user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "LlmFunction", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
     }
 }

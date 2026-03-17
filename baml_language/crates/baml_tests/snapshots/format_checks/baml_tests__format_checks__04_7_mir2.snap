@@ -994,6 +994,25 @@ fn user.WithMethod.greet() -> string {
     }
 }
 
+fn user.TestTarget$render_prompt() -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: map<string, unknown>
+
+    bb0: {
+        _1 = {  };
+        _0 = call const fn baml.llm.render_prompt(const "TestTarget", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.TestTarget() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -1002,6 +1021,25 @@ fn user.TestTarget() -> string {
     bb0: {
         _1 = {  };
         _0 = call const fn baml.llm.call_llm_function(const "TestTarget", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.TestTarget$build_request() -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: map<string, unknown>
+
+    bb0: {
+        _1 = {  };
+        _0 = call const fn baml.llm.build_request(const "TestTarget", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1128,6 +1166,46 @@ fn user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, ma
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "name": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "LlmBasic", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "LlmMultiLine", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }
@@ -1734,6 +1812,66 @@ fn user.LlmBasic(name: string) -> string {
     }
 }
 
+fn user.LlmBasic$build_request(name: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "name": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "LlmBasic", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "LlmReversedOrder", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "LlmMultiLine", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> {
     // Locals:
     let _0: (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> // _0 // return
@@ -1929,15 +2067,15 @@ fn user.LlmMultiLine(text: string) -> string {
     }
 }
 
-fn user.LlmReversedOrder(text: string) -> string {
+fn user.LlmStringClient$build_request(text: string) -> baml.http.Request {
     // Locals:
-    let _0: string // _0 // return
+    let _0: baml.http.Request // _0 // return
     let _1: string // text // param
     let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "LlmReversedOrder", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.build_request(const "LlmStringClient", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -1961,6 +2099,92 @@ fn user.MultiParamTrivia(a: int, b: string) -> int {
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.LlmReversedOrder(text: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "LlmReversedOrder", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // first_context // param
+    let _2: string // second_context // param
+    let _3: string // third_context // param
+    let _4: string // user_query // param
+    let _5: map<string, unknown>
+
+    bb0: {
+        _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
+        _0 = call const fn baml.llm.render_prompt(const "LlmWithLongSignature", copy _5) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "LlmStringClient", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // first_context // param
+    let _2: string // second_context // param
+    let _3: string // third_context // param
+    let _4: string // user_query // param
+    let _5: map<string, unknown>
+
+    bb0: {
+        _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
+        _0 = call const fn baml.llm.build_request(const "LlmWithLongSignature", copy _5) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }
@@ -1991,6 +2215,26 @@ fn user.ExtraWhitespace(a: int, b: int) -> int {
     }
 
     bb1: {
+        return;
+    }
+}
+
+fn user.LlmReversedOrder$build_request(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "LlmReversedOrder", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }

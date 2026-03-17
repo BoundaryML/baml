@@ -27,7 +27,12 @@ impl QualifiedTypeName {
         Self::new_with_generic_params(pkg, namespace, name, Vec::new())
     }
 
-    pub fn new_with_generic_params(pkg: Name, namespace: Vec<Name>, name: Name, generic_params: Vec<Name>) -> Self {
+    pub fn new_with_generic_params(
+        pkg: Name,
+        namespace: Vec<Name>,
+        name: Name,
+        generic_params: Vec<Name>,
+    ) -> Self {
         Self {
             pkg,
             namespace,
@@ -35,7 +40,6 @@ impl QualifiedTypeName {
             generic_params,
         }
     }
-
 
     pub fn package(&self) -> &Name {
         &self.pkg
@@ -50,13 +54,22 @@ impl QualifiedTypeName {
     }
 
     pub fn to_path_in_package(&self) -> Vec<Name> {
-        self.namespace.iter().chain(std::iter::once(&self.name)).map(|n| n.clone()).collect::<Vec<_>>()
+        self.namespace
+            .iter()
+            .chain(std::iter::once(&self.name))
+            .map(|n| n.clone())
+            .collect::<Vec<_>>()
     }
 }
 
 impl fmt::Display for QualifiedTypeName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let namespace = self.namespace.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(".");
+        let namespace = self
+            .namespace
+            .iter()
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(".");
         if !namespace.is_empty() {
             write!(f, "{}.{}.{}", self.pkg, namespace, self.name)?;
         } else {

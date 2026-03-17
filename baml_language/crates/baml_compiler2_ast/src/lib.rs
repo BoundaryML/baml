@@ -8,6 +8,7 @@
 //! can be constructed directly in tests without parsing.
 
 pub mod ast;
+pub(crate) mod companions;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;

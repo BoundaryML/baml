@@ -63,7 +63,9 @@ impl VizContext {
 use baml_compiler2_tir::ty::{PrimitiveType, QualifiedTypeName, Ty as Tir2Ty};
 
 fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
-    let module_path = std::iter::once(qtn.package().clone()).chain(qtn.namespace().iter().cloned()).collect::<Vec<_>>();
+    let module_path = std::iter::once(qtn.package().clone())
+        .chain(qtn.namespace().iter().cloned())
+        .collect::<Vec<_>>();
     let display_name = smol_str::SmolStr::new(qtn.to_string());
     TypeName {
         name: qtn.name().clone(),
@@ -303,7 +305,8 @@ impl<'db> LoweringContext<'db> {
         let func_span = func_data.span;
 
         let index = file_semantic_index(db, file);
-        let func_scope_id: FileScopeId = index.scope_at_offset(func_span.start());
+        let func_scope_id: FileScopeId =
+            index.scope_at_offset(func_span.start(), Some(&func_data.name));
 
         // --- Eagerly aggregate expr_types, pat_types, resolutions, and exhaustive_matches from all scopes ---
         let mut expr_types: FxHashMap<AstExprId, Tir2Ty> = FxHashMap::default();
@@ -461,7 +464,10 @@ impl<'db> LoweringContext<'db> {
 
     /// Generate a unique synthetic variable name, e.g. __for_idx, __for_idx_1, __for_idx_2.
     fn gensym(&mut self, prefix: &str) -> Name {
-        let count = self.synthetic_name_counts.entry(prefix.to_string()).or_insert(0);
+        let count = self
+            .synthetic_name_counts
+            .entry(prefix.to_string())
+            .or_insert(0);
         let name = if *count == 0 {
             prefix.to_string()
         } else {
@@ -538,7 +544,8 @@ impl<'db> LoweringContext<'db> {
         let index = file_semantic_index(self.db, self.file);
         let item_tree = file_item_tree(self.db, self.file);
         let func_data = &item_tree[self.func_loc.id(self.db)];
-        let func_scope_id: FileScopeId = index.scope_at_offset(func_data.span.start());
+        let func_scope_id: FileScopeId =
+            index.scope_at_offset(func_data.span.start(), Some(&func_data.name));
         let func_scope = &index.scopes[func_scope_id.index() as usize];
         let enclosing_class_name: Option<Name> = func_scope.parent.and_then(|parent_idx| {
             let parent = &index.scopes[parent_idx.index() as usize];
@@ -760,10 +767,21 @@ impl<'db> LoweringContext<'db> {
 
 impl<'db> LoweringContext<'db> {
     fn lower_path_expr(&mut self, expr_id: AstExprId, segments: &[Name], dest: Place) {
-        debug_assert!(
-            segments.len() == 1,
-            "multi-segment paths should be desugared"
-        );
+        // Multi-segment paths (e.g. baml.llm.render_prompt) — check TIR resolution first
+        if segments.len() > 1 {
+            if let Some(resolution) = self.resolutions.get(&expr_id).cloned() {
+                let item = resolution_to_item_ref(&resolution);
+                self.builder.assign(
+                    dest,
+                    Rvalue::Use(Operand::Constant(Constant::Function(item))),
+                );
+                return;
+            }
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            return;
+        }
+
         let name = &segments[0];
 
         let span_start = self
@@ -1070,25 +1088,32 @@ impl<'db> LoweringContext<'db> {
     fn check_sys_op(&self, callee: AstExprId) -> bool {
         use baml_compiler2_ast::BuiltinKind;
 
-        // ── Existing path: simple Path callee ─────────────────────────────────
+        // ── Path callee (single- or multi-segment) ─────────────────────────────
         if let AstExpr::Path(segments) = &self.body.exprs[callee] {
-            if segments.len() == 1 {
+            let func_loc = if segments.len() == 1 {
                 let span_start = self
                     .source_map
                     .as_ref()
                     .map(|sm| sm.expr_span(callee).start())
                     .unwrap_or_default();
                 let resolved = resolve_name_at(self.db, self.file, span_start, &segments[0]);
-                let func_loc = match resolved {
+                match resolved {
                     ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
                     ResolvedName::Item(Definition::Function(fl)) => Some(fl),
                     _ => None,
-                };
-                if let Some(fl) = func_loc {
-                    let body = function_body(self.db, fl);
-                    if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
-                        return true;
-                    }
+                }
+            } else {
+                // Multi-segment: check TIR resolution
+                use baml_compiler2_tir::inference::MethodResolution;
+                self.resolutions.get(&callee).and_then(|res| match res {
+                    MethodResolution::Free { func_loc, .. } => Some(*func_loc),
+                    MethodResolution::Method { func_loc, .. } => Some(*func_loc),
+                })
+            };
+            if let Some(fl) = func_loc {
+                let body = function_body(self.db, fl);
+                if let FunctionBody::Builtin(BuiltinKind::Io) = body.as_ref() {
+                    return true;
                 }
             }
         }
@@ -1571,12 +1596,9 @@ impl<'db> LoweringContext<'db> {
                     attr: TyAttr::default(),
                 };
                 let idx_name = self.gensym("__for_idx");
-                let idx_local = self.builder.declare_local(
-                    Some(idx_name),
-                    int_ty.clone(),
-                    None,
-                    false,
-                );
+                let idx_local =
+                    self.builder
+                        .declare_local(Some(idx_name), int_ty.clone(), None, false);
                 self.builder.assign(
                     Place::local(idx_local),
                     Rvalue::Use(Operand::Constant(Constant::Int(0))),
@@ -2245,20 +2267,21 @@ impl<'db> LoweringContext<'db> {
             AstPattern::EnumVariant { enum_name, variant } => {
                 // Resolve the enum's package from TIR type info when available,
                 // otherwise fall back to the current file's package.
-                let enum_ref = if let Some(Tir2Ty::EnumVariant(qtn, _)) = self.pat_types.get(&pat_id) {
-                    ItemRef::EnumType {
-                        package: qtn.package().clone(),
-                        namespace: qtn.namespace().clone(),
-                        name: qtn.name().clone(),
-                    }
-                } else {
-                    let pkg_info = file_package(self.db, self.file);
-                    ItemRef::EnumType {
-                        package: pkg_info.package.clone(),
-                        namespace: pkg_info.namespace_path.clone(),
-                        name: enum_name.clone(),
-                    }
-                };
+                let enum_ref =
+                    if let Some(Tir2Ty::EnumVariant(qtn, _)) = self.pat_types.get(&pat_id) {
+                        ItemRef::EnumType {
+                            package: qtn.package().clone(),
+                            namespace: qtn.namespace().clone(),
+                            name: qtn.name().clone(),
+                        }
+                    } else {
+                        let pkg_info = file_package(self.db, self.file);
+                        ItemRef::EnumType {
+                            package: pkg_info.package.clone(),
+                            namespace: pkg_info.namespace_path.clone(),
+                            name: enum_name.clone(),
+                        }
+                    };
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
                     left: Operand::Copy(Place::Local(scrutinee)),
@@ -2397,13 +2420,13 @@ impl<'db> LoweringContext<'db> {
 
 // ─── 3.7: Entry point ─────────────────────────────────────────────────────────
 
-pub fn lower_function<'db>(
-    db: &'db dyn crate::Db,
-    func_loc: FunctionLoc<'db>,
-) -> MirFunction {
+pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -> MirFunction {
     let body = function_body(db, func_loc);
     let source_map = function_body_source_map(db, func_loc);
-    let item_ref = def_to_item_ref(db, baml_compiler2_hir::contributions::Definition::Function(func_loc));
+    let item_ref = def_to_item_ref(
+        db,
+        baml_compiler2_hir::contributions::Definition::Function(func_loc),
+    );
     let sig = function_signature(db, func_loc);
     let arity = sig.params.len();
 

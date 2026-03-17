@@ -442,7 +442,9 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         mir_type: baml_compiler2_mir::VizNodeType,
     ) -> bex_vm_types::VizNodeType {
         match mir_type {
-            baml_compiler2_mir::VizNodeType::FunctionRoot => bex_vm_types::VizNodeType::FunctionRoot,
+            baml_compiler2_mir::VizNodeType::FunctionRoot => {
+                bex_vm_types::VizNodeType::FunctionRoot
+            }
             baml_compiler2_mir::VizNodeType::HeaderContextEnter => {
                 bex_vm_types::VizNodeType::HeaderContextEnter
             }
@@ -1644,7 +1646,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     /// Build local variable name mapping from MIR and slot assignments.
     ///
     /// Returns a flat `Vec<String>` mapping slot indices to variable names.
-    fn build_local_names(mir: &MirFunctionBody, local_slots: &HashMap<Local, usize>) -> Vec<String> {
+    fn build_local_names(
+        mir: &MirFunctionBody,
+        local_slots: &HashMap<Local, usize>,
+    ) -> Vec<String> {
         let max_slot = local_slots.values().max().copied().unwrap_or(0);
         let mut names = vec![String::new(); max_slot + 1];
 

@@ -102,7 +102,7 @@ pub enum TokenKind {
     /// Any identifier-like word (non-keyword)
     /// Also matches $-prefixed identifiers like $watch for special builtin methods
     #[regex(r"\$[a-zA-Z_][a-zA-Z0-9_]*")]
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_-]*")]
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_$-]*")]
     Word,
 
     /// Quote symbol - used for string delimiters
@@ -494,6 +494,37 @@ mod tests {
             .map(|t| t.text.as_str())
             .collect();
         assert_eq!(words, vec!["gpt-4o", "model-name"]);
+    }
+
+    #[test]
+    fn test_word_with_dollar() {
+        // Dollar-qualified names (e.g. companion functions) tokenize as a single Word
+        let source = "ExtractResume$render_prompt Foo$bar";
+        let tokens = lex_no_whitespace(source);
+        assert_eq!(tokens, vec![TokenKind::Word, TokenKind::Word]);
+
+        let all_tokens = lex(source);
+        let words: Vec<&str> = all_tokens
+            .iter()
+            .filter(|t| t.kind == TokenKind::Word)
+            .map(|t| t.text.as_str())
+            .collect();
+        assert_eq!(words, vec!["ExtractResume$render_prompt", "Foo$bar"]);
+
+        // $-prefixed words work with dot access: foo.$watch
+        let source2 = "foo.$watch";
+        let tokens2 = lex_no_whitespace(source2);
+        assert_eq!(
+            tokens2,
+            vec![TokenKind::Word, TokenKind::Dot, TokenKind::Word]
+        );
+        let all_tokens2 = lex(source2);
+        let words2: Vec<&str> = all_tokens2
+            .iter()
+            .filter(|t| t.kind == TokenKind::Word)
+            .map(|t| t.text.as_str())
+            .collect();
+        assert_eq!(words2, vec!["foo", "$watch"]);
     }
 
     #[test]

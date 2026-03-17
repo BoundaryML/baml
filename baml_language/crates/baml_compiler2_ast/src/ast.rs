@@ -267,6 +267,9 @@ pub enum Expr {
         stmts: Vec<StmtId>,
         tail_expr: Option<ExprId>,
     },
+    // These nodes are constructed purely in the HIR layer AFTER
+    // name resolution as we can't know if it's a field access
+    // until we know how to resolve the path
     FieldAccess {
         base: ExprId,
         field: Name,

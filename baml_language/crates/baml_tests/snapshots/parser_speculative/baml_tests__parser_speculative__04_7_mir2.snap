@@ -1,17 +1,56 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 17394
 ---
 === MIR2 ===
-fn user.AnotherLLM(input: string) -> string {
+fn user.AnotherLLM$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
-    let _0: string // _0 // return
+    let _0: baml.llm.PromptAst // _0 // return
     let _1: string // input // param
     let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "AnotherLLM", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.render_prompt(const "AnotherLLM", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "Ambiguous", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Ambiguous$build_request(input: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "Ambiguous", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -32,6 +71,46 @@ fn user.Ambiguous(input: string) -> string {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.call_llm_function(const "Ambiguous", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.AnotherLLM(input: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const "AnotherLLM", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.AnotherLLM$build_request(input: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "AnotherLLM", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -101,20 +180,62 @@ fn user.ExtractData(text: string) -> user.JsonData {
     }
 }
 
-fn user.SimpleCalc(a: int, b: int) -> int {
+fn user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
     // Locals:
-    let _0: int // _0 // return
-    let _1: int // a // param
-    let _2: int // b // param
-    let _3: int
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
 
     bb0: {
-        _3 = copy _2 * const 2_i64;
-        _0 = copy _1 + copy _3;
-        goto -> bb1;
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "ExtractData", copy _2) -> [bb1];
     }
 
     bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.ExtractData$build_request(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "ExtractData", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "LLMAnalyze", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }
@@ -148,6 +269,26 @@ fn user.LLMAnalyze(text: string) -> user.Analysis {
     bb0: {
         _2 = { const "text": copy _1 };
         _0 = call const fn baml.llm.call_llm_function(const "LLMAnalyze", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "ChainedProcess", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -219,6 +360,64 @@ fn user.ProcessAnalysis(analysis: user.Analysis) -> string {
     }
 
     bb7: {
+        return;
+    }
+}
+
+fn user.ChainedProcess$build_request(input: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "ChainedProcess", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.SimpleCalc(a: int, b: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a // param
+    let _2: int // b // param
+    let _3: int
+
+    bb0: {
+        _3 = copy _2 * const 2_i64;
+        _0 = copy _1 + copy _3;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "LLMAnalyze", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }

@@ -14,8 +14,13 @@ fn make_db() -> ProjectDatabase {
 }
 
 fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
-    generate_project_bytecode(db, &CompileOptions { emit_test_cases: false })
-        .expect("compilation should succeed")
+    generate_project_bytecode(
+        db,
+        &CompileOptions {
+            emit_test_cases: false,
+        },
+    )
+    .expect("compilation should succeed")
 }
 
 #[test]
@@ -36,10 +41,7 @@ fn simple_function_compiles() {
 #[test]
 fn builtin_functions_included() {
     let mut db = make_db();
-    db.add_file(
-        "test.baml",
-        "function f() -> string { return \"x\"; }",
-    );
+    db.add_file("test.baml", "function f() -> string { return \"x\"; }");
     let program = compile(&db);
     // Builtins from the baml and env packages should be present
     let has_baml = program

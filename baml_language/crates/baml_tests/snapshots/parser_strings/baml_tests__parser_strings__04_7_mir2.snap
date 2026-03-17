@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 21478
 ---
 === MIR2 ===
 fn user.FormatMessage(name: string) -> string {
@@ -23,6 +22,66 @@ fn user.FormatMessage(name: string) -> string {
     }
 }
 
+fn user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "name": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "FormatMessage", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.FormatMessage$build_request(name: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "name": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "FormatMessage", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "ProcessText", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.ProcessText(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
@@ -32,6 +91,26 @@ fn user.ProcessText(input: string) -> string {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.call_llm_function(const "ProcessText", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.ProcessText$build_request(input: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.build_request(const "ProcessText", copy _2) -> [bb1];
     }
 
     bb1: {

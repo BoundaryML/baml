@@ -96,9 +96,7 @@ pub(crate) fn verify_mir_emit_invariants(
                 .classifications
                 .get(&local)
                 .copied()
-                .unwrap_or_else(|| {
-                    panic!("missing classification for watched local {}", local,)
-                });
+                .unwrap_or_else(|| panic!("missing classification for watched local {}", local,));
             assert!(
                 class == LocalClassification::Real,
                 "watched local {} classified as {:?} (expected Real)",
@@ -137,8 +135,9 @@ pub(crate) fn verify_mir_emit_invariants(
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_mir::{BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place,
-        Rvalue, Statement};
+    use baml_compiler2_mir::{
+        BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place, Rvalue, Statement,
+    };
     use baml_type::Ty;
 
     use super::*;
@@ -220,8 +219,7 @@ mod tests {
             block.id = BlockId(i);
         }
         let arity = 0usize;
-        let analysis =
-            AnalysisResult::analyze(&body, arity, crate::analysis::OptLevel::One);
+        let analysis = AnalysisResult::analyze(&body, arity, crate::analysis::OptLevel::One);
         verify_mir_emit_invariants(&body, arity, &analysis);
     }
 
@@ -267,8 +265,7 @@ mod tests {
             block.id = BlockId(i);
         }
         let arity = 0usize;
-        let analysis =
-            AnalysisResult::analyze(&body, arity, crate::analysis::OptLevel::One);
+        let analysis = AnalysisResult::analyze(&body, arity, crate::analysis::OptLevel::One);
         verify_mir_emit_invariants(&body, arity, &analysis);
     }
 
@@ -291,8 +288,7 @@ mod tests {
             block.id = BlockId(i);
         }
         let arity = 0usize;
-        let analysis =
-            AnalysisResult::analyze(&body, arity, crate::analysis::OptLevel::One);
+        let analysis = AnalysisResult::analyze(&body, arity, crate::analysis::OptLevel::One);
         verify_mir_emit_invariants(&body, arity, &analysis);
     }
 }

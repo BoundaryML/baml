@@ -8,27 +8,25 @@ mod pull_semantics;
 mod stack_carry;
 mod verifier;
 
-pub use analysis::OptLevel;
-pub(crate) use emit::compile_mir_function;
-
 use std::collections::HashMap;
 
+pub use analysis::OptLevel;
 use baml_base::Span;
 use baml_compiler2_ast::TypeExpr;
 use baml_compiler2_hir::{
-    compiler2_all_files,
-    file_item_tree,
+    compiler2_all_files, file_item_tree,
     file_package::file_package,
     loc::FunctionLoc,
     package::{PackageId, package_items},
 };
-use baml_compiler2_mir::{lower_function, BuiltinKind, MirFunctionKind};
+use baml_compiler2_mir::{BuiltinKind, MirFunctionKind, lower_function};
 use baml_type::TyAttr;
 use bex_vm_types::{
     Bytecode, Class, ClassField, ClientBuildMeta, ClientBuildType, ConstValue, Enum, EnumVariant,
     Function, FunctionKind, FunctionMeta, Object, ObjectIndex, ObjectPool, Program,
     RetryPolicyMeta,
 };
+pub(crate) use emit::compile_mir_function;
 
 /// Context for MIR codegen.
 pub(crate) struct MirCodegenContext<'ctx, 'obj> {
@@ -175,7 +173,9 @@ pub fn generate_project_bytecode(
             // Also register with the short (unqualified) class name so that MIR aggregates,
             // which store only the local name (e.g., "Point" not "user.Point"), can find it.
             let short_name = class_data.name.to_string();
-            class_object_indices.entry(short_name.clone()).or_insert(class_obj_idx);
+            class_object_indices
+                .entry(short_name.clone())
+                .or_insert(class_obj_idx);
             classes.entry(short_name).or_insert_with(|| {
                 // Rebuild field_indices since we moved it above; re-read from class_data.
                 let mut m = HashMap::new();
@@ -246,7 +246,8 @@ pub fn generate_project_bytecode(
                         enum_variants: &enum_variants,
                         objects: &mut program.objects,
                     };
-                    let mut f = compile_mir_function(body, mir.arity, &line_starts, ctx, OptLevel::One);
+                    let mut f =
+                        compile_mir_function(body, mir.arity, &line_starts, ctx, OptLevel::One);
                     f.name = fq_name.clone();
                     f
                 }
@@ -533,9 +534,8 @@ fn compute_function_metadata_from_item_tree(
 
     let resolve = |te: &TypeExpr| -> baml_type::Ty {
         let mut diags = Vec::new();
-        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-            db, te, &pkg_items, &mut diags,
-        );
+        let tir_ty =
+            baml_compiler2_tir::lower_type_expr::lower_type_expr(db, te, &pkg_items, &mut diags);
         baml_compiler2_mir::convert_tir2_ty(&tir_ty)
     };
 

@@ -52,7 +52,7 @@ pub fn resolve_name_at<'db>(
     name: &Name,
 ) -> ResolvedName<'db> {
     let index = baml_compiler2_hir::file_semantic_index(db, file);
-    let scope_id = index.scope_at_offset(at_offset);
+    let scope_id = index.scope_at_offset(at_offset, None);
 
     // Walk ancestor scopes from innermost to outermost
     for ancestor_id in index.ancestor_scopes(scope_id) {
@@ -124,8 +124,10 @@ pub fn resolve_name_at<'db>(
 
 /// Resolve a path expression at a given position.
 ///
-/// After AST lowering, paths are always single-segment (bare identifiers).
-/// Multi-segment paths like `Color.Red` are desugared to FieldAccess chains.
+/// Single-segment paths are resolved via `resolve_name_at`.
+/// Multi-segment paths (e.g. `baml.llm.render_prompt`) are resolved
+/// by treating the first segment as a package name and looking up
+/// the remaining segments in that package.
 pub fn resolve_path_at<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -136,11 +138,25 @@ pub fn resolve_path_at<'db>(
         return ResolvedName::Unknown;
     }
 
-    debug_assert!(
-        segments.len() == 1,
-        "multi-segment Path should have been desugared to FieldAccess: {:?}",
-        segments
-    );
+    if segments.len() == 1 {
+        return resolve_name_at(db, file, at_offset, &segments[0]);
+    }
 
-    resolve_name_at(db, file, at_offset, &segments[0])
+    // Multi-segment: first segment is a package name
+    let pkg_name = &segments[0];
+    let pkg_id = PackageId::new(db, pkg_name.clone());
+    let pkg_items = package_items(db, pkg_id);
+
+    let after_pkg = &segments[1..];
+
+    // Try value namespace (functions)
+    if let Some(def) = pkg_items.lookup_value(after_pkg) {
+        return ResolvedName::Builtin(def);
+    }
+    // Try type namespace (classes, enums)
+    if let Some(def) = pkg_items.lookup_type(after_pkg) {
+        return ResolvedName::Builtin(def);
+    }
+
+    ResolvedName::Unknown
 }
