@@ -52,6 +52,7 @@ export class WebviewPanelHost {
   private _googleAuth = new GoogleAuth({
     scopes: ['https://www.googleapis.com/auth/cloud-platform'],
   });
+  private _azureCredential = new DefaultAzureCredential();
 
 
   /**
@@ -726,8 +727,7 @@ export class WebviewPanelHost {
           case 'LOAD_AZURE_CREDS':
             (async () => {
               try {
-                const credential = new DefaultAzureCredential();
-                const tokenResponse = await credential.getToken(
+                const tokenResponse = await this._azureCredential.getToken(
                   'https://cognitiveservices.azure.com/.default',
                 );
                 if (!tokenResponse?.token) {

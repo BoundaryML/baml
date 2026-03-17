@@ -142,8 +142,13 @@ impl AzureAuth {
         };
 
         // Cache the credential object
-        if let Ok(mut cache) = AZURE_AUTH_CACHE.write() {
-            cache.insert(cache_key, credential.clone());
+        match AZURE_AUTH_CACHE.write() {
+            Ok(mut cache) => {
+                cache.insert(cache_key, credential.clone());
+            }
+            Err(e) => {
+                log::warn!("Azure credential cache lock poisoned, skipping cache: {e}");
+            }
         }
 
         Ok(Arc::new(AzureAuth { credential }))

@@ -127,7 +127,9 @@ test TestAzureClients {
     TestAzureWithMaxTokens,
     TestAzureO1WithMaxCompletionTokens,
     TestAzureO3NoMaxTokens,
-    TestAzureO3WithMaxCompletionTokens
+    TestAzureO3WithMaxCompletionTokens,
+    TestAzureEntraId,
+    TestAzureEntraIdSystemDefault
   ]
   args {
     input "Cherry blossoms"

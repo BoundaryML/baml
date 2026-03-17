@@ -492,7 +492,7 @@ client<llm> AzureEntraId {
   options {
     resource_name env.AZURE_OPENAI_RESOURCE_NAME
     deployment_id env.AZURE_OPENAI_DEPLOYMENT_ID
-    api_version "2024-02-01"
+    api_version env.AZURE_OPENAI_API_VERSION
     tenant_id env.AZURE_TENANT_ID
     client_id env.AZURE_CLIENT_ID
     client_secret env.AZURE_CLIENT_SECRET
@@ -508,7 +508,7 @@ client<llm> AzureEntraIdSystemDefault {
   options {
     resource_name env.AZURE_OPENAI_RESOURCE_NAME
     deployment_id env.AZURE_OPENAI_DEPLOYMENT_ID
-    api_version "2024-02-01"
+    api_version env.AZURE_OPENAI_API_VERSION
     tenant_id env.AZURE_TENANT_ID
     client_id env.AZURE_CLIENT_ID
     max_tokens null

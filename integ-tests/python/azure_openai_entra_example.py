@@ -11,9 +11,9 @@ Test Azure OpenAI with Entra ID.
 
 Modes:
   - Service principal: set AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
-    (e.g. infisical run --env=test -- uv run test_azure_openai_entra.py)
+    (e.g. infisical run --env=test -- uv run azure_openai_entra_example.py)
   - Default credential chain: set USE_DEFAULT_CREDENTIAL=1 and run after az login
-    (e.g. USE_DEFAULT_CREDENTIAL=1 uv run test_azure_openai_entra.py)
+    (e.g. USE_DEFAULT_CREDENTIAL=1 uv run azure_openai_entra_example.py)
 
 Required env vars (always): AZURE_OPENAI_RESOURCE_NAME, AZURE_OPENAI_DEPLOYMENT_ID
 """
@@ -41,7 +41,7 @@ def main() -> None:
         if use_default:
             print("For default credential: USE_DEFAULT_CREDENTIAL=1 and az login", file=sys.stderr)
         else:
-            print("Run with: infisical run --env=test -- uv run test_azure_openai_entra.py", file=sys.stderr)
+            print("Run with: infisical run --env=test -- uv run azure_openai_entra_example.py", file=sys.stderr)
         sys.exit(1)
 
     resource = os.environ["AZURE_OPENAI_RESOURCE_NAME"]

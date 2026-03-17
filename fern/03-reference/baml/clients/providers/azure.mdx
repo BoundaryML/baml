@@ -75,10 +75,12 @@ You can use this to modify the azure api key, base url, and api version for exam
   Microsoft Entra ID tenant ID. When provided (along with `client_id`), BAML switches from API key
   authentication to Entra ID OAuth2 bearer token authentication.
 
-  Set to `env.AZURE_TENANT_ID` to read from the environment.
+  Set to `env.AZURE_TENANT_ID` to read from the environment. If only `client_id` is provided without
+  `tenant_id`, the missing value defaults to the `AZURE_TENANT_ID` environment variable.
 
   If `client_secret` is also provided, BAML uses service principal (client credentials) authentication.
-  If `client_secret` is omitted, BAML uses managed identity authentication.
+  If `client_secret` is omitted, BAML uses managed identity authentication only
+  (via `ManagedIdentityCredential` — suitable for Azure VMs, App Service, and AKS).
 </ParamField>
 
 <ParamField
@@ -87,7 +89,8 @@ You can use this to modify the azure api key, base url, and api version for exam
 >
   Microsoft Entra ID application (client) ID. Required when using Entra ID authentication.
 
-  Set to `env.AZURE_CLIENT_ID` to read from the environment.
+  Set to `env.AZURE_CLIENT_ID` to read from the environment. If only `tenant_id` is provided without
+  `client_id`, the missing value defaults to the `AZURE_CLIENT_ID` environment variable.
 </ParamField>
 
 <ParamField

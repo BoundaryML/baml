@@ -71,32 +71,21 @@ describe("Azure Entra ID Provider", () => {
     !!process.env.AZURE_OPENAI_RESOURCE_NAME &&
     !!process.env.AZURE_OPENAI_DEPLOYMENT_ID;
 
-  it("should support Entra ID service principal authentication", async () => {
-    if (!hasEntraIdCreds) {
-      console.log(
-        "Skipping Entra ID test: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, " +
-        "AZURE_OPENAI_RESOURCE_NAME, or AZURE_OPENAI_DEPLOYMENT_ID not set"
-      );
-      return;
-    }
+  const hasSystemDefaultCreds =
+    !!process.env.AZURE_TENANT_ID &&
+    !!process.env.AZURE_CLIENT_ID &&
+    !!process.env.AZURE_OPENAI_RESOURCE_NAME &&
+    !!process.env.AZURE_OPENAI_DEPLOYMENT_ID;
+
+  const itEntra = hasEntraIdCreds ? it : it.skip;
+  const itSystemDefault = hasSystemDefaultCreds ? it : it.skip;
+
+  itEntra("should support Entra ID service principal authentication", async () => {
     const res = await b.TestAzureEntraId("Autumn leaves falling");
     expect(res.toLowerCase()).toMatch(/autumn|leaves|fall/);
   });
 
-  it("should support Entra ID system default credential chain", async () => {
-    const hasSystemDefaultCreds =
-      !!process.env.AZURE_TENANT_ID &&
-      !!process.env.AZURE_CLIENT_ID &&
-      !!process.env.AZURE_OPENAI_RESOURCE_NAME &&
-      !!process.env.AZURE_OPENAI_DEPLOYMENT_ID;
-
-    if (!hasSystemDefaultCreds) {
-      console.log(
-        "Skipping Entra ID system default test: AZURE_TENANT_ID, AZURE_CLIENT_ID, " +
-        "AZURE_OPENAI_RESOURCE_NAME, or AZURE_OPENAI_DEPLOYMENT_ID not set"
-      );
-      return;
-    }
+  itSystemDefault("should support Entra ID system default credential chain", async () => {
     const res = await b.TestAzureEntraIdSystemDefault("Mountain stream");
     expect(res.length).toBeGreaterThan(0);
   });
