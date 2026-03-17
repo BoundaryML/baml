@@ -851,7 +851,7 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     return
 }
 
-function user.ChainExprs(user: null, items: null[], m: map<string, int>) -> string {
+function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<string, int>) -> string {
     load_var user
     load_field .name
     load_var _25
@@ -2926,7 +2926,7 @@ function user.ManyParams(first_parameter: int, second_parameter: string, third_p
     return
 }
 
-function user.MatchExprs(x: int, s: null, r: null, b: bool) -> string {
+function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bool) -> string {
     load_var x
     copy 0
     load_const 0

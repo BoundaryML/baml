@@ -15,7 +15,13 @@ use std::collections::HashMap;
 
 use baml_base::Span;
 use baml_compiler2_ast::TypeExpr;
-use baml_compiler2_hir::{compiler2_all_files, file_item_tree, file_package::file_package, loc::FunctionLoc};
+use baml_compiler2_hir::{
+    compiler2_all_files,
+    file_item_tree,
+    file_package::file_package,
+    loc::FunctionLoc,
+    package::{PackageId, package_items},
+};
 use baml_compiler2_mir::{lower_function, BuiltinKind, MirFunctionKind};
 use baml_type::TyAttr;
 use bex_vm_types::{
@@ -115,6 +121,8 @@ pub fn generate_project_bytecode(
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
+        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let pkg_items = package_items(db, pkg_id);
         for (_class_id, class_data) in item_tree.classes.iter() {
             // Build fully-qualified name: "user.MyClass" or "baml.ns.MyClass"
             let fq_name = if pkg_info.namespace_path.is_empty() {
@@ -128,12 +136,22 @@ pub fn generate_project_bytecode(
             let mut fields = Vec::new();
             for (idx, field) in class_data.fields.iter().enumerate() {
                 field_indices.insert(field.name.to_string(), idx);
+                let field_type = field
+                    .type_expr
+                    .as_ref()
+                    .map(|te| {
+                        let mut diags = Vec::new();
+                        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+                            db, &te.expr, &pkg_items, &mut diags,
+                        );
+                        baml_compiler2_mir::convert_tir2_ty(&tir_ty)
+                    })
+                    .unwrap_or_else(|| baml_type::Ty::Null {
+                        attr: baml_type::TyAttr::default(),
+                    });
                 fields.push(ClassField {
                     name: field.name.to_string(),
-                    // Use placeholder type — full type resolution is deferred
-                    field_type: baml_type::Ty::Null {
-                        attr: baml_type::TyAttr::default(),
-                    },
+                    field_type,
                     description: None,
                     alias: None,
                     field_attr: baml_base::FieldAttr::default(),
@@ -278,7 +296,7 @@ pub fn generate_project_bytecode(
 
             // Set function metadata from signature
             let (param_names, param_types, return_type) =
-                compute_function_metadata_from_item_tree(func_data);
+                compute_function_metadata_from_item_tree(db, *file, func_data);
             compiled_fn.return_type = return_type;
             compiled_fn.param_names = param_names;
             compiled_fn.param_types = param_types;
@@ -493,9 +511,11 @@ fn convert_test_arg_value(
 
 /// Extract param names, param types, and return type from an item_tree Function.
 ///
-/// Converts `TypeExpr` to `baml_type::Ty` using a lightweight structural mapping
-/// (no name resolution — named types map to placeholder Null).
+/// Type resolution delegates to TIR's `lower_type_expr` (single source of truth)
+/// then converts via MIR's `convert_tir2_ty` to produce `baml_type::Ty`.
 fn compute_function_metadata_from_item_tree(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
     func_data: &baml_compiler2_hir::item_tree::Function,
 ) -> (Vec<String>, Vec<baml_type::Ty>, baml_type::Ty) {
     let param_names: Vec<String> = func_data
@@ -504,70 +524,39 @@ fn compute_function_metadata_from_item_tree(
         .map(|p| p.name.to_string())
         .collect();
 
+    let pkg_info = file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_items = package_items(db, pkg_id);
+    let null_ty = || baml_type::Ty::Null {
+        attr: baml_type::TyAttr::default(),
+    };
+
+    let resolve = |te: &TypeExpr| -> baml_type::Ty {
+        let mut diags = Vec::new();
+        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+            db, te, &pkg_items, &mut diags,
+        );
+        baml_compiler2_mir::convert_tir2_ty(&tir_ty)
+    };
+
     let param_types: Vec<baml_type::Ty> = func_data
         .params
         .iter()
         .map(|p| {
             p.type_expr
                 .as_ref()
-                .map(|te| type_expr_to_baml_ty(&te.expr))
-                .unwrap_or_else(|| baml_type::Ty::Null {
-                    attr: baml_type::TyAttr::default(),
-                })
+                .map(|te| resolve(&te.expr))
+                .unwrap_or_else(null_ty)
         })
         .collect();
 
     let return_type = func_data
         .return_type
         .as_ref()
-        .map(|te| type_expr_to_baml_ty(&te.expr))
-        .unwrap_or_else(|| baml_type::Ty::Null {
-            attr: baml_type::TyAttr::default(),
-        });
+        .map(|te| resolve(&te.expr))
+        .unwrap_or_else(null_ty);
 
     (param_names, param_types, return_type)
-}
-
-/// Convert a compiler2 `TypeExpr` to a `baml_type::Ty`.
-///
-/// Named type paths (classes, enums) map to `Null` as a placeholder —
-/// full name resolution is not run here. Primitive types map directly.
-fn type_expr_to_baml_ty(te: &TypeExpr) -> baml_type::Ty {
-    let attr = baml_type::TyAttr::default();
-    match te {
-        TypeExpr::Int => baml_type::Ty::Int { attr },
-        TypeExpr::Float => baml_type::Ty::Float { attr },
-        TypeExpr::String => baml_type::Ty::String { attr },
-        TypeExpr::Bool => baml_type::Ty::Bool { attr },
-        TypeExpr::Null | TypeExpr::Never | TypeExpr::Unknown | TypeExpr::Error => {
-            baml_type::Ty::Null { attr }
-        }
-        TypeExpr::Media(kind) => baml_type::Ty::Media(*kind, attr),
-        TypeExpr::Optional(inner) => {
-            baml_type::Ty::Optional(Box::new(type_expr_to_baml_ty(inner)), attr)
-        }
-        TypeExpr::List(inner) => {
-            baml_type::Ty::List(Box::new(type_expr_to_baml_ty(inner)), attr)
-        }
-        TypeExpr::Map { key, value } => baml_type::Ty::Map {
-            key: Box::new(type_expr_to_baml_ty(key)),
-            value: Box::new(type_expr_to_baml_ty(value)),
-            attr,
-        },
-        TypeExpr::Union(members) => {
-            baml_type::Ty::Union(members.iter().map(type_expr_to_baml_ty).collect(), attr)
-        }
-        TypeExpr::Path(_) | TypeExpr::BuiltinUnknown | TypeExpr::Type | TypeExpr::Rust => {
-            // Named types and opaque types fall back to Null
-            baml_type::Ty::Null { attr }
-        }
-        TypeExpr::Function { params, ret } => baml_type::Ty::Function {
-            params: params.iter().map(|p| type_expr_to_baml_ty(&p.ty)).collect(),
-            ret: Box::new(type_expr_to_baml_ty(ret)),
-            attr,
-        },
-        TypeExpr::Literal(lit) => baml_type::Ty::Literal(lit.clone(), attr),
-    }
 }
 
 /// Build a table of byte offsets where each line starts in the source text.

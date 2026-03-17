@@ -60,7 +60,7 @@ function user.BoolWithCatchAll(b: bool) -> string {
     return
 }
 
-function user.DeeplyNestedLiterals(x: null) -> string {
+function user.DeeplyNestedLiterals(x: user.SuccessCode) -> string {
     load_var x
     copy 0
     load_const 200
@@ -121,7 +121,7 @@ function user.DuplicateBoolLiteral(b: bool) -> string {
     return
 }
 
-function user.DuplicateEnumVariant(s: null) -> string {
+function user.DuplicateEnumVariant(s: user.Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -176,7 +176,7 @@ function user.DuplicateIntLiteral(x: int) -> string {
     return
 }
 
-function user.DuplicateStringLiteral(role: null) -> string {
+function user.DuplicateStringLiteral(role: user.Role) -> string {
     load_var role
     load_const "user"
     cmp_op ==
@@ -220,7 +220,7 @@ function user.DuplicateStringLiteral(role: null) -> string {
     return
 }
 
-function user.EnumVariantAfterTypedEnum(s: null) -> string {
+function user.EnumVariantAfterTypedEnum(s: user.Status) -> string {
     load_var s
     type_tag
     load_const 5
@@ -244,7 +244,7 @@ function user.EnumVariantAfterTypedEnum(s: null) -> string {
     return
 }
 
-function user.EnumVariantUnion(s: null) -> string {
+function user.EnumVariantUnion(s: user.Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -274,7 +274,7 @@ function user.EnumVariantUnion(s: null) -> string {
     return
 }
 
-function user.EnumVariantUnionWithCatchAll(s: null) -> string {
+function user.EnumVariantUnionWithCatchAll(s: user.Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -304,7 +304,7 @@ function user.EnumVariantUnionWithCatchAll(s: null) -> string {
     return
 }
 
-function user.ExhaustiveAliasOfLiterals(code: null) -> string {
+function user.ExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string {
     load_var code
     copy 0
     load_const 200
@@ -355,7 +355,7 @@ function user.ExhaustiveBool(b: bool) -> string {
     return
 }
 
-function user.ExhaustiveClassPlusLiteral(x: null) -> string {
+function user.ExhaustiveClassPlusLiteral(x: user.SuccessOr200) -> string {
     load_var x
     load_const user.Success
     cmp_op instanceof
@@ -378,7 +378,7 @@ function user.ExhaustiveClassPlusLiteral(x: null) -> string {
     return
 }
 
-function user.ExhaustiveCustomBool(b: null) -> string {
+function user.ExhaustiveCustomBool(b: user.CustomBool) -> string {
     load_var b
     load_const true
     cmp_op ==
@@ -400,7 +400,7 @@ function user.ExhaustiveCustomBool(b: null) -> string {
     return
 }
 
-function user.ExhaustiveDoubleMaybe(dm: null) -> string {
+function user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string {
     load_var dm
     load_const user.Success
     cmp_op instanceof
@@ -435,7 +435,7 @@ function user.ExhaustiveDoubleMaybe(dm: null) -> string {
     return
 }
 
-function user.ExhaustiveEnumAllVariants(s: null) -> string {
+function user.ExhaustiveEnumAllVariants(s: user.Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -469,7 +469,7 @@ function user.ExhaustiveEnumAllVariants(s: null) -> string {
     return
 }
 
-function user.ExhaustiveEnumWithCatchAll(s: null) -> string {
+function user.ExhaustiveEnumWithCatchAll(s: user.Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -491,7 +491,7 @@ function user.ExhaustiveEnumWithCatchAll(s: null) -> string {
     return
 }
 
-function user.ExhaustiveEnumWithTypedPattern(s: null) -> string {
+function user.ExhaustiveEnumWithTypedPattern(s: user.Status) -> string {
     load_var s
     type_tag
     load_const 5
@@ -503,7 +503,7 @@ function user.ExhaustiveEnumWithTypedPattern(s: null) -> string {
     return
 }
 
-function user.ExhaustiveFalseType(f: null) -> string {
+function user.ExhaustiveFalseType(f: user.AlwaysFalse) -> string {
     load_var f
     load_const false
     cmp_op ==
@@ -514,7 +514,7 @@ function user.ExhaustiveFalseType(f: null) -> string {
     return
 }
 
-function user.ExhaustiveIntLiterals(code: null) -> string {
+function user.ExhaustiveIntLiterals(code: user.SuccessCode) -> string {
     load_var code
     copy 0
     load_const 200
@@ -578,7 +578,7 @@ function user.ExhaustiveLiteralWithBaseType(x: int) -> string {
     return
 }
 
-function user.ExhaustiveMixedLiterals(x: null) -> string {
+function user.ExhaustiveMixedLiterals(x: user.MixedLiterals) -> string {
     load_var x
     load_const 200
     cmp_op ==
@@ -611,7 +611,7 @@ function user.ExhaustiveMixedLiterals(x: null) -> string {
     return
 }
 
-function user.ExhaustiveNullableEnum(s: null?) -> string {
+function user.ExhaustiveNullableEnum(s: user.Status?) -> string {
     load_var s
     load_const user.Status.Active
     alloc_variant user.Status
@@ -658,7 +658,7 @@ function user.ExhaustiveNullableEnum(s: null?) -> string {
     return
 }
 
-function user.ExhaustiveNullableEnumWithTypedPattern(s: null?) -> string {
+function user.ExhaustiveNullableEnumWithTypedPattern(s: user.Status?) -> string {
     load_var s
     type_tag
     load_const 5
@@ -704,7 +704,7 @@ function user.ExhaustiveOptional(x: int?) -> string {
     return
 }
 
-function user.ExhaustiveOptionalSingleton(code: null) -> string {
+function user.ExhaustiveOptionalSingleton(code: user.MaybeOk) -> string {
     load_var code
     load_const 200
     cmp_op ==
@@ -726,7 +726,7 @@ function user.ExhaustiveOptionalSingleton(code: null) -> string {
     return
 }
 
-function user.ExhaustiveSingletonInt(code: null) -> string {
+function user.ExhaustiveSingletonInt(code: user.HttpOk) -> string {
     load_var code
     copy 0
     load_const 200
@@ -740,7 +740,7 @@ function user.ExhaustiveSingletonInt(code: null) -> string {
     return
 }
 
-function user.ExhaustiveStringLiterals(role: null) -> string {
+function user.ExhaustiveStringLiterals(role: user.Role) -> string {
     load_var role
     load_const "user"
     cmp_op ==
@@ -773,7 +773,7 @@ function user.ExhaustiveStringLiterals(role: null) -> string {
     return
 }
 
-function user.ExhaustiveTrueType(t: null) -> string {
+function user.ExhaustiveTrueType(t: user.AlwaysTrue) -> string {
     load_var t
     load_const true
     cmp_op ==
@@ -784,7 +784,7 @@ function user.ExhaustiveTrueType(t: null) -> string {
     return
 }
 
-function user.ExhaustiveTypeAlias(r: null) -> string {
+function user.ExhaustiveTypeAlias(r: user.Result) -> string {
     load_var r
     load_const user.Success
     cmp_op instanceof
@@ -808,7 +808,7 @@ function user.ExhaustiveTypeAlias(r: null) -> string {
     return
 }
 
-function user.ExhaustiveTypeAliasWithCatchAll(r: null) -> string {
+function user.ExhaustiveTypeAliasWithCatchAll(r: user.Result) -> string {
     load_var r
     load_const user.Success
     cmp_op instanceof
@@ -883,7 +883,7 @@ function user.ExhaustiveWithUnderscore(x: int) -> int {
     return
 }
 
-function user.GetStatus() -> null {
+function user.GetStatus() -> user.Status {
     load_const user.Status.Active
     alloc_variant user.Status
     return
@@ -951,7 +951,7 @@ function user.GuardedWithFallback(x: int) -> int {
     return
 }
 
-function user.HighLineNumberNonExhaustive(s: null) -> string {
+function user.HighLineNumberNonExhaustive(s: user.Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -966,7 +966,7 @@ function user.HighLineNumberNonExhaustive(s: null) -> string {
     return
 }
 
-function user.IntLiteralUnionPattern(code: null) -> string {
+function user.IntLiteralUnionPattern(code: user.SuccessCode) -> string {
     load_var code
     copy 0
     load_const 200
@@ -1003,7 +1003,7 @@ function user.IntLiteralUnionPattern(code: null) -> string {
     return
 }
 
-function user.JumpTableClassTypeTag(pet: null | null | null | null) -> string {
+function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.Fish) -> string {
     load_var pet
     load_const user.Cat
     cmp_op instanceof
@@ -1047,7 +1047,7 @@ function user.JumpTableClassTypeTag(pet: null | null | null | null) -> string {
     return
 }
 
-function user.JumpTableEnumDiscriminant(state: null) -> int {
+function user.JumpTableEnumDiscriminant(state: user.DispatchState) -> int {
     load_var state
     discriminant
     jump_table [L3, L2, L1, L0], default L5
@@ -1349,7 +1349,7 @@ function user.MixedPatterns(x: int) -> string {
     return
 }
 
-function user.MultipleUnreachableSpans(s: null) -> string {
+function user.MultipleUnreachableSpans(s: user.Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1383,7 +1383,7 @@ function user.MultipleUnreachableSpans(s: null) -> string {
     return
 }
 
-function user.NestedEnumMatch(s1: null, s2: null) -> string {
+function user.NestedEnumMatch(s1: user.Status, s2: user.Status) -> string {
     load_var s1
     discriminant
     copy 0
@@ -1444,7 +1444,7 @@ function user.NestedEnumMatch(s1: null, s2: null) -> string {
     return
 }
 
-function user.NestedEnumVariantUnions(s: null) -> string {
+function user.NestedEnumVariantUnions(s: user.Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1614,7 +1614,7 @@ function user.NestedMatchSpans(x: int, y: bool) -> string {
     return
 }
 
-function user.NestedTypeAlias(mr: null) -> string {
+function user.NestedTypeAlias(mr: user.MaybeResult) -> string {
     load_var mr
     load_const user.Success
     cmp_op instanceof
@@ -1649,7 +1649,7 @@ function user.NestedTypeAlias(mr: null) -> string {
     return
 }
 
-function user.NestedTypeBindings(r: null) -> int {
+function user.NestedTypeBindings(r: user.Result) -> int {
     load_var r
     pop 1
     load_const false
@@ -1671,7 +1671,7 @@ function user.NestedTypeBindings(r: null) -> int {
     return
 }
 
-function user.NonExhaustiveAliasOfLiterals(code: null) -> string {
+function user.NonExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string {
     load_var code
     copy 0
     load_const 200
@@ -1707,7 +1707,7 @@ function user.NonExhaustiveBoolMissingTrue(b: bool) -> string {
     return
 }
 
-function user.NonExhaustiveClassPlusLiteralMissingClass(x: null) -> string {
+function user.NonExhaustiveClassPlusLiteralMissingClass(x: user.SuccessOr200) -> string {
     load_var x
     copy 0
     load_const 200
@@ -1721,7 +1721,7 @@ function user.NonExhaustiveClassPlusLiteralMissingClass(x: null) -> string {
     return
 }
 
-function user.NonExhaustiveClassPlusLiteralMissingLiteral(x: null) -> string {
+function user.NonExhaustiveClassPlusLiteralMissingLiteral(x: user.SuccessOr200) -> string {
     load_var x
     load_const user.Success
     cmp_op instanceof
@@ -1733,7 +1733,7 @@ function user.NonExhaustiveClassPlusLiteralMissingLiteral(x: null) -> string {
     return
 }
 
-function user.NonExhaustiveCustomBoolMissing(b: null) -> string {
+function user.NonExhaustiveCustomBoolMissing(b: user.CustomBool) -> string {
     load_var b
     load_const true
     cmp_op ==
@@ -1744,7 +1744,7 @@ function user.NonExhaustiveCustomBoolMissing(b: null) -> string {
     return
 }
 
-function user.NonExhaustiveDoubleMaybeMissingNull(dm: null) -> string {
+function user.NonExhaustiveDoubleMaybeMissingNull(dm: user.DoubleMaybe) -> string {
     load_var dm
     load_const user.Success
     cmp_op instanceof
@@ -1768,7 +1768,7 @@ function user.NonExhaustiveDoubleMaybeMissingNull(dm: null) -> string {
     return
 }
 
-function user.NonExhaustiveEnumMissingMultiple(s: null) -> string {
+function user.NonExhaustiveEnumMissingMultiple(s: user.Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1783,7 +1783,7 @@ function user.NonExhaustiveEnumMissingMultiple(s: null) -> string {
     return
 }
 
-function user.NonExhaustiveEnumMissingOne(s: null) -> string {
+function user.NonExhaustiveEnumMissingOne(s: user.Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1813,7 +1813,7 @@ function user.NonExhaustiveEnumMissingOne(s: null) -> string {
     return
 }
 
-function user.NonExhaustiveFullResultMissingOne(r: null) -> string {
+function user.NonExhaustiveFullResultMissingOne(r: user.FullResult) -> string {
     load_var r
     load_const user.Success
     cmp_op instanceof
@@ -1837,7 +1837,7 @@ function user.NonExhaustiveFullResultMissingOne(r: null) -> string {
     return
 }
 
-function user.NonExhaustiveIntLiteral(code: null) -> string {
+function user.NonExhaustiveIntLiteral(code: user.SuccessCode) -> string {
     load_var code
     copy 0
     load_const 200
@@ -1866,7 +1866,7 @@ function user.NonExhaustiveIntLiteral(code: null) -> string {
     return
 }
 
-function user.NonExhaustiveMixedLiterals(x: null) -> string {
+function user.NonExhaustiveMixedLiterals(x: user.MixedLiterals) -> string {
     load_var x
     load_const 200
     cmp_op ==
@@ -1888,7 +1888,7 @@ function user.NonExhaustiveMixedLiterals(x: null) -> string {
     return
 }
 
-function user.NonExhaustiveNullableEnumMissingNull(s: null?) -> string {
+function user.NonExhaustiveNullableEnumMissingNull(s: user.Status?) -> string {
     load_var s
     discriminant
     copy 0
@@ -1930,7 +1930,7 @@ function user.NonExhaustiveNullableEnumMissingNull(s: null?) -> string {
     return
 }
 
-function user.NonExhaustiveNullableEnumMissingVariant(s: null?) -> string {
+function user.NonExhaustiveNullableEnumMissingVariant(s: user.Status?) -> string {
     load_var s
     load_const user.Status.Active
     alloc_variant user.Status
@@ -1965,7 +1965,7 @@ function user.NonExhaustiveNullableEnumMissingVariant(s: null?) -> string {
     return
 }
 
-function user.NonExhaustiveOptionalMissingNull(code: null) -> string {
+function user.NonExhaustiveOptionalMissingNull(code: user.MaybeOk) -> string {
     load_var code
     copy 0
     load_const 200
@@ -1979,7 +1979,7 @@ function user.NonExhaustiveOptionalMissingNull(code: null) -> string {
     return
 }
 
-function user.NonExhaustiveOptionalMissingValue(code: null) -> string {
+function user.NonExhaustiveOptionalMissingValue(code: user.MaybeOk) -> string {
     load_var code
     load_const null
     cmp_op ==
@@ -1990,7 +1990,7 @@ function user.NonExhaustiveOptionalMissingValue(code: null) -> string {
     return
 }
 
-function user.NonExhaustiveStringLiteral(role: null) -> string {
+function user.NonExhaustiveStringLiteral(role: user.Role) -> string {
     load_var role
     load_const "user"
     cmp_op ==
@@ -2012,7 +2012,7 @@ function user.NonExhaustiveStringLiteral(role: null) -> string {
     return
 }
 
-function user.NonExhaustiveTrueTypeWrongLiteral(t: null) -> string {
+function user.NonExhaustiveTrueTypeWrongLiteral(t: user.AlwaysTrue) -> string {
     load_var t
     load_const false
     cmp_op ==
@@ -2023,7 +2023,7 @@ function user.NonExhaustiveTrueTypeWrongLiteral(t: null) -> string {
     return
 }
 
-function user.NonExhaustiveTypeAliasMissingOne(r: null) -> string {
+function user.NonExhaustiveTypeAliasMissingOne(r: user.Result) -> string {
     load_var r
     load_const user.Success
     cmp_op instanceof
@@ -2053,7 +2053,7 @@ function user.OptionalWithCatchAll(x: int?) -> string {
     return
 }
 
-function user.OverlappingTypedPatterns(r: null) -> string {
+function user.OverlappingTypedPatterns(r: user.Result) -> string {
     load_var r
     load_const user.Success
     cmp_op instanceof
@@ -2075,7 +2075,7 @@ function user.OverlappingTypedPatterns(r: null) -> string {
     return
 }
 
-function user.OverlappingWithBindings(r: null) -> string {
+function user.OverlappingWithBindings(r: user.Result) -> string {
     load_var r
     load_const user.Success
     cmp_op instanceof
@@ -2120,7 +2120,7 @@ function user.ParenthesizedSingleLiteral(b: bool) -> string {
     return
 }
 
-function user.PartialUnionPatternCoverage(r: null) -> string {
+function user.PartialUnionPatternCoverage(r: user.FullResult) -> string {
     load_var r
     pop 1
     load_const false
@@ -2131,7 +2131,7 @@ function user.PartialUnionPatternCoverage(r: null) -> string {
     return
 }
 
-function user.PartialUnionPlusCatchAll(r: null) -> string {
+function user.PartialUnionPlusCatchAll(r: user.FullResult) -> string {
     load_var r
     pop 1
     load_const false
@@ -2176,7 +2176,7 @@ function user.StringLiteralAfterStringType(s: string) -> string {
     return
 }
 
-function user.StringLiteralUnionPattern(role: null) -> string {
+function user.StringLiteralUnionPattern(role: user.Role) -> string {
     load_var role
     load_const "user"
     cmp_op ==
@@ -2205,7 +2205,7 @@ function user.StringLiteralUnionPattern(role: null) -> string {
     return
 }
 
-function user.StringLiteralWithCatchAll(role: null) -> string {
+function user.StringLiteralWithCatchAll(role: user.Role) -> string {
     load_var role
     load_const "user"
     cmp_op ==
@@ -2283,7 +2283,7 @@ function user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     return
 }
 
-function user.UnionPatternCoversAll(r: null) -> string {
+function user.UnionPatternCoversAll(r: user.Result) -> string {
     load_var r
     pop 1
     load_const false

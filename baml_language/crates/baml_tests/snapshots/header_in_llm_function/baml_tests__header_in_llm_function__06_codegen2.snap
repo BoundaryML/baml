@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.FetchDatax(user_id: string) -> null {
+function user.FetchDatax(user_id: string) -> user.Hi {
     load_const "FetchDatax"
     load_var user_id
     load_const "user_id"

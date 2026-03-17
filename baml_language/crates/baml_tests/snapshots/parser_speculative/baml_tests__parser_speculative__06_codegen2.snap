@@ -28,7 +28,7 @@ function user.ChainedProcess(input: string) -> string {
     return
 }
 
-function user.ExtractData(text: string) -> null {
+function user.ExtractData(text: string) -> user.JsonData {
     load_const "ExtractData"
     load_var text
     load_const "text"
@@ -37,7 +37,7 @@ function user.ExtractData(text: string) -> null {
     return
 }
 
-function user.LLMAnalyze(text: string) -> null {
+function user.LLMAnalyze(text: string) -> user.Analysis {
     load_const "LLMAnalyze"
     load_var text
     load_const "text"
@@ -46,7 +46,7 @@ function user.LLMAnalyze(text: string) -> null {
     return
 }
 
-function user.ProcessAnalysis(analysis: null) -> string {
+function user.ProcessAnalysis(analysis: user.Analysis) -> string {
     load_var analysis
     load_field .score
     store_var score
@@ -101,7 +101,7 @@ function user.ProcessAnalysis(analysis: null) -> string {
     return
 }
 
-function user.ProcessData(data: null) -> string {
+function user.ProcessData(data: user.JsonData) -> string {
     load_var data
     load_field .field1
     load_var data

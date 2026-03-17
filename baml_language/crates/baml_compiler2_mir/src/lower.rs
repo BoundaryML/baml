@@ -72,7 +72,7 @@ fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
     }
 }
 
-fn convert_tir2_ty(ty: &Tir2Ty) -> Ty {
+pub fn convert_tir2_ty(ty: &Tir2Ty) -> Ty {
     let attr = TyAttr::default();
     match ty {
         // Primitives

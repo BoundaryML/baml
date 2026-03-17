@@ -22,7 +22,7 @@ function user.Calculate() -> int {
     return
 }
 
-function user.FieldAccess(user: null) -> string {
+function user.FieldAccess(user: user.User) -> string {
     load_var user
     load_field .profile
     load_field .settings
@@ -30,7 +30,7 @@ function user.FieldAccess(user: null) -> string {
     return
 }
 
-function user.IndexAccess(users: null[]) -> string {
+function user.IndexAccess(users: user.IndexUser[]) -> string {
     load_var users
     load_var _7
     load_array_element

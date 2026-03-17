@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.TypeBuilderFn(from_text: string) -> null {
+function user.TypeBuilderFn(from_text: string) -> user.Resume {
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"

@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.AlwaysThrowsStatus(n: int) -> null {
+function user.AlwaysThrowsStatus(n: int) -> user.Status {
     load_var n
     copy 0
     load_const 0
@@ -172,7 +172,7 @@ function user.RecB(n: int) -> string {
     return
 }
 
-function user.ThrowsAllStatusVariants(n: int) -> null {
+function user.ThrowsAllStatusVariants(n: int) -> user.Status {
     load_var n
     copy 0
     load_const 1
@@ -224,7 +224,7 @@ function user.UnreachableTailStillChecked() -> string {
     throw
 }
 
-function user.WrapperAlwaysThrows(n: int) -> null {
+function user.WrapperAlwaysThrows(n: int) -> user.Status {
     load_var n
     call user.AlwaysThrowsStatus
     return

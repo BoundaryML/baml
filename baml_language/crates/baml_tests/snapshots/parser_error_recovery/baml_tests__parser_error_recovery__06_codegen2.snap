@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.Foo() -> null {
+function user.Foo() -> void {
     load_const null
     return
 }

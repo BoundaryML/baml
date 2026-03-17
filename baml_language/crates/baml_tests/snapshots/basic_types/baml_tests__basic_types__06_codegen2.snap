@@ -15,14 +15,14 @@ function user.GetMixedMap() -> map<string, int | string> {
     return
 }
 
-function user.GetStatus() -> null {
+function user.GetStatus() -> user.Status {
     load_const "GetStatus"
     alloc_map 0
     call baml.llm.call_llm_function
     return
 }
 
-function user.GetUser(id: int) -> null {
+function user.GetUser(id: int) -> user.User {
     load_const "GetUser"
     load_var id
     load_const "id"

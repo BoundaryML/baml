@@ -60,7 +60,7 @@ function user.mixedArray() -> int | string[] {
     return
 }
 
-function user.point() -> null {
+function user.point() -> user.Point {
     alloc_instance Point
     copy 0
     load_const 1
@@ -71,7 +71,7 @@ function user.point() -> null {
     return
 }
 
-function user.pointArray() -> null[] {
+function user.pointArray() -> user.Point[] {
     alloc_instance Point
     copy 0
     load_const 1
@@ -114,7 +114,7 @@ function user.stringValues() -> map<string, string> {
     return
 }
 
-function user.vec2d() -> null {
+function user.vec2d() -> user.Vec2D {
     alloc_instance Vec2D
     copy 0
     alloc_instance Point
