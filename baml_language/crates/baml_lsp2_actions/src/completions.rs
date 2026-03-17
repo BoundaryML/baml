@@ -464,12 +464,12 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
     match ty {
         Ty::Class(qn) => {
             // Find the class definition and return its fields and methods.
-            let class_name = Name::new(qn.name.as_str());
-            let pkg_info_name = qn.pkg.as_str();
+            let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
             let pkg = package_items(db, pkg_id);
+            let path = qn.to_path_in_package();
 
-            let class_def = pkg.lookup_type(&[class_name]);
+            let class_def = pkg.lookup_type(&path);
             let Some(Definition::Class(class_loc)) = class_def else {
                 return Vec::new();
             };
@@ -503,11 +503,11 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
 
         Ty::Enum(qn) => {
             // Find the enum and return its variants.
-            let enum_name = Name::new(qn.name.as_str());
-            let pkg_id = PackageId::new(db, Name::new(qn.pkg.as_str()));
+            let pkg_id = PackageId::new(db, Name::new(qn.package().as_str()));
             let pkg = package_items(db, pkg_id);
+            let path = qn.to_path_in_package();
 
-            let enum_def = pkg.lookup_type(&[enum_name]);
+            let enum_def = pkg.lookup_type(&path);
             let Some(Definition::Enum(enum_loc)) = enum_def else {
                 return Vec::new();
             };
@@ -656,7 +656,8 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             let class = &item_tree[class_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
             Some(Ty::Class(baml_compiler2_tir::ty::QualifiedTypeName::new(
-                Name::new(pkg_info.package.as_str()),
+                pkg_info.package,
+                pkg_info.namespace_path.clone(),
                 class.name.clone(),
             )))
         }
@@ -665,7 +666,8 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             let enum_data = &item_tree[enum_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db));
             Some(Ty::Enum(baml_compiler2_tir::ty::QualifiedTypeName::new(
-                Name::new(pkg_info.package.as_str()),
+                pkg_info.package,
+                pkg_info.namespace_path.clone(),
                 enum_data.name.clone(),
             )))
         }

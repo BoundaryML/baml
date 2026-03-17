@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 9818
 ---
 === MIR2 ===
 fn user.array_length() -> int {
@@ -89,7 +88,7 @@ fn user.param_in_if_statement(b: bool) -> int {
     }
 }
 
-fn user.Greeting(self: user.Baz) -> string {
+fn user.Baz.Greeting(self: user.Baz) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: user.Baz // self // param

@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 18749
 ---
 === MIR2 ===
 fn user.assign_in_loop() -> int {
@@ -405,7 +404,7 @@ fn user.nested_for_loop() -> int {
     let _6: 1 | 2 | 3
     let _7: 1 | 2 | 3 // i
     let _8: 4 | 5 | 6[]
-    let _9: int // __for_idx
+    let _9: int // __for_idx_1
     let _10: int
     let _11: bool
     let _12: 4 | 5 | 6

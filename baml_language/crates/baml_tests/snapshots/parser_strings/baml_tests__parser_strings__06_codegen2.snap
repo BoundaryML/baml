@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.FormatMessage(name: string) -> string {
+    load_const "FormatMessage"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}
+
+function user.GetRole() -> "admin" | "user" | "guest" {
+    load_const "user"
+    return
+}
+
+function user.ProcessText(input: string) -> string {
+    load_const "ProcessText"
+    load_var input
+    load_const "input"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}

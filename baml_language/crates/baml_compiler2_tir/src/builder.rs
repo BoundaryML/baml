@@ -1180,7 +1180,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Enum(enum_name) => Some(
                 self.lookup_enum_variants(enum_name)
                     .into_iter()
-                    .map(|variant| format!("{}.{}", enum_name.name, variant))
+                    .map(|variant| format!("{}.{}", enum_name, variant))
                     .collect(),
             ),
             Ty::Optional(inner) => {
@@ -1236,7 +1236,13 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::Null => BTreeSet::from(["null".to_string()]),
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
-                BTreeSet::from([format!("{}.{}", enum_name, variant)])
+                // Use the qualified name from scrutinee_ty when available,
+                // so the case string matches required_match_cases output.
+                let qualified_enum = match scrutinee_ty {
+                    Ty::Enum(qtn) if qtn.name() == enum_name => qtn.to_string(),
+                    _ => enum_name.to_string(),
+                };
+                BTreeSet::from([format!("{}.{}", qualified_enum, variant)])
             }
             baml_compiler2_ast::Pattern::Union(parts) => {
                 let mut out = BTreeSet::new();
@@ -1336,7 +1342,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             baml_compiler2_ast::Pattern::Null => Ty::Primitive(PrimitiveType::Null),
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
                 if let Ty::Enum(qn) = scrutinee_ty {
-                    if qn.name == *enum_name {
+                    if qn.name() == enum_name {
                         return Ty::EnumVariant(qn.clone(), variant.clone());
                     }
                 }
@@ -1480,8 +1486,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
                 let matches_variant = match throw_fact {
-                    Ty::EnumVariant(qn, v) => qn.name == *enum_name && v == variant,
-                    Ty::Enum(qn) => qn.name == *enum_name,
+                    Ty::EnumVariant(qn, v) => qn.name() == enum_name && v == variant,
+                    Ty::Enum(qn) => qn.name() == enum_name,
                     _ => false,
                 };
                 if matches_variant {
@@ -1893,7 +1899,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Extract the short name from a qualified type name for package item lookups.
     fn unqualify(qn: &crate::ty::QualifiedTypeName) -> Name {
-        qn.name.clone()
+        qn.name().clone()
     }
 
     fn infer_literal(&self, lit: &baml_base::Literal) -> Ty {
@@ -2272,7 +2278,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> FxHashMap<Name, Ty> {
         let mut result = FxHashMap::default();
         let short = Self::unqualify(class_name);
-        let pkg_items_for_class = self.resolve_class_pkg_items(&class_name.pkg);
+        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package());
         if let Some(def) = pkg_items_for_class.lookup_type_any_ns(&short) {
             if let Definition::Class(class_loc) = def {
                 let file = class_loc.file(self.context.db());
@@ -2341,7 +2347,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         baml_compiler2_hir::loc::FunctionLoc<'db>,
     )> {
         let short = Self::unqualify(class_name);
-        let pkg_items_for_class = self.resolve_class_pkg_items(&class_name.pkg);
+        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package());
         let def = pkg_items_for_class.lookup_type_any_ns(&short)?;
         let Definition::Class(class_loc) = def else {
             return None;
@@ -2759,11 +2765,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // For generics, apply type_args (e.g. Array<int>).
                 let builtin_class_ty = if type_args.is_empty() {
                     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                    Ty::Class(crate::ty::QualifiedTypeName {
-                        pkg: pkg_info.package,
-                        name: class_data.name.clone(),
-                        generic_params: class_data.generic_params.clone(),
-                    })
+                    Ty::Class(crate::ty::QualifiedTypeName::new_with_generic_params(
+                        pkg_info.package,
+                        pkg_info.namespace_path,
+                        class_data.name.clone(),
+                        class_data.generic_params.clone(),
+                    ))
                 } else if type_args.len() == 1 {
                     // Single type arg: Array<T> → List(T), special-case common containers
                     match class_data.name.as_str() {
@@ -2772,6 +2779,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
                             Ty::Class(crate::ty::QualifiedTypeName::new(
                                 pkg_info.package,
+                                pkg_info.namespace_path,
                                 class_data.name.clone(),
                             ))
                         }
@@ -2786,6 +2794,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
                             Ty::Class(crate::ty::QualifiedTypeName::new(
                                 pkg_info.package,
+                                pkg_info.namespace_path,
                                 class_data.name.clone(),
                             ))
                         }
@@ -2794,6 +2803,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
                     Ty::Class(crate::ty::QualifiedTypeName::new(
                         pkg_info.package,
+                        pkg_info.namespace_path,
                         class_data.name.clone(),
                     ))
                 };

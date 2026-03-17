@@ -149,11 +149,6 @@ pub fn lower_type_expr_in_ns(
     }
 }
 
-/// Build a qualified type name from package and short name.
-pub fn qualify(pkg: &str, name: &baml_base::Name) -> QualifiedTypeName {
-    QualifiedTypeName::new(baml_base::Name::new(pkg), name.clone())
-}
-
 /// Derive the qualified name for a type from its Definition's file location.
 pub fn qualify_def(
     db: &dyn crate::Db,
@@ -162,5 +157,5 @@ pub fn qualify_def(
 ) -> QualifiedTypeName {
     let file = def.file(db);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    qualify(pkg_info.package.as_str(), name)
+    QualifiedTypeName::new(pkg_info.package, pkg_info.namespace_path, name.clone())
 }

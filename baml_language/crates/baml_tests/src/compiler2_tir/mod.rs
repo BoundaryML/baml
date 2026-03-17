@@ -530,9 +530,10 @@ pub(crate) mod support {
                                     }
                                     writeln!(output, "}}").ok();
                                     // Render class cycle diagnostic if applicable
-                                    let qn = baml_compiler2_tir::lower_type_expr::qualify(
-                                        pkg_info.package.as_str(),
-                                        name,
+                                    let qn = baml_compiler2_tir::ty::QualifiedTypeName::new(
+                                        pkg_info.package.clone(),
+                                        pkg_info.namespace_path.clone(),
+                                        name.clone(),
                                     );
                                     if let Some(cycle_path) = class_cycle_map.get(&qn) {
                                         let start = u32::from(scope.range.start());
@@ -561,9 +562,10 @@ pub(crate) mod support {
                                         writeln!(output, "  !! {start}..{end}: {diag}").ok();
                                     }
                                     // Render cycle diagnostic if this alias is in an invalid cycle
-                                    let qn = baml_compiler2_tir::lower_type_expr::qualify(
-                                        pkg_info.package.as_str(),
-                                        name,
+                                    let qn = baml_compiler2_tir::ty::QualifiedTypeName::new(
+                                        pkg_info.package.clone(),
+                                        pkg_info.namespace_path.clone(),
+                                        name.clone(),
                                     );
                                     if invalid_cycles.contains(&qn) {
                                         let start = u32::from(scope.range.start());

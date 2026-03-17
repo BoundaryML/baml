@@ -63,16 +63,10 @@ impl VizContext {
 use baml_compiler2_tir::ty::{PrimitiveType, QualifiedTypeName, Ty as Tir2Ty};
 
 fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
-    let module_path = vec![qtn.pkg.clone()];
-    let base_display = format!("{}.{}", qtn.pkg, qtn.name);
-    let display_name = if qtn.generic_params.is_empty() {
-        Name::new(base_display)
-    } else {
-        let params: Vec<_> = qtn.generic_params.iter().map(|p| p.to_string()).collect();
-        Name::new(format!("{}<{}>", base_display, params.join(", ")))
-    };
+    let module_path = std::iter::once(qtn.package().clone()).chain(qtn.namespace().iter().cloned()).collect::<Vec<_>>();
+    let display_name = smol_str::SmolStr::new(qtn.to_string());
     TypeName {
-        name: qtn.name.clone(),
+        name: qtn.name().clone(),
         module_path,
         display_name,
     }
@@ -289,6 +283,9 @@ struct LoweringContext<'db> {
     viz_context: VizContext,
     #[allow(dead_code)]
     pending_header: Option<PendingHeader>,
+
+    // Counter for generating unique synthetic variable names (e.g. __for_idx, __for_idx_1)
+    synthetic_name_counts: HashMap<String, usize>,
 }
 
 impl<'db> LoweringContext<'db> {
@@ -458,7 +455,20 @@ impl<'db> LoweringContext<'db> {
             watched_locals_stack: Vec::new(),
             viz_context: VizContext::new(func_data.name.to_string()),
             pending_header: None,
+            synthetic_name_counts: HashMap::new(),
         }
+    }
+
+    /// Generate a unique synthetic variable name, e.g. __for_idx, __for_idx_1, __for_idx_2.
+    fn gensym(&mut self, prefix: &str) -> Name {
+        let count = self.synthetic_name_counts.entry(prefix.to_string()).or_insert(0);
+        let name = if *count == 0 {
+            prefix.to_string()
+        } else {
+            format!("{prefix}_{count}")
+        };
+        *count += 1;
+        Name::new(&name)
     }
 
     /// Get the baml_type::Ty for an expression by looking up in the aggregated map
@@ -1248,9 +1258,9 @@ impl<'db> LoweringContext<'db> {
         if let Some(tir_ty) = self.expr_types.get(&expr_id).cloned() {
             if let Tir2Ty::EnumVariant(qtn, variant) = &tir_ty {
                 let enum_ref = ItemRef::EnumType {
-                    package: qtn.pkg.clone(),
-                    namespace: vec![],
-                    name: qtn.name.clone(),
+                    package: qtn.package().clone(),
+                    namespace: qtn.namespace().clone(),
+                    name: qtn.name().clone(),
                 };
                 self.builder.assign(
                     dest,
@@ -1560,8 +1570,9 @@ impl<'db> LoweringContext<'db> {
                 let int_ty = Ty::Int {
                     attr: TyAttr::default(),
                 };
+                let idx_name = self.gensym("__for_idx");
                 let idx_local = self.builder.declare_local(
-                    Some(Name::new("__for_idx")),
+                    Some(idx_name),
                     int_ty.clone(),
                     None,
                     false,
@@ -2232,15 +2243,27 @@ impl<'db> LoweringContext<'db> {
                     .branch(Operand::Copy(Place::Local(test_local)), success, failure);
             }
             AstPattern::EnumVariant { enum_name, variant } => {
+                // Resolve the enum's package from TIR type info when available,
+                // otherwise fall back to the current file's package.
+                let enum_ref = if let Some(Tir2Ty::EnumVariant(qtn, _)) = self.pat_types.get(&pat_id) {
+                    ItemRef::EnumType {
+                        package: qtn.package().clone(),
+                        namespace: qtn.namespace().clone(),
+                        name: qtn.name().clone(),
+                    }
+                } else {
+                    let pkg_info = file_package(self.db, self.file);
+                    ItemRef::EnumType {
+                        package: pkg_info.package.clone(),
+                        namespace: pkg_info.namespace_path.clone(),
+                        name: enum_name.clone(),
+                    }
+                };
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
                     left: Operand::Copy(Place::Local(scrutinee)),
                     right: Operand::Constant(Constant::EnumVariant {
-                        enum_ref: ItemRef::EnumType {
-                            package: Name::new("user"),
-                            namespace: vec![],
-                            name: enum_name.clone(),
-                        },
+                        enum_ref,
                         variant: variant.clone(),
                     }),
                 };

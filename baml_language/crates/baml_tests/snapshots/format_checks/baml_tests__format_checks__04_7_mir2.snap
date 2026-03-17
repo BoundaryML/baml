@@ -1,6 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 8478
 ---
 === MIR2 ===
 fn user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
@@ -964,7 +963,7 @@ fn user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<string,
     }
 }
 
-fn user.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
+fn user.WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
     // Locals:
     let _0: map<string, int | string | bool> // _0 // return
     let _1: map<string, int> // first_input // param
@@ -981,7 +980,7 @@ fn user.processData(first_input: map<string, int>, second_input: int | string | 
     }
 }
 
-fn user.greet() -> string {
+fn user.WithMethod.greet() -> string {
     // Locals:
     let _0: string // _0 // return
 
@@ -1285,7 +1284,7 @@ fn user.NestedLoops(matrix: int[][]) -> int {
     let _6: int[]
     let _7: int[] // row
     let _8: int[]
-    let _9: int // __for_idx
+    let _9: int // __for_idx_1
     let _10: int
     let _11: bool
     let _12: int
@@ -2562,20 +2561,20 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _32: int // item
     let _33: int
     let _34: 1 | 2 | 3 | 4 | 5[]
-    let _35: int // __for_idx
+    let _35: int // __for_idx_1
     let _36: int
     let _37: bool
     let _38: 1 | 2 | 3 | 4 | 5
     let _39: 1 | 2 | 3 | 4 | 5 // x
     let _40: void
     let _41: 1 | 2 | 3[]
-    let _42: int // __for_idx
+    let _42: int // __for_idx_2
     let _43: int
     let _44: bool
     let _45: 1 | 2 | 3
     let _46: 1 | 2 | 3 // i
     let _47: 4 | 5 | 6[]
-    let _48: int // __for_idx
+    let _48: int // __for_idx_3
     let _49: int
     let _50: bool
     let _51: 4 | 5 | 6
@@ -2591,13 +2590,13 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _61: bool
     let _62: int
     let _63: int
-    let _64: int // __for_idx
+    let _64: int // __for_idx_4
     let _65: int
     let _66: bool
     let _67: int
     let _68: int // item
     let _69: int
-    let _70: int // __for_idx
+    let _70: int // __for_idx_5
     let _71: int
     let _72: bool
     let _73: int
@@ -2675,12 +2674,12 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _145: void
     let _146: void
     let _147: "very long string one" | "very long string two" | "very long string three" | "very long string four"[]
-    let _148: int // __for_idx
+    let _148: int // __for_idx_6
     let _149: int
     let _150: bool
     let _151: "very long string one" | "very long string two" | "very long string three" | "very long string four"
     let _152: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
-    let _153: int // __for_idx
+    let _153: int // __for_idx_7
     let _154: int
     let _155: bool
     let _156: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
@@ -2753,29 +2752,29 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _223: void
     let _224: void
     let _225: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
-    let _226: int // __for_idx
+    let _226: int // __for_idx_8
     let _227: int
     let _228: bool
     let _229: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
     let _230: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
-    let _231: int // __for_idx
+    let _231: int // __for_idx_9
     let _232: int
     let _233: bool
     let _234: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
     let _235: 1 | 2 | 3[]
-    let _236: int // __for_idx
+    let _236: int // __for_idx_10
     let _237: int
     let _238: bool
     let _239: 1 | 2 | 3
     let _240: 1 | 2 | 3 // i
     let _241: 4 | 5 | 6[]
-    let _242: int // __for_idx
+    let _242: int // __for_idx_11
     let _243: int
     let _244: bool
     let _245: 4 | 5 | 6
     let _246: 4 | 5 | 6 // j
     let _247: 7 | 8 | 9[]
-    let _248: int // __for_idx
+    let _248: int // __for_idx_12
     let _249: int
     let _250: bool
     let _251: 7 | 8 | 9
@@ -2800,7 +2799,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _270: int
     let _271: int
     let _272: 1 | 2 | 3 | 4 | 5[]
-    let _273: int // __for_idx
+    let _273: int // __for_idx_13
     let _274: int
     let _275: bool
     let _276: 1 | 2 | 3 | 4 | 5
@@ -2808,7 +2807,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _278: bool
     let _279: 1 | 2 | 3 | 4 | 5
     let _280: 10 | 20 | 30 | 40 | 50[]
-    let _281: int // __for_idx
+    let _281: int // __for_idx_14
     let _282: int
     let _283: bool
     let _284: 10 | 20 | 30 | 40 | 50
@@ -2829,7 +2828,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _299: bool
     let _300: int
     let _301: 1 | 2[]
-    let _302: int // __for_idx
+    let _302: int // __for_idx_15
     let _303: int
     let _304: bool
     let _305: 1 | 2
@@ -2847,7 +2846,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _317: 1 | 2
     let _318: int
     let _319: int
-    let _320: int // __for_idx
+    let _320: int // __for_idx_16
     let _321: int
     let _322: bool
     let _323: int
@@ -2873,13 +2872,13 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _343: void
     let _344: void
     let _345: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10[]
-    let _346: int // __for_idx
+    let _346: int // __for_idx_17
     let _347: int
     let _348: bool
     let _349: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
     let _350: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 // i
     let _351: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100[]
-    let _352: int // __for_idx
+    let _352: int // __for_idx_18
     let _353: int
     let _354: bool
     let _355: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
@@ -2912,7 +2911,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _382: bool
     let _383: int
     let _384: int
-    let _385: int // __for_idx
+    let _385: int // __for_idx_19
     let _386: int
     let _387: bool
     let _388: int

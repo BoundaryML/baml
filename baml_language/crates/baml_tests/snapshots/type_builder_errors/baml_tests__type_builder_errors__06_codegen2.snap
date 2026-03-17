@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.TypeBuilderFn(from_text: string) -> null {
+    load_const "TypeBuilderFn"
+    load_var from_text
+    load_const "from_text"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}

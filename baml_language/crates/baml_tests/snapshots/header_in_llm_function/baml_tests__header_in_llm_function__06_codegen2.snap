@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.FetchDatax(user_id: string) -> null {
+    load_const "FetchDatax"
+    load_var user_id
+    load_const "user_id"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}

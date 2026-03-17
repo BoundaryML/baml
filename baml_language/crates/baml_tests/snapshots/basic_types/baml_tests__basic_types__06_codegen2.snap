@@ -1,0 +1,32 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.GetMixedList() -> int | string[] {
+    load_const "GetMixedList"
+    alloc_map 0
+    call baml.llm.call_llm_function
+    return
+}
+
+function user.GetMixedMap() -> map<string, int | string> {
+    load_const "GetMixedMap"
+    alloc_map 0
+    call baml.llm.call_llm_function
+    return
+}
+
+function user.GetStatus() -> null {
+    load_const "GetStatus"
+    alloc_map 0
+    call baml.llm.call_llm_function
+    return
+}
+
+function user.GetUser(id: int) -> null {
+    load_const "GetUser"
+    load_var id
+    load_const "id"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}

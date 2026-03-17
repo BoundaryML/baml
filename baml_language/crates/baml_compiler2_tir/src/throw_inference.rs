@@ -185,8 +185,8 @@ pub fn collect_direct_throws<'db>(
 fn fact_display_name(fact: &Ty) -> String {
     match fact {
         Ty::Primitive(p) => p.to_string(),
-        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.name.as_str().to_string(),
-        Ty::EnumVariant(qn, variant) => format!("{}.{}", qn.name, variant),
+        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.to_string(),
+        Ty::EnumVariant(qn, variant) => format!("{}.{}", qn, variant),
         Ty::Unknown => "unknown".to_string(),
         _ => format!("{fact}"),
     }

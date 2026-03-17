@@ -1,18 +1,17 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 1829
 ---
 === MIR2 ===
 fn user.ReadAndClose() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.File // f
-    let _2: future<baml.File>
+    let _1: baml.fs.File // f
+    let _2: future<baml.fs.File>
     let _3: string // content
-    let _4: baml.File
+    let _4: baml.fs.File
     let _5: future<string>
     let _6: null
-    let _7: baml.File
+    let _7: baml.fs.File
     let _8: future<null>
 
     bb0: {
@@ -54,9 +53,9 @@ fn user.ReadAndClose() -> string {
 fn user.ReadFile() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.File // f
-    let _2: future<baml.File>
-    let _3: baml.File
+    let _1: baml.fs.File // f
+    let _2: future<baml.fs.File>
+    let _3: baml.fs.File
     let _4: future<string>
 
     bb0: {
@@ -88,8 +87,8 @@ fn user.ReadFile() -> string {
 fn user.ReadFileInline() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.File
-    let _2: future<baml.File>
+    let _1: baml.fs.File
+    let _2: future<baml.fs.File>
     let _3: future<string>
 
     bb0: {
@@ -120,15 +119,15 @@ fn user.ReadFileInline() -> string {
 fn user.ReadMultipleFiles() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.File // f1
-    let _2: future<baml.File>
-    let _3: baml.File // f2
-    let _4: future<baml.File>
+    let _1: baml.fs.File // f1
+    let _2: future<baml.fs.File>
+    let _3: baml.fs.File // f2
+    let _4: future<baml.fs.File>
     let _5: string // content1
-    let _6: baml.File
+    let _6: baml.fs.File
     let _7: future<string>
     let _8: string // content2
-    let _9: baml.File
+    let _9: baml.fs.File
     let _10: future<string>
     let _11: string
     let _12: string
@@ -182,9 +181,9 @@ fn user.ReadMultipleFiles() -> string {
 fn user.ConnectAndRead() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.Socket // sock
-    let _2: future<baml.Socket>
-    let _3: baml.Socket
+    let _1: baml.net.Socket // sock
+    let _2: future<baml.net.Socket>
+    let _3: baml.net.Socket
     let _4: future<string>
 
     bb0: {
@@ -216,8 +215,8 @@ fn user.ConnectAndRead() -> string {
 fn user.ConnectAndReadInline() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.Socket
-    let _2: future<baml.Socket>
+    let _1: baml.net.Socket
+    let _2: future<baml.net.Socket>
     let _3: future<string>
 
     bb0: {
@@ -248,15 +247,15 @@ fn user.ConnectAndReadInline() -> string {
 fn user.MultipleConnections() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.Socket // s1
-    let _2: future<baml.Socket>
-    let _3: baml.Socket // s2
-    let _4: future<baml.Socket>
+    let _1: baml.net.Socket // s1
+    let _2: future<baml.net.Socket>
+    let _3: baml.net.Socket // s2
+    let _4: future<baml.net.Socket>
     let _5: string // data1
-    let _6: baml.Socket
+    let _6: baml.net.Socket
     let _7: future<string>
     let _8: string // data2
-    let _9: baml.Socket
+    let _9: baml.net.Socket
     let _10: future<string>
     let _11: string
     let _12: string
@@ -310,13 +309,13 @@ fn user.MultipleConnections() -> string {
 fn user.ConnectReadAndClose() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: baml.Socket // sock
-    let _2: future<baml.Socket>
+    let _1: baml.net.Socket // sock
+    let _2: future<baml.net.Socket>
     let _3: string // data
-    let _4: baml.Socket
+    let _4: baml.net.Socket
     let _5: future<string>
     let _6: null
-    let _7: baml.Socket
+    let _7: baml.net.Socket
     let _8: future<null>
 
     bb0: {

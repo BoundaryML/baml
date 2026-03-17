@@ -87,7 +87,7 @@ fn class_field_self_reference() {
     class user.Node {
       next: user.Node
     }
-      !! 0..24: class cycle: Node
+      !! 0..24: class cycle: user.Node
     ");
 }
 
@@ -104,11 +104,11 @@ fn class_field_mutual_reference() {
     class user.Husband {
       wife: user.Wife
     }
-      !! 0..27: class cycle: Husband -> Wife -> Husband
+      !! 0..27: class cycle: user.Husband -> user.Wife -> user.Husband
     class user.Wife {
       husband: user.Husband
     }
-      !! 27..58: class cycle: Husband -> Wife -> Husband
+      !! 27..58: class cycle: user.Husband -> user.Wife -> user.Husband
     ");
 }
 
@@ -212,11 +212,11 @@ fn class_required_field_mutual_cycle() {
     class user.A {
       b: user.B
     }
-      !! 0..15: class cycle: A -> B -> A
+      !! 0..15: class cycle: user.A -> user.B -> user.A
     class user.B {
       a: user.A
     }
-      !! 15..31: class cycle: A -> B -> A
+      !! 15..31: class cycle: user.A -> user.B -> user.A
     ");
 }
 
@@ -230,7 +230,7 @@ fn class_required_field_self_cycle() {
     class user.A {
       self_ref: user.A
     }
-      !! 0..22: class cycle: A
+      !! 0..22: class cycle: user.A
     ");
 }
 
@@ -246,15 +246,15 @@ fn class_required_field_three_way_cycle() {
     class user.A {
       b: user.B
     }
-      !! 0..15: class cycle: A -> B -> C -> A
+      !! 0..15: class cycle: user.A -> user.B -> user.C -> user.A
     class user.B {
       c: user.C
     }
-      !! 15..31: class cycle: A -> B -> C -> A
+      !! 15..31: class cycle: user.A -> user.B -> user.C -> user.A
     class user.C {
       a: user.A
     }
-      !! 31..47: class cycle: A -> B -> C -> A
+      !! 31..47: class cycle: user.A -> user.B -> user.C -> user.A
     ");
 }
 
@@ -325,12 +325,12 @@ fn class_cycle_through_type_alias() {
     class user.A {
       b: user.AliasB
     }
-      !! 0..20: class cycle: A -> B -> A
+      !! 0..20: class cycle: user.A -> user.B -> user.A
     type user.AliasB = user.B
     class user.B {
       a: user.A
     }
-      !! 36..52: class cycle: A -> B -> A
+      !! 36..52: class cycle: user.A -> user.B -> user.A
     ");
 }
 
@@ -364,11 +364,11 @@ fn class_union_field_all_variants_same_class() {
     class user.A {
       b: user.B | user.B
     }
-      !! 0..19: class cycle: A -> B -> A
+      !! 0..19: class cycle: user.A -> user.B -> user.A
     class user.B {
       a: user.A
     }
-      !! 19..35: class cycle: A -> B -> A
+      !! 19..35: class cycle: user.A -> user.B -> user.A
     ");
 }
 

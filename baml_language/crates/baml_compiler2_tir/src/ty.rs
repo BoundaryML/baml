@@ -12,27 +12,56 @@ use baml_base::Name;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct QualifiedTypeName {
     /// The package this type is defined in (e.g. `"user"`, `"baml"`).
-    pub pkg: Name,
+    pkg: Name,
+    /// The namespace this type is defined in (e.g. `["llm"]`).
+    namespace: Vec<Name>,
     /// The short/local name of the type (e.g. `"Foo"`).
-    pub name: Name,
+    name: Name,
     /// Unresolved generic type parameter names (e.g. `["T"]` for `Array<T>`).
     /// Empty for non-generic types or when concrete type args are substituted.
     pub generic_params: Vec<Name>,
 }
 
 impl QualifiedTypeName {
-    pub fn new(pkg: Name, name: Name) -> Self {
+    pub fn new(pkg: Name, namespace: Vec<Name>, name: Name) -> Self {
+        Self::new_with_generic_params(pkg, namespace, name, Vec::new())
+    }
+
+    pub fn new_with_generic_params(pkg: Name, namespace: Vec<Name>, name: Name, generic_params: Vec<Name>) -> Self {
         Self {
             pkg,
+            namespace,
             name,
-            generic_params: Vec::new(),
+            generic_params,
         }
+    }
+
+
+    pub fn package(&self) -> &Name {
+        &self.pkg
+    }
+
+    pub fn namespace(&self) -> &Vec<Name> {
+        &self.namespace
+    }
+
+    pub fn name(&self) -> &Name {
+        &self.name
+    }
+
+    pub fn to_path_in_package(&self) -> Vec<Name> {
+        self.namespace.iter().chain(std::iter::once(&self.name)).map(|n| n.clone()).collect::<Vec<_>>()
     }
 }
 
 impl fmt::Display for QualifiedTypeName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}", self.pkg, self.name)?;
+        let namespace = self.namespace.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(".");
+        if !namespace.is_empty() {
+            write!(f, "{}.{}.{}", self.pkg, namespace, self.name)?;
+        } else {
+            write!(f, "{}.{}", self.pkg, self.name)?;
+        }
         if !self.generic_params.is_empty() {
             let params: Vec<_> = self.generic_params.iter().map(|p| p.to_string()).collect();
             write!(f, "<{}>", params.join(", "))?;

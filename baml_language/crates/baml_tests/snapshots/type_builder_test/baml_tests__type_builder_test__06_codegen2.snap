@@ -1,0 +1,9 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.Fn() -> string {
+    load_const "Fn"
+    alloc_map 0
+    call baml.llm.call_llm_function
+    return
+}

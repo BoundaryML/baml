@@ -618,7 +618,7 @@ impl<'g> Tarjan<'g> {
 
         // Sort nodes for deterministic traversal order.
         let mut nodes: Vec<_> = graph.keys().cloned().collect();
-        nodes.sort_by(|a, b| (&a.pkg, &a.name).cmp(&(&b.pkg, &b.name)));
+        nodes.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
 
         for node in &nodes {
             if tarjan.state[node].index == Self::UNVISITED {
@@ -629,7 +629,7 @@ impl<'g> Tarjan<'g> {
         // Sort components by first element for deterministic output.
         tarjan
             .components
-            .sort_by(|a, b| (&a[0].pkg, &a[0].name).cmp(&(&b[0].pkg, &b[0].name)));
+            .sort_by(|a, b| a[0].to_string().cmp(&b[0].to_string()));
 
         tarjan.components
     }
@@ -646,7 +646,7 @@ impl<'g> Tarjan<'g> {
 
         // Sort successors for deterministic DFS order.
         let mut successors: Vec<_> = self.graph[node_id].iter().collect();
-        successors.sort_by(|a, b| (&a.pkg, &a.name).cmp(&(&b.pkg, &b.name)));
+        successors.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
 
         for successor_id in successors {
             let mut successor = self.state[successor_id];
@@ -687,7 +687,7 @@ impl<'g> Tarjan<'g> {
                 if let Some(min_idx) = component
                     .iter()
                     .enumerate()
-                    .min_by(|(_, a), (_, b)| (&a.pkg, &a.name).cmp(&(&b.pkg, &b.name)))
+                    .min_by(|(_, a), (_, b)| a.to_string().cmp(&b.to_string()))
                     .map(|(i, _)| i)
                 {
                     component.rotate_left(min_idx);
@@ -887,10 +887,10 @@ fn extract_required_class_deps(
 /// Format a cycle path as "A -> B -> C -> A".
 fn format_cycle_path(cycle: &[QualifiedTypeName]) -> String {
     if cycle.len() == 1 {
-        cycle[0].name.to_string()
+        cycle[0].to_string()
     } else {
-        let mut path: Vec<String> = cycle.iter().map(|qn| qn.name.to_string()).collect();
-        path.push(cycle[0].name.to_string());
+        let mut path: Vec<String> = cycle.iter().map(|qn| qn.to_string()).collect();
+        path.push(cycle[0].to_string());
         path.join(" -> ")
     }
 }
@@ -901,7 +901,7 @@ mod tests {
     use crate::ty::Freshness;
 
     fn qn(name: &str) -> QualifiedTypeName {
-        QualifiedTypeName::new(Name::new("test"), Name::new(name))
+        QualifiedTypeName::new(Name::new("test"), vec![], Name::new(name))
     }
 
     fn type_alias(name: &str) -> Ty {

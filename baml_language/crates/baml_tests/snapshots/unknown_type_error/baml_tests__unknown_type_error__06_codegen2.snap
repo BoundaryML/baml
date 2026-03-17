@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.Bar(x: null) -> int {
+    load_const 1
+    return
+}
+
+function user.Baz() -> null? {
+    load_const null
+    return
+}
+
+function user.Foo() -> null {
+    load_const 1
+    return
+}

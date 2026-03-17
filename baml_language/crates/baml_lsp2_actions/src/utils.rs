@@ -114,8 +114,8 @@ pub fn definition_span<'db>(
 pub fn display_ty(ty: &Ty) -> String {
     use baml_compiler2_tir::ty::PrimitiveType;
     match ty {
-        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.name.as_str().to_string(),
-        Ty::EnumVariant(qn, v) => format!("{}.{}", qn.name, v),
+        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.to_string(),
+        Ty::EnumVariant(qn, v) => format!("{}.{}", qn, v),
         Ty::Primitive(p) => match p {
             PrimitiveType::Int => "int".to_string(),
             PrimitiveType::Float => "float".to_string(),

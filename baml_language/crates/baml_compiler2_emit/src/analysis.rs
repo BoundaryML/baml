@@ -618,6 +618,19 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
         }
     }
 
+    // Unwind error locals are implicitly used by PushUnwind instructions —
+    // the VM writes into these slots when an exception is caught. Without
+    // this, the locals may have zero recorded uses and get classified Dead,
+    // causing a panic when the emitter tries to allocate a slot for them.
+    for (&block_id, &local) in &body.unwind_error_locals {
+        if let Some(du) = def_use.get_mut(&local) {
+            du.uses.push(UseLocation {
+                block: block_id,
+                statement_ref: StatementRef::Terminator,
+            });
+        }
+    }
+
     def_use
 }
 

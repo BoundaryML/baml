@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.HelloWorld(name: string) -> string {
+    load_const "HelloWorld"
+    load_var name
+    load_const "name"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}

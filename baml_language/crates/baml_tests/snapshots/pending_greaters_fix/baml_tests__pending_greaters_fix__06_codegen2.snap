@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.BadParam(x: map<string, int>) -> string {
+    load_const "BadParam"
+    load_var x
+    load_const "x"
+    alloc_map 1
+    call baml.llm.call_llm_function
+    return
+}
+
+function user.BadReturnType() -> map<string, int> {
+    load_const "BadReturnType"
+    alloc_map 0
+    call baml.llm.call_llm_function
+    return
+}

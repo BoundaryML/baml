@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.GetTodo() -> null {
+    load_const "parse error"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}

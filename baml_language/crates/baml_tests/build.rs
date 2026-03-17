@@ -217,6 +217,7 @@ fn generate_project_tests(
         };
     let diagnostics_test = generate_diagnostics_test(project);
     let codegen_test = generate_codegen_test(project, codegen_filter, require_codegen_functions);
+    let codegen2_test = generate_codegen2_test(project);
 
     let formatter_tests: TokenStream = project.files.iter().map(generate_formatter_test).collect();
 
@@ -267,6 +268,7 @@ fn generate_project_tests(
             #control_flow_test
             #diagnostics_test
             #codegen_test
+            #codegen2_test
             #formatter_tests
             #parser_specific_tests
         }
@@ -964,6 +966,79 @@ fn generate_codegen_test(
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("06_codegen", output);
+            });
+        }
+    }
+}
+
+fn generate_codegen2_test(project: &TestProject) -> TokenStream {
+    let file_loaders: TokenStream = project
+        .files
+        .iter()
+        .map(|baml_file| {
+            let full_path = baml_file.full_path.display().to_string();
+            let relative_path = baml_file.relative_path.display().to_string();
+            let include_content = make_include_str(&full_path);
+
+            quote! {
+                {
+                    let content = #include_content;
+                    let content = content.replace("\r\n", "\n");
+                    db.add_file(#relative_path, &content);
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[test]
+        fn test_06_codegen2() {
+            let mut db = ProjectDatabase::new();
+            db.set_project_root(std::path::Path::new("."));
+
+            #file_loaders
+
+            let mut output = String::new();
+
+            let options = baml_compiler2_emit::CompileOptions { emit_test_cases: false };
+            match baml_compiler2_emit::generate_project_bytecode(&db, &options) {
+                Ok(program) => {
+                    let mut func_names: Vec<_> = program.function_indices.keys()
+                        .filter(|name: &&String| !name.starts_with(BAML_STD_PREFIX) && !name.starts_with("env."))
+                        .collect();
+                    func_names.sort();
+
+                    let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
+                        .iter()
+                        .map(|name| {
+                            let idx = *program.function_indices.get(*name).unwrap();
+                            match program.objects.get(idx) {
+                                Some(bex_vm_types::Object::Function(func)) => {
+                                    ((*name).clone(), func.as_ref())
+                                }
+                                other => {
+                                    panic!(
+                                        "function_indices entry '{}' (idx={}) is not a Function: {:?}",
+                                        name, idx, other.map(std::mem::discriminant)
+                                    );
+                                }
+                            }
+                        })
+                        .collect();
+
+                    output = bex_vm::debug::display_program(
+                        &functions,
+                        bex_vm::debug::BytecodeFormat::Textual,
+                    );
+                }
+                Err(err) => {
+                    writeln!(output, "=== NO CODEGEN2 DUE TO ERRORS ===").unwrap();
+                    writeln!(output, "Error: {:?}", err).unwrap();
+                }
+            }
+
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+                assert_snapshot!("06_codegen2", output);
             });
         }
     }
