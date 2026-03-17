@@ -305,4 +305,13 @@ impl BamlWasmRuntime {
     pub fn request_playground_state(&self) {
         self.bex.request_playground_state();
     }
+
+    /// Request the control flow graph for a function.
+    ///
+    /// Triggers a `playground_send_notification` callback with a
+    /// `ControlFlowGraphResult` notification containing the serialized graph.
+    #[wasm_bindgen(js_name = requestControlFlowGraph)]
+    pub fn request_control_flow_graph(&self, _project: String, function_name: &str) {
+        self.bex.request_control_flow_graph(function_name);
+    }
 }

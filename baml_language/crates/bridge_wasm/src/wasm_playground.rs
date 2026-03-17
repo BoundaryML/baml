@@ -29,6 +29,11 @@ pub enum PlaygroundNotification {
         project: String,
         function_name: Option<String>,
     },
+    #[serde(rename_all = "camelCase")]
+    ControlFlowGraphResult {
+        function_name: String,
+        graph: Option<serde_json::Value>,
+    },
 }
 
 impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
@@ -52,6 +57,13 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
             } => PlaygroundNotification::OpenPlayground {
                 project,
                 function_name,
+            },
+            bex_project::PlaygroundNotification::ControlFlowGraphResult {
+                function_name,
+                graph,
+            } => PlaygroundNotification::ControlFlowGraphResult {
+                function_name,
+                graph,
             },
         }
     }

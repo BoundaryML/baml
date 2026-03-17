@@ -127,6 +127,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               setSelectedProject(n.project);
               if (n.functionName) setSelectedFn(n.functionName);
               break;
+            case 'controlFlowGraphResult':
+              console.log('[playground] controlFlowGraphResult (via notification)', n.functionName, n.graph);
+              break;
           }
           break;
         }
@@ -193,6 +196,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         case "vfsFileDeleted":
           break;
 
+        case "controlFlowGraphResult":
+          console.log('[playground] controlFlowGraphResult', data.functionName, data.graph);
+          break;
+
         default:
           data satisfies never;
       }
@@ -205,6 +212,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
     return unsubscribe;
   }, [port]);
+
+  // Request control flow graph when selected function changes (Phase 1 testing)
+  useEffect(() => {
+    if (!selectedFn || !selectedProject) return;
+    port.postMessage({ type: 'requestControlFlowGraph', project: selectedProject, functionName: selectedFn });
+  }, [port, selectedFn, selectedProject]);
 
   // Sync existing envVars to the port whenever port changes
   useEffect(() => {

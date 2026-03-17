@@ -23,7 +23,41 @@ export interface ProjectUpdate {
 export type PlaygroundNotification =
   | { type: 'listProjects'; projects: string[] }
   | { type: 'updateProject'; project: string; update: ProjectUpdate }
-  | { type: 'openPlayground'; project: string; functionName?: string };
+  | { type: 'openPlayground'; project: string; functionName?: string }
+  | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null };
+
+// ---------------------------------------------------------------------------
+// Control flow graph types (matches Rust serde output from baml_compiler2_visualization)
+// ---------------------------------------------------------------------------
+
+export type CfgNodeType =
+  | 'functionRoot'
+  | 'headerContextEnter'
+  | 'branchGroup'
+  | 'branchArm'
+  | 'loop'
+  | 'otherScope';
+
+export interface CfgNode {
+  id: number;
+  parentNodeId: number | null;
+  logFilterKey: string;
+  label: string;
+  sourceExpr: number | null;
+  nodeType: CfgNodeType;
+}
+
+export interface CfgEdge {
+  src: number;
+  dst: number;
+}
+
+export interface ControlFlowGraph {
+  /** IndexMap<NodeId, Node> serializes as an object with numeric string keys. */
+  nodes: Record<string, CfgNode>;
+  /** IndexMap<NodeId, Vec<Edge>> serializes as an object with numeric string keys. */
+  edgesBySrc: Record<string, CfgEdge[]>;
+}
 
 export interface FetchLogEntry {
   id: number;
@@ -72,7 +106,8 @@ export type WorkerOutMessage =
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }
-  | { type: 'buildTime'; value: string };
+  | { type: 'buildTime'; value: string }
+  | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null };
 
 // ---------------------------------------------------------------------------
 // Main thread → Worker messages
@@ -86,6 +121,7 @@ export type WorkerInMessage =
   | { type: 'deleteEnvVar'; key: string }
   | { type: 'selectProject'; root: string }
   | { type: 'requestState' }
+  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
   | { type: 'filesChanged'; files: Record<string, string> }
   | { type: 'dispose' };
 

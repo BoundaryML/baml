@@ -23,13 +23,15 @@ type WsOutMessage =
   | { type: 'callFunctionError'; id: number; error: string }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
-  | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string };
+  | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string }
+  | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null };
 
 /** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
 type WsInMessage =
   | { type: 'callFunction'; id: number; project: string; name: string; argsProto: string }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
-  | { type: 'requestState' };
+  | { type: 'requestState' }
+  | { type: 'requestControlFlowGraph'; project: string; functionName: string };
 
 const MAX_RECONNECT_DELAY = 5000;
 
@@ -178,6 +180,12 @@ export class WebSocketRuntimePort implements RuntimePort {
         return null; // handled locally, not sent to server
       case 'requestState':
         return { type: 'requestState' };
+      case 'requestControlFlowGraph':
+        return {
+          type: 'requestControlFlowGraph',
+          project: msg.project,
+          functionName: msg.functionName,
+        };
       case 'clearHandles':
         return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':
@@ -252,6 +260,12 @@ export class WebSocketRuntimePort implements RuntimePort {
             ...(raw.responseBody !== undefined ? { responseBody: raw.responseBody } : {}),
             ...(raw.error !== undefined ? { error: raw.error } : {}),
           },
+        };
+      case 'controlFlowGraphResult':
+        return {
+          type: 'controlFlowGraphResult',
+          functionName: raw.functionName,
+          graph: (raw.graph ?? null) as import('../worker-protocol').ControlFlowGraph | null,
         };
       default:
         return null;

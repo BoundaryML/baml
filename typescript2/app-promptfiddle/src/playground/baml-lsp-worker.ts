@@ -527,6 +527,10 @@ self.onmessage = async (event: MessageEvent) => {
       postOut({ type: "buildTime", value: getBuildTime() });
       return;
 
+    case "requestControlFlowGraph":
+      runtime?.requestControlFlowGraph(msg.project, msg.functionName);
+      return;
+
     case "clearHandles":
       for (const id of msg.runIds) {
         const handles = liveHandles.get(id);

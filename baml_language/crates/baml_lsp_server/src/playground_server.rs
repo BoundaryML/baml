@@ -304,6 +304,23 @@ async fn handle_ws_in_message(
         WsInMessage::RequestState => {
             state.bex.request_playground_state();
         }
+
+        WsInMessage::RequestControlFlowGraph {
+            project: _,
+            function_name,
+        } => {
+            let graph = state.bex.ast_control_flow_graph(&function_name);
+            let graph_json = graph.and_then(|g| serde_json::to_value(&g).ok());
+            let msg = WsOutMessage::ControlFlowGraphResult {
+                function_name,
+                graph: graph_json,
+            };
+            if let Some(ws_msg) = to_ws_text(&msg) {
+                if sink.send(ws_msg).await.is_err() {
+                    tracing::warn!("Failed to send control flow graph result");
+                }
+            }
+        }
     }
 }
 

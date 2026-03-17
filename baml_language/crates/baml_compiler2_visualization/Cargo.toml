@@ -18,7 +18,8 @@ workspace = true
 
 [dependencies]
 baml_compiler2_ast = { workspace = true }
-indexmap = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 la-arena = { workspace = true }

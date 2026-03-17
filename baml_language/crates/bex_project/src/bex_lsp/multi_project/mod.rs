@@ -538,6 +538,33 @@ impl super::BexLsp for BexMulitProject {
             );
         }
     }
+
+    fn ast_control_flow_graph(
+        &self,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        let projects = self.projects.lock().ok()?;
+        for project in projects.values() {
+            let db = project.project.db.lock().ok()?;
+            if let Some(graph) = db.ast_control_flow_graph(function_name) {
+                return Some(graph);
+            }
+        }
+        None
+    }
+
+    fn request_control_flow_graph(&self, function_name: &str) {
+        let graph = self.ast_control_flow_graph(function_name);
+        let graph_json = graph
+            .as_ref()
+            .and_then(|g| serde_json::to_value(g).ok());
+        self.playground_sender.send_playground_notification(
+            crate::bex_lsp::PlaygroundNotification::ControlFlowGraphResult {
+                function_name: function_name.to_string(),
+                graph: graph_json,
+            },
+        );
+    }
 }
 
 pub fn new_lsp(

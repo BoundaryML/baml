@@ -17,7 +17,7 @@ use indexmap::IndexMap;
 // ---------------------------------------------------------------------------
 
 /// Opaque node identifier.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct NodeId(u32);
 
 impl NodeId {
@@ -37,7 +37,8 @@ impl fmt::Display for NodeId {
 }
 
 /// Segment of a log-filter key path.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PathSegment {
     FunctionRoot { ordinal: u16 },
     Header { slug: String, ordinal: u16 },
@@ -48,7 +49,8 @@ pub enum PathSegment {
 }
 
 /// The type of a visualization node.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum NodeType {
     FunctionRoot,
     HeaderContextEnter,
@@ -59,7 +61,8 @@ pub enum NodeType {
 }
 
 /// A node in the control flow visualization graph.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Node {
     pub id: NodeId,
     pub parent_node_id: Option<NodeId>,
@@ -106,14 +109,15 @@ impl Node {
 }
 
 /// A directed edge in the visualization graph.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Edge {
     pub src: NodeId,
     pub dst: NodeId,
 }
 
 /// The control flow visualization graph.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ControlFlowGraph {
     pub nodes: IndexMap<NodeId, Node>,
     pub edges_by_src: IndexMap<NodeId, Vec<Edge>>,

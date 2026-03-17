@@ -163,6 +163,12 @@ impl<'a> AstGraphBuilder<'a> {
                 self.visit_expr(*value);
             }
 
+            ast::Expr::Call { .. } => {
+                // Emit an OtherScope node for function calls so they appear in the graph.
+                let label = render_expr_compact_ast(self.body, id);
+                self.emit_call_scope(id, &label);
+            }
+
             // All other expressions don't create graph nodes.
             _ => {}
         }
@@ -493,6 +499,40 @@ impl<'a> AstGraphBuilder<'a> {
             node_id,
             Some(segment),
         ));
+    }
+
+    // -- Call scope (leaf node — no recursion into the call's arguments) --
+
+    fn emit_call_scope(&mut self, _call_expr: ast::ExprId, label: &str) {
+        let ordinal = {
+            let frame = self
+                .frames
+                .last_mut()
+                .expect("frame stack should not be empty");
+            frame.next_ordinal(&CounterKind::OtherScope)
+        };
+        let slug_base = slugify(label);
+        let slug = if slug_base.is_empty() {
+            format!("call-{ordinal}")
+        } else {
+            slug_base
+        };
+        let segment = PathSegment::OtherScope { slug, ordinal };
+        let log_filter_key = self.build_log_filter_key(&segment);
+        let node_id = self.graph.allocate_id();
+        let parent_id = self.current_parent_id();
+        let node = Node::new(
+            node_id,
+            parent_id,
+            log_filter_key,
+            label.to_string(),
+            None,
+            NodeType::OtherScope,
+        );
+        self.graph.add_node(node);
+        let parent_index = self.current_parent_index();
+        self.register_child_with_parent(parent_index, node_id);
+        // Note: no frame push / recursion — call nodes are leaves.
     }
 
     // -- OtherScope --

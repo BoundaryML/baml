@@ -519,6 +519,52 @@ impl ProjectDatabase {
         None
     }
 
+    /// Build a control flow graph for the given function using the compiler2 AST builder.
+    ///
+    /// More error-resilient than `control_flow_graph()` — works even when code has type errors,
+    /// because it builds directly from the AST using `Missing` sentinels for unresolved nodes.
+    /// Suitable for the playground which must function during editing.
+    pub fn ast_control_flow_graph(
+        &self,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        use baml_compiler2_visualization::control_flow::{
+            build_control_flow_graph_from_ast, build_llm_control_flow_graph,
+        };
+
+        for source_file in self.file_map.values().copied() {
+            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
+            for (local_id, func_data) in index.item_tree.functions.iter() {
+                let func_name = func_data.name.to_string();
+                if func_name != function_name {
+                    continue;
+                }
+
+                let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+                let body = baml_compiler2_hir::body::function_body(self, func_loc);
+
+                return match body.as_ref() {
+                    baml_compiler2_hir::body::FunctionBody::Expr(expr_body) => {
+                        let graph = build_control_flow_graph_from_ast(function_name, expr_body);
+                        Some(graph)
+                    }
+                    baml_compiler2_hir::body::FunctionBody::Llm(llm_body) => {
+                        let client_name = llm_body
+                            .client
+                            .as_ref()
+                            .map(|c| c.to_string())
+                            .unwrap_or_else(|| "unknown".to_string());
+                        Some(build_llm_control_flow_graph(function_name, &client_name))
+                    }
+                    baml_compiler2_hir::body::FunctionBody::Builtin(_)
+                    | baml_compiler2_hir::body::FunctionBody::Missing => None,
+                };
+            }
+        }
+
+        None
+    }
+
     /// Get the compiled bytecode for the project.
     pub fn get_bytecode(&self) -> Result<bex_vm_types::Program, baml_compiler_emit::LoweringError> {
         // First ensure no diagnostics errors are present
@@ -555,6 +601,77 @@ impl std::fmt::Debug for ProjectDatabase {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ast_control_flow_graph_with_headers() {
+        use baml_compiler2_visualization::control_flow::NodeType;
+
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        // Use header comments (//#) inside the function body — these produce
+        // HeaderContextEnter nodes which survive the flattening pipeline.
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/workflow.baml"),
+            r#"
+function Workflow(input: string) -> string {
+    //# Prepare
+    let x = input;
+    //# Process
+    if (true) { x } else { "fallback" }
+}
+"#,
+        );
+
+        let graph = db.ast_control_flow_graph("Workflow");
+        assert!(
+            graph.is_some(),
+            "ast_control_flow_graph should return a graph for a known function"
+        );
+        let graph = graph.unwrap();
+
+        // Should have at least: FunctionRoot + two HeaderContextEnter nodes.
+        assert!(
+            graph.nodes.len() >= 3,
+            "expected at least 3 nodes (root + 2 headers), got {}",
+            graph.nodes.len()
+        );
+
+        // The root node should have FunctionRoot type.
+        let root = graph.nodes.values().next().unwrap();
+        assert!(
+            matches!(root.node_type, NodeType::FunctionRoot),
+            "first node should be FunctionRoot, got {:?}",
+            root.node_type
+        );
+
+        // There should be at least two HeaderContextEnter nodes.
+        let header_count = graph
+            .nodes
+            .values()
+            .filter(|n| matches!(n.node_type, NodeType::HeaderContextEnter))
+            .count();
+        assert!(
+            header_count >= 2,
+            "expected at least 2 HeaderContextEnter nodes, got {header_count}"
+        );
+
+        // Edges should be non-empty.
+        assert!(!graph.edges_by_src.is_empty(), "graph should have edges");
+    }
+
+    #[test]
+    fn test_ast_control_flow_graph_not_found() {
+        let mut db = ProjectDatabase::new();
+        db.set_project_root(std::path::Path::new("/tmp"));
+        db.add_or_update_file(
+            std::path::Path::new("/tmp/test.baml"),
+            r#"function Simple(x: int) -> int { x + 1 }"#,
+        );
+
+        // Non-existent function should return None.
+        let graph = db.ast_control_flow_graph("DoesNotExist");
+        assert!(graph.is_none(), "should return None for unknown function");
+    }
 
     #[test]
     fn test_add_file() {

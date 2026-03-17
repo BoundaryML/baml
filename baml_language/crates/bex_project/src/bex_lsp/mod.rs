@@ -83,6 +83,11 @@ pub enum PlaygroundNotification {
         project: String,
         function_name: Option<String>,
     },
+    #[serde(rename_all = "camelCase")]
+    ControlFlowGraphResult {
+        function_name: String,
+        graph: Option<serde_json::Value>,
+    },
 }
 
 pub trait PlaygroundSender: Send + Sync {
@@ -102,6 +107,17 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     ) -> Result<Box<dyn crate::Bex>, crate::RuntimeError>;
 
     fn request_playground_state(&self);
+
+    fn ast_control_flow_graph(
+        &self,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph>;
+
+    /// Request the control flow graph for a function.
+    ///
+    /// Builds the graph and sends it back via the playground notification
+    /// callback as a `PlaygroundNotification::ControlFlowGraphResult`.
+    fn request_control_flow_graph(&self, function_name: &str);
 }
 
 pub use multi_project::{LspClientSenderTrait, new_lsp};

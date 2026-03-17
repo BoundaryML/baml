@@ -476,6 +476,7 @@ dependencies = [
  "baml_compiler2_ast",
  "indexmap",
  "la-arena",
+ "serde",
 ]
 
 [[package]]
@@ -775,6 +776,7 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_ppir",
  "baml_compiler2_tir",
+ "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_compiler_hir",
@@ -953,6 +955,7 @@ dependencies = [
  "async-trait",
  "baml_base",
  "baml_builtins",
+ "baml_compiler2_visualization",
  "baml_compiler_diagnostics",
  "baml_compiler_emit",
  "baml_db",

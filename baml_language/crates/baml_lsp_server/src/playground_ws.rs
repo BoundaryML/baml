@@ -29,6 +29,12 @@ pub enum WsInMessage {
     },
     #[serde(rename = "requestState")]
     RequestState,
+    #[serde(rename = "requestControlFlowGraph")]
+    RequestControlFlowGraph {
+        project: String,
+        #[serde(rename = "functionName")]
+        function_name: String,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -78,5 +84,11 @@ pub enum WsOutMessage {
         response_body: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
+    },
+    #[serde(rename = "controlFlowGraphResult")]
+    ControlFlowGraphResult {
+        #[serde(rename = "functionName")]
+        function_name: String,
+        graph: Option<serde_json::Value>,
     },
 }
