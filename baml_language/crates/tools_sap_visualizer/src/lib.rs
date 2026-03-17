@@ -2,8 +2,6 @@
 //! will try all the partial deserializations and emit a visualization of the deserialized
 //! values as the input is streamed in.
 
-use ::std::rc::Rc;
-
 use ::bex_sap::{
     deserializer::{
         coercer::{ParsingContext, ParsingError},
@@ -14,6 +12,7 @@ use ::bex_sap::{
 };
 use ::eframe::egui;
 use ::ouroboros::self_referencing;
+use ::std::rc::Rc;
 
 pub struct SapVisualizerState<N: sap_model::TypeIdent + 'static> {
     json: Rc<String>,
