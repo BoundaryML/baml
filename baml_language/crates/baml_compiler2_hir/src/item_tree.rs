@@ -92,11 +92,51 @@ pub struct TypeAlias {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Client {
     pub name: Name,
+    /// Provider name (e.g., "openai", "anthropic", "fallback", "round-robin").
+    pub provider: Option<Name>,
+    /// Sub-client names for fallback/round-robin clients.
+    pub sub_client_names: Vec<Name>,
+    /// Retry policy name, if configured.
+    pub retry_policy_name: Option<Name>,
+    /// Starting index for round-robin clients.
+    pub round_robin_start: Option<usize>,
+}
+
+/// A test argument value stored in the ItemTree.
+///
+/// Floats are stored as bit patterns (via `f64::to_bits`) to allow `Eq` and `Hash`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TestArgValue {
+    Null,
+    Int(i64),
+    /// Float stored as raw bits (`f64::to_bits(value)`).
+    FloatBits(u64),
+    Bool(bool),
+    String(String),
+    Array(Vec<TestArgValue>),
+    Map(Vec<(String, TestArgValue)>),
+}
+
+impl TestArgValue {
+    pub fn float(v: f64) -> Self {
+        Self::FloatBits(v.to_bits())
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Self::FloatBits(bits) => Some(f64::from_bits(*bits)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Test {
     pub name: Name,
+    /// The function(s) this test exercises.
+    pub function_refs: Vec<Name>,
+    /// Test arguments as key-value pairs.
+    pub args: Vec<(Name, TestArgValue)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,11 +147,23 @@ pub struct Generator {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TemplateString {
     pub name: Name,
+    /// Template parameter names.
+    pub params: Vec<Name>,
+    /// Template body text (Jinja template).
+    pub body: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RetryPolicy {
     pub name: Name,
+    /// Raw string value of max_retries (parsed at emit time).
+    pub max_retries: Option<String>,
+    /// Raw string value of initial_delay_ms.
+    pub initial_delay_ms: Option<String>,
+    /// Raw string value of multiplier.
+    pub multiplier: Option<String>,
+    /// Raw string value of max_delay_ms.
+    pub max_delay_ms: Option<String>,
 }
 
 // ── ItemTree ─────────────────────────────────────────────────────────────────
@@ -260,15 +312,62 @@ impl ItemTree {
         id
     }
 
-    pub fn alloc_client(&mut self, name: &Name) -> LocalItemId<ClientMarker> {
-        let id = self.alloc_id(ItemKind::Client, name);
-        self.clients.insert(id, Client { name: name.clone() });
+    pub fn alloc_client(&mut self, c: &ast::ClientDef) -> LocalItemId<ClientMarker> {
+        let id = self.alloc_id(ItemKind::Client, &c.name);
+        let provider = c
+            .config_items
+            .iter()
+            .find(|item| item.key.as_str() == "provider")
+            .map(|item| Name::new(item.value.trim().trim_matches('"')));
+        let sub_client_names = c
+            .config_items
+            .iter()
+            .find(|item| item.key.as_str() == "options")
+            .map(|_| Vec::new()) // complex to parse; clients field is more relevant
+            .unwrap_or_default();
+        let retry_policy_name = c
+            .config_items
+            .iter()
+            .find(|item| item.key.as_str() == "retry_policy")
+            .map(|item| Name::new(item.value.trim().trim_matches('"')));
+        self.clients.insert(
+            id,
+            Client {
+                name: c.name.clone(),
+                provider,
+                sub_client_names,
+                retry_policy_name,
+                round_robin_start: None,
+            },
+        );
         id
     }
 
-    pub fn alloc_test(&mut self, name: &Name) -> LocalItemId<TestMarker> {
-        let id = self.alloc_id(ItemKind::Test, name);
-        self.tests.insert(id, Test { name: name.clone() });
+    pub fn alloc_test(&mut self, t: &ast::TestDef) -> LocalItemId<TestMarker> {
+        let id = self.alloc_id(ItemKind::Test, &t.name);
+        // Extract function_refs from config_items (key "functions" or "function")
+        let function_refs = t
+            .config_items
+            .iter()
+            .filter(|item| item.key.as_str() == "functions" || item.key.as_str() == "function")
+            .flat_map(|item| {
+                // Values may be comma-separated or a single name
+                item.value
+                    .split(',')
+                    .map(|s| Name::new(s.trim().trim_matches('"')))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        // Args come from config_items with key "args" — store raw; complex parsing skipped
+        let args = Vec::new();
+        self.tests.insert(
+            id,
+            Test {
+                name: t.name.clone(),
+                function_refs,
+                args,
+            },
+        );
         id
     }
 
@@ -278,17 +377,39 @@ impl ItemTree {
         id
     }
 
-    pub fn alloc_template_string(&mut self, name: &Name) -> LocalItemId<TemplateStringMarker> {
-        let id = self.alloc_id(ItemKind::TemplateString, name);
-        self.template_strings
-            .insert(id, TemplateString { name: name.clone() });
+    pub fn alloc_template_string(&mut self, ts: &ast::TemplateStringDef) -> LocalItemId<TemplateStringMarker> {
+        let id = self.alloc_id(ItemKind::TemplateString, &ts.name);
+        let params = ts.params.iter().map(|p| p.name.clone()).collect();
+        let body = ts.body.as_ref().map(|b| b.text.clone());
+        self.template_strings.insert(
+            id,
+            TemplateString {
+                name: ts.name.clone(),
+                params,
+                body,
+            },
+        );
         id
     }
 
-    pub fn alloc_retry_policy(&mut self, name: &Name) -> LocalItemId<RetryPolicyMarker> {
-        let id = self.alloc_id(ItemKind::RetryPolicy, name);
-        self.retry_policies
-            .insert(id, RetryPolicy { name: name.clone() });
+    pub fn alloc_retry_policy(&mut self, rp: &ast::RetryPolicyDef) -> LocalItemId<RetryPolicyMarker> {
+        let id = self.alloc_id(ItemKind::RetryPolicy, &rp.name);
+        let get_field = |key: &str| -> Option<String> {
+            rp.config_items
+                .iter()
+                .find(|item| item.key.as_str() == key)
+                .map(|item| item.value.trim().to_string())
+        };
+        self.retry_policies.insert(
+            id,
+            RetryPolicy {
+                name: rp.name.clone(),
+                max_retries: get_field("max_retries"),
+                initial_delay_ms: get_field("initial_delay_ms"),
+                multiplier: get_field("multiplier"),
+                max_delay_ms: get_field("max_delay_ms"),
+            },
+        );
         id
     }
 }

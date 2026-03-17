@@ -474,7 +474,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_client(&mut self, c: &ast::ClientDef) {
-        let local_id = self.item_tree.alloc_client(&c.name);
+        let local_id = self.item_tree.alloc_client(c);
         let loc = ClientLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             c.name.clone(),
@@ -489,7 +489,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_test(&mut self, t: &ast::TestDef) {
-        let local_id = self.item_tree.alloc_test(&t.name);
+        let local_id = self.item_tree.alloc_test(t);
         let loc = TestLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             t.name.clone(),
@@ -519,7 +519,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_template_string(&mut self, ts: &ast::TemplateStringDef) {
-        let local_id = self.item_tree.alloc_template_string(&ts.name);
+        let local_id = self.item_tree.alloc_template_string(ts);
         let loc = TemplateStringLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             ts.name.clone(),
@@ -534,7 +534,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_retry_policy(&mut self, rp: &ast::RetryPolicyDef) {
-        let local_id = self.item_tree.alloc_retry_policy(&rp.name);
+        let local_id = self.item_tree.alloc_retry_policy(rp);
         let loc = RetryPolicyLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             rp.name.clone(),
