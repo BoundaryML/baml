@@ -1,0 +1,298 @@
+//! MIR/emitter invariant verifier.
+//!
+//! This module validates assumptions shared by analysis and emission so
+//! regressions fail loudly during development/testing.
+
+use std::collections::HashSet;
+
+use baml_compiler2_mir::{BlockId, Local, MirFunctionBody, StatementKind, Terminator};
+
+use crate::analysis::{self, AnalysisResult, LocalClassification};
+
+/// Verify MIR + analysis invariants required by bytecode emission.
+///
+/// Intended for debug builds to catch invariant drift between MIR lowering,
+/// analysis, and emission.
+pub(crate) fn verify_mir_emit_invariants(
+    body: &MirFunctionBody,
+    arity: usize,
+    analysis: &AnalysisResult,
+) {
+    let _ = arity; // available for error messages if needed
+    let block_ids: HashSet<BlockId> = body.blocks.iter().map(|b| b.id).collect();
+
+    // Block IDs must be dense and match indexing assumptions used by MirFunctionBody::block().
+    for (idx, block) in body.blocks.iter().enumerate() {
+        assert!(
+            block.id == BlockId(idx),
+            "block id/index mismatch: block.id={:?}, index=bb{}",
+            block.id,
+            idx
+        );
+    }
+
+    // Redirect map must only contain known blocks and must resolve to a final non-source target.
+    for (&src, &dst) in &analysis.redirect_targets {
+        assert!(
+            block_ids.contains(&src),
+            "redirect source {:?} missing in MIR body",
+            src,
+        );
+        assert!(
+            block_ids.contains(&dst),
+            "redirect target {:?} missing in MIR body",
+            dst,
+        );
+        assert!(src != dst, "self-redirect for {:?} in MIR body", src,);
+
+        let src_block = body.block(src);
+        let is_threadable =
+            analysis::threadable_goto_target(src_block, &analysis.classifications).is_some();
+        assert!(
+            is_threadable,
+            "non-threadable redirect source {:?} in MIR body",
+            src,
+        );
+
+        let resolved = analysis.resolve_jump_target(src);
+        assert!(
+            !analysis.redirect_targets.contains_key(&resolved),
+            "redirect chain did not converge for {:?} -> {:?} in MIR body",
+            src,
+            resolved,
+        );
+    }
+
+    // Exhaustive switches rely on an unreachable default path. If this regresses,
+    // if-else chain emission can become unsound.
+    for block in &body.blocks {
+        if let Some(Terminator::Switch {
+            otherwise,
+            exhaustive,
+            ..
+        }) = &block.terminator
+            && *exhaustive
+        {
+            let otherwise_block = body.block(*otherwise);
+            assert!(
+                analysis::is_dead_unreachable_block(otherwise_block),
+                "exhaustive switch in {:?} has non-unreachable default block {:?}",
+                block.id,
+                otherwise
+            );
+        }
+    }
+
+    // Watched locals must always be real so Watch/Unwatch have stable slots.
+    for (idx, decl) in body.locals.iter().enumerate() {
+        if decl.is_watched {
+            let local = Local(idx);
+            assert!(
+                decl.name.is_some(),
+                "watched local {} must have a user-visible name",
+                local,
+            );
+            let class = analysis
+                .classifications
+                .get(&local)
+                .copied()
+                .unwrap_or_else(|| {
+                    panic!("missing classification for watched local {}", local,)
+                });
+            assert!(
+                class == LocalClassification::Real,
+                "watched local {} classified as {:?} (expected Real)",
+                local,
+                class,
+            );
+        }
+    }
+
+    // Watch-manipulation statements must only reference watched locals.
+    for block in &body.blocks {
+        for stmt in &block.statements {
+            let Some(local) = (match &stmt.kind {
+                StatementKind::Unwatch(local)
+                | StatementKind::WatchNotify(local)
+                | StatementKind::WatchOptions { local, .. } => Some(*local),
+                _ => None,
+            }) else {
+                continue;
+            };
+
+            let decl = body.local(local);
+            assert!(
+                decl.is_watched,
+                "watch statement references non-watched local {}",
+                local,
+            );
+            assert!(
+                decl.name.is_some(),
+                "watch statement references unnamed watched local {}",
+                local,
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_compiler2_mir::{BasicBlock, Constant, LocalDecl, MirFunctionBody, Operand, Place,
+        Rvalue, Statement};
+    use baml_type::Ty;
+
+    use super::*;
+    use crate::analysis::AnalysisResult;
+
+    fn local(name: &str) -> LocalDecl {
+        LocalDecl {
+            name: Some(baml_base::Name::new(name)),
+            ty: Ty::Int {
+                attr: baml_type::TyAttr::default(),
+            },
+            span: None,
+            scope_span: None,
+            is_watched: false,
+        }
+    }
+
+    fn local_watched(name: &str) -> LocalDecl {
+        LocalDecl {
+            name: Some(baml_base::Name::new(name)),
+            ty: Ty::Int {
+                attr: baml_type::TyAttr::default(),
+            },
+            span: None,
+            scope_span: None,
+            is_watched: true,
+        }
+    }
+
+    fn stmt_assign(local: Local, value: i64) -> Statement {
+        Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(local),
+                value: Rvalue::Use(Operand::Constant(Constant::Int(value))),
+            },
+            span: None,
+        }
+    }
+
+    #[test]
+    fn verifier_allows_exhaustive_switch_with_unreachable_default() {
+        let mut body = MirFunctionBody {
+            unwind_error_locals: std::collections::HashMap::new(),
+            blocks: vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::Switch {
+                        discriminant: Operand::Constant(Constant::Int(0)),
+                        arms: vec![(0, BlockId(1))],
+                        otherwise: BlockId(2),
+                        exhaustive: true,
+                        arm_names: vec![],
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![stmt_assign(Local(0), 1)],
+                    terminator: Some(Terminator::Return),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![],
+                    terminator: Some(Terminator::Unreachable),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            entry: BlockId(0),
+            locals: vec![local("ret")],
+            viz_nodes: vec![],
+        };
+        // Ensure IDs/indexes stay coherent for this synthetic MIR.
+        for (i, block) in body.blocks.iter_mut().enumerate() {
+            block.id = BlockId(i);
+        }
+        let arity = 0usize;
+        let analysis =
+            AnalysisResult::analyze(&body, arity, crate::analysis::OptLevel::One);
+        verify_mir_emit_invariants(&body, arity, &analysis);
+    }
+
+    #[test]
+    #[should_panic(expected = "exhaustive switch")]
+    fn verifier_rejects_exhaustive_switch_with_reachable_default() {
+        let mut body = MirFunctionBody {
+            unwind_error_locals: std::collections::HashMap::new(),
+            blocks: vec![
+                BasicBlock {
+                    id: BlockId(0),
+                    statements: vec![],
+                    terminator: Some(Terminator::Switch {
+                        discriminant: Operand::Constant(Constant::Int(0)),
+                        arms: vec![(0, BlockId(1))],
+                        otherwise: BlockId(2),
+                        exhaustive: true,
+                        arm_names: vec![],
+                    }),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(1),
+                    statements: vec![stmt_assign(Local(0), 1)],
+                    terminator: Some(Terminator::Return),
+                    span: None,
+                    terminator_span: None,
+                },
+                BasicBlock {
+                    id: BlockId(2),
+                    statements: vec![],
+                    terminator: Some(Terminator::Goto { target: BlockId(1) }),
+                    span: None,
+                    terminator_span: None,
+                },
+            ],
+            entry: BlockId(0),
+            locals: vec![local("ret")],
+            viz_nodes: vec![],
+        };
+        for (i, block) in body.blocks.iter_mut().enumerate() {
+            block.id = BlockId(i);
+        }
+        let arity = 0usize;
+        let analysis =
+            AnalysisResult::analyze(&body, arity, crate::analysis::OptLevel::One);
+        verify_mir_emit_invariants(&body, arity, &analysis);
+    }
+
+    #[test]
+    fn verifier_accepts_watched_locals_classified_real() {
+        let mut body = MirFunctionBody {
+            unwind_error_locals: std::collections::HashMap::new(),
+            blocks: vec![BasicBlock {
+                id: BlockId(0),
+                statements: vec![],
+                terminator: Some(Terminator::Return),
+                span: None,
+                terminator_span: None,
+            }],
+            entry: BlockId(0),
+            locals: vec![local("ret"), local_watched("x")],
+            viz_nodes: vec![],
+        };
+        for (i, block) in body.blocks.iter_mut().enumerate() {
+            block.id = BlockId(i);
+        }
+        let arity = 0usize;
+        let analysis =
+            AnalysisResult::analyze(&body, arity, crate::analysis::OptLevel::One);
+        verify_mir_emit_invariants(&body, arity, &analysis);
+    }
+}
