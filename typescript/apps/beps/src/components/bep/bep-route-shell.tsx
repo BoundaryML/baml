@@ -32,7 +32,7 @@ import { AIAssistantPanel } from "@/components/ai-assistant/ai-assistant-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Edit, History, Pencil } from "lucide-react";
+import { ArrowLeft, Check, Copy, Edit, History, Pencil } from "lucide-react";
 import {
   MAIN_CONTENT_ID,
   RESERVED_PAGE_SLUGS,
@@ -87,6 +87,7 @@ export function BepRouteShell() {
   const [hasConflict, setHasConflict] = useState(false);
   const [conflictVersion, setConflictVersion] = useState<number | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [copied, setCopied] = useState(false);
   const editorRef = useRef<MDXEditorHandle>(null);
   const newPages = useMemo(
     () =>
@@ -481,6 +482,17 @@ export function BepRouteShell() {
     }
   };
 
+  const handleCopyMarkdown = useCallback(async () => {
+    const content = getCurrentContent(contentSection);
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy markdown:", err);
+    }
+  }, [getCurrentContent, contentSection]);
+
   const handleDiscardChanges = () => {
     setEditMode(false);
     setShowSubmitModal(false);
@@ -792,9 +804,31 @@ export function BepRouteShell() {
               </span>{" "}
               {isViewingHistorical && viewingVersion ? viewingVersion.title : bep.title}
             </h1>
-            {!isViewingHistorical && (
-              <BepStatusSelect bepId={bep._id} currentStatus={bep.status} />
-            )}
+            <div className="flex items-center gap-2">
+              {isContentRoute && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyMarkdown}
+                  title="Copy raw markdown"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-4 w-4 mr-1.5 text-green-600" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4 mr-1.5" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              )}
+              {!isViewingHistorical && (
+                <BepStatusSelect bepId={bep._id} currentStatus={bep.status} />
+              )}
+            </div>
           </div>
           <p className="text-muted-foreground">
             Shepherds: {bep.shepherdNames.join(", ") || "None assigned"}
