@@ -32,7 +32,7 @@ import { AIAssistantPanel } from "@/components/ai-assistant/ai-assistant-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Check, Copy, Edit, History, Pencil } from "lucide-react";
+import { ArrowLeft, Check, Copy, Edit, History, Maximize2, Minimize2, Pencil } from "lucide-react";
 import {
   MAIN_CONTENT_ID,
   RESERVED_PAGE_SLUGS,
@@ -87,7 +87,23 @@ export function BepRouteShell() {
   const [hasConflict, setHasConflict] = useState(false);
   const [conflictVersion, setConflictVersion] = useState<number | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
+const [copied, setCopied] = useState(false);
+  const [isWideMode, setIsWideMode] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("beps-wide-mode");
+    if (stored === "true") {
+      setIsWideMode(true);
+    }
+  }, []);
+
+  const toggleWideMode = useCallback(() => {
+    setIsWideMode((prev) => {
+      const next = !prev;
+      localStorage.setItem("beps-wide-mode", String(next));
+      return next;
+    });
+  }, []);
   const editorRef = useRef<MDXEditorHandle>(null);
   const newPages = useMemo(
     () =>
@@ -751,6 +767,18 @@ export function BepRouteShell() {
           </Link>
           <div className="flex items-center gap-3">
             {userId && <BepPresence bepId={bep._id} userId={userId} />}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleWideMode}
+              title={isWideMode ? "Narrow view" : "Wide view"}
+            >
+              {isWideMode ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
             <BepExportDialog bepId={bep._id} bepNumber={bep.number} />
             <BepImportDialog bepId={bep._id} bepNumber={bep.number} />
             <BepVersionSelect
@@ -783,7 +811,7 @@ export function BepRouteShell() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 lg:mr-80 lg:ml-8">
+      <main className={`mx-auto px-4 py-8 lg:mr-80 lg:ml-8 ${isWideMode ? "max-w-7xl" : "max-w-5xl"}`}>
         {isViewingHistorical && viewingVersion && (
           <Alert className="mb-6 border-amber-500 bg-amber-50 dark:bg-amber-950/30">
             <History className="h-4 w-4 text-amber-600" />
