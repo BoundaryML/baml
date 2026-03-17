@@ -1468,8 +1468,12 @@ impl LoweringContext {
         let mut position = 0;
         let mut type_name = None;
 
-        // Look for the optional type name (first WORD or path before the brace)
-        for elem in node.children_with_tokens() {
+        // Look for the optional type name (first WORD or path before the brace).
+        // The type name may be:
+        //   - A simple WORD token: `MyClass { ... }`
+        //   - A qualified path node: `baml.errors.DevOther { ... }` (parsed as PATH_EXPR)
+        // For qualified paths, extract the final segment as the class name.
+        'outer: for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Token(token) => {
                     if token.kind() == SyntaxKind::L_BRACE {
@@ -1479,7 +1483,24 @@ impl LoweringContext {
                         type_name = Some(Name::new(token.text()));
                     }
                 }
-                rowan::NodeOrToken::Node(_) => break,
+                rowan::NodeOrToken::Node(child_node) => {
+                    // A child node before L_BRACE is the type name path (e.g. PATH_EXPR).
+                    // Walk its tokens to find the last WORD — that's the class name.
+                    let mut last_word: Option<Name> = None;
+                    for token in child_node
+                        .children_with_tokens()
+                        .filter_map(rowan::NodeOrToken::into_token)
+                    {
+                        if token.kind() == SyntaxKind::WORD {
+                            last_word = Some(Name::new(token.text()));
+                        }
+                    }
+                    if let Some(name) = last_word {
+                        type_name = Some(name);
+                    }
+                    // After handling the path node, stop scanning for more pre-brace items.
+                    break 'outer;
+                }
             }
         }
 

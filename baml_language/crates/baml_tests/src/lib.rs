@@ -136,6 +136,9 @@ pub mod compiler2_tir;
 pub mod compiler2_mir;
 
 #[cfg(test)]
+pub mod compiler2_emit;
+
+#[cfg(test)]
 pub mod incremental;
 
 #[cfg(test)]

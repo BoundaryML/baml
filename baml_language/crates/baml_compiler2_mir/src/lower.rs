@@ -181,6 +181,22 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
         Definition::RetryPolicy(loc) => item_tree[loc.id(db)].name.clone(),
     };
 
+    // For function definitions, check if this is a class method by searching
+    // the item tree's class methods lists.
+    if let Definition::Function(func_loc) = def {
+        let func_local_id = func_loc.id(db);
+        for (_class_local_id, class_data) in item_tree.classes.iter() {
+            if class_data.methods.contains(&func_local_id) {
+                return ItemRef::Method {
+                    package: pkg_info.package.clone(),
+                    namespace: pkg_info.namespace_path.clone(),
+                    class: class_data.name.clone(),
+                    name,
+                };
+            }
+        }
+    }
+
     ItemRef::Free {
         package: pkg_info.package.clone(),
         namespace: pkg_info.namespace_path.clone(),
@@ -1161,16 +1177,25 @@ impl<'db> LoweringContext<'db> {
 
     fn lower_object(
         &mut self,
-        _expr_id: AstExprId,
+        expr_id: AstExprId,
         type_name: &Option<Name>,
         fields: &[(Name, AstExprId)],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
     ) {
-        let class_name = type_name
-            .as_ref()
-            .map(|n| n.to_string())
-            .unwrap_or_default();
+        // Prefer the explicitly written type name. If absent (e.g., when the
+        // type is a qualified path like `baml.errors.DevOther`), fall back to
+        // the TIR-inferred type to get the short class name.
+        let class_name = if let Some(n) = type_name {
+            n.to_string()
+        } else {
+            // Try to extract the class name from the TIR type of this expression.
+            let ty = self.expr_ty(expr_id);
+            match &ty {
+                Ty::Class(tn, _) => tn.name.to_string(),
+                _ => String::new(),
+            }
+        };
 
         if spreads.is_empty() {
             let field_operands: Vec<Operand> = fields

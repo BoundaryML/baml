@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/compiler2_mir/mod.rs
 ---
-fn f(x: int, y: int) -> int {
+fn user.f(x: int, y: int) -> int {
     // Locals:
     let _0: int // _0 // return
     let _1: int // x // param

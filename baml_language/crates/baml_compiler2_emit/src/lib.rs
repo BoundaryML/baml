@@ -151,8 +151,21 @@ pub fn generate_project_bytecode(
                 type_tag,
                 ty_attr: TyAttr::default(),
             }));
+            // Register with fully-qualified name for inter-package lookups.
             class_object_indices.insert(fq_name.clone(), class_obj_idx);
             classes.insert(fq_name, field_indices);
+            // Also register with the short (unqualified) class name so that MIR aggregates,
+            // which store only the local name (e.g., "Point" not "user.Point"), can find it.
+            let short_name = class_data.name.to_string();
+            class_object_indices.entry(short_name.clone()).or_insert(class_obj_idx);
+            classes.entry(short_name).or_insert_with(|| {
+                // Rebuild field_indices since we moved it above; re-read from class_data.
+                let mut m = HashMap::new();
+                for (idx, field) in class_data.fields.iter().enumerate() {
+                    m.insert(field.name.to_string(), idx);
+                }
+                m
+            });
         }
     }
 

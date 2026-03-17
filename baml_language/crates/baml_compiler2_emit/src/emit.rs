@@ -1789,15 +1789,23 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn alloc_class_instance(&mut self, class_name: &str) -> Result<(), Self::Error> {
-        let class_obj_idx = self
-            .class_object_indices
-            .get(class_name)
-            .copied()
-            .unwrap_or_else(|| panic!("undefined class: {class_name}"));
-        let inst = self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
-            class_obj_idx,
-        )));
-        self.set_operand(inst, OperandMeta::Object(class_name.to_string()));
+        if let Some(&class_obj_idx) = self.class_object_indices.get(class_name) {
+            let inst = self.emit(Instruction::AllocInstance(ObjectIndex::from_raw(
+                class_obj_idx,
+            )));
+            self.set_operand(inst, OperandMeta::Object(class_name.to_string()));
+        } else {
+            // Class not found — this can happen when the parser produces an
+            // anonymous or misidentified object literal (e.g., `null { }` from
+            // an ambiguous if-condition). Emit a null constant as a fallback so
+            // compilation doesn't panic; the runtime behavior is best-effort.
+            let null_idx = self.add_constant(bex_vm_types::ConstValue::Null);
+            let inst = self.emit(bex_vm_types::Instruction::LoadConst(null_idx));
+            self.set_operand(
+                inst,
+                OperandMeta::Const(format!("null /* unknown class: {class_name} */")),
+            );
+        }
         Ok(())
     }
 
