@@ -1,7 +1,7 @@
 use ::bex_sap::deserializer::coercer::ParsingError;
 use ::eframe::egui::{
-    self, Color32, Rect, RichText, TextBuffer,
-    text::{LayoutSection, TextWrapping},
+    self, Color32, Key, Rect, RichText, TextBuffer,
+    text::{CCursor, CCursorRange, LayoutSection, TextWrapping},
 };
 use ::std::borrow::Cow;
 use tools_sap_visualizer::SapVisualizerState;
@@ -9,6 +9,10 @@ use tools_sap_visualizer::SapVisualizerState;
 struct SapVisualizer {
     sap: SapVisualizerState<&'static str>,
     text_highlight: Option<(usize, usize)>,
+    /// Stack of auto-inserted closers to the right of the cursor (innermost
+    /// first).  When the user types a closer matching the top of the stack,
+    /// we over-type instead of inserting.  Cleared on unexpected cursor moves.
+    overtype_stack: AutoCloseStack,
 }
 
 impl SapVisualizer {
@@ -43,6 +47,7 @@ impl SapVisualizer {
         Self {
             sap,
             text_highlight: None,
+            overtype_stack: AutoCloseStack::default(),
         }
     }
 }
@@ -125,12 +130,55 @@ impl eframe::App for SapVisualizer {
                     };
                     ui.fonts_mut(|f| f.layout_job(layout_job))
                 };
-                egui::TextEdit::multiline(&mut self.sap)
+                let text_edit_id = ui.make_persistent_id("json_input");
+                let action = preprocess_json_input(
+                    ui,
+                    text_edit_id,
+                    &mut self.sap,
+                    &mut self.overtype_stack,
+                );
+
+                let output = egui::TextEdit::multiline(&mut self.sap)
                     .code_editor()
+                    .id(text_edit_id)
                     .desired_width(f32::INFINITY)
                     .hint_text("Put some JSON here")
                     .layouter(&mut layouter)
                     .show(ui);
+
+                // After show(): adjust cursor or shift the stack for edits
+                // that egui processed (normal typing, backspace, etc.).
+                match action {
+                    PostShowAction::AdjustCursor(delta) => {
+                        if let Some(cr) = output.cursor_range {
+                            let new_idx = (cr.primary.index as i32 + delta) as usize;
+                            let mut state = output.state.clone();
+                            state
+                                .cursor
+                                .set_char_range(Some(CCursorRange::one(CCursor::new(new_idx))));
+                            state.store(ui.ctx(), output.response.id);
+                        }
+                    }
+                    PostShowAction::AlreadyHandled => {
+                        // We handled the edit before show(); nothing more to do.
+                    }
+                    PostShowAction::None(old_cursor) => {
+                        // egui may have processed normal typing or other edits.
+                        // Shift the stack to keep indices in sync.
+                        if output.response.changed() {
+                            if let Some(cr) = output.cursor_range {
+                                let new_cursor = cr.primary.index;
+                                if new_cursor > old_cursor {
+                                    let inserted = new_cursor - old_cursor;
+                                    self.overtype_stack.shift_for_insert(old_cursor, inserted);
+                                } else if new_cursor < old_cursor {
+                                    let deleted = old_cursor - new_cursor;
+                                    self.overtype_stack.shift_for_delete(new_cursor, deleted);
+                                }
+                            }
+                        }
+                    }
+                }
             });
         });
         eframe::egui::CentralPanel::default().show(ctx, |ui| {
@@ -195,6 +243,231 @@ impl eframe::App for SapVisualizer {
     }
 }
 
+/// Build the string to insert when Enter is pressed at `cursor` (char index)
+/// in `text`. Returns `"\n"` plus matching indentation, with an extra indent
+/// level if the line ends with `{` or `[`.
+fn newline_with_indent(text: &str, cursor: usize) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let before = &chars[..cursor];
+
+    let line_start = before.iter().rposition(|&c| c == '\n').map_or(0, |i| i + 1);
+    let indent: String = before[line_start..]
+        .iter()
+        .take_while(|c| c.is_ascii_whitespace())
+        .collect();
+
+    let last_non_ws = before.iter().rposition(|c| !c.is_ascii_whitespace());
+    let ends_with_opener = last_non_ws.is_some_and(|i| matches!(before[i], '{' | '['));
+
+    let char_after_cursor = chars.get(cursor).copied();
+
+    if ends_with_opener {
+        let opener = before[last_non_ws.unwrap()];
+        let closer = if opener == '{' { '}' } else { ']' };
+        if char_after_cursor == Some(closer) {
+            // Cursor between matched pair: `{|}` → `{\n\t|\n}`
+            // we use tabs not spaces here since we want to minimize the size of the printed partials in the table below
+            return format!("\n{indent}\t\n{indent}");
+        }
+        return format!("\n{indent}\t");
+    }
+
+    format!("\n{indent}")
+}
+
+/// If `typed` is an opener character (`{`, `[`, `"`), return a replacement
+/// string with the closer appended (e.g. `"{}"`) so egui inserts both in one
+/// atomic operation. Returns `None` if no auto-close should fire.
+///
+/// `text` is the current buffer content and `cursor` is the char-index where
+/// the text will be inserted.
+fn auto_close_text(text: &str, cursor: usize, typed: &str) -> Option<String> {
+    let closer = match typed {
+        "{" => "}",
+        "[" => "]",
+        "\"" => {
+            let chars: Vec<char> = text.chars().collect();
+            let after = chars.get(cursor).copied();
+            if after == Some('"') {
+                return None;
+            }
+            let quote_count = chars[..cursor].iter().filter(|&&c| c == '"').count();
+            if quote_count % 2 == 1 {
+                return None;
+            }
+            "\""
+        }
+        _ => return None,
+    };
+    Some(format!("{typed}{closer}"))
+}
+
+/// The action that `preprocess_json_input` asks the caller to perform after
+/// `show()`.
+enum PostShowAction {
+    /// No action needed.  The `usize` is the cursor position before `show()`,
+    /// used to detect edits egui processed and shift the stack accordingly.
+    None(usize),
+    /// Move the cursor by this signed offset from where egui left it.
+    AdjustCursor(i32),
+    /// We already handled the edit ourselves (Enter / pair-delete); egui's
+    /// `show()` should see the already-modified buffer and not process any
+    /// mutating events.
+    AlreadyHandled,
+}
+
+/// Pre-process egui input events for JSON editing assistance (auto-close,
+/// over-type, pair-delete, and auto-indent). Mutates the event queue and text
+/// buffer as needed so that edits are atomic from the undoer's perspective.
+fn preprocess_json_input(
+    ui: &mut egui::Ui,
+    text_edit_id: egui::Id,
+    sap: &mut SapVisualizerState<&'static str>,
+    stack: &mut AutoCloseStack,
+) -> PostShowAction {
+    let Some(state) = egui::TextEdit::load_state(ui.ctx(), text_edit_id) else {
+        return PostShowAction::None(0);
+    };
+    let Some(cursor_range) = state.cursor.char_range() else {
+        return PostShowAction::None(0);
+    };
+    let cursor = cursor_range.primary.index;
+    let text = sap.as_str();
+
+    // Invalidate entries whose enclosing range no longer contains the cursor.
+    stack.validate_cursor(cursor);
+
+    // --- Backspace: pair-delete if the cursor is right after an auto-closed
+    // opener ---
+    let has_backspace = ui.input_mut(|input| {
+        input.events.iter().any(|e| {
+            matches!(
+                e,
+                egui::Event::Key {
+                    key: Key::Backspace,
+                    pressed: true,
+                    ..
+                }
+            )
+        })
+    });
+    if has_backspace {
+        if let Some(closer_idx) = stack.try_pair_delete(cursor) {
+            // Remove the backspace event — we handle it ourselves.
+            ui.input_mut(|input| {
+                input.events.retain(|e| {
+                    !matches!(
+                        e,
+                        egui::Event::Key {
+                            key: Key::Backspace,
+                            pressed: true,
+                            ..
+                        }
+                    )
+                });
+            });
+            // Delete both opener (cursor - 1) and closer.
+            // Delete closer first (higher index) so the opener index stays valid.
+            sap.delete_char_range(closer_idx..closer_idx + 1);
+            stack.shift_for_delete(closer_idx, 1);
+            sap.delete_char_range(cursor - 1..cursor);
+            stack.shift_for_delete(cursor - 1, 1);
+            let mut state = state;
+            state
+                .cursor
+                .set_char_range(Some(CCursorRange::one(CCursor::new(cursor - 1))));
+            state.store(ui.ctx(), text_edit_id);
+            return PostShowAction::AlreadyHandled;
+        }
+    }
+
+    // --- Text events: over-type or auto-close ---
+    let mut cursor_adjust: i32 = 0;
+    ui.input_mut(|input| {
+        for event in &mut input.events {
+            if let egui::Event::Text(t) = event {
+                // Over-type: if the typed char matches an auto-inserted closer
+                // at the cursor, consume the event and advance cursor.
+                if t.len() == 1 {
+                    let ch = t.chars().next().unwrap();
+                    if stack.try_overtype(cursor, ch) {
+                        t.clear();
+                        cursor_adjust = 1;
+                        continue;
+                    }
+                }
+                // Auto-close: rewrite opener to opener+closer.
+                if let Some(replacement) = auto_close_text(text, cursor, t) {
+                    let closer = replacement.chars().last().unwrap();
+                    let insert_len = replacement.chars().count();
+                    // Shift existing entries to account for the text egui
+                    // will insert at `cursor`, then push the new entry with
+                    // its final absolute indices.
+                    stack.shift_for_insert(cursor, insert_len);
+                    stack.push(cursor, cursor + insert_len - 1, closer);
+                    cursor_adjust = -(replacement.len() as i32 - t.len() as i32);
+                    *t = replacement;
+                }
+            }
+        }
+    });
+    if cursor_adjust != 0 {
+        return PostShowAction::AdjustCursor(cursor_adjust);
+    }
+
+    // --- Enter: auto-indent ---
+    let enter_pressed = ui.input_mut(|input| {
+        let had = input.events.iter().any(|e| {
+            matches!(
+                e,
+                egui::Event::Key {
+                    key: Key::Enter,
+                    pressed: true,
+                    ..
+                }
+            )
+        });
+        if had {
+            input.events.retain(|e| {
+                !matches!(
+                    e,
+                    egui::Event::Key {
+                        key: Key::Enter,
+                        pressed: true,
+                        ..
+                    }
+                )
+            });
+        }
+        had
+    });
+
+    if enter_pressed {
+        let insert = newline_with_indent(text, cursor);
+        let insert_len = insert.chars().count();
+        // For the `{|\n}` case the cursor lands on the middle line, not at
+        // the very end of the inserted text.
+        let cursor_pos = if insert.matches('\n').count() == 2 {
+            let second_nl = insert.find('\n').unwrap()
+                + 1
+                + insert[insert.find('\n').unwrap() + 1..].find('\n').unwrap();
+            cursor + second_nl
+        } else {
+            cursor + insert_len
+        };
+        sap.insert_text(&insert, cursor);
+        stack.shift_for_insert(cursor, insert_len);
+        let mut state = state;
+        state
+            .cursor
+            .set_char_range(Some(CCursorRange::one(CCursor::new(cursor_pos))));
+        state.store(ui.ctx(), text_edit_id);
+        return PostShowAction::AlreadyHandled;
+    }
+
+    PostShowAction::None(cursor)
+}
+
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
@@ -205,6 +478,119 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| Ok(Box::new(SapVisualizer::new(cc)))),
     )
+}
+
+/// Tracks auto-inserted closers for over-type and pair-delete behavior,
+/// modelled after VSCode's `AutoClosedAction`.
+///
+/// Each entry records the char-index of the closer and the enclosing range
+/// (opener..=closer).  When text is inserted or deleted *before* the closer
+/// the indices shift accordingly.  An entry is invalidated when the cursor
+/// leaves the enclosing range.
+///
+/// Reference: `src/vs/editor/common/cursor/cursor.ts` — `AutoClosedAction`,
+/// `isAutoClosingOvertype`, `_runAutoClosingPairDelete` in the VSCode repo.
+#[derive(Default)]
+struct AutoCloseStack {
+    entries: Vec<AutoCloseEntry>,
+}
+
+#[derive(Clone, Copy)]
+struct AutoCloseEntry {
+    /// Char-index of the auto-inserted closer.
+    closer_idx: usize,
+    /// The closer character (e.g. `}`, `]`, `"`).
+    closer_char: char,
+    /// Char-index of the opener (inclusive start of enclosing range).
+    open_idx: usize,
+}
+
+impl AutoCloseStack {
+    /// Record that we auto-inserted `closer_char` when the user typed an
+    /// opener at `open_idx`.  The closer lands at `closer_idx`.
+    fn push(&mut self, open_idx: usize, closer_idx: usize, closer_char: char) {
+        self.entries.push(AutoCloseEntry {
+            closer_idx,
+            closer_char,
+            open_idx,
+        });
+    }
+
+    /// If `typed` is a closer that we auto-inserted at `cursor`, consume it
+    /// (over-type).  Returns `true` if the caller should skip normal insertion
+    /// and advance the cursor by 1.
+    fn try_overtype(&mut self, cursor: usize, typed: char) -> bool {
+        // Find the innermost matching entry (last in the vec).
+        let pos = self
+            .entries
+            .iter()
+            .rposition(|e| e.closer_idx == cursor && e.closer_char == typed);
+        if let Some(i) = pos {
+            self.entries.remove(i);
+            // The over-type replaces the closer in-place (no net text change),
+            // but conceptually the cursor advances past it.  Shift any entries
+            // whose closer was at the same position (shouldn't happen in
+            // practice since closers are unique positions).
+            return true;
+        }
+        false
+    }
+
+    /// If the cursor is right after an opener whose closer was auto-inserted,
+    /// return the closer index so the caller can delete both.  This implements
+    /// VSCode's "backspace deletes the pair" behaviour.
+    fn try_pair_delete(&mut self, cursor: usize) -> Option<usize> {
+        // cursor is the char-index *after* the opener, i.e. `open_idx + 1`.
+        let pos = self.entries.iter().rposition(|e| e.open_idx + 1 == cursor);
+        if let Some(i) = pos {
+            let closer_idx = self.entries[i].closer_idx;
+            self.entries.remove(i);
+            return Some(closer_idx);
+        }
+        None
+    }
+
+    /// Adjust all tracked indices after text of length `len` (in chars) was
+    /// inserted at char-index `at`.
+    fn shift_for_insert(&mut self, at: usize, len: usize) {
+        for e in &mut self.entries {
+            if e.open_idx >= at {
+                e.open_idx += len;
+            }
+            if e.closer_idx >= at {
+                e.closer_idx += len;
+            }
+        }
+    }
+
+    /// Adjust all tracked indices after `len` chars were deleted starting at
+    /// char-index `at`.
+    fn shift_for_delete(&mut self, at: usize, len: usize) {
+        self.entries.retain_mut(|e| {
+            // If the deletion overlaps the closer, invalidate.
+            if at <= e.closer_idx && e.closer_idx < at + len {
+                return false;
+            }
+            if e.open_idx >= at + len {
+                e.open_idx -= len;
+            } else if e.open_idx > at {
+                e.open_idx = at;
+            }
+            if e.closer_idx >= at + len {
+                e.closer_idx -= len;
+            }
+            true
+        });
+    }
+
+    /// Remove entries whose enclosing range no longer contains `cursor`.
+    fn validate_cursor(&mut self, cursor: usize) {
+        self.entries.retain(|e| {
+            // Cursor must be strictly inside the enclosing range
+            // (after opener, at or before closer).
+            cursor > e.open_idx && cursor <= e.closer_idx
+        });
+    }
 }
 
 struct RowData<'a> {
