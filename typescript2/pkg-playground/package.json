@@ -26,6 +26,9 @@
   },
   "dependencies": {
     "@b/pkg-proto": "workspace:*",
+    "@xyflow/react": "^12.10.1",
+    "elkjs": "^0.9.3",
+    "lucide-react": "^0.468.0",
     "prism-react-renderer": "^2.4.1"
   }
 }

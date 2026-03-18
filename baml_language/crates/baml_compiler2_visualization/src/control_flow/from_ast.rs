@@ -214,7 +214,15 @@ impl<'a> AstGraphBuilder<'a> {
                 self.visit_expr(*value);
             }
 
-            // Return, Break, Continue, Assign, AssignOp, Assert, Missing — no graph nodes.
+            ast::Stmt::Return(Some(expr_id)) => {
+                self.visit_expr(*expr_id);
+            }
+
+            ast::Stmt::Assign { value, .. } | ast::Stmt::AssignOp { value, .. } => {
+                self.visit_expr(*value);
+            }
+
+            // Break, Continue, bare Return, Assert, Missing — no graph nodes.
             _ => {}
         }
     }

@@ -24,6 +24,7 @@ export type {
   WorkerOutMessage,
   WorkerInMessage,
   WorkerInitMessage,
+  ControlFlowGraph,
   DiagnosticEntry,
   FetchLogEntry,
   EnvVarRequest,

@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
 import type { RuntimePort } from './runtime-port';
 import type {
+  ControlFlowGraph,
   DiagnosticEntry,
   FetchLogEntry,
   EnvVarRequest,
@@ -24,6 +25,7 @@ import type {
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
+import { GraphView } from './graph/GraphView';
 
 registerBuiltinResultRenderers();
 
@@ -90,6 +92,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 
+  const [controlFlowGraph, setControlFlowGraph] = useState<ControlFlowGraph | null>(null);
+  const [activeTab, setActiveTab] = useState<'run' | 'graph'>('run');
+  const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(null);
+
   const [buildTime, setBuildTime] = useState<number | null>(null);
   const [envRequests, setEnvRequests] = useState<EnvVarRequest[]>([]);
   const [envVars, setEnvVarsState] = useState<Record<string, string>>({});
@@ -128,7 +134,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               if (n.functionName) setSelectedFn(n.functionName);
               break;
             case 'controlFlowGraphResult':
-              console.log('[playground] controlFlowGraphResult (via notification)', n.functionName, n.graph);
+              if (n.graph) setControlFlowGraph(n.graph);
               break;
           }
           break;
@@ -197,7 +203,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
 
         case "controlFlowGraphResult":
-          console.log('[playground] controlFlowGraphResult', data.functionName, data.graph);
+          if (data.graph) setControlFlowGraph(data.graph);
           break;
 
         default:
@@ -213,8 +219,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     return unsubscribe;
   }, [port]);
 
-  // Request control flow graph when selected function changes (Phase 1 testing)
+  // Request control flow graph when selected function changes
   useEffect(() => {
+    setControlFlowGraph(null);
+    setHighlightedNodeId(null);
     if (!selectedFn || !selectedProject) return;
     port.postMessage({ type: 'requestControlFlowGraph', project: selectedProject, functionName: selectedFn });
   }, [port, selectedFn, selectedProject]);
@@ -553,8 +561,51 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         )}
       </div>
 
+      {/* Tab switcher */}
+      {selectedFn && (
+        <div className="flex items-center gap-0 px-2.5 py-0 border-b border-vsc-border shrink-0 bg-vsc-surface">
+          <button
+            onClick={() => setActiveTab('run')}
+            className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
+              activeTab === 'run'
+                ? 'border-vsc-accent text-vsc-text font-semibold'
+                : 'border-transparent text-vsc-text-muted'
+            }`}
+          >
+            Run
+          </button>
+          <button
+            onClick={() => setActiveTab('graph')}
+            className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
+              activeTab === 'graph'
+                ? 'border-vsc-accent text-vsc-text font-semibold'
+                : 'border-transparent text-vsc-text-muted'
+            }`}
+          >
+            Graph
+          </button>
+        </div>
+      )}
+
+      {/* Graph view */}
+      {selectedFn && activeTab === 'graph' ? (
+        <div className="flex-1 min-h-0" style={{ minHeight: 300 }}>
+          {controlFlowGraph ? (
+            <GraphView
+              graph={controlFlowGraph}
+              selectedNodeId={highlightedNodeId}
+              onNodeClick={(nodeId) => setHighlightedNodeId(nodeId)}
+            />
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
+              Loading graph...
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {/* Execution area */}
-      {selectedFn ? (
+      {selectedFn && activeTab === 'run' ? (
         <div className="flex-1 flex flex-col min-h-0">
           {/* Args */}
           <div className="flex items-center border-b border-vsc-border shrink-0">
@@ -662,7 +713,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
             })}
           </div>
         </div>
-      ) : (
+      ) : null}
+
+      {/* No function selected fallback */}
+      {!selectedFn && (
         <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
           Select a function to run
         </div>
