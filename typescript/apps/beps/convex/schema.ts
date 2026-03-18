@@ -44,7 +44,6 @@ export default defineSchema({
     name: v.string(),
     avatarUrl: v.optional(v.string()),
     githubId: v.optional(v.string()),
-    githubEmail: v.optional(v.string()),
     role: userRole,
     createdAt: v.number(),
     // Special account fields for BoundaryML team members

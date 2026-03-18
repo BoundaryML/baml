@@ -24,7 +24,6 @@ interface GitHubUserData {
   githubId: string;
   name: string;
   avatarUrl?: string;
-  githubEmail?: string;
   boundaryEmail?: string;
 }
 
@@ -111,7 +110,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
       githubId: userData.githubId,
       name: userData.name,
       avatarUrl: userData.avatarUrl,
-      githubEmail: userData.githubEmail,
       boundaryEmail: userData.boundaryEmail,
     });
     setStoredUserId(userId);
