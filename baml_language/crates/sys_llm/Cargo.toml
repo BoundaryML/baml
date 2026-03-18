@@ -13,6 +13,15 @@ baml_type = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 bex_vm_types = { workspace = true }
+aws-credential-types = { workspace = true }
+aws-sdk-bedrockruntime = { workspace = true }
+aws-sigv4 = { workspace = true }
+aws-smithy-async = { workspace = true }
+aws-smithy-runtime-api = { workspace = true }
+aws-smithy-types = { workspace = true }
+aws-types = { workspace = true }
+base64 = { workspace = true }
+futures = { workspace = true }
 indexmap = { workspace = true }
 minijinja = { workspace = true }
 minijinja-contrib = { workspace = true }
@@ -21,9 +30,19 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = [ "rt" ] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+aws-config = { workspace = true, features = [ "rt-tokio", "credentials-process", "sso" ] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+aws-config = { workspace = true }
+futures-timer = { workspace = true }
+web-time = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 [lints]
 workspace = true

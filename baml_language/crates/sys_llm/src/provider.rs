@@ -42,7 +42,7 @@ pub(crate) enum LlmProvider {
     #[strum(serialize = "vertex-ai")]
     VertexAi,
 
-    /// AWS Bedrock — deferred (uses AWS SDK, not HTTP)
+    /// AWS Bedrock — uses Converse API with `SigV4` signing
     #[strum(serialize = "aws-bedrock")]
     AwsBedrock,
 

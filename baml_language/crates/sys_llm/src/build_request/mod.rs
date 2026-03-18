@@ -3,6 +3,7 @@
 //! Converts a `LlmPrimitiveClient` + `PromptAst` into a `baml.http.Request` instance.
 
 mod anthropic;
+mod bedrock;
 mod openai;
 
 use std::str::FromStr;
@@ -23,6 +24,16 @@ const SPECIALIZE_PROMPT_SKIP_KEYS: &[&str] = &[
 /// Option keys consumed by `build_request` itself (URL, auth, headers, model) —
 /// never forwarded to the request body.
 const BUILD_REQUEST_SKIP_KEYS: &[&str] = &["api_key", "base_url", "model", "headers"];
+
+/// Callbacks available during request building for cross-op calls.
+///
+/// Bridges `SysOpHttp`, `SysOpEnv`, and `SysOpFs` into provider-specific
+/// request builders without a direct dependency on `sys_types`.
+pub(crate) struct BuildRequestCallbacks<'a> {
+    pub http_send: &'a crate::HttpSendFn,
+    pub env_read: &'a crate::EnvReadFn,
+    pub fs_read: &'a crate::FsReadFn,
+}
 
 /// Trait for building provider-specific HTTP requests.
 ///
@@ -49,11 +60,15 @@ pub(crate) trait LlmRequestBuilder {
     // --- Default methods (shared logic) ---
 
     /// Build the full request. Default: POST with url/headers/body from trait methods.
-    fn build_request(
+    ///
+    /// Providers that need async operations (e.g., credential resolution) override
+    /// this method directly.
+    async fn build_request(
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
         stream: bool,
+        _callbacks: &BuildRequestCallbacks<'_>,
     ) -> Result<RawHttpRequest, BuildRequestError> {
         let url = self.build_url(client)?;
         let headers = self.build_headers(client);
@@ -126,13 +141,22 @@ pub(crate) trait LlmRequestBuilder {
 ///
 /// Returns an owned `HttpRequest` matching the `baml.http.Request` class:
 /// `{ method: String, url: String, headers: Map<String, String>, body: String }`
-pub(crate) fn build_request(
+pub(crate) async fn build_request(
     client: &LlmPrimitiveClient,
     prompt: bex_vm_types::PromptAst,
     stream: bool,
+    http_send: &crate::HttpSendFn,
+    env_read: &crate::EnvReadFn,
+    fs_read: &crate::FsReadFn,
 ) -> Result<builtin_types::owned::HttpRequest, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
+
+    let callbacks = BuildRequestCallbacks {
+        http_send,
+        env_read,
+        fs_read,
+    };
 
     let raw = match provider {
         LlmProvider::OpenAi
@@ -140,17 +164,27 @@ pub(crate) fn build_request(
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
         | LlmProvider::OpenRouter => {
-            openai::OpenAiBuilder::new(&provider).build_request(client, prompt, stream)?
+            openai::OpenAiBuilder::new(&provider)
+                .build_request(client, prompt, stream, &callbacks)
+                .await?
         }
         LlmProvider::OpenAiResponses => {
-            openai::OpenAiResponsesBuilder::new(&provider).build_request(client, prompt, stream)?
+            openai::OpenAiResponsesBuilder::new(&provider)
+                .build_request(client, prompt, stream, &callbacks)
+                .await?
         }
         LlmProvider::Anthropic => {
-            anthropic::AnthropicBuilder.build_request(client, prompt, stream)?
+            anthropic::AnthropicBuilder
+                .build_request(client, prompt, stream, &callbacks)
+                .await?
+        }
+        LlmProvider::AwsBedrock => {
+            bedrock::BedrockBuilder
+                .build_request(client, prompt, stream, &callbacks)
+                .await?
         }
         LlmProvider::GoogleAi
         | LlmProvider::VertexAi
-        | LlmProvider::AwsBedrock
         | LlmProvider::BamlFallback
         | LlmProvider::BamlRoundRobin => {
             return Err(BuildRequestError::UnsupportedLlmProvider(
@@ -239,6 +273,32 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
     }
 }
 
+/// Test-only stub callbacks that panic if called. Most providers don't invoke
+/// these during request building, so the stubs are safe for unit tests.
+#[cfg(test)]
+pub(crate) fn stub_callbacks() -> (crate::HttpSendFn, crate::EnvReadFn, crate::FsReadFn) {
+    use std::sync::Arc;
+    let http: crate::HttpSendFn =
+        Arc::new(|_| Box::pin(async { panic!("unexpected http_send call in test") }));
+    let env: crate::EnvReadFn =
+        Arc::new(|_| Box::pin(async { panic!("unexpected env_read call in test") }));
+    let fs: crate::FsReadFn =
+        Arc::new(|_| Box::pin(async { panic!("unexpected fs_read call in test") }));
+    (http, env, fs)
+}
+
+/// Test-only no-op env/fs callbacks that return "not found" instead of panicking.
+/// Use these in tests that exercise credential resolution (e.g., bedrock without
+/// explicit credentials) where the AWS SDK will read env vars and files.
+#[cfg(test)]
+pub(crate) fn noop_env_fs_callbacks() -> (crate::EnvReadFn, crate::FsReadFn) {
+    use std::sync::Arc;
+    let env: crate::EnvReadFn = Arc::new(|_| Box::pin(async { Ok(None) }));
+    let fs: crate::FsReadFn =
+        Arc::new(|_| Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) }));
+    (env, fs)
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -280,11 +340,14 @@ mod tests {
         serde_json::from_str(&req.body).unwrap()
     }
 
-    #[test]
-    fn test_unsupported_provider() {
+    #[tokio::test]
+    async fn test_unsupported_provider() {
         let client = make_client("unknown-provider", vec![]);
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false);
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        };
         assert!(result.is_err());
         assert!(
             result
@@ -299,8 +362,8 @@ mod tests {
     // ========================================================================
 
     /// Matches `test_expose_request_gpt4` from `test_request.py`.
-    #[test]
-    fn test_openai_gpt4o_system_only() {
+    #[tokio::test]
+    async fn test_openai_gpt4o_system_only() {
         let client = make_client(
             "openai",
             vec![
@@ -312,7 +375,11 @@ mod tests {
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
         let prompt = Arc::new(PromptAst::Vec(vec![msg("system", system_text)]));
 
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -348,8 +415,8 @@ mod tests {
     }
 
     /// Matches `test_expose_request_fallback` from `test_request.py`.
-    #[test]
-    fn test_openai_gpt4_turbo_system_and_user() {
+    #[tokio::test]
+    async fn test_openai_gpt4_turbo_system_and_user() {
         let client = make_client(
             "openai",
             vec![
@@ -363,7 +430,11 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
 
         assert_eq!(result.url, "https://api.openai.com/v1/chat/completions");
 
@@ -391,22 +462,26 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_openai_content_always_array() {
+    #[tokio::test]
+    async fn test_openai_content_always_array() {
         let client = make_client(
             "openai",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
         let prompt = msg("user", "Hello world");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result);
         assert!(body["messages"][0]["content"].is_array());
         assert_eq!(body["messages"][0]["content"][0]["type"], "text");
         assert_eq!(body["messages"][0]["content"][0]["text"], "Hello world");
     }
 
-    #[test]
-    fn test_openai_custom_base_url() {
+    #[tokio::test]
+    async fn test_openai_custom_base_url() {
         let client = make_client(
             "openai",
             vec![(
@@ -415,12 +490,16 @@ mod tests {
             )],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         assert_eq!(result.url, "https://custom.api.com/chat/completions");
     }
 
-    #[test]
-    fn test_openai_forwards_options_to_body() {
+    #[tokio::test]
+    async fn test_openai_forwards_options_to_body() {
         let client = make_client(
             "openai",
             vec![
@@ -429,13 +508,17 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(body["temperature"], 0.7);
     }
 
-    #[test]
-    fn test_openai_skips_internal_options_in_body() {
+    #[tokio::test]
+    async fn test_openai_skips_internal_options_in_body() {
         let client = make_client(
             "openai",
             vec![
@@ -448,7 +531,11 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result);
         assert!(body.get("api_key").is_none());
         assert!(body.get("base_url").is_none());
@@ -461,8 +548,8 @@ mod tests {
     // ========================================================================
 
     /// Matches `test_expose_request_round_robin` from `test_request.py`.
-    #[test]
-    fn test_anthropic_claude_system_extracted() {
+    #[tokio::test]
+    async fn test_anthropic_claude_system_extracted() {
         let client = make_client(
             "anthropic",
             vec![
@@ -480,7 +567,11 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -514,8 +605,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_anthropic_no_system_message() {
+    #[tokio::test]
+    async fn test_anthropic_no_system_message() {
         let client = make_client(
             "anthropic",
             vec![
@@ -527,14 +618,18 @@ mod tests {
             ],
         );
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result);
         assert!(body.get("system").is_none());
         assert_eq!(body["messages"].as_array().unwrap().len(), 1);
     }
 
-    #[test]
-    fn test_anthropic_custom_headers() {
+    #[tokio::test]
+    async fn test_anthropic_custom_headers() {
         let mut header_entries = IndexMap::new();
         header_entries.insert(
             "anthropic-beta".to_string(),
@@ -575,7 +670,11 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
 
         assert_eq!(
             result.headers.get("anthropic-beta").unwrap(),
@@ -587,8 +686,8 @@ mod tests {
         assert!(body.get("headers").is_none());
     }
 
-    #[test]
-    fn test_anthropic_custom_version() {
+    #[tokio::test]
+    async fn test_anthropic_custom_version() {
         let client = make_client(
             "anthropic",
             vec![(
@@ -597,26 +696,34 @@ mod tests {
             )],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         assert_eq!(
             result.headers.get("anthropic-version").unwrap(),
             "2024-01-01"
         );
     }
 
-    #[test]
-    fn test_anthropic_default_version() {
+    #[tokio::test]
+    async fn test_anthropic_default_version() {
         let client = make_client("anthropic", vec![]);
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         assert_eq!(
             result.headers.get("anthropic-version").unwrap(),
             "2023-06-01"
         );
     }
 
-    #[test]
-    fn test_anthropic_forwards_max_tokens() {
+    #[tokio::test]
+    async fn test_anthropic_forwards_max_tokens() {
         let client = make_client(
             "anthropic",
             vec![
@@ -628,7 +735,11 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(body["max_tokens"], 1000);
     }
@@ -637,8 +748,8 @@ mod tests {
     // OpenAI Responses API tests
     // ========================================================================
 
-    #[test]
-    fn test_responses_url() {
+    #[tokio::test]
+    async fn test_responses_url() {
         let client = make_client(
             "openai-responses",
             vec![
@@ -647,7 +758,11 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         assert_eq!(result.url, "https://api.openai.com/v1/responses");
         assert_eq!(
             result.headers.get("authorization").unwrap(),
@@ -655,14 +770,18 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_responses_uses_input_key() {
+    #[tokio::test]
+    async fn test_responses_uses_input_key() {
         let client = make_client(
             "openai-responses",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result);
         assert!(
             body.get("input").is_some(),
@@ -674,14 +793,18 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_responses_input_text_type() {
+    #[tokio::test]
+    async fn test_responses_input_text_type() {
         let client = make_client(
             "openai-responses",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(
             body,
@@ -697,8 +820,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_responses_output_text_for_assistant() {
+    #[tokio::test]
+    async fn test_responses_output_text_for_assistant() {
         let client = make_client(
             "openai-responses",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
@@ -707,14 +830,18 @@ mod tests {
             msg("user", "hello"),
             msg("assistant", "hi there"),
         ]));
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(body["input"][0]["content"][0]["type"], "input_text");
         assert_eq!(body["input"][1]["content"][0]["type"], "output_text");
     }
 
-    #[test]
-    fn test_responses_system_and_user() {
+    #[tokio::test]
+    async fn test_responses_system_and_user() {
         let client = make_client(
             "openai-responses",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
@@ -723,15 +850,19 @@ mod tests {
             msg("system", "You are helpful."),
             msg("user", "Hi"),
         ]));
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(body["input"][0]["role"], "system");
         assert_eq!(body["input"][0]["content"][0]["type"], "input_text");
         assert_eq!(body["input"][1]["role"], "user");
     }
 
-    #[test]
-    fn test_responses_custom_base_url() {
+    #[tokio::test]
+    async fn test_responses_custom_base_url() {
         let client = make_client(
             "openai-responses",
             vec![(
@@ -740,12 +871,16 @@ mod tests {
             )],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         assert_eq!(result.url, "https://custom.api.com/v1/responses");
     }
 
-    #[test]
-    fn test_responses_forwards_options() {
+    #[tokio::test]
+    async fn test_responses_forwards_options() {
         let client = make_client(
             "openai-responses",
             vec![
@@ -754,7 +889,11 @@ mod tests {
             ],
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result);
         assert_eq!(body["temperature"], 0.5);
     }

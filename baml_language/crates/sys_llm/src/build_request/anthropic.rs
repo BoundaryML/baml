@@ -485,8 +485,8 @@ mod tests {
     // Anthropic: message building and metadata
     // ========================================================================
 
-    #[test]
-    fn anthropic_single_user_message() {
+    #[tokio::test]
+    async fn anthropic_single_user_message() {
         let client = make_client(vec![
             (
                 "model",
@@ -495,7 +495,11 @@ mod tests {
             ("max_tokens", BexExternalValue::Int(1000)),
         ]);
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = crate::build_request::stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -512,8 +516,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn anthropic_three_role_conversation() {
+    #[tokio::test]
+    async fn anthropic_three_role_conversation() {
         let client = make_client(vec![
             (
                 "model",
@@ -526,7 +530,11 @@ mod tests {
             msg("user", "What is 2+2?"),
             msg("assistant", "4"),
         ]));
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = crate::build_request::stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -550,8 +558,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn anthropic_multi_turn_conversation() {
+    #[tokio::test]
+    async fn anthropic_multi_turn_conversation() {
         let client = make_client(vec![
             (
                 "model",
@@ -567,7 +575,11 @@ mod tests {
             msg("assistant", "Good, thanks!"),
             msg("user", "Goodbye"),
         ]));
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = crate::build_request::stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -603,8 +615,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn anthropic_metadata_merged_to_last_part() {
+    #[tokio::test]
+    async fn anthropic_metadata_merged_to_last_part() {
         let client = make_client(vec![
             (
                 "model",
@@ -617,7 +629,11 @@ mod tests {
             content: Arc::new("hello".to_string().into()),
             metadata: serde_json::json!({"cache_control": {"type": "ephemeral"}}),
         });
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = crate::build_request::stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -640,8 +656,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn anthropic_multiple_system_messages_combined() {
+    #[tokio::test]
+    async fn anthropic_multiple_system_messages_combined() {
         let client = make_client(vec![
             (
                 "model",
@@ -654,7 +670,11 @@ mod tests {
             msg("system", "Second instruction."),
             msg("user", "Hello"),
         ]));
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = crate::build_request::stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -675,8 +695,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn anthropic_system_metadata_merged_to_last_part() {
+    #[tokio::test]
+    async fn anthropic_system_metadata_merged_to_last_part() {
         let client = make_client(vec![
             (
                 "model",
@@ -692,7 +712,11 @@ mod tests {
             }),
             msg("user", "Hello"),
         ]));
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = crate::build_request::stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -716,8 +740,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn anthropic_mixed_text_and_image() {
+    #[tokio::test]
+    async fn anthropic_mixed_text_and_image() {
         let client = make_client(vec![
             (
                 "model",
@@ -746,7 +770,11 @@ mod tests {
             metadata: serde_json::Value::Null,
         });
 
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = {
+            let (h, e, f) = crate::build_request::stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,

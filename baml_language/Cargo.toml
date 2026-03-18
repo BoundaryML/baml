@@ -89,6 +89,14 @@ arboard = "3.4"
 ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
+aws-config = { git = "https://github.com/boundaryml/aws-sdk-rust", default-features = false, features = [ "behavior-version-latest" ] }
+aws-credential-types = { git = "https://github.com/boundaryml/aws-sdk-rust" }
+aws-sdk-bedrockruntime = { git = "https://github.com/boundaryml/aws-sdk-rust", default-features = false, features = [ "behavior-version-latest" ] }
+aws-sigv4 = { git = "https://github.com/boundaryml/aws-sdk-rust", features = [ "sign-http" ] }
+aws-smithy-async = { git = "https://github.com/boundaryml/aws-sdk-rust" }
+aws-smithy-runtime-api = { git = "https://github.com/boundaryml/aws-sdk-rust", features = [ "client" ] }
+aws-smithy-types = { git = "https://github.com/boundaryml/aws-sdk-rust" }
+aws-types = { git = "https://github.com/boundaryml/aws-sdk-rust" }
 axum = { version = "0.8.4", features = [ "ws" ] }
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "0.28.0"
@@ -103,6 +111,7 @@ derive_more = { version = "2.1.1", features = [ "from" ] }
 divan = { package = "codspeed-divan-compat", version = "*" }
 flate2 = { version = "1" }
 futures = { version = "0.3.30", features = [ "executor" ] }
+futures-timer = { version = "3.0.3", features = [ "wasm-bindgen" ] }
 graphviz-rust = { version = "0.9" }
 indexmap = { version = "2.1.0", features = [ "serde" ] }
 insta = { version = "1.34", features = [ "yaml", "redactions" ] }

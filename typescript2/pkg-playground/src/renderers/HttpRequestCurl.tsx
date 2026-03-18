@@ -54,10 +54,16 @@ function toCurl(req: HttpRequestShape): string {
     }
   }
   if (body != null && body !== '') {
-    const heredoc = safeHeredoc(prettyBody(body));
+    // HACK: AWS Bedrock requests are SigV4-signed, so the body hash is part
+    // of the signature. Pretty-printing changes the body and invalidates it.
+    // Ideally we'd check the LLM provider, but the renderer only has the
+    // HTTP request shape. URL sniffing is a workaround for now.
+    const isBedrock = url.includes('bedrock-runtime');
+    const formatted = isBedrock ? body : prettyBody(body);
+    const heredoc = safeHeredoc(formatted);
     parts.push('-d @-');
     parts.push(`'${url.replace(/'/g, "'\\''")}'`);
-    return parts.join(' \\\n  ') + ` <<'${heredoc}'\n${prettyBody(body)}\n${heredoc}`;
+    return parts.join(' \\\n  ') + ` <<'${heredoc}'\n${formatted}\n${heredoc}`;
   }
   parts.push(`'${url.replace(/'/g, "'\\''")}'`);
   return parts.join(' \\\n  ');
