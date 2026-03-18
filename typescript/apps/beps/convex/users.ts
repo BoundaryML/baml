@@ -81,10 +81,13 @@ export const getOrCreateFromGitHub = mutation({
     githubId: v.string(),
     name: v.string(),
     avatarUrl: v.optional(v.string()),
+    githubEmail: v.optional(v.string()),
     boundaryEmail: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const isSpecialAccount = !!args.boundaryEmail;
+    // Use boundaryEmail for Slack lookup if available, otherwise use githubEmail
+    const emailForSlackLookup = args.boundaryEmail || args.githubEmail;
 
     // Check if user exists by GitHub ID
     const existingByGithub = await ctx.db
@@ -100,6 +103,11 @@ export const getOrCreateFromGitHub = mutation({
         updates.avatarUrl = args.avatarUrl;
       }
 
+      // Update githubEmail if provided and different
+      if (args.githubEmail && existingByGithub.githubEmail !== args.githubEmail) {
+        updates.githubEmail = args.githubEmail;
+      }
+
       // Update special account status and boundaryEmail if they have one
       if (isSpecialAccount) {
         updates.isSpecialAccount = true;
@@ -110,11 +118,11 @@ export const getOrCreateFromGitHub = mutation({
         await ctx.db.patch(existingByGithub._id, updates);
       }
 
-      // Schedule Slack lookup if special account and no slackUserId yet
-      if (isSpecialAccount && !existingByGithub.slackUserId) {
+      // Schedule Slack lookup if we have an email and no slackUserId yet
+      if (emailForSlackLookup && !existingByGithub.slackUserId) {
         await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
           userId: existingByGithub._id,
-          email: args.boundaryEmail!,
+          email: emailForSlackLookup,
         });
       }
 
@@ -132,6 +140,7 @@ export const getOrCreateFromGitHub = mutation({
       const updates: Record<string, unknown> = {
         githubId: args.githubId,
         avatarUrl: args.avatarUrl,
+        githubEmail: args.githubEmail,
       };
 
       if (isSpecialAccount) {
@@ -141,11 +150,11 @@ export const getOrCreateFromGitHub = mutation({
 
       await ctx.db.patch(existingByName._id, updates);
 
-      // Schedule Slack lookup if special account
-      if (isSpecialAccount && !existingByName.slackUserId) {
+      // Schedule Slack lookup if we have an email and no slackUserId yet
+      if (emailForSlackLookup && !existingByName.slackUserId) {
         await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
           userId: existingByName._id,
-          email: args.boundaryEmail!,
+          email: emailForSlackLookup,
         });
       }
 
@@ -156,6 +165,7 @@ export const getOrCreateFromGitHub = mutation({
     const userId = await ctx.db.insert("users", {
       name: args.name,
       githubId: args.githubId,
+      githubEmail: args.githubEmail,
       avatarUrl: args.avatarUrl,
       role: "member",
       createdAt: Date.now(),
@@ -163,11 +173,11 @@ export const getOrCreateFromGitHub = mutation({
       boundaryEmail: args.boundaryEmail,
     });
 
-    // Schedule Slack lookup if special account
-    if (isSpecialAccount) {
+    // Schedule Slack lookup if we have an email
+    if (emailForSlackLookup) {
       await ctx.scheduler.runAfter(0, internal.slack.lookupAndLinkSlackUser, {
         userId,
-        email: args.boundaryEmail!,
+        email: emailForSlackLookup,
       });
     }
 

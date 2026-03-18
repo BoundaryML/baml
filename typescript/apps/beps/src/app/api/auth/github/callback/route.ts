@@ -125,8 +125,9 @@ export async function GET(request: NextRequest) {
 
     const githubUser: GitHubUser = await userResponse.json();
 
-    // Fetch all emails to check for @boundaryml.com (special account)
+    // Fetch all emails to check for @boundaryml.com (special account) and find primary email
     let boundaryEmail: string | undefined;
+    let primaryEmail: string | undefined;
     try {
       const emailsResponse = await fetch("https://api.github.com/user/emails", {
         headers: {
@@ -137,22 +138,39 @@ export async function GET(request: NextRequest) {
 
       if (emailsResponse.ok) {
         const emails: GitHubEmail[] = await emailsResponse.json();
+        
+        // Find boundaryml.com email for special account status
         const boundaryEmailObj = emails.find(
           (e) => e.verified && e.email.endsWith("@boundaryml.com")
         );
         if (boundaryEmailObj) {
           boundaryEmail = boundaryEmailObj.email;
         }
+
+        // Find primary verified email for Slack lookup
+        const primaryEmailObj = emails.find((e) => e.verified && e.primary);
+        if (primaryEmailObj) {
+          primaryEmail = primaryEmailObj.email;
+        } else {
+          // Fall back to any verified email
+          const anyVerifiedEmail = emails.find((e) => e.verified);
+          if (anyVerifiedEmail) {
+            primaryEmail = anyVerifiedEmail.email;
+          }
+        }
       }
     } catch (error) {
       console.warn("Failed to fetch GitHub emails:", error);
     }
 
+    // Use the GitHub user's public email as fallback
+    const githubEmail = primaryEmail || githubUser.email || undefined;
+
     const userData = {
       githubId: githubUser.id.toString(),
       name: githubUser.name || githubUser.login,
       avatarUrl: githubUser.avatar_url,
-      email: githubUser.email,
+      githubEmail,
       boundaryEmail,
     };
 
