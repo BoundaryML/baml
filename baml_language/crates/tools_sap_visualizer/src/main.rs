@@ -165,16 +165,16 @@ impl eframe::App for SapVisualizer {
                     PostShowAction::None(old_cursor) => {
                         // egui may have processed normal typing or other edits.
                         // Shift the stack to keep indices in sync.
-                        if output.response.changed() {
-                            if let Some(cr) = output.cursor_range {
-                                let new_cursor = cr.primary.index;
-                                if new_cursor > old_cursor {
-                                    let inserted = new_cursor - old_cursor;
-                                    self.overtype_stack.shift_for_insert(old_cursor, inserted);
-                                } else if new_cursor < old_cursor {
-                                    let deleted = old_cursor - new_cursor;
-                                    self.overtype_stack.shift_for_delete(new_cursor, deleted);
-                                }
+                        if output.response.changed()
+                            && let Some(cr) = output.cursor_range
+                        {
+                            let new_cursor = cr.primary.index;
+                            if new_cursor > old_cursor {
+                                let inserted = new_cursor - old_cursor;
+                                self.overtype_stack.shift_for_insert(old_cursor, inserted);
+                            } else if new_cursor < old_cursor {
+                                let deleted = old_cursor - new_cursor;
+                                self.overtype_stack.shift_for_delete(new_cursor, deleted);
                             }
                         }
                     }
@@ -187,12 +187,23 @@ impl eframe::App for SapVisualizer {
                 ui.take_available_space();
                 egui::ScrollArea::both().show(ui, |ui| {
                     egui::Grid::new("output").show(ui, |ui| {
+                        let first_item =
+                            RowData::make_item(self.sap.iter().next().unwrap_or_default());
+                        // Track the last real-value string for diffing.
+                        // "Real value" = white-colored items (not errors or NO YIELD).
+                        let mut last_real_value: Option<String> = if first_item.0 == Color32::WHITE
+                        {
+                            Some(first_item.1.to_string())
+                        } else {
+                            None
+                        };
                         let mut prev = RowData {
                             sap: &self.sap,
                             byte_idx: 0,
                             text: "".to_string(),
                             text_len: 0,
-                            item: RowData::make_item(self.sap.iter().next().unwrap_or_default()),
+                            item: first_item,
+                            diff: None, // first row has no previous to diff against
                         };
                         let mut pointer = None;
                         ctx.input(|i| pointer = i.pointer.hover_pos());
@@ -222,12 +233,23 @@ impl eframe::App for SapVisualizer {
                                 if pointer.is_some_and(|pointer| row_rect.contains(pointer)) {
                                     self.text_highlight = Some(would_be_highlight);
                                 }
+                                // Compute diff for the new item if it's a real value.
+                                let diff = if item.0 == Color32::WHITE {
+                                    let d = last_real_value
+                                        .as_deref()
+                                        .map(|prev_val| compute_item_diff(prev_val, &item.1));
+                                    last_real_value = Some(item.1.to_string());
+                                    d
+                                } else {
+                                    None
+                                };
                                 prev = RowData {
                                     sap: &self.sap,
                                     byte_idx,
                                     text: c.to_string(),
                                     text_len: c.len_utf8(),
                                     item,
+                                    diff,
                                 };
                             }
                         }
@@ -351,34 +373,32 @@ fn preprocess_json_input(
             )
         })
     });
-    if has_backspace {
-        if let Some(closer_idx) = stack.try_pair_delete(cursor) {
-            // Remove the backspace event — we handle it ourselves.
-            ui.input_mut(|input| {
-                input.events.retain(|e| {
-                    !matches!(
-                        e,
-                        egui::Event::Key {
-                            key: Key::Backspace,
-                            pressed: true,
-                            ..
-                        }
-                    )
-                });
+    if has_backspace && let Some(closer_idx) = stack.try_pair_delete(cursor) {
+        // Remove the backspace event — we handle it ourselves.
+        ui.input_mut(|input| {
+            input.events.retain(|e| {
+                !matches!(
+                    e,
+                    egui::Event::Key {
+                        key: Key::Backspace,
+                        pressed: true,
+                        ..
+                    }
+                )
             });
-            // Delete both opener (cursor - 1) and closer.
-            // Delete closer first (higher index) so the opener index stays valid.
-            sap.delete_char_range(closer_idx..closer_idx + 1);
-            stack.shift_for_delete(closer_idx, 1);
-            sap.delete_char_range(cursor - 1..cursor);
-            stack.shift_for_delete(cursor - 1, 1);
-            let mut state = state;
-            state
-                .cursor
-                .set_char_range(Some(CCursorRange::one(CCursor::new(cursor - 1))));
-            state.store(ui.ctx(), text_edit_id);
-            return PostShowAction::AlreadyHandled;
-        }
+        });
+        // Delete both opener (cursor - 1) and closer.
+        // Delete closer first (higher index) so the opener index stays valid.
+        sap.delete_char_range(closer_idx..closer_idx + 1);
+        stack.shift_for_delete(closer_idx, 1);
+        sap.delete_char_range(cursor - 1..cursor);
+        stack.shift_for_delete(cursor - 1, 1);
+        let mut state = state;
+        state
+            .cursor
+            .set_char_range(Some(CCursorRange::one(CCursor::new(cursor - 1))));
+        state.store(ui.ctx(), text_edit_id);
+        return PostShowAction::AlreadyHandled;
     }
 
     // --- Text events: over-type or auto-close ---
@@ -593,6 +613,56 @@ impl AutoCloseStack {
     }
 }
 
+/// Describes what changed in the item string relative to the previous
+/// real-value row.
+///
+/// Uses common-prefix / common-suffix to find the minimal changed span in
+/// both the old and new strings.  This handles additions, removals, and
+/// replacements:
+///   - Pure addition:   `old_range` is empty, `new_range` covers the inserted bytes.
+///   - Pure removal:    `new_range` is empty, `old_range` covers the removed bytes.
+///   - Replacement:     Both ranges are non-empty.
+struct ItemDiff {
+    /// Byte range in the *previous* item string that was replaced/removed.
+    old_range: std::ops::Range<usize>,
+    /// Byte range in the *current* item string that is new/changed.
+    new_range: std::ops::Range<usize>,
+}
+
+/// Compute the diff between two item strings.
+/// Returns `None` when there is no previous value to compare against.
+fn compute_item_diff(prev: &str, current: &str) -> ItemDiff {
+    let common_prefix = prev
+        .bytes()
+        .zip(current.bytes())
+        .take_while(|(a, b)| a == b)
+        .count();
+
+    // If the strings are identical, return empty ranges.
+    if common_prefix == prev.len() && common_prefix == current.len() {
+        return ItemDiff {
+            old_range: 0..0,
+            new_range: 0..0,
+        };
+    }
+
+    let max_suffix_from_prev = prev.len().saturating_sub(common_prefix);
+    let max_suffix_from_curr = current.len().saturating_sub(common_prefix);
+    let common_suffix = prev
+        .bytes()
+        .rev()
+        .zip(current.bytes().rev())
+        .take_while(|(a, b)| a == b)
+        .take(max_suffix_from_prev)
+        .take(max_suffix_from_curr)
+        .count();
+
+    ItemDiff {
+        old_range: common_prefix..prev.len() - common_suffix,
+        new_range: common_prefix..current.len() - common_suffix,
+    }
+}
+
 struct RowData<'a> {
     pub sap: &'a SapVisualizerState<&'static str>,
     pub byte_idx: usize,
@@ -600,6 +670,8 @@ struct RowData<'a> {
     /// May be different from `text.len()` since we may have escaped characters.
     pub text_len: usize,
     pub item: (Color32, Cow<'static, str>),
+    /// Diff against the previous real-value row, if any.
+    pub diff: Option<ItemDiff>,
 }
 impl<'a> RowData<'a> {
     pub fn add_char(&mut self, c: char) {
@@ -618,6 +690,7 @@ impl<'a> RowData<'a> {
             text,
             text_len,
             item,
+            diff,
         } = self;
         let display_idx = if text_len <= 1 {
             byte_idx.to_string()
@@ -638,8 +711,109 @@ impl<'a> RowData<'a> {
                 ui.label(RichText::new(&sap.json()[..byte_idx + text_len]).monospace());
             });
         let sep2 = ui.horizontal(|ui| ui.separator());
+
         let (color, s) = item;
-        let item_label = ui.colored_label(color, RichText::new(s).monospace());
+        let item_label = match diff {
+            Some(ItemDiff {
+                old_range,
+                new_range,
+            }) if !new_range.is_empty() || !old_range.is_empty() => {
+                let mono = egui::FontId::monospace(14.0);
+                let base_fmt = egui::TextFormat {
+                    font_id: mono.clone(),
+                    color,
+                    ..Default::default()
+                };
+
+                if new_range.is_empty() {
+                    // Pure removal: insert a red "▎" marker at the deletion point.
+                    let insert_point = new_range.start; // == new_range.end
+                    let mut display = s.into_owned();
+                    let marker = "\u{258E}"; // ▎ thin vertical bar
+                    display.insert_str(insert_point, marker);
+
+                    let marker_fmt = egui::TextFormat {
+                        font_id: mono.clone(),
+                        color: Color32::from_rgb(255, 80, 80),
+                        ..Default::default()
+                    };
+                    let mut sections = Vec::new();
+                    if insert_point > 0 {
+                        sections.push(LayoutSection {
+                            leading_space: 0.0,
+                            byte_range: 0..insert_point,
+                            format: base_fmt.clone(),
+                        });
+                    }
+                    sections.push(LayoutSection {
+                        leading_space: 0.0,
+                        byte_range: insert_point..insert_point + marker.len(),
+                        format: marker_fmt,
+                    });
+                    if insert_point < display.len() - marker.len() {
+                        sections.push(LayoutSection {
+                            leading_space: 0.0,
+                            byte_range: insert_point + marker.len()..display.len(),
+                            format: base_fmt,
+                        });
+                    }
+                    let job = egui::text::LayoutJob {
+                        text: display,
+                        sections,
+                        wrap: TextWrapping::no_max_width(),
+                        break_on_newline: false,
+                        ..Default::default()
+                    };
+                    ui.label(job)
+                } else {
+                    // Addition or replacement: color the changed text and
+                    // underline it.  Green for pure additions, yellow for
+                    // replacements (where old content was also removed).
+                    let is_replacement = !old_range.is_empty();
+                    let diff_color = if is_replacement {
+                        Color32::from_rgb(255, 200, 50) // yellow
+                    } else {
+                        Color32::from_rgb(80, 255, 80) // green
+                    };
+                    let highlight_fmt = egui::TextFormat {
+                        font_id: mono,
+                        color: diff_color,
+                        underline: egui::Stroke::new(1.0, diff_color),
+                        ..Default::default()
+                    };
+                    let mut sections = Vec::new();
+                    if new_range.start > 0 {
+                        sections.push(LayoutSection {
+                            leading_space: 0.0,
+                            byte_range: 0..new_range.start,
+                            format: base_fmt.clone(),
+                        });
+                    }
+                    sections.push(LayoutSection {
+                        leading_space: 0.0,
+                        byte_range: new_range.clone(),
+                        format: highlight_fmt,
+                    });
+                    if new_range.end < s.len() {
+                        sections.push(LayoutSection {
+                            leading_space: 0.0,
+                            byte_range: new_range.end..s.len(),
+                            format: base_fmt,
+                        });
+                    }
+                    let job = egui::text::LayoutJob {
+                        text: s.into_owned(),
+                        sections,
+                        wrap: TextWrapping::no_max_width(),
+                        break_on_newline: false,
+                        ..Default::default()
+                    };
+                    ui.label(job)
+                }
+            }
+            _ => ui.colored_label(color, RichText::new(s).monospace()),
+        };
+
         ui.end_row();
         num_label
             .rect
