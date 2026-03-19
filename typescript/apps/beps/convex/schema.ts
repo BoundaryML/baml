@@ -27,9 +27,9 @@ export const summaryStatus = v.union(
 );
 
 export const userRole = v.union(
-  v.literal("admin"),
-  v.literal("shepherd"),
-  v.literal("member")
+  v.literal("bdfl"),
+  v.literal("team"),
+  v.literal("unset")
 );
 
 // ─────────────────────────────────────────────────────────────────────────────

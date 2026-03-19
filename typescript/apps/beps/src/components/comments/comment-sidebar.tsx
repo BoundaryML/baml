@@ -7,7 +7,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useUser } from "@/components/providers/user-provider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, AlertCircle, HelpCircle, ChevronDown, ChevronUp, MessageSquare, X } from "lucide-react";
+import { Check, AlertCircle, HelpCircle, ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -711,7 +711,7 @@ export function CommentSidebar({
         {newComment && !readOnly && (
           <div className="absolute left-0 right-0 bg-card rounded border border-border shadow-lg p-2 z-20 text-[12px]" style={{ top: newComment.top }}>
             <div className="text-[10px] text-muted-foreground/60 italic border-l-2 border-amber-400 pl-1.5 mb-1.5 line-clamp-2">
-              "{newComment.selectedText}"
+              &ldquo;{newComment.selectedText}&rdquo;
             </div>
             <div className="flex gap-2">
               <Avatar name={user?.name ?? "You"} />

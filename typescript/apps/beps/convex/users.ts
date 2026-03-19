@@ -31,6 +31,37 @@ export const list = query({
   },
 });
 
+// List all users - requires BDFL or Team role
+export const listForManagement = query({
+  args: { requesterId: v.id("users") },
+  handler: async (ctx, args) => {
+    const requester = await ctx.db.get(args.requesterId);
+    if (!requester) {
+      throw new Error("Requester not found");
+    }
+
+    // Only BDFL and Team members can view user management
+    if (requester.role !== "bdfl" && requester.role !== "team") {
+      throw new Error("Unauthorized: Only BDFL and Team members can view users");
+    }
+
+    const users = await ctx.db.query("users").collect();
+    return users;
+  },
+});
+
+// Check if a user has management permissions (BDFL or Team)
+export const hasManagementPermissions = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return false;
+    }
+    return user.role === "bdfl" || user.role === "team";
+  },
+});
+
 // Internal query for use in actions
 export const getById = internalQuery({
   args: { id: v.id("users") },
@@ -65,10 +96,10 @@ export const getOrCreate = mutation({
       return existing._id;
     }
 
-    // Create new user with default role
+    // Create new user with default role (unset)
     const userId = await ctx.db.insert("users", {
       name: args.name,
-      role: "member",
+      role: "unset",
       createdAt: Date.now(),
     });
 
@@ -152,12 +183,12 @@ export const getOrCreateFromGitHub = mutation({
       return existingByName._id;
     }
 
-    // Create new user
+    // Create new user with default role (unset)
     const userId = await ctx.db.insert("users", {
       name: args.name,
       githubId: args.githubId,
       avatarUrl: args.avatarUrl,
-      role: "member",
+      role: "unset",
       createdAt: Date.now(),
       isSpecialAccount,
       boundaryEmail: args.boundaryEmail,
@@ -184,7 +215,7 @@ export const create = mutation({
   handler: async (ctx, args) => {
     return await ctx.db.insert("users", {
       name: args.name,
-      role: args.role ?? "member",
+      role: args.role ?? "unset",
       avatarUrl: args.avatarUrl,
       createdAt: Date.now(),
     });
@@ -198,6 +229,43 @@ export const updateRole = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.id, { role: args.role });
+  },
+});
+
+// Update user role - requires BDFL or Team role
+export const updateRoleWithPermissions = mutation({
+  args: {
+    requesterId: v.id("users"),
+    targetUserId: v.id("users"),
+    role: userRole,
+  },
+  handler: async (ctx, args) => {
+    const requester = await ctx.db.get(args.requesterId);
+    if (!requester) {
+      throw new Error("Requester not found");
+    }
+
+    // Only BDFL and Team members can update roles
+    if (requester.role !== "bdfl" && requester.role !== "team") {
+      throw new Error("Unauthorized: Only BDFL and Team members can update roles");
+    }
+
+    // Only BDFL can assign BDFL role
+    if (args.role === "bdfl" && requester.role !== "bdfl") {
+      throw new Error("Unauthorized: Only BDFL can assign the BDFL role");
+    }
+
+    const targetUser = await ctx.db.get(args.targetUserId);
+    if (!targetUser) {
+      throw new Error("Target user not found");
+    }
+
+    // Cannot change the role of a BDFL unless you are also BDFL
+    if (targetUser.role === "bdfl" && requester.role !== "bdfl") {
+      throw new Error("Unauthorized: Only BDFL can change another BDFL's role");
+    }
+
+    await ctx.db.patch(args.targetUserId, { role: args.role });
   },
 });
 
