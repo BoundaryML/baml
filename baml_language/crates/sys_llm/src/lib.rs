@@ -15,7 +15,13 @@ mod render_prompt;
 mod specialize_prompt;
 pub(crate) mod types;
 
-use std::{future::Future, pin::Pin, str::FromStr, sync::Arc};
+use std::{
+    future::Future,
+    panic::{RefUnwindSafe, UnwindSafe},
+    pin::Pin,
+    str::FromStr,
+    sync::Arc,
+};
 
 use bex_external_types::BexExternalValue;
 use bex_heap::builtin_types;
@@ -71,7 +77,7 @@ pub type EnvReadFut = Pin<Box<dyn Future<Output = Result<Option<String>, LlmOpEr
 /// Injected by the `SysOpLlm` blanket impl in `sys_types`, bridging to the
 /// `SysOpEnv` trait so that `sys_llm` can read env vars without depending
 /// on `std::env` or a specific runtime.
-pub type EnvReadFn = Arc<dyn Fn(String) -> EnvReadFut + Send + Sync>;
+pub type EnvReadFn = Arc<dyn Fn(String) -> EnvReadFut + Send + Sync + UnwindSafe + RefUnwindSafe>;
 
 // ============================================================================
 // Fs callback types (for reading files from build_request)
@@ -85,7 +91,7 @@ pub type FsReadFut = Pin<Box<dyn Future<Output = Result<Vec<u8>, LlmOpError>> + 
 /// Injected by the `SysOpLlm` blanket impl in `sys_types`, bridging to the
 /// `SysOpFs` trait so that `sys_llm` can read files without depending
 /// on `std::fs` or a specific runtime.
-pub type FsReadFn = Arc<dyn Fn(String) -> FsReadFut + Send + Sync>;
+pub type FsReadFn = Arc<dyn Fn(String) -> FsReadFut + Send + Sync + UnwindSafe + RefUnwindSafe>;
 
 // ============================================================================
 // Clean (owned-type) entry points for trait-based dispatch
