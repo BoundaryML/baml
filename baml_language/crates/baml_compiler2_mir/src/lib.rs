@@ -5,7 +5,7 @@ mod lower;
 pub mod pretty;
 
 pub use ir::*;
-pub use lower::{convert_tir2_ty, def_to_item_ref, lower_function};
+pub use lower::{convert_tir2_ty, def_to_item_ref, lower_function, lower_let_body};
 
 /// Database trait for compiler2 MIR queries.
 #[salsa::db]

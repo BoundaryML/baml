@@ -41,6 +41,11 @@ pub struct Program {
     /// Used for dynamic function lookup at runtime.
     pub function_global_indices: HashMap<String, usize>,
 
+    /// Maps let-binding fully-qualified names to their global slot indices.
+    /// E.g., `"user.my_const" -> 5`. Populated in Pass 1; slots hold `ConstValue::Null`
+    /// until `$init` runs at load time via `StoreGlobal`.
+    pub let_global_indices: HashMap<String, usize>,
+
     /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
     /// Prepended to function prompt templates by `get_jinja_template`.
     pub template_strings_macros: String,

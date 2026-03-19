@@ -13,6 +13,7 @@ use std::{
 };
 
 use baml_compiler_emit::CompileOptions;
+use baml_compiler2_ast;
 use baml_db::{FileId, SourceFile};
 use baml_workspace::{Compiler2ExtraFiles, Project};
 use salsa::Setter;
@@ -65,6 +66,9 @@ pub struct ProjectDatabase {
     compiler2_file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps `FileId` to file path for reverse lookup (all files including v2 stubs).
     file_id_to_path: HashMap<FileId, std::path::PathBuf>,
+    /// Synthetic compiler-generated items to inject into specific files.
+    /// Used by tests to inject `Item::Let` without needing BAML surface syntax.
+    synthetic_file_items: HashMap<SourceFile, Vec<baml_compiler2_ast::Item>>,
 }
 
 #[salsa::db]
@@ -82,6 +86,13 @@ impl baml_workspace::Db for ProjectDatabase {
 impl baml_compiler2_hir::Db for ProjectDatabase {
     fn compiler2_extra_files(&self) -> Option<baml_workspace::Compiler2ExtraFiles> {
         self.compiler2_extra_files
+    }
+
+    fn synthetic_items_for_file(&self, file: SourceFile) -> Vec<baml_compiler2_ast::Item> {
+        self.synthetic_file_items
+            .get(&file)
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
@@ -123,6 +134,7 @@ impl ProjectDatabase {
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
+            synthetic_file_items: HashMap::new(),
         }
     }
 
@@ -142,7 +154,20 @@ impl ProjectDatabase {
             file_map: HashMap::new(),
             compiler2_file_map: HashMap::new(),
             file_id_to_path: HashMap::new(),
+            synthetic_file_items: HashMap::new(),
         }
+    }
+
+    /// Inject synthetic compiler-generated items into a specific file's HIR index.
+    ///
+    /// Used by tests to add `Item::Let` (and other compiler-generated items) without
+    /// needing BAML surface syntax. Must be called before compilation queries run.
+    pub fn set_synthetic_items_for_file(
+        &mut self,
+        file: SourceFile,
+        items: Vec<baml_compiler2_ast::Item>,
+    ) {
+        self.synthetic_file_items.insert(file, items);
     }
 
     /// Get the project, if set.

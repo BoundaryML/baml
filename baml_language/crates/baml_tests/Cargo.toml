@@ -12,10 +12,10 @@ doctest = false
 [dependencies]
 baml_base = { workspace = true }
 baml_compiler2_ast = { workspace = true }
-baml_compiler2_hir = { workspace = true }
-baml_compiler2_tir = { workspace = true }
 baml_compiler2_emit = { workspace = true }
+baml_compiler2_hir = { workspace = true }
 baml_compiler2_mir = { workspace = true }
+baml_compiler2_tir = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_compiler_emit = { workspace = true }
 baml_compiler_hir = { workspace = true }
@@ -35,7 +35,9 @@ sys_types = { workspace = true }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
 insta = { workspace = true }
+la-arena = { workspace = true }
 salsa = { workspace = true }
+text-size = { workspace = true }
 
 [build-dependencies]
 prettyplease = { workspace = true }

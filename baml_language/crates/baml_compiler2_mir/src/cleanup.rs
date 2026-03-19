@@ -7,6 +7,8 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use baml_base::Name;
+
 use crate::{
     BasicBlock, BlockId, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place,
     Terminator,
@@ -24,6 +26,27 @@ pub(crate) fn cleanup_function(func: &mut MirFunction) {
 
     #[cfg(debug_assertions)]
     verify_mir(body, &func.item_ref);
+}
+
+/// Run all cleanup phases directly on a `MirFunctionBody`.
+///
+/// Used for let-binding initializers, which are lowered as bodies without
+/// the enclosing `MirFunction` wrapper (arity = 0).
+pub(crate) fn cleanup_function_body(body: &mut MirFunctionBody) {
+    eliminate_dead_blocks(body);
+    propagate_copies(body, 0);
+    eliminate_dead_locals(body, 0);
+    reorder_blocks_rpo(body);
+
+    #[cfg(debug_assertions)]
+    verify_mir(
+        body,
+        &crate::ItemRef::Free {
+            package: Name::new("$init_let"),
+            namespace: vec![],
+            name: Name::new("_"),
+        },
+    );
 }
 
 // ============================================================================

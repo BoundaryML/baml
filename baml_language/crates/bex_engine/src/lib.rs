@@ -264,6 +264,9 @@ pub enum EngineError {
 
     #[error("A function call with ID {call_id} is already in progress")]
     DuplicateCallId { call_id: CallId },
+
+    #[error("Package initialization failed: {0}")]
+    InitFailed(String),
 }
 
 // ============================================================================
@@ -406,6 +409,9 @@ impl BexEngine {
         sys_ops: std::sync::Arc<sys_types::SysOps>,
         event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     ) -> Result<Self, EngineError> {
+        // Extract package_init_order before consuming bytecode_program.
+        let package_init_order = bytecode_program.package_init_order.clone();
+
         // Convert the pure bytecode to a VM-ready program with native functions attached
         let bytecode = bex_vm::convert_program(bytecode_program)?;
 
@@ -446,14 +452,15 @@ impl BexEngine {
 
         // Convert ObjectIndex -> HeapPtr for function lookup table.
         // Now that the heap exists, we can get stable pointers to compile-time objects.
-        let resolved_function_names = bytecode
-            .resolved_function_names
-            .into_iter()
-            .map(|(name, (idx, kind))| {
-                let ptr = heap.compile_time_ptr(idx.into_raw());
-                (name, (ptr, kind))
-            })
-            .collect();
+        let resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)> =
+            bytecode
+                .resolved_function_names
+                .into_iter()
+                .map(|(name, (idx, kind))| {
+                    let ptr = heap.compile_time_ptr(idx.into_raw());
+                    (name, (ptr, kind))
+                })
+                .collect();
 
         // Build class name lookup table from pre-computed indices.
         let resolved_class_names: HashMap<String, HeapPtr> = class_indices
@@ -474,7 +481,49 @@ impl BexEngine {
             .into_iter()
             .map(|cv| cv.to_value(|idx| heap.compile_time_ptr(idx.into_raw())))
             .collect();
-        let globals = GlobalPool::from_vec(globals_vec);
+        let mut globals = GlobalPool::from_vec(globals_vec);
+
+        // Run $init for each package in dependency order.
+        // $init evaluates top-level let-binding initializers and stores their
+        // results into the global slots via StoreGlobal instructions.
+        // This must run before any user code calls LoadGlobal on let-bound names.
+        for init_name in &package_init_order {
+            if let Some((init_ptr, _kind)) = resolved_function_names.get(init_name.as_str()) {
+                let mut vm = BexVm::new(
+                    Arc::clone(&heap),
+                    globals.clone(),
+                    resolved_class_names.clone(),
+                );
+                vm.set_entry_point(*init_ptr, &[]);
+                // Drive the VM to completion. $init only contains synchronous
+                // bytecode (no async ops), but we loop to handle any intermediate
+                // notifications gracefully.
+                loop {
+                    match vm.exec() {
+                        Ok(VmExecState::Complete(_)) => {
+                            // Extract the (potentially mutated) global pool back
+                            // so StoreGlobal writes are visible to subsequent calls.
+                            globals = vm.globals;
+                            break;
+                        }
+                        Ok(VmExecState::Notify(_)) | Ok(VmExecState::SpanNotify(_)) => {
+                            // Ignore watch/span notifications during init.
+                            continue;
+                        }
+                        Ok(other) => {
+                            return Err(EngineError::InitFailed(format!(
+                                "$init function '{init_name}' yielded unexpectedly: {other:?}"
+                            )));
+                        }
+                        Err(e) => {
+                            return Err(EngineError::InitFailed(format!(
+                                "$init function '{init_name}' failed: {e}"
+                            )));
+                        }
+                    }
+                }
+            }
+        }
 
         // Build SysOpContext by pre-extracting LLM function metadata from the heap.
         // This avoids passing raw HeapPtrs to sys_ops.

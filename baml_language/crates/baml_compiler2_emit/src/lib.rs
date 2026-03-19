@@ -21,7 +21,9 @@ use baml_compiler2_hir::{
     loc::{FunctionLoc, LetLoc},
     package::{PackageId, package_items},
 };
-use baml_compiler2_mir::{BuiltinKind, MirFunctionKind, def_to_item_ref, lower_function};
+use baml_compiler2_mir::{
+    BuiltinKind, MirFunctionKind, def_to_item_ref, lower_function, lower_let_body,
+};
 use baml_type::TyAttr;
 use bex_vm_types::{
     Bytecode, Class, ClassField, ClientBuildMeta, ClientBuildType, ConstValue, Enum, EnumVariant,
@@ -93,13 +95,13 @@ pub fn generate_project_bytecode(
     let all_files = compiler2_all_files(db);
 
     // --- Pass 1: Build globals map (function name -> global index) ---
-    // We iterate all files, get their functions and let bindings, and build a
-    // stable index map. Let bindings are allocated global slots alongside
-    // functions; their initial value is ConstValue::Null (overwritten by $init
-    // at load time via StoreGlobal).
+    // Functions are allocated first (slots 0..N-1), then let bindings (slots N..M-1).
+    // This ensures function slots match the order they're appended to program.globals
+    // in Pass 4, and let binding slots don't interleave with function slots.
     let mut globals: HashMap<String, usize> = HashMap::new();
     let mut global_idx = 0usize;
 
+    // First sub-pass: assign slots to all functions across all files.
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
         for (local_id, _func_data) in item_tree.functions.iter() {
@@ -112,6 +114,12 @@ pub fn generate_project_bytecode(
                 idx
             });
         }
+    }
+
+    // Second sub-pass: assign slots to all let bindings across all files,
+    // after all function slots have been reserved.
+    for file in &all_files {
+        let item_tree = file_item_tree(db, *file);
         for (local_id, _let_data) in item_tree.lets.iter() {
             let let_loc = LetLoc::new(db, *file, *local_id);
             let fq_name = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
@@ -349,10 +357,12 @@ pub fn generate_project_bytecode(
                 let let_loc = LetLoc::new(db, *file, *local_id);
                 let fq_name = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
                 // Ensure the global slot for this let binding is populated with Null.
+                // Also register in let_global_indices for test/debug visibility.
                 if let Some(&slot) = globals.get(&fq_name) {
                     while program.globals.len() <= slot {
                         program.add_global(ConstValue::Null);
                     }
+                    program.let_global_indices.insert(fq_name.clone(), slot);
                 }
                 pkg_lets
                     .entry(pkg_info.package.to_string())
@@ -362,9 +372,18 @@ pub fn generate_project_bytecode(
         }
 
         // Track package init order for runtime.
+        // Sort packages: non-user packages first (alphabetical), then "user".
+        // This ensures `baml.$init` runs before the user package's `$init`.
+        let mut sorted_pkg_names: Vec<&String> = pkg_lets.keys().collect();
+        sorted_pkg_names.sort_by(|a, b| match (a.as_str(), b.as_str()) {
+            ("user", _) => std::cmp::Ordering::Greater,
+            (_, "user") => std::cmp::Ordering::Less,
+            (a, b) => a.cmp(b),
+        });
         let mut package_init_order: Vec<String> = Vec::new();
 
-        for (pkg_name, let_bindings) in &pkg_lets {
+        for pkg_name in &sorted_pkg_names {
+            let let_bindings = &pkg_lets[*pkg_name];
             if let_bindings.is_empty() {
                 continue;
             }
@@ -384,7 +403,7 @@ pub fn generate_project_bytecode(
                 &mut program,
             )?;
 
-            let init_fq_name = if pkg_name == "user" {
+            let init_fq_name = if pkg_name.as_str() == "user" {
                 "$init".to_string()
             } else {
                 format!("{pkg_name}.$init")
@@ -731,26 +750,112 @@ fn topological_sort_lets<'db>(
 }
 
 /// Compile the `$init` function that evaluates all let-binding initializers
-/// in dependency order.
+/// in dependency order, storing each result via `StoreGlobal`.
 ///
-/// Phase 2 produces an empty skeleton `$init` function — the slot allocation
-/// framework is validated here. Phase 3 will add actual `StoreGlobal`
-/// instructions for each let-binding initializer.
+/// Strategy: for each let binding, lower the initializer through MIR → bytecode
+/// as a standalone zero-arg helper function. Register the helper in globals
+/// (for `Call` addressability), then emit a `$init` body that calls each helper
+/// and `StoreGlobal`s the result into the let binding's global slot.
 fn compile_init_function<'db>(
-    _db: &'db dyn baml_compiler2_mir::Db,
-    _sorted_bindings: &[(String, LetLoc<'db>, baml_base::SourceFile)],
-    _globals: &HashMap<String, usize>,
-    _classes: &HashMap<String, HashMap<String, usize>>,
-    _class_object_indices: &HashMap<String, usize>,
-    _enum_object_indices: &HashMap<String, usize>,
-    _enum_variants: &HashMap<String, HashMap<String, usize>>,
-    _program: &mut Program,
+    db: &'db dyn baml_compiler2_mir::Db,
+    sorted_bindings: &[(String, LetLoc<'db>, baml_base::SourceFile)],
+    globals: &HashMap<String, usize>,
+    classes: &HashMap<String, HashMap<String, usize>>,
+    class_object_indices: &HashMap<String, usize>,
+    enum_object_indices: &HashMap<String, usize>,
+    enum_variants: &HashMap<String, HashMap<String, usize>>,
+    program: &mut Program,
 ) -> Result<Function, LoweringError> {
-    // Phase 2 skeleton: emit an empty $init that just returns.
-    // Phase 3 will replace this with actual StoreGlobal sequences for each
-    // let-binding initializer.
+    // Build the $init bytecode: a sequence of Call + StoreGlobal pairs.
+    let mut init_instructions: Vec<Instruction> = Vec::new();
+    let mut init_constants: Vec<bex_vm_types::ConstValue> = Vec::new();
+
+    for (i, (fq_name, let_loc, file)) in sorted_bindings.iter().enumerate() {
+        // Find the global slot for this let binding.
+        let let_slot = match globals.get(fq_name.as_str()) {
+            Some(&slot) => slot,
+            None => {
+                return Err(LoweringError::Internal(format!(
+                    "no global slot for let binding: {fq_name}"
+                )));
+            }
+        };
+
+        // Lower the let initializer through MIR → MirFunctionBody.
+        let maybe_body = lower_let_body(db, *let_loc);
+
+        let helper_fn = match maybe_body {
+            Some(mir_body) => {
+                let line_starts = build_line_starts(file.text(db));
+                let ctx = MirCodegenContext {
+                    globals,
+                    classes,
+                    class_object_indices,
+                    enum_object_indices,
+                    enum_variants,
+                    objects: &mut program.objects,
+                };
+                let mut helper =
+                    compile_mir_function(&mir_body, 0, &line_starts, ctx, OptLevel::One);
+                helper.name = format!("$init_let_{i}");
+                helper.arity = 0;
+                helper
+            }
+            None => {
+                // No initializer — helper just pushes Null.
+                let mut bytecode = Bytecode::default();
+                // LoadConst(0) → Null constant
+                bytecode.constants.push(bex_vm_types::ConstValue::Null);
+                bytecode.instructions.push(Instruction::LoadConst(0));
+                bytecode.instructions.push(Instruction::Return);
+                Function {
+                    name: format!("$init_let_{i}"),
+                    arity: 0,
+                    real_local_count: 0,
+                    bytecode,
+                    kind: FunctionKind::Bytecode,
+                    local_names: Vec::new(),
+                    debug_locals: Vec::new(),
+                    span: baml_base::Span::fake(),
+                    block_notifications: Vec::new(),
+                    viz_nodes: Vec::new(),
+                    return_type: baml_type::Ty::Null {
+                        attr: baml_type::TyAttr::default(),
+                    },
+                    param_names: Vec::new(),
+                    param_types: Vec::new(),
+                    body_meta: None,
+                    trace: false,
+                }
+            }
+        };
+
+        // Register the helper function as an object and a global slot.
+        // This lets $init call it via Call(global_idx).
+        let helper_obj_idx = program.add_object(Object::Function(Box::new(helper_fn)));
+        let helper_global_slot = program.globals.len();
+        program.add_global(bex_vm_types::ConstValue::Object(ObjectIndex::from_raw(
+            helper_obj_idx,
+        )));
+
+        // Emit: Call(helper_global_slot) then StoreGlobal(let_slot)
+        init_instructions.push(Instruction::Call(bex_vm_types::GlobalIndex::from_raw(
+            helper_global_slot,
+        )));
+        init_instructions.push(Instruction::StoreGlobal(
+            bex_vm_types::GlobalIndex::from_raw(let_slot),
+        ));
+    }
+
+    // Final: push Null and Return (Return pops the top of the eval stack).
+    let null_const_idx = init_constants.len();
+    init_constants.push(bex_vm_types::ConstValue::Null);
+    init_instructions.push(Instruction::LoadConst(null_const_idx));
+    init_instructions.push(Instruction::Return);
+
     let mut bytecode = Bytecode::default();
-    bytecode.instructions.push(Instruction::Return);
+    bytecode.instructions = init_instructions;
+    bytecode.constants = init_constants;
 
     Ok(Function {
         name: "$init".to_string(),

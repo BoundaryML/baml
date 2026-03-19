@@ -418,6 +418,24 @@ impl MirBuilder {
         }
     }
 
+    /// Consume the builder and produce just the `MirFunctionBody`.
+    ///
+    /// Used when building a let-binding initializer — the caller holds the
+    /// `arity` and `item_ref` context externally.
+    pub(crate) fn build_body(self) -> MirFunctionBody {
+        assert!(!self.blocks.is_empty(), "let body has no blocks");
+        for (i, block) in self.blocks.iter().enumerate() {
+            assert!(block.terminator.is_some(), "block bb{i} is not terminated");
+        }
+        MirFunctionBody {
+            blocks: self.blocks,
+            entry: BlockId(0),
+            locals: self.locals,
+            unwind_error_locals: self.unwind_error_locals,
+            viz_nodes: self.viz_nodes,
+        }
+    }
+
     /// Build without checking termination (for incremental construction).
     ///
     /// The `item_ref` field is set to a placeholder — `lower_function` overwrites

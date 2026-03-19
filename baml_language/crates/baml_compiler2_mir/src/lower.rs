@@ -239,9 +239,12 @@ use baml_compiler2_ast::{
     Pattern as AstPattern, Stmt as AstStmt, StmtId as AstStmtId, UnaryOp as AstUnaryOp,
 };
 use baml_compiler2_hir::{
-    body::{FunctionBody, function_body, function_body_source_map},
+    body::{
+        FunctionBody, LetBody, function_body, function_body_source_map, let_body,
+        let_body_source_map,
+    },
     file_semantic_index,
-    loc::FunctionLoc,
+    loc::{FunctionLoc, LetLoc},
     package::{PackageId, package_items},
     scope::FileScopeId,
     signature::function_signature,
@@ -272,7 +275,7 @@ struct LoweringContext<'db> {
     body: AstExprBody,
     source_map: Option<AstSourceMap>,
     file: baml_base::SourceFile,
-    func_loc: FunctionLoc<'db>,
+    func_loc: Option<FunctionLoc<'db>>,
 
     // Schema maps built from PackageItems
     class_fields: HashMap<String, HashMap<String, usize>>,
@@ -452,12 +455,161 @@ impl<'db> LoweringContext<'db> {
             body: expr_body,
             source_map,
             file,
-            func_loc,
+            func_loc: Some(func_loc),
             class_fields,
             enum_variants,
             class_type_tags,
             watched_locals_stack: Vec::new(),
             viz_context: VizContext::new(func_data.name.to_string()),
+            pending_header: None,
+            synthetic_name_counts: HashMap::new(),
+        }
+    }
+
+    /// Create a lowering context for a top-level let binding.
+    ///
+    /// The let binding has no parameters — arity 0, no `func_loc`.
+    /// Type information is gathered from the `ScopeKind::Let` scope.
+    fn new_for_let(
+        db: &'db dyn crate::Db,
+        let_loc: LetLoc<'db>,
+        expr_body: AstExprBody,
+        source_map: Option<AstSourceMap>,
+    ) -> Self {
+        let file = let_loc.file(db);
+
+        // --- Resolve LetLoc → FileScopeId via span ---
+        let item_tree = file_item_tree(db, file);
+        let let_data = &item_tree[let_loc.id(db)];
+        let let_span = let_data.span;
+        let let_name = let_data.name.clone();
+
+        let index = file_semantic_index(db, file);
+        let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
+
+        // --- Eagerly aggregate expr_types, pat_types, resolutions from let scope ---
+        let mut expr_types: FxHashMap<AstExprId, Tir2Ty> = FxHashMap::default();
+        let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
+        let mut resolutions: FxHashMap<
+            AstExprId,
+            baml_compiler2_tir::inference::MethodResolution<'db>,
+        > = FxHashMap::default();
+        let mut exhaustive_matches: rustc_hash::FxHashSet<AstExprId> =
+            rustc_hash::FxHashSet::default();
+
+        let merge_scope =
+            |fsi: FileScopeId,
+             expr_types: &mut FxHashMap<AstExprId, Tir2Ty>,
+             pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
+             resolutions: &mut FxHashMap<
+                AstExprId,
+                baml_compiler2_tir::inference::MethodResolution<'db>,
+            >,
+             exhaustive_matches: &mut rustc_hash::FxHashSet<AstExprId>| {
+                let scope_id = index.scope_ids[fsi.index() as usize];
+                let inference = infer_scope_types(db, scope_id);
+                for (&expr_id, ty) in inference.iter_expressions() {
+                    expr_types.insert(expr_id, ty.clone());
+                }
+                for (&pat_id, ty) in inference.iter_bindings() {
+                    pat_types.insert(pat_id, ty.clone());
+                }
+                for (&expr_id, res) in inference.iter_resolutions() {
+                    resolutions.insert(expr_id, res.clone());
+                }
+                for &expr_id in inference.iter_exhaustive_matches() {
+                    exhaustive_matches.insert(expr_id);
+                }
+            };
+
+        // Include the let scope itself
+        merge_scope(
+            let_scope_id,
+            &mut expr_types,
+            &mut pat_types,
+            &mut resolutions,
+            &mut exhaustive_matches,
+        );
+
+        // Include all descendant scopes (blocks, closures within the initializer)
+        let let_scope = &index.scopes[let_scope_id.index() as usize];
+        let desc_start = let_scope.descendants.start.index();
+        let desc_end = let_scope.descendants.end.index();
+        for raw_idx in desc_start..desc_end {
+            merge_scope(
+                FileScopeId::new(raw_idx),
+                &mut expr_types,
+                &mut pat_types,
+                &mut resolutions,
+                &mut exhaustive_matches,
+            );
+        }
+
+        // --- Build class_fields / enum_variants / class_type_tags from PackageItems ---
+        let pkg_info = file_package(db, file);
+        let pkg_id = PackageId::new(db, pkg_info.package.clone());
+        let pkg_items = package_items(db, pkg_id);
+
+        let mut class_fields: HashMap<String, HashMap<String, usize>> = HashMap::new();
+        let mut class_type_tags: HashMap<String, i64> = HashMap::new();
+        let mut class_type_tag_counter = 0i64;
+        let mut enum_variants: HashMap<String, HashMap<String, usize>> = HashMap::new();
+
+        for ns in pkg_items.namespaces.values() {
+            for (_name, def) in &ns.types {
+                match def {
+                    Definition::Class(class_loc) => {
+                        let cfile = class_loc.file(db);
+                        let citree = file_item_tree(db, cfile);
+                        let class_data = &citree[class_loc.id(db)];
+                        let class_name = class_data.name.to_string();
+
+                        let mut fields = HashMap::new();
+                        for (idx, field) in class_data.fields.iter().enumerate() {
+                            fields.insert(field.name.to_string(), idx);
+                        }
+                        let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
+                        class_type_tag_counter += 1;
+                        class_type_tags.insert(class_name.clone(), type_tag);
+                        class_fields.insert(class_name, fields);
+                    }
+                    Definition::Enum(enum_loc) => {
+                        let efile = enum_loc.file(db);
+                        let eitree = file_item_tree(db, efile);
+                        let enum_data = &eitree[enum_loc.id(db)];
+                        let enum_name = enum_data.name.to_string();
+
+                        let mut variants = HashMap::new();
+                        for (idx, variant) in enum_data.variants.iter().enumerate() {
+                            variants.insert(variant.name.to_string(), idx);
+                        }
+                        enum_variants.insert(enum_name, variants);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        LoweringContext {
+            db,
+            builder: MirBuilder::new(let_name.clone(), 0),
+            locals: HashMap::new(),
+            loop_context: None,
+            catch_context: None,
+            exit_block: BlockId(0), // placeholder; overwritten in lower_let_body_inner
+            expr_types,
+            pat_types,
+            resolutions,
+            exhaustive_matches,
+            body: expr_body,
+            source_map,
+            file,
+            func_loc: None,
+            class_fields,
+            enum_variants,
+            class_type_tags,
+            watched_locals_stack: Vec::new(),
+            viz_context: VizContext::new(let_name.to_string()),
             pending_header: None,
             synthetic_name_counts: HashMap::new(),
         }
@@ -519,7 +671,10 @@ impl<'db> LoweringContext<'db> {
     fn lower_function_body(&mut self) -> MirFunction {
         use baml_compiler2_tir::lower_type_expr::lower_type_expr;
 
-        let sig = function_signature(self.db, self.func_loc);
+        let func_loc = self
+            .func_loc
+            .expect("lower_function_body called on non-function LoweringContext");
+        let sig = function_signature(self.db, func_loc);
 
         // Return place _0
         let pkg_info = file_package(self.db, self.file);
@@ -544,7 +699,7 @@ impl<'db> LoweringContext<'db> {
         // Detect enclosing class for `self` parameter resolution
         let index = file_semantic_index(self.db, self.file);
         let item_tree = file_item_tree(self.db, self.file);
-        let func_data = &item_tree[self.func_loc.id(self.db)];
+        let func_data = &item_tree[func_loc.id(self.db)];
         let func_scope_id: FileScopeId =
             index.scope_at_offset(func_data.span.start(), Some(&func_data.name));
         let func_scope = &index.scopes[func_scope_id.index() as usize];
@@ -620,6 +775,54 @@ impl<'db> LoweringContext<'db> {
         let mut mir = builder.build();
         cleanup::cleanup_function(&mut mir);
         mir
+    }
+
+    /// Lower a top-level let binding's initializer into a zero-arg `MirFunctionBody`.
+    ///
+    /// The resulting body has arity 0, a single `_0` return place (type unknown/null),
+    /// and evaluates the initializer expression, leaving the result in `_0`.
+    /// This is used by `compile_init_function` to compile let initializers into bytecode
+    /// that can then be called and have their result stored via `StoreGlobal`.
+    fn lower_let_body_inner(&mut self) -> MirFunctionBody {
+        // Return place _0 (type unknown — let bodies don't have type annotations)
+        let ret = self.builder.declare_local(
+            Some(Name::new("_0")),
+            Ty::Null {
+                attr: TyAttr::default(),
+            },
+            None,
+            false,
+        );
+
+        // Entry and exit blocks
+        let entry = self.builder.create_block();
+        let exit = self.builder.create_block();
+        self.exit_block = exit;
+        self.builder.set_current_block(entry);
+
+        // Lower root expression into return place
+        if let Some(root) = self.body.root_expr {
+            self.lower_expr(root, Place::local(ret));
+        } else {
+            self.builder.assign(
+                Place::local(ret),
+                Rvalue::Use(Operand::Constant(Constant::Null)),
+            );
+        }
+
+        // Goto exit, emit Return terminator
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(self.exit_block);
+        }
+        self.builder.set_current_block(self.exit_block);
+        self.builder.return_();
+
+        // Take the builder out and build the MirFunctionBody
+        let dummy = MirBuilder::new(Name::new("_dummy"), 0);
+        let builder = std::mem::replace(&mut self.builder, dummy);
+        let mut body = builder.build_body();
+        cleanup::cleanup_function_body(&mut body);
+        body
     }
 }
 
@@ -2419,7 +2622,28 @@ impl<'db> LoweringContext<'db> {
     }
 }
 
-// ─── 3.7: Entry point ─────────────────────────────────────────────────────────
+// ─── 3.7: Entry points ────────────────────────────────────────────────────────
+
+/// Lower a top-level let binding's initializer into a `MirFunctionBody`.
+///
+/// The body has arity 0 and contains only the initializer expression.
+/// Used by `compile_init_function` in the emit crate to compile let initializers
+/// into bytecode for the `$init` function.
+pub fn lower_let_body<'db>(
+    db: &'db dyn crate::Db,
+    let_loc: LetLoc<'db>,
+) -> Option<MirFunctionBody> {
+    let body = let_body(db, let_loc);
+    let source_map = let_body_source_map(db, let_loc);
+
+    match body.as_ref() {
+        LetBody::Expr(expr_body) => {
+            let mut ctx = LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map);
+            Some(ctx.lower_let_body_inner())
+        }
+        LetBody::Missing => None,
+    }
+}
 
 pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -> MirFunction {
     let body = function_body(db, func_loc);

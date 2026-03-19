@@ -800,6 +800,7 @@ version = "0.0.0-beta"
 dependencies = [
  "baml_builtins",
  "baml_builtins2",
+ "baml_compiler2_ast",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
  "baml_compiler2_mir",
@@ -848,6 +849,7 @@ dependencies = [
  "codspeed-divan-compat",
  "indexmap",
  "insta",
+ "la-arena",
  "prettyplease",
  "proc-macro2",
  "quote",
@@ -856,6 +858,7 @@ dependencies = [
  "sys_native",
  "sys_types",
  "tempfile",
+ "text-size",
  "tokio",
  "walkdir",
  "wiremock",

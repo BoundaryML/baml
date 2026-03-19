@@ -18,8 +18,8 @@ doctest = false
 workspace = true
 
 [build-dependencies]
-baml_builtins2_codegen = { path = "../baml_builtins2_codegen" }
-baml_builtins2 = { path = "../baml_builtins2" }
+baml_builtins2 = { workspace = true }
+baml_builtins2_codegen = { workspace = true }
 
 [dependencies]
 baml_base = { workspace = true }
