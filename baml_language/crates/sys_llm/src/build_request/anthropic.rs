@@ -6,16 +6,16 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder, get_string_option, mime_type_as_ok,
+    BuildRequestCallbacks, BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder,
+    RawHttpRequest, build_headers, forward_options, get_string_option, mime_type_as_ok,
 };
 
 /// Builder for the Anthropic provider.
 pub(crate) struct AnthropicBuilder;
 
-/// Default `max_tokens` and version for Anthropic requests (Anthropic requires this field).
+/// Default `max_tokens` for Anthropic requests (Anthropic requires this field).
 /// Matches the default in `engine/baml-lib/llm-client/src/clients/anthropic.rs`.
 const DEFAULT_MAX_TOKENS: u32 = 4096;
-const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
 
 /// A content part within an Anthropic message.
 ///
@@ -39,49 +39,59 @@ enum MediaSource {
     Base64 { media_type: String, data: String },
 }
 
+/// Option keys specific to Anthropic that should not be forwarded to the body.
+const ANTHROPIC_SKIP_KEYS: &[&str] = &["anthropic_version"];
+
 impl LlmRequestBuilder for AnthropicBuilder {
-    fn provider_skip_keys(&self) -> &'static [&'static str] {
-        &["anthropic_version"]
-    }
-
-    fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError> {
-        let base_url = get_string_option(client, "base_url")
-            .unwrap_or_else(|| "https://api.anthropic.com".to_string());
-        Ok(format!("{base_url}/v1/messages"))
-    }
-
-    fn build_auth_headers(&self, client: &LlmPrimitiveClient) -> IndexMap<String, String> {
-        let mut headers = IndexMap::new();
-        // Anthropic uses x-api-key header
-        if let Some(api_key) = get_string_option(client, "api_key") {
-            headers.insert("x-api-key".to_string(), api_key);
-        }
-        // Anthropic version header
-        let version = get_string_option(client, "anthropic_version")
-            .unwrap_or_else(|| DEFAULT_ANTHROPIC_VERSION.to_string());
-        headers.insert("anthropic-version".to_string(), version);
-        headers
-    }
-
-    fn build_prompt_body(
+    async fn build_request(
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
-    ) -> Result<serde_json::Map<String, serde_json::Value>, super::BuildRequestError> {
-        let mut map = serde_json::Map::new();
-        // Anthropic requires max_tokens — inject default if not set by user.
+        stream: bool,
+        _callbacks: &BuildRequestCallbacks<'_>,
+    ) -> Result<RawHttpRequest, BuildRequestError> {
+        // URL
+        let base_url = get_string_option(client, "base_url")
+            .unwrap_or_else(|| "https://api.anthropic.com".to_string());
+        let url = format!("{base_url}/v1/messages");
+
+        // Base headers (auth headers added by LlmRequestAuthorizer after building)
+        let headers = build_headers(IndexMap::new(), client);
+
+        // Body
+        let mut body = serde_json::Map::new();
+        if let Some(model) = get_string_option(client, "model") {
+            body.insert("model".to_string(), serde_json::Value::String(model));
+        }
+        if stream {
+            body.insert("stream".to_string(), serde_json::Value::Bool(true));
+        }
+        // Anthropic requires max_tokens - inject default if not set by user.
         if !client.options.contains_key("max_tokens") {
-            map.insert(
+            body.insert(
                 "max_tokens".to_string(),
                 serde_json::Value::Number(DEFAULT_MAX_TOKENS.into()),
             );
         }
         let (system_parts, messages) = extract_system_and_messages(prompt, &client.default_role)?;
         if !system_parts.is_empty() {
-            map.insert("system".to_string(), serde_json::Value::Array(system_parts));
+            body.insert("system".to_string(), serde_json::Value::Array(system_parts));
         }
-        map.insert("messages".to_string(), serde_json::Value::Array(messages));
-        Ok(map)
+        body.insert("messages".to_string(), serde_json::Value::Array(messages));
+        forward_options(ANTHROPIC_SKIP_KEYS, client, &mut body);
+
+        let body_str =
+            serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
+                key: "body".into(),
+                reason: e.to_string(),
+            })?;
+
+        Ok(RawHttpRequest {
+            method: "POST".to_string(),
+            url,
+            headers,
+            body: body_str,
+        })
     }
 }
 

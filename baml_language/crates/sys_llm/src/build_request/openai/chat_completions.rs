@@ -9,8 +9,9 @@ use serde::Serialize;
 use crate::{
     LlmProvider,
     build_request::{
-        BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder, get_string_option,
-        mime_type_as_ok, openai::build_openai_url,
+        BuildRequestCallbacks, BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder,
+        RawHttpRequest, build_headers, forward_options, get_string_option, mime_type_as_ok,
+        openai::build_openai_url,
     },
 };
 
@@ -68,33 +69,24 @@ impl<'a> OpenAiBuilder<'a> {
     }
 }
 
+/// Option keys specific to `OpenAI` that should not be forwarded to the body.
+const OPENAI_SKIP_KEYS: &[&str] = &["resource_name", "api_version"];
+
 impl LlmRequestBuilder for OpenAiBuilder<'_> {
-    fn provider_skip_keys(&self) -> &'static [&'static str] {
-        &["resource_name", "api_version"]
-    }
-
-    fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError> {
-        build_openai_url(*self.provider, client, "/chat/completions")
-    }
-
-    fn build_auth_headers(&self, client: &LlmPrimitiveClient) -> IndexMap<String, String> {
-        let mut headers = IndexMap::new();
-        if let Some(api_key) = get_string_option(client, "api_key") {
-            if *self.provider == LlmProvider::AzureOpenAi {
-                headers.insert("api-key".to_string(), api_key);
-            } else {
-                headers.insert("authorization".to_string(), format!("Bearer {api_key}"));
-            }
-        }
-        headers
-    }
-
-    fn build_body(
+    async fn build_request(
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
         stream: bool,
-    ) -> Result<String, BuildRequestError> {
+        _callbacks: &BuildRequestCallbacks<'_>,
+    ) -> Result<RawHttpRequest, BuildRequestError> {
+        // URL
+        let url = build_openai_url(*self.provider, client, "/chat/completions")?;
+
+        // Base headers (auth headers added by LlmRequestAuthorizer after building)
+        let headers = build_headers(IndexMap::new(), client);
+
+        // Body
         let mut body = serde_json::Map::new();
         if let Some(model) = get_string_option(client, "model") {
             body.insert("model".to_string(), serde_json::Value::String(model));
@@ -106,8 +98,15 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
                 serde_json::json!({ "include_usage": true }),
             );
         }
-        body.extend(self.build_prompt_body(client, prompt)?);
-        self.forward_options(client, &mut body);
+
+        // TODO: Handle default role in Ollama once compiler2 is merged.
+        let messages = prompt_to_openai_messages(&prompt, client.default_role.as_str())?;
+        body.insert(
+            "messages".to_string(),
+            serde_json::to_value(messages).expect("infallible"),
+        );
+
+        forward_options(OPENAI_SKIP_KEYS, client, &mut body);
 
         // Azure OpenAI: default max_tokens to 4096 if neither max_tokens nor
         // max_completion_tokens is set. Holdover from engine, not sure why this was the case.
@@ -122,27 +121,18 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
             }
         }
 
-        serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
-            key: "body".into(),
-            reason: e.to_string(),
+        let body_str =
+            serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
+                key: "body".into(),
+                reason: e.to_string(),
+            })?;
+
+        Ok(RawHttpRequest {
+            method: "POST".to_string(),
+            url,
+            headers,
+            body: body_str,
         })
-    }
-
-    fn build_prompt_body(
-        &self,
-        client: &LlmPrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-    ) -> Result<serde_json::Map<String, serde_json::Value>, BuildRequestError> {
-        let mut map = serde_json::Map::new();
-
-        // TODO: Handle default role in Ollama once compiler2 is merged.
-
-        let messages = prompt_to_openai_messages(&prompt, client.default_role.as_str())?;
-        map.insert(
-            "messages".to_string(),
-            serde_json::to_value(messages).expect("infallible"),
-        );
-        Ok(map)
     }
 }
 
@@ -370,7 +360,7 @@ mod tests {
     use indexmap::IndexMap;
 
     use super::*;
-    use crate::build_request::{LlmPrimitiveClient, LlmRequestBuilder, build_request};
+    use crate::build_request::{LlmPrimitiveClient, build_request};
 
     // -- helpers --
 
@@ -881,8 +871,7 @@ mod tests {
                 ("api_key", BexExternalValue::String("sk-test".into())),
             ],
         );
-        let builder = OpenAiBuilder::new(&LlmProvider::AzureOpenAi);
-        let url = builder.build_url(&client).unwrap();
+        let url = build_openai_url(LlmProvider::AzureOpenAi, &client, "/chat/completions").unwrap();
         assert_eq!(
             url,
             "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview"
@@ -905,24 +894,11 @@ mod tests {
                 ),
             ],
         );
-        let builder = OpenAiBuilder::new(&LlmProvider::AzureOpenAi);
-        let url = builder.build_url(&client).unwrap();
+        let url = build_openai_url(LlmProvider::AzureOpenAi, &client, "/chat/completions").unwrap();
         assert_eq!(
             url,
             "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview"
         );
-    }
-
-    #[test]
-    fn azure_auth_header_uses_api_key() {
-        let client = make_client(
-            "azure-openai",
-            vec![("api_key", BexExternalValue::String("sk-azure".into()))],
-        );
-        let builder = OpenAiBuilder::new(&LlmProvider::AzureOpenAi);
-        let headers = builder.build_auth_headers(&client);
-        assert_eq!(headers.get("api-key").unwrap(), "sk-azure");
-        assert!(headers.get("authorization").is_none());
     }
 
     #[tokio::test]

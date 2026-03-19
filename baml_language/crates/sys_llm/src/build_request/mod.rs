@@ -11,7 +11,7 @@ use std::str::FromStr;
 use bex_external_types::BexExternalValue;
 use bex_heap::{builtin_types, builtin_types::owned::LlmPrimitiveClient};
 
-use crate::LlmProvider;
+use crate::{LlmProvider, auth_request::LlmRequestAuthorizer};
 
 /// Option keys consumed by `specialize_prompt` — never forwarded to the request body.
 const SPECIALIZE_PROMPT_SKIP_KEYS: &[&str] = &[
@@ -37,102 +37,57 @@ pub(crate) struct BuildRequestCallbacks<'a> {
 
 /// Trait for building provider-specific HTTP requests.
 ///
-/// Default methods handle shared logic (body assembly, option forwarding, header
-/// merging). Each provider implements only the parts that differ.
+/// Each provider implements only `build_request`. Shared helpers
+/// (`build_headers`, `forward_options`) are free functions.
 pub(crate) trait LlmRequestBuilder {
-    /// LlmProvider-specific option keys to skip (in addition to the shared skip-key lists).
-    fn provider_skip_keys(&self) -> &'static [&'static str];
-
-    /// Build the request URL.
-    fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError>;
-
-    /// Build auth + provider-specific headers (without content-type or custom headers).
-    fn build_auth_headers(&self, client: &LlmPrimitiveClient)
-    -> indexmap::IndexMap<String, String>;
-
-    /// Convert a specialized prompt into the JSON body fields specific to this provider.
-    fn build_prompt_body(
-        &self,
-        client: &LlmPrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-    ) -> Result<serde_json::Map<String, serde_json::Value>, BuildRequestError>;
-
-    // --- Default methods (shared logic) ---
-
-    /// Build the full request. Default: POST with url/headers/body from trait methods.
-    ///
-    /// Providers that need async operations (e.g., credential resolution) override
-    /// this method directly.
+    /// Build the full HTTP request for this provider.
     async fn build_request(
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
         stream: bool,
-        _callbacks: &BuildRequestCallbacks<'_>,
-    ) -> Result<RawHttpRequest, BuildRequestError> {
-        let url = self.build_url(client)?;
-        let headers = self.build_headers(client);
-        let body = self.build_body(client, prompt, stream)?;
-        Ok(RawHttpRequest {
-            method: "POST".to_string(),
-            url,
-            headers,
-            body,
-        })
-    }
+        callbacks: &BuildRequestCallbacks<'_>,
+    ) -> Result<RawHttpRequest, BuildRequestError>;
+}
 
-    /// Build headers: auth headers + content-type + custom headers from options.
-    fn build_headers(&self, client: &LlmPrimitiveClient) -> indexmap::IndexMap<String, String> {
-        let mut headers = indexmap::IndexMap::new();
-        headers.insert("content-type".to_string(), "application/json".to_string());
-        headers.extend(self.build_auth_headers(client));
-        // Forward custom headers from client.options["headers"]
-        if let Some(BexExternalValue::Map { entries, .. }) = client.options.get("headers") {
-            for (key, value) in entries {
-                if let BexExternalValue::String(v) = value {
-                    headers.insert(key.clone(), v.clone());
-                }
+// ---------------------------------------------------------------------------
+// Shared default helpers - called by provider `build_request` implementations
+// ---------------------------------------------------------------------------
+
+/// Build headers: content-type + auth headers + custom headers from options.
+pub(crate) fn build_headers(
+    auth_headers: indexmap::IndexMap<String, String>,
+    client: &LlmPrimitiveClient,
+) -> indexmap::IndexMap<String, String> {
+    let mut headers = indexmap::IndexMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.extend(auth_headers);
+    // Forward custom headers from client.options["headers"]
+    if let Some(BexExternalValue::Map { entries, .. }) = client.options.get("headers") {
+        for (key, value) in entries {
+            if let BexExternalValue::String(v) = value {
+                headers.insert(key.clone(), v.clone());
             }
         }
-        headers
     }
+    headers
+}
 
-    /// Build JSON body: model + prompt fields + forwarded options.
-    fn build_body(
-        &self,
-        client: &LlmPrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-        _stream: bool,
-    ) -> Result<String, BuildRequestError> {
-        let mut body = serde_json::Map::new();
-        if let Some(model) = get_string_option(client, "model") {
-            body.insert("model".to_string(), serde_json::Value::String(model));
+/// Forward non-skipped options from `client.options` into the JSON body.
+pub(crate) fn forward_options(
+    provider_skip_keys: &[&str],
+    client: &LlmPrimitiveClient,
+    body: &mut serde_json::Map<String, serde_json::Value>,
+) {
+    for (key, value) in &client.options {
+        if SPECIALIZE_PROMPT_SKIP_KEYS.contains(&key.as_str())
+            || BUILD_REQUEST_SKIP_KEYS.contains(&key.as_str())
+            || provider_skip_keys.contains(&key.as_str())
+        {
+            continue;
         }
-        body.extend(self.build_prompt_body(client, prompt)?);
-        self.forward_options(client, &mut body);
-        serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
-            key: "body".into(),
-            reason: e.to_string(),
-        })
-    }
-
-    /// Forward non-skipped options to body.
-    fn forward_options(
-        &self,
-        client: &LlmPrimitiveClient,
-        body: &mut serde_json::Map<String, serde_json::Value>,
-    ) {
-        let provider_keys = self.provider_skip_keys();
-        for (key, value) in &client.options {
-            if SPECIALIZE_PROMPT_SKIP_KEYS.contains(&key.as_str())
-                || BUILD_REQUEST_SKIP_KEYS.contains(&key.as_str())
-                || provider_keys.contains(&key.as_str())
-            {
-                continue;
-            }
-            if let Some(json_val) = bex_value_to_json(value) {
-                body.insert(key.clone(), json_val);
-            }
+        if let Some(json_val) = bex_value_to_json(value) {
+            body.insert(key.clone(), json_val);
         }
     }
 }
@@ -193,7 +148,35 @@ pub(crate) async fn build_request(
         }
     };
 
-    Ok(raw.into_owned())
+    // Authorize the built request (API keys, bearer tokens, SigV4 signatures, etc.)
+    // Eventually this will be moved to its own stage in llm.baml after request building.
+    let authorized = match provider {
+        LlmProvider::Anthropic => {
+            crate::auth_request::AnthropicAuth
+                .authorize(raw, client, &callbacks)
+                .await?
+        }
+        LlmProvider::OpenAi
+        | LlmProvider::OpenAiGeneric
+        | LlmProvider::AzureOpenAi
+        | LlmProvider::Ollama
+        | LlmProvider::OpenRouter
+        | LlmProvider::OpenAiResponses => {
+            crate::auth_request::OpenAiAuth {
+                provider: &provider,
+            }
+            .authorize(raw, client, &callbacks)
+            .await?
+        }
+        LlmProvider::AwsBedrock => {
+            crate::auth_request::BedrockAuth
+                .authorize(raw, client, &callbacks)
+                .await?
+        }
+        _ => unreachable!("unsupported providers rejected above"),
+    };
+
+    Ok(authorized.into_owned())
 }
 
 /// Intermediate struct before converting to an owned `HttpRequest`.
@@ -228,6 +211,12 @@ pub(crate) enum BuildRequestError {
     UnsupportedMedia(String),
     #[error("File not resolved: {0}")]
     FileNotResolved(String),
+    #[error("Failed to serialize request body: {0}")]
+    BodySerialization(String),
+    /// Will move to a dedicated error type once request building and request
+    /// authorization are fully separate.
+    #[error("Authorization failed: {0}")]
+    AuthorizationFailed(String),
 }
 
 /// Returns the MIME type of a media value, or an error if none is set.

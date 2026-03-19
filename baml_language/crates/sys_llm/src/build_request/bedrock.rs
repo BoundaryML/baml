@@ -15,46 +15,15 @@
 //! 1. Explicit `region` in client options
 //! 2. AWS default provider chain
 
-use std::time::SystemTime;
-
-use aws_credential_types::{Credentials, provider::ProvideCredentials};
+use aws_credential_types::Credentials;
 use aws_sdk_bedrockruntime as bedrock;
 use baml_base::MediaKind;
+use baml_builtins::{PromptAst, PromptAstSimple};
 use bedrock::types::{
     ContentBlock, ConversationRole, DocumentBlock, DocumentFormat, DocumentSource, ImageBlock,
     ImageFormat, ImageSource, InferenceConfiguration, Message, SystemContentBlock, VideoBlock,
     VideoFormat, VideoSource,
 };
-
-/// Platform-aware `SystemTime::now()`.
-///
-/// On WASM, `std::time::SystemTime::now()` panics — use `web_time` instead.
-fn now() -> SystemTime {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        SystemTime::now()
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        let offset = web_time::SystemTime::now()
-            .duration_since(web_time::UNIX_EPOCH)
-            .unwrap();
-        std::time::UNIX_EPOCH + offset
-    }
-}
-use aws_sigv4::{
-    http_request::{SignableBody, SignableRequest, SigningSettings, sign},
-    sign::v4,
-};
-use aws_smithy_runtime_api::{
-    client::{
-        http::{HttpConnectorFuture, SharedHttpConnector},
-        result::ConnectorError,
-    },
-    http as smithy_http,
-};
-use aws_smithy_types::body::SdkBody;
-use baml_builtins::{PromptAst, PromptAstSimple};
 use indexmap::IndexMap;
 
 use super::{
@@ -62,178 +31,14 @@ use super::{
     RawHttpRequest, get_string_option, mime_type_as_ok,
 };
 
-// ---------------------------------------------------------------------------
-// Native: sync env/fs providers using block_on (safe on multi-threaded runtimes)
-// ---------------------------------------------------------------------------
-
-#[cfg(not(target_arch = "wasm32"))]
-mod native_providers {
-    use std::future::Future;
-
-    use aws_types::os_shim_internal::{ProvideEnv, ProvideFs};
-
-    use crate::{EnvReadFn, FsReadFn};
-
-    pub(super) struct BexEnvProvider {
-        pub env_read_fn: EnvReadFn,
-    }
-
-    impl std::fmt::Debug for BexEnvProvider {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("BexEnvProvider").finish()
-        }
-    }
-
-    impl ProvideEnv for BexEnvProvider {
-        fn get(&self, k: &str) -> Result<String, std::env::VarError> {
-            let fut = (self.env_read_fn)(k.to_string());
-            match futures::executor::block_on(fut) {
-                Ok(Some(v)) => Ok(v),
-                Ok(None) | Err(_) => Err(std::env::VarError::NotPresent),
-            }
-        }
-    }
-
-    pub(super) struct BexFsProvider {
-        pub fs_read_fn: FsReadFn,
-    }
-
-    impl std::fmt::Debug for BexFsProvider {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("BexFsProvider").finish()
-        }
-    }
-
-    impl ProvideFs for BexFsProvider {
-        fn read_to_end(
-            &self,
-            path: &std::path::Path,
-        ) -> std::pin::Pin<Box<dyn Future<Output = std::io::Result<Vec<u8>>> + Send + '_>> {
-            let fut = (self.fs_read_fn)(path.to_string_lossy().into_owned());
-            Box::pin(async move {
-                match fut.await {
-                    Ok(v) => Ok(v),
-                    Err(_) => Err(std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        "file not found",
-                    )),
-                }
-            })
-        }
-
-        fn write(
-            &self,
-            _path: &std::path::Path,
-            _contents: &[u8],
-        ) -> std::pin::Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + '_>> {
-            unreachable!()
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// WASM: async-safe providers (no block_on — would deadlock on single-threaded runtime)
-// ---------------------------------------------------------------------------
-
-#[cfg(target_arch = "wasm32")]
-mod wasm_providers {
-    use aws_credential_types::{
-        Credentials,
-        provider::{self, future::ProvideCredentials},
-    };
-    use aws_smithy_async::{
-        rt::sleep::{AsyncSleep, Sleep},
-        time::TimeSource,
-    };
-
-    use crate::EnvReadFn;
-
-    /// Browser-compatible time source using `web_time`.
-    #[derive(Debug)]
-    pub(super) struct BrowserTime;
-
-    impl TimeSource for BrowserTime {
-        fn now(&self) -> std::time::SystemTime {
-            let offset = web_time::SystemTime::now()
-                .duration_since(web_time::UNIX_EPOCH)
-                .unwrap();
-            std::time::UNIX_EPOCH + offset
-        }
-    }
-
-    /// Browser-compatible async sleep using `futures_timer`.
-    #[derive(Debug, Clone)]
-    pub(super) struct BrowserSleep;
-
-    impl AsyncSleep for BrowserSleep {
-        fn sleep(&self, duration: std::time::Duration) -> Sleep {
-            Sleep::new(futures_timer::Delay::new(duration))
-        }
-    }
-
-    /// Async credential provider that reads AWS env vars via `EnvReadFn`.
-    ///
-    /// Mirrors the engine's `WasmAwsCreds` but uses the callback architecture
-    /// instead of a JS callback provider.
-    pub(super) struct EnvCredentialProvider {
-        pub env_read: EnvReadFn,
-    }
-
-    impl std::fmt::Debug for EnvCredentialProvider {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("EnvCredentialProvider").finish()
-        }
-    }
-
-    impl EnvCredentialProvider {
-        async fn resolve(&self) -> provider::Result {
-            let access_key_id = (self.env_read)("AWS_ACCESS_KEY_ID".into())
-                .await
-                .ok()
-                .flatten()
-                .ok_or_else(|| {
-                    provider::error::CredentialsError::unhandled("AWS_ACCESS_KEY_ID not set")
-                })?;
-
-            let secret_access_key = (self.env_read)("AWS_SECRET_ACCESS_KEY".into())
-                .await
-                .ok()
-                .flatten()
-                .ok_or_else(|| {
-                    provider::error::CredentialsError::unhandled("AWS_SECRET_ACCESS_KEY not set")
-                })?;
-
-            let session_token = (self.env_read)("AWS_SESSION_TOKEN".into())
-                .await
-                .ok()
-                .flatten();
-
-            Ok(Credentials::new(
-                access_key_id,
-                secret_access_key,
-                session_token,
-                None,
-                "baml-bedrock-wasm",
-            ))
-        }
-    }
-
-    impl aws_credential_types::provider::ProvideCredentials for EnvCredentialProvider {
-        fn provide_credentials<'a>(&'a self) -> ProvideCredentials<'a>
-        where
-            Self: 'a,
-        {
-            ProvideCredentials::new(self.resolve())
-        }
-    }
-}
-
 /// Builder for the AWS Bedrock Converse provider.
 pub(crate) struct BedrockBuilder;
 
 /// Provider-specific option keys consumed by the builder (not forwarded to body).
 const BEDROCK_SKIP_KEYS: &[&str] = &[
     "region",
+    "endpoint_url",
+    "profile",
     "access_key_id",
     "secret_access_key",
     "session_token",
@@ -244,105 +49,69 @@ const BEDROCK_SKIP_KEYS: &[&str] = &[
     "stop_sequences",
 ];
 
-impl LlmRequestBuilder for BedrockBuilder {
-    fn provider_skip_keys(&self) -> &'static [&'static str] {
-        BEDROCK_SKIP_KEYS
-    }
-
-    fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError> {
+/// Build the Bedrock request URL.
+///
+/// If `endpoint_url` is set, uses it as the base (for local mocking / custom
+/// proxies like `LocalStack`). Otherwise constructs the standard AWS URL from
+/// the `region` option.
+fn build_bedrock_url(
+    client: &LlmPrimitiveClient,
+    model: &str,
+    endpoint: &str,
+) -> Result<String, BuildRequestError> {
+    if let Some(base) = get_string_option(client, "endpoint_url") {
+        let base = base.trim_end_matches('/');
+        Ok(format!("{base}/model/{model}/{endpoint}"))
+    } else {
         let region = get_string_option(client, "region")
             .ok_or_else(|| BuildRequestError::MissingOption("region".into()))?;
-        let model = get_string_option(client, "model")
-            .ok_or_else(|| BuildRequestError::MissingOption("model".into()))?;
         Ok(format!(
-            "https://bedrock-runtime.{region}.amazonaws.com/model/{model}/converse"
+            "https://bedrock-runtime.{region}.amazonaws.com/model/{model}/{endpoint}"
         ))
     }
+}
 
-    fn build_auth_headers(&self, _client: &LlmPrimitiveClient) -> IndexMap<String, String> {
-        IndexMap::new()
-    }
-
-    fn build_prompt_body(
+impl BedrockBuilder {
+    /// Build the request URL from region + model options.
+    #[cfg(test)]
+    #[allow(clippy::unused_self)]
+    fn build_url(
         &self,
         client: &LlmPrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-    ) -> Result<serde_json::Map<String, serde_json::Value>, BuildRequestError> {
-        // Fallback manual implementation — only used if `build_body` is called
-        // directly (the normal path goes through `build_request` which uses
-        // SDK-based serialization).
-        let mut map = serde_json::Map::new();
-        let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
-        if !system_blocks.is_empty() {
-            let parts: Vec<serde_json::Value> = system_blocks
-                .into_iter()
-                .map(|b| match b {
-                    SystemContentBlock::Text(s) => serde_json::json!({"text": s}),
-                    _ => serde_json::json!({}),
-                })
-                .collect();
-            map.insert("system".to_string(), serde_json::Value::Array(parts));
-        }
-        let msgs: Vec<serde_json::Value> = messages
-            .into_iter()
-            .map(|m| {
-                let role = m.role().as_str().to_string();
-                let content: Vec<serde_json::Value> = m
-                    .content()
-                    .iter()
-                    .map(|b| match b {
-                        ContentBlock::Text(s) => serde_json::json!({"text": s}),
-                        _ => serde_json::json!({}),
-                    })
-                    .collect();
-                serde_json::json!({"role": role, "content": content})
-            })
-            .collect();
-        map.insert("messages".to_string(), serde_json::Value::Array(msgs));
-        if let Some(cfg) = build_sdk_inference_config(client) {
-            let mut ic = serde_json::Map::new();
-            if let Some(v) = cfg.max_tokens() {
-                ic.insert("maxTokens".to_string(), serde_json::json!(v));
-            }
-            if let Some(v) = cfg.temperature() {
-                ic.insert("temperature".to_string(), serde_json::json!(v));
-            }
-            if let Some(v) = cfg.top_p() {
-                ic.insert("topP".to_string(), serde_json::json!(v));
-            }
-            if !cfg.stop_sequences().is_empty() {
-                ic.insert(
-                    "stopSequences".to_string(),
-                    serde_json::json!(cfg.stop_sequences()),
-                );
-            }
-            if !ic.is_empty() {
-                map.insert("inferenceConfig".to_string(), serde_json::Value::Object(ic));
-            }
-        }
-        Ok(map)
+        stream: bool,
+    ) -> Result<String, BuildRequestError> {
+        let model = get_string_option(client, "model")
+            .ok_or_else(|| BuildRequestError::MissingOption("model".into()))?;
+        let endpoint = if stream {
+            "converse-stream"
+        } else {
+            "converse"
+        };
+        build_bedrock_url(client, &model, endpoint)
     }
+}
 
-    /// Resolves credentials from options or the default AWS provider chain, then
-    /// builds the body via the SDK's own serializer and SigV4-signs the request.
+impl LlmRequestBuilder for BedrockBuilder {
+    /// Builds an unsigned Bedrock Converse API request.
+    ///
+    /// Resolves the AWS region (from options or the default provider chain) for
+    /// URL construction. Credential resolution and `SigV4` signing are handled
+    /// by [`crate::auth_request::BedrockAuth`] as a post-build step.
     async fn build_request(
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
-        _stream: bool,
-        callbacks: &BuildRequestCallbacks<'_>,
+        stream: bool,
+        _callbacks: &BuildRequestCallbacks<'_>,
     ) -> Result<RawHttpRequest, BuildRequestError> {
-        let (credentials, region) = resolve_aws_credentials_and_region(
-            client,
-            callbacks.http_send,
-            callbacks.env_read,
-            callbacks.fs_read,
-        )
-        .await?;
-
         let model = get_string_option(client, "model")
             .ok_or_else(|| BuildRequestError::MissingOption("model".into()))?;
-        let url = format!("https://bedrock-runtime.{region}.amazonaws.com/model/{model}/converse");
+        let endpoint = if stream {
+            "converse-stream"
+        } else {
+            "converse"
+        };
+        let url = build_bedrock_url(client, &model, endpoint)?;
 
         // Convert BAML prompt to SDK types.
         let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
@@ -363,18 +132,7 @@ impl LlmRequestBuilder for BedrockBuilder {
         headers.insert("content-type".to_string(), "application/json".to_string());
         headers.insert("accept".to_string(), "application/json".to_string());
 
-        // Sign the request.
-        let signed_headers = sign_with_credentials(
-            &credentials,
-            &region,
-            "POST",
-            &url,
-            &headers,
-            body.as_bytes(),
-        )?;
-        headers.extend(signed_headers);
-
-        // Forward custom headers from client.options["headers"] (after signing).
+        // Forward custom headers from client.options["headers"].
         if let Some(bex_external_types::BexExternalValue::Map { entries, .. }) =
             client.options.get("headers")
         {
@@ -427,8 +185,8 @@ fn dry_run_sdk_config() -> bedrock::Config {
     #[cfg(target_arch = "wasm32")]
     {
         builder = builder
-            .sleep_impl(wasm_providers::BrowserSleep)
-            .time_source(wasm_providers::BrowserTime);
+            .sleep_impl(crate::wasm::BrowserSleep)
+            .time_source(crate::wasm::BrowserTime);
     }
 
     builder.build()
@@ -476,10 +234,9 @@ async fn serialize_body_via_sdk(
 
     let body = captured.lock().unwrap().clone();
     if body.is_empty() {
-        return Err(BuildRequestError::InvalidOption {
-            key: "body".into(),
-            reason: "SDK serialization produced no body (dry-run interception failed)".into(),
-        });
+        return Err(BuildRequestError::BodySerialization(
+            "SDK serialization produced no body (dry-run interception failed)".into(),
+        ));
     }
     Ok(body)
 }
@@ -522,9 +279,10 @@ fn prompt_to_sdk_types(
                         .role(conv_role)
                         .set_content(Some(blocks))
                         .build()
-                        .map_err(|e| BuildRequestError::InvalidOption {
-                            key: "message".into(),
-                            reason: e.to_string(),
+                        .map_err(|e| {
+                            BuildRequestError::BodySerialization(format!(
+                                "failed to build message: {e}"
+                            ))
                         })?,
                 );
             }
@@ -536,9 +294,10 @@ fn prompt_to_sdk_types(
                         .role(conv_role)
                         .set_content(Some(blocks))
                         .build()
-                        .map_err(|e| BuildRequestError::InvalidOption {
-                            key: "message".into(),
-                            reason: e.to_string(),
+                        .map_err(|e| {
+                            BuildRequestError::BodySerialization(format!(
+                                "failed to build message: {e}"
+                            ))
                         })?,
                 );
             }
@@ -553,10 +312,9 @@ fn parse_conversation_role(role: &str) -> Result<ConversationRole, BuildRequestE
     match role {
         "user" => Ok(ConversationRole::User),
         "assistant" => Ok(ConversationRole::Assistant),
-        other => Err(BuildRequestError::InvalidOption {
-            key: "role".into(),
-            reason: format!("unsupported conversation role for Bedrock: {other}"),
-        }),
+        other => Err(BuildRequestError::BodySerialization(format!(
+            "unsupported conversation role for Bedrock: {other}"
+        ))),
     }
 }
 
@@ -604,9 +362,8 @@ enum ResolvedMedia {
 ///
 /// HACK: The SDK's `Blob` type stores raw bytes and the Smithy serializer
 /// re-encodes them as base64. We already have base64 data, so this is a
-/// wasteful decode→re-encode round-trip. If this becomes a perf issue, we
-/// should expose the SDK's `protocol_serde` serializers directly (the fork
-/// supports it) instead of going through `map_request`.
+/// wasteful decode then re-encode round-trip. If this becomes a perf issue,
+/// we can upstream a change to allow base64 to be passed directly.
 fn resolve_media_source(
     content: &baml_builtins::MediaContent,
     kind_label: &str,
@@ -636,9 +393,10 @@ fn resolve_media_source(
         } => {
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(base64_data)
-                .map_err(|e| BuildRequestError::InvalidOption {
-                    key: kind_label.into(),
-                    reason: format!("invalid base64 data: {e}"),
+                .map_err(|e| {
+                    BuildRequestError::BodySerialization(format!(
+                        "invalid base64 {kind_label} data: {e}"
+                    ))
                 })?;
             Ok(ResolvedMedia::Bytes(bytes))
         }
@@ -694,29 +452,6 @@ fn parse_audio_format(mime: &str) -> Result<bedrock::types::AudioFormat, BuildRe
     }
 }
 
-/// Parse a MIME type string into a Bedrock `DocumentFormat`.
-#[allow(dead_code)] // Will be needed when non-PDF document types are supported.
-fn parse_document_format(mime: &str) -> Result<DocumentFormat, BuildRequestError> {
-    match mime {
-        "application/pdf" => Ok(DocumentFormat::Pdf),
-        "text/plain" => Ok(DocumentFormat::Txt),
-        "text/csv" => Ok(DocumentFormat::Csv),
-        "text/html" => Ok(DocumentFormat::Html),
-        "text/markdown" => Ok(DocumentFormat::Md),
-        "application/msword" => Ok(DocumentFormat::Doc),
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => {
-            Ok(DocumentFormat::Docx)
-        }
-        "application/vnd.ms-excel" => Ok(DocumentFormat::Xls),
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => {
-            Ok(DocumentFormat::Xlsx)
-        }
-        other => Err(BuildRequestError::UnsupportedMedia(format!(
-            "unsupported document format for Bedrock: {other}"
-        ))),
-    }
-}
-
 /// Build an `S3Location` from a URI string.
 fn s3_location(uri: String) -> bedrock::types::S3Location {
     bedrock::types::S3Location::builder()
@@ -747,9 +482,10 @@ fn media_to_content_block(
                 .format(format)
                 .source(img_source)
                 .build()
-                .map_err(|e| BuildRequestError::InvalidOption {
-                    key: "image".into(),
-                    reason: e.to_string(),
+                .map_err(|e| {
+                    BuildRequestError::BodySerialization(format!(
+                        "failed to build image block: {e}"
+                    ))
                 })?;
             Ok(vec![ContentBlock::Image(block)])
         }
@@ -765,9 +501,10 @@ fn media_to_content_block(
                 .format(format)
                 .source(vid_source)
                 .build()
-                .map_err(|e| BuildRequestError::InvalidOption {
-                    key: "video".into(),
-                    reason: e.to_string(),
+                .map_err(|e| {
+                    BuildRequestError::BodySerialization(format!(
+                        "failed to build video block: {e}"
+                    ))
                 })?;
             Ok(vec![ContentBlock::Video(block)])
         }
@@ -783,9 +520,10 @@ fn media_to_content_block(
                 .name("document")
                 .source(doc_source)
                 .build()
-                .map_err(|e| BuildRequestError::InvalidOption {
-                    key: "document".into(),
-                    reason: e.to_string(),
+                .map_err(|e| {
+                    BuildRequestError::BodySerialization(format!(
+                        "failed to build document block: {e}"
+                    ))
                 })?;
             Ok(vec![ContentBlock::Document(block)])
         }
@@ -805,9 +543,10 @@ fn media_to_content_block(
                 .format(format)
                 .source(aud_source)
                 .build()
-                .map_err(|e| BuildRequestError::InvalidOption {
-                    key: "audio".into(),
-                    reason: e.to_string(),
+                .map_err(|e| {
+                    BuildRequestError::BodySerialization(format!(
+                        "failed to build audio block: {e}"
+                    ))
                 })?;
             Ok(vec![ContentBlock::Audio(block)])
         }
@@ -916,230 +655,6 @@ fn bex_value_to_document(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Credential resolution
-// ---------------------------------------------------------------------------
-
-/// Try to extract explicit credentials from client options.
-fn credentials_from_options(client: &LlmPrimitiveClient) -> Option<Credentials> {
-    let access_key_id = get_string_option(client, "access_key_id")?;
-    let secret_access_key = get_string_option(client, "secret_access_key")?;
-    let session_token = get_string_option(client, "session_token");
-    Some(Credentials::new(
-        access_key_id,
-        secret_access_key,
-        session_token,
-        None,
-        "baml-bedrock",
-    ))
-}
-
-/// Resolve AWS credentials and region.
-///
-/// 1. If explicit `access_key_id`/`secret_access_key` are in client options, use those.
-/// 2. Otherwise, load from the AWS default provider chain (`aws_config`).
-///
-/// Region follows the same pattern: explicit option first, then default chain.
-async fn resolve_aws_credentials_and_region(
-    client: &LlmPrimitiveClient,
-    http_send: &crate::HttpSendFn,
-    env_read: &crate::EnvReadFn,
-    #[cfg_attr(target_arch = "wasm32", allow(unused))] fs_read: &crate::FsReadFn,
-) -> Result<(Credentials, String), BuildRequestError> {
-    // Try explicit credentials first.
-    if let Some(creds) = credentials_from_options(client) {
-        let region = get_string_option(client, "region")
-            .ok_or_else(|| BuildRequestError::MissingOption("region".into()))?;
-        return Ok((creds, region));
-    }
-
-    // Fall back to the default provider chain with platform-specific config.
-    #[cfg(not(target_arch = "wasm32"))]
-    let sdk_config = {
-        use aws_types::os_shim_internal::{Env, Fs};
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .http_client(baml_http_client(http_send.clone()))
-            .env(Env::from_custom(native_providers::BexEnvProvider {
-                env_read_fn: env_read.clone(),
-            }))
-            .fs(Fs::from_custom(native_providers::BexFsProvider {
-                fs_read_fn: fs_read.clone(),
-            }))
-            .load()
-            .await
-    };
-
-    #[cfg(target_arch = "wasm32")]
-    let sdk_config = {
-        aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .sleep_impl(wasm_providers::BrowserSleep)
-            .time_source(wasm_providers::BrowserTime)
-            .http_client(baml_http_client(http_send.clone()))
-            .credentials_provider(wasm_providers::EnvCredentialProvider {
-                env_read: env_read.clone(),
-            })
-            .load()
-            .await
-    };
-
-    let region = get_string_option(client, "region")
-        .or_else(|| sdk_config.region().map(std::string::ToString::to_string))
-        .ok_or_else(|| {
-            BuildRequestError::MissingOption(
-                "region (not found in client options or AWS default provider chain)".into(),
-            )
-        })?;
-
-    let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
-        BuildRequestError::MissingOption(
-            "AWS credentials provider not found in default provider chain".into(),
-        )
-    })?;
-
-    let creds = credentials_provider
-        .provide_credentials()
-        .await
-        .map_err(|e| BuildRequestError::InvalidOption {
-            key: "aws_credentials".into(),
-            reason: format!("failed to load credentials from default provider chain: {e}"),
-        })?;
-
-    Ok((creds, region))
-}
-
-// ---------------------------------------------------------------------------
-// Custom HTTP connector bridging to HttpSendFn
-// ---------------------------------------------------------------------------
-
-/// An [`aws_smithy_runtime_api::client::http::HttpConnector`] that delegates
-/// all HTTP traffic to a BAML [`HttpSendFn`](crate::HttpSendFn) closure.
-#[derive(Clone)]
-struct BamlHttpConnector {
-    send_fn: crate::HttpSendFn,
-}
-
-impl std::fmt::Debug for BamlHttpConnector {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BamlHttpConnector").finish()
-    }
-}
-
-impl aws_smithy_runtime_api::client::http::HttpConnector for BamlHttpConnector {
-    fn call(&self, request: smithy_http::Request) -> HttpConnectorFuture {
-        let send_fn = self.send_fn.clone();
-        HttpConnectorFuture::new(async move {
-            // Convert AWS SDK Request<SdkBody> to a BAML HttpRequest.
-            let method = request.method().to_string();
-            let url = request.uri().to_string();
-            let mut headers = IndexMap::new();
-            for (name, value) in request.headers() {
-                headers.insert(name.to_string(), value.to_string());
-            }
-            let body = request
-                .body()
-                .bytes()
-                .map(|b| String::from_utf8_lossy(b).into_owned())
-                .unwrap_or_default();
-
-            let baml_req = bex_heap::builtin_types::owned::HttpRequest {
-                method,
-                url,
-                headers,
-                body,
-            };
-
-            // Call the BAML HTTP send closure.
-            let resp = send_fn(baml_req)
-                .await
-                .map_err(|e| ConnectorError::other(e.into(), None))?;
-
-            // Convert BAML HttpSendResponse to a AWS SDK Response<SdkBody>.
-            let status = smithy_http::StatusCode::try_from(resp.status_code)
-                .map_err(|e| ConnectorError::other(Box::new(e), None))?;
-            let sdk_body = SdkBody::from(resp.body);
-            let mut aws_resp = smithy_http::Response::new(status, sdk_body);
-            for (name, value) in resp.headers {
-                aws_resp
-                    .headers_mut()
-                    .try_insert(name, value)
-                    .map_err(|e| ConnectorError::other(e.into(), None))?;
-            }
-
-            Ok(aws_resp)
-        })
-    }
-}
-
-/// Build a [`SharedHttpClient`](aws_smithy_runtime_api::client::http::SharedHttpClient)
-/// that delegates to the given [`HttpSendFn`](crate::HttpSendFn).
-fn baml_http_client(
-    send_fn: crate::HttpSendFn,
-) -> aws_smithy_runtime_api::client::http::SharedHttpClient {
-    use aws_smithy_runtime_api::client::http::http_client_fn;
-    let connector = SharedHttpConnector::new(BamlHttpConnector { send_fn });
-    http_client_fn(move |_settings, _components| connector.clone())
-}
-
-// ---------------------------------------------------------------------------
-// SigV4 signing
-// ---------------------------------------------------------------------------
-
-/// Sign the request with `SigV4` given resolved credentials and region.
-fn sign_with_credentials(
-    credentials: &Credentials,
-    region: &str,
-    method: &str,
-    url: &str,
-    existing_headers: &IndexMap<String, String>,
-    body: &[u8],
-) -> Result<IndexMap<String, String>, BuildRequestError> {
-    let identity = credentials.clone().into();
-
-    let signing_settings = SigningSettings::default();
-    let signing_params = v4::SigningParams::builder()
-        .identity(&identity)
-        .region(region)
-        .name("bedrock")
-        .time(now())
-        .settings(signing_settings)
-        .build()
-        .map_err(|e| BuildRequestError::InvalidOption {
-            key: "signing".into(),
-            reason: e.to_string(),
-        })?
-        .into();
-
-    let header_pairs: Vec<(&str, &str)> = existing_headers
-        .iter()
-        .map(|(k, v)| (k.as_str(), v.as_str()))
-        .collect();
-
-    let signable = SignableRequest::new(
-        method,
-        url,
-        header_pairs.into_iter(),
-        SignableBody::Bytes(body),
-    )
-    .map_err(|e| BuildRequestError::InvalidOption {
-        key: "signable_request".into(),
-        reason: e.to_string(),
-    })?;
-
-    let (instructions, _signature) = sign(signable, &signing_params)
-        .map_err(|e| BuildRequestError::InvalidOption {
-            key: "signing".into(),
-            reason: e.to_string(),
-        })?
-        .into_parts();
-
-    let mut signed_headers = IndexMap::new();
-    for (name, value) in instructions.headers() {
-        signed_headers.insert(name.to_string(), value.to_string());
-    }
-
-    Ok(signed_headers)
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -1149,7 +664,7 @@ mod tests {
     use indexmap::IndexMap;
 
     use super::*;
-    use crate::build_request::{LlmRequestBuilder, build_request};
+    use crate::build_request::build_request;
 
     fn make_client(options: Vec<(&str, BexExternalValue)>) -> LlmPrimitiveClient {
         let mut opts = IndexMap::new();
@@ -1563,7 +1078,7 @@ mod tests {
     #[test]
     fn bedrock_url_contains_model_and_region() {
         let client = make_client(base_options());
-        let url = BedrockBuilder.build_url(&client).unwrap();
+        let url = BedrockBuilder.build_url(&client, false).unwrap();
         assert_eq!(
             url,
             "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
@@ -1571,9 +1086,62 @@ mod tests {
     }
 
     #[test]
+    fn bedrock_stream_url_uses_converse_stream() {
+        let client = make_client(base_options());
+        let url = BedrockBuilder.build_url(&client, true).unwrap();
+        assert!(url.ends_with("/converse-stream"));
+    }
+
+    #[test]
+    fn bedrock_endpoint_url_overrides_base() {
+        let mut opts = base_options();
+        opts.push((
+            "endpoint_url",
+            BexExternalValue::String("http://localhost:4566".into()),
+        ));
+        let client = make_client(opts);
+        let url = BedrockBuilder.build_url(&client, false).unwrap();
+        assert_eq!(
+            url,
+            "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
+        );
+    }
+
+    #[test]
+    fn bedrock_endpoint_url_with_trailing_slash() {
+        let mut opts = base_options();
+        opts.push((
+            "endpoint_url",
+            BexExternalValue::String("http://localhost:4566/".into()),
+        ));
+        let client = make_client(opts);
+        let url = BedrockBuilder.build_url(&client, false).unwrap();
+        assert_eq!(
+            url,
+            "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
+        );
+    }
+
+    #[test]
+    fn bedrock_endpoint_url_does_not_require_region() {
+        let client = make_client(vec![
+            (
+                "model",
+                BexExternalValue::String("anthropic.claude-3-haiku-20240307-v1:0".into()),
+            ),
+            (
+                "endpoint_url",
+                BexExternalValue::String("http://localhost:4566".into()),
+            ),
+        ]);
+        let url = BedrockBuilder.build_url(&client, false).unwrap();
+        assert!(url.starts_with("http://localhost:4566/"));
+    }
+
+    #[test]
     fn bedrock_missing_region_errors() {
         let client = make_client(vec![("model", BexExternalValue::String("m".into()))]);
-        assert!(BedrockBuilder.build_url(&client).is_err());
+        assert!(BedrockBuilder.build_url(&client, false).is_err());
     }
 
     #[test]
@@ -1582,7 +1150,7 @@ mod tests {
             "region",
             BexExternalValue::String("us-east-1".into()),
         )]);
-        assert!(BedrockBuilder.build_url(&client).is_err());
+        assert!(BedrockBuilder.build_url(&client, false).is_err());
     }
 
     #[tokio::test]
@@ -1658,49 +1226,5 @@ mod tests {
         };
         assert!(result.is_ok());
         assert_eq!(call_count.load(Ordering::SeqCst), 0);
-    }
-
-    #[tokio::test]
-    async fn baml_http_connector_converts_request_and_response() {
-        use aws_smithy_runtime_api::client::http::HttpConnector;
-
-        let call_count = Arc::new(AtomicUsize::new(0));
-        let captured_url = Arc::new(std::sync::Mutex::new(String::new()));
-        let captured_body = Arc::new(std::sync::Mutex::new(String::new()));
-        let cu = captured_url.clone();
-        let cb = captured_body.clone();
-        let cc = call_count.clone();
-
-        let send_fn: crate::HttpSendFn = Arc::new(move |req| {
-            cc.fetch_add(1, Ordering::SeqCst);
-            *cu.lock().unwrap() = req.url.clone();
-            *cb.lock().unwrap() = req.body;
-            Box::pin(async {
-                let mut headers = IndexMap::new();
-                headers.insert("x-test".to_string(), "hello".to_string());
-                Ok(crate::HttpSendResponse {
-                    status_code: 200,
-                    headers,
-                    body: r#"{"ok": true}"#.to_string(),
-                })
-            })
-        });
-
-        let connector = BamlHttpConnector { send_fn };
-        let mut aws_req = smithy_http::Request::new(SdkBody::from(r#"{"test": 1}"#));
-        aws_req.set_uri("https://example.com/test").unwrap();
-        aws_req
-            .headers_mut()
-            .insert("content-type", "application/json");
-
-        let aws_resp = connector.call(aws_req).await.unwrap();
-
-        assert_eq!(call_count.load(Ordering::SeqCst), 1);
-        assert_eq!(*captured_url.lock().unwrap(), "https://example.com/test");
-        assert_eq!(*captured_body.lock().unwrap(), r#"{"test": 1}"#);
-        assert_eq!(aws_resp.status().as_u16(), 200);
-        assert_eq!(aws_resp.headers().get("x-test"), Some("hello"));
-        let body_bytes = aws_resp.body().bytes().unwrap();
-        assert_eq!(std::str::from_utf8(body_bytes).unwrap(), r#"{"ok": true}"#);
     }
 }

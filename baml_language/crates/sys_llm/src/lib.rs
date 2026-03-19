@@ -6,6 +6,7 @@
 //! - `specialize_prompt()` - Transform a generic `PromptAst` for a specific LLM provider
 //! - `execute_*` entry points for trait-based dispatch from `sys_types`
 
+pub(crate) mod auth_request;
 mod build_request;
 pub(crate) mod jinja;
 mod model_features;
@@ -14,6 +15,8 @@ mod provider;
 mod render_prompt;
 mod specialize_prompt;
 pub(crate) mod types;
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod wasm;
 
 use std::{
     future::Future,
