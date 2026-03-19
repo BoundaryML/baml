@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Users, Shield, Crown, UserMinus } from "lucide-react";
 
-type UserRole = "bdfl" | "team" | "unset";
+type UserRole = "bdfl" | "team" | "unset" | "admin" | "shepherd" | "member";
 
 interface UserRecord {
   _id: Id<"users">;
@@ -38,11 +38,22 @@ interface UserRecord {
   createdAt: number;
 }
 
+// Get the equivalent new role for a legacy role (for sorting purposes)
+function getNormalizedRole(role: string): "bdfl" | "team" | "unset" {
+  if (role === "bdfl" || role === "admin") return "bdfl";
+  if (role === "team" || role === "shepherd") return "team";
+  return "unset";
+}
+
 function RoleBadge({ role }: { role: UserRole }) {
   const roleConfig = {
     bdfl: { label: "BDFL", variant: "bdfl" as const, icon: Crown },
     team: { label: "Team", variant: "team" as const, icon: Shield },
     unset: { label: "Unset", variant: "unset" as const, icon: UserMinus },
+    // Legacy roles - show original name with "(legacy)" suffix
+    admin: { label: "Admin (legacy)", variant: "admin" as const, icon: Crown },
+    shepherd: { label: "Shepherd (legacy)", variant: "shepherd" as const, icon: Shield },
+    member: { label: "Member (legacy)", variant: "member" as const, icon: UserMinus },
   };
 
   const config = roleConfig[role];
@@ -68,8 +79,11 @@ function UserRow({
   onRoleChange: (userId: Id<"users">, newRole: UserRole) => void;
 }) {
   const isCurrentUser = user._id === currentUserId;
-  const canEditBdfl = currentUserRole === "bdfl";
-  const canEditThisUser = canEditBdfl || user.role !== "bdfl";
+  // Check if current user has admin-level permissions (bdfl or legacy admin)
+  const canEditBdfl = currentUserRole === "bdfl" || currentUserRole === "admin";
+  // Can edit this user if we have admin permissions, or if the target user is not an admin
+  const targetIsAdmin = user.role === "bdfl" || user.role === "admin";
+  const canEditThisUser = canEditBdfl || !targetIsAdmin;
 
   return (
     <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
@@ -189,17 +203,20 @@ export default function UsersPage() {
   const sortedUsers = users
     ? [...users].sort((a, b) => {
         const roleOrder = { bdfl: 0, team: 1, unset: 2 };
-        if (roleOrder[a.role] !== roleOrder[b.role]) {
-          return roleOrder[a.role] - roleOrder[b.role];
+        const aOrder = roleOrder[getNormalizedRole(a.role)];
+        const bOrder = roleOrder[getNormalizedRole(b.role)];
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder;
         }
         return a.name.localeCompare(b.name);
       })
     : [];
 
+  // Group users by normalized role (legacy roles grouped with their modern equivalents)
   const usersByRole = {
-    bdfl: sortedUsers.filter((u) => u.role === "bdfl"),
-    team: sortedUsers.filter((u) => u.role === "team"),
-    unset: sortedUsers.filter((u) => u.role === "unset"),
+    bdfl: sortedUsers.filter((u) => getNormalizedRole(u.role) === "bdfl"),
+    team: sortedUsers.filter((u) => getNormalizedRole(u.role) === "team"),
+    unset: sortedUsers.filter((u) => getNormalizedRole(u.role) === "unset"),
   };
 
   return (

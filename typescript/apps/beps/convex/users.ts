@@ -3,6 +3,16 @@ import { v } from "convex/values";
 import { userRole } from "./schema";
 import { internal } from "./_generated/api";
 
+// Helper to check if a role has admin-level permissions (bdfl or legacy admin)
+function hasAdminPermissions(role: string): boolean {
+  return role === "bdfl" || role === "admin";
+}
+
+// Helper to check if a role has team-level permissions (team, bdfl, or legacy equivalents)
+function hasTeamPermissions(role: string): boolean {
+  return role === "bdfl" || role === "team" || role === "admin" || role === "shepherd";
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // QUERIES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,8 +50,8 @@ export const listForManagement = query({
       throw new Error("Requester not found");
     }
 
-    // Only BDFL and Team members can view user management
-    if (requester.role !== "bdfl" && requester.role !== "team") {
+    // Only BDFL and Team members (or legacy equivalents) can view user management
+    if (!hasTeamPermissions(requester.role)) {
       throw new Error("Unauthorized: Only BDFL and Team members can view users");
     }
 
@@ -50,7 +60,7 @@ export const listForManagement = query({
   },
 });
 
-// Check if a user has management permissions (BDFL or Team)
+// Check if a user has management permissions (BDFL or Team, including legacy roles)
 export const hasManagementPermissions = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
@@ -58,7 +68,7 @@ export const hasManagementPermissions = query({
     if (!user) {
       return false;
     }
-    return user.role === "bdfl" || user.role === "team";
+    return hasTeamPermissions(user.role);
   },
 });
 
@@ -245,13 +255,13 @@ export const updateRoleWithPermissions = mutation({
       throw new Error("Requester not found");
     }
 
-    // Only BDFL and Team members can update roles
-    if (requester.role !== "bdfl" && requester.role !== "team") {
+    // Only BDFL and Team members (or legacy equivalents) can update roles
+    if (!hasTeamPermissions(requester.role)) {
       throw new Error("Unauthorized: Only BDFL and Team members can update roles");
     }
 
-    // Only BDFL can assign BDFL role
-    if (args.role === "bdfl" && requester.role !== "bdfl") {
+    // Only BDFL (or legacy admin) can assign BDFL role
+    if (args.role === "bdfl" && !hasAdminPermissions(requester.role)) {
       throw new Error("Unauthorized: Only BDFL can assign the BDFL role");
     }
 
@@ -260,8 +270,8 @@ export const updateRoleWithPermissions = mutation({
       throw new Error("Target user not found");
     }
 
-    // Cannot change the role of a BDFL unless you are also BDFL
-    if (targetUser.role === "bdfl" && requester.role !== "bdfl") {
+    // Cannot change the role of a BDFL (or legacy admin) unless you are also BDFL/admin
+    if (hasAdminPermissions(targetUser.role) && !hasAdminPermissions(requester.role)) {
       throw new Error("Unauthorized: Only BDFL can change another BDFL's role");
     }
 

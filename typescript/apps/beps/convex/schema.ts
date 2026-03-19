@@ -27,9 +27,15 @@ export const summaryStatus = v.union(
 );
 
 export const userRole = v.union(
+  // New roles
   v.literal("bdfl"),
   v.literal("team"),
-  v.literal("unset")
+  v.literal("unset"),
+  // Legacy roles (kept for backwards compatibility with existing data)
+  // Run `npx convex run migrations:migrateUserRoles` to migrate to new roles
+  v.literal("admin"),
+  v.literal("shepherd"),
+  v.literal("member")
 );
 
 // ─────────────────────────────────────────────────────────────────────────────

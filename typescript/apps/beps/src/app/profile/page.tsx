@@ -25,13 +25,22 @@ import {
   XCircle,
 } from "lucide-react";
 
-type UserRole = "bdfl" | "team" | "unset";
+type UserRole = "bdfl" | "team" | "unset" | "admin" | "shepherd" | "member";
+
+// Check if role is a legacy role that needs migration
+function isLegacyRole(role: string): boolean {
+  return role === "admin" || role === "shepherd" || role === "member";
+}
 
 function RoleBadge({ role }: { role: UserRole }) {
   const roleConfig = {
     bdfl: { label: "BDFL", variant: "bdfl" as const, icon: Crown, description: "Full administrative access" },
     team: { label: "Team", variant: "team" as const, icon: Shield, description: "Team member with management access" },
     unset: { label: "Unset", variant: "unset" as const, icon: UserMinus, description: "No special permissions" },
+    // Legacy roles
+    admin: { label: "Admin (legacy)", variant: "admin" as const, icon: Crown, description: "Full administrative access (legacy role)" },
+    shepherd: { label: "Shepherd (legacy)", variant: "shepherd" as const, icon: Shield, description: "Team member with management access (legacy role)" },
+    member: { label: "Member (legacy)", variant: "member" as const, icon: UserMinus, description: "No special permissions (legacy role)" },
   };
 
   const config = roleConfig[role];
@@ -189,30 +198,45 @@ export default function ProfilePage() {
               <div className="p-4 border rounded-lg">
                 <RoleBadge role={user.role} />
 
-                {user.role === "bdfl" && (
+                {(user.role === "bdfl" || user.role === "admin") && (
                   <div className="mt-3 text-sm text-muted-foreground">
-                    <p>As a BDFL, you have:</p>
+                    <p>As a {user.role === "bdfl" ? "BDFL" : "Admin"}, you have:</p>
                     <ul className="list-disc list-inside mt-2 space-y-1">
                       <li>Access to user management</li>
                       <li>Ability to assign any role to any user</li>
                       <li>Full administrative access</li>
                     </ul>
+                    {isLegacyRole(user.role) && (
+                      <p className="mt-2 text-amber-600 dark:text-amber-400">
+                        Note: Your role will be migrated to BDFL automatically.
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {user.role === "team" && (
+                {(user.role === "team" || user.role === "shepherd") && (
                   <div className="mt-3 text-sm text-muted-foreground">
-                    <p>As a Team member, you have:</p>
+                    <p>As a {user.role === "team" ? "Team member" : "Shepherd"}, you have:</p>
                     <ul className="list-disc list-inside mt-2 space-y-1">
                       <li>Access to user management</li>
                       <li>Ability to assign Team or Unset roles</li>
                     </ul>
+                    {isLegacyRole(user.role) && (
+                      <p className="mt-2 text-amber-600 dark:text-amber-400">
+                        Note: Your role will be migrated to Team automatically.
+                      </p>
+                    )}
                   </div>
                 )}
 
-                {user.role === "unset" && (
+                {(user.role === "unset" || user.role === "member") && (
                   <div className="mt-3 text-sm text-muted-foreground">
                     <p>You currently have no special permissions. Contact a Team member or BDFL to request access.</p>
+                    {isLegacyRole(user.role) && (
+                      <p className="mt-2 text-amber-600 dark:text-amber-400">
+                        Note: Your role will be migrated to Unset automatically.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
