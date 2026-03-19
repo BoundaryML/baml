@@ -504,6 +504,26 @@ pub mod io {
 // Blanket IO LLM implementation (delegates to sys_llm)
 // ============================================================================
 
+impl<T> io::IoClassLlmClient for T {
+    fn get_constructor(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::Client,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        let resolve_fn_name = format!("{}.resolve", client.name);
+        let Some(global_index) = ctx.function_global_indices.get(&resolve_fn_name) else {
+            return SysOpOutput::err(OpErrorKind::Other(format!(
+                "Client resolve function not found: {resolve_fn_name}"
+            )));
+        };
+        SysOpOutput::ok(
+            FunctionRef::<io::owned::llm::PrimitiveClient>::new(*global_index).into_external(),
+        )
+    }
+}
+
 /// Blanket impl — all types get real LLM behavior via `sys_llm` delegation.
 /// Uses new IO traits from the `io` module.
 impl<T> io::IoClassLlmPrimitiveClient for T {
@@ -514,6 +534,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         client: io::owned::llm::PrimitiveClient,
         template: String,
         args: indexmap::IndexMap<String, BexExternalValue>,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::PromptAst> {
         let old_client = convert_io_primitive_client(&client);
         let args_ext = BexExternalValue::Map {
@@ -534,6 +555,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::PromptAst> {
         let old_client = convert_io_primitive_client(&client);
         let prompt_ast = unwrap_prompt_ast(&prompt);
@@ -550,6 +572,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         _call_id: CallId,
         client: io::owned::llm::PrimitiveClient,
         prompt: io::owned::llm::PromptAst,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = convert_io_primitive_client(&client);
         let prompt_ast = unwrap_prompt_ast(&prompt);
@@ -575,6 +598,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         client: io::owned::llm::PrimitiveClient,
         response: String,
         type_def: baml_type::Ty,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = convert_io_primitive_client(&client);
         SysOpOutput::Ready(
@@ -607,26 +631,6 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(template)
     }
 
-    fn build_primitive_client(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        name: String,
-        provider: String,
-        default_role: String,
-        allowed_roles: Vec<String>,
-        options: indexmap::IndexMap<String, BexExternalValue>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::PrimitiveClient> {
-        SysOpOutput::ok(io::owned::llm::PrimitiveClient {
-            name,
-            provider,
-            default_role,
-            allowed_roles,
-            options,
-        })
-    }
-
     fn get_client(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -643,24 +647,6 @@ impl<T> io::IoNamespaceLlm for T {
             Ok(client) => SysOpOutput::ok(client),
             Err(e) => SysOpOutput::err(OpErrorKind::Other(e)),
         }
-    }
-
-    fn resolve_client(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        let resolve_fn_name = format!("{client_name}.resolve");
-        let Some(global_index) = ctx.function_global_indices.get(&resolve_fn_name) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "Client resolve function not found: {resolve_fn_name}"
-            )));
-        };
-        SysOpOutput::ok(
-            FunctionRef::<io::owned::llm::PrimitiveClient>::new(*global_index).into_external(),
-        )
     }
 
     fn round_robin_next(
@@ -734,15 +720,27 @@ fn unwrap_prompt_ast(owned: &io::owned::llm::PromptAst) -> bex_vm_types::PromptA
 /// With typed owned fields, both structs have the same field types so this is
 /// a direct field-by-field clone.
 fn convert_io_primitive_client(
-    client: &io::owned::llm::PrimitiveClient,
+    io::owned::llm::PrimitiveClient {
+        name,
+        provider,
+        options,
+    }: &io::owned::llm::PrimitiveClient,
 ) -> sys_llm::baml_std::PrimitiveClient {
-    sys_llm::baml_std::PrimitiveClient {
-        name: client.name.clone(),
-        provider: client.provider.clone(),
-        default_role: client.default_role.clone(),
-        allowed_roles: client.allowed_roles.clone(),
-        options: client.options.clone(),
-    }
+    sys_llm::baml_std::PrimitiveClient::new(
+        name.clone(),
+        provider.clone(),
+        sys_llm::baml_std::PrimitiveClientOptions {
+            base_url: options.base_url.clone(),
+            default_role: options.default_role.clone(),
+            allowed_roles: options.allowed_roles.clone(),
+            remap_roles: options.remap_roles.clone(),
+            api_key: options.api_key.clone(),
+            headers: options.headers.clone(),
+            query_params: options.query_params.clone(),
+            request_body: options.request_body.clone(),
+            ..Default::default()
+        },
+    )
 }
 
 /// Convert a `ClientBuildType` to a `BexExternalValue` variant representation.
@@ -797,10 +795,22 @@ fn build_io_client_tree(
 struct DefaultIoOps;
 
 impl io::IoClassFsFile for DefaultIoOps {
-    fn read(&self, _h: &Arc<BexHeap>, _c: CallId, _f: io::owned::fs::File) -> SysOpOutput<String> {
+    fn read(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
-    fn close(&self, _h: &Arc<BexHeap>, _c: CallId, _f: io::owned::fs::File) -> SysOpOutput<()> {
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }
@@ -823,6 +833,7 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _h: &Arc<BexHeap>,
         _c: CallId,
         _r: io::owned::http::Response,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
@@ -855,10 +866,17 @@ impl io::IoClassNetSocket for DefaultIoOps {
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::Socket,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
-    fn close(&self, _h: &Arc<BexHeap>, _c: CallId, _s: io::owned::net::Socket) -> SysOpOutput<()> {
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::Socket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }

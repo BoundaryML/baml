@@ -831,6 +831,7 @@ fn definition_kind_to_lsp_symbol_kind(
         DefinitionKind::Generator => lsp_types::SymbolKind::INTERFACE,
         DefinitionKind::TemplateString => lsp_types::SymbolKind::FUNCTION,
         DefinitionKind::RetryPolicy => lsp_types::SymbolKind::STRUCT,
+        DefinitionKind::Let => lsp_types::SymbolKind::CONSTANT,
         DefinitionKind::Field => lsp_types::SymbolKind::FIELD,
         DefinitionKind::Method => lsp_types::SymbolKind::METHOD,
         DefinitionKind::Variant => lsp_types::SymbolKind::ENUM_MEMBER,

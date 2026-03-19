@@ -1490,6 +1490,10 @@ impl CompilerRunner {
                         ScopeKind::Block => "Block",
                         ScopeKind::Lambda => "Lambda",
                         ScopeKind::Item => "Item",
+                        ScopeKind::Let => "Let",
+                        ScopeKind::MatchArm => "MatchArm",
+                        ScopeKind::CatchClause => "CatchClause",
+                        ScopeKind::CatchArm => "CatchArm",
                         _ => unreachable!(),
                     };
                     let name_str = scope

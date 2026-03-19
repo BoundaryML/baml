@@ -4,8 +4,8 @@ use baml_base::{Name, SourceFile};
 use text_size::TextRange;
 
 use crate::loc::{
-    ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, RetryPolicyLoc, TemplateStringLoc,
-    TestLoc, TypeAliasLoc,
+    ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, LetLoc, RetryPolicyLoc,
+    TemplateStringLoc, TestLoc, TypeAliasLoc,
 };
 
 // ── DefinitionKind ──────────────────────────────────────────────────────────
@@ -27,6 +27,7 @@ pub enum DefinitionKind {
     Generator,
     Test,
     RetryPolicy,
+    Let,
 
     // Intra-item members
     Field,
@@ -48,6 +49,7 @@ impl DefinitionKind {
             Self::Generator => "generator",
             Self::Test => "test",
             Self::RetryPolicy => "retry_policy",
+            Self::Let => "let",
             Self::Field => "field",
             Self::Method => "method",
             Self::Variant => "variant",
@@ -83,6 +85,7 @@ pub enum Definition<'db> {
     Generator(GeneratorLoc<'db>),
     Test(TestLoc<'db>),
     RetryPolicy(RetryPolicyLoc<'db>),
+    Let(LetLoc<'db>),
 }
 
 impl<'db> Definition<'db> {
@@ -98,6 +101,7 @@ impl<'db> Definition<'db> {
             Definition::Generator(loc) => loc.file(db),
             Definition::Test(loc) => loc.file(db),
             Definition::RetryPolicy(loc) => loc.file(db),
+            Definition::Let(loc) => loc.file(db),
         }
     }
 
@@ -113,6 +117,7 @@ impl<'db> Definition<'db> {
             Definition::Generator(_) => DefinitionKind::Generator,
             Definition::Test(_) => DefinitionKind::Test,
             Definition::RetryPolicy(_) => DefinitionKind::RetryPolicy,
+            Definition::Let(_) => DefinitionKind::Let,
         }
     }
 

@@ -226,30 +226,31 @@ mod tests {
 
     #[test]
     fn test_openai_defaults() {
-        let features = ModelFeatures::for_provider(LlmProvider::OpenAi, &IndexMap::new());
+        let features = ModelFeatures::for_provider(LlmProvider::OpenAi, &Default::default());
         assert!(!features.max_one_system_prompt);
     }
 
     #[test]
     fn test_anthropic_defaults() {
-        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &IndexMap::new());
+        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &Default::default());
         assert!(features.max_one_system_prompt);
     }
 
     #[test]
     fn test_strategy_provider_defaults() {
-        let features = ModelFeatures::for_provider(LlmProvider::BamlFallback, &IndexMap::new());
+        let features = ModelFeatures::for_provider(LlmProvider::BamlFallback, &Default::default());
         assert!(features.max_one_system_prompt);
     }
 
     #[test]
     fn test_override_max_one_system_prompt() {
-        let mut options = IndexMap::new();
-        options.insert(
-            "max_one_system_prompt".to_string(),
-            bex_external_types::BexExternalValue::Bool(false),
+        let features = ModelFeatures::for_provider(
+            LlmProvider::Anthropic,
+            &crate::baml_std::PrimitiveClientOptions {
+                max_one_system_prompt: Some(false),
+                ..Default::default()
+            },
         );
-        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &options);
         assert!(!features.max_one_system_prompt);
     }
 
@@ -405,7 +406,7 @@ mod tests {
             msg("assistant", "I'm fine"),
         ]));
 
-        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &IndexMap::new());
+        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &Default::default());
 
         let result = merge_adjacent_roles(prompt);
         let result = consolidate_system_prompts(result, &features);

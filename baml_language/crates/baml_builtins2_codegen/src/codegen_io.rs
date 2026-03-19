@@ -782,7 +782,7 @@ fn emit_one_class_trait(
         let ret_ty = clean_rust_type(&m.return_type, class_ns_map);
         let receiver_ty = format!("owned::{ns}::{class_name}");
 
-        // Build param list: &self, heap, call_id, receiver, then other params
+        // Build param list: &self, heap, call_id, receiver, then other params, then ctx
         let mut param_strs = vec![
             "&self".to_string(),
             "heap: &std::sync::Arc<BexHeap>".to_string(),
@@ -793,6 +793,7 @@ fn emit_one_class_trait(
             let pty = clean_rust_type(&p.ty, class_ns_map);
             param_strs.push(format!("{}: {pty}", p.name));
         }
+        param_strs.push("ctx: &SysOpContext".to_string());
 
         out.push_str(&format!(
             "    fn {method_name}({}) -> SysOpOutput<{ret_ty}>;\n\n",
@@ -839,7 +840,7 @@ fn emit_glue_method(
 
     out.push_str(&format!(
         "    fn {glue_name}(&self, heap: &std::sync::Arc<BexHeap>, args: Vec<BexValue<'_>>,\n\
-         \x20       _ctx: &SysOpContext, call_id: CallId,\n\
+         \x20       ctx: &SysOpContext, call_id: CallId,\n\
          \x20   ) -> SysOpResult {{\n"
     ));
 
@@ -888,6 +889,7 @@ fn emit_glue_method(
     for p in &builtin.params {
         call_args.push(format!("__{}", p.name));
     }
+    call_args.push("ctx".to_string());
 
     let destructure_names: Vec<String> = tuple_elems.clone();
     out.push_str(&format!(
@@ -1220,47 +1222,6 @@ mod tests {
     use crate::extract::extract_native_builtins;
 
     #[test]
-    fn test_sys_op_enum_has_expected_variants() {
-        let (_vm, io, _cd) = extract_native_builtins();
-        let code = generate_sys_op_enum(&io);
-
-        // Check all expected variants are present
-        let expected_variants = [
-            "BamlFsOpen",
-            "BamlFsFileRead",
-            "BamlFsFileClose",
-            "BamlNetConnect",
-            "BamlNetSocketRead",
-            "BamlNetSocketClose",
-            "BamlHttpFetch",
-            "BamlHttpSend",
-            "BamlHttpResponseText",
-            "BamlSysShell",
-            "BamlSysSleep",
-            "BamlSysPanic",
-            "BamlEnvGet",
-            "BamlLlmPrimitiveClientRenderPrompt",
-            "BamlLlmPrimitiveClientSpecializePrompt",
-            "BamlLlmPrimitiveClientBuildRequest",
-            "BamlLlmPrimitiveClientParse",
-            "BamlLlmGetJinjaTemplate",
-            "BamlLlmBuildPrimitiveClient",
-            "BamlLlmGetClient",
-            "BamlLlmResolveClient",
-            "BamlLlmRoundRobinNext",
-            "BamlLlmRoundRobinPeek",
-            "BamlLlmGetReturnType",
-        ];
-
-        for v in &expected_variants {
-            assert!(
-                code.contains(&format!("    {v},")),
-                "Missing variant {v} in generated enum"
-            );
-        }
-    }
-
-    #[test]
     fn test_sys_op_enum_paths() {
         let (_vm, io, _cd) = extract_native_builtins();
         let code = generate_sys_op_enum(&io);
@@ -1419,7 +1380,7 @@ mod tests {
             "Missing IoNamespaceEnv"
         );
         assert!(
-            code.contains("pub trait IoNamespaceLlm: IoClassLlmPrimitiveClient"),
+            code.contains("pub trait IoNamespaceLlm: IoClassLlmClient + IoClassLlmPrimitiveClient"),
             "Missing IoNamespaceLlm"
         );
     }

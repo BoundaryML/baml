@@ -278,9 +278,11 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
                 }),
             },
         )),
-        Ty::Enum(tn, _) => Some(FieldType::EnumType(crate::baml::cffi::BamlFieldTypeEnum {
-            name: tn.display_name.to_string(),
-        })),
+        Ty::EnumVariant(tn, ..) | Ty::Enum(tn, _) => {
+            Some(FieldType::EnumType(crate::baml::cffi::BamlFieldTypeEnum {
+                name: tn.display_name.to_string(),
+            }))
+        }
         Ty::Union(_, _) => Some(FieldType::UnionVariantType(BamlFieldTypeUnionVariant {
             name: None,
         })),
@@ -295,6 +297,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
             unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
         Ty::TypeAlias(_, _)
+        | Ty::Future(..)
         | Ty::Function { .. }
         | Ty::Void { .. }
         | Ty::WatchAccessor(_, _)

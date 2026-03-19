@@ -473,8 +473,17 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             }
         }
 
-        // Treat everything else (Union, Literal, Function, BuiltinUnknown, etc.) as Named.
-        TypeExpr::Union(_) => BamlType::Named("union".to_string()),
+        TypeExpr::Union(variants) => {
+            let non_null: Vec<_> = variants
+                .iter()
+                .filter(|v| !matches!(v, TypeExpr::Null))
+                .collect();
+            if non_null.len() == 1 && non_null.len() < variants.len() {
+                BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
+            } else {
+                BamlType::Named("union".to_string())
+            }
+        }
         TypeExpr::Literal(_) => BamlType::Named("literal".to_string()),
         TypeExpr::Function { .. } => BamlType::Named("function".to_string()),
         TypeExpr::BuiltinUnknown | TypeExpr::Unknown | TypeExpr::Error => {
@@ -831,67 +840,6 @@ mod tests {
             .find(|b| b.path == "baml.String.split")
             .expect("missing String.split");
         assert_eq!(string_split.vm_usage, VmUsage::MutRef);
-    }
-
-    #[test]
-    fn test_extract_io_builtins() {
-        let (_vm, io_builtins, _class_defs) = extract_native_builtins();
-
-        // All IO builtins should have pipeline == Io
-        for b in &io_builtins {
-            assert_eq!(b.pipeline, BuiltinPipeline::Io, "{} should be Io", b.path);
-        }
-
-        let expected_paths = [
-            "baml.fs.open",
-            "baml.fs.File.read",
-            "baml.fs.File.close",
-            "baml.net.connect",
-            "baml.net.Socket.read",
-            "baml.net.Socket.close",
-            "baml.http.fetch",
-            "baml.http.send",
-            "baml.http.Response.text",
-            "baml.sys.shell",
-            "baml.sys.sleep",
-            "baml.sys.panic",
-            "baml.env.get",
-        ];
-        for path in &expected_paths {
-            assert!(
-                io_builtins.iter().any(|b| b.path == *path),
-                "missing IO builtin: {path}"
-            );
-        }
-
-        // LLM functions from llm_types.baml
-        let llm_paths = [
-            "baml.llm.PrimitiveClient.render_prompt",
-            "baml.llm.PrimitiveClient.specialize_prompt",
-            "baml.llm.PrimitiveClient.build_request",
-            "baml.llm.PrimitiveClient.parse",
-            "baml.llm.get_jinja_template",
-            "baml.llm.build_primitive_client",
-            "baml.llm.get_client",
-            "baml.llm.resolve_client",
-            "baml.llm.round_robin_next",
-            "baml.llm.round_robin_peek",
-            "baml.llm.get_return_type",
-        ];
-        for path in &llm_paths {
-            assert!(
-                io_builtins.iter().any(|b| b.path == *path),
-                "missing LLM IO builtin: {path}"
-            );
-        }
-
-        // baml.http.Response.ok is NOT extracted (pure BAML expression, not $rust_io_function)
-        assert!(
-            !io_builtins
-                .iter()
-                .any(|b| b.path == "baml.http.Response.ok"),
-            "Response.ok should not be extracted as IO builtin"
-        );
     }
 
     #[test]

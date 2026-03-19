@@ -458,6 +458,16 @@ pub enum Item {
     Generator(GeneratorDef),
     TemplateString(TemplateStringDef),
     RetryPolicy(RetryPolicyDef),
+    Let(LetDef),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeclarativeMeta {
+    /// LLM function metadata (client name, prompt template).
+    /// Present only for functions declared with `{ client ...; prompt ... }` syntax.
+    /// The body is desugared to a synthetic `Expr` calling `baml.llm.call_llm_function`,
+    /// while this field preserves the original metadata for Jinja type-checking.
+    Llm(LlmBodyDef),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -469,11 +479,7 @@ pub struct FunctionDef {
     pub return_type: Option<SpannedTypeExpr>,
     pub throws: Option<SpannedTypeExpr>,
     pub body: Option<FunctionBodyDef>,
-    /// LLM function metadata (client name, prompt template).
-    /// Present only for functions declared with `{ client ...; prompt ... }` syntax.
-    /// The body is desugared to a synthetic `Expr` calling `baml.llm.call_llm_function`,
-    /// while this field preserves the original metadata for Jinja type-checking.
-    pub llm_meta: Option<LlmBodyDef>,
+    pub declarative_meta: Option<DeclarativeMeta>,
     pub attributes: Vec<RawAttribute>,
     pub span: TextRange,
     pub name_span: TextRange,
@@ -615,6 +621,17 @@ pub struct TemplateStringDef {
 pub struct RetryPolicyDef {
     pub name: Name,
     pub config_items: Vec<ConfigItemDef>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+/// A top-level let binding — compiler-generated, not user syntax.
+/// Carries an optional `ExprBody` initializer that flows through TIR type-checking.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LetDef {
+    pub name: Name,
+    pub initializer: Option<(ExprBody, AstSourceMap)>,
+    pub origin: LetOrigin,
     pub span: TextRange,
     pub name_span: TextRange,
 }

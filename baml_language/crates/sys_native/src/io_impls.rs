@@ -48,6 +48,7 @@ impl io::IoClassFsFile for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         file: owned::fs::File,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         use tokio::io::AsyncReadExt;
 
@@ -70,6 +71,7 @@ impl io::IoClassFsFile for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _file: owned::fs::File,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::ok(())
     }
@@ -169,6 +171,7 @@ impl io::IoClassNetSocket for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         socket: owned::net::Socket,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         use tokio::io::AsyncReadExt;
 
@@ -192,6 +195,7 @@ impl io::IoClassNetSocket for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _socket: owned::net::Socket,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::ok(())
     }
@@ -227,6 +231,7 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         response: owned::http::Response,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
             let body: Arc<tokio::sync::Mutex<Option<reqwest::Response>>> = response
@@ -249,6 +254,7 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _response: owned::http::Response,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }

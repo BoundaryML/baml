@@ -8,7 +8,6 @@
 use baml_builtins::{PromptAst as BuiltinPromptAst, PromptAstSimple};
 use baml_type::TyAttr;
 use bex_engine::{FunctionCallContextBuilder, Ty};
-use bex_external_types::BexExternalAdt;
 use bex_heap::BexExternalValue;
 
 #[tokio::test]
@@ -24,24 +23,26 @@ async fn test_render_prompt_directly() {
     );
     args.insert("age".to_string(), BexExternalValue::Int(30));
 
-    let client = sys_llm::baml_std::PrimitiveClient {
-        name: "test".to_string(),
-        provider: "openai".to_string(),
-        default_role: "user".to_string(),
-        allowed_roles: vec![
-            "user".to_string(),
-            "assistant".to_string(),
-            "system".to_string(),
-        ],
-        options: IndexMap::new(),
-    };
+    let client = sys_llm::baml_std::PrimitiveClient::new(
+        "test".to_string(),
+        "openai".to_string(),
+        sys_llm::baml_std::PrimitiveClientOptions {
+            default_role: Some("user".to_string()),
+            allowed_roles: Some(vec![
+                "user".to_string(),
+                "assistant".to_string(),
+                "system".to_string(),
+            ]),
+            ..Default::default()
+        },
+    );
 
     let ctx = sys_llm::RenderContext {
         client: sys_llm::RenderContextClient {
             name: client.name.clone(),
             provider: client.provider.clone(),
-            default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles,
+            default_role: client.default_role(),
+            allowed_roles: client.allowed_roles(),
         },
         output_format: sys_llm::OutputFormatContent::new(Ty::String {
             attr: TyAttr::default(),
@@ -79,24 +80,26 @@ You are a helpful assistant.
         BexExternalValue::String("What is 2+2?".to_string()),
     );
 
-    let client = sys_llm::baml_std::PrimitiveClient {
-        name: "test".to_string(),
-        provider: "openai".to_string(),
-        default_role: "user".to_string(),
-        allowed_roles: vec![
-            "user".to_string(),
-            "assistant".to_string(),
-            "system".to_string(),
-        ],
-        options: IndexMap::new(),
-    };
+    let client = sys_llm::baml_std::PrimitiveClient::new(
+        "test".to_string(),
+        "openai".to_string(),
+        sys_llm::baml_std::PrimitiveClientOptions {
+            default_role: Some("user".to_string()),
+            allowed_roles: Some(vec![
+                "user".to_string(),
+                "assistant".to_string(),
+                "system".to_string(),
+            ]),
+            ..Default::default()
+        },
+    );
 
     let ctx = sys_llm::RenderContext {
         client: sys_llm::RenderContextClient {
             name: client.name.clone(),
             provider: client.provider.clone(),
-            default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles,
+            default_role: client.default_role(),
+            allowed_roles: client.allowed_roles(),
         },
         output_format: sys_llm::OutputFormatContent::new(Ty::String {
             attr: TyAttr::default(),

@@ -77,6 +77,8 @@ pub enum ScopeKind {
     CatchClause,
     /// Catch arm body — holds arm-level pattern bindings.
     CatchArm,
+    /// Top-level let binding — owns an initializer expression.
+    Let,
 }
 
 /// A single scope node in the per-file scope tree.

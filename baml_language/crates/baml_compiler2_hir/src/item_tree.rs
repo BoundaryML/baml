@@ -12,8 +12,8 @@ use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, ItemKind, LocalItemId,
-    RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker, hash_name,
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, ItemKind, LetMarker,
+    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker, hash_name,
 };
 
 // ── Minimal item data structs ────────────────────────────────────────────────
@@ -35,8 +35,8 @@ pub struct Function {
     pub throws: Option<ast::SpannedTypeExpr>,
     /// Function body — either an expression or a builtin.
     pub body: Option<ast::FunctionBodyDef>,
-    /// LLM function metadata, if this function was declared with LLM syntax.
-    pub llm_meta: Option<ast::LlmBodyDef>,
+    /// Declarative metadata, if this function was declared with declarative syntax.
+    pub declarative_meta: Option<ast::DeclarativeMeta>,
     /// Full source span of the function.
     pub span: TextRange,
 }
@@ -166,6 +166,17 @@ pub struct RetryPolicy {
     pub max_delay_ms: Option<String>,
 }
 
+/// A top-level let binding stored in the ItemTree.
+/// Carries the optional initializer `ExprBody` for body queries.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Let {
+    pub name: Name,
+    pub initializer: Option<(ast::ExprBody, ast::AstSourceMap)>,
+    pub origin: ast::LetOrigin,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
 // ── ItemTree ─────────────────────────────────────────────────────────────────
 
 /// Position-independent item storage for a single file.
@@ -184,6 +195,7 @@ pub struct ItemTree {
     pub generators: FxHashMap<LocalItemId<GeneratorMarker>, Generator>,
     pub template_strings: FxHashMap<LocalItemId<TemplateStringMarker>, TemplateString>,
     pub retry_policies: FxHashMap<LocalItemId<RetryPolicyMarker>, RetryPolicy>,
+    pub lets: FxHashMap<LocalItemId<LetMarker>, Let>,
 
     /// Collision tracker: `(ItemKind, hash)` → next available index.
     next_index: FxHashMap<(ItemKind, u16), u16>,
@@ -207,6 +219,7 @@ impl ItemTree {
             generators: FxHashMap::default(),
             template_strings: FxHashMap::default(),
             retry_policies: FxHashMap::default(),
+            lets: FxHashMap::default(),
             next_index: FxHashMap::default(),
         }
     }
@@ -241,7 +254,7 @@ impl ItemTree {
                 return_type: f.return_type.clone(),
                 throws: f.throws.clone(),
                 body: f.body.clone(),
-                llm_meta: f.llm_meta.clone(),
+                declarative_meta: f.declarative_meta.clone(),
                 span: f.span,
             },
         );
@@ -418,6 +431,21 @@ impl ItemTree {
         );
         id
     }
+
+    pub fn alloc_let(&mut self, l: &ast::LetDef) -> LocalItemId<LetMarker> {
+        let id = self.alloc_id(ItemKind::Let, &l.name);
+        self.lets.insert(
+            id,
+            Let {
+                name: l.name.clone(),
+                initializer: l.initializer.clone(),
+                origin: l.origin,
+                span: l.span,
+                name_span: l.name_span,
+            },
+        );
+        id
+    }
 }
 
 // ── Index impls ───────────────────────────────────────────────────────────────
@@ -482,5 +510,12 @@ impl Index<LocalItemId<RetryPolicyMarker>> for ItemTree {
     type Output = RetryPolicy;
     fn index(&self, id: LocalItemId<RetryPolicyMarker>) -> &RetryPolicy {
         &self.retry_policies[&id]
+    }
+}
+
+impl Index<LocalItemId<LetMarker>> for ItemTree {
+    type Output = Let;
+    fn index(&self, id: LocalItemId<LetMarker>) -> &Let {
+        &self.lets[&id]
     }
 }

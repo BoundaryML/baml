@@ -5,7 +5,7 @@
 use baml_builtins::PromptAst;
 use indexmap::IndexMap;
 
-use super::{BuildRequestError, LlmRequestBuilder, get_string_option};
+use super::{BuildRequestError, LlmRequestBuilder};
 use crate::{LlmProvider, build_request::prompt_to_content_parts_simple};
 
 /// Builder for OpenAI-compatible providers.
@@ -28,16 +28,28 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         &self,
         client: &crate::baml_std::PrimitiveClient,
     ) -> Result<String, BuildRequestError> {
-        let base_url = get_string_option(client, "base_url")
+        let base_url = client
+            .options
+            .base_url
+            .clone()
             .unwrap_or_else(|| "https://api.openai.com".to_string());
 
         // Azure uses a different URL pattern
         if *self.provider == LlmProvider::AzureOpenAi {
-            let deployment = get_string_option(client, "resource_name")
+            let deployment = client
+                .options
+                .resource_name
+                .clone()
                 .ok_or_else(|| BuildRequestError::MissingOption("resource_name".into()))?;
-            let model = get_string_option(client, "model")
+            let model = client
+                .options
+                .model
+                .clone()
                 .ok_or_else(|| BuildRequestError::MissingOption("model".into()))?;
-            let api_version = get_string_option(client, "api_version")
+            let api_version = client
+                .options
+                .api_version
+                .clone()
                 .unwrap_or_else(|| "2024-02-15-preview".to_string());
             return Ok(format!(
                 "https://{deployment}.openai.azure.com/openai/deployments/{model}/chat/completions?api-version={api_version}"
@@ -52,7 +64,7 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
         client: &crate::baml_std::PrimitiveClient,
     ) -> IndexMap<String, String> {
         let mut headers = IndexMap::new();
-        if let Some(api_key) = get_string_option(client, "api_key") {
+        if let Some(api_key) = client.options.api_key.clone() {
             if *self.provider == LlmProvider::AzureOpenAi {
                 headers.insert("api-key".to_string(), api_key);
             } else {

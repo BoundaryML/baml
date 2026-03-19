@@ -22,8 +22,8 @@ use crate::{
     ids::{FunctionMarker, LocalItemId},
     item_tree::ItemTree,
     loc::{
-        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, RetryPolicyLoc, TemplateStringLoc,
-        TestLoc, TypeAliasLoc,
+        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, LetLoc, RetryPolicyLoc,
+        TemplateStringLoc, TestLoc, TypeAliasLoc,
     },
     scope::{FileScopeId, Scope, ScopeId, ScopeKind},
     semantic_index::{DefinitionSite, FileSemanticIndex, ScopeBindings, SemanticIndexExtra},
@@ -348,6 +348,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::Generator(g) => self.lower_generator(g),
             ast::Item::TemplateString(ts) => self.lower_template_string(ts),
             ast::Item::RetryPolicy(rp) => self.lower_retry_policy(rp),
+            ast::Item::Let(l) => self.lower_let(l),
         }
     }
 
@@ -545,6 +546,24 @@ impl<'db> SemanticIndexBuilder<'db> {
         ));
 
         self.push_scope(ScopeKind::Item, Some(rp.name.clone()), rp.span);
+        self.pop_scope();
+    }
+
+    fn lower_let(&mut self, l: &ast::LetDef) {
+        let local_id = self.item_tree.alloc_let(l);
+        let loc = LetLoc::new(self.db, self.file, local_id);
+        self.value_contributions.push((
+            l.name.clone(),
+            Contribution {
+                name_span: l.name_span,
+                definition: Definition::Let(loc),
+            },
+        ));
+
+        self.push_scope(ScopeKind::Let, Some(l.name.clone()), l.span);
+        if let Some((ref body, ref source_map)) = l.initializer {
+            self.walk_expr_body(body, source_map);
+        }
         self.pop_scope();
     }
 

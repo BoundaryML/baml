@@ -51,6 +51,11 @@ pub struct Program {
 
     /// Compiled test cases.
     pub test_cases: Vec<TestCase>,
+
+    /// Ordered list of `$init` function names to run at load time.
+    /// E.g., `["baml.$init", "$init"]` — builtins before user package.
+    /// Empty when there are no top-level let bindings in any package.
+    pub package_init_order: Vec<String>,
 }
 
 /// Metadata for building a client tree at runtime.

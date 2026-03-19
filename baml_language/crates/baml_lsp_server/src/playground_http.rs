@@ -59,6 +59,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
         heap: &Arc<BexHeap>,
         call_id: CallId,
         response: owned::http::Response,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         let state = self.0.clone();
         let key = response_body_key(&response);
@@ -69,6 +70,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
             heap,
             call_id,
             response,
+            ctx,
         );
 
         match fetch_info {

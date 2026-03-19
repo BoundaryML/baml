@@ -15,9 +15,9 @@ use std::{collections::HashMap, sync::Arc};
 use baml_base::Name;
 use baml_compiler2_ast::{ExprId, PatId};
 use baml_compiler2_hir::{
-    body::FunctionBody,
+    body::{FunctionBody, LetBody},
     contributions::Definition,
-    loc::{ClassLoc, FunctionLoc, TypeAliasLoc},
+    loc::{ClassLoc, FunctionLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems, package_items},
     scope::{ScopeId, ScopeKind},
 };
@@ -328,6 +328,25 @@ pub fn infer_scope_types<'db>(
             // Class scope: no expressions to type-check.
             // Fields are resolved by resolve_class_fields.
             // Methods are child Function scopes with their own infer_scope_types.
+        }
+        ScopeKind::Let => {
+            // Top-level let binding — find the matching let in the item tree
+            // and type-infer its initializer expression.
+            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            for (local_id, let_data) in &item_tree.lets {
+                if let_data.span == scope.range && scope.name.as_ref() == Some(&let_data.name) {
+                    let let_loc = LetLoc::new(db, file, *local_id);
+                    let body = baml_compiler2_hir::body::let_body(db, let_loc);
+
+                    if let LetBody::Expr(expr_body) = body.as_ref() {
+                        // Infer the root expression type bottom-up.
+                        if let Some(root_expr) = expr_body.root_expr {
+                            builder.infer_expr(root_expr, expr_body);
+                        }
+                    }
+                    break;
+                }
+            }
         }
         _ => {
             // Project, Package, Namespace, File, Enum, TypeAlias, Block, Item:

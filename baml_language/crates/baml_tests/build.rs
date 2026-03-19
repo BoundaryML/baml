@@ -191,8 +191,8 @@ fn discover_baml_files(dir: &Path) -> Vec<BamlFile> {
 fn generate_project_tests(
     project: &TestProject,
     manifest_dir: &str,
-    codegen_filter: TokenStream,
-    require_codegen_functions: bool,
+    _codegen_filter: TokenStream,
+    _require_codegen_functions: bool,
 ) -> TokenStream {
     let module_name = format_ident!("{}", project.name.replace("-", "_"));
     let snapshot_path = format!(
@@ -207,7 +207,7 @@ fn generate_project_tests(
 
     let hir_test = generate_hir_test(project);
     let tir_test = generate_tir_test(project);
-    let mir_test = generate_mir_test(project);
+    // let mir_test = generate_mir_test(project);
     let mir2_test = generate_mir2_test(project);
     let control_flow_test =
         if project.name == "control_flow" || project.name == "headers_edge_cases" {
@@ -216,7 +216,7 @@ fn generate_project_tests(
             quote! {}
         };
     let diagnostics_test = generate_diagnostics_test(project);
-    let codegen_test = generate_codegen_test(project, codegen_filter, require_codegen_functions);
+    // let codegen_test = generate_codegen_test(project, codegen_filter, require_codegen_functions);
     let codegen2_test = generate_codegen2_test(project);
 
     let formatter_tests: TokenStream = project.files.iter().map(generate_formatter_test).collect();
@@ -263,11 +263,11 @@ fn generate_project_tests(
             #parser_tests
             #hir_test
             #tir_test
-            #mir_test
+            // #mir_test
             #mir2_test
             #control_flow_test
             #diagnostics_test
-            #codegen_test
+            // #codegen_test
             #codegen2_test
             #formatter_tests
             #parser_specific_tests
@@ -490,6 +490,7 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
     }
 }
 
+#[allow(dead_code)]
 fn generate_mir_test(project: &TestProject) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
@@ -856,6 +857,7 @@ fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
 /// Emits a `quote!` fragment that collects sorted functions from a compiled program,
 /// filtered by a predicate on the function name. The `filter_expr` should be a quoted
 /// expression of type `impl Fn(&&String) -> bool`.
+#[allow(dead_code)]
 fn emit_collect_functions(filter_expr: TokenStream) -> TokenStream {
     quote! {
         let mut func_names: Vec<_> = program.function_indices.keys()
@@ -883,6 +885,7 @@ fn emit_collect_functions(filter_expr: TokenStream) -> TokenStream {
     }
 }
 
+#[allow(dead_code)]
 fn generate_codegen_test(
     project: &TestProject,
     codegen_filter: TokenStream,

@@ -14,6 +14,7 @@ use baml_compiler_syntax::{SyntaxNode, ast};
 use rowan::ast::AstNode;
 
 use crate::{
+    DeclarativeMeta,
     ast::{
         BuiltinKind, ClientDef, ConfigItemDef, EnumDef, FieldDef, FunctionBodyDef, FunctionDef,
         GeneratorDef, Interpolation, Item, LlmBodyDef, Param, RawAttribute, RawAttributeArg,
@@ -118,7 +119,7 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
             span: te.syntax().text_range(),
         });
 
-    let (body, llm_meta) = if let Some(llm) = func.llm_body() {
+    let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
         let llm_body_def = lower_llm_body(&llm);
         let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
         let (expr_body, source_map) = synthesize_llm_builtin_call(
@@ -129,7 +130,7 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
         );
         (
             Some(FunctionBodyDef::Expr(expr_body, source_map)),
-            Some(llm_body_def),
+            Some(DeclarativeMeta::Llm(llm_body_def)),
         )
     } else if let Some(expr) = func.expr_body() {
         // Check if the body is `$rust_function` or `$rust_io_function` before lowering
@@ -153,7 +154,7 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
         return_type,
         throws,
         body,
-        llm_meta,
+        declarative_meta,
         attributes,
         span: node.text_range(),
         name_span,

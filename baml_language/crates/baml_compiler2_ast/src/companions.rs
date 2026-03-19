@@ -11,6 +11,7 @@
 use baml_base::Name;
 
 use crate::{
+    DeclarativeMeta,
     ast::{FunctionBodyDef, FunctionDef, SpannedTypeExpr, TypeExpr},
     lower_cst::synthesize_llm_builtin_call,
 };
@@ -29,7 +30,10 @@ pub(crate) fn expand_companions(func: &FunctionDef) -> Vec<FunctionDef> {
 }
 
 fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
-    parent.llm_meta.as_ref()?;
+    // Only LLM functions get render_prompt / build_request companions.
+    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
+        return None;
+    }
     Some(make_llm_companion(
         parent,
         "render_prompt",
@@ -38,7 +42,10 @@ fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
 }
 
 fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
-    parent.llm_meta.as_ref()?;
+    // Only LLM functions get render_prompt / build_request companions.
+    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
+        return None;
+    }
     Some(make_llm_companion(
         parent,
         "build_request",
@@ -53,7 +60,7 @@ fn make_llm_companion(
 ) -> FunctionDef {
     let name = Name::new(format!("{}${}", parent.name, target));
     let return_type = SpannedTypeExpr {
-        expr: TypeExpr::Path(return_type_path.iter().map(|s| Name::new(s)).collect()),
+        expr: TypeExpr::Path(return_type_path.iter().map(Name::new).collect()),
         span: parent.span,
     };
     let param_names: Vec<Name> = parent.params.iter().map(|p| p.name.clone()).collect();
@@ -66,7 +73,7 @@ fn make_llm_companion(
         return_type: Some(return_type),
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),
-        llm_meta: None,
+        declarative_meta: None,
         attributes: vec![],
         span: parent.span,
         name_span: parent.name_span,

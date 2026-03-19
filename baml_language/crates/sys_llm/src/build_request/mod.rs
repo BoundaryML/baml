@@ -78,12 +78,8 @@ pub(crate) trait LlmRequestBuilder {
         headers.insert("content-type".to_string(), "application/json".to_string());
         headers.extend(self.build_auth_headers(client));
         // Forward custom headers from client.options["headers"]
-        if let Some(BexExternalValue::Map { entries, .. }) = client.options.get("headers") {
-            for (key, value) in entries {
-                if let BexExternalValue::String(v) = value {
-                    headers.insert(key.clone(), v.clone());
-                }
-            }
+        for (key, value) in &client.options.headers {
+            headers.insert(key.clone(), value.clone());
         }
         headers
     }
@@ -95,8 +91,11 @@ pub(crate) trait LlmRequestBuilder {
         prompt: bex_vm_types::PromptAst,
     ) -> Result<String, BuildRequestError> {
         let mut body = serde_json::Map::new();
-        if let Some(model) = get_string_option(client, "model") {
-            body.insert("model".to_string(), serde_json::Value::String(model));
+        if let Some(model) = &client.options.model {
+            body.insert(
+                "model".to_string(),
+                serde_json::Value::String(model.clone()),
+            );
         }
         body.extend(self.build_prompt_body(prompt));
         self.forward_options(client, &mut body);
@@ -113,7 +112,7 @@ pub(crate) trait LlmRequestBuilder {
         body: &mut serde_json::Map<String, serde_json::Value>,
     ) {
         let provider_keys = self.provider_skip_keys();
-        for (key, value) in &client.options {
+        for (key, value) in &client.options.request_body {
             if SPECIALIZE_PROMPT_SKIP_KEYS.contains(&key.as_str())
                 || BUILD_REQUEST_SKIP_KEYS.contains(&key.as_str())
                 || provider_keys.contains(&key.as_str())
@@ -192,17 +191,6 @@ pub(crate) enum BuildRequestError {
     InvalidOption { key: String, reason: String },
 }
 
-/// Helper to extract a string option from client.options.
-pub(crate) fn get_string_option(
-    client: &crate::baml_std::PrimitiveClient,
-    key: &str,
-) -> Option<String> {
-    match client.options.get(key) {
-        Some(BexExternalValue::String(s)) => Some(s.clone()),
-        _ => None,
-    }
-}
-
 /// Convert a `BexExternalValue` to a `serde_json::Value`.
 pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::Value> {
     match value {
@@ -262,22 +250,18 @@ mod tests {
 
     fn make_client(
         provider: &str,
-        options: Vec<(&str, BexExternalValue)>,
+        mut options: crate::baml_std::PrimitiveClientOptions,
     ) -> crate::baml_std::PrimitiveClient {
-        let mut opts = IndexMap::new();
-        for (k, v) in options {
-            opts.insert(k.to_string(), v);
-        }
+        options.default_role = Some("user".to_string());
+        options.allowed_roles = Some(vec![
+            "system".to_string(),
+            "user".to_string(),
+            "assistant".to_string(),
+        ]);
         crate::baml_std::PrimitiveClient {
             name: "test-client".to_string(),
             provider: provider.to_string(),
-            default_role: "user".to_string(),
-            allowed_roles: vec![
-                "system".to_string(),
-                "user".to_string(),
-                "assistant".to_string(),
-            ],
-            options: opts,
+            options,
         }
     }
 
@@ -296,7 +280,7 @@ mod tests {
 
     #[test]
     fn test_unsupported_provider() {
-        let client = make_client("unknown-provider", vec![]);
+        let client = make_client("unknown-provider", Default::default());
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt);
         assert!(result.is_err());
@@ -317,10 +301,11 @@ mod tests {
     fn test_openai_gpt4o_system_only() {
         let client = make_client(
             "openai",
-            vec![
-                ("model", BexExternalValue::String("gpt-4o".into())),
-                ("api_key", BexExternalValue::String("sk-test-key".into())),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
+                api_key: Some("sk-test-key".to_string()),
+                ..Default::default()
+            },
         );
 
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
@@ -366,10 +351,11 @@ mod tests {
     fn test_openai_gpt4_turbo_system_and_user() {
         let client = make_client(
             "openai",
-            vec![
-                ("model", BexExternalValue::String("gpt-4-turbo".into())),
-                ("api_key", BexExternalValue::String("sk-test-key".into())),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4-turbo".to_string()),
+                api_key: Some("sk-test-key".to_string()),
+                ..Default::default()
+            },
         );
 
         let prompt = Arc::new(PromptAst::Vec(vec![
@@ -409,7 +395,10 @@ mod tests {
     fn test_openai_content_always_array() {
         let client = make_client(
             "openai",
-            vec![("model", BexExternalValue::String("gpt-4o".into()))],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
+                ..Default::default()
+            },
         );
         let prompt = msg("user", "Hello world");
         let result = build_request(&client, prompt).unwrap();
@@ -423,10 +412,10 @@ mod tests {
     fn test_openai_custom_base_url() {
         let client = make_client(
             "openai",
-            vec![(
-                "base_url",
-                BexExternalValue::String("https://custom.api.com".into()),
-            )],
+            crate::baml_std::PrimitiveClientOptions {
+                base_url: Some("https://custom.api.com".to_string()),
+                ..Default::default()
+            },
         );
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
@@ -437,10 +426,14 @@ mod tests {
     fn test_openai_forwards_options_to_body() {
         let client = make_client(
             "openai",
-            vec![
-                ("model", BexExternalValue::String("gpt-4o".into())),
-                ("temperature", BexExternalValue::Float(0.7)),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
+                request_body: IndexMap::from([(
+                    "temperature".to_string(),
+                    BexExternalValue::Float(0.7),
+                )]),
+                ..Default::default()
+            },
         );
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
@@ -452,14 +445,12 @@ mod tests {
     fn test_openai_skips_internal_options_in_body() {
         let client = make_client(
             "openai",
-            vec![
-                ("api_key", BexExternalValue::String("sk-secret".into())),
-                (
-                    "base_url",
-                    BexExternalValue::String("https://api.openai.com".into()),
-                ),
-                ("model", BexExternalValue::String("gpt-4o".into())),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                api_key: Some("sk-secret".to_string()),
+                base_url: Some("https://api.openai.com".to_string()),
+                model: Some("gpt-4o".to_string()),
+                ..Default::default()
+            },
         );
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
@@ -479,14 +470,15 @@ mod tests {
     fn test_anthropic_claude_system_extracted() {
         let client = make_client(
             "anthropic",
-            vec![
-                (
-                    "model",
-                    BexExternalValue::String("claude-3-haiku-20240307".into()),
-                ),
-                ("api_key", BexExternalValue::String("sk-ant-test".into())),
-                ("max_tokens", BexExternalValue::Int(1000)),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-3-haiku-20240307".to_string()),
+                api_key: Some("sk-ant-test".to_string()),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(1000),
+                )]),
+                ..Default::default()
+            },
         );
 
         let prompt = Arc::new(PromptAst::Vec(vec![
@@ -532,13 +524,14 @@ mod tests {
     fn test_anthropic_no_system_message() {
         let client = make_client(
             "anthropic",
-            vec![
-                (
-                    "model",
-                    BexExternalValue::String("claude-3-haiku-20240307".into()),
-                ),
-                ("max_tokens", BexExternalValue::Int(1000)),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-3-haiku-20240307".to_string()),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(1000),
+                )]),
+                ..Default::default()
+            },
         );
         let prompt = msg("user", "Hello");
         let result = build_request(&client, prompt).unwrap();
@@ -557,35 +550,25 @@ mod tests {
 
         let client = make_client(
             "anthropic",
-            vec![
-                (
-                    "model",
-                    BexExternalValue::String("claude-3-haiku-20240307".into()),
-                ),
-                ("api_key", BexExternalValue::String("sk-ant-test".into())),
-                ("max_tokens", BexExternalValue::Int(500)),
-                (
-                    "allowed_role_metadata",
-                    BexExternalValue::Array {
-                        element_type: Ty::String {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        items: vec![BexExternalValue::String("cache_control".into())],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-3-haiku-20240307".to_string()),
+                api_key: Some("sk-ant-test".to_string()),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(500),
+                )]),
+                allowed_role_metadata: Some(BexExternalValue::Array {
+                    element_type: Ty::String {
+                        attr: baml_type::TyAttr::default(),
                     },
-                ),
-                (
-                    "headers",
-                    BexExternalValue::Map {
-                        key_type: Ty::String {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        value_type: Ty::String {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        entries: header_entries,
-                    },
-                ),
-            ],
+                    items: vec![BexExternalValue::String("cache_control".into())],
+                }),
+                headers: IndexMap::from([(
+                    "anthropic-beta".to_string(),
+                    "prompt-caching-2024-07-31".into(),
+                )]),
+                ..Default::default()
+            },
         );
 
         let prompt = msg("user", "hello");
@@ -605,10 +588,10 @@ mod tests {
     fn test_anthropic_custom_version() {
         let client = make_client(
             "anthropic",
-            vec![(
-                "anthropic_version",
-                BexExternalValue::String("2024-01-01".into()),
-            )],
+            crate::baml_std::PrimitiveClientOptions {
+                anthropic_version: Some("2024-01-01".to_string()),
+                ..Default::default()
+            },
         );
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
@@ -620,7 +603,7 @@ mod tests {
 
     #[test]
     fn test_anthropic_default_version() {
-        let client = make_client("anthropic", vec![]);
+        let client = make_client("anthropic", Default::default());
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
         assert_eq!(
@@ -633,13 +616,14 @@ mod tests {
     fn test_anthropic_forwards_max_tokens() {
         let client = make_client(
             "anthropic",
-            vec![
-                (
-                    "model",
-                    BexExternalValue::String("claude-3-haiku-20240307".into()),
-                ),
-                ("max_tokens", BexExternalValue::Int(1000)),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-3-haiku-20240307".to_string()),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(1000),
+                )]),
+                ..Default::default()
+            },
         );
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();

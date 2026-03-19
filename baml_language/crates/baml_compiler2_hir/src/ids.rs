@@ -29,6 +29,8 @@ pub struct GeneratorMarker;
 pub struct TemplateStringMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RetryPolicyMarker;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LetMarker;
 
 // ── LocalItemId ──────────────────────────────────────────────────────────────
 
@@ -100,4 +102,5 @@ pub enum ItemKind {
     Test,
     TemplateString,
     RetryPolicy,
+    Let,
 }

@@ -59,8 +59,8 @@ pub fn execute_render_prompt_from_owned(
         client: jinja::RenderContextClient {
             name: client.name.clone(),
             provider: client.provider.clone(),
-            default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles.clone(),
+            default_role: client.default_role(),
+            allowed_roles: client.allowed_roles(),
         },
         output_format: types::OutputFormatContent::new(bex_external_types::Ty::String {
             attr: baml_type::TyAttr::default(),
@@ -105,7 +105,7 @@ pub fn execute_parse_response_from_owned(
     )
     .map_err(|e| LlmOpError::ParseResponseError(e.to_string()))?;
 
-    if !is_finish_reason_allowed(&client.options, response.finish_reason_raw.as_deref()) {
+    if !client.is_finish_reason_allowed(response.finish_reason_raw.as_deref()) {
         return Err(LlmOpError::ParseResponseError(format!(
             "Finish reason not allowed: {}",
             response.finish_reason_raw.as_deref().unwrap_or("unknown")
@@ -119,26 +119,6 @@ pub fn execute_parse_response_from_owned(
         _ => Err(LlmOpError::NotImplemented {
             message: format!("Unsupported return type: {return_type:?}"),
         }),
-    }
-}
-
-fn is_finish_reason_allowed(
-    options: &indexmap::IndexMap<String, bex_external_types::BexExternalValue>,
-    reason: Option<&str>,
-) -> bool {
-    let allow = extract_string_list(options.get("finish_reason_allow_list"));
-    let deny = extract_string_list(options.get("finish_reason_deny_list"));
-
-    match (allow, deny) {
-        (Some(allow_list), None) => match reason {
-            None => true,
-            Some(r) => allow_list.iter().any(|v| v.eq_ignore_ascii_case(r)),
-        },
-        (None, Some(deny_list)) => match reason {
-            None => true,
-            Some(r) => !deny_list.iter().any(|v| v.eq_ignore_ascii_case(r)),
-        },
-        _ => true,
     }
 }
 
@@ -168,13 +148,11 @@ mod tests {
     use crate::baml_std;
 
     fn make_client_with_options(
-        options: indexmap::IndexMap<String, BexExternalValue>,
+        options: baml_std::PrimitiveClientOptions,
     ) -> baml_std::PrimitiveClient {
         baml_std::PrimitiveClient {
             name: "TestClient".to_string(),
             provider: "openai".to_string(),
-            default_role: "user".to_string(),
-            allowed_roles: vec!["user".to_string(), "assistant".to_string()],
             options,
         }
     }
@@ -207,12 +185,10 @@ mod tests {
             }]
         }"#;
 
-        let mut allow_options = indexmap::IndexMap::new();
-        allow_options.insert(
-            "finish_reason_allow_list".to_string(),
-            single_string_array("stop"),
-        );
-        let allow_client = make_client_with_options(allow_options);
+        let allow_client = make_client_with_options(baml_std::PrimitiveClientOptions {
+            allowed_roles_allow_list: Some(vec!["stop".to_string()]),
+            ..Default::default()
+        });
 
         // "stop" is allowed.
         let allowed = execute_parse_response_from_owned(
@@ -234,12 +210,10 @@ mod tests {
         );
         assert!(blocked.is_err());
 
-        let mut deny_options = indexmap::IndexMap::new();
-        deny_options.insert(
-            "finish_reason_deny_list".to_string(),
-            single_string_array("length"),
-        );
-        let deny_client = make_client_with_options(deny_options);
+        let deny_client = make_client_with_options(baml_std::PrimitiveClientOptions {
+            allowed_roles_deny_list: Some(vec!["length".to_string()]),
+            ..Default::default()
+        });
 
         // "length" is rejected by deny list.
         let denied = execute_parse_response_from_owned(

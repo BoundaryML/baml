@@ -14,16 +14,18 @@ pub use analysis::OptLevel;
 use baml_base::Span;
 use baml_compiler2_ast::TypeExpr;
 use baml_compiler2_hir::{
-    compiler2_all_files, file_item_tree,
+    compiler2_all_files,
+    contributions::Definition,
+    file_item_tree,
     file_package::file_package,
-    loc::FunctionLoc,
+    loc::{FunctionLoc, LetLoc},
     package::{PackageId, package_items},
 };
-use baml_compiler2_mir::{BuiltinKind, MirFunctionKind, lower_function};
+use baml_compiler2_mir::{BuiltinKind, MirFunctionKind, def_to_item_ref, lower_function};
 use baml_type::TyAttr;
 use bex_vm_types::{
     Bytecode, Class, ClassField, ClientBuildMeta, ClientBuildType, ConstValue, Enum, EnumVariant,
-    Function, FunctionKind, FunctionMeta, Object, ObjectIndex, ObjectPool, Program,
+    Function, FunctionKind, FunctionMeta, Instruction, Object, ObjectIndex, ObjectPool, Program,
     RetryPolicyMeta,
 };
 pub(crate) use emit::compile_mir_function;
@@ -91,7 +93,10 @@ pub fn generate_project_bytecode(
     let all_files = compiler2_all_files(db);
 
     // --- Pass 1: Build globals map (function name -> global index) ---
-    // We iterate all files, get their functions, and build a stable index map.
+    // We iterate all files, get their functions and let bindings, and build a
+    // stable index map. Let bindings are allocated global slots alongside
+    // functions; their initial value is ConstValue::Null (overwritten by $init
+    // at load time via StoreGlobal).
     let mut globals: HashMap<String, usize> = HashMap::new();
     let mut global_idx = 0usize;
 
@@ -101,6 +106,15 @@ pub fn generate_project_bytecode(
             let func_loc = FunctionLoc::new(db, *file, *local_id);
             let mir = lower_function(db, func_loc);
             let fq_name = mir.item_ref.to_string();
+            globals.entry(fq_name).or_insert_with(|| {
+                let idx = global_idx;
+                global_idx += 1;
+                idx
+            });
+        }
+        for (local_id, _let_data) in item_tree.lets.iter() {
+            let let_loc = LetLoc::new(db, *file, *local_id);
+            let fq_name = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
             globals.entry(fq_name).or_insert_with(|| {
                 let idx = global_idx;
                 global_idx += 1;
@@ -303,7 +317,9 @@ pub fn generate_project_bytecode(
             compiled_fn.param_types = param_types;
 
             // Set LLM-specific body_meta if this is an LLM function
-            if let Some(llm_meta) = &func_data.llm_meta {
+            if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
+                &func_data.declarative_meta
+            {
                 if let (Some(client), Some(prompt)) = (&llm_meta.client, &llm_meta.prompt) {
                     compiled_fn.body_meta = Some(FunctionMeta::Llm {
                         prompt_template: prompt.text.clone(),
@@ -319,6 +335,75 @@ pub fn generate_project_bytecode(
             program.function_global_indices.insert(fq_name, gi);
             program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
         }
+    }
+
+    // --- Pass 4.5: Populate let-binding global slots and synthesize $init ---
+    // Collect all let bindings grouped by package.
+    {
+        let mut pkg_lets: HashMap<String, Vec<(String, LetLoc, baml_base::SourceFile)>> =
+            HashMap::new();
+        for file in &all_files {
+            let item_tree = file_item_tree(db, *file);
+            let pkg_info = file_package(db, *file);
+            for (local_id, _let_data) in item_tree.lets.iter() {
+                let let_loc = LetLoc::new(db, *file, *local_id);
+                let fq_name = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
+                // Ensure the global slot for this let binding is populated with Null.
+                if let Some(&slot) = globals.get(&fq_name) {
+                    while program.globals.len() <= slot {
+                        program.add_global(ConstValue::Null);
+                    }
+                }
+                pkg_lets
+                    .entry(pkg_info.package.to_string())
+                    .or_default()
+                    .push((fq_name, let_loc, *file));
+            }
+        }
+
+        // Track package init order for runtime.
+        let mut package_init_order: Vec<String> = Vec::new();
+
+        for (pkg_name, let_bindings) in &pkg_lets {
+            if let_bindings.is_empty() {
+                continue;
+            }
+
+            // Topologically sort the bindings (detect circular deps).
+            let sorted_bindings = topological_sort_lets(db, let_bindings)?;
+
+            // Compile all let-binding initializers into a single $init function.
+            let init_fn = compile_init_function(
+                db,
+                &sorted_bindings,
+                &globals,
+                &classes,
+                &class_object_indices,
+                &enum_object_indices,
+                &enum_variants,
+                &mut program,
+            )?;
+
+            let init_fq_name = if pkg_name == "user" {
+                "$init".to_string()
+            } else {
+                format!("{pkg_name}.$init")
+            };
+
+            let fn_obj_idx = program.add_object(Object::Function(Box::new(init_fn)));
+            program
+                .function_indices
+                .insert(init_fq_name.clone(), fn_obj_idx);
+            let gi = program.globals.len();
+            program
+                .function_global_indices
+                .insert(init_fq_name.clone(), gi);
+            program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
+
+            package_init_order.push(init_fq_name);
+        }
+
+        program.package_init_order = package_init_order;
     }
 
     // --- Pass 5: Template string macros ---
@@ -571,4 +656,119 @@ fn build_line_starts(text: &str) -> Vec<u32> {
         }
     }
     starts
+}
+
+// ─── Let-binding helpers ─────────────────────────────────────────────────────
+
+/// Topologically sort let bindings by their dependencies.
+///
+/// Walks each binding's `ExprBody` to find `Expr::Path` references to other
+/// let bindings in the same package, then runs Kahn's algorithm. Returns an
+/// error if circular dependencies are detected.
+fn topological_sort_lets<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    bindings: &[(String, LetLoc<'db>, baml_base::SourceFile)],
+) -> Result<Vec<(String, LetLoc<'db>, baml_base::SourceFile)>, LoweringError> {
+    use std::collections::{HashSet, VecDeque};
+
+    // Build adjacency list: binding[i] depends on (needs) binding[j]
+    let mut deps: Vec<HashSet<usize>> = vec![HashSet::new(); bindings.len()];
+    for (i, (_name, let_loc, _file)) in bindings.iter().enumerate() {
+        let body = baml_compiler2_hir::body::let_body(db, *let_loc);
+        if let baml_compiler2_hir::body::LetBody::Expr(expr_body) = body.as_ref() {
+            // Walk all expressions to find path references to other let bindings.
+            for (_expr_id, expr) in expr_body.exprs.iter() {
+                if let baml_compiler2_ast::Expr::Path(segments) = expr {
+                    // Single-segment paths might reference another let binding.
+                    if segments.len() == 1 {
+                        let ref_name_short = segments[0].as_str();
+                        for (j, (fq, _, _)) in bindings.iter().enumerate() {
+                            if j != i && fq.ends_with(&format!(".{ref_name_short}")) {
+                                deps[i].insert(j);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Kahn's algorithm: if A depends on B, B must come first.
+    // Build reverse edges (used_by) and in-degree (dep count).
+    let mut in_degree: Vec<usize> = deps.iter().map(|d| d.len()).collect();
+    let mut reverse_deps: Vec<Vec<usize>> = vec![Vec::new(); bindings.len()];
+    for (i, dep_set) in deps.iter().enumerate() {
+        for &j in dep_set {
+            reverse_deps[j].push(i);
+        }
+    }
+
+    let mut queue: VecDeque<usize> = VecDeque::new();
+    for (i, &deg) in in_degree.iter().enumerate() {
+        if deg == 0 {
+            queue.push_back(i);
+        }
+    }
+
+    let mut sorted = Vec::with_capacity(bindings.len());
+    while let Some(node) = queue.pop_front() {
+        sorted.push(node);
+        for &dependent in &reverse_deps[node] {
+            in_degree[dependent] -= 1;
+            if in_degree[dependent] == 0 {
+                queue.push_back(dependent);
+            }
+        }
+    }
+
+    if sorted.len() != bindings.len() {
+        return Err(LoweringError::Internal(
+            "Circular dependency detected among top-level let bindings".to_string(),
+        ));
+    }
+
+    Ok(sorted.into_iter().map(|i| bindings[i].clone()).collect())
+}
+
+/// Compile the `$init` function that evaluates all let-binding initializers
+/// in dependency order.
+///
+/// Phase 2 produces an empty skeleton `$init` function — the slot allocation
+/// framework is validated here. Phase 3 will add actual `StoreGlobal`
+/// instructions for each let-binding initializer.
+fn compile_init_function<'db>(
+    _db: &'db dyn baml_compiler2_mir::Db,
+    _sorted_bindings: &[(String, LetLoc<'db>, baml_base::SourceFile)],
+    _globals: &HashMap<String, usize>,
+    _classes: &HashMap<String, HashMap<String, usize>>,
+    _class_object_indices: &HashMap<String, usize>,
+    _enum_object_indices: &HashMap<String, usize>,
+    _enum_variants: &HashMap<String, HashMap<String, usize>>,
+    _program: &mut Program,
+) -> Result<Function, LoweringError> {
+    // Phase 2 skeleton: emit an empty $init that just returns.
+    // Phase 3 will replace this with actual StoreGlobal sequences for each
+    // let-binding initializer.
+    let mut bytecode = Bytecode::default();
+    bytecode.instructions.push(Instruction::Return);
+
+    Ok(Function {
+        name: "$init".to_string(),
+        arity: 0,
+        real_local_count: 0,
+        bytecode,
+        kind: FunctionKind::Bytecode,
+        local_names: Vec::new(),
+        debug_locals: Vec::new(),
+        span: baml_base::Span::fake(),
+        block_notifications: Vec::new(),
+        viz_nodes: Vec::new(),
+        return_type: baml_type::Ty::Null {
+            attr: baml_type::TyAttr::default(),
+        },
+        param_names: Vec::new(),
+        param_types: Vec::new(),
+        body_meta: None,
+        trace: false,
+    })
 }

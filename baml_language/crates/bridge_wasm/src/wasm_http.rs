@@ -142,6 +142,7 @@ impl IoClassHttpResponse for WasmHttp {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         response: io::owned::http::Response,
+        _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         let registry = Arc::clone(&self.registry);
         let body = response

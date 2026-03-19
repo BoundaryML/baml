@@ -74,7 +74,8 @@ pub fn lower_type_expr_in_ns(
                     Definition::Class(_) => Ty::Class(qualify_def(db, def, short)),
                     Definition::Enum(_) => Ty::Enum(qualify_def(db, def, short)),
                     Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, short)),
-                    _ => Ty::Unknown,
+                    // Let bindings are values, not types — produce Unknown in a type position.
+                    Definition::Let(_) | _ => Ty::Unknown,
                 }
             } else {
                 let name = segments

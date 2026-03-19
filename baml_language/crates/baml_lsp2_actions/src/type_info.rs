@@ -305,6 +305,15 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
                 kind: "retry_policy",
             })
         }
+
+        Definition::Let(loc) => {
+            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+            let data = &item_tree[loc.id(db)];
+            Some(TypeInfo::OtherItem {
+                name: data.name.as_str().to_string(),
+                kind: "let",
+            })
+        }
     }
 }
 

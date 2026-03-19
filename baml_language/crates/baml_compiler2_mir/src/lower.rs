@@ -175,6 +175,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
         Definition::Generator(loc) => item_tree[loc.id(db)].name.clone(),
         Definition::Test(loc) => item_tree[loc.id(db)].name.clone(),
         Definition::RetryPolicy(loc) => item_tree[loc.id(db)].name.clone(),
+        Definition::Let(loc) => item_tree[loc.id(db)].name.clone(),
     };
 
     // For function definitions, check if this is a class method by searching
