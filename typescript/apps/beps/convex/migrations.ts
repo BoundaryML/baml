@@ -10,6 +10,8 @@ import { mutation } from "./_generated/server";
  *
  * Run this migration ONCE after deploying the schema changes:
  *   npx convex run migrations:migrateUserRoles
+ *
+ * Returns a summary of the migration results.
  */
 export const migrateUserRoles = mutation({
   args: {},
