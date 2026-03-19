@@ -1,0 +1,13 @@
+flowchart TD
+  subgraph sg0["Pipeline"]
+    direction TB
+    n0["Step A"]
+    n1["Step B"]
+    n2["Step C"]
+  end
+  n0 --> n1
+  n1 --> n2
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/duplicate_function_calls.baml","start_line":2,"start":4,"end_line":2,"end":15},"n1":{"file_path":"tests/validation_files/headers/duplicate_function_calls.baml","start_line":5,"start":4,"end_line":5,"end":15},"n2":{"file_path":"tests/validation_files/headers/duplicate_function_calls.baml","start_line":8,"start":4,"end_line":8,"end":15}}
+  click n0 call bamlMermaidNodeClick() "Go to source"
+  click n1 call bamlMermaidNodeClick() "Go to source"
+  click n2 call bamlMermaidNodeClick() "Go to source"

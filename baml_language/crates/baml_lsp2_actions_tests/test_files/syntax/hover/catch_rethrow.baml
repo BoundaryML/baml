@@ -1,0 +1,42 @@
+class AuthenticationError {}
+class AuthorizationError {}
+
+type Errors = AuthenticationError | AuthorizationError
+
+function server<[CURSOR](req: int) -> bool {
+  {
+    getProfile(req)
+  } catch (e) {
+    AuthenticationError => { throw e }
+    _ => { false }
+  }
+}
+
+function getProfile(req: int) -> bool throws Errors {
+  return true
+}
+
+//----
+//- diagnostics
+// Error: unreachable arm
+//     ╭─[ hover_catch_rethrow.baml:10:27 ]
+//     │
+//  10 │     AuthenticationError => { throw e }
+//     │                           ──────┬─────  
+//     │                                 ╰─────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: extraneous throws declaration: Errors
+//     ╭─[ hover_catch_rethrow.baml:15:45 ]
+//     │
+//  15 │ function getProfile(req: int) -> bool throws Errors {
+//     │                                             ───┬───  
+//     │                                                ╰───── extraneous throws declaration: Errors
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+//
+//- on_hover expressions
+// hover at hover_catch_rethrow.baml:6:16
+// No hover content
