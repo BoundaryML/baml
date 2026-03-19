@@ -117,7 +117,9 @@ jobs:
     name: "cargo test (windows)"
     runs-on: windows-latest
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 30
+    # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
+    # Right now it needs to download our repo every time which is very slow
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -280,7 +282,9 @@ jobs:
     name: "size-gate (windows)"
     runs-on: windows-latest
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 25
+    # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
+    # Right now it needs to download our repo every time which is very slow
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
