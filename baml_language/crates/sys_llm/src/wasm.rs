@@ -21,7 +21,7 @@ impl TimeSource for BrowserTime {
     fn now(&self) -> SystemTime {
         let offset = web_time::SystemTime::now()
             .duration_since(web_time::UNIX_EPOCH)
-            .unwrap();
+            .unwrap_or_default();
         std::time::UNIX_EPOCH + offset
     }
 }

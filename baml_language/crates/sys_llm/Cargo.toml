@@ -21,7 +21,6 @@ aws-smithy-runtime-api = { workspace = true }
 aws-smithy-types = { workspace = true }
 aws-types = { workspace = true }
 base64 = { workspace = true }
-futures = { workspace = true }
 indexmap = { workspace = true }
 minijinja = { workspace = true }
 minijinja-contrib = { workspace = true }
@@ -30,7 +29,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = [ "rt" ] }
+tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-config = { workspace = true, features = [ "rt-tokio", "credentials-process", "sso" ] }

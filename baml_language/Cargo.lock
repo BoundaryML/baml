@@ -234,7 +234,7 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 [[package]]
 name = "aws-config"
 version = "1.8.15"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -263,7 +263,7 @@ dependencies = [
 [[package]]
 name = "aws-credential-types"
 version = "1.2.14"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -296,7 +296,7 @@ dependencies = [
 [[package]]
 name = "aws-runtime"
 version = "1.7.2"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -321,7 +321,7 @@ dependencies = [
 [[package]]
 name = "aws-sdk-bedrockruntime"
 version = "1.128.0"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -347,7 +347,7 @@ dependencies = [
 [[package]]
 name = "aws-sdk-sso"
 version = "1.97.0"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -370,7 +370,7 @@ dependencies = [
 [[package]]
 name = "aws-sdk-ssooidc"
 version = "1.99.0"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -393,7 +393,7 @@ dependencies = [
 [[package]]
 name = "aws-sdk-sts"
 version = "1.101.0"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -417,7 +417,7 @@ dependencies = [
 [[package]]
 name = "aws-sigv4"
 version = "1.4.2"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -439,7 +439,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-async"
 version = "1.2.14"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -449,7 +449,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-eventstream"
 version = "0.60.20"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-smithy-types",
  "bytes",
@@ -459,7 +459,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-http"
 version = "0.63.6"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-smithy-eventstream",
  "aws-smithy-runtime-api",
@@ -480,7 +480,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-json"
 version = "0.62.5"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-smithy-types",
 ]
@@ -488,7 +488,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-observability"
 version = "0.2.6"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-smithy-runtime-api",
 ]
@@ -496,7 +496,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-query"
 version = "0.60.15"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-smithy-types",
  "urlencoding",
@@ -505,7 +505,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-runtime"
 version = "1.10.3"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -528,7 +528,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-runtime-api"
 version = "1.11.6"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -544,7 +544,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-types"
 version = "1.4.7"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -566,7 +566,7 @@ dependencies = [
 [[package]]
 name = "aws-smithy-xml"
 version = "0.60.15"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "xmlparser",
 ]
@@ -574,7 +574,7 @@ dependencies = [
 [[package]]
 name = "aws-types"
 version = "1.3.14"
-source = "git+https://github.com/boundaryml/aws-sdk-rust#28d4f67bac1214320320905c1f6908ea32b6b0ac"
+source = "git+https://github.com/boundaryml/aws-sdk-rust.git?rev=28d4f67bac1214320320905c1f6908ea32b6b0ac#28d4f67bac1214320320905c1f6908ea32b6b0ac"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",
@@ -5120,7 +5120,6 @@ dependencies = [
  "bex_external_types",
  "bex_heap",
  "bex_vm_types",
- "futures",
  "futures-timer",
  "indexmap",
  "minijinja",

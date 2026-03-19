@@ -39,10 +39,8 @@ fn now() -> SystemTime {
     }
     #[cfg(target_arch = "wasm32")]
     {
-        let offset = web_time::SystemTime::now()
-            .duration_since(web_time::UNIX_EPOCH)
-            .unwrap();
-        std::time::UNIX_EPOCH + offset
+        use aws_smithy_async::time::TimeSource;
+        crate::wasm::BrowserTime.now()
     }
 }
 
@@ -71,7 +69,7 @@ mod native_providers {
     impl ProvideEnv for BexEnvProvider {
         fn get(&self, k: &str) -> Result<String, std::env::VarError> {
             let fut = (self.env_read_fn)(k.to_string());
-            match futures::executor::block_on(fut) {
+            match tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(fut)) {
                 Ok(Some(v)) => Ok(v),
                 Ok(None) | Err(_) => Err(std::env::VarError::NotPresent),
             }
@@ -110,7 +108,7 @@ mod native_providers {
             _path: &std::path::Path,
             _contents: &[u8],
         ) -> std::pin::Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + '_>> {
-            unreachable!()
+            Box::pin(async { Err(std::io::Error::other("not implemented")) })
         }
     }
 }

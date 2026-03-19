@@ -89,14 +89,14 @@ arboard = "3.4"
 ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
-aws-config = { git = "https://github.com/boundaryml/aws-sdk-rust", default-features = false, features = [ "behavior-version-latest" ] }
-aws-credential-types = { git = "https://github.com/boundaryml/aws-sdk-rust" }
-aws-sdk-bedrockruntime = { git = "https://github.com/boundaryml/aws-sdk-rust", default-features = false, features = [ "behavior-version-latest" ] }
-aws-sigv4 = { git = "https://github.com/boundaryml/aws-sdk-rust", features = [ "sign-http" ] }
-aws-smithy-async = { git = "https://github.com/boundaryml/aws-sdk-rust" }
-aws-smithy-runtime-api = { git = "https://github.com/boundaryml/aws-sdk-rust", features = [ "client" ] }
-aws-smithy-types = { git = "https://github.com/boundaryml/aws-sdk-rust" }
-aws-types = { git = "https://github.com/boundaryml/aws-sdk-rust" }
+aws-config = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", default-features = false, features = [ "behavior-version-latest" ] }
+aws-credential-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
+aws-sdk-bedrockruntime = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", default-features = false, features = [ "behavior-version-latest" ] }
+aws-sigv4 = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", features = [ "sign-http" ] }
+aws-smithy-async = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
+aws-smithy-runtime-api = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", features = [ "client" ] }
+aws-smithy-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
+aws-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
 axum = { version = "0.8.4", features = [ "ws" ] }
 cargo_metadata = { version = "0.23.1" }
 cbindgen = "0.28.0"
