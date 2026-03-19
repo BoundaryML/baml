@@ -15,7 +15,8 @@ import { Id } from "../../../convex/_generated/dataModel";
 interface User {
   _id: Id<"users">;
   name: string;
-  role: "bdfl" | "team" | "unset";
+  // Includes both new roles and legacy roles (for backwards compatibility)
+  role: "bdfl" | "team" | "unset" | "admin" | "shepherd" | "member";
   avatarUrl?: string;
   boundaryEmail?: string;
   slackUserId?: string;
@@ -123,8 +124,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setStoredUserId(null);
   };
 
-  // Check if user has management permissions (BDFL or Team)
-  const hasManagementPermissions = user ? (user.role === "bdfl" || user.role === "team") : false;
+  // Check if user has management permissions (BDFL or Team, including legacy roles)
+  const hasManagementPermissions = user ? (
+    user.role === "bdfl" || user.role === "team" ||
+    user.role === "admin" || user.role === "shepherd"
+  ) : false;
 
   return (
     <UserContext.Provider
