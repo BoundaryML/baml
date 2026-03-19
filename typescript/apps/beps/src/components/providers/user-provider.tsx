@@ -15,8 +15,11 @@ import { Id } from "../../../convex/_generated/dataModel";
 interface User {
   _id: Id<"users">;
   name: string;
-  role: "admin" | "shepherd" | "member";
+  role: "bdfl" | "team" | "unset";
   avatarUrl?: string;
+  boundaryEmail?: string;
+  slackUserId?: string;
+  isSpecialAccount?: boolean;
   createdAt: number;
 }
 
@@ -31,6 +34,7 @@ interface UserContextType {
   user: User | null;
   userId: Id<"users"> | null;
   isLoading: boolean;
+  hasManagementPermissions: boolean;
   login: (name: string, passkey: string) => Promise<void>;
   loginWithGitHub: (userData: GitHubUserData) => Promise<void>;
   logout: () => void;
@@ -119,12 +123,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setStoredUserId(null);
   };
 
+  // Check if user has management permissions (BDFL or Team)
+  const hasManagementPermissions = user ? (user.role === "bdfl" || user.role === "team") : false;
+
   return (
     <UserContext.Provider
       value={{
         user: user ?? null,
         userId: storedUserId,
         isLoading: !isHydrated || (storedUserId !== null && user === undefined),
+        hasManagementPermissions,
         login,
         loginWithGitHub,
         logout,
