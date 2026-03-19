@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { codeToHtml } from "shiki";
 import { SHIKI_THEMES } from "@/lib/shiki-themes";
+import { Copy, Check } from "lucide-react";
 
 interface ShikiCodeBlockProps {
   code: string;
@@ -54,6 +55,35 @@ const languageDisplayNames: Record<string, string> = {
 
 function getDisplayName(lang: string): string {
   return languageDisplayNames[lang] || lang.charAt(0).toUpperCase() + lang.slice(1);
+}
+
+function CopyButton({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy code:", err);
+    }
+  }, [code]);
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1.5 rounded-md hover:bg-muted-foreground/20 transition-colors text-muted-foreground hover:text-foreground"
+      title={copied ? "Copied!" : "Copy code"}
+      aria-label={copied ? "Copied!" : "Copy code"}
+    >
+      {copied ? (
+        <Check className="h-4 w-4 text-green-500" />
+      ) : (
+        <Copy className="h-4 w-4" />
+      )}
+    </button>
+  );
 }
 
 export function ShikiCodeBlock({
@@ -117,12 +147,17 @@ export function ShikiCodeBlock({
   if (isLoading) {
     const lines = code.split("\n");
     return (
-      <div className="bep-shiki-code not-prose my-5 rounded-xl border border-code-border overflow-hidden">
-        {showLanguageBar && (
-          <div className="bg-muted border-b border-code-border px-4 py-2 text-xs font-medium text-muted-foreground">
-            {getDisplayName(normalizedLang)}
-          </div>
-        )}
+      <div className="bep-shiki-code not-prose my-5 rounded-xl border border-code-border overflow-hidden group/codeblock">
+        <div className="bg-muted border-b border-code-border px-4 py-1.5 flex items-center justify-between">
+          {showLanguageBar ? (
+            <span className="text-xs font-medium text-muted-foreground">
+              {getDisplayName(normalizedLang)}
+            </span>
+          ) : (
+            <span />
+          )}
+          <CopyButton code={code} />
+        </div>
         <div className="bg-code-bg overflow-x-auto">
           <pre className="p-4 m-0">
             <code className="font-mono text-[13px] leading-5 text-foreground">
@@ -144,12 +179,17 @@ export function ShikiCodeBlock({
   }
 
   return (
-    <div className="bep-shiki-code not-prose my-5 rounded-xl border border-code-border overflow-hidden">
-      {showLanguageBar && (
-        <div className="bg-muted border-b border-code-border px-4 py-2 text-xs font-medium text-muted-foreground">
-          {getDisplayName(normalizedLang)}
-        </div>
-      )}
+    <div className="bep-shiki-code not-prose my-5 rounded-xl border border-code-border overflow-hidden group/codeblock">
+      <div className="bg-muted border-b border-code-border px-4 py-1.5 flex items-center justify-between">
+        {showLanguageBar ? (
+          <span className="text-xs font-medium text-muted-foreground">
+            {getDisplayName(normalizedLang)}
+          </span>
+        ) : (
+          <span />
+        )}
+        <CopyButton code={code} />
+      </div>
       <div
         className={`
           [&_pre]:m-0
