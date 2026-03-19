@@ -34,6 +34,10 @@ pub enum PlaygroundNotification {
         function_name: String,
         graph: Option<serde_json::Value>,
     },
+    #[serde(rename_all = "camelCase")]
+    CursorContext {
+        context: serde_json::Value,
+    },
 }
 
 impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
@@ -65,6 +69,9 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                 function_name,
                 graph,
             },
+            bex_project::PlaygroundNotification::CursorContext { context } => {
+                PlaygroundNotification::CursorContext { context }
+            }
         }
     }
 }

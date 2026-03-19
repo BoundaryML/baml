@@ -24,14 +24,16 @@ type WsOutMessage =
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
   | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string }
-  | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null };
+  | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null }
+  | { type: 'cursorContext'; context: unknown };
 
 /** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
 type WsInMessage =
   | { type: 'callFunction'; id: number; project: string; name: string; argsProto: string }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
   | { type: 'requestState' }
-  | { type: 'requestControlFlowGraph'; project: string; functionName: string };
+  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
+  | { type: 'cursorPosition'; file: string; line: number; column: number };
 
 const MAX_RECONNECT_DELAY = 5000;
 
@@ -186,6 +188,13 @@ export class WebSocketRuntimePort implements RuntimePort {
           project: msg.project,
           functionName: msg.functionName,
         };
+      case 'cursorPosition':
+        return {
+          type: 'cursorPosition',
+          file: msg.file,
+          line: msg.line,
+          column: msg.column,
+        };
       case 'clearHandles':
         return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':
@@ -266,6 +275,11 @@ export class WebSocketRuntimePort implements RuntimePort {
           type: 'controlFlowGraphResult',
           functionName: raw.functionName,
           graph: (raw.graph ?? null) as import('../worker-protocol').ControlFlowGraph | null,
+        };
+      case 'cursorContext':
+        return {
+          type: 'cursorContext',
+          context: raw.context as import('../worker-protocol').CursorContext,
         };
       default:
         return null;

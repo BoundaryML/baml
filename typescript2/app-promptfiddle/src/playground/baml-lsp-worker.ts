@@ -244,7 +244,25 @@ export function mapsToRecordsDeep<T>(input: T): T {
 
 
 function onPlaygroundNotification(notification: PlaygroundNotification): void {
-  postOut({ type: "playgroundNotification", notification });
+  // Request-response messages get unwrapped to top-level WorkerOutMessage.
+  // Only unsolicited push notifications stay wrapped in playgroundNotification.
+  switch (notification.type) {
+    case "controlFlowGraphResult":
+      postOut({
+        type: "controlFlowGraphResult",
+        functionName: notification.functionName,
+        graph: notification.graph ?? null,
+      });
+      break;
+    case "cursorContext":
+      postOut({
+        type: "cursorContext",
+        context: notification.context,
+      });
+      break;
+    default:
+      postOut({ type: "playgroundNotification", notification });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -529,6 +547,10 @@ self.onmessage = async (event: MessageEvent) => {
 
     case "requestControlFlowGraph":
       runtime?.requestControlFlowGraph(msg.project, msg.functionName);
+      return;
+
+    case "cursorPosition":
+      runtime?.handleCursorPosition(msg.file, msg.line, msg.column);
       return;
 
     case "clearHandles":

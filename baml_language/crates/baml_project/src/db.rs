@@ -17,6 +17,20 @@ use baml_db::{FileId, SourceFile};
 use baml_workspace::{Compiler2ExtraFiles, Project};
 use salsa::Setter;
 
+/// Context about what the cursor is pointing at, for playground navigation.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CursorContext {
+    pub function_name: Option<String>,
+    pub is_workflow: bool,
+    pub workflow_memberships: Vec<String>,
+    /// Raw ExprId index — matched against node.metadata.sourceExpr on the TS side.
+    /// NOT a CFG NodeId. The TS side scans the cached graph for a node whose
+    /// sourceExpr matches this value.
+    pub source_expr_id: Option<u32>,
+    pub test_name: Option<String>,
+}
+
 // Note: Builtin BAML files (like llm.baml) are loaded in set_project_root().
 // The paths are defined in `baml_builtins::baml_sources::ALL`.
 
@@ -560,6 +574,342 @@ impl ProjectDatabase {
                     | baml_compiler2_hir::body::FunctionBody::Missing => None,
                 };
             }
+        }
+
+        None
+    }
+
+    /// Given a file path and byte offset, return context about what entity
+    /// the cursor is on — used by the playground for navigation.
+    pub fn playground_cursor_context(
+        &self,
+        file_path: &str,
+        byte_offset: u32,
+    ) -> CursorContext {
+        let empty = CursorContext {
+            function_name: None,
+            is_workflow: false,
+            workflow_memberships: vec![],
+            source_expr_id: None,
+            test_name: None,
+        };
+
+        // 1. Find the SourceFile matching file_path
+        let source_file = match self.find_source_file(file_path) {
+            Some(sf) => sf,
+            None => return empty,
+        };
+
+        let offset = text_size::TextSize::from(byte_offset);
+
+        // 2. Find CST token at offset
+        let token = match baml_lsp2_actions::utils::find_token_at_offset(self, source_file, offset)
+        {
+            Some(tok) => tok,
+            None => return empty,
+        };
+
+        // Only resolve WORD tokens (identifiers)
+        use baml_db::baml_compiler_syntax::SyntaxKind;
+        if token.kind() != SyntaxKind::WORD {
+            return empty;
+        }
+
+        let name = baml_db::Name::from(token.text().to_string());
+
+        // 3. Resolve the name at the cursor position
+        let resolved =
+            baml_compiler2_tir::resolve::resolve_name_at(self, source_file, offset, &name);
+
+        match resolved {
+            baml_compiler2_tir::resolve::ResolvedName::Item(def)
+            | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => {
+                self.cursor_context_for_definition(source_file, offset, def)
+            }
+            baml_compiler2_tir::resolve::ResolvedName::Local { .. } => {
+                // For local variables, try to find the enclosing function and source_expr_id
+                self.cursor_context_for_local(source_file, offset)
+            }
+            baml_compiler2_tir::resolve::ResolvedName::Unknown => empty,
+        }
+    }
+
+    /// Build cursor context when the cursor resolved to a top-level Definition.
+    fn cursor_context_for_definition(
+        &self,
+        source_file: SourceFile,
+        offset: text_size::TextSize,
+        def: baml_compiler2_hir::contributions::Definition<'_>,
+    ) -> CursorContext {
+        use baml_compiler2_hir::contributions::Definition;
+
+        match def {
+            Definition::Function(func_loc) => {
+                let sig = baml_compiler2_hir::signature::function_signature(self, func_loc);
+                let func_name = sig.name.to_string();
+                let body = baml_compiler2_hir::body::function_body(self, func_loc);
+                let is_workflow = matches!(
+                    body.as_ref(),
+                    baml_compiler2_hir::body::FunctionBody::Expr(_)
+                );
+
+                // Find which workflows call this function
+                let workflow_memberships = self.find_workflow_memberships(&func_name);
+
+                // Find source_expr_id if cursor is inside a function body
+                let source_expr_id =
+                    self.find_source_expr_id_at(source_file, offset);
+
+                CursorContext {
+                    function_name: Some(func_name),
+                    is_workflow,
+                    workflow_memberships,
+                    source_expr_id,
+                    test_name: None,
+                }
+            }
+            _ => {
+                // For classes, enums, etc. - no meaningful playground navigation
+                CursorContext {
+                    function_name: None,
+                    is_workflow: false,
+                    workflow_memberships: vec![],
+                    source_expr_id: None,
+                    test_name: None,
+                }
+            }
+        }
+    }
+
+    /// Build cursor context when the cursor resolved to a local variable.
+    /// We look up the enclosing function to provide context.
+    fn cursor_context_for_local(
+        &self,
+        source_file: SourceFile,
+        offset: text_size::TextSize,
+    ) -> CursorContext {
+        let (func_name, is_workflow) =
+            match self.find_enclosing_function(source_file, offset) {
+                Some((name, workflow)) => (Some(name), workflow),
+                None => (None, false),
+            };
+
+        let workflow_memberships = func_name
+            .as_ref()
+            .map(|n| self.find_workflow_memberships(n))
+            .unwrap_or_default();
+
+        let source_expr_id = self.find_source_expr_id_at(source_file, offset);
+
+        CursorContext {
+            function_name: func_name,
+            is_workflow,
+            workflow_memberships,
+            source_expr_id,
+            test_name: None,
+        }
+    }
+
+    /// Find a SourceFile by file path (matches by suffix to handle different path formats).
+    pub fn find_source_file(&self, file_path: &str) -> Option<SourceFile> {
+        // Try exact match first
+        let path = PathBuf::from(file_path);
+        if let Some(&sf) = self.file_map.get(&path) {
+            return Some(sf);
+        }
+        // Also check compiler2_file_map
+        if let Some(&sf) = self.compiler2_file_map.get(&path) {
+            return Some(sf);
+        }
+        // Fallback: match by file name suffix (handles Monaco's relative paths)
+        for (&ref stored_path, &sf) in &self.file_map {
+            if stored_path.ends_with(file_path)
+                || file_path.ends_with(stored_path.to_string_lossy().as_ref())
+            {
+                return Some(sf);
+            }
+        }
+        None
+    }
+
+    /// Find the enclosing function name and whether it's a workflow, given a cursor position.
+    fn find_enclosing_function(
+        &self,
+        source_file: SourceFile,
+        offset: text_size::TextSize,
+    ) -> Option<(String, bool)> {
+        use baml_compiler2_hir::scope::ScopeKind;
+
+        let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
+        let scope_id = index.scope_at_offset(offset);
+        let ancestors = index.ancestor_scopes(scope_id);
+
+        // Find the innermost Function scope
+        let func_scope_id = ancestors.iter().find(|&&ancestor_id| {
+            let scope = &index.scopes[ancestor_id.index() as usize];
+            matches!(scope.kind, ScopeKind::Function)
+        })?;
+
+        let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
+
+        // Match against item tree functions by span
+        let item_tree = &index.item_tree;
+        for (local_id, func_data) in item_tree.functions.iter() {
+            if func_data.span == func_scope_range {
+                let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
+                    self,
+                    source_file,
+                    *local_id,
+                );
+                let sig = baml_compiler2_hir::signature::function_signature(self, func_loc);
+                let body = baml_compiler2_hir::body::function_body(self, func_loc);
+                let is_workflow = matches!(
+                    body.as_ref(),
+                    baml_compiler2_hir::body::FunctionBody::Expr(_)
+                );
+                return Some((sig.name.to_string(), is_workflow));
+            }
+        }
+        None
+    }
+
+    /// Find workflows that call the given function by scanning all function bodies.
+    fn find_workflow_memberships(&self, target_function_name: &str) -> Vec<String> {
+        let mut memberships = Vec::new();
+
+        for source_file in self.file_map.values().copied() {
+            let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
+            for (local_id, func_data) in index.item_tree.functions.iter() {
+                let func_name = func_data.name.to_string();
+                if func_name == target_function_name {
+                    continue; // Skip self
+                }
+
+                let func_loc =
+                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+                let body = baml_compiler2_hir::body::function_body(self, func_loc);
+
+                // Only workflow (Expr) functions can call other functions
+                if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
+                    if self.expr_body_calls_function(expr_body, target_function_name) {
+                        memberships.push(func_name);
+                    }
+                }
+            }
+        }
+
+        memberships
+    }
+
+    /// Check if an expression body contains a call to a function with the given name.
+    fn expr_body_calls_function(
+        &self,
+        body: &baml_compiler2_ast::ExprBody,
+        target_name: &str,
+    ) -> bool {
+        use baml_compiler2_ast::Expr;
+        for (_id, expr) in body.exprs.iter() {
+            if let Expr::Call { callee, .. } = expr {
+                // Check if the callee is a Path containing the target name
+                if let Expr::Path(segments) = &body.exprs[*callee] {
+                    if segments.len() == 1 && segments[0].as_str() == target_name {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Find the source expression ID for the expression at the cursor offset.
+    ///
+    /// Prefers Call expressions over their sub-expressions (callee Path, arguments)
+    /// because the CFG stores Call ExprIds for call-scope nodes. Without this,
+    /// clicking on `Classify` (a Path) inside `Classify(text)` (a Call) would
+    /// return the Path's ExprId which doesn't match any CFG node.
+    fn find_source_expr_id_at(
+        &self,
+        source_file: SourceFile,
+        offset: text_size::TextSize,
+    ) -> Option<u32> {
+        use baml_compiler2_hir::scope::ScopeKind;
+
+        let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
+        let scope_id = index.scope_at_offset(offset);
+        let ancestors = index.ancestor_scopes(scope_id);
+
+        // Find the innermost Function scope
+        let func_scope_id = ancestors.iter().find(|&&ancestor_id| {
+            let scope = &index.scopes[ancestor_id.index() as usize];
+            matches!(scope.kind, ScopeKind::Function)
+        })?;
+
+        let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
+
+        // Match against item tree functions
+        let item_tree = &index.item_tree;
+        for (local_id, func_data) in item_tree.functions.iter() {
+            if func_data.span != func_scope_range {
+                continue;
+            }
+
+            let func_loc =
+                baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+            let source_map =
+                baml_compiler2_hir::body::function_body_source_map(self, func_loc)?;
+            let body = baml_compiler2_hir::body::function_body(self, func_loc);
+            let expr_body = match body.as_ref() {
+                baml_compiler2_hir::body::FunctionBody::Expr(eb) => Some(eb),
+                _ => None,
+            };
+
+            // Build a set of ExprIds that are Call expressions (these match CFG nodes).
+            let call_expr_ids: std::collections::HashSet<u32> = if let Some(eb) = expr_body {
+                eb.exprs
+                    .iter()
+                    .filter(|(_, expr)| matches!(expr, baml_compiler2_ast::Expr::Call { .. }))
+                    .map(|(id, _)| id.into_raw().into_u32())
+                    .collect()
+            } else {
+                std::collections::HashSet::new()
+            };
+
+            // Find the smallest expression span containing the offset,
+            // and separately track the smallest Call expression span.
+            let mut best: Option<(u32, text_size::TextSize)> = None;
+            let mut best_call: Option<(u32, text_size::TextSize)> = None;
+            for (idx, (_id, range)) in source_map.expr_spans.iter().enumerate() {
+                if range.contains(offset) || range.end() == offset {
+                    let span_len = range.len();
+
+                    // Track overall smallest
+                    match best {
+                        Some((_, best_len)) if span_len < best_len => {
+                            best = Some((idx as u32, span_len));
+                        }
+                        None => {
+                            best = Some((idx as u32, span_len));
+                        }
+                        _ => {}
+                    }
+
+                    // Track smallest Call expression (these match CFG nodes)
+                    if call_expr_ids.contains(&(idx as u32)) {
+                        match best_call {
+                            Some((_, best_len)) if span_len < best_len => {
+                                best_call = Some((idx as u32, span_len));
+                            }
+                            None => {
+                                best_call = Some((idx as u32, span_len));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+
+            // Prefer Call expression if one contains the cursor — these match CFG nodes.
+            return best_call.or(best).map(|(idx, _)| idx);
         }
 
         None

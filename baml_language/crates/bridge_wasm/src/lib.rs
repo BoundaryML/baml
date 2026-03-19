@@ -314,4 +314,13 @@ impl BamlWasmRuntime {
     pub fn request_control_flow_graph(&self, _project: String, function_name: &str) {
         self.bex.request_control_flow_graph(function_name);
     }
+
+    /// Handle a cursor position change from the editor.
+    ///
+    /// Computes cursor context (which function/workflow the cursor is in) and
+    /// sends it via a `CursorContext` playground notification.
+    #[wasm_bindgen(js_name = handleCursorPosition)]
+    pub fn handle_cursor_position(&self, file: &str, line: u32, column: u32) {
+        self.bex.request_cursor_context(file, line, column);
+    }
 }

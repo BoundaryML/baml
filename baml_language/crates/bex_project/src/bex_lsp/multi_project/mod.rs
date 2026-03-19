@@ -565,6 +565,61 @@ impl super::BexLsp for BexMulitProject {
             },
         );
     }
+
+    fn playground_cursor_context(
+        &self,
+        file_path: &str,
+        line: u32,
+        column: u32,
+    ) -> baml_project::CursorContext {
+        let empty = baml_project::CursorContext {
+            function_name: None,
+            is_workflow: false,
+            workflow_memberships: vec![],
+            source_expr_id: None,
+            test_name: None,
+        };
+
+        let Ok(projects) = self.projects.lock() else {
+            return empty;
+        };
+
+        for project in projects.values() {
+            let Ok(db) = project.project.db.lock() else {
+                continue;
+            };
+
+            // Convert line/column to byte offset using the source file text.
+            // The file_path from Monaco may be relative — find matching file.
+            let Some(source_file) = db.find_source_file(file_path) else {
+                continue;
+            };
+
+            let text: &str = source_file.text(&*db);
+            let position = lsp_types::Position {
+                line,
+                character: column,
+            };
+            let byte_offset = u32::try_from(
+                baml_project::position::lsp_position_to_offset(text, &position),
+            )
+            .unwrap_or(0);
+
+            return db.playground_cursor_context(file_path, byte_offset);
+        }
+
+        empty
+    }
+
+    fn request_cursor_context(&self, file_path: &str, line: u32, column: u32) {
+        let ctx = self.playground_cursor_context(file_path, line, column);
+        let ctx_json = serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null);
+        self.playground_sender.send_playground_notification(
+            crate::bex_lsp::PlaygroundNotification::CursorContext {
+                context: ctx_json,
+            },
+        );
+    }
 }
 
 pub fn new_lsp(

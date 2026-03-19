@@ -4,7 +4,8 @@ import type { WorkflowNodeData } from '../types';
 
 export const HexagonNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
   const d = data as WorkflowNodeData;
-  const borderColor = selected ? '#0ea5e9' : '#3c3c3c';
+  const isHighlighted = d.selected || selected;
+  const borderColor = isHighlighted ? '#4fc3f7' : '#3c3c3c';
 
   return (
     <>
@@ -18,7 +19,7 @@ export const HexagonNode: ComponentType<NodeProps> = memo(({ data, selected }) =
           borderRadius: 6,
           background: '#252526',
           border: `2px solid ${borderColor}`,
-          boxShadow: selected ? `0 0 0 2px #0ea5e9` : '0 1px 3px rgba(0,0,0,0.3)',
+          boxShadow: isHighlighted ? `0 0 0 3px #4fc3f7, 0 0 12px rgba(79,195,247,0.4)` : '0 1px 3px rgba(0,0,0,0.3)',
         }}
       >
         <div

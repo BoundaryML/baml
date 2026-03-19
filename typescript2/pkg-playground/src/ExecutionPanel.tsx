@@ -15,6 +15,7 @@ import { encodeCallArgs } from '@b/pkg-proto';
 import type { RuntimePort } from './runtime-port';
 import type {
   ControlFlowGraph,
+  CursorContext,
   DiagnosticEntry,
   FetchLogEntry,
   EnvVarRequest,
@@ -107,8 +108,104 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const envVarsRef = useRef(envVars);
   useEffect(() => { envVarsRef.current = envVars; }, [envVars]);
 
+  // Ref mirrors for cursor context handler (avoids stale closures in port.onMessage).
+  const selectedFnRef = useRef(selectedFn);
+  useEffect(() => { selectedFnRef.current = selectedFn; }, [selectedFn]);
+  const controlFlowGraphRef = useRef(controlFlowGraph);
+  useEffect(() => { controlFlowGraphRef.current = controlFlowGraph; }, [controlFlowGraph]);
+
   const nextCallIdRef = useRef(0);
   const pendingCallsRef = useRef<Map<number, { resolve: (v: string) => void; reject: (e: Error) => void }>>(new Map());
+
+  // ── Cursor context navigation ────────────────────────────────────────
+
+  /** Resolve a source expression ID to a graph node ID by scanning the cached CFG.
+   *  Prefers leaf nodes (otherScope, loop) over structural nodes (branchArm, branchGroup)
+   *  because a branch arm's body expression and its child call node can share the same
+   *  sourceExpr (e.g., `"positive" => Summarize(text)` — the arm body IS the call). */
+  function resolveSourceExprToNodeId(
+    graph: ControlFlowGraph | null,
+    sourceExprId: number | null,
+  ): number | null {
+    if (!graph || sourceExprId == null) return null;
+    let fallback: number | null = null;
+    for (const [, node] of Object.entries(graph.nodes)) {
+      if (node.sourceExpr === sourceExprId) {
+        // Leaf node types match CFG call/loop nodes — prefer these
+        if (node.nodeType === 'otherScope' || node.nodeType === 'loop') {
+          return node.id;
+        }
+        fallback ??= node.id;
+      }
+    }
+    return fallback;
+  }
+
+  /** Find a graph node whose label starts with `funcName(` — used when ExprId matching fails
+   *  because the cursor is on a callee Path expression but the graph stores the Call expression. */
+  function resolveNodeByFunctionName(
+    graph: ControlFlowGraph | null,
+    funcName: string,
+  ): number | null {
+    if (!graph || !funcName) return null;
+    const prefix = `${funcName}(`;
+    for (const [, node] of Object.entries(graph.nodes)) {
+      if (node.label.startsWith(prefix)) return node.id;
+    }
+    return null;
+  }
+
+  function handleCursorContext(ctx: CursorContext) {
+    if (!ctx.functionName) return;
+
+    const currentFn = selectedFnRef.current;
+    const cachedGraph = controlFlowGraphRef.current;
+
+    // Resolve sourceExprId → nodeId using cached graph.
+    // Falls back to matching by function name in node labels when sourceExprId
+    // is present but didn't match (e.g., old WASM before Call-preference fix).
+    // When sourceExprId is null (cursor is on a function definition, not a call
+    // site), skip the fallback so we fall through to Rule 3 (switch function).
+    const nodeId = resolveSourceExprToNodeId(cachedGraph, ctx.sourceExprId)
+      ?? (ctx.sourceExprId != null ? resolveNodeByFunctionName(cachedGraph, ctx.functionName) : null);
+
+    console.log('[handleCursorContext]', { currentFn, ctx, nodeId });
+
+    // Rule 0: cursor is on a function definition (not a call site) — switch to that function.
+    // sourceExprId is null when the cursor is on the definition line, not inside a call.
+    if (ctx.sourceExprId == null && ctx.functionName !== currentFn) {
+      console.log('[handleCursorContext] Rule 0: switch to definition', ctx.functionName);
+      setSelectedFn(ctx.functionName);
+      setHighlightedNodeId(null);
+      return;
+    }
+
+    // Rule 1: cursor is on a node in the currently-displayed workflow
+    if (nodeId != null && ctx.functionName === currentFn) {
+      console.log('[handleCursorContext] Rule 1: highlight node', nodeId);
+      setHighlightedNodeId(nodeId);
+      return;
+    }
+
+    // Rule 2: cursor is on a call site inside the current workflow — highlight the call node.
+    if (nodeId != null && ctx.workflowMemberships.includes(currentFn ?? '')) {
+      console.log('[handleCursorContext] Rule 2: highlight node', nodeId);
+      setHighlightedNodeId(nodeId);
+      return;
+    }
+
+    // Rule 3: switch to the function or its first workflow parent
+    if (ctx.workflowMemberships.length > 0) {
+      const target = ctx.workflowMemberships[0];
+      console.log('[handleCursorContext] Rule 3: switch to workflow', target);
+      setSelectedFn(target);
+      setHighlightedNodeId(null);
+    } else {
+      console.log('[handleCursorContext] Rule 3: switch to', ctx.functionName);
+      setSelectedFn(ctx.functionName);
+      setHighlightedNodeId(null);
+    }
+  }
 
   // ── Port message handler ─────────────────────────────────────────────
 
@@ -204,6 +301,10 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         case "controlFlowGraphResult":
           if (data.graph) setControlFlowGraph(data.graph);
+          break;
+
+        case "cursorContext":
+          handleCursorContext(data.context);
           break;
 
         default:

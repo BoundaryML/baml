@@ -15,6 +15,7 @@ const stateColors: Record<string, { border: string; bg: string }> = {
 
 export const DiamondNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
   const d = data as WorkflowNodeData;
+  const isHighlighted = d.selected || selected;
   const colors = stateColors[d.executionState] ?? stateColors['not-started'];
 
   return (
@@ -28,8 +29,8 @@ export const DiamondNode: ComponentType<NodeProps> = memo(({ data, selected }) =
           padding: '10px 16px',
           borderRadius: 6,
           background: colors.bg,
-          border: `2px solid ${colors.border}`,
-          boxShadow: selected ? `0 0 0 2px ${colors.border}` : '0 1px 3px rgba(0,0,0,0.3)',
+          border: `2px solid ${isHighlighted ? '#4fc3f7' : colors.border}`,
+          boxShadow: isHighlighted ? `0 0 0 3px #4fc3f7, 0 0 12px rgba(79,195,247,0.4)` : '0 1px 3px rgba(0,0,0,0.3)',
           minWidth: 110,
         }}
       >

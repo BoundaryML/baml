@@ -261,7 +261,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             label,
-            None, // source_expr: None for AST spike
+            Some(condition.into_raw().into_u32()),
             NodeType::BranchGroup,
         );
         self.graph.add_node(node);
@@ -330,7 +330,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             label,
-            None, // source_expr: None for AST spike
+            Some(body_expr.into_raw().into_u32()),
             NodeType::BranchArm,
         );
         self.graph.add_node(node);
@@ -402,7 +402,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             label,
-            None,
+            Some(scrutinee.into_raw().into_u32()),
             NodeType::BranchGroup,
         );
         self.graph.add_node(node);
@@ -454,7 +454,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             label,
-            None,
+            Some(condition.into_raw().into_u32()),
             NodeType::Loop,
         );
         self.graph.add_node(node);
@@ -511,7 +511,7 @@ impl<'a> AstGraphBuilder<'a> {
 
     // -- Call scope (leaf node — no recursion into the call's arguments) --
 
-    fn emit_call_scope(&mut self, _call_expr: ast::ExprId, label: &str) {
+    fn emit_call_scope(&mut self, call_expr: ast::ExprId, label: &str) {
         let ordinal = {
             let frame = self
                 .frames
@@ -534,7 +534,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             label.to_string(),
-            None,
+            Some(call_expr.into_raw().into_u32()),
             NodeType::OtherScope,
         );
         self.graph.add_node(node);
@@ -571,7 +571,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             node_label,
-            None,
+            Some(inner_expr.into_raw().into_u32()),
             NodeType::OtherScope,
         );
         self.graph.add_node(node);
@@ -1022,5 +1022,128 @@ mod tests {
             .find(|n| matches!(n.node_type, NodeType::OtherScope))
             .expect("should have OtherScope");
         assert_eq!(scope.label, "let x = ...");
+    }
+
+    #[test]
+    fn call_scope_has_source_expr() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let callee = exprs.alloc(ast::Expr::Path(vec!["Summarize".into()]));
+            let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
+            let call = exprs.alloc(ast::Expr::Call {
+                callee,
+                args: vec![arg],
+            });
+            Some(call)
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        assert_eq!(graph.nodes.len(), 2); // root + call
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::OtherScope))
+            .expect("should have OtherScope for call");
+        assert!(
+            call_node.source_expr.is_some(),
+            "call scope should have source_expr set"
+        );
+    }
+
+    #[test]
+    fn if_branch_group_has_source_expr() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let then_b = exprs.alloc(ast::Expr::Null);
+            let else_b = exprs.alloc(ast::Expr::Null);
+            Some(exprs.alloc(ast::Expr::If {
+                condition: cond,
+                then_branch: then_b,
+                else_branch: Some(else_b),
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let branch_group = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::BranchGroup))
+            .expect("should have BranchGroup");
+        assert!(
+            branch_group.source_expr.is_some(),
+            "BranchGroup should have source_expr pointing to the condition"
+        );
+    }
+
+    #[test]
+    fn loop_has_source_expr() {
+        let body = make_ast_body(|exprs, stmts, _, _| {
+            let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let body_expr = exprs.alloc(ast::Expr::Null);
+            let while_stmt = stmts.alloc(ast::Stmt::While {
+                condition: cond,
+                body: body_expr,
+                after: None,
+                origin: ast::LoopOrigin::While,
+            });
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![while_stmt],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let loop_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::Loop))
+            .expect("should have Loop");
+        assert!(
+            loop_node.source_expr.is_some(),
+            "Loop should have source_expr pointing to the condition"
+        );
+    }
+
+    #[test]
+    fn header_has_no_source_expr() {
+        let body = make_ast_body(|exprs, stmts, _, _| {
+            let h = stmts.alloc(ast::Stmt::HeaderComment {
+                name: "Setup".into(),
+                level: 1,
+            });
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![h],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let header = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::HeaderContextEnter))
+            .expect("should have header");
+        assert!(
+            header.source_expr.is_none(),
+            "Header should not have source_expr"
+        );
+    }
+
+    #[test]
+    fn synthetic_else_has_no_source_expr() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let then_b = exprs.alloc(ast::Expr::Null);
+            Some(exprs.alloc(ast::Expr::If {
+                condition: cond,
+                then_branch: then_b,
+                else_branch: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let else_arm = graph
+            .nodes
+            .values()
+            .find(|n| n.label == "else")
+            .expect("should have synthetic else arm");
+        assert!(
+            else_arm.source_expr.is_none(),
+            "Synthetic else arm should not have source_expr"
+        );
     }
 }

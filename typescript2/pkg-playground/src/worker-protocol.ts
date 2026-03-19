@@ -24,7 +24,8 @@ export type PlaygroundNotification =
   | { type: 'listProjects'; projects: string[] }
   | { type: 'updateProject'; project: string; update: ProjectUpdate }
   | { type: 'openPlayground'; project: string; functionName?: string }
-  | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null };
+  | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
+  | { type: 'cursorContext'; context: CursorContext };
 
 // ---------------------------------------------------------------------------
 // Control flow graph types (matches Rust serde output from baml_compiler2_visualization)
@@ -57,6 +58,20 @@ export interface ControlFlowGraph {
   nodes: Record<string, CfgNode>;
   /** IndexMap<NodeId, Vec<Edge>> serializes as an object with numeric string keys. */
   edgesBySrc: Record<string, CfgEdge[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Cursor context types (matches Rust CursorContext serde output)
+// ---------------------------------------------------------------------------
+
+export interface CursorContext {
+  functionName: string | null;
+  isWorkflow: boolean;
+  workflowMemberships: string[];
+  /** Raw ExprId index — NOT a CFG NodeId. Match against node.metadata.sourceExpr
+   *  in the cached ControlFlowGraph to find the corresponding graph node. */
+  sourceExprId: number | null;
+  testName: string | null;
 }
 
 export interface FetchLogEntry {
@@ -107,7 +122,8 @@ export type WorkerOutMessage =
   | { type: 'vfsFileChanged'; path: string; content: string }
   | { type: 'vfsFileDeleted'; path: string }
   | { type: 'buildTime'; value: string }
-  | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null };
+  | { type: 'controlFlowGraphResult'; functionName: string; graph: ControlFlowGraph | null }
+  | { type: 'cursorContext'; context: CursorContext };
 
 // ---------------------------------------------------------------------------
 // Main thread → Worker messages
@@ -122,6 +138,7 @@ export type WorkerInMessage =
   | { type: 'selectProject'; root: string }
   | { type: 'requestState' }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
+  | { type: 'cursorPosition'; file: string; line: number; column: number }
   | { type: 'filesChanged'; files: Record<string, string> }
   | { type: 'dispose' };
 

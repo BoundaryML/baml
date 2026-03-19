@@ -35,6 +35,12 @@ pub enum WsInMessage {
         #[serde(rename = "functionName")]
         function_name: String,
     },
+    #[serde(rename = "cursorPosition")]
+    CursorPosition {
+        file: String,
+        line: u32,
+        column: u32,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -90,5 +96,9 @@ pub enum WsOutMessage {
         #[serde(rename = "functionName")]
         function_name: String,
         graph: Option<serde_json::Value>,
+    },
+    #[serde(rename = "cursorContext")]
+    CursorContext {
+        context: serde_json::Value,
     },
 }
