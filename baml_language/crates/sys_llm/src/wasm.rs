@@ -4,8 +4,6 @@
 //! This module provides browser-compatible replacements used by both
 //! `build_request` (dry-run SDK config) and `auth_request` (credential resolution).
 
-#![cfg(target_arch = "wasm32")]
-
 #[allow(clippy::disallowed_types)]
 use std::time::SystemTime;
 
@@ -18,6 +16,7 @@ use aws_smithy_async::{
 #[derive(Debug)]
 pub(crate) struct BrowserTime;
 
+#[allow(clippy::disallowed_types)]
 impl TimeSource for BrowserTime {
     fn now(&self) -> SystemTime {
         let offset = web_time::SystemTime::now()

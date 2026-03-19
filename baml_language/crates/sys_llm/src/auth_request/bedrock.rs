@@ -31,6 +31,7 @@ use crate::build_request::{
 /// Platform-aware `SystemTime::now()`.
 ///
 /// On WASM, `std::time::SystemTime::now()` panics — use `web_time` instead.
+#[allow(clippy::disallowed_types)]
 fn now() -> SystemTime {
     #[cfg(not(target_arch = "wasm32"))]
     {
