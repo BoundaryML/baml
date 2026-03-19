@@ -6,6 +6,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
+#[allow(clippy::disallowed_types)]
 use std::time::SystemTime;
 
 use aws_smithy_async::{

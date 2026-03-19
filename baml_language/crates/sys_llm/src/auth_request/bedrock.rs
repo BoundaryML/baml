@@ -1,5 +1,6 @@
 //! AWS Bedrock request authorization: credential resolution + `SigV4` signing.
 
+#[allow(clippy::disallowed_types)]
 use std::time::SystemTime;
 
 use aws_credential_types::{Credentials, provider::ProvideCredentials};
