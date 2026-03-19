@@ -1580,7 +1580,7 @@ impl CompilerRunner {
                             .as_ref()
                             .map(|te| hir2_type_expr_to_string(&te.expr))
                             .unwrap_or_else(|| "?".to_string());
-                        let body_kind = if f.llm_meta.is_some() {
+                        let body_kind = if f.declarative_meta.is_some() {
                             "llm"
                         } else {
                             match &f.body {
@@ -5273,8 +5273,6 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Class(c) => format!("<class {}>", c.name),
                 Object::Enum(e) => format!("<enum {}>", e.name),
                 Object::Future(_) => "<future>".to_string(),
-                Object::Resource(r) => format!("<resource: {}>", r),
-                Object::PromptAst(_) => "<prompt_ast>".to_string(),
                 Object::Collector(_) => "<collector>".to_string(),
                 Object::Type(ty) => format!("<type: {ty}>"),
                 Object::RustData(_) => "<rust_data>".to_string(),
