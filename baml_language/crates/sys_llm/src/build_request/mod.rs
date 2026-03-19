@@ -74,6 +74,10 @@ pub(crate) fn build_headers(
 }
 
 /// Forward non-skipped options from `client.options` into the JSON body.
+///
+/// Keys already present in `body` (written by the provider builder) are never
+/// overwritten. The builder's values for prompt-derived fields like `messages`,
+/// `system`, `input`, `stream`, and `stream_options` take precedence.
 pub(crate) fn forward_options(
     provider_skip_keys: &[&str],
     client: &LlmPrimitiveClient,
@@ -84,6 +88,11 @@ pub(crate) fn forward_options(
             || BUILD_REQUEST_SKIP_KEYS.contains(&key.as_str())
             || provider_skip_keys.contains(&key.as_str())
         {
+            continue;
+        }
+        // Never overwrite keys the builder already wrote (e.g. messages,
+        // system, input, stream, stream_options).
+        if body.contains_key(key) {
             continue;
         }
         if let Some(json_val) = bex_value_to_json(value) {
