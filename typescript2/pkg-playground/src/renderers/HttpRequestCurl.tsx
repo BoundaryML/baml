@@ -14,6 +14,17 @@ interface HttpRequestShape {
   body?: string;
 }
 
+/**
+ * Whether the body must not be reformatted (e.g. SigV4-signed requests where
+ * the body hash is part of the signature).
+ *
+ * TODO: maybe pass a flag through BAML that tells us if we need to preserve
+ * the exact request body?
+ */
+function preserveExactBody(req: HttpRequestShape): boolean {
+  return (req.url ?? '').includes('bedrock-runtime');
+}
+
 function isHttpRequest(value: unknown): value is HttpRequestShape {
   if (value == null || typeof value !== 'object') return false;
   const o = value as Record<string, unknown>;
@@ -54,12 +65,7 @@ function toCurl(req: HttpRequestShape): string {
     }
   }
   if (body != null && body !== '') {
-    // HACK: AWS Bedrock requests are SigV4-signed, so the body hash is part
-    // of the signature. Pretty-printing changes the body and invalidates it.
-    // Ideally we'd check the LLM provider, but the renderer only has the
-    // HTTP request shape. URL sniffing is a workaround for now.
-    const isBedrock = url.includes('bedrock-runtime');
-    const formatted = isBedrock ? body : prettyBody(body);
+    const formatted = preserveExactBody(req) ? body : prettyBody(body);
     const heredoc = safeHeredoc(formatted);
     parts.push('-d @-');
     parts.push(`'${url.replace(/'/g, "'\\''")}'`);
@@ -87,7 +93,7 @@ function toJsFetch(req: HttpRequestShape): string {
     opts.push(`  headers: {\n${headersStr}\n  }`);
   }
   if (body != null && body !== '') {
-    const formatted = prettyBody(body);
+    const formatted = preserveExactBody(req) ? body : prettyBody(body);
     const escaped = formatted.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
     opts.push(`  body: \`${escaped}\``);
   }
@@ -114,7 +120,8 @@ function toPythonRequests(req: HttpRequestShape): string {
     kwargs.push(`    headers={\n${headersStr}\n    }`);
   }
   if (body != null && body !== '') {
-    const safeBody = prettyBody(body).replace(/'''/g, "\\'\\'\\'" );
+    const formatted = preserveExactBody(req) ? body : prettyBody(body);
+    const safeBody = formatted.replace(/'''/g, "\\'\\'\\'");
     kwargs.push(`    data='''\n${safeBody}\n    '''`);
   }
   const kwargsBlock = kwargs.length ? ',\n' + kwargs.join(',\n') : '';
@@ -130,7 +137,8 @@ function toGo(req: HttpRequestShape): string {
   const url = req.url ?? '';
   const headers = req.headers ?? {};
   const body = req.body ?? '';
-  const bodyArg = body ? `strings.NewReader("${escapeGoString(prettyBody(body))}")` : 'nil';
+  const bodyFormatted = body ? (preserveExactBody(req) ? body : prettyBody(body)) : '';
+  const bodyArg = body ? `strings.NewReader("${escapeGoString(bodyFormatted)}")` : 'nil';
   const lines: string[] = [
     `req, err := http.NewRequest("${method}", "${escapeGoString(url)}", ${bodyArg})`,
     'if err != nil { log.Fatal(err) }',
@@ -164,7 +172,7 @@ function toRust(req: HttpRequestShape): string {
   const url = req.url ?? '';
   const headers = req.headers ?? {};
   const body = req.body ?? '';
-  const bodyFormatted = body ? prettyBody(body) : '';
+  const bodyFormatted = body ? (preserveExactBody(req) ? body : prettyBody(body)) : '';
   const clientCall = REQWEST_SHORTCUT_METHODS.has(method)
     ? `client.${method}("${escapeRustString(url)}")`
     : `client.request("${method.toUpperCase()}".parse().unwrap(), "${escapeRustString(url)}")`;
