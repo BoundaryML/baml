@@ -683,6 +683,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_lsp2_actions_tests"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_compiler_diagnostics",
+ "baml_lsp2_actions",
+ "baml_project",
+ "indexmap",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.116",
+ "text-size",
+ "walkdir",
+]
+
+[[package]]
 name = "baml_lsp_actions"
 version = "0.0.0-beta"
 dependencies = [
