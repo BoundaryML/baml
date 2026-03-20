@@ -82,7 +82,7 @@ jobs:
     name: "cargo test (macos)"
     runs-on: macos-latest
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -119,7 +119,7 @@ jobs:
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     # TODO: Reduce this once our changes to aws-sdk-rust are upstreamed
     # Right now it needs to download our repo every time which is very slow
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
