@@ -98,7 +98,7 @@ impl LlmRequestBuilder for BedrockBuilder {
 
         // Convert BAML prompt to SDK types.
         let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
-        let inference_config = build_sdk_inference_config(client);
+        let inference_config = build_sdk_inference_config(client)?;
         let additional_fields = collect_additional_fields(client);
 
         // Serialize body via the SDK's own serialization pipeline.
@@ -540,21 +540,30 @@ fn media_to_content_block(
 }
 
 /// Build an `InferenceConfiguration` from client options, if any are set.
-#[allow(clippy::cast_possible_truncation)]
-fn build_sdk_inference_config(client: &LlmPrimitiveClient) -> Option<InferenceConfiguration> {
+///
+/// Returns `InvalidOption` if `max_tokens` overflows `i32`.
+fn build_sdk_inference_config(
+    client: &LlmPrimitiveClient,
+) -> Result<Option<InferenceConfiguration>, BuildRequestError> {
     use bex_external_types::BexExternalValue;
 
     let mut builder = InferenceConfiguration::builder();
     let mut has_config = false;
 
     if let Some(BexExternalValue::Int(v)) = client.options.get("max_tokens") {
-        builder = builder.max_tokens(*v as i32);
+        let narrow = i32::try_from(*v).map_err(|_| BuildRequestError::InvalidOption {
+            key: "max_tokens".into(),
+            reason: format!("value {v} is out of the supported range (0..={})", i32::MAX),
+        })?;
+        builder = builder.max_tokens(narrow);
         has_config = true;
     }
+    #[allow(clippy::cast_possible_truncation)]
     if let Some(BexExternalValue::Float(v)) = client.options.get("temperature") {
         builder = builder.temperature(*v as f32);
         has_config = true;
     }
+    #[allow(clippy::cast_possible_truncation)]
     if let Some(BexExternalValue::Float(v)) = client.options.get("top_p") {
         builder = builder.top_p(*v as f32);
         has_config = true;
@@ -574,9 +583,9 @@ fn build_sdk_inference_config(client: &LlmPrimitiveClient) -> Option<InferenceCo
     }
 
     if has_config {
-        Some(builder.build())
+        Ok(Some(builder.build()))
     } else {
-        None
+        Ok(None)
     }
 }
 
@@ -1160,5 +1169,21 @@ mod tests {
         )]);
         let result = build_raw(&client, msg("user", "hi"), false).await;
         assert!(result.is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // Range validation tests
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn bedrock_max_tokens_overflow_rejected() {
+        let mut opts = base_options();
+        opts.push(("max_tokens", BexExternalValue::Int(i64::from(i32::MAX) + 1)));
+        let client = make_client(opts);
+        let result = build_raw(&client, msg("user", "hi"), false).await;
+        assert!(
+            matches!(&result, Err(BuildRequestError::InvalidOption { key, .. }) if key == "max_tokens"),
+            "expected InvalidOption for max_tokens, got: {result:?}"
+        );
     }
 }
