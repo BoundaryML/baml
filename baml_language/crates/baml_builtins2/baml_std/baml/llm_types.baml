@@ -22,6 +22,7 @@ class Client {
   client_type ClientType
   sub_clients Client[]
   retry RetryPolicy?
+  counter int
 
   function to_primitive_client(self) -> PrimitiveClient {
     if (self.name.contains("/")) {

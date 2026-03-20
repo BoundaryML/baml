@@ -9,6 +9,7 @@
 
 pub mod ast;
 pub(crate) mod companions;
+pub(crate) mod lower_config_item;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;
@@ -638,5 +639,110 @@ function f() -> int {
         } else {
             panic!("expected expression body for f");
         }
+    }
+
+    // ── Phase 1: retry_policy produces Item::Let with LetOrigin::RetryPolicy ──
+
+    #[test]
+    fn retry_policy_produces_let_item_with_retry_policy_origin() {
+        use crate::ast::{Expr, FunctionBodyDef, Item, LetOrigin, Literal};
+
+        let source = r#"
+retry_policy MyRetry {
+  max_retries 3
+  initial_delay_ms 500
+  multiplier 2.0
+  max_delay_ms 60000
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(items.len(), 1, "expected exactly one item");
+
+        let let_def = match &items[0] {
+            Item::Let(ld) => ld,
+            other => panic!("expected Item::Let, got {other:?}"),
+        };
+
+        assert_eq!(let_def.name.as_str(), "MyRetry");
+        assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
+
+        let (body, _source_map) = let_def.initializer.as_ref().expect("expected initializer");
+
+        let root_id = body.root_expr.expect("expected root expr");
+        let root_expr = &body.exprs[root_id];
+
+        let (type_name, fields, _) = match root_expr {
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+            } => (type_name, fields, spreads),
+            other => panic!("expected Expr::Object, got {other:?}"),
+        };
+
+        assert_eq!(
+            type_name.as_ref().map(|n| n.as_str()),
+            Some("RetryPolicy"),
+            "expected type_name to be RetryPolicy"
+        );
+
+        // Check field names
+        let field_names: Vec<&str> = fields.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(
+            field_names,
+            vec![
+                "max_retries",
+                "initial_delay_ms",
+                "multiplier",
+                "max_delay_ms"
+            ]
+        );
+
+        // Check field values
+        let field_exprs: Vec<&Expr> = fields.iter().map(|(_, id)| &body.exprs[*id]).collect();
+
+        assert_eq!(
+            field_exprs[0],
+            &Expr::Literal(Literal::Int(3)),
+            "max_retries should be Int(3)"
+        );
+        assert_eq!(
+            field_exprs[1],
+            &Expr::Literal(Literal::Int(500)),
+            "initial_delay_ms should be Int(500)"
+        );
+        assert_eq!(
+            field_exprs[2],
+            &Expr::Literal(Literal::Float("2.0".to_string())),
+            "multiplier should be Float(2.0)"
+        );
+        assert_eq!(
+            field_exprs[3],
+            &Expr::Literal(Literal::Int(60000)),
+            "max_delay_ms should be Int(60000)"
+        );
+    }
+
+    #[test]
+    fn retry_policy_with_defaults_produces_let_item() {
+        use crate::ast::{Item, LetOrigin};
+
+        // A retry_policy with only max_retries set; other fields use defaults
+        let source = r#"
+retry_policy Simple {
+  max_retries 5
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(items.len(), 1);
+
+        let let_def = match &items[0] {
+            Item::Let(ld) => ld,
+            other => panic!("expected Item::Let, got {other:?}"),
+        };
+
+        assert_eq!(let_def.name.as_str(), "Simple");
+        assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
+        assert!(let_def.initializer.is_some(), "expected an initializer");
     }
 }

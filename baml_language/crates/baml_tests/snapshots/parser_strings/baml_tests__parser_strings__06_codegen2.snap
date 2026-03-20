@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.FormatMessage(name: string) -> string {
+    load_const null
     load_const "FormatMessage"
     load_var name
     load_const "name"
@@ -34,6 +35,7 @@ function user.GetRole() -> "admin" | "user" | "guest" {
 }
 
 function user.ProcessText(input: string) -> string {
+    load_const null
     load_const "ProcessText"
     load_var input
     load_const "input"

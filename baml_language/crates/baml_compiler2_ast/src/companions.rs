@@ -64,8 +64,13 @@ fn make_llm_companion(
         span: parent.span,
     };
     let param_names: Vec<Name> = parent.params.iter().map(|p| p.name.clone()).collect();
-    let (body, source_map) =
-        synthesize_llm_builtin_call(target, parent.name.as_str(), &param_names, parent.span);
+    let (body, source_map) = synthesize_llm_builtin_call(
+        target,
+        parent.name.as_str(),
+        &param_names,
+        None,
+        parent.span,
+    );
     FunctionDef {
         name,
         generic_params: parent.generic_params.clone(),

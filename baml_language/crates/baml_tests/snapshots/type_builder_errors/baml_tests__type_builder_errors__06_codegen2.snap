@@ -2,6 +2,22 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.TypeBuilderFn(from_text: string) -> user.Resume {
+    alloc_instance Client
+    copy 0
+    load_const "openai/gpt-4o-mini"
+    store_field .name
+    copy 0
+    load_const null
+    store_field .client_type
+    copy 0
+    alloc_array 0
+    store_field .sub_clients
+    copy 0
+    load_const null
+    store_field .retry
+    copy 0
+    load_const 0
+    store_field .counter
     load_const "TypeBuilderFn"
     load_var from_text
     load_const "from_text"

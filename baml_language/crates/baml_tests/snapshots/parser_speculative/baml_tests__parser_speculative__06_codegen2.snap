@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.Ambiguous(input: string) -> string {
+    load_const null
     load_const "Ambiguous"
     load_var input
     load_const "input"
@@ -29,6 +30,7 @@ function user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
 }
 
 function user.AnotherLLM(input: string) -> string {
+    load_const null
     load_const "AnotherLLM"
     load_var input
     load_const "input"
@@ -56,6 +58,7 @@ function user.AnotherLLM$render_prompt(input: string) -> baml.llm.PromptAst {
 }
 
 function user.ChainedProcess(input: string) -> string {
+    load_const null
     load_const "ChainedProcess"
     load_var input
     load_const "input"
@@ -83,6 +86,7 @@ function user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst 
 }
 
 function user.ExtractData(text: string) -> user.JsonData {
+    load_const null
     load_const "ExtractData"
     load_var text
     load_const "text"
@@ -110,6 +114,7 @@ function user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
 }
 
 function user.LLMAnalyze(text: string) -> user.Analysis {
+    load_const null
     load_const "LLMAnalyze"
     load_var text
     load_const "text"

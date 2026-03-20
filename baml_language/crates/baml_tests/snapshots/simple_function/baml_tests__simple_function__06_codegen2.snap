@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.HelloWorld(name: string) -> string {
+    load_const null
     load_const "HelloWorld"
     load_var name
     load_const "name"

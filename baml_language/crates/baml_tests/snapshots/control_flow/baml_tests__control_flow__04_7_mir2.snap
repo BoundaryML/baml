@@ -69,6 +69,26 @@ fn user.MatchExpression(x: int) -> string {
     }
 }
 
+fn user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const "LlmFunction", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.LlmFunction$build_request(input: string) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
@@ -238,22 +258,24 @@ fn user.NestedControlFlow(x: int) -> string {
     }
 }
 
-fn user.LlmFunction(input: string) -> string {
+fn user.TestClient$new() -> null {
     // Locals:
-    let _0: string // _0 // return
-    let _1: string // input // param
-    let _2: map<string, unknown>
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
 
     bb0: {
-        _2 = { const "input": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "LlmFunction", copy _2) -> [bb1];
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "TestClient", const "openai", copy _1 };
+        goto -> bb1;
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }
@@ -309,15 +331,15 @@ fn user.WhileWithHeaders() -> int {
     }
 }
 
-fn user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst {
+fn user.LlmFunction(input: string) -> string {
     // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
+    let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<string, unknown>
+    let _2: map<"input", string>
 
     bb0: {
         _2 = { const "input": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(const "LlmFunction", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const fn user.TestClient, const "LlmFunction", copy _2) -> [bb1];
     }
 
     bb1: {

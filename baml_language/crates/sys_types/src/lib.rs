@@ -512,7 +512,7 @@ impl<T> io::IoClassLlmClient for T {
         client: io::owned::llm::Client,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let resolve_fn_name = format!("{}.resolve", client.name);
+        let resolve_fn_name = format!("{}$new", client.name);
         let Some(global_index) = ctx.function_global_indices.get(&resolve_fn_name) else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
                 "Client resolve function not found: {resolve_fn_name}"
@@ -778,11 +778,13 @@ fn build_io_client_tree(
             multiplier: r.multiplier,
             max_delay_ms: r.max_delay_ms,
         });
+    let counter = meta.round_robin_start.map(|s| s as i64).unwrap_or(0);
     Ok(io::owned::llm::Client {
         name: client_name.to_string(),
         client_type: client_type_to_external(&meta.client_type),
         sub_clients,
         retry,
+        counter,
     })
 }
 

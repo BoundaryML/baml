@@ -26,9 +26,8 @@ use baml_compiler2_mir::{
 };
 use baml_type::TyAttr;
 use bex_vm_types::{
-    Bytecode, Class, ClassField, ClientBuildMeta, ClientBuildType, ConstValue, Enum, EnumVariant,
-    Function, FunctionKind, FunctionMeta, Instruction, Object, ObjectIndex, ObjectPool, Program,
-    RetryPolicyMeta,
+    Bytecode, Class, ClassField, ConstValue, Enum, EnumVariant, Function, FunctionKind,
+    FunctionMeta, Instruction, Object, ObjectIndex, ObjectPool, Program,
 };
 pub(crate) use emit::compile_mir_function;
 
@@ -56,28 +55,12 @@ pub struct CompileOptions {
 pub enum LoweringError {
     /// A stub — no errors expected from Phase 1 stub.
     Internal(String),
-    /// A retry policy field had an invalid value.
-    InvalidRetryPolicyValue {
-        policy_name: String,
-        field_name: String,
-        value: String,
-        reason: String,
-    },
 }
 
 impl std::fmt::Display for LoweringError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Internal(msg) => write!(f, "internal lowering error: {msg}"),
-            Self::InvalidRetryPolicyValue {
-                policy_name,
-                field_name,
-                value,
-                reason,
-            } => write!(
-                f,
-                "retry policy '{policy_name}': invalid value for '{field_name}': '{value}' — {reason}"
-            ),
         }
     }
 }
@@ -447,83 +430,13 @@ pub fn generate_project_bytecode(
     program.template_strings_macros = template_macros.join("\n");
 
     // --- Pass 6: Retry policies ---
-    let mut retry_policies: HashMap<String, RetryPolicyMeta> = HashMap::new();
-    for file in &all_files {
-        let item_tree = file_item_tree(db, *file);
-        for (_rp_id, rp_data) in item_tree.retry_policies.iter() {
-            let policy_name = rp_data.name.to_string();
-            let meta = RetryPolicyMeta {
-                max_retries: parse_retry_policy_field(
-                    &policy_name,
-                    "max_retries",
-                    rp_data.max_retries.as_deref(),
-                    0_i64,
-                )?,
-                initial_delay_ms: parse_retry_policy_field(
-                    &policy_name,
-                    "initial_delay_ms",
-                    rp_data.initial_delay_ms.as_deref(),
-                    0_i64,
-                )?,
-                multiplier: parse_retry_policy_field(
-                    &policy_name,
-                    "multiplier",
-                    rp_data.multiplier.as_deref(),
-                    1.0_f64,
-                )?,
-                max_delay_ms: parse_retry_policy_field(
-                    &policy_name,
-                    "max_delay_ms",
-                    rp_data.max_delay_ms.as_deref(),
-                    60_000_i64,
-                )?,
-            };
-            retry_policies.insert(policy_name, meta);
-        }
-    }
+    // Retry policies are now synthesized as Item::Let bindings during CST lowering.
+    // Their values flow through the $init pipeline instead of being parsed here.
+    // Pass 6 is intentionally empty.
 
-    // --- Pass 7: Client metadata ---
-    for file in &all_files {
-        let item_tree = file_item_tree(db, *file);
-        for (_client_id, client_data) in item_tree.clients.iter() {
-            let client_name = client_data.name.to_string();
-            let provider = client_data
-                .provider
-                .as_ref()
-                .map(|p| p.as_str())
-                .unwrap_or("");
-
-            let client_type = match provider {
-                "fallback" => ClientBuildType::Fallback,
-                "round-robin" => ClientBuildType::RoundRobin,
-                _ => ClientBuildType::Primitive,
-            };
-
-            let sub_client_names: Vec<String> = client_data
-                .sub_client_names
-                .iter()
-                .map(|n| n.to_string())
-                .collect();
-
-            let retry_policy = client_data
-                .retry_policy_name
-                .as_ref()
-                .and_then(|name| retry_policies.get(name.as_str()).cloned());
-
-            #[allow(clippy::cast_sign_loss)]
-            let round_robin_start = client_data.round_robin_start.map(|v| v as i32);
-
-            program.client_metadata.insert(
-                client_name,
-                ClientBuildMeta {
-                    client_type,
-                    sub_client_names,
-                    retry_policy,
-                    round_robin_start,
-                },
-            );
-        }
-    }
+    // Client metadata is now synthesized as Item::Let bindings during CST lowering.
+    // Client values (including sub-clients, retry policies) flow through the $init pipeline.
+    // Pass 7 is intentionally empty.
 
     // --- Pass 8: Test cases (only when requested) ---
     if options.emit_test_cases {
@@ -550,30 +463,6 @@ pub fn generate_project_bytecode(
     }
 
     Ok(program)
-}
-
-/// Parse a retry policy field value, returning a default if absent.
-fn parse_retry_policy_field<T>(
-    policy_name: &str,
-    field_name: &str,
-    raw_value: Option<&str>,
-    default: T,
-) -> Result<T, LoweringError>
-where
-    T: std::str::FromStr + Copy,
-    <T as std::str::FromStr>::Err: std::fmt::Display,
-{
-    match raw_value {
-        None => Ok(default),
-        Some(value) => value
-            .parse::<T>()
-            .map_err(|e| LoweringError::InvalidRetryPolicyValue {
-                policy_name: policy_name.to_string(),
-                field_name: field_name.to_string(),
-                value: value.to_string(),
-                reason: e.to_string(),
-            }),
-    }
 }
 
 /// Convert a compiler2 `TestArgValue` to a `bex_vm_types::TestArgValue`.

@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.GetMixedList() -> int | string[] {
+    load_const null
     load_const "GetMixedList"
     alloc_map 0
     call baml.llm.call_llm_function
@@ -23,6 +24,7 @@ function user.GetMixedList$render_prompt() -> baml.llm.PromptAst {
 }
 
 function user.GetMixedMap() -> map<string, int | string> {
+    load_const null
     load_const "GetMixedMap"
     alloc_map 0
     call baml.llm.call_llm_function
@@ -44,6 +46,7 @@ function user.GetMixedMap$render_prompt() -> baml.llm.PromptAst {
 }
 
 function user.GetStatus() -> user.Status {
+    load_const null
     load_const "GetStatus"
     alloc_map 0
     call baml.llm.call_llm_function
@@ -65,6 +68,7 @@ function user.GetStatus$render_prompt() -> baml.llm.PromptAst {
 }
 
 function user.GetUser(id: int) -> user.User {
+    load_const null
     load_const "GetUser"
     load_var id
     load_const "id"

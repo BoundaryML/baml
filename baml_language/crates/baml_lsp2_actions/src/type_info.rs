@@ -309,9 +309,14 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
         Definition::Let(loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
+            let kind = match data.origin {
+                baml_compiler2_ast::ast::LetOrigin::Client => "client",
+                baml_compiler2_ast::ast::LetOrigin::RetryPolicy => "retry_policy",
+                _ => "let",
+            };
             Some(TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
-                kind: "let",
+                kind,
             })
         }
     }

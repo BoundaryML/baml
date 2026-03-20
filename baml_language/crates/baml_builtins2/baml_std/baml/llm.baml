@@ -56,9 +56,8 @@ function build_request(function_name: string, args: map<string, unknown>) -> bam
   return primitive_client.build_request(specialized_prompt)
 }
 
-function call_llm_function(function_name: string, args: map<string, unknown>) -> unknown {
+function call_llm_function(client: Client, function_name: string, args: map<string, unknown>) -> unknown {
   let jinja_string = get_jinja_template(function_name)
-  let llm_client = get_client(function_name)
 
   let context = ExecutionContext {
     jinja_string: jinja_string,
@@ -66,7 +65,7 @@ function call_llm_function(function_name: string, args: map<string, unknown>) ->
     function_name: function_name,
   }
 
-  let result = llm_client.execute(context, 0)
+  let result = client.execute(context, 0)
 
   if (result.ok) {
     return result.value

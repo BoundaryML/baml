@@ -66,11 +66,11 @@ fn user.Ambiguous(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<string, unknown>
+    let _2: map<"input", string>
 
     bb0: {
         _2 = { const "input": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "Ambiguous", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "Ambiguous", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -86,11 +86,11 @@ fn user.AnotherLLM(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<string, unknown>
+    let _2: map<"input", string>
 
     bb0: {
         _2 = { const "input": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "AnotherLLM", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "AnotherLLM", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -164,11 +164,11 @@ fn user.ExtractData(text: string) -> user.JsonData {
     // Locals:
     let _0: user.JsonData // _0 // return
     let _1: string // text // param
-    let _2: map<string, unknown>
+    let _2: map<"text", string>
 
     bb0: {
         _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "ExtractData", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "ExtractData", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -244,11 +244,11 @@ fn user.ChainedProcess(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<string, unknown>
+    let _2: map<"input", string>
 
     bb0: {
         _2 = { const "input": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "ChainedProcess", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "ChainedProcess", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -264,11 +264,11 @@ fn user.LLMAnalyze(text: string) -> user.Analysis {
     // Locals:
     let _0: user.Analysis // _0 // return
     let _1: string // text // param
-    let _2: map<string, unknown>
+    let _2: map<"text", string>
 
     bb0: {
         _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "LLMAnalyze", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "LLMAnalyze", copy _2) -> [bb1];
     }
 
     bb1: {

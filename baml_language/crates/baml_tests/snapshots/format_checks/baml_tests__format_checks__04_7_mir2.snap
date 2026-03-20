@@ -994,14 +994,168 @@ fn user.WithMethod.greet() -> string {
     }
 }
 
-fn user.TestTarget$render_prompt() -> baml.llm.PromptAst {
+fn user.RawStringConfigClient$new() -> null {
     // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: map<string, unknown>
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model" | "system_prompt", "gpt-4" | "#Youareahelpfulassistant.Alwaysbeconcise.#">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4", const "system_prompt": const "#Youareahelpfulassistant.Alwaysbeconcise.#" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "RawStringConfigClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.CommaClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model" | "max_tokens", "gpt-4" | 100>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4", const "max_tokens": const 100_i64 };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "CommaClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ExtraWhitespaceClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "ExtraWhitespaceClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaLongValueClientBlock$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" };
+        _1 = PrimitiveClientOptions { const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "TriviaLongValueClientBlock", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaClientBlock$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "TriviaClientBlock", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.SameLineClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "SameLineClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TypedValuesClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model" | "temperature" | "max_tokens" | "stream", "gpt-4" | 0.5 | 2048 | "true">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4", const "temperature": const 0.5_f64, const "max_tokens": const 2048_i64, const "stream": const "true" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "TypedValuesClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TestTarget() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: map<void, void>
 
     bb0: {
         _1 = {  };
-        _0 = call const fn baml.llm.render_prompt(const "TestTarget", copy _1) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const fn user.BasicClient, const "TestTarget", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1013,14 +1167,312 @@ fn user.TestTarget$render_prompt() -> baml.llm.PromptAst {
     }
 }
 
-fn user.TestTarget() -> string {
+fn user.TriviaClient$new() -> null {
     // Locals:
-    let _0: string // _0 // return
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "TriviaClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.C$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "C", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ArrayConfigClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model" | "stop_sequences", "gpt-4" | "END" | "STOP" | "DONE"[]>
+    let _5: "END" | "STOP" | "DONE"[]
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _5 = [const "END", const "STOP", const "DONE"];
+        _4 = { const "model": const "gpt-4", const "stop_sequences": copy _5 };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "ArrayConfigClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LongOptionClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" };
+        _1 = PrimitiveClientOptions { const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "LongOptionClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.NestedConfigClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 =  {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "NestedConfigClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LongArrayOfObjectsClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model" | "tools", "gpt-4" | void[]>
+    let _5: void[]
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _5 = [];
+        _4 = { const "model": const "gpt-4", const "tools": copy _5 };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "LongArrayOfObjectsClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.BasicClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "BasicClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LongNestedValuesClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<"model", 5>
+
+    bb0: {
+        _2 =  {  };
+        _3 = {  };
+        _4 = { const "model": const 5_i64 };
+        _1 = PrimitiveClientOptions { const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "LongNestedValuesClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.StringProviderClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", 1>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const 1_i64 };
+        _1 = PrimitiveClientOptions { const "https://openrouter.ai/api/v1", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "StringProviderClient", const "openai-generic", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DeeplyNestedClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: void
+    let _3: void
+    let _4: void
+    let _5: map<void, void>
+    let _6: map<"model", "gpt-4">
+
+    bb0: {
+        _4 =  { const "platform", const "production" };
+        _3 =  { const "true", const 30000_i64, copy _4 };
+        _2 =  { copy _3 };
+        _5 = {  };
+        _6 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _5, copy _6 };
+        _0 = PrimitiveClient { const "DeeplyNestedClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaDeeplyNestedClientBlock$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 =  {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "TriviaDeeplyNestedClientBlock", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.MixedValuesClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model" | "max_tokens" | "temperature" | "stream" | "stop" | "inline_string", "gpt-4" | 100 | 0.7 | "true" | "END"[] | "#inlineraw#">
+    let _5: "END"[]
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _5 = [const "END"];
+        _4 = { const "model": const "gpt-4", const "max_tokens": const 100_i64, const "temperature": const 0.7_f64, const "stream": const "true", const "stop": copy _5, const "inline_string": const "#inlineraw#" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "MixedValuesClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LongArrayClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model" | "stop_sequences", "gpt-4" | "STOP_GENERATION_NOW" | "END_OF_RESPONSE_MARKER" | "COMPLETION_FINISHED_SIGNAL" | "TERMINATE_OUTPUT_HERE" | "FINAL_ANSWER_DELIMITER"[]>
+    let _5: "STOP_GENERATION_NOW" | "END_OF_RESPONSE_MARKER" | "COMPLETION_FINISHED_SIGNAL" | "TERMINATE_OUTPUT_HERE" | "FINAL_ANSWER_DELIMITER"[]
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _5 = [const "STOP_GENERATION_NOW", const "END_OF_RESPONSE_MARKER", const "COMPLETION_FINISHED_SIGNAL", const "TERMINATE_OUTPUT_HERE", const "FINAL_ANSWER_DELIMITER"];
+        _4 = { const "model": const "gpt-4", const "stop_sequences": copy _5 };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "LongArrayClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TestTarget$render_prompt() -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
     let _1: map<string, unknown>
 
     bb0: {
         _1 = {  };
-        _0 = call const fn baml.llm.call_llm_function(const "TestTarget", copy _1) -> [bb1];
+        _0 = call const fn baml.llm.render_prompt(const "TestTarget", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1047,6 +1499,164 @@ fn user.TestTarget$build_request() -> baml.http.Request {
     }
 
     bb2: {
+        return;
+    }
+}
+
+fn user.TriviaLongValueClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit" };
+        _1 = PrimitiveClientOptions { const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "TriviaLongValueClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.FullClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model" | "max_tokens" | "temperature" | "top_p", "gpt-4" | 100 | 0.7 | 0.9>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4", const "max_tokens": const 100_i64, const "temperature": const 0.7_f64, const "top_p": const 0.9_f64 };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "FullClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ArrayOfObjectsClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model" | "tools", "gpt-4" | void[]>
+    let _5: void[]
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _5 = [];
+        _4 = { const "model": const "gpt-4", const "tools": copy _5 };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "ArrayOfObjectsClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaDeeplyNestedClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 =  {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "TriviaDeeplyNestedClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.EnvClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "EnvClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model", "gpt-4">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ManyOptionsClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"model" | "max_tokens" | "temperature" | "top_p" | "frequency_penalty" | "presence_penalty" | "stream" | "stop_sequences", "gpt-4" | 4096 | 0.7 | 0.95 | 0.5 | 0.3 | "true" | "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]>
+    let _5: "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _5 = [const "END", const "STOP", const "DONE", const "COMPLETE", const "FINISHED"];
+        _4 = { const "model": const "gpt-4", const "max_tokens": const 4096_i64, const "temperature": const 0.7_f64, const "top_p": const 0.95_f64, const "frequency_penalty": const 0.5_f64, const "presence_penalty": const 0.3_f64, const "stream": const "true", const "stop_sequences": copy _5 };
+        _1 = PrimitiveClientOptions { const "https://api.openai.com/v1", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = PrimitiveClient { const "ManyOptionsClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
         return;
     }
 }
@@ -1796,11 +2406,11 @@ fn user.LlmBasic(name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // name // param
-    let _2: map<string, unknown>
+    let _2: map<"name", string>
 
     bb0: {
         _2 = { const "name": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "LlmBasic", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmBasic", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -1942,11 +2552,11 @@ fn user.LlmWithLongSignature(first_context: string, second_context: string, thir
     let _2: string // second_context // param
     let _3: string // third_context // param
     let _4: string // user_query // param
-    let _5: map<string, unknown>
+    let _5: map<"first_context" | "second_context" | "third_context" | "user_query", string>
 
     bb0: {
         _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
-        _0 = call const fn baml.llm.call_llm_function(const "LlmWithLongSignature", copy _5) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmWithLongSignature", copy _5) -> [bb1];
     }
 
     bb1: {
@@ -1979,11 +2589,15 @@ fn user.LlmStringClient(text: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
-    let _2: map<string, unknown>
+    let _2: void
+    let _3: void[]
+    let _4: map<"text", string>
 
     bb0: {
-        _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "LlmStringClient", copy _2) -> [bb1];
+        _3 = [];
+        _2 = Client { const "openai/gpt-4o", const null, copy _3, const null, const 0_i64 };
+        _4 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(copy _2, const "LlmStringClient", copy _4) -> [bb1];
     }
 
     bb1: {
@@ -2051,11 +2665,11 @@ fn user.LlmMultiLine(text: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
-    let _2: map<string, unknown>
+    let _2: map<"text", string>
 
     bb0: {
         _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "LlmMultiLine", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmMultiLine", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -2107,11 +2721,11 @@ fn user.LlmReversedOrder(text: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
-    let _2: map<string, unknown>
+    let _2: map<"text", string>
 
     bb0: {
         _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "LlmReversedOrder", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmReversedOrder", copy _2) -> [bb1];
     }
 
     bb1: {

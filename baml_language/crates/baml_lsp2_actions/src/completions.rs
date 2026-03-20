@@ -814,6 +814,20 @@ fn completions_for_value_position(
                     (CompletionKind::TemplateString, "template_string")
                 }
                 Definition::Client(_) => (CompletionKind::Client, "client"),
+                Definition::RetryPolicy(_) => (CompletionKind::RetryPolicy, "retry_policy"),
+                // Let bindings with Client/RetryPolicy origin are compiler2 clients/retry policies.
+                Definition::Let(loc) => {
+                    let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+                    match item_tree[loc.id(db)].origin {
+                        baml_compiler2_ast::ast::LetOrigin::Client => {
+                            (CompletionKind::Client, "client")
+                        }
+                        baml_compiler2_ast::ast::LetOrigin::RetryPolicy => {
+                            (CompletionKind::RetryPolicy, "retry_policy")
+                        }
+                        _ => continue,
+                    }
+                }
                 _ => continue,
             };
             items.push(

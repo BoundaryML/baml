@@ -6,11 +6,11 @@ fn user.GetUser(id: int) -> user.User {
     // Locals:
     let _0: user.User // _0 // return
     let _1: int // id // param
-    let _2: map<string, unknown>
+    let _2: map<"id", int>
 
     bb0: {
         _2 = { const "id": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const "GetUser", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "GetUser", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -63,11 +63,11 @@ fn user.GetMixedList$build_request() -> baml.http.Request {
 fn user.GetStatus() -> user.Status {
     // Locals:
     let _0: user.Status // _0 // return
-    let _1: map<string, unknown>
+    let _1: map<void, void>
 
     bb0: {
         _1 = {  };
-        _0 = call const fn baml.llm.call_llm_function(const "GetStatus", copy _1) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "GetStatus", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -121,11 +121,11 @@ fn user.GetUser$render_prompt(id: int) -> baml.llm.PromptAst {
 fn user.GetMixedMap() -> map<string, int | string> {
     // Locals:
     let _0: map<string, int | string> // _0 // return
-    let _1: map<string, unknown>
+    let _1: map<void, void>
 
     bb0: {
         _1 = {  };
-        _0 = call const fn baml.llm.call_llm_function(const "GetMixedMap", copy _1) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "GetMixedMap", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -217,11 +217,11 @@ fn user.GetStatus$build_request() -> baml.http.Request {
 fn user.GetMixedList() -> int | string[] {
     // Locals:
     let _0: int | string[] // _0 // return
-    let _1: map<string, unknown>
+    let _1: map<void, void>
 
     bb0: {
         _1 = {  };
-        _0 = call const fn baml.llm.call_llm_function(const "GetMixedList", copy _1) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const null, const "GetMixedList", copy _1) -> [bb1];
     }
 
     bb1: {

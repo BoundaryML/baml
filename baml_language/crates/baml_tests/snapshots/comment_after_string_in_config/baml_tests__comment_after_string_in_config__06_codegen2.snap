@@ -1,4 +1,54 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function $init() -> null {
+    call ?
+    store_global ?100
+    load_const ?
+    return
+}
 
+function user.OpenRouterMistralSmall3_1_24b$new() -> null {
+    alloc_instance PrimitiveClient
+    copy 0
+    load_const "OpenRouterMistralSmall3_1_24b"
+    store_field .name
+    copy 0
+    load_const "openai-generic"
+    store_field .provider
+    copy 0
+    alloc_instance PrimitiveClientOptions
+    copy 0
+    load_const "https://openrouter.ai/api/v1"
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    load_const null /* unknown class:  */
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    load_const 1
+    load_const 0.1
+    load_const "model"
+    load_const "temperature"
+    alloc_map 2
+    store_field .request_body
+    store_field .options
+    return
+}

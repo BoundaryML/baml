@@ -2,6 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function user.GetUser() -> user.MyClass {
+    load_const null
     load_const "GetUser"
     alloc_map 0
     call baml.llm.call_llm_function

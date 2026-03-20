@@ -529,51 +529,18 @@ impl BexEngine {
         // This avoids passing raw HeapPtrs to sys_ops.
         let llm_functions = Self::extract_llm_function_info(&resolved_function_names);
 
-        // Convert compile-time client metadata to runtime format.
+        // Client metadata and round-robin counters are no longer populated from compile-time
+        // metadata. Clients flow through let-binding globals ($init populates their slots),
+        // and round-robin counters will be initialized from Client global slots in a future phase.
+        // For now, both maps are empty — `get_client` is no longer called (clients are passed
+        // directly as arguments), and `round_robin_next`/`round_robin_peek` work on the
+        // `round_robin_counters` map which starts empty.
         let client_metadata: std::collections::HashMap<String, sys_types::ClientBuildMeta> =
-            bytecode
-                .client_metadata
-                .into_iter()
-                .map(|(name, meta)| {
-                    let client_type = meta.client_type;
-                    let retry_policy =
-                        meta.retry_policy
-                            .map(|rp| sys_types::io::owned::llm::RetryPolicy {
-                                max_retries: rp.max_retries,
-                                initial_delay_ms: rp.initial_delay_ms,
-                                multiplier: rp.multiplier,
-                                max_delay_ms: rp.max_delay_ms,
-                            });
-                    (
-                        name,
-                        sys_types::ClientBuildMeta {
-                            client_type,
-                            sub_client_names: meta.sub_client_names,
-                            retry_policy,
-                            round_robin_start: meta
-                                .round_robin_start
-                                .and_then(|start| usize::try_from(start).ok()),
-                        },
-                    )
-                })
-                .collect();
-
-        // Build round-robin counters for composite clients.
-        let round_robin_counters = client_metadata
-            .iter()
-            .filter(|(_, meta)| {
-                matches!(meta.client_type, bex_vm_types::ClientBuildType::RoundRobin)
-            })
-            .map(|(name, meta)| {
-                let start = meta
-                    .round_robin_start
-                    .unwrap_or_else(default_round_robin_start);
-                (
-                    name.clone(),
-                    std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(start)),
-                )
-            })
-            .collect();
+            std::collections::HashMap::new();
+        let round_robin_counters: std::collections::HashMap<
+            String,
+            std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        > = std::collections::HashMap::new();
 
         let sys_op_ctx = sys_types::SysOpContext {
             llm_functions: Arc::new(llm_functions),
