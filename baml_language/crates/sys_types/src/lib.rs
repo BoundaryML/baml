@@ -732,7 +732,9 @@ impl<T: SysOpHttp + SysOpEnv + SysOpFs + Default + 'static> SysOpLlm for T {
                 };
 
                 Ok(sys_llm::HttpSendResponse {
-                    status_code: u16::try_from(status).unwrap(),
+                    status_code: u16::try_from(status).map_err(|_| {
+                        sys_llm::LlmOpError::Other(format!("invalid HTTP status code: {status}"))
+                    })?,
                     headers,
                     body,
                 })
