@@ -395,7 +395,7 @@ macro_rules! __baml_db_item {
     };
     {$db:ident =>
         enum $name:ident {
-            $($variant:ident $(@alias($alias:literal))*),+
+            $($variant:ident $(@alias($alias:literal))*),+$(,)?
         }
         $($rest:tt)*
     } => {

@@ -1,0 +1,13 @@
+[package]
+name = "tools_sap_visualizer"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "tools_sap_visualizer"
+path = "src/main.rs"
+
+[dependencies]
+bex_sap = { workspace = true }
+eframe = { workspace = true }
+serde_json = { workspace = true }

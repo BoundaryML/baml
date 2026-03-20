@@ -107,59 +107,29 @@ where
         };
 
         // add entries as fields
+        let mut obj: HashMap<&str, &jsonish::Value<'s>> =
+            obj.iter().map(|(k, v)| (k.as_ref(), v)).collect();
+
+        // Iterate fields in definition order for stable output ordering,
+        // using alias-aware matching to find the corresponding input key.
         let mut field_data = IndexMap::new();
-        for (k, v) in obj {
-            // try_cast is strict and rejects when it finds extra keys.
-            let field = class_ty.fields.iter().find(|f| f.key_matches(k))?;
-            let field_ty = ctx
-                .db
-                .resolve_with_meta(field.ty.as_ref())
-                .map_err(|ident| ctx.error_type_resolution(ident))
-                .ok()?;
-            let value = TyResolvedRef::try_cast(ctx, field_ty.clone(), v)?;
-            field_data.insert(&*field.name, value);
-        }
-
-        // check all fields
         for field in &class_ty.fields {
-            let AnnotatedField {
-                name,
-                ty,
-                class_in_progress_field_missing: before_started,
-                class_completed_field_missing: missing,
-                ..
-            } = field;
-            if field_data.contains_key(name.as_ref()) {
-                continue; // happy path: we already have this field
-            }
+            let AnnotatedField { name, ty, .. } = field;
+            let ty = ctx.db.resolve_with_meta(ty.as_ref()).ok()?;
 
-            let replacement = match completion_state {
-                CompletionState::Incomplete if matches!(before_started, AttrLiteral::Never) => {
-                    return None;
-                }
-                CompletionState::Incomplete => before_started,
-                CompletionState::Complete if matches!(missing, AttrLiteral::Never) => {
-                    return None;
-                }
-                CompletionState::Complete => missing,
+            // Use key_matches for alias-aware lookup (when aliases exist,
+            // only aliases match — not the original field name).
+            let matched_key = obj.keys().find(|k| field.key_matches(k)).copied();
+            let Some(key) = matched_key else {
+                return None; // `try_cast` is strict and rejects with missing keys
             };
 
-            let field_ty = ctx
-                .db
-                .resolve_with_meta(ty.as_ref())
-                .map_err(|ident| ctx.error_type_resolution(ident))
-                .ok()?;
-
-            // Literal must match thet field's type.
-            let value = field_ty.ty.from_literal(replacement, ctx).ok()?;
-            let value = BamlValueWithFlags::new(
-                value,
-                DeserializerMeta {
-                    flags: DeserializerConditions::new().with_flag(Flag::DefaultFromNoValue),
-                    ty: field_ty,
-                },
-            );
+            let value = obj.remove(key).unwrap();
+            let value = TyResolvedRef::try_cast(ctx, ty.clone(), value)?;
             field_data.insert(&**name, value);
+        }
+        if !obj.is_empty() {
+            return None; // `try_cast` is strict and rejects with extra keys
         }
 
         Some(ValueWithFlags::new(
@@ -509,7 +479,11 @@ where
             // Missing entry falls back to `missing` when object is complete
             None /*if !is_incomplete */=> {
                 let field_value = ty.ty.from_literal(missing, ctx)?;
-                let field_meta = DeserializerMeta::new(ty);
+                let field_meta = DeserializerMeta {
+                    flags: DeserializerConditions::new()
+                        .with_flag(Flag::DefaultFromNoValue),
+                    ty,
+                };
                 ValueWithFlags::new(field_value, field_meta)
             }
         };
