@@ -50,7 +50,7 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
 
 use std::collections::{HashMap, HashSet};
 
-use baml_base::{FieldAttr, Name, SourceFile, Span};
+use baml_base::{Name, SourceFile, Span};
 use baml_compiler_hir::{
     self, ItemId, function_body, function_qualified_name, function_signature,
     function_signature_source_map, template_string_body, template_string_signature,
@@ -184,7 +184,6 @@ pub fn compile_files(
                 field_type: field_ty,
                 description: None,
                 alias: None,
-                field_attr: FieldAttr::default(),
             });
 
             // Only add public fields to field_types (for type checking)
@@ -257,7 +256,6 @@ pub fn compile_files(
                         field_type: runtime_ty,
                         description: field.description.value().cloned(),
                         alias: field.alias.value().cloned(),
-                        field_attr: FieldAttr::default(),
                     });
                 }
 

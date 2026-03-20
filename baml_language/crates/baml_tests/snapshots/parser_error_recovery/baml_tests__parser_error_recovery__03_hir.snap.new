@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 14474
+---
+=== HIR ITEMS ===
+function Foo() -> <unknown> {
+    GPT4
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+class Another {
+  field: int
+}
+
+class User {
+  name: string
+}
+
+function Incomplete(param1: string) -> <unknown> {
+    // missing body
+}
+
+function NextFunction() -> string {
+    return "parsed";
+}
+
+class Partial {
+  field1: str
+  field2: <unknown>
+  field3: string
+  field4: string
+  string: <unknown>
+}
+
+enum ValidEnum {
+  OPTION1
+  OPTION2
+}
+
+class Test {
+  field1: string
+  field2: string
+  another: closed
+  string: ")  // Should still parse this
+}"
+}

@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 10587
+---
+=== TIR2 ===
+class user.MyClass {
+  name: string
+  age: int
+}
+function user.GetUser() -> user.MyClass {
+  baml.llm.call_llm_function(null, "GetUser", map {  }) : unknown
+  !! 347..397: type mismatch: expected baml.llm.Client, got null
+  !! 347..397: type mismatch: expected user.MyClass, got unknown
+}
+function user.GetUser$render_prompt() -> baml.llm.PromptAst {
+  baml.llm.render_prompt("GetUser", map {  }) : baml.llm.PromptAst
+}
+function user.GetUser$build_request() -> baml.http.Request {
+  baml.llm.build_request("GetUser", map {  }) : baml.http.Request
+}

@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 27548
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: type mismatch: expected string, got unknown
+   ╭─[ test.baml:1:24 ]
+   │
+ 1 │ ╭─▶ function Fn() -> string {
+   ┆ ┆   
+ 4 │ ├─▶ }
+   │ │       
+   │ ╰─────── type mismatch: expected string, got unknown
+   │     
+   │     Note: Error code: E0001
+───╯

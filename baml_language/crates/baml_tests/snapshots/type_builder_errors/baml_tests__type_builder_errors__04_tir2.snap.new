@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 26959
+---
+=== TIR2 ===
+function user.TypeBuilderFn(from_text: string) -> user.Resume {
+  baml.llm.call_llm_function(Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text }) : unknown
+  !! 0..0: type mismatch: expected user.Resume, got unknown
+}
+function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
+  baml.llm.render_prompt("TypeBuilderFn", map { "from_text": from_text }) : baml.llm.PromptAst
+}
+function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request {
+  baml.llm.build_request("TypeBuilderFn", map { "from_text": from_text }) : baml.http.Request
+}
+class user.Resume {
+  name: string
+}

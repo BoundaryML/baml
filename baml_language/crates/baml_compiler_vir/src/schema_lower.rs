@@ -125,7 +125,6 @@ fn lower_class(
                 description: attr_to_option(&field.description),
                 alias: attr_to_option(&field.alias),
                 skip: attr_to_bool(&field.skip),
-                field_attr: field.field_attr.clone(),
             }
         })
         .collect();

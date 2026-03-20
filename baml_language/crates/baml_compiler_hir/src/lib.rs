@@ -2093,7 +2093,6 @@ pub(crate) fn lower_class(node: &SyntaxNode, ctx: &mut LoweringContext) -> Optio
                 alias: field_alias,
                 description: field_description,
                 skip: field_skip,
-                field_attr: baml_base::FieldAttr::default(),
             });
         }
     }

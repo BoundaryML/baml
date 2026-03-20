@@ -464,7 +464,6 @@ mod tests {
                     },
                     description: None,
                     alias: None,
-                    field_attr: Default::default(),
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
@@ -473,7 +472,6 @@ mod tests {
                     },
                     description: None,
                     alias: None,
-                    field_attr: Default::default(),
                 },
             ],
             description: None,
