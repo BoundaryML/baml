@@ -258,7 +258,7 @@ mod tests {
     use indexmap::IndexMap;
 
     use super::*;
-    use crate::build_request::{LlmPrimitiveClient, build_request};
+    use crate::build_request::{LlmPrimitiveClient, LlmRequestBuilder};
 
     // -- helpers --
 
@@ -290,6 +290,22 @@ mod tests {
 
     fn parse_body(body: &str) -> serde_json::Value {
         serde_json::from_str(body).unwrap()
+    }
+
+    async fn build_raw(
+        client: &LlmPrimitiveClient,
+        prompt: Arc<PromptAst>,
+        stream: bool,
+    ) -> Result<crate::build_request::RawHttpRequest, crate::build_request::BuildRequestError> {
+        let (h, e, f) = crate::build_request::stub_callbacks();
+        let callbacks = crate::build_request::BuildRequestCallbacks {
+            http_send: &h,
+            env_read: &e,
+            fs_read: &f,
+        };
+        AnthropicBuilder
+            .build_request(client, prompt, stream, &callbacks)
+            .await
     }
 
     // ========================================================================
@@ -505,11 +521,7 @@ mod tests {
             ("max_tokens", BexExternalValue::Int(1000)),
         ]);
         let prompt = msg("user", "Hello");
-        let result = {
-            let (h, e, f) = crate::build_request::stub_callbacks();
-            build_request(&client, prompt, false, &h, &e, &f).await
-        }
-        .unwrap();
+        let result = build_raw(&client, prompt, false).await.unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -540,11 +552,7 @@ mod tests {
             msg("user", "What is 2+2?"),
             msg("assistant", "4"),
         ]));
-        let result = {
-            let (h, e, f) = crate::build_request::stub_callbacks();
-            build_request(&client, prompt, false, &h, &e, &f).await
-        }
-        .unwrap();
+        let result = build_raw(&client, prompt, false).await.unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -585,11 +593,7 @@ mod tests {
             msg("assistant", "Good, thanks!"),
             msg("user", "Goodbye"),
         ]));
-        let result = {
-            let (h, e, f) = crate::build_request::stub_callbacks();
-            build_request(&client, prompt, false, &h, &e, &f).await
-        }
-        .unwrap();
+        let result = build_raw(&client, prompt, false).await.unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -639,11 +643,7 @@ mod tests {
             content: Arc::new("hello".to_string().into()),
             metadata: serde_json::json!({"cache_control": {"type": "ephemeral"}}),
         });
-        let result = {
-            let (h, e, f) = crate::build_request::stub_callbacks();
-            build_request(&client, prompt, false, &h, &e, &f).await
-        }
-        .unwrap();
+        let result = build_raw(&client, prompt, false).await.unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -680,11 +680,7 @@ mod tests {
             msg("system", "Second instruction."),
             msg("user", "Hello"),
         ]));
-        let result = {
-            let (h, e, f) = crate::build_request::stub_callbacks();
-            build_request(&client, prompt, false, &h, &e, &f).await
-        }
-        .unwrap();
+        let result = build_raw(&client, prompt, false).await.unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -722,11 +718,7 @@ mod tests {
             }),
             msg("user", "Hello"),
         ]));
-        let result = {
-            let (h, e, f) = crate::build_request::stub_callbacks();
-            build_request(&client, prompt, false, &h, &e, &f).await
-        }
-        .unwrap();
+        let result = build_raw(&client, prompt, false).await.unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -780,11 +772,7 @@ mod tests {
             metadata: serde_json::Value::Null,
         });
 
-        let result = {
-            let (h, e, f) = crate::build_request::stub_callbacks();
-            build_request(&client, prompt, false, &h, &e, &f).await
-        }
-        .unwrap();
+        let result = build_raw(&client, prompt, false).await.unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,

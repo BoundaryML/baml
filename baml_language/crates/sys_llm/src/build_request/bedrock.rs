@@ -49,48 +49,6 @@ const BEDROCK_SKIP_KEYS: &[&str] = &[
     "stop_sequences",
 ];
 
-/// Build the Bedrock request URL.
-///
-/// If `endpoint_url` is set, uses it as the base (for local mocking / custom
-/// proxies like `LocalStack`). Otherwise constructs the standard AWS URL from
-/// the `region` option.
-fn build_bedrock_url(
-    client: &LlmPrimitiveClient,
-    model: &str,
-    endpoint: &str,
-) -> Result<String, BuildRequestError> {
-    if let Some(base) = get_string_option(client, "endpoint_url") {
-        let base = base.trim_end_matches('/');
-        Ok(format!("{base}/model/{model}/{endpoint}"))
-    } else {
-        let region = get_string_option(client, "region")
-            .ok_or_else(|| BuildRequestError::MissingOption("region".into()))?;
-        Ok(format!(
-            "https://bedrock-runtime.{region}.amazonaws.com/model/{model}/{endpoint}"
-        ))
-    }
-}
-
-impl BedrockBuilder {
-    /// Build the request URL from region + model options.
-    #[cfg(test)]
-    #[allow(clippy::unused_self)]
-    fn build_url(
-        &self,
-        client: &LlmPrimitiveClient,
-        stream: bool,
-    ) -> Result<String, BuildRequestError> {
-        let model = get_string_option(client, "model")
-            .ok_or_else(|| BuildRequestError::MissingOption("model".into()))?;
-        let endpoint = if stream {
-            "converse-stream"
-        } else {
-            "converse"
-        };
-        build_bedrock_url(client, &model, endpoint)
-    }
-}
-
 impl LlmRequestBuilder for BedrockBuilder {
     /// Builds an unsigned Bedrock Converse API request.
     ///
@@ -102,7 +60,7 @@ impl LlmRequestBuilder for BedrockBuilder {
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
         stream: bool,
-        _callbacks: &BuildRequestCallbacks<'_>,
+        callbacks: &BuildRequestCallbacks<'_>,
     ) -> Result<RawHttpRequest, BuildRequestError> {
         let model = get_string_option(client, "model")
             .ok_or_else(|| BuildRequestError::MissingOption("model".into()))?;
@@ -111,7 +69,32 @@ impl LlmRequestBuilder for BedrockBuilder {
         } else {
             "converse"
         };
-        let url = build_bedrock_url(client, &model, endpoint)?;
+
+        // When endpoint_url is set (e.g. LocalStack), region is only needed for
+        // SigV4 signing later, not for URL construction. Otherwise resolve from
+        // explicit option first, then the AWS default provider chain.
+        let url = if let Some(base) = get_string_option(client, "endpoint_url") {
+            let base = base.trim_end_matches('/');
+            format!("{base}/model/{model}/{endpoint}")
+        } else {
+            let region = match get_string_option(client, "region") {
+                Some(r) => r,
+                None => {
+                    let sdk_config = crate::auth_request::load_aws_sdk_config(
+                        client,
+                        callbacks.http_send,
+                        callbacks.env_read,
+                        callbacks.fs_read,
+                    )
+                    .await;
+                    sdk_config
+                        .region()
+                        .map(std::string::ToString::to_string)
+                        .ok_or_else(|| BuildRequestError::MissingOption("region".into()))?
+                }
+            };
+            format!("https://bedrock-runtime.{region}.amazonaws.com/model/{model}/{endpoint}")
+        };
 
         // Convert BAML prompt to SDK types.
         let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
@@ -664,7 +647,6 @@ mod tests {
     use indexmap::IndexMap;
 
     use super::*;
-    use crate::build_request::build_request;
 
     fn make_client(options: Vec<(&str, BexExternalValue)>) -> LlmPrimitiveClient {
         let mut opts = IndexMap::new();
@@ -746,11 +728,7 @@ mod tests {
 
     /// Helper: build a request and return the parsed body JSON.
     async fn body_for(client: &LlmPrimitiveClient, prompt: Arc<PromptAst>) -> serde_json::Value {
-        let result = {
-            let (h, e, f) = crate::build_request::stub_callbacks();
-            build_request(client, prompt, false, &h, &e, &f).await
-        }
-        .unwrap();
+        let result = build_raw(client, prompt, false).await.unwrap();
         serde_json::from_str(&result.body).unwrap()
     }
 
@@ -1064,10 +1042,7 @@ mod tests {
                 base64_data: None,
             },
         );
-        let result = {
-            let (h, e, f) = crate::build_request::stub_callbacks();
-            build_request(&client, prompt, false, &h, &e, &f).await
-        };
+        let result = build_raw(&client, prompt, false).await;
         assert!(result.is_err(), "non-s3 URLs should be rejected");
     }
 
@@ -1075,55 +1050,73 @@ mod tests {
     // URL, headers, error cases
     // -----------------------------------------------------------------------
 
-    #[test]
-    fn bedrock_url_contains_model_and_region() {
+    /// Helper: run only the build step (no auth/signing) via the
+    /// `LlmRequestBuilder` trait so URL tests don't need valid credentials.
+    async fn build_raw(
+        client: &LlmPrimitiveClient,
+        prompt: Arc<PromptAst>,
+        stream: bool,
+    ) -> Result<RawHttpRequest, BuildRequestError> {
+        let (h, e, f) = crate::build_request::stub_callbacks();
+        let callbacks = crate::build_request::BuildRequestCallbacks {
+            http_send: &h,
+            env_read: &e,
+            fs_read: &f,
+        };
+        BedrockBuilder
+            .build_request(client, prompt, stream, &callbacks)
+            .await
+    }
+
+    #[tokio::test]
+    async fn bedrock_url_contains_model_and_region() {
         let client = make_client(base_options());
-        let url = BedrockBuilder.build_url(&client, false).unwrap();
+        let result = build_raw(&client, msg("user", "hi"), false).await.unwrap();
         assert_eq!(
-            url,
+            result.url,
             "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
         );
     }
 
-    #[test]
-    fn bedrock_stream_url_uses_converse_stream() {
+    #[tokio::test]
+    async fn bedrock_stream_url_uses_converse_stream() {
         let client = make_client(base_options());
-        let url = BedrockBuilder.build_url(&client, true).unwrap();
-        assert!(url.ends_with("/converse-stream"));
+        let result = build_raw(&client, msg("user", "hi"), true).await.unwrap();
+        assert!(result.url.ends_with("/converse-stream"));
     }
 
-    #[test]
-    fn bedrock_endpoint_url_overrides_base() {
+    #[tokio::test]
+    async fn bedrock_endpoint_url_overrides_base() {
         let mut opts = base_options();
         opts.push((
             "endpoint_url",
             BexExternalValue::String("http://localhost:4566".into()),
         ));
         let client = make_client(opts);
-        let url = BedrockBuilder.build_url(&client, false).unwrap();
+        let result = build_raw(&client, msg("user", "hi"), false).await.unwrap();
         assert_eq!(
-            url,
+            result.url,
             "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
         );
     }
 
-    #[test]
-    fn bedrock_endpoint_url_with_trailing_slash() {
+    #[tokio::test]
+    async fn bedrock_endpoint_url_with_trailing_slash() {
         let mut opts = base_options();
         opts.push((
             "endpoint_url",
             BexExternalValue::String("http://localhost:4566/".into()),
         ));
         let client = make_client(opts);
-        let url = BedrockBuilder.build_url(&client, false).unwrap();
+        let result = build_raw(&client, msg("user", "hi"), false).await.unwrap();
         assert_eq!(
-            url,
+            result.url,
             "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
         );
     }
 
-    #[test]
-    fn bedrock_endpoint_url_does_not_require_region() {
+    #[tokio::test]
+    async fn bedrock_endpoint_url_does_not_require_region() {
         let client = make_client(vec![
             (
                 "model",
@@ -1134,97 +1127,38 @@ mod tests {
                 BexExternalValue::String("http://localhost:4566".into()),
             ),
         ]);
-        let url = BedrockBuilder.build_url(&client, false).unwrap();
-        assert!(url.starts_with("http://localhost:4566/"));
+        let result = build_raw(&client, msg("user", "hi"), false).await.unwrap();
+        assert!(result.url.starts_with("http://localhost:4566/"));
     }
 
-    #[test]
-    fn bedrock_missing_region_errors() {
+    #[tokio::test]
+    async fn bedrock_missing_region_errors() {
+        // No region in options, so build_request falls back to the AWS
+        // provider chain. noop callbacks return "not found" so region
+        // resolution fails, which is what we're testing.
+        use std::sync::Arc;
         let client = make_client(vec![("model", BexExternalValue::String("m".into()))]);
-        assert!(BedrockBuilder.build_url(&client, false).is_err());
+        let h: crate::HttpSendFn =
+            Arc::new(|_| Box::pin(async { Err(crate::LlmOpError::Other("not available".into())) }));
+        let (e, f) = crate::build_request::noop_env_fs_callbacks();
+        let callbacks = crate::build_request::BuildRequestCallbacks {
+            http_send: &h,
+            env_read: &e,
+            fs_read: &f,
+        };
+        let result = BedrockBuilder
+            .build_request(&client, msg("user", "hi"), false, &callbacks)
+            .await;
+        assert!(result.is_err());
     }
 
-    #[test]
-    fn bedrock_missing_model_errors() {
+    #[tokio::test]
+    async fn bedrock_missing_model_errors() {
         let client = make_client(vec![(
             "region",
             BexExternalValue::String("us-east-1".into()),
         )]);
-        assert!(BedrockBuilder.build_url(&client, false).is_err());
-    }
-
-    #[tokio::test]
-    async fn bedrock_sigv4_headers_present() {
-        let client = make_client(base_options());
-        let result = {
-            let (h, e, f) = crate::build_request::stub_callbacks();
-            build_request(&client, msg("user", "Hi"), false, &h, &e, &f).await
-        }
-        .unwrap();
-        assert!(result.headers.contains_key("authorization"));
-        assert!(result.headers.contains_key("x-amz-date"));
-    }
-
-    #[tokio::test]
-    async fn bedrock_fails_without_explicit_credentials() {
-        let call_count = Arc::new(AtomicUsize::new(0));
-        let send_fn = mock_http_send(call_count, 404, "");
-        let (e, f) = crate::build_request::noop_env_fs_callbacks();
-        let client = make_client(vec![
-            ("region", BexExternalValue::String("us-east-1".into())),
-            ("model", BexExternalValue::String("some-model".into())),
-        ]);
-        let result = build_request(&client, msg("user", "Hi"), false, &send_fn, &e, &f).await;
+        let result = build_raw(&client, msg("user", "hi"), false).await;
         assert!(result.is_err());
-    }
-
-    // -----------------------------------------------------------------------
-    // BamlHttpConnector wiring tests
-    // -----------------------------------------------------------------------
-
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    fn mock_http_send(
-        call_count: Arc<AtomicUsize>,
-        status: u16,
-        body: &'static str,
-    ) -> crate::HttpSendFn {
-        Arc::new(move |_req| {
-            call_count.fetch_add(1, Ordering::SeqCst);
-            let body = body.to_string();
-            Box::pin(async move {
-                Ok(crate::HttpSendResponse {
-                    status_code: status,
-                    headers: IndexMap::new(),
-                    body,
-                })
-            })
-        })
-    }
-
-    #[tokio::test]
-    async fn bedrock_http_send_invoked_during_credential_resolution() {
-        let call_count = Arc::new(AtomicUsize::new(0));
-        let send_fn = mock_http_send(call_count.clone(), 404, "");
-        let client = make_client(vec![
-            ("region", BexExternalValue::String("us-east-1".into())),
-            ("model", BexExternalValue::String("some-model".into())),
-        ]);
-        let (e, f) = crate::build_request::noop_env_fs_callbacks();
-        let _result = build_request(&client, msg("user", "Hi"), false, &send_fn, &e, &f).await;
-        assert!(call_count.load(Ordering::SeqCst) > 0);
-    }
-
-    #[tokio::test]
-    async fn bedrock_http_send_not_invoked_with_explicit_credentials() {
-        let call_count = Arc::new(AtomicUsize::new(0));
-        let send_fn = mock_http_send(call_count.clone(), 200, "");
-        let client = make_client(base_options());
-        let result = {
-            let (_h, e, f) = crate::build_request::stub_callbacks();
-            build_request(&client, msg("user", "Hi"), false, &send_fn, &e, &f).await
-        };
-        assert!(result.is_ok());
-        assert_eq!(call_count.load(Ordering::SeqCst), 0);
     }
 }

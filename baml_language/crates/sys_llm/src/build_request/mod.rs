@@ -189,6 +189,7 @@ pub(crate) async fn build_request(
 }
 
 /// Intermediate struct before converting to an owned `HttpRequest`.
+#[derive(Debug)]
 pub(crate) struct RawHttpRequest {
     pub method: String,
     pub url: String,
@@ -894,5 +895,143 @@ mod tests {
         .unwrap();
         let body = parse_body(&result);
         assert_eq!(body["temperature"], 0.5);
+    }
+
+    // ========================================================================
+    // Bedrock integration tests (build + SigV4 auth through the full pipeline)
+    // ========================================================================
+
+    fn bedrock_options() -> Vec<(&'static str, BexExternalValue)> {
+        vec![
+            ("region", BexExternalValue::String("us-east-1".into())),
+            (
+                "model",
+                BexExternalValue::String("anthropic.claude-3-haiku-20240307-v1:0".into()),
+            ),
+            (
+                "access_key_id",
+                BexExternalValue::String("AKIAIOSFODNN7EXAMPLE".into()),
+            ),
+            (
+                "secret_access_key",
+                BexExternalValue::String("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
+            ),
+        ]
+    }
+
+    #[tokio::test]
+    async fn test_bedrock_url_and_method() {
+        let client = make_client("aws-bedrock", bedrock_options());
+        let prompt = msg("user", "Hello");
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
+        assert_eq!(result.method, "POST");
+        assert_eq!(
+            result.url,
+            "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_bedrock_sigv4_headers_present() {
+        let client = make_client("aws-bedrock", bedrock_options());
+        let prompt = msg("user", "Hello");
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
+        assert!(result.headers.contains_key("authorization"));
+        assert!(result.headers.contains_key("x-amz-date"));
+        assert_eq!(
+            result.headers.get("content-type").unwrap(),
+            "application/json"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_bedrock_stream_url() {
+        let client = make_client("aws-bedrock", bedrock_options());
+        let prompt = msg("user", "Hello");
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, true, &h, &e, &f).await
+        }
+        .unwrap();
+        assert!(result.url.ends_with("/converse-stream"));
+    }
+
+    #[tokio::test]
+    async fn test_bedrock_body_structure() {
+        let client = make_client("aws-bedrock", bedrock_options());
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "You are helpful."),
+            msg("user", "Hi"),
+        ]));
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "system": [{"text": "You are helpful."}],
+                "messages": [
+                    {"role": "user", "content": [{"text": "Hi"}]}
+                ]
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_bedrock_no_creds_or_region_in_body() {
+        let client = make_client("aws-bedrock", bedrock_options());
+        let prompt = msg("user", "Hello");
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "messages": [
+                    {"role": "user", "content": [{"text": "Hello"}]}
+                ]
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_bedrock_inference_config_through_pipeline() {
+        let mut opts = bedrock_options();
+        opts.push(("max_tokens", BexExternalValue::Int(500)));
+        opts.push(("temperature", BexExternalValue::Float(0.5)));
+        let client = make_client("aws-bedrock", opts);
+        let prompt = msg("user", "Hello");
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "messages": [
+                    {"role": "user", "content": [{"text": "Hello"}]}
+                ],
+                "inferenceConfig": {
+                    "maxTokens": 500,
+                    "temperature": 0.5,
+                }
+            })
+        );
     }
 }

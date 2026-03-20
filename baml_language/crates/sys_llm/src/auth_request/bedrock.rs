@@ -69,7 +69,17 @@ mod native_providers {
     impl ProvideEnv for BexEnvProvider {
         fn get(&self, k: &str) -> Result<String, std::env::VarError> {
             let fut = (self.env_read_fn)(k.to_string());
-            match tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(fut)) {
+            // ProvideEnv::get is sync but EnvReadFn is async (and may contain
+            // real awaits). We can't block_on from inside the tokio runtime,
+            // and block_in_place only works on multi-threaded runtimes. A
+            // short-lived thread lets us call block_on from outside the runtime.
+            // This is a truly horrible workaround but I'm not sure what else to
+            // do here.
+            let handle = tokio::runtime::Handle::current();
+            let result = std::thread::spawn(move || handle.block_on(fut))
+                .join()
+                .unwrap_or(Err(crate::LlmOpError::Other("thread panicked".into())));
+            match result {
                 Ok(Some(v)) => Ok(v),
                 Ok(None) | Err(_) => Err(std::env::VarError::NotPresent),
             }
@@ -257,7 +267,7 @@ fn baml_http_client(
 /// If the client has a `profile` option, it is passed to the SDK config
 /// loader to select the named profile from `~/.aws/config` and
 /// `~/.aws/credentials`.
-async fn load_aws_sdk_config(
+pub(crate) async fn load_aws_sdk_config(
     client: &LlmPrimitiveClient,
     http_send: &crate::HttpSendFn,
     env_read: &crate::EnvReadFn,
@@ -445,4 +455,150 @@ fn sign_with_credentials(
     }
 
     Ok(signed_headers)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    use bex_external_types::BexExternalValue;
+    use indexmap::IndexMap;
+
+    use super::*;
+    use crate::build_request::{BuildRequestCallbacks, RawHttpRequest};
+
+    fn make_client(options: Vec<(&str, BexExternalValue)>) -> LlmPrimitiveClient {
+        let mut opts = IndexMap::new();
+        for (k, v) in options {
+            opts.insert(k.to_string(), v);
+        }
+        LlmPrimitiveClient {
+            name: "test-bedrock".to_string(),
+            provider: "aws-bedrock".to_string(),
+            default_role: "user".to_string(),
+            allowed_roles: vec![
+                "system".to_string(),
+                "user".to_string(),
+                "assistant".to_string(),
+            ],
+            options: opts,
+        }
+    }
+
+    fn base_options() -> Vec<(&'static str, BexExternalValue)> {
+        vec![
+            ("region", BexExternalValue::String("us-east-1".into())),
+            (
+                "access_key_id",
+                BexExternalValue::String("AKIAIOSFODNN7EXAMPLE".into()),
+            ),
+            (
+                "secret_access_key",
+                BexExternalValue::String("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
+            ),
+        ]
+    }
+
+    /// A minimal unsigned Bedrock request for auth tests.
+    fn fake_request() -> RawHttpRequest {
+        let mut headers = IndexMap::new();
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        RawHttpRequest {
+            method: "POST".to_string(),
+            url: "https://bedrock-runtime.us-east-1.amazonaws.com/model/some-model/converse"
+                .to_string(),
+            headers,
+            body: r#"{"messages":[]}"#.to_string(),
+        }
+    }
+
+    fn mock_http_send(
+        call_count: Arc<AtomicUsize>,
+        status: u16,
+        body: &'static str,
+    ) -> crate::HttpSendFn {
+        Arc::new(move |_req| {
+            call_count.fetch_add(1, Ordering::SeqCst);
+            let body = body.to_string();
+            Box::pin(async move {
+                Ok(crate::HttpSendResponse {
+                    status_code: status,
+                    headers: IndexMap::new(),
+                    body,
+                })
+            })
+        })
+    }
+
+    #[tokio::test]
+    async fn sigv4_headers_present() {
+        let client = make_client(base_options());
+        let (h, e, f) = crate::build_request::stub_callbacks();
+        let callbacks = BuildRequestCallbacks {
+            http_send: &h,
+            env_read: &e,
+            fs_read: &f,
+        };
+        let result = BedrockAuth
+            .authorize(fake_request(), &client, &callbacks)
+            .await
+            .unwrap();
+        assert!(result.headers.contains_key("authorization"));
+        assert!(result.headers.contains_key("x-amz-date"));
+    }
+
+    #[tokio::test]
+    async fn fails_without_explicit_credentials() {
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let send_fn = mock_http_send(call_count, 404, "");
+        let (e, f) = crate::build_request::noop_env_fs_callbacks();
+        let client = make_client(vec![]);
+        let callbacks = BuildRequestCallbacks {
+            http_send: &send_fn,
+            env_read: &e,
+            fs_read: &f,
+        };
+        let result = BedrockAuth
+            .authorize(fake_request(), &client, &callbacks)
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn http_send_invoked_during_credential_resolution() {
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let send_fn = mock_http_send(call_count.clone(), 404, "");
+        let (e, f) = crate::build_request::noop_env_fs_callbacks();
+        let client = make_client(vec![]);
+        let callbacks = BuildRequestCallbacks {
+            http_send: &send_fn,
+            env_read: &e,
+            fs_read: &f,
+        };
+        let _result = BedrockAuth
+            .authorize(fake_request(), &client, &callbacks)
+            .await;
+        assert!(call_count.load(Ordering::SeqCst) > 0);
+    }
+
+    #[tokio::test]
+    async fn http_send_not_invoked_with_explicit_credentials() {
+        let call_count = Arc::new(AtomicUsize::new(0));
+        let send_fn = mock_http_send(call_count.clone(), 200, "");
+        let client = make_client(base_options());
+        let (_, e, f) = crate::build_request::stub_callbacks();
+        let callbacks = BuildRequestCallbacks {
+            http_send: &send_fn,
+            env_read: &e,
+            fs_read: &f,
+        };
+        let result = BedrockAuth
+            .authorize(fake_request(), &client, &callbacks)
+            .await;
+        assert!(result.is_ok());
+        assert_eq!(call_count.load(Ordering::SeqCst), 0);
+    }
 }
