@@ -1,3 +1,4 @@
+#[cfg(not(target_arch = "wasm32"))]
 use ::tools_sap_visualizer::ui::SapVisualizer;
 
 #[cfg(not(target_arch = "wasm32"))]

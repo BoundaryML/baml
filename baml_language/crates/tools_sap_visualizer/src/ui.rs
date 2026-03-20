@@ -176,6 +176,11 @@ impl eframe::App for SapVisualizer {
                             } else if new_cursor < old_cursor {
                                 let deleted = old_cursor - new_cursor;
                                 self.overtype_stack.shift_for_delete(new_cursor, deleted);
+                            } else {
+                                // Text changed but cursor didn't move (e.g. forward-delete).
+                                // We can't infer what was deleted, so clear the stack to
+                                // avoid stale entries causing incorrect over-typing.
+                                self.overtype_stack.clear();
                             }
                         }
                     }
@@ -189,7 +194,7 @@ impl eframe::App for SapVisualizer {
                 egui::ScrollArea::both().show(ui, |ui| {
                     egui::Grid::new("output").show(ui, |ui| {
                         let first_item =
-                            RowData::make_item(self.sap.iter().next().unwrap_or_default());
+                            RowData::make_item(self.sap.iter().next().unwrap_or(&None));
                         // Track the last real-value string for diffing.
                         // "Real value" = white-colored items (not errors or NO YIELD).
                         let mut last_real_value: Option<String> = if first_item.0 == Color32::WHITE
@@ -216,15 +221,7 @@ impl eframe::App for SapVisualizer {
                                 .chain(std::iter::once((self.sap.json().len(), '\0'))),
                             self.sap.iter().skip(1),
                         ) {
-                            let item = match item {
-                                // jsonish error
-                                None => {
-                                    (Color32::RED, Cow::Borrowed("ERROR: jsonish parse failed"))
-                                }
-                                Some(Err(e)) => (Color32::RED, Cow::Owned(format!("ERROR: {e}"))),
-                                Some(Ok(None)) => (Color32::CYAN, Cow::Borrowed("== NO YIELD ==")),
-                                Some(Ok(Some(s))) => (Color32::WHITE, Cow::Owned(s)),
-                            };
+                            let item = RowData::make_item(item);
                             if prev.item == item {
                                 prev.add_char(c);
                             } else {
@@ -304,18 +301,39 @@ fn newline_with_indent(text: &str, cursor: usize) -> String {
 ///
 /// `text` is the current buffer content and `cursor` is the char-index where
 /// the text will be inserted.
+/// Walk `chars[..cursor]` and determine whether the cursor sits inside a
+/// JSON string literal.  Handles backslash escapes correctly so that `\"`
+/// does not flip the in-string state.
+fn cursor_inside_string(chars: &[char], cursor: usize) -> bool {
+    let mut in_string = false;
+    let mut i = 0;
+    while i < cursor {
+        match chars[i] {
+            '"' => in_string = !in_string,
+            '\\' if in_string => {
+                i += 1; // skip the escaped character
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    in_string
+}
+
 fn auto_close_text(text: &str, cursor: usize, typed: &str) -> Option<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let inside_string = cursor_inside_string(&chars, cursor);
+
     let closer = match typed {
-        "{" => "}",
-        "[" => "]",
+        // Don't auto-close braces/brackets when inside a string literal.
+        "{" if !inside_string => "}",
+        "[" if !inside_string => "]",
         "\"" => {
-            let chars: Vec<char> = text.chars().collect();
             let after = chars.get(cursor).copied();
             if after == Some('"') {
                 return None;
             }
-            let quote_count = chars[..cursor].iter().filter(|&&c| c == '"').count();
-            if quote_count % 2 == 1 {
+            if inside_string {
                 return None;
             }
             "\""
@@ -592,6 +610,11 @@ impl AutoCloseStack {
         });
     }
 
+    /// Remove all entries.
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
+
     /// Remove entries whose enclosing range no longer contains `cursor`.
     fn validate_cursor(&mut self, cursor: usize) {
         self.entries.retain(|e| {
@@ -621,11 +644,19 @@ struct ItemDiff {
 /// Compute the diff between two item strings.
 /// Returns `None` when there is no previous value to compare against.
 fn compute_item_diff(prev: &str, current: &str) -> ItemDiff {
-    let common_prefix = prev
+    let common_prefix_bytes = prev
         .bytes()
         .zip(current.bytes())
         .take_while(|(a, b)| a == b)
         .count();
+
+    // Snap back to a valid char boundary in both strings.
+    let mut common_prefix = common_prefix_bytes;
+    while common_prefix > 0
+        && (!prev.is_char_boundary(common_prefix) || !current.is_char_boundary(common_prefix))
+    {
+        common_prefix -= 1;
+    }
 
     // If the strings are identical, return empty ranges.
     if common_prefix == prev.len() && common_prefix == current.len() {
@@ -637,7 +668,7 @@ fn compute_item_diff(prev: &str, current: &str) -> ItemDiff {
 
     let max_suffix_from_prev = prev.len().saturating_sub(common_prefix);
     let max_suffix_from_curr = current.len().saturating_sub(common_prefix);
-    let common_suffix = prev
+    let common_suffix_bytes = prev
         .bytes()
         .rev()
         .zip(current.bytes().rev())
@@ -645,6 +676,15 @@ fn compute_item_diff(prev: &str, current: &str) -> ItemDiff {
         .take(max_suffix_from_prev)
         .take(max_suffix_from_curr)
         .count();
+
+    // Snap suffix to valid char boundaries in both strings.
+    let mut common_suffix = common_suffix_bytes;
+    while common_suffix > 0
+        && (!prev.is_char_boundary(prev.len() - common_suffix)
+            || !current.is_char_boundary(current.len() - common_suffix))
+    {
+        common_suffix -= 1;
+    }
 
     ItemDiff {
         old_range: common_prefix..prev.len() - common_suffix,
@@ -812,13 +852,13 @@ impl<'a> RowData<'a> {
             .union(item_label.rect)
     }
     fn make_item(
-        from: Option<Result<Option<String>, ParsingError>>,
+        from: &Option<Result<Option<String>, ParsingError>>,
     ) -> (Color32, Cow<'static, str>) {
         match from {
             None => (Color32::RED, Cow::Borrowed("ERROR: jsonish parse failed")),
             Some(Err(e)) => (Color32::RED, Cow::Owned(format!("ERROR: {e}"))),
             Some(Ok(None)) => (Color32::CYAN, Cow::Borrowed("== NO YIELD ==")),
-            Some(Ok(Some(s))) => (Color32::WHITE, Cow::Owned(s)),
+            Some(Ok(Some(s))) => (Color32::WHITE, Cow::Owned(s.clone())),
         }
     }
 }

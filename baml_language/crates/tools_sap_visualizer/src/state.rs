@@ -3,21 +3,20 @@
 //! values as the input is streamed in.
 
 use ::bex_sap::{
-    deserializer::{
-        coercer::{ParsingContext, ParsingError},
-        types::BamlValueWithFlags,
-    },
+    deserializer::coercer::{ParsingContext, ParsingError},
     jsonish,
     sap_model::{self, TyResolvedRef},
 };
 use ::eframe::egui;
-use ::ouroboros::self_referencing;
 use ::std::rc::Rc;
+
+/// Cached result for a single prefix parse.
+type CachedResult = Option<Result<Option<String>, ParsingError>>;
 
 pub struct SapVisualizerState<N: sap_model::TypeIdent + 'static> {
     json: Rc<String>,
     ty: Rc<SapVisualizerTypes<'static, N>>,
-    output: Vec<Option<SapVisualizerOutput<N>>>,
+    output: Vec<CachedResult>,
 }
 impl<N: sap_model::TypeIdent + 'static> SapVisualizerState<N> {
     pub fn new(
@@ -45,41 +44,34 @@ impl<N: sap_model::TypeIdent + 'static> SapVisualizerState<N> {
             .char_indices()
             .chain(std::iter::once((json.len(), '\0')))
         {
-            let json = json.clone();
-            let ty = ty.clone();
-            output.push(Self::parse_item(json, ty, end));
+            output.push(Self::parse_item(&json, &ty, end));
         }
         Self { json, ty, output }
     }
 
-    fn parse_item(
-        json: Rc<String>,
-        ty: Rc<SapVisualizerTypes<'static, N>>,
-        end: usize,
-    ) -> Option<SapVisualizerOutput<N>> {
+    fn parse_item(json: &str, ty: &SapVisualizerTypes<'static, N>, end: usize) -> CachedResult {
         assert!(end <= json.len());
 
-        let Ok(jsonish) = SapVisualizerOutputJsonish::try_new(json.clone(), |json| {
-            let slice = &json[..end];
-            jsonish::parse(slice, Default::default(), end + 1 == json.len())
-        }) else {
+        let slice = &json[..end];
+        let Ok(jsonish) = jsonish::parse(slice, Default::default(), end + 1 == json.len()) else {
             return None;
         };
 
-        let item = SapVisualizerOutput::new(jsonish, ty, |jsonish, ty| {
-            let ctx = ParsingContext::new(&ty.db);
-            let value = ty
-                .db
-                .resolve_with_meta(ty.ty.as_ref())
-                .map_err(|n| ParsingError {
-                    scope: ctx.scope.clone(),
-                    reason: format!("Failed to resolve top-level type: {n}"),
-                    causes: Vec::new(),
-                })?;
-            TyResolvedRef::coerce(&ctx, value, jsonish.borrow_jsonish())
-        });
+        let ctx = ParsingContext::new(&ty.db);
+        let sap = ty
+            .db
+            .resolve_with_meta(ty.ty.as_ref())
+            .map_err(|n| ParsingError {
+                scope: ctx.scope.clone(),
+                reason: format!("Failed to resolve top-level type: {n}"),
+                causes: Vec::new(),
+            })
+            .and_then(|value| TyResolvedRef::coerce(&ctx, value, &jsonish));
 
-        Some(item)
+        Some(match sap {
+            Ok(sap) => Ok(Some(serde_json::to_string(&sap).unwrap())),
+            Err(e) => Err(e),
+        })
     }
 
     /// More efficient if only the json changes.
@@ -108,59 +100,45 @@ impl<N: sap_model::TypeIdent + 'static> SapVisualizerState<N> {
     /// Since most of the time the json change is at the end (add or remove suffix),
     /// we check to see if we can keep some of the existing output.
     pub fn update_with_json(&mut self, json: String) {
-        if self.json.starts_with(&json) {
-            // New json is the old json with characters removed from the end.
-            self.json = Rc::new(json);
-            while self.output.len() > self.json.len() + 1 {
-                self.output.pop();
-            }
-        } else if json.starts_with(self.json.as_str()) {
-            // New json is the old json with characters added to the end.
-            let old_len = self.json.len();
-            self.json = Rc::new(json);
-            for end in old_len + 1..=self.json.len() {
-                self.output
-                    .push(Self::parse_item(self.json.clone(), self.ty.clone(), end));
-            }
-        } else {
-            // was somewhere in the middle
-            *self = Self::new_impl(json, self.ty.clone());
+        let mut keep_len_bytes = 0;
+        let mut keep_len_chars = 0;
+        let mut it_old = self.json.chars();
+        let mut it_new = json.chars();
+        loop {
+            match (it_old.next(), it_new.next()) {
+                (None, None) => return, // entirely the same
+                (Some(old), Some(new)) if old == new => {
+                    keep_len_chars += 1;
+                    keep_len_bytes += old.len_utf8();
+                }
+                _ => break,
+            };
         }
+
+        assert!(keep_len_chars <= self.output.len());
+        self.output.truncate(keep_len_chars);
+        self.json = Rc::new(json);
+        let suffix = &self.json[keep_len_bytes..];
+        for (end_offset, _) in suffix
+            .char_indices()
+            .chain(std::iter::once((suffix.len(), '\0')))
+        {
+            let end = keep_len_bytes + end_offset;
+            self.output
+                .push(Self::parse_item(&self.json, &self.ty, end));
+        }
+
         debug_assert_eq!(self.json.chars().count() + 1, self.output.len());
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = Option<Result<Option<String>, ParsingError>>> {
-        self.output.iter().map(|o| {
-            o.as_ref().map(|v| {
-                v.with_sap(|sap| match sap {
-                    Ok(sap) => Ok(Some(serde_json::to_string(&sap).unwrap())),
-                    Err(e) => Err(e.clone()),
-                })
-            })
-        })
+    pub fn iter(&self) -> impl Iterator<Item = &CachedResult> {
+        self.output.iter()
     }
 }
 
 struct SapVisualizerTypes<'t, N: sap_model::TypeIdent + 't> {
     db: sap_model::TypeRefDb<'t, N>,
     ty: sap_model::AnnotatedTy<'t, N>,
-}
-
-#[self_referencing]
-struct SapVisualizerOutputJsonish {
-    json: Rc<String>,
-    #[borrows(json)]
-    #[covariant]
-    jsonish: jsonish::Value<'this>,
-}
-
-#[self_referencing]
-struct SapVisualizerOutput<N: sap_model::TypeIdent + 'static> {
-    jsonish: SapVisualizerOutputJsonish,
-    ty: Rc<SapVisualizerTypes<'static, N>>,
-    #[borrows(jsonish, ty)]
-    #[not_covariant]
-    sap: Result<Option<BamlValueWithFlags<'this, 'this, 'this, N>>, ParsingError>,
 }
 
 impl<N: sap_model::TypeIdent + 'static> egui::TextBuffer for SapVisualizerState<N> {
