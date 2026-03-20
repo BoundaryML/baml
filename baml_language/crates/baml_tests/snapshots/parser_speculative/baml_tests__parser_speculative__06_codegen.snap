@@ -134,7 +134,7 @@ function user.LLMAnalyze(text: string) -> Analysis {
 function user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
     load_const null
     load_const "LLMAnalyze"
-    load_var text
+    load_const null
     load_const "text"
     alloc_map 1
     call baml.llm.build_request
@@ -144,7 +144,7 @@ function user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
 function user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst {
     load_const null
     load_const "LLMAnalyze"
-    load_var text
+    load_const null
     load_const "text"
     alloc_map 1
     call baml.llm.render_prompt

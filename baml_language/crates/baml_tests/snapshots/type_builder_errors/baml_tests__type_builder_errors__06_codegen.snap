@@ -46,7 +46,7 @@ function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Reques
     load_const 0
     store_field .counter
     load_const "TypeBuilderFn"
-    load_var from_text
+    load_const null
     load_const "from_text"
     alloc_map 1
     call baml.llm.build_request
@@ -72,7 +72,7 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptA
     load_const 0
     store_field .counter
     load_const "TypeBuilderFn"
-    load_var from_text
+    load_const null
     load_const "from_text"
     alloc_map 1
     call baml.llm.render_prompt

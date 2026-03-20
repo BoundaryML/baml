@@ -14,3 +14,9 @@ function user.GetTodo() -> user.Todo throws never {
   }
   !! 165..185: unresolved name: baml
 }
+class user.Todo$stream {
+  id: null | int
+  title: null | string
+  completed: null | bool
+  userId: null | int
+}

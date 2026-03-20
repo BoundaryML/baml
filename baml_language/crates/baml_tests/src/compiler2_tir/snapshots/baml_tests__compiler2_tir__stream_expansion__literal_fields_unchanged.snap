@@ -7,3 +7,8 @@ class user.WithLiterals {
   version: 1
   enabled: true
 }
+class user.WithLiterals$stream {
+  type: "resume"
+  version: 1
+  enabled: true
+}

@@ -6,3 +6,7 @@ type user.Config = map<string, string>
 class user.WithMapAlias {
   settings: user.Config | int
 }
+type user.Config$stream = map<string, string>
+class user.WithMapAlias$stream {
+  settings: user.Config$stream | int
+}

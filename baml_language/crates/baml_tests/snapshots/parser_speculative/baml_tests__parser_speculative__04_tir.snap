@@ -40,6 +40,10 @@ function user.ProcessData(data: user.JsonData) -> string throws never {
     return "low" : "low"
   }
 }
+class user.JsonData$stream {
+  field1: null | int
+  field2: null | int
+}
 function user.ExtractData(text: string) -> user.JsonData throws never {
   baml.llm.call_llm_function<T>(GPT4, "ExtractData", map { "text": text }) : user.JsonData
   !! 46..146: unresolved name: GPT4
@@ -108,4 +112,9 @@ function user.SimpleCalc(a: int, b: int) -> int throws never {
   { : never
     return a Add b Mul 2 : int
   }
+}
+class user.Analysis$stream {
+  sentiment: null | string
+  keywords: string[]
+  score: null | float
 }

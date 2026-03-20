@@ -15,3 +15,6 @@ class user.TopLevelClass {
   a: string
 }
 enum user.TopLevelEnum
+class user.TopLevelClass$stream {
+  a: null | string
+}

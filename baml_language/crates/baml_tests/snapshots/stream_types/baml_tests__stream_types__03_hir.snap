@@ -2,6 +2,92 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
+class user.AttrFoo {
+  x: int
+}
+class user.Config {
+  id: int
+  name: string
+  data: user.AttrFoo
+}
+class user.WithBlockAttrs {
+  a: int
+  b: string
+}
+class user.Bar {
+  ref: user.Foo
+  items: int[]
+  nested: user.Foo[]
+  mapping: map<string, int>
+  opt: int?
+}
+class user.Foo {
+  a: int
+  b: string
+  c: float
+  d: bool
+}
+class user.ApiCall {
+  request: baml.http.Request
+  label: string
+}
+class user.MixedBuiltin {
+  requests: baml.http.Request[]
+  metadata: map<string, baml.http.Request>
+  maybe_request: baml.http.Request?
+  union_request: baml.http.Request | string
+}
+class user.WithResponse {
+  response: baml.http.Response
+  status: string
+}
+class user.WithStreamRef {
+  partial: baml.http.Request$stream
+}
+class user.Complex {
+  color: user.Color
+  literal: 5
+  str_literal: "hello"
+  union_field: int | string[]
+  alias_field: user.StringAlias
+  nested_list: user.Inner[][]
+  optional_class: user.Inner?
+  union_with_null: int | null | string
+}
+class user.Inner {
+  value: int
+}
+enum user.Color {Red, Green, Blue}
+type user.AliasToClass = user.Inner
+type user.StringAlias = string
+class user.AllDone {
+  a: int
+  b: string
+  c: user.EdgeFoo
+}
+class user.AllMustExist {
+  a: int
+  b: string
+  c: float
+}
+class user.EdgeFoo {
+  x: int
+}
+class user.MustExistClass {
+  v: int
+}
+class user.NeverFields {
+  lit_int: 42
+  lit_str: "fixed"
+  lit_bool: true
+}
+class user.SelfRef {
+  name: string
+  children: user.SelfRef[]
+}
+class user.UnionWithMustExist {
+  mixed: user.MustExistClass | 5
+}
 class user.AllDefaults {
   name: string
   age: int

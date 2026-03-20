@@ -6,3 +6,7 @@ type user.Ints = int[]
 class user.WithAliasUnion {
   data: user.Ints | string
 }
+type user.Ints$stream = int[]
+class user.WithAliasUnion$stream {
+  data: user.Ints$stream | string
+}

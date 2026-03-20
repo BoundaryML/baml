@@ -6,3 +6,7 @@ class user.WithDesc {
   name: string @description("The name") @stream.done
   age: int @description("Age in years")
 }
+class user.WithDesc$stream {
+  name: null | string @description("The name")
+  age: null | int @description("Age in years")
+}

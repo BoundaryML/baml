@@ -5,6 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
 type user.MetaAlias = type
 type user.MetaList = type[]
 type user.MetaUnion = type | string
+type user.MetaAlias$stream = unknown
+type user.MetaList$stream = unknown[]
+type user.MetaUnion$stream = unknown | string
 function user.test_type_annotation(function_name: string) -> string throws never {
   { : never
     let t = baml.llm.get_return_type(function_name) : type
@@ -19,6 +22,13 @@ class user.MetaField {
   type: type
 }
 enum user.Kind
+class user.RiskFactor$stream {
+  type: null | string
+  severity: null | float
+}
+class user.MetaField$stream {
+  type: unknown
+}
 function user.test_let_binding(function_name: string) -> string throws never {
   { : never
     let t = baml.llm.get_return_type(function_name) : type

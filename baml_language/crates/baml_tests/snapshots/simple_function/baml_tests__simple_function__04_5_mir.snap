@@ -29,7 +29,7 @@ fn user.HelloWorld$build_request(name: string) -> baml.http.Request {
     let _2: map<string, unknown>
 
     bb0: {
-        _2 = { const "name": copy _1 };
+        _2 = { const "name": const null };
         _0 = call const fn baml.llm.build_request(const null, const "HelloWorld", copy _2) -> [bb1];
     }
 
@@ -49,7 +49,7 @@ fn user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst {
     let _2: map<string, unknown>
 
     bb0: {
-        _2 = { const "name": copy _1 };
+        _2 = { const "name": const null };
         _0 = call const fn baml.llm.render_prompt(const null, const "HelloWorld", copy _2) -> [bb1];
     }
 

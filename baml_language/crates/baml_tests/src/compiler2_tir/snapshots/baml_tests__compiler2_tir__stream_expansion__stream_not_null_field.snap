@@ -6,3 +6,7 @@ class user.WithNotNull {
   gpa: float
   name: string
 }
+class user.WithNotNull$stream {
+  gpa: null | float
+  name: null | string
+}
