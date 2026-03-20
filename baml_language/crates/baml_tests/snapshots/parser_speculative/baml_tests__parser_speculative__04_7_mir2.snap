@@ -66,7 +66,7 @@ fn user.Ambiguous(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -86,7 +86,7 @@ fn user.AnotherLLM(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -164,7 +164,7 @@ fn user.ExtractData(text: string) -> user.JsonData {
     // Locals:
     let _0: user.JsonData // _0 // return
     let _1: string // text // param
-    let _2: map<"text", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "text": copy _1 };
@@ -244,7 +244,7 @@ fn user.ChainedProcess(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -264,7 +264,7 @@ fn user.LLMAnalyze(text: string) -> user.Analysis {
     // Locals:
     let _0: user.Analysis // _0 // return
     let _1: string // text // param
-    let _2: map<"text", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "text": copy _1 };

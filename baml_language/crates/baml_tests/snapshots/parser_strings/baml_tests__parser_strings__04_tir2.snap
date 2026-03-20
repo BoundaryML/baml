@@ -17,6 +17,7 @@ class user.NestedQuotes {
 function user.FormatMessage(name: string) -> string {
   baml.llm.call_llm_function(GPT4, "FormatMessage", map { "name": name }) : unknown
   !! 428..553: unresolved name: GPT4
+  !! 428..553: type mismatch: expected string, got unknown
 }
 function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("FormatMessage", map { "name": name }) : baml.llm.PromptAst
@@ -33,6 +34,7 @@ class user.RawStrings {
 function user.ProcessText(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "ProcessText", map { "input": input }) : unknown
   !! 364..532: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("ProcessText", map { "input": input }) : baml.llm.PromptAst

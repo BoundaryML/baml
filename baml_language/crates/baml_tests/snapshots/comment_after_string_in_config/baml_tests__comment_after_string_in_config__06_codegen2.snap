@@ -9,6 +9,9 @@ function $init() -> null {
 }
 
 function user.OpenRouterMistralSmall3_1_24b$new() -> null {
+    load_const "OPENROUTER_API_KEY"
+    call env.get_or_panic
+    store_var _2
     alloc_instance PrimitiveClient
     copy 0
     load_const "OpenRouterMistralSmall3_1_24b"
@@ -31,7 +34,7 @@ function user.OpenRouterMistralSmall3_1_24b$new() -> null {
     load_const null
     store_field .remap_roles
     copy 0
-    load_const null
+    load_var _2
     store_field .api_key
     copy 0
     load_const null

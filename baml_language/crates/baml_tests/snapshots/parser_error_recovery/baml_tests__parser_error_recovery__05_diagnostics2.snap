@@ -92,34 +92,14 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected '}', found client
-    ╭─[ invalid_syntax.baml:11:3 ]
+  [type] Error: unresolved name: GPT4
+    ╭─[ invalid_syntax.baml:11:10 ]
     │
  11 │   client GPT4
-    │   ───┬──  
-    │      ╰──── Expected '}', found client
+    │          ──┬─  
+    │            ╰─── unresolved name: GPT4
     │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected config block, found '}'
-    ╭─[ invalid_syntax.baml:12:1 ]
-    │
- 12 │ }
-    │ ┬  
-    │ ╰── Expected config block, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found '}'
-    ╭─[ invalid_syntax.baml:12:1 ]
-    │
- 12 │ }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
+    │ Note: Error code: E0001
 ────╯
 
   [parse] Error: Expected '}', found class

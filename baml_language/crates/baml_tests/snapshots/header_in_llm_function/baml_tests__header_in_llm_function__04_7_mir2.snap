@@ -46,7 +46,7 @@ fn user.FetchDatax(user_id: string) -> user.Hi {
     // Locals:
     let _0: user.Hi // _0 // return
     let _1: string // user_id // param
-    let _2: map<"user_id", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "user_id": copy _1 };

@@ -10,6 +10,7 @@ function user.VertexGCP$new() -> ? {
 }
 function user.FetchDatax(user_id: string) -> user.Hi {
   baml.llm.call_llm_function(VertexGCP, "FetchDatax", map { "user_id": user_id }) : unknown
+  !! 0..0: type mismatch: expected user.Hi, got unknown
 }
 function user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("FetchDatax", map { "user_id": user_id }) : baml.llm.PromptAst

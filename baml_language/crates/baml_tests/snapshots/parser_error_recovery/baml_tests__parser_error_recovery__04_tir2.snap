@@ -4,8 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 enum user.Status
 function user.Foo() -> unknown {
-  { : void
+  { : unknown
+    GPT4 : unknown
   }
+  !! 185..189: unresolved name: GPT4
 }
 class user.User {
   name: string

@@ -5139,6 +5139,7 @@ enum user.Status100
 function user.Process1(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process1", map { "input": input }) : unknown
   !! 122445..122547: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process1$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process1", map { "input": input }) : baml.llm.PromptAst
@@ -5149,6 +5150,7 @@ function user.Process1$build_request(input: string) -> baml.http.Request {
 function user.Process2(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process2", map { "input": input }) : unknown
   !! 122591..122649: unresolved name: GPT4
+  !! 122591..122649: type mismatch: expected string, got unknown
 }
 function user.Process2$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process2", map { "input": input }) : baml.llm.PromptAst
@@ -5159,6 +5161,7 @@ function user.Process2$build_request(input: string) -> baml.http.Request {
 function user.Process3(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process3", map { "input": input }) : unknown
   !! 122649..122751: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process3$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process3", map { "input": input }) : baml.llm.PromptAst
@@ -5169,6 +5172,7 @@ function user.Process3$build_request(input: string) -> baml.http.Request {
 function user.Process4(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process4", map { "input": input }) : unknown
   !! 122795..122853: unresolved name: GPT4
+  !! 122795..122853: type mismatch: expected string, got unknown
 }
 function user.Process4$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process4", map { "input": input }) : baml.llm.PromptAst
@@ -5179,6 +5183,7 @@ function user.Process4$build_request(input: string) -> baml.http.Request {
 function user.Process5(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process5", map { "input": input }) : unknown
   !! 122853..122955: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process5$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process5", map { "input": input }) : baml.llm.PromptAst
@@ -5189,6 +5194,7 @@ function user.Process5$build_request(input: string) -> baml.http.Request {
 function user.Process6(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process6", map { "input": input }) : unknown
   !! 122955..123057: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process6$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process6", map { "input": input }) : baml.llm.PromptAst
@@ -5199,6 +5205,7 @@ function user.Process6$build_request(input: string) -> baml.http.Request {
 function user.Process7(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process7", map { "input": input }) : unknown
   !! 123057..123159: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process7$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process7", map { "input": input }) : baml.llm.PromptAst
@@ -5209,6 +5216,7 @@ function user.Process7$build_request(input: string) -> baml.http.Request {
 function user.Process8(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process8", map { "input": input }) : unknown
   !! 123159..123261: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process8$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process8", map { "input": input }) : baml.llm.PromptAst
@@ -5219,6 +5227,7 @@ function user.Process8$build_request(input: string) -> baml.http.Request {
 function user.Process9(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process9", map { "input": input }) : unknown
   !! 123261..123363: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process9$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process9", map { "input": input }) : baml.llm.PromptAst
@@ -5229,6 +5238,7 @@ function user.Process9$build_request(input: string) -> baml.http.Request {
 function user.Process10(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process10", map { "input": input }) : unknown
   !! 123363..123467: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process10$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process10", map { "input": input }) : baml.llm.PromptAst
@@ -5239,6 +5249,7 @@ function user.Process10$build_request(input: string) -> baml.http.Request {
 function user.Process11(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process11", map { "input": input }) : unknown
   !! 123467..123571: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process11$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process11", map { "input": input }) : baml.llm.PromptAst
@@ -5249,6 +5260,7 @@ function user.Process11$build_request(input: string) -> baml.http.Request {
 function user.Process12(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process12", map { "input": input }) : unknown
   !! 123571..123675: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process12$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process12", map { "input": input }) : baml.llm.PromptAst
@@ -5259,6 +5271,7 @@ function user.Process12$build_request(input: string) -> baml.http.Request {
 function user.Process13(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process13", map { "input": input }) : unknown
   !! 123720..123779: unresolved name: GPT4
+  !! 123720..123779: type mismatch: expected string, got unknown
 }
 function user.Process13$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process13", map { "input": input }) : baml.llm.PromptAst
@@ -5269,6 +5282,7 @@ function user.Process13$build_request(input: string) -> baml.http.Request {
 function user.Process14(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process14", map { "input": input }) : unknown
   !! 123824..123883: unresolved name: GPT4
+  !! 123824..123883: type mismatch: expected string, got unknown
 }
 function user.Process14$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process14", map { "input": input }) : baml.llm.PromptAst
@@ -5279,6 +5293,7 @@ function user.Process14$build_request(input: string) -> baml.http.Request {
 function user.Process15(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process15", map { "input": input }) : unknown
   !! 123883..123987: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process15$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process15", map { "input": input }) : baml.llm.PromptAst
@@ -5289,6 +5304,7 @@ function user.Process15$build_request(input: string) -> baml.http.Request {
 function user.Process16(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process16", map { "input": input }) : unknown
   !! 123987..124091: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process16$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process16", map { "input": input }) : baml.llm.PromptAst
@@ -5299,6 +5315,7 @@ function user.Process16$build_request(input: string) -> baml.http.Request {
 function user.Process17(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process17", map { "input": input }) : unknown
   !! 124091..124195: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process17$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process17", map { "input": input }) : baml.llm.PromptAst
@@ -5309,6 +5326,7 @@ function user.Process17$build_request(input: string) -> baml.http.Request {
 function user.Process18(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process18", map { "input": input }) : unknown
   !! 124240..124299: unresolved name: GPT4
+  !! 124240..124299: type mismatch: expected string, got unknown
 }
 function user.Process18$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process18", map { "input": input }) : baml.llm.PromptAst
@@ -5319,6 +5337,7 @@ function user.Process18$build_request(input: string) -> baml.http.Request {
 function user.Process19(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process19", map { "input": input }) : unknown
   !! 124299..124403: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process19$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process19", map { "input": input }) : baml.llm.PromptAst
@@ -5329,6 +5348,7 @@ function user.Process19$build_request(input: string) -> baml.http.Request {
 function user.Process20(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process20", map { "input": input }) : unknown
   !! 124403..124507: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process20$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process20", map { "input": input }) : baml.llm.PromptAst
@@ -5339,6 +5359,7 @@ function user.Process20$build_request(input: string) -> baml.http.Request {
 function user.Process21(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process21", map { "input": input }) : unknown
   !! 124507..124611: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process21$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process21", map { "input": input }) : baml.llm.PromptAst
@@ -5349,6 +5370,7 @@ function user.Process21$build_request(input: string) -> baml.http.Request {
 function user.Process22(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process22", map { "input": input }) : unknown
   !! 124611..124715: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process22$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process22", map { "input": input }) : baml.llm.PromptAst
@@ -5359,6 +5381,7 @@ function user.Process22$build_request(input: string) -> baml.http.Request {
 function user.Process23(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process23", map { "input": input }) : unknown
   !! 124760..124819: unresolved name: GPT4
+  !! 124760..124819: type mismatch: expected string, got unknown
 }
 function user.Process23$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process23", map { "input": input }) : baml.llm.PromptAst
@@ -5369,6 +5392,7 @@ function user.Process23$build_request(input: string) -> baml.http.Request {
 function user.Process24(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process24", map { "input": input }) : unknown
   !! 124819..124923: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process24$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process24", map { "input": input }) : baml.llm.PromptAst
@@ -5379,6 +5403,7 @@ function user.Process24$build_request(input: string) -> baml.http.Request {
 function user.Process25(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process25", map { "input": input }) : unknown
   !! 124968..125027: unresolved name: GPT4
+  !! 124968..125027: type mismatch: expected string, got unknown
 }
 function user.Process25$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process25", map { "input": input }) : baml.llm.PromptAst
@@ -5389,6 +5414,7 @@ function user.Process25$build_request(input: string) -> baml.http.Request {
 function user.Process26(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process26", map { "input": input }) : unknown
   !! 125072..125131: unresolved name: GPT4
+  !! 125072..125131: type mismatch: expected string, got unknown
 }
 function user.Process26$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process26", map { "input": input }) : baml.llm.PromptAst
@@ -5399,6 +5425,7 @@ function user.Process26$build_request(input: string) -> baml.http.Request {
 function user.Process27(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process27", map { "input": input }) : unknown
   !! 125176..125235: unresolved name: GPT4
+  !! 125176..125235: type mismatch: expected string, got unknown
 }
 function user.Process27$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process27", map { "input": input }) : baml.llm.PromptAst
@@ -5409,6 +5436,7 @@ function user.Process27$build_request(input: string) -> baml.http.Request {
 function user.Process28(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process28", map { "input": input }) : unknown
   !! 125235..125339: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process28$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process28", map { "input": input }) : baml.llm.PromptAst
@@ -5419,6 +5447,7 @@ function user.Process28$build_request(input: string) -> baml.http.Request {
 function user.Process29(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process29", map { "input": input }) : unknown
   !! 125339..125443: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process29$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process29", map { "input": input }) : baml.llm.PromptAst
@@ -5429,6 +5458,7 @@ function user.Process29$build_request(input: string) -> baml.http.Request {
 function user.Process30(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process30", map { "input": input }) : unknown
   !! 125443..125547: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process30$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process30", map { "input": input }) : baml.llm.PromptAst
@@ -5439,6 +5469,7 @@ function user.Process30$build_request(input: string) -> baml.http.Request {
 function user.Process31(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process31", map { "input": input }) : unknown
   !! 125547..125651: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process31$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process31", map { "input": input }) : baml.llm.PromptAst
@@ -5449,6 +5480,7 @@ function user.Process31$build_request(input: string) -> baml.http.Request {
 function user.Process32(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process32", map { "input": input }) : unknown
   !! 125651..125755: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process32$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process32", map { "input": input }) : baml.llm.PromptAst
@@ -5459,6 +5491,7 @@ function user.Process32$build_request(input: string) -> baml.http.Request {
 function user.Process33(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process33", map { "input": input }) : unknown
   !! 125800..125859: unresolved name: GPT4
+  !! 125800..125859: type mismatch: expected string, got unknown
 }
 function user.Process33$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process33", map { "input": input }) : baml.llm.PromptAst
@@ -5469,6 +5502,7 @@ function user.Process33$build_request(input: string) -> baml.http.Request {
 function user.Process34(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process34", map { "input": input }) : unknown
   !! 125859..125963: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process34$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process34", map { "input": input }) : baml.llm.PromptAst
@@ -5479,6 +5513,7 @@ function user.Process34$build_request(input: string) -> baml.http.Request {
 function user.Process35(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process35", map { "input": input }) : unknown
   !! 125963..126067: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process35$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process35", map { "input": input }) : baml.llm.PromptAst
@@ -5489,6 +5524,7 @@ function user.Process35$build_request(input: string) -> baml.http.Request {
 function user.Process36(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process36", map { "input": input }) : unknown
   !! 126067..126171: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process36$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process36", map { "input": input }) : baml.llm.PromptAst
@@ -5499,6 +5535,7 @@ function user.Process36$build_request(input: string) -> baml.http.Request {
 function user.Process37(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process37", map { "input": input }) : unknown
   !! 126216..126275: unresolved name: GPT4
+  !! 126216..126275: type mismatch: expected string, got unknown
 }
 function user.Process37$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process37", map { "input": input }) : baml.llm.PromptAst
@@ -5509,6 +5546,7 @@ function user.Process37$build_request(input: string) -> baml.http.Request {
 function user.Process38(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process38", map { "input": input }) : unknown
   !! 126275..126379: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process38$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process38", map { "input": input }) : baml.llm.PromptAst
@@ -5519,6 +5557,7 @@ function user.Process38$build_request(input: string) -> baml.http.Request {
 function user.Process39(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process39", map { "input": input }) : unknown
   !! 126424..126483: unresolved name: GPT4
+  !! 126424..126483: type mismatch: expected string, got unknown
 }
 function user.Process39$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process39", map { "input": input }) : baml.llm.PromptAst
@@ -5529,6 +5568,7 @@ function user.Process39$build_request(input: string) -> baml.http.Request {
 function user.Process40(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process40", map { "input": input }) : unknown
   !! 126528..126587: unresolved name: GPT4
+  !! 126528..126587: type mismatch: expected string, got unknown
 }
 function user.Process40$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process40", map { "input": input }) : baml.llm.PromptAst
@@ -5539,6 +5579,7 @@ function user.Process40$build_request(input: string) -> baml.http.Request {
 function user.Process41(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process41", map { "input": input }) : unknown
   !! 126587..126691: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process41$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process41", map { "input": input }) : baml.llm.PromptAst
@@ -5549,6 +5590,7 @@ function user.Process41$build_request(input: string) -> baml.http.Request {
 function user.Process42(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process42", map { "input": input }) : unknown
   !! 126691..126795: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process42$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process42", map { "input": input }) : baml.llm.PromptAst
@@ -5559,6 +5601,7 @@ function user.Process42$build_request(input: string) -> baml.http.Request {
 function user.Process43(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process43", map { "input": input }) : unknown
   !! 126840..126899: unresolved name: GPT4
+  !! 126840..126899: type mismatch: expected string, got unknown
 }
 function user.Process43$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process43", map { "input": input }) : baml.llm.PromptAst
@@ -5569,6 +5612,7 @@ function user.Process43$build_request(input: string) -> baml.http.Request {
 function user.Process44(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process44", map { "input": input }) : unknown
   !! 126899..127003: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process44$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process44", map { "input": input }) : baml.llm.PromptAst
@@ -5579,6 +5623,7 @@ function user.Process44$build_request(input: string) -> baml.http.Request {
 function user.Process45(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process45", map { "input": input }) : unknown
   !! 127003..127107: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process45$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process45", map { "input": input }) : baml.llm.PromptAst
@@ -5589,6 +5634,7 @@ function user.Process45$build_request(input: string) -> baml.http.Request {
 function user.Process46(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process46", map { "input": input }) : unknown
   !! 127152..127211: unresolved name: GPT4
+  !! 127152..127211: type mismatch: expected string, got unknown
 }
 function user.Process46$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process46", map { "input": input }) : baml.llm.PromptAst
@@ -5599,6 +5645,7 @@ function user.Process46$build_request(input: string) -> baml.http.Request {
 function user.Process47(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process47", map { "input": input }) : unknown
   !! 127211..127315: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process47$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process47", map { "input": input }) : baml.llm.PromptAst
@@ -5609,6 +5656,7 @@ function user.Process47$build_request(input: string) -> baml.http.Request {
 function user.Process48(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process48", map { "input": input }) : unknown
   !! 127315..127419: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process48$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process48", map { "input": input }) : baml.llm.PromptAst
@@ -5619,6 +5667,7 @@ function user.Process48$build_request(input: string) -> baml.http.Request {
 function user.Process49(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process49", map { "input": input }) : unknown
   !! 127464..127523: unresolved name: GPT4
+  !! 127464..127523: type mismatch: expected string, got unknown
 }
 function user.Process49$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process49", map { "input": input }) : baml.llm.PromptAst
@@ -5629,6 +5678,7 @@ function user.Process49$build_request(input: string) -> baml.http.Request {
 function user.Process50(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process50", map { "input": input }) : unknown
   !! 127568..127627: unresolved name: GPT4
+  !! 127568..127627: type mismatch: expected string, got unknown
 }
 function user.Process50$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process50", map { "input": input }) : baml.llm.PromptAst
@@ -5639,6 +5689,7 @@ function user.Process50$build_request(input: string) -> baml.http.Request {
 function user.Process51(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process51", map { "input": input }) : unknown
   !! 127627..127731: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process51$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process51", map { "input": input }) : baml.llm.PromptAst
@@ -5649,6 +5700,7 @@ function user.Process51$build_request(input: string) -> baml.http.Request {
 function user.Process52(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process52", map { "input": input }) : unknown
   !! 127731..127835: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process52$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process52", map { "input": input }) : baml.llm.PromptAst
@@ -5659,6 +5711,7 @@ function user.Process52$build_request(input: string) -> baml.http.Request {
 function user.Process53(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process53", map { "input": input }) : unknown
   !! 127835..127939: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process53$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process53", map { "input": input }) : baml.llm.PromptAst
@@ -5669,6 +5722,7 @@ function user.Process53$build_request(input: string) -> baml.http.Request {
 function user.Process54(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process54", map { "input": input }) : unknown
   !! 127939..128043: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process54$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process54", map { "input": input }) : baml.llm.PromptAst
@@ -5679,6 +5733,7 @@ function user.Process54$build_request(input: string) -> baml.http.Request {
 function user.Process55(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process55", map { "input": input }) : unknown
   !! 128043..128147: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process55$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process55", map { "input": input }) : baml.llm.PromptAst
@@ -5689,6 +5744,7 @@ function user.Process55$build_request(input: string) -> baml.http.Request {
 function user.Process56(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process56", map { "input": input }) : unknown
   !! 128192..128251: unresolved name: GPT4
+  !! 128192..128251: type mismatch: expected string, got unknown
 }
 function user.Process56$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process56", map { "input": input }) : baml.llm.PromptAst
@@ -5699,6 +5755,7 @@ function user.Process56$build_request(input: string) -> baml.http.Request {
 function user.Process57(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process57", map { "input": input }) : unknown
   !! 128296..128355: unresolved name: GPT4
+  !! 128296..128355: type mismatch: expected string, got unknown
 }
 function user.Process57$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process57", map { "input": input }) : baml.llm.PromptAst
@@ -5709,6 +5766,7 @@ function user.Process57$build_request(input: string) -> baml.http.Request {
 function user.Process58(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process58", map { "input": input }) : unknown
   !! 128400..128459: unresolved name: GPT4
+  !! 128400..128459: type mismatch: expected string, got unknown
 }
 function user.Process58$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process58", map { "input": input }) : baml.llm.PromptAst
@@ -5719,6 +5777,7 @@ function user.Process58$build_request(input: string) -> baml.http.Request {
 function user.Process59(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process59", map { "input": input }) : unknown
   !! 128459..128563: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process59$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process59", map { "input": input }) : baml.llm.PromptAst
@@ -5729,6 +5788,7 @@ function user.Process59$build_request(input: string) -> baml.http.Request {
 function user.Process60(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process60", map { "input": input }) : unknown
   !! 128608..128667: unresolved name: GPT4
+  !! 128608..128667: type mismatch: expected string, got unknown
 }
 function user.Process60$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process60", map { "input": input }) : baml.llm.PromptAst
@@ -5739,6 +5799,7 @@ function user.Process60$build_request(input: string) -> baml.http.Request {
 function user.Process61(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process61", map { "input": input }) : unknown
   !! 128712..128771: unresolved name: GPT4
+  !! 128712..128771: type mismatch: expected string, got unknown
 }
 function user.Process61$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process61", map { "input": input }) : baml.llm.PromptAst
@@ -5749,6 +5810,7 @@ function user.Process61$build_request(input: string) -> baml.http.Request {
 function user.Process62(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process62", map { "input": input }) : unknown
   !! 128816..128875: unresolved name: GPT4
+  !! 128816..128875: type mismatch: expected string, got unknown
 }
 function user.Process62$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process62", map { "input": input }) : baml.llm.PromptAst
@@ -5759,6 +5821,7 @@ function user.Process62$build_request(input: string) -> baml.http.Request {
 function user.Process63(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process63", map { "input": input }) : unknown
   !! 128920..128979: unresolved name: GPT4
+  !! 128920..128979: type mismatch: expected string, got unknown
 }
 function user.Process63$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process63", map { "input": input }) : baml.llm.PromptAst
@@ -5769,6 +5832,7 @@ function user.Process63$build_request(input: string) -> baml.http.Request {
 function user.Process64(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process64", map { "input": input }) : unknown
   !! 128979..129083: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process64$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process64", map { "input": input }) : baml.llm.PromptAst
@@ -5779,6 +5843,7 @@ function user.Process64$build_request(input: string) -> baml.http.Request {
 function user.Process65(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process65", map { "input": input }) : unknown
   !! 129083..129187: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process65$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process65", map { "input": input }) : baml.llm.PromptAst
@@ -5789,6 +5854,7 @@ function user.Process65$build_request(input: string) -> baml.http.Request {
 function user.Process66(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process66", map { "input": input }) : unknown
   !! 129232..129291: unresolved name: GPT4
+  !! 129232..129291: type mismatch: expected string, got unknown
 }
 function user.Process66$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process66", map { "input": input }) : baml.llm.PromptAst
@@ -5799,6 +5865,7 @@ function user.Process66$build_request(input: string) -> baml.http.Request {
 function user.Process67(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process67", map { "input": input }) : unknown
   !! 129336..129395: unresolved name: GPT4
+  !! 129336..129395: type mismatch: expected string, got unknown
 }
 function user.Process67$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process67", map { "input": input }) : baml.llm.PromptAst
@@ -5809,6 +5876,7 @@ function user.Process67$build_request(input: string) -> baml.http.Request {
 function user.Process68(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process68", map { "input": input }) : unknown
   !! 129395..129499: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process68$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process68", map { "input": input }) : baml.llm.PromptAst
@@ -5819,6 +5887,7 @@ function user.Process68$build_request(input: string) -> baml.http.Request {
 function user.Process69(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process69", map { "input": input }) : unknown
   !! 129544..129603: unresolved name: GPT4
+  !! 129544..129603: type mismatch: expected string, got unknown
 }
 function user.Process69$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process69", map { "input": input }) : baml.llm.PromptAst
@@ -5829,6 +5898,7 @@ function user.Process69$build_request(input: string) -> baml.http.Request {
 function user.Process70(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process70", map { "input": input }) : unknown
   !! 129648..129707: unresolved name: GPT4
+  !! 129648..129707: type mismatch: expected string, got unknown
 }
 function user.Process70$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process70", map { "input": input }) : baml.llm.PromptAst
@@ -5839,6 +5909,7 @@ function user.Process70$build_request(input: string) -> baml.http.Request {
 function user.Process71(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process71", map { "input": input }) : unknown
   !! 129707..129811: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process71$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process71", map { "input": input }) : baml.llm.PromptAst
@@ -5849,6 +5920,7 @@ function user.Process71$build_request(input: string) -> baml.http.Request {
 function user.Process72(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process72", map { "input": input }) : unknown
   !! 129811..129915: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process72$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process72", map { "input": input }) : baml.llm.PromptAst
@@ -5859,6 +5931,7 @@ function user.Process72$build_request(input: string) -> baml.http.Request {
 function user.Process73(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process73", map { "input": input }) : unknown
   !! 129915..130019: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process73$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process73", map { "input": input }) : baml.llm.PromptAst
@@ -5869,6 +5942,7 @@ function user.Process73$build_request(input: string) -> baml.http.Request {
 function user.Process74(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process74", map { "input": input }) : unknown
   !! 130019..130123: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process74$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process74", map { "input": input }) : baml.llm.PromptAst
@@ -5879,6 +5953,7 @@ function user.Process74$build_request(input: string) -> baml.http.Request {
 function user.Process75(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process75", map { "input": input }) : unknown
   !! 130123..130227: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process75$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process75", map { "input": input }) : baml.llm.PromptAst
@@ -5889,6 +5964,7 @@ function user.Process75$build_request(input: string) -> baml.http.Request {
 function user.Process76(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process76", map { "input": input }) : unknown
   !! 130227..130331: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process76$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process76", map { "input": input }) : baml.llm.PromptAst
@@ -5899,6 +5975,7 @@ function user.Process76$build_request(input: string) -> baml.http.Request {
 function user.Process77(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process77", map { "input": input }) : unknown
   !! 130331..130435: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process77$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process77", map { "input": input }) : baml.llm.PromptAst
@@ -5909,6 +5986,7 @@ function user.Process77$build_request(input: string) -> baml.http.Request {
 function user.Process78(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process78", map { "input": input }) : unknown
   !! 130435..130539: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process78$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process78", map { "input": input }) : baml.llm.PromptAst
@@ -5919,6 +5997,7 @@ function user.Process78$build_request(input: string) -> baml.http.Request {
 function user.Process79(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process79", map { "input": input }) : unknown
   !! 130539..130643: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process79$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process79", map { "input": input }) : baml.llm.PromptAst
@@ -5929,6 +6008,7 @@ function user.Process79$build_request(input: string) -> baml.http.Request {
 function user.Process80(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process80", map { "input": input }) : unknown
   !! 130643..130747: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process80$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process80", map { "input": input }) : baml.llm.PromptAst
@@ -5939,6 +6019,7 @@ function user.Process80$build_request(input: string) -> baml.http.Request {
 function user.Process81(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process81", map { "input": input }) : unknown
   !! 130747..130851: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process81$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process81", map { "input": input }) : baml.llm.PromptAst
@@ -5949,6 +6030,7 @@ function user.Process81$build_request(input: string) -> baml.http.Request {
 function user.Process82(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process82", map { "input": input }) : unknown
   !! 130896..130955: unresolved name: GPT4
+  !! 130896..130955: type mismatch: expected string, got unknown
 }
 function user.Process82$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process82", map { "input": input }) : baml.llm.PromptAst
@@ -5959,6 +6041,7 @@ function user.Process82$build_request(input: string) -> baml.http.Request {
 function user.Process83(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process83", map { "input": input }) : unknown
   !! 131000..131059: unresolved name: GPT4
+  !! 131000..131059: type mismatch: expected string, got unknown
 }
 function user.Process83$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process83", map { "input": input }) : baml.llm.PromptAst
@@ -5969,6 +6052,7 @@ function user.Process83$build_request(input: string) -> baml.http.Request {
 function user.Process84(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process84", map { "input": input }) : unknown
   !! 131059..131163: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process84$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process84", map { "input": input }) : baml.llm.PromptAst
@@ -5979,6 +6063,7 @@ function user.Process84$build_request(input: string) -> baml.http.Request {
 function user.Process85(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process85", map { "input": input }) : unknown
   !! 131163..131267: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process85$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process85", map { "input": input }) : baml.llm.PromptAst
@@ -5989,6 +6074,7 @@ function user.Process85$build_request(input: string) -> baml.http.Request {
 function user.Process86(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process86", map { "input": input }) : unknown
   !! 131267..131371: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process86$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process86", map { "input": input }) : baml.llm.PromptAst
@@ -5999,6 +6085,7 @@ function user.Process86$build_request(input: string) -> baml.http.Request {
 function user.Process87(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process87", map { "input": input }) : unknown
   !! 131371..131475: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process87$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process87", map { "input": input }) : baml.llm.PromptAst
@@ -6009,6 +6096,7 @@ function user.Process87$build_request(input: string) -> baml.http.Request {
 function user.Process88(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process88", map { "input": input }) : unknown
   !! 131475..131579: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process88$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process88", map { "input": input }) : baml.llm.PromptAst
@@ -6019,6 +6107,7 @@ function user.Process88$build_request(input: string) -> baml.http.Request {
 function user.Process89(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process89", map { "input": input }) : unknown
   !! 131579..131683: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process89$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process89", map { "input": input }) : baml.llm.PromptAst
@@ -6029,6 +6118,7 @@ function user.Process89$build_request(input: string) -> baml.http.Request {
 function user.Process90(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process90", map { "input": input }) : unknown
   !! 131683..131787: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process90$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process90", map { "input": input }) : baml.llm.PromptAst
@@ -6039,6 +6129,7 @@ function user.Process90$build_request(input: string) -> baml.http.Request {
 function user.Process91(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process91", map { "input": input }) : unknown
   !! 131832..131891: unresolved name: GPT4
+  !! 131832..131891: type mismatch: expected string, got unknown
 }
 function user.Process91$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process91", map { "input": input }) : baml.llm.PromptAst
@@ -6049,6 +6140,7 @@ function user.Process91$build_request(input: string) -> baml.http.Request {
 function user.Process92(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process92", map { "input": input }) : unknown
   !! 131891..131995: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process92$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process92", map { "input": input }) : baml.llm.PromptAst
@@ -6059,6 +6151,7 @@ function user.Process92$build_request(input: string) -> baml.http.Request {
 function user.Process93(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process93", map { "input": input }) : unknown
   !! 132040..132099: unresolved name: GPT4
+  !! 132040..132099: type mismatch: expected string, got unknown
 }
 function user.Process93$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process93", map { "input": input }) : baml.llm.PromptAst
@@ -6069,6 +6162,7 @@ function user.Process93$build_request(input: string) -> baml.http.Request {
 function user.Process94(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process94", map { "input": input }) : unknown
   !! 132099..132203: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process94$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process94", map { "input": input }) : baml.llm.PromptAst
@@ -6079,6 +6173,7 @@ function user.Process94$build_request(input: string) -> baml.http.Request {
 function user.Process95(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process95", map { "input": input }) : unknown
   !! 132203..132307: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process95$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process95", map { "input": input }) : baml.llm.PromptAst
@@ -6089,6 +6184,7 @@ function user.Process95$build_request(input: string) -> baml.http.Request {
 function user.Process96(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process96", map { "input": input }) : unknown
   !! 132352..132411: unresolved name: GPT4
+  !! 132352..132411: type mismatch: expected string, got unknown
 }
 function user.Process96$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process96", map { "input": input }) : baml.llm.PromptAst
@@ -6099,6 +6195,7 @@ function user.Process96$build_request(input: string) -> baml.http.Request {
 function user.Process97(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process97", map { "input": input }) : unknown
   !! 132411..132515: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process97$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process97", map { "input": input }) : baml.llm.PromptAst
@@ -6109,6 +6206,7 @@ function user.Process97$build_request(input: string) -> baml.http.Request {
 function user.Process98(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process98", map { "input": input }) : unknown
   !! 132560..132619: unresolved name: GPT4
+  !! 132560..132619: type mismatch: expected string, got unknown
 }
 function user.Process98$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process98", map { "input": input }) : baml.llm.PromptAst
@@ -6119,6 +6217,7 @@ function user.Process98$build_request(input: string) -> baml.http.Request {
 function user.Process99(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process99", map { "input": input }) : unknown
   !! 132619..132723: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process99$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process99", map { "input": input }) : baml.llm.PromptAst
@@ -6129,6 +6228,7 @@ function user.Process99$build_request(input: string) -> baml.http.Request {
 function user.Process100(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Process100", map { "input": input }) : unknown
   !! 132723..132829: unresolved name: GPT4
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Process100$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Process100", map { "input": input }) : baml.llm.PromptAst

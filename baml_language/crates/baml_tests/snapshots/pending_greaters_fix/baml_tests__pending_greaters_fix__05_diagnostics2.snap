@@ -2,22 +2,22 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected map<string, int>, got unknown
    ╭─[ extra_greater.baml:1:1 ]
    │
  1 │ // Test case: Extra '>' in generic type should not cause cascading errors
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected map<string, int>, got unknown
    │ 
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
    ╭─[ extra_greater.baml:1:1 ]
    │
  1 │ // Test case: Extra '>' in generic type should not cause cascading errors
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected string, got unknown
    │ 
    │ Note: Error code: E0001
 ───╯

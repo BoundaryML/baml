@@ -63,7 +63,7 @@ fn user.BadParam$render_prompt(x: map<string, int>) -> baml.llm.PromptAst {
 fn user.BadReturnType() -> map<string, int> {
     // Locals:
     let _0: map<string, int> // _0 // return
-    let _1: map<void, void>
+    let _1: map<string, unknown>
 
     bb0: {
         _1 = {  };
@@ -83,7 +83,7 @@ fn user.BadParam(x: map<string, int>) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: map<string, int> // x // param
-    let _2: map<"x", map<string, int>>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "x": copy _1 };

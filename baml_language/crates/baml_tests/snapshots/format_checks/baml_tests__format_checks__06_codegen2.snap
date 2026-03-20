@@ -1496,6 +1496,9 @@ function user.DeeplyNestedClient$new() -> null {
 }
 
 function user.EnvClient$new() -> null {
+    load_const "OPENAI_API_KEY"
+    call env.get_or_panic
+    store_var _2
     alloc_instance PrimitiveClient
     copy 0
     load_const "EnvClient"
@@ -1518,7 +1521,7 @@ function user.EnvClient$new() -> null {
     load_const null
     store_field .remap_roles
     copy 0
-    load_const null
+    load_var _2
     store_field .api_key
     copy 0
     load_const null
@@ -1746,7 +1749,8 @@ function user.LlmStringClient(text: string) -> string {
     load_const "openai/gpt-4o"
     store_field .name
     copy 0
-    load_const null
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
     store_field .client_type
     copy 0
     alloc_array 0
@@ -3718,6 +3722,9 @@ function user.ManyNestedExprs(items: int[]) -> int {
 }
 
 function user.ManyOptionsClient$new() -> null {
+    load_const "OPENAI_API_KEY"
+    call env.get_or_panic
+    store_var _2
     alloc_instance PrimitiveClient
     copy 0
     load_const "ManyOptionsClient"
@@ -3740,7 +3747,7 @@ function user.ManyOptionsClient$new() -> null {
     load_const null
     store_field .remap_roles
     copy 0
-    load_const null
+    load_var _2
     store_field .api_key
     copy 0
     load_const null

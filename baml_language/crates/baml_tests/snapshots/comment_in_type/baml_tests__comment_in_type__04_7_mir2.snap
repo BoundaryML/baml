@@ -47,7 +47,7 @@ fn user.FunctionWithComments$build_request(a: string, b: int) -> baml.http.Reque
 fn user.CommentAfterArrow() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: map<void, void>
+    let _1: map<string, unknown>
 
     bb0: {
         _1 = {  };
@@ -128,7 +128,7 @@ fn user.FunctionWithComments(a: string, b: int) -> string {
     let _0: string // _0 // return
     let _1: string // a // param
     let _2: int // b // param
-    let _3: map<"a" | "b", string | int>
+    let _3: map<string, unknown>
 
     bb0: {
         _3 = { const "a": copy _1, const "b": copy _2 };

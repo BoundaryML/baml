@@ -2,14 +2,26 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected baml.llm.Client, got null
     ╭─[ valid_generator.baml:20:30 ]
     │
  20 │ ╭─▶ function GetUser() -> MyClass {
     ┆ ┆   
  23 │ ├─▶ }
     │ │       
-    │ ╰─────── expected 0 argument(s), got 3
+    │ ╰─────── type mismatch: expected baml.llm.Client, got null
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected user.MyClass, got unknown
+    ╭─[ valid_generator.baml:20:30 ]
+    │
+ 20 │ ╭─▶ function GetUser() -> MyClass {
+    ┆ ┆   
+ 23 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected user.MyClass, got unknown
     │     
     │     Note: Error code: E0001
 ────╯

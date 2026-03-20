@@ -2,12 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
    ╭─[ main.baml:1:1 ]
    │
  1 │ // Control flow visualization graph test cases
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected string, got unknown
    │ 
    │ Note: Error code: E0001
 ───╯

@@ -31,13 +31,13 @@ SOURCE_FILE
     ARROW "->"
     TYPE_EXPR
     EXPR_FUNCTION_BODY
-      BLOCK_EXPR "{"
+      BLOCK_EXPR "{  // Missing return type
+  client GPT4
+}"
         L_BRACE "{"
-  CLIENT_DEF "// Missing return type
-  client GPT4"
-    KW_CLIENT "client"
-    WORD "GPT4"
-  R_BRACE "}"
+        KW_CLIENT "client"
+        WORD "GPT4"
+        R_BRACE "}"
 
 === ERRORS ===
 Error: Expected class name, found integer
@@ -126,36 +126,6 @@ Error: Expected type, found '{'
  10 │ function Foo() -> {  // Missing return type
     │                   ┬  
     │                   ╰── Expected type, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected '}', found client
-    ╭─[ invalid_syntax.baml:11:3 ]
-    │
- 11 │   client GPT4
-    │   ───┬──  
-    │      ╰──── Expected '}', found client
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected config block, found '}'
-    ╭─[ invalid_syntax.baml:12:1 ]
-    │
- 12 │ }
-    │ ┬  
-    │ ╰── Expected config block, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ invalid_syntax.baml:12:1 ]
-    │
- 12 │ }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯

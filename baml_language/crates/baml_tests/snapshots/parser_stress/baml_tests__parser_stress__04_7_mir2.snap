@@ -50,7 +50,7 @@ fn user.Process37(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -70,7 +70,7 @@ fn user.Process14(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -90,7 +90,7 @@ fn user.Process60(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -130,7 +130,7 @@ fn user.Process4(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -290,7 +290,7 @@ fn user.Process39(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -310,7 +310,7 @@ fn user.Process63(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -370,7 +370,7 @@ fn user.Process18(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -570,7 +570,7 @@ fn user.Process26(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -610,7 +610,7 @@ fn user.Process69(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -650,7 +650,7 @@ fn user.Process87(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -730,7 +730,7 @@ fn user.Process40(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -790,7 +790,7 @@ fn user.Process25(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -830,7 +830,7 @@ fn user.Process82(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -850,7 +850,7 @@ fn user.Process91(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -890,7 +890,7 @@ fn user.Process70(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -930,7 +930,7 @@ fn user.Process23(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -950,7 +950,7 @@ fn user.Process96(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1090,7 +1090,7 @@ fn user.Process43(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1150,7 +1150,7 @@ fn user.Process47(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1170,7 +1170,7 @@ fn user.Process92(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1350,7 +1350,7 @@ fn user.Process46(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1410,7 +1410,7 @@ fn user.Process52(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1430,7 +1430,7 @@ fn user.Process78(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1490,7 +1490,7 @@ fn user.Process33(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1550,7 +1550,7 @@ fn user.Process38(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1610,7 +1610,7 @@ fn user.Process27(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1630,7 +1630,7 @@ fn user.Process93(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1650,7 +1650,7 @@ fn user.Process56(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1710,7 +1710,7 @@ fn user.Process36(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1750,7 +1750,7 @@ fn user.Process84(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1770,7 +1770,7 @@ fn user.Process49(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1790,7 +1790,7 @@ fn user.Process83(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1850,7 +1850,7 @@ fn user.Process98(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -1910,7 +1910,7 @@ fn user.Process62(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2010,7 +2010,7 @@ fn user.Process8(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2170,7 +2170,7 @@ fn user.Process15(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2190,7 +2190,7 @@ fn user.Process35(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2250,7 +2250,7 @@ fn user.Process61(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2350,7 +2350,7 @@ fn user.Process80(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2390,7 +2390,7 @@ fn user.Process81(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2550,7 +2550,7 @@ fn user.Process71(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2610,7 +2610,7 @@ fn user.Process21(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2650,7 +2650,7 @@ fn user.Process31(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2670,7 +2670,7 @@ fn user.Process75(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2730,7 +2730,7 @@ fn user.Process41(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2830,7 +2830,7 @@ fn user.Process28(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2850,7 +2850,7 @@ fn user.Process58(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2870,7 +2870,7 @@ fn user.Process29(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -2990,7 +2990,7 @@ fn user.Process13(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3110,7 +3110,7 @@ fn user.Process1(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3130,7 +3130,7 @@ fn user.Process34(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3210,7 +3210,7 @@ fn user.Process30(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3230,7 +3230,7 @@ fn user.Process2(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3270,7 +3270,7 @@ fn user.Process73(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3350,7 +3350,7 @@ fn user.Process10(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3530,7 +3530,7 @@ fn user.Process3(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3550,7 +3550,7 @@ fn user.Process20(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3570,7 +3570,7 @@ fn user.Process32(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3610,7 +3610,7 @@ fn user.Process17(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3730,7 +3730,7 @@ fn user.Process42(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3770,7 +3770,7 @@ fn user.Process50(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3790,7 +3790,7 @@ fn user.Process12(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3830,7 +3830,7 @@ fn user.Process44(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3890,7 +3890,7 @@ fn user.Process64(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3910,7 +3910,7 @@ fn user.Process54(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3950,7 +3950,7 @@ fn user.Process88(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -3970,7 +3970,7 @@ fn user.Process9(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4030,7 +4030,7 @@ fn user.Process11(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4070,7 +4070,7 @@ fn user.Process22(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4090,7 +4090,7 @@ fn user.Process55(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4110,7 +4110,7 @@ fn user.Process24(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4130,7 +4130,7 @@ fn user.Process66(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4270,7 +4270,7 @@ fn user.Process57(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4410,7 +4410,7 @@ fn user.Process67(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4450,7 +4450,7 @@ fn user.Process19(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4470,7 +4470,7 @@ fn user.Process99(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4530,7 +4530,7 @@ fn user.Process95(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4570,7 +4570,7 @@ fn user.Process74(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4590,7 +4590,7 @@ fn user.Process45(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4610,7 +4610,7 @@ fn user.Process5(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4630,7 +4630,7 @@ fn user.Process90(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4650,7 +4650,7 @@ fn user.Process6(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4690,7 +4690,7 @@ fn user.Process79(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4710,7 +4710,7 @@ fn user.Process16(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4790,7 +4790,7 @@ fn user.Process68(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4850,7 +4850,7 @@ fn user.Process76(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4870,7 +4870,7 @@ fn user.Process53(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -4970,7 +4970,7 @@ fn user.Process85(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5130,7 +5130,7 @@ fn user.Process59(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5170,7 +5170,7 @@ fn user.Process89(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5250,7 +5250,7 @@ fn user.Process7(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5310,7 +5310,7 @@ fn user.Process100(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5390,7 +5390,7 @@ fn user.Process48(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5470,7 +5470,7 @@ fn user.Process94(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5510,7 +5510,7 @@ fn user.Process97(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5550,7 +5550,7 @@ fn user.Process65(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5570,7 +5570,7 @@ fn user.Process72(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5770,7 +5770,7 @@ fn user.Process51(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5790,7 +5790,7 @@ fn user.Process77(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };
@@ -5830,7 +5830,7 @@ fn user.Process86(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };

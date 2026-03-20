@@ -1151,7 +1151,7 @@ fn user.TypedValuesClient$new() -> null {
 fn user.TestTarget() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: map<void, void>
+    let _1: map<string, unknown>
 
     bb0: {
         _1 = {  };
@@ -1597,20 +1597,25 @@ fn user.EnvClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: map<void, void>
+    let _2: string
     let _3: map<void, void>
-    let _4: map<"model", "gpt-4">
+    let _4: map<void, void>
+    let _5: map<"model", "gpt-4">
 
     bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = { const "model": const "gpt-4" };
-        _1 = PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = PrimitiveClient { const "EnvClient", const "openai", copy _1 };
-        goto -> bb1;
+        _2 = call const fn env.get_or_panic(const "OPENAI_API_KEY") -> [bb1];
     }
 
     bb1: {
+        _3 = {  };
+        _4 = {  };
+        _5 = { const "model": const "gpt-4" };
+        _1 = PrimitiveClientOptions { const null, const null, const null, const null, copy _2, const null, copy _3, copy _4, copy _5 };
+        _0 = PrimitiveClient { const "EnvClient", const "openai", copy _1 };
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }
@@ -1641,22 +1646,27 @@ fn user.ManyOptionsClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: map<void, void>
+    let _2: string
     let _3: map<void, void>
-    let _4: map<"model" | "max_tokens" | "temperature" | "top_p" | "frequency_penalty" | "presence_penalty" | "stream" | "stop_sequences", "gpt-4" | 4096 | 0.7 | 0.95 | 0.5 | 0.3 | "true" | "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]>
-    let _5: "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]
+    let _4: map<void, void>
+    let _5: map<"model" | "max_tokens" | "temperature" | "top_p" | "frequency_penalty" | "presence_penalty" | "stream" | "stop_sequences", "gpt-4" | 4096 | 0.7 | 0.95 | 0.5 | 0.3 | "true" | "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]>
+    let _6: "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]
 
     bb0: {
-        _2 = {  };
-        _3 = {  };
-        _5 = [const "END", const "STOP", const "DONE", const "COMPLETE", const "FINISHED"];
-        _4 = { const "model": const "gpt-4", const "max_tokens": const 4096_i64, const "temperature": const 0.7_f64, const "top_p": const 0.95_f64, const "frequency_penalty": const 0.5_f64, const "presence_penalty": const 0.3_f64, const "stream": const "true", const "stop_sequences": copy _5 };
-        _1 = PrimitiveClientOptions { const "https://api.openai.com/v1", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = PrimitiveClient { const "ManyOptionsClient", const "openai", copy _1 };
-        goto -> bb1;
+        _2 = call const fn env.get_or_panic(const "OPENAI_API_KEY") -> [bb1];
     }
 
     bb1: {
+        _3 = {  };
+        _4 = {  };
+        _6 = [const "END", const "STOP", const "DONE", const "COMPLETE", const "FINISHED"];
+        _5 = { const "model": const "gpt-4", const "max_tokens": const 4096_i64, const "temperature": const 0.7_f64, const "top_p": const 0.95_f64, const "frequency_penalty": const 0.5_f64, const "presence_penalty": const 0.3_f64, const "stream": const "true", const "stop_sequences": copy _6 };
+        _1 = PrimitiveClientOptions { const "https://api.openai.com/v1", const null, const null, const null, copy _2, const null, copy _3, copy _4, copy _5 };
+        _0 = PrimitiveClient { const "ManyOptionsClient", const "openai", copy _1 };
+        goto -> bb2;
+    }
+
+    bb2: {
         return;
     }
 }
@@ -2406,7 +2416,7 @@ fn user.LlmBasic(name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // name // param
-    let _2: map<"name", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "name": copy _1 };
@@ -2552,7 +2562,7 @@ fn user.LlmWithLongSignature(first_context: string, second_context: string, thir
     let _2: string // second_context // param
     let _3: string // third_context // param
     let _4: string // user_query // param
-    let _5: map<"first_context" | "second_context" | "third_context" | "user_query", string>
+    let _5: map<string, unknown>
 
     bb0: {
         _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
@@ -2589,13 +2599,13 @@ fn user.LlmStringClient(text: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
-    let _2: void
+    let _2: baml.llm.Client
     let _3: void[]
-    let _4: map<"text", string>
+    let _4: map<string, unknown>
 
     bb0: {
         _3 = [];
-        _2 = Client { const "openai/gpt-4o", const null, copy _3, const null, const 0_i64 };
+        _2 = Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
         _4 = { const "text": copy _1 };
         _0 = call const fn baml.llm.call_llm_function(copy _2, const "LlmStringClient", copy _4) -> [bb1];
     }
@@ -2665,7 +2675,7 @@ fn user.LlmMultiLine(text: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
-    let _2: map<"text", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "text": copy _1 };
@@ -2721,7 +2731,7 @@ fn user.LlmReversedOrder(text: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // text // param
-    let _2: map<"text", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "text": copy _1 };

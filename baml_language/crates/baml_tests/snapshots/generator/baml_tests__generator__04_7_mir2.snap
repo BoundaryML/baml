@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 fn user.GetUser() -> user.MyClass {
     // Locals:
     let _0: user.MyClass // _0 // return
-    let _1: map<void, void>
+    let _1: map<string, unknown>
 
     bb0: {
         _1 = {  };

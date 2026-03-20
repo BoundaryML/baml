@@ -2,58 +2,46 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected int | string[], got unknown
    ╭─[ functions.baml:1:1 ]
    │
  1 │ function GetUser(id: int) -> User {
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected int | string[], got unknown
    │ 
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected map<string, int | string>, got unknown
    ╭─[ functions.baml:1:1 ]
    │
  1 │ function GetUser(id: int) -> User {
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected map<string, int | string>, got unknown
    │ 
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected user.User, got unknown
    ╭─[ functions.baml:1:34 ]
    │
  1 │ ╭─▶ function GetUser(id: int) -> User {
    ┆ ┆   
  4 │ ├─▶ }
    │ │       
-   │ ╰─────── expected 0 argument(s), got 3
+   │ ╰─────── type mismatch: expected user.User, got unknown
    │     
    │     Note: Error code: E0001
 ───╯
 
-  [type] Error: unresolved name: GPT4
-   ╭─[ functions.baml:1:34 ]
-   │
- 1 │ ╭─▶ function GetUser(id: int) -> User {
-   ┆ ┆   
- 4 │ ├─▶ }
-   │ │       
-   │ ╰─────── unresolved name: GPT4
-   │     
-   │     Note: Error code: E0001
-───╯
-
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected user.Status, got unknown
    ╭─[ functions.baml:6:31 ]
    │
  6 │ ╭─▶ function GetStatus() -> Status {
    ┆ ┆   
  9 │ ├─▶ }
    │ │       
-   │ ╰─────── expected 0 argument(s), got 3
+   │ ╰─────── type mismatch: expected user.Status, got unknown
    │     
    │     Note: Error code: E0001
 ───╯

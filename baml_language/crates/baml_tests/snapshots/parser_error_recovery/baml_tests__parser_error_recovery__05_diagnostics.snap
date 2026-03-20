@@ -1,6 +1,5 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === DIAGNOSTICS ===
   [parse] Error: Expected class name, found integer
@@ -89,36 +88,6 @@ expression: output
  10 │ function Foo() -> {  // Missing return type
     │                   ┬  
     │                   ╰── Expected type, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected '}', found client
-    ╭─[ invalid_syntax.baml:11:3 ]
-    │
- 11 │   client GPT4
-    │   ───┬──  
-    │      ╰──── Expected '}', found client
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected config block, found '}'
-    ╭─[ invalid_syntax.baml:12:1 ]
-    │
- 12 │ }
-    │ ┬  
-    │ ╰── Expected config block, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found '}'
-    ╭─[ invalid_syntax.baml:12:1 ]
-    │
- 12 │ }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -263,17 +232,6 @@ expression: output
    │ Note: Error code: E0010
 ───╯
 
-  [hir] Error: Missing `provider` field in client. e.g. `provider openai`
-    ╭─[ invalid_syntax.baml:10:20 ]
-    │
- 10 │ ╭─▶ function Foo() -> {  // Missing return type
- 11 │ ├─▶   client GPT4
-    │ │                   
-    │ ╰─────────────────── Missing `provider` field in client. e.g. `provider openai`
-    │     
-    │     Note: Error code: E0026
-────╯
-
   [hir] Error: Expected @alias("..."), but got an expression `  // Unclosed attribute
   field5`
    ╭─[ partial_input.baml:6:23 ]
@@ -306,3 +264,13 @@ expression: output
    │ 
    │ Note: Error code: E0002
 ───╯
+
+  [type] Error: Unknown variable `GPT4`
+    ╭─[ invalid_syntax.baml:11:10 ]
+    │
+ 11 │   client GPT4
+    │          ──┬─  
+    │            ╰─── Unknown variable `GPT4`
+    │ 
+    │ Note: Error code: E0003
+────╯

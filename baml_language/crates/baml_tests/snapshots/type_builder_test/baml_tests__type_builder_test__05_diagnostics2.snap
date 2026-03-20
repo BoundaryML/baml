@@ -2,14 +2,14 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
    ╭─[ test.baml:1:24 ]
    │
  1 │ ╭─▶ function Fn() -> string {
    ┆ ┆   
  4 │ ├─▶ }
    │ │       
-   │ ╰─────── expected 0 argument(s), got 3
+   │ ╰─────── type mismatch: expected string, got unknown
    │     
    │     Note: Error code: E0001
 ───╯

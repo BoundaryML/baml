@@ -5,13 +5,13 @@ source: crates/baml_tests/src/generated_tests.rs
 fn user.Fn() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: void
+    let _1: baml.llm.Client
     let _2: void[]
-    let _3: map<void, void>
+    let _3: map<string, unknown>
 
     bb0: {
         _2 = [];
-        _1 = Client { const "openai/gpt-4o", const null, copy _2, const null, const 0_i64 };
+        _1 = Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _2, const null, const 0_i64 };
         _3 = {  };
         _0 = call const fn baml.llm.call_llm_function(copy _1, const "Fn", copy _3) -> [bb1];
     }

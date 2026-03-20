@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === HIR2 ===
 enum user.Status {ACTIVE, INACTIVE, PENDING}
 function user.Foo() -> ?  [expr] {
-  {  }
+  {  } GPT4
 }
 class user.Another {
   field: int

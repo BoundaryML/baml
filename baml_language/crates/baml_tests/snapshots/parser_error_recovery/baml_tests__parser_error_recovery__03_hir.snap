@@ -1,23 +1,15 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR ITEMS ===
 function Foo() -> <unknown> {
-}
-
-function GPT4.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("GPT4", "unknown", "user", ["user", "assistant", "system"], {  })
+    GPT4
 }
 
 enum Status {
   ACTIVE
   INACTIVE
   PENDING
-}
-
-client GPT4 {
-  provider: unknown
 }
 
 class Another {

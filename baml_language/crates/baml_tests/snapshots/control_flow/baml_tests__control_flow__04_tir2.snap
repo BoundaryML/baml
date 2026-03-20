@@ -123,6 +123,7 @@ function user.TestClient$new() -> ? {
 }
 function user.LlmFunction(input: string) -> string {
   baml.llm.call_llm_function(TestClient, "LlmFunction", map { "input": input }) : unknown
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("LlmFunction", map { "input": input }) : baml.llm.PromptAst

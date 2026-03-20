@@ -6,7 +6,7 @@ fn user.FormatMessage(name: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // name // param
-    let _2: map<"name", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "name": copy _1 };
@@ -86,7 +86,7 @@ fn user.ProcessText(input: string) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: string // input // param
-    let _2: map<"input", string>
+    let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "input": copy _1 };

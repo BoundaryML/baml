@@ -7,6 +7,7 @@ function user.TestClient$new() -> ? {
 }
 function user.FunctionWithComments(a: string, b: int) -> string {
   baml.llm.call_llm_function(TestClient, "FunctionWithComments", map { "a": a, "b": b }) : unknown
+  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.PromptAst {
   baml.llm.render_prompt("FunctionWithComments", map { "a": a, "b": b }) : baml.llm.PromptAst
@@ -16,6 +17,7 @@ function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http
 }
 function user.CommentAfterArrow() -> string {
   baml.llm.call_llm_function(TestClient, "CommentAfterArrow", map {  }) : unknown
+  !! 472..514: type mismatch: expected string, got unknown
 }
 function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst {
   baml.llm.render_prompt("CommentAfterArrow", map {  }) : baml.llm.PromptAst

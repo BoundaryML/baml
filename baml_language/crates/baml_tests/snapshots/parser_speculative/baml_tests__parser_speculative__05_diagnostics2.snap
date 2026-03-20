@@ -2,22 +2,22 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
    ╭─[ ambiguous_function.baml:1:1 ]
    │
  1 │ // This could initially look like either type
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected string, got unknown
    │ 
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
    ╭─[ ambiguous_function.baml:1:1 ]
    │
  1 │ // This could initially look like either type
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected string, got unknown
    │ 
    │ Note: Error code: E0001
 ───╯
@@ -43,6 +43,18 @@ source: crates/baml_tests/src/generated_tests.rs
    │ 
    │ Note: Error code: E0010
 ───╯
+
+  [type] Error: type mismatch: expected baml.llm.Client, got null
+    ╭─[ ambiguous_function.baml:5:2 ]
+    │
+  5 │ ╭─▶ }
+    ┆ ┆   
+ 11 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.llm.Client, got null
+    │     
+    │     Note: Error code: E0001
+────╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found 'clent', found identifier
    ╭─[ ambiguous_function.baml:9:3 ]
@@ -74,14 +86,14 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected user.JsonData, got unknown
    ╭─[ llm_function.baml:1:47 ]
    │
  1 │ ╭─▶ function ExtractData(text: string) -> JsonData {
    ┆ ┆   
  7 │ ├─▶ }
    │ │       
-   │ ╰─────── expected 0 argument(s), got 3
+   │ ╰─────── type mismatch: expected user.JsonData, got unknown
    │     
    │     Note: Error code: E0001
 ───╯
@@ -98,12 +110,12 @@ source: crates/baml_tests/src/generated_tests.rs
    │     Note: Error code: E0001
 ───╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected user.Analysis, got unknown
    ╭─[ mixed_functions.baml:1:1 ]
    │
  1 │ // Mix of LLM and expression functions in one file
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected user.Analysis, got unknown
    │ 
    │ Note: Error code: E0001
 ───╯
@@ -120,14 +132,14 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
     ╭─[ mixed_functions.baml:31:49 ]
     │
  31 │ ╭─▶ function ChainedProcess(input: string) -> string {
     ┆ ┆   
  39 │ ├─▶ }
     │ │       
-    │ ╰─────── expected 0 argument(s), got 3
+    │ ╰─────── type mismatch: expected string, got unknown
     │     
     │     Note: Error code: E0001
 ────╯

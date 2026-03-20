@@ -308,44 +308,44 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
      ╭─[ config_decls.baml:445:32 ]
      │
  445 │ ╭─▶ function TestTarget() -> string {
      ┆ ┆   
  448 │ ├─▶ }
      │ │       
-     │ ╰─────── expected 0 argument(s), got 3
+     │ ╰─────── type mismatch: expected string, got unknown
      │     
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
    ╭─[ function_decls.baml:1:1 ]
    │
  1 │ // Testing all the formatter cases for function declarations
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected string, got unknown
    │ 
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
    ╭─[ function_decls.baml:1:1 ]
    │
  1 │ // Testing all the formatter cases for function declarations
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected string, got unknown
    │ 
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
    ╭─[ function_decls.baml:1:1 ]
    │
  1 │ // Testing all the formatter cases for function declarations
    │ │ 
-   │ ╰─ expected 0 argument(s), got 3
+   │ ╰─ type mismatch: expected string, got unknown
    │ 
    │ Note: Error code: E0001
 ───╯
@@ -394,14 +394,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
      ╭─[ function_decls.baml:481:49 ]
      │
  481 │ ╭─▶ function LlmStringClient(text: string) -> string {
      ┆ ┆   
  484 │ ├─▶ }
      │ │       
-     │ ╰─────── expected 0 argument(s), got 3
+     │ ╰─────── type mismatch: expected string, got unknown
      │     
      │     Note: Error code: E0001
 ─────╯
@@ -418,14 +418,14 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: expected 0 argument(s), got 3
+  [type] Error: type mismatch: expected string, got unknown
      ╭─[ function_decls.baml:495:130 ]
      │
  495 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
      ┆ ┆   
  501 │ ├─▶ }
      │ │       
-     │ ╰─────── expected 0 argument(s), got 3
+     │ ╰─────── type mismatch: expected string, got unknown
      │     
      │     Note: Error code: E0001
 ─────╯

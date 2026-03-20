@@ -7,7 +7,8 @@ function user.TypeBuilderFn(from_text: string) -> user.Resume {
     load_const "openai/gpt-4o-mini"
     store_field .name
     copy 0
-    load_const null
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
     store_field .client_type
     copy 0
     alloc_array 0
