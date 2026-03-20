@@ -1,0 +1,8 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR ITEMS ===
+template_string StartsWith(s: string)
+template_string Split(s: string)
+template_string Upper(s: string)
+template_string Sep(n: int)

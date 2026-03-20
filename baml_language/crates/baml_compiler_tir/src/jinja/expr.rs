@@ -188,7 +188,29 @@ fn visit_expr(expr: &ast::Expr, errors: &mut Vec<TypeError>, env: &JinjaTypeEnv)
             }
         }
 
-        ast::Expr::Call(call_expr) => handle_call(call_expr, errors, env),
+        ast::Expr::Call(call_expr) => {
+            // Intercept string method calls: "str".method(args) or string_var.method(args)
+            if let ast::Expr::GetAttr(get_attr) = &call_expr.expr {
+                let parent = visit_expr(&get_attr.expr, errors, env);
+                if parent.is_subtype_of(&JinjaType::String) {
+                    if let Some(ret) = string_method_return_type(get_attr.name) {
+                        // Visit args for side effects (variable tracking, error checking)
+                        for arg in &call_expr.args {
+                            match arg {
+                                ast::CallArg::Pos(e) | ast::CallArg::Kwarg(_, e) => {
+                                    visit_expr(e, errors, env);
+                                }
+                                ast::CallArg::PosSplat(e) | ast::CallArg::KwargSplat(e) => {
+                                    visit_expr(e, errors, env);
+                                }
+                            }
+                        }
+                        return ret;
+                    }
+                }
+            }
+            handle_call(call_expr, errors, env)
+        }
 
         ast::Expr::List(list_expr) => {
             let elem_type = merge_types(
@@ -580,6 +602,30 @@ fn handle_test(test_expr: &ast::Spanned<ast::Test>, errors: &mut Vec<TypeError>)
         ));
     }
     JinjaType::Bool
+}
+
+/// Return type for a known Python string method, or None if unknown.
+///
+/// Source of truth for supported methods:
+/// <https://docs.rs/minijinja-contrib/latest/src/minijinja_contrib/pycompat.rs.html>
+fn string_method_return_type(method: &str) -> Option<JinjaType> {
+    match method {
+        // Methods returning String
+        "capitalize" | "format" | "join" | "lower" | "lstrip" | "replace" | "rstrip" | "strip"
+        | "title" | "upper" => Some(JinjaType::String),
+
+        // Methods returning Bool
+        "endswith" | "isalnum" | "isalpha" | "isascii" | "isdigit" | "islower" | "isnumeric"
+        | "isupper" | "startswith" => Some(JinjaType::Bool),
+
+        // Methods returning Int
+        "count" | "find" | "rfind" => Some(JinjaType::Int),
+
+        // Methods returning List[String]
+        "split" | "splitlines" => Some(JinjaType::List(Box::new(JinjaType::String))),
+
+        _ => None,
+    }
 }
 
 /// Handle property access (dot notation).
