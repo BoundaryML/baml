@@ -1,0 +1,94 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+enum user.Status
+function user.AlwaysThrowsStatus(n: int) -> user.Status {
+  { : never
+    match (n : int) : never
+      0 =>
+        throw "http_error" : never
+      _ =>
+        throw 404 : never
+  }
+}
+function user.WrapperAlwaysThrows(n: int) -> user.Status {
+  { : user.Status
+    AlwaysThrowsStatus(n) : user.Status
+  }
+}
+function user.CatchAlwaysThrows(n: int) -> string {
+  { : user.Status | "http!" | "index!"
+    catch (WrapperAlwaysThrows(n) : user.Status) : user.Status | "http!" | "index!"
+      catch (e)
+        _: string =>
+          "http!" : "http!"
+      catch (e2)
+        _: int =>
+          "index!" : "index!"
+  }
+  !! 618..737: type mismatch: expected string, got user.Status | "http!" | "index!"
+}
+function user.ThrowsAllStatusVariants(n: int) -> user.Status {
+  { : never
+    match (n : int) : never
+      1 =>
+        throw Status.HttpError : never
+      2 =>
+        throw Status.IndexError : never
+      3 =>
+        throw Status.AuthError : never
+      _ =>
+        throw Status.SomeOtherError : never
+  }
+}
+function user.CatchAllStatusVariants(n: int) -> string {
+  { : user.Status | "http!" | "index!" | "auth!" | "other!"
+    catch (ThrowsAllStatusVariants(n) : user.Status) : user.Status | "http!" | "index!" | "auth!" | "other!"
+      catch (e)
+        Status.HttpError =>
+          "http!" : "http!"
+      catch (e)
+        Status.IndexError =>
+          "index!" : "index!"
+      catch (e)
+        Status.AuthError =>
+          "auth!" : "auth!"
+      catch (e)
+        Status.SomeOtherError =>
+          "other!" : "other!"
+  }
+  !! 1111..1365: type mismatch: expected string, got user.Status | "http!" | "index!" | "auth!" | "other!"
+}
+function user.RecA(n: int) -> string {
+  { : string
+    match (n : int) : string
+      0 =>
+        throw "boom" : never
+      _ =>
+        RecB(n) : string
+  }
+}
+function user.RecB(n: int) -> string {
+  { : string
+    RecA(n) : string
+  }
+}
+function user.CatchRecursiveThrow(n: int) -> string {
+  { : string | "handled"
+    catch (RecB(n) : string) : string | "handled"
+      catch (e)
+        _: string =>
+          "handled" : "handled"
+  }
+}
+function user.UnreachableTailStillChecked() -> string {
+  { : never
+    { : never
+      throw "error" : "error"
+      let x = 123 : unknown
+      x.missing : unknown
+    }
+  }
+  !! 1900..1922: unreachable code: 2 statement(s) after diverging statement
+}

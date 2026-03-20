@@ -295,7 +295,11 @@ pub(crate) fn synthesize_llm_builtin_call(
             Some(name) if name.contains('/') => {
                 // Shorthand client (e.g. "openai/gpt-4o"): build an inline Client object.
                 let name_lit = alloc(Expr::Literal(Literal::String(name.to_string())));
-                let ct_path = alloc(Expr::Path(vec![Name::new("ClientType")]));
+                let ct_path = alloc(Expr::Path(vec![
+                    Name::new("baml"),
+                    Name::new("llm"),
+                    Name::new("ClientType"),
+                ]));
                 let ct_variant = alloc(Expr::FieldAccess {
                     base: ct_path,
                     field: Name::new("Primitive"),
@@ -766,8 +770,12 @@ fn synthesize_client_let(
     // name: "MyClient"
     let name_expr = alloc(Expr::Literal(Literal::String(client_name.to_string())));
 
-    // client_type: ClientType.Primitive (or Fallback / RoundRobin)
-    let client_type_path = alloc(Expr::Path(vec![Name::new("ClientType")]));
+    // client_type: baml.llm.ClientType.Primitive (or Fallback / RoundRobin)
+    let client_type_path = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("ClientType"),
+    ]));
     let variant_name = if is_fallback {
         "Fallback"
     } else if is_round_robin {

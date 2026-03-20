@@ -597,7 +597,8 @@ pub(crate) mod support {
             if matches!(scope.kind, ScopeKind::Function) {
                 let item_tree = &index.item_tree;
                 for (local_id, func_data) in &item_tree.functions {
-                    if func_data.span == scope.range {
+                    let name_matches = scope.name.as_ref().map_or(true, |n| *n == func_data.name);
+                    if func_data.span == scope.range && name_matches {
                         let func_loc = FunctionLoc::new(db, file, *local_id);
                         func_body_opt = Some(function_body(db, func_loc));
                         let sig = function_signature(db, func_loc);
@@ -672,6 +673,519 @@ pub(crate) mod support {
             }
 
             writeln!(output, "}}").ok();
+        }
+
+        output
+    }
+
+    /// Render a file's HIR2 (compiler2 item tree) as readable text.
+    pub fn render_hir2(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
+        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal, Pattern};
+        use baml_compiler2_hir::{
+            file_item_tree,
+            file_package::file_package,
+            loc::{ClassLoc, EnumLoc, TypeAliasLoc},
+        };
+
+        fn qualify_type_name(
+            name: &baml_base::Name,
+            pkg_prefix: &str,
+            local_type_names: &std::collections::HashSet<&str>,
+        ) -> String {
+            let s = name.as_str();
+            if s.contains('.') {
+                s.into()
+            } else if local_type_names.contains(s) {
+                format!("{pkg_prefix}{s}")
+            } else {
+                s.into()
+            }
+        }
+
+        fn type_expr_to_string_hir(ty: &baml_compiler2_ast::TypeExpr, pkg_prefix: &str) -> String {
+            match ty {
+                baml_compiler2_ast::TypeExpr::Path(segments) => {
+                    let path = segments
+                        .iter()
+                        .map(|n| n.as_str())
+                        .collect::<Vec<_>>()
+                        .join(".");
+                    if segments.len() == 1 {
+                        format!("{pkg_prefix}{path}")
+                    } else {
+                        path
+                    }
+                }
+                baml_compiler2_ast::TypeExpr::Int => "int".into(),
+                baml_compiler2_ast::TypeExpr::Float => "float".into(),
+                baml_compiler2_ast::TypeExpr::String => "string".into(),
+                baml_compiler2_ast::TypeExpr::Bool => "bool".into(),
+                baml_compiler2_ast::TypeExpr::Null => "null".into(),
+                baml_compiler2_ast::TypeExpr::Never => "never".into(),
+                baml_compiler2_ast::TypeExpr::Media(k) => format!("{:?}", k).to_lowercase(),
+                baml_compiler2_ast::TypeExpr::Optional(inner) => {
+                    format!("{}?", type_expr_to_string_hir(inner, pkg_prefix))
+                }
+                baml_compiler2_ast::TypeExpr::List(inner) => {
+                    format!("{}[]", type_expr_to_string_hir(inner, pkg_prefix))
+                }
+                baml_compiler2_ast::TypeExpr::Map { key, value } => format!(
+                    "map<{}, {}>",
+                    type_expr_to_string_hir(key, pkg_prefix),
+                    type_expr_to_string_hir(value, pkg_prefix)
+                ),
+                baml_compiler2_ast::TypeExpr::Union(members) => members
+                    .iter()
+                    .map(|m| type_expr_to_string_hir(m, pkg_prefix))
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+                baml_compiler2_ast::TypeExpr::Literal(lit) => lit.to_string(),
+                baml_compiler2_ast::TypeExpr::Function { params, ret } => {
+                    let ps: Vec<String> = params
+                        .iter()
+                        .map(|p| {
+                            p.name
+                                .as_ref()
+                                .map(|n| {
+                                    format!(
+                                        "{}: {}",
+                                        n.as_str(),
+                                        type_expr_to_string_hir(&p.ty, pkg_prefix)
+                                    )
+                                })
+                                .unwrap_or_else(|| type_expr_to_string_hir(&p.ty, pkg_prefix))
+                        })
+                        .collect();
+                    format!(
+                        "({}) -> {}",
+                        ps.join(", "),
+                        type_expr_to_string_hir(ret, pkg_prefix)
+                    )
+                }
+                baml_compiler2_ast::TypeExpr::BuiltinUnknown => "unknown".into(),
+                baml_compiler2_ast::TypeExpr::Type => "type".into(),
+                baml_compiler2_ast::TypeExpr::Rust => "$rust_type".into(),
+                baml_compiler2_ast::TypeExpr::Error => "error".into(),
+                baml_compiler2_ast::TypeExpr::Unknown => "?".into(),
+            }
+        }
+
+        fn pat_desc_hir(
+            pat_id: baml_compiler2_ast::PatId,
+            body: &ExprBody,
+            prefix: &str,
+            local_type_names: &std::collections::HashSet<&str>,
+        ) -> String {
+            let pat = &body.patterns[pat_id];
+            match pat {
+                Pattern::Binding(n) => n.to_string(),
+                Pattern::TypedBinding { name, ty } => {
+                    format!("{name}: {}", type_expr_to_string_hir(ty, prefix))
+                }
+                Pattern::Literal(lit) => lit.to_string(),
+                Pattern::Null => "null".into(),
+                Pattern::EnumVariant { enum_name, variant } => {
+                    format!(
+                        "{}.{variant}",
+                        qualify_type_name(enum_name, prefix, local_type_names)
+                    )
+                }
+                Pattern::Union(pats) => pats
+                    .iter()
+                    .map(|p| pat_desc_hir(*p, body, prefix, local_type_names))
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+            }
+        }
+
+        fn expr_desc_hir(
+            expr_id: baml_compiler2_ast::ExprId,
+            body: &ExprBody,
+            prefix: &str,
+            local_type_names: &std::collections::HashSet<&str>,
+        ) -> String {
+            let expr = &body.exprs[expr_id];
+            match expr {
+                Expr::Literal(lit) => match lit {
+                    Literal::String(s) => {
+                        let truncated = if s.len() > 20 {
+                            format!("{}...", &s[..17])
+                        } else {
+                            s.clone()
+                        };
+                        format!("\"{}\"", truncated)
+                    }
+                    Literal::Int(i) => i.to_string(),
+                    Literal::Float(f) => f.clone(),
+                    Literal::Bool(b) => b.to_string(),
+                },
+                Expr::Null => "null".into(),
+                Expr::Path(segments) => segments
+                    .iter()
+                    .map(|n| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join("."),
+                Expr::If {
+                    condition,
+                    then_branch,
+                    else_branch,
+                } => {
+                    let cond = expr_desc_hir(*condition, body, prefix, local_type_names);
+                    let then_desc = expr_desc_hir(*then_branch, body, prefix, local_type_names);
+                    match else_branch {
+                        Some(eb) => format!(
+                            "if ({cond}) {then_desc} else {}",
+                            expr_desc_hir(*eb, body, prefix, local_type_names)
+                        ),
+                        None => format!("if ({cond}) {then_desc}"),
+                    }
+                }
+                Expr::Match {
+                    scrutinee, arms, ..
+                } => {
+                    let scrut = expr_desc_hir(*scrutinee, body, prefix, local_type_names);
+                    let arm_strs: Vec<String> = arms
+                        .iter()
+                        .map(|arm_id| {
+                            let arm = &body.match_arms[*arm_id];
+                            let pat = pat_desc_hir(arm.pattern, body, prefix, local_type_names);
+                            let body_desc = expr_desc_hir(arm.body, body, prefix, local_type_names);
+                            format!("{pat} => {body_desc}")
+                        })
+                        .collect();
+                    format!("match ({scrut}) {{ {} }}", arm_strs.join(", "))
+                }
+                Expr::Catch { base, clauses } => {
+                    let base_desc = expr_desc_hir(*base, body, prefix, local_type_names);
+                    let clause_descs: Vec<String> = clauses
+                        .iter()
+                        .map(|clause| {
+                            let kind = match clause.kind {
+                                CatchClauseKind::Catch => "catch",
+                                CatchClauseKind::CatchAll => "catch_all",
+                                CatchClauseKind::CatchAllPanics => "catch_all_panics",
+                            };
+                            let binding =
+                                pat_desc_hir(clause.binding, body, prefix, local_type_names);
+                            let arms_desc = clause
+                                .arms
+                                .iter()
+                                .map(|arm_id| {
+                                    let arm = &body.catch_arms[*arm_id];
+                                    format!(
+                                        "{} => {}",
+                                        pat_desc_hir(arm.pattern, body, prefix, local_type_names),
+                                        expr_desc_hir(arm.body, body, prefix, local_type_names)
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            format!("{kind} ({binding}) {{ {arms_desc} }}")
+                        })
+                        .collect();
+                    format!("{base_desc} {}", clause_descs.join(" "))
+                }
+                Expr::Throw { value } => {
+                    format!(
+                        "throw {}",
+                        expr_desc_hir(*value, body, prefix, local_type_names)
+                    )
+                }
+                Expr::Binary { op, lhs, rhs } => format!(
+                    "{} {op:?} {}",
+                    expr_desc_hir(*lhs, body, prefix, local_type_names),
+                    expr_desc_hir(*rhs, body, prefix, local_type_names)
+                ),
+                Expr::Unary { op, expr: inner } => {
+                    format!(
+                        "{op:?} {}",
+                        expr_desc_hir(*inner, body, prefix, local_type_names)
+                    )
+                }
+                Expr::Call { callee, args } => {
+                    let callee_str = expr_desc_hir(*callee, body, prefix, local_type_names);
+                    let arg_strs: Vec<String> = args
+                        .iter()
+                        .map(|a| expr_desc_hir(*a, body, prefix, local_type_names))
+                        .collect();
+                    format!("{callee_str}({})", arg_strs.join(", "))
+                }
+                Expr::Object {
+                    type_name, fields, ..
+                } => {
+                    let tn = type_name
+                        .as_ref()
+                        .map(|n| qualify_type_name(n, prefix, local_type_names))
+                        .unwrap_or_else(|| "_".into());
+                    let field_strs: Vec<String> = fields
+                        .iter()
+                        .map(|(name, val)| {
+                            format!(
+                                "{name}: {}",
+                                expr_desc_hir(*val, body, prefix, local_type_names)
+                            )
+                        })
+                        .collect();
+                    format!("{tn} {{ {} }}", field_strs.join(", "))
+                }
+                Expr::Array { elements } => {
+                    let elem_strs: Vec<String> = elements
+                        .iter()
+                        .map(|e| expr_desc_hir(*e, body, prefix, local_type_names))
+                        .collect();
+                    format!("[{}]", elem_strs.join(", "))
+                }
+                Expr::Map { entries } => {
+                    let entry_strs: Vec<String> = entries
+                        .iter()
+                        .map(|(k, v)| {
+                            format!(
+                                "{}: {}",
+                                expr_desc_hir(*k, body, prefix, local_type_names),
+                                expr_desc_hir(*v, body, prefix, local_type_names)
+                            )
+                        })
+                        .collect();
+                    format!("map {{ {} }}", entry_strs.join(", "))
+                }
+                Expr::Block { stmts, tail_expr } => {
+                    let stmt_strs: Vec<String> = stmts
+                        .iter()
+                        .map(|s| stmt_desc_hir(*s, body, prefix, local_type_names))
+                        .collect();
+                    let tail = tail_expr
+                        .map(|e| format!(" {}", expr_desc_hir(e, body, prefix, local_type_names)))
+                        .unwrap_or_default();
+                    format!("{{ {} }}{tail}", stmt_strs.join("; "))
+                }
+                Expr::FieldAccess { base, field } => {
+                    format!(
+                        "{}.{field}",
+                        expr_desc_hir(*base, body, prefix, local_type_names)
+                    )
+                }
+                Expr::Index { base, index } => format!(
+                    "{}[{}]",
+                    expr_desc_hir(*base, body, prefix, local_type_names),
+                    expr_desc_hir(*index, body, prefix, local_type_names)
+                ),
+                Expr::Missing => "<missing>".into(),
+            }
+        }
+
+        fn stmt_desc_hir(
+            stmt_id: baml_compiler2_ast::StmtId,
+            body: &ExprBody,
+            prefix: &str,
+            local_type_names: &std::collections::HashSet<&str>,
+        ) -> String {
+            use baml_compiler2_ast::Stmt;
+            let stmt = &body.stmts[stmt_id];
+            match stmt {
+                Stmt::Let {
+                    pattern,
+                    type_annotation,
+                    initializer,
+                    ..
+                } => {
+                    let pat = pat_desc_hir(*pattern, body, prefix, local_type_names);
+                    let ty_annot = type_annotation
+                        .map(|id| {
+                            format!(
+                                ": {}",
+                                type_expr_to_string_hir(&body.type_annotations[id], prefix)
+                            )
+                        })
+                        .unwrap_or_default();
+                    let init = initializer
+                        .map(|e| format!(" = {}", expr_desc_hir(e, body, prefix, local_type_names)))
+                        .unwrap_or_default();
+                    format!("let {pat}{ty_annot}{init}")
+                }
+                Stmt::Return(Some(expr_id)) => {
+                    format!(
+                        "return {}",
+                        expr_desc_hir(*expr_id, body, prefix, local_type_names)
+                    )
+                }
+                Stmt::Return(None) => "return".into(),
+                Stmt::Throw { value } => {
+                    format!(
+                        "throw {}",
+                        expr_desc_hir(*value, body, prefix, local_type_names)
+                    )
+                }
+                Stmt::Expr(expr_id) => expr_desc_hir(*expr_id, body, prefix, local_type_names),
+                Stmt::While {
+                    condition,
+                    body: be,
+                    ..
+                } => format!(
+                    "while {} {}",
+                    expr_desc_hir(*condition, body, prefix, local_type_names),
+                    expr_desc_hir(*be, body, prefix, local_type_names)
+                ),
+                Stmt::For {
+                    binding,
+                    collection,
+                    body: for_body,
+                } => {
+                    let bind = pat_desc_hir(*binding, body, prefix, local_type_names);
+                    let coll = expr_desc_hir(*collection, body, prefix, local_type_names);
+                    format!(
+                        "for {bind} in {coll} {}",
+                        expr_desc_hir(*for_body, body, prefix, local_type_names)
+                    )
+                }
+                Stmt::Assign { target, value } => format!(
+                    "{} = {}",
+                    expr_desc_hir(*target, body, prefix, local_type_names),
+                    expr_desc_hir(*value, body, prefix, local_type_names)
+                ),
+                Stmt::AssignOp { target, op, value } => format!(
+                    "{} {op:?}= {}",
+                    expr_desc_hir(*target, body, prefix, local_type_names),
+                    expr_desc_hir(*value, body, prefix, local_type_names)
+                ),
+                Stmt::Assert { condition } => {
+                    format!(
+                        "assert {}",
+                        expr_desc_hir(*condition, body, prefix, local_type_names)
+                    )
+                }
+                Stmt::Break => "break".into(),
+                Stmt::Continue => "continue".into(),
+                Stmt::HeaderComment { name, level } => format!("// [{level}] {name}"),
+                Stmt::Missing => "<missing stmt>".into(),
+            }
+        }
+
+        let mut output = String::new();
+        let pkg_info = file_package(db, file);
+        let prefix = if pkg_info.namespace_path.is_empty() {
+            format!("{}.", pkg_info.package)
+        } else {
+            format!(
+                "{}.{}.",
+                pkg_info.package,
+                pkg_info
+                    .namespace_path
+                    .iter()
+                    .map(|n| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(".")
+            )
+        };
+
+        let item_tree = file_item_tree(db, file);
+
+        let mut local_type_names = std::collections::HashSet::new();
+        for (_, class) in &item_tree.classes {
+            local_type_names.insert(class.name.as_str());
+        }
+        for (_, enum_def) in &item_tree.enums {
+            local_type_names.insert(enum_def.name.as_str());
+        }
+        for (_, ta) in &item_tree.type_aliases {
+            local_type_names.insert(ta.name.as_str());
+        }
+
+        let mut classes: Vec<_> = item_tree.classes.iter().collect();
+        classes.sort_by_key(|(_, c)| c.name.as_str().to_string());
+        for (id, class) in classes {
+            let _loc = ClassLoc::new(db, file, *id);
+            writeln!(output, "class {prefix}{} {{", class.name).ok();
+            for field in &class.fields {
+                let ty = field
+                    .type_expr
+                    .as_ref()
+                    .map(|te| type_expr_to_string_hir(&te.expr, &prefix))
+                    .unwrap_or_else(|| "?".into());
+                writeln!(output, "  {}: {}", field.name, ty).ok();
+            }
+            writeln!(output, "}}").ok();
+        }
+
+        let mut enums: Vec<_> = item_tree.enums.iter().collect();
+        enums.sort_by_key(|(_, e)| e.name.as_str().to_string());
+        for (id, enum_def) in enums {
+            let _loc = EnumLoc::new(db, file, *id);
+            write!(output, "enum {prefix}{} {{", enum_def.name).ok();
+            for (i, v) in enum_def.variants.iter().enumerate() {
+                if i > 0 {
+                    write!(output, ", ").ok();
+                }
+                write!(output, "{}", v.name).ok();
+            }
+            writeln!(output, "}}").ok();
+        }
+
+        let mut type_aliases: Vec<_> = item_tree.type_aliases.iter().collect();
+        type_aliases.sort_by_key(|(_, ta)| ta.name.as_str().to_string());
+        for (id, ta) in type_aliases {
+            let _loc = TypeAliasLoc::new(db, file, *id);
+            let ty = ta
+                .type_expr
+                .as_ref()
+                .map(|te| type_expr_to_string_hir(&te.expr, &prefix))
+                .unwrap_or_else(|| "?".into());
+            writeln!(output, "type {prefix}{} = {}", ta.name, ty).ok();
+        }
+
+        let mut functions: Vec<_> = item_tree.functions.iter().collect();
+        functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
+        for (_, func) in functions {
+            let params: Vec<String> = func
+                .params
+                .iter()
+                .map(|p| {
+                    let ty = p
+                        .type_expr
+                        .as_ref()
+                        .map(|te| type_expr_to_string_hir(&te.expr, &prefix))
+                        .unwrap_or_else(|| "?".into());
+                    format!("{}: {}", p.name, ty)
+                })
+                .collect();
+            let ret = func
+                .return_type
+                .as_ref()
+                .map(|te| type_expr_to_string_hir(&te.expr, &prefix))
+                .unwrap_or_else(|| "?".into());
+            let body_kind = if func.declarative_meta.is_some() {
+                "llm"
+            } else {
+                match &func.body {
+                    Some(baml_compiler2_ast::FunctionBodyDef::Expr(_, _)) => "expr",
+                    Some(baml_compiler2_ast::FunctionBodyDef::Builtin(_)) => "builtin",
+                    None => "missing",
+                }
+            };
+            write!(
+                output,
+                "function {prefix}{}({}) -> {}  [{}]",
+                func.name,
+                params.join(", "),
+                ret,
+                body_kind
+            )
+            .ok();
+            if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, _)) = &func.body {
+                if let Some(root) = body.root_expr {
+                    writeln!(output, " {{").ok();
+                    writeln!(
+                        output,
+                        "  {}",
+                        expr_desc_hir(root, body, &prefix, &local_type_names)
+                    )
+                    .ok();
+                    writeln!(output, "}}").ok();
+                } else {
+                    writeln!(output).ok();
+                }
+            } else {
+                writeln!(output).ok();
+            }
         }
 
         output

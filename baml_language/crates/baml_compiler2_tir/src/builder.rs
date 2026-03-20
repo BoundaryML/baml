@@ -1969,7 +1969,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         // Try as a value (function) in a nested namespace
-        if let Some(def) = pkg_items.lookup_value(path) {
+        let lookup_val = pkg_items.lookup_value(path);
+        if let Some(def) = lookup_val {
             if let Definition::Function(func_loc) = def {
                 let db = self.context.db();
                 let member = path.last().unwrap();
@@ -2892,13 +2893,33 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Look up enum variants from the package items (via item tree).
+    ///
+    /// Uses the enum's qualified package to find it in the correct package,
+    /// not just the current file's package.
     fn lookup_enum_variants(&self, enum_name: &crate::ty::QualifiedTypeName) -> Vec<Name> {
+        let db = self.context.db();
         let short = Self::unqualify(enum_name);
-        if let Some(def) = self.package_items.lookup_type(&[short]) {
+
+        // First try the current package (common case: same-package enum).
+        let pkg_items_to_search = if *enum_name.package() == self.package_id.name(db) {
+            None // use self.package_items below
+        } else {
+            // Cross-package enum: look it up in the enum's own package.
+            let pkg_id =
+                baml_compiler2_hir::package::PackageId::new(db, enum_name.package().clone());
+            Some(baml_compiler2_hir::package::package_items(db, pkg_id))
+        };
+
+        // Build the lookup path: namespace segments + enum name.
+        let mut lookup_path: Vec<Name> = enum_name.namespace().to_vec();
+        lookup_path.push(short);
+
+        let items = pkg_items_to_search.unwrap_or(self.package_items);
+        if let Some(def) = items.lookup_type(&lookup_path) {
             if let Definition::Enum(enum_loc) = def {
-                let file = enum_loc.file(self.context.db());
-                let item_tree = baml_compiler2_hir::file_item_tree(self.context.db(), file);
-                let enum_data = &item_tree[enum_loc.id(self.context.db())];
+                let file = enum_loc.file(db);
+                let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+                let enum_data = &item_tree[enum_loc.id(db)];
                 return enum_data.variants.iter().map(|v| v.name.clone()).collect();
             }
         }

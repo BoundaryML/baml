@@ -725,6 +725,12 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// [`at_top_level_keyword`] minus `client`: in blocks, `client` can start `client.method(...)`
+    /// (e.g. a parameter named `client`), not a top-level `client` declaration.
+    fn at_top_level_keyword_except_client(&self) -> bool {
+        self.at_top_level_keyword() && !self.at(TokenKind::Client)
+    }
+
     /// Expect a '>' token, but also accept '>>' and consume only one '>'.
     /// This handles nested generics like `map<K, map<K2, V>>` where the lexer
     /// tokenizes '>>' as a single token.
@@ -1921,8 +1927,8 @@ impl<'a> Parser<'a> {
     fn parse_function_type_param_inner(&mut self) -> bool {
         // Check if this is `name: type` by looking ahead
         // If we see WORD followed by COLON (skipping trivia), it's a named param
-        let is_named =
-            self.at(TokenKind::Word) && self.peek(1).map(|t| t.kind) == Some(TokenKind::Colon);
+        let is_named = (self.at(TokenKind::Word) || self.at(TokenKind::Client))
+            && self.peek(1).map(|t| t.kind) == Some(TokenKind::Colon);
 
         if is_named {
             // Named parameter: `name: type`
@@ -2292,8 +2298,8 @@ impl<'a> Parser<'a> {
             // Check if this is a 'self' parameter (no type annotation allowed)
             let is_self = p.current().map(|t| t.text == "self").unwrap_or(false);
 
-            // Parameter name
-            if p.at(TokenKind::Word) {
+            // Parameter name (`client` lexes as KW_CLIENT, not Word)
+            if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                 p.bump();
             } else {
                 p.error_unexpected_token("parameter name".to_string());
@@ -2343,8 +2349,14 @@ impl<'a> Parser<'a> {
                         return true;
                     }
                 }
-                // Check for Client keyword token (not just Word with text "client")
-                TokenKind::Client if brace_depth == 1 => return true,
+                // `client` as KW_CLIENT: LLM directive is `client Model`, not `client.method(...)`.
+                TokenKind::Client if brace_depth == 1 => {
+                    let j = self.skip_trivia_and_comments_from(i + 1);
+                    let next = self.tokens.get(j).map(|t| t.kind);
+                    if next != Some(TokenKind::Dot) {
+                        return true;
+                    }
+                }
                 // Check for expression function keywords
                 TokenKind::Let
                 | TokenKind::Return
@@ -2490,7 +2502,7 @@ impl<'a> Parser<'a> {
             // Parse statements until closing brace
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword() {
+                if p.at_top_level_keyword_except_client() {
                     break;
                 }
 
@@ -2718,7 +2730,7 @@ impl<'a> Parser<'a> {
                     // Parse additional arms
                     while !p.at(TokenKind::RBrace) && !p.at_end() {
                         // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                        if p.at_top_level_keyword() {
+                        if p.at_top_level_keyword_except_client() {
                             break;
                         }
                         p.parse_match_arm();
@@ -2924,7 +2936,7 @@ impl<'a> Parser<'a> {
             } else {
                 p.parse_catch_arm();
                 while !p.at(TokenKind::RBrace) && !p.at_end() {
-                    if p.at_top_level_keyword() {
+                    if p.at_top_level_keyword_except_client() {
                         break;
                     }
                     p.parse_catch_arm();
@@ -3460,6 +3472,9 @@ impl<'a> Parser<'a> {
                 // Identifier or path (could be multi-segment like baml.HttpMethod.Get)
                 self.parse_path_or_ident();
             }
+        } else if self.at(TokenKind::Client) {
+            // `client` is KW_CLIENT; allow as identifier (e.g. parameter named `client`, `client.execute(...)`)
+            self.parse_path_or_ident();
         } else if self.at(TokenKind::LParen) {
             // Parenthesized expression
             self.with_node(SyntaxKind::PAREN_EXPR, |p| {
@@ -3757,19 +3772,15 @@ impl<'a> Parser<'a> {
     /// This distinction is made at parse time because we can determine syntactically
     /// whether the base is a simple identifier chain or a complex expression.
     fn parse_path_or_ident(&mut self) {
-        if !self.at(TokenKind::Word) {
+        if !self.at(TokenKind::Word) && !self.at(TokenKind::Client) {
             return;
         }
 
-        // Check if this looks like a path (word followed by dot and another word)
-        if self
-            .peek(1)
-            .map(|t| t.kind == TokenKind::Dot)
-            .unwrap_or(false)
-            && self
-                .peek(2)
-                .map(|t| t.kind == TokenKind::Word)
-                .unwrap_or(false)
+        let segment = |k: TokenKind| matches!(k, TokenKind::Word | TokenKind::Client);
+
+        // Check if this looks like a path (ident.client followed by dot and another ident)
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
+            && self.peek(2).map(|t| segment(t.kind)).unwrap_or(false)
         {
             // It's a path - all segments are identifiers
             self.with_node(SyntaxKind::PATH_EXPR, |p| {
@@ -3777,7 +3788,7 @@ impl<'a> Parser<'a> {
 
                 // Parse remaining segments
                 while p.eat(TokenKind::Dot) {
-                    if p.at(TokenKind::Word) {
+                    if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                         p.bump(); // Next segment
                     } else {
                         p.error_unexpected_token("path segment after '.'".to_string());
@@ -4659,6 +4670,62 @@ class Response {
             .collect();
 
         assert_eq!(attrs.len(), 1, "expected method block attribute");
+    }
+
+    #[test]
+    fn parses_function_with_client_as_parameter_name() {
+        // `client` is a keyword (KW_CLIENT); it must still be valid as a parameter name.
+        let source = r#"
+function call_llm_function(client: Client, function_name: string) -> unknown {
+  let _ = client
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        let type_exprs: Vec<_> = func
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .collect();
+        assert_eq!(
+            type_exprs.len(),
+            1,
+            "expected one top-level return TYPE_EXPR on FUNCTION_DEF"
+        );
+        let expr_body = func
+            .children()
+            .find(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY);
+        assert!(
+            expr_body.is_some(),
+            "expected EXPR_FUNCTION_BODY on FUNCTION_DEF"
+        );
+    }
+
+    #[test]
+    fn expression_body_starting_with_client_dot_path_is_not_llm_body() {
+        let source = r#"
+function f() -> int {
+  client.execute()
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
+        );
     }
 
     #[test]

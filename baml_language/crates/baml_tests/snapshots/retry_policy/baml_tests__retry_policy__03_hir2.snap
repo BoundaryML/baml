@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.MyClient$new() -> ?  [expr] {
+  PrimitiveClient { name: "MyClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } }
+}

@@ -1,5 +1,5 @@
 function GetUser(id: int) -> User {
-    client GPT4
+    client "openai/gpt-4o"
     prompt #"Get user {{id}}"#
 }
 

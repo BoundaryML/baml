@@ -1,0 +1,68 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.NestedQuotes {
+  single_in_double: string
+  double_in_single: string
+  She: unknown
+  hello: "')
+  escaped_in_escaped string @alias("
+  The: unknown
+  quote: unknown
+  is: unknown
+  complex_nesting: string
+  json_like: string
+}
+function user.FormatMessage(name: string) -> string {
+  baml.llm.call_llm_function(GPT4, "FormatMessage", map { "name": name }) : unknown
+  !! 428..553: unresolved name: GPT4
+}
+function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
+  baml.llm.render_prompt("FormatMessage", map { "name": name }) : baml.llm.PromptAst
+}
+function user.FormatMessage$build_request(name: string) -> baml.http.Request {
+  baml.llm.build_request("FormatMessage", map { "name": name }) : baml.http.Request
+}
+class user.RawStrings {
+  simple: string
+  with_quotes: string
+  multi_hash: string
+  multiline: string
+}
+function user.ProcessText(input: string) -> string {
+  baml.llm.call_llm_function(GPT4, "ProcessText", map { "input": input }) : unknown
+  !! 364..532: unresolved name: GPT4
+}
+function user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst {
+  baml.llm.render_prompt("ProcessText", map { "input": input }) : baml.llm.PromptAst
+}
+function user.ProcessText$build_request(input: string) -> baml.http.Request {
+  baml.llm.build_request("ProcessText", map { "input": input }) : baml.http.Request
+}
+class user.Messages {
+  greeting: string
+  empty: string
+  with_spaces: string
+  with_escapes: string
+  with_quotes: string
+}
+function user.GetRole() -> "admin" | "user" | "guest" {
+  { : never
+    return "user" : "user"
+  }
+}
+class user.UnicodeStrings {
+  emoji_basic: string
+  emoji_multiple: string
+  emoji_in_text: string
+  chinese: string
+  arabic: string
+  japanese: string
+  russian: string
+  math_symbols: string
+  currency: string
+  arrows: string
+  zero_width: string
+  rtl_override: string
+}

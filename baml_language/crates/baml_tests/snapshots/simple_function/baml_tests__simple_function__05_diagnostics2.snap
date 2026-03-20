@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: type mismatch: expected string, got unknown
+   ╭─[ main.baml:1:44 ]
+   │
+ 1 │ ╭─▶ function HelloWorld(name: string) -> string {
+   ┆ ┆   
+ 6 │ ├─▶ }
+   │ │       
+   │ ╰─────── type mismatch: expected string, got unknown
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: GPT4
+   ╭─[ main.baml:1:44 ]
+   │
+ 1 │ ╭─▶ function HelloWorld(name: string) -> string {
+   ┆ ┆   
+ 6 │ ├─▶ }
+   │ │       
+   │ ╰─────── unresolved name: GPT4
+   │     
+   │     Note: Error code: E0001
+───╯

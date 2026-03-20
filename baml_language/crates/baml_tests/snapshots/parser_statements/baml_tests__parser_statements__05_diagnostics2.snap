@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: operator `Add` cannot be applied to `int` and `1 | 2 | 3`
+    ╭─[ for_loops.baml:12:5 ]
+    │
+ 12 │     result += i;
+    │     ───┬──  
+    │        ╰──── operator `Add` cannot be applied to `int` and `1 | 2 | 3`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
+    ╭─[ for_loops.baml:21:17 ]
+    │
+ 21 │       result += i * j;
+    │                 ──┬──  
+    │                   ╰──── operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
+    │ 
+    │ Note: Error code: E0001
+────╯

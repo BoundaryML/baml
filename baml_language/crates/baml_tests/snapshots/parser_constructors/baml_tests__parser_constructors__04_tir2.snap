@@ -1,0 +1,76 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Point {
+  x: int
+  y: int
+}
+function user.stringArray() -> string[] {
+  { : string[]
+    ["hello", "world", "test"] : string[]
+  }
+}
+function user.intArray() -> int[] {
+  { : int[]
+    [1, 2, 3] : int[]
+  }
+}
+function user.floatArray() -> float[] {
+  { : float[]
+    [1.0, 2.0, 3.0] : float[]
+  }
+}
+function user.boolArray() -> bool[] {
+  { : bool[]
+    [true, false, true] : bool[]
+  }
+}
+function user.pointArray() -> user.Point[] {
+  { : user.Point[]
+    [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }] : user.Point[]
+  }
+}
+function user.mixedArray() -> int | string[] {
+  { : int | string[]
+    [1, "two", 3] : int | string[]
+  }
+}
+class user.Point {
+  x: int
+  y: int
+}
+class user.Vec2D {
+  p: user.Point
+  q: user.Point
+}
+function user.point() -> user.Point {
+  { : user.Point
+    Point { x: 1, y: 2 } : user.Point
+  }
+}
+function user.vec2d() -> user.Vec2D {
+  { : user.Vec2D
+    Vec2D { p: Point { x: 1, y: 2 }, q: Point { x: 3, y: 4 } } : user.Vec2D
+  }
+}
+function user.stringValues() -> map<string, string> {
+  { : map<string, string>
+    map { "hello": "world", "test": "test" } : map<string, string>
+  }
+}
+function user.intValues() -> map<string, int> {
+  { : map<string, int>
+    map { "hello": 1, "test": 2 } : map<string, int>
+  }
+}
+function user.floatValues() -> map<string, float> {
+  { : map<string, float>
+    map { "hello": 1.0, "test": 2.0 } : map<string, float>
+  }
+}
+function user.boolValues() -> map<string, bool> {
+  { : map<string, bool>
+    map { "hello": true, "test": false } : map<string, bool>
+  }
+}

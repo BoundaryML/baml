@@ -1,0 +1,36 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+enum user.Status
+function user.Foo() -> unknown {
+  { : void
+  }
+}
+class user.User {
+  name: string
+}
+class user.Another {
+  field: int
+}
+class user.Partial {
+  field1: unknown
+  field2: unknown
+  field3: string
+  field4: string
+  string: unknown
+}
+function user.NextFunction() -> string {
+  { : never
+    return "parsed" : "parsed"
+  }
+}
+enum user.VALUE1
+enum user.ValidEnum
+class user.Test {
+  field1: string
+  field2: string
+  another: unknown
+  string: ")  // Should still parse this
+}"
+}

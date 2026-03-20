@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Broken {
+  field: int
+}
+function user.Broken.Invalid() -> ? {
+  { : void
+  }
+}
+function user.Broken.BadUnionPattern(x: int | bool) -> string {
+  { : unknown | "bad"
+    match (x : int | bool) : unknown | "bad"
+      a: int | b =>
+        <missing> : unknown
+      bool =>
+        "bad" : "bad"
+  }
+  !! 664..669: unresolved type: b
+  !! 664..669: unresolved type: b
+  !! 664..669: unresolved type: b
+  !! 619..675: unresolved type: bool
+  !! 619..675: unreachable arm
+  !! 619..675: unresolved type: bool
+}
+function user.Broken.MixedLiteralAndTyped(x: int) -> string {
+  { : "mixed"
+    match (x : int) : "mixed"
+      42 | n: int =>
+        "mixed" : "mixed"
+  }
+}

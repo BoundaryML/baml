@@ -1031,7 +1031,10 @@ impl Parameter {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
+            .find(|token| {
+                // `client` is KW_CLIENT in the CST, not WORD.
+                token.kind() == SyntaxKind::WORD || token.kind() == SyntaxKind::KW_CLIENT
+            })
     }
 
     /// Get the parameter type.

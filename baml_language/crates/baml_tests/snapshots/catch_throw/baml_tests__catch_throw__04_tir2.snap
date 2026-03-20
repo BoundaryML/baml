@@ -1,0 +1,117 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.MayFail(x: int) -> string {
+  { : "ok"
+    match (x : int) : "ok"
+      0 =>
+        throw "string error" : never
+      _ =>
+        "ok" : "ok"
+  }
+}
+function user.MayFailIntOrString(x: int) -> string {
+  { : "ok"
+    match (x : int) : "ok"
+      0 =>
+        throw "string error" : never
+      1 =>
+        throw 1 : never
+      _ =>
+        "ok" : "ok"
+  }
+}
+function user.AlsoMayFail(x: int) -> string {
+  { : "also ok"
+    match (x : int) : "also ok"
+      0 =>
+        throw "secondary error" : never
+      _ =>
+        "also ok" : "also ok"
+  }
+}
+function user.SingleCatchWildcard(x: int) -> string {
+  { : string | "caught"
+    catch (MayFail(x) : string) : string | "caught"
+      catch (e)
+        _ =>
+          "caught" : "caught"
+  }
+}
+function user.SingleCatchTyped(x: int) -> string {
+  { : string | "caught string"
+    catch (MayFail(x) : string) : string | "caught string"
+      catch (e)
+        _: string =>
+          "caught string" : "caught string"
+  }
+}
+function user.CatchWithFallback(x: int) -> string {
+  { : string | "caught string" | "caught int fallback"
+    catch (MayFailIntOrString(x) : string) : string | "caught string" | "caught int fallback"
+      catch (e)
+        _: string =>
+          "caught string" : "caught string"
+      catch (e2)
+        _: int =>
+          "caught int fallback" : "caught int fallback"
+  }
+}
+function user.CatchWithTypedArm(x: int) -> string {
+  { : string | "caught string"
+    catch (MayFail(x) : string) : string | "caught string"
+      catch (e)
+        _: string =>
+          "caught string" : "caught string"
+  }
+}
+function user.MultipleCatchArms(x: int) -> string {
+  { : string | "caught string" | "caught int"
+    catch (MayFailIntOrString(x) : string) : string | "caught string" | "caught int"
+      catch (e)
+        _: string =>
+          "caught string" : "caught string"
+        _: int =>
+          "caught int" : "caught int"
+  }
+}
+function user.NestedCatch(x: int) -> string {
+  { : string | "inner caught"
+    let inner = : string | "inner caught"
+      catch (MayFail(x) : string) : string | "inner caught"
+        catch (e)
+          _ =>
+            "inner caught" : "inner caught"
+    catch (AlsoMayFail(x) : string) : string | "inner caught"
+      catch (e)
+        _ =>
+          inner : string | "inner caught"
+  }
+}
+function user.CatchAndRethrow(x: int) -> string {
+  { : string
+    catch (MayFail(x) : string) : string
+      catch (e)
+        _ =>
+          throw e : never
+  }
+}
+function user.ThrowStatement(x: int) -> string {
+  { : never
+    throw "error" : "error"
+    "unreachable" : unknown
+  }
+  !! 3181..3199: unreachable code: 1 statement(s) after diverging statement
+}
+function user.ChainedCatchClauses(x: int) -> string {
+  { : string | "first handler" | "second handler"
+    catch (MayFailIntOrString(x) : string) : string | "first handler" | "second handler"
+      catch (e)
+        _: string =>
+          "first handler" : "first handler"
+      catch (e2)
+        _: int =>
+          "second handler" : "second handler"
+  }
+}

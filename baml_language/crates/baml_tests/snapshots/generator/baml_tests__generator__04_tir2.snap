@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.MyClass {
+  name: string
+  age: int
+}
+function user.GetUser() -> user.MyClass {
+  baml.llm.call_llm_function(null, "GetUser", map {  }) : unknown
+}
+function user.GetUser$render_prompt() -> baml.llm.PromptAst {
+  baml.llm.render_prompt("GetUser", map {  }) : baml.llm.PromptAst
+}
+function user.GetUser$build_request() -> baml.http.Request {
+  baml.llm.build_request("GetUser", map {  }) : baml.http.Request
+}

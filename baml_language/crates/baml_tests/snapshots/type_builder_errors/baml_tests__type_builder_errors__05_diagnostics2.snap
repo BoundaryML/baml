@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: expected 0 argument(s), got 3
+   ╭─[ test.baml:1:1 ]
+   │
+ 1 │ // Test file for type_builder validation errors
+   │ │ 
+   │ ╰─ expected 0 argument(s), got 3
+   │ 
+   │ Note: Error code: E0001
+───╯

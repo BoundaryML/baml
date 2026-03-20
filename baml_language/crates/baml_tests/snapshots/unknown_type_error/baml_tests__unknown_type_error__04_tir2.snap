@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.Foo() -> unknown {
+  { : 1
+    1 : 1
+  }
+  !! 131..136: unresolved type: blah
+}
+function user.Bar(x: unknown) -> int {
+  { : 1
+    1 : 1
+  }
+  !! 208..229: unresolved type: unknown_param_type
+}
+function user.Baz() -> unknown? {
+  { : null
+    null : null
+  }
+  !! 311..329: unresolved type: unknown_optional
+}

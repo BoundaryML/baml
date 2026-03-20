@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Hi {
+  name: string
+}
+function user.VertexGCP$new() -> ? {
+  PrimitiveClient { name: "VertexGCP", provider: "vertex-ai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gemini-2", "flash": "" } } } : unknown
+}
+function user.FetchDatax(user_id: string) -> user.Hi {
+  baml.llm.call_llm_function(VertexGCP, "FetchDatax", map { "user_id": user_id }) : unknown
+}
+function user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst {
+  baml.llm.render_prompt("FetchDatax", map { "user_id": user_id }) : baml.llm.PromptAst
+}
+function user.FetchDatax$build_request(user_id: string) -> baml.http.Request {
+  baml.llm.build_request("FetchDatax", map { "user_id": user_id }) : baml.http.Request
+}

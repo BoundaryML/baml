@@ -206,7 +206,9 @@ fn generate_project_tests(
     let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
     let hir_test = generate_hir_test(project);
+    let hir2_test = generate_hir2_test(project);
     let tir_test = generate_tir_test(project);
+    let tir2_test = generate_tir2_test(project);
     // let mir_test = generate_mir_test(project);
     let mir2_test = generate_mir2_test(project);
     let control_flow_test =
@@ -216,6 +218,7 @@ fn generate_project_tests(
             quote! {}
         };
     let diagnostics_test = generate_diagnostics_test(project);
+    let compiler2_diagnostics_test = generate_compiler2_diagnostics_test(project);
     // let codegen_test = generate_codegen_test(project, codegen_filter, require_codegen_functions);
     let codegen2_test = generate_codegen2_test(project);
 
@@ -262,11 +265,14 @@ fn generate_project_tests(
             #lexer_tests
             #parser_tests
             #hir_test
+            #hir2_test
             #tir_test
+            #tir2_test
             // #mir_test
             #mir2_test
             #control_flow_test
             #diagnostics_test
+            #compiler2_diagnostics_test
             // #codegen_test
             #codegen2_test
             #formatter_tests
@@ -402,6 +408,54 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("03_hir", output);
+            });
+        }
+    }
+}
+
+fn generate_hir2_test(project: &TestProject) -> TokenStream {
+    let file_loaders: TokenStream = project
+        .files
+        .iter()
+        .map(|baml_file| {
+            let full_path = baml_file.full_path.display().to_string();
+            let relative_path = baml_file.relative_path.display().to_string();
+            let include_content = make_include_str(&full_path);
+
+            quote! {
+                {
+                    let content = #include_content;
+                    let content = content.replace("\r\n", "\n");
+                    let sf = db.add_file(
+                        #relative_path,
+                        &content,
+                    );
+                    source_files.push(sf);
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[test]
+        fn test_03_hir2() {
+            use crate::compiler2_tir::support::render_hir2;
+
+            let mut db = ProjectDatabase::new();
+            let _root = db.set_project_root(std::path::Path::new("."));
+            let mut source_files = Vec::new();
+
+            #file_loaders
+
+            let mut output = String::new();
+            writeln!(output, "=== HIR2 ===").unwrap();
+
+            for source_file in &source_files {
+                output.push_str(&render_hir2(&db, *source_file));
+            }
+
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+                assert_snapshot!("03_hir2", output);
             });
         }
     }
@@ -607,6 +661,54 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_5_mir", output);
+            });
+        }
+    }
+}
+
+fn generate_tir2_test(project: &TestProject) -> TokenStream {
+    let file_loaders: TokenStream = project
+        .files
+        .iter()
+        .map(|baml_file| {
+            let full_path = baml_file.full_path.display().to_string();
+            let relative_path = baml_file.relative_path.display().to_string();
+            let include_content = make_include_str(&full_path);
+
+            quote! {
+                {
+                    let content = #include_content;
+                    let content = content.replace("\r\n", "\n");
+                    let sf = db.add_file(
+                        #relative_path,
+                        &content,
+                    );
+                    source_files.push(sf);
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[test]
+        fn test_04_tir2() {
+            use crate::compiler2_tir::support::render_tir;
+
+            let mut db = ProjectDatabase::new();
+            let _root = db.set_project_root(std::path::Path::new("."));
+            let mut source_files = Vec::new();
+
+            #file_loaders
+
+            let mut output = String::new();
+            writeln!(output, "=== TIR2 ===").unwrap();
+
+            for source_file in &source_files {
+                output.push_str(&render_tir(&db, *source_file));
+            }
+
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+                assert_snapshot!("04_tir2", output);
             });
         }
     }
@@ -827,6 +929,79 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("05_diagnostics", output);
+            });
+        }
+    }
+}
+
+fn generate_compiler2_diagnostics_test(project: &TestProject) -> TokenStream {
+    let file_loaders: TokenStream = project
+        .files
+        .iter()
+        .map(|baml_file| {
+            let full_path = baml_file.full_path.display().to_string();
+            let relative_path = baml_file.relative_path.display().to_string();
+            let include_content = make_include_str(&full_path);
+
+            quote! {
+                {
+                    let content = #include_content;
+                    let content = content.replace("\r\n", "\n");
+                    let source_file = db.add_file(
+                        #relative_path,
+                        &content,
+                    );
+                    source_files.push(source_file);
+                }
+            }
+        })
+        .collect();
+
+    quote! {
+        #[test]
+        fn test_05_diagnostics2() {
+            use baml_compiler_diagnostics::{DiagnosticPhase, RenderConfig, render_diagnostic};
+            use baml_project::collect_compiler2_diagnostics;
+            use std::path::PathBuf;
+
+            let mut db = ProjectDatabase::new();
+            let _root = db.set_project_root(std::path::Path::new("."));
+            let mut source_files = Vec::new();
+
+            #file_loaders
+
+            let all_files = db.get_source_files();
+            let diagnostics = collect_compiler2_diagnostics(&db, &all_files);
+
+            let mut sources: HashMap<baml_db::FileId, String> = HashMap::new();
+            let mut file_paths: HashMap<baml_db::FileId, PathBuf> = HashMap::new();
+            for source_file in &all_files {
+                let file_id = source_file.file_id(&db);
+                sources.insert(file_id, source_file.text(&db).to_string());
+                file_paths.insert(file_id, source_file.path(&db));
+            }
+
+            let config = RenderConfig::test();
+
+            let mut output = String::new();
+            writeln!(output, "=== COMPILER2 DIAGNOSTICS ===").unwrap();
+            if diagnostics.is_empty() {
+                writeln!(output, "No errors found.").unwrap();
+            } else {
+                for diag in &diagnostics {
+                    let phase_name = match diag.phase {
+                        DiagnosticPhase::Parse => "parse",
+                        DiagnosticPhase::Hir => "hir",
+                        DiagnosticPhase::Validation => "validation",
+                        DiagnosticPhase::Type => "type",
+                    };
+                    let rendered = render_diagnostic(diag, &sources, &file_paths, &config);
+                    writeln!(output, "  [{}] {}", phase_name, rendered).unwrap();
+                }
+            }
+
+            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
+                assert_snapshot!("05_diagnostics2", output);
             });
         }
     }

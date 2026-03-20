@@ -606,6 +606,17 @@ pub fn render_scope_diagnostics<'db>(
         .and_then(|(local_id, _)| {
             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
             baml_compiler2_hir::body::function_body_source_map(db, func_loc)
+        })
+        .or_else(|| {
+            // Also search let bindings — synthesized Item::Let initializers have source maps too.
+            item_tree
+                .lets
+                .iter()
+                .find(|(_, l)| l.span == scope.range)
+                .and_then(|(local_id, _)| {
+                    let let_loc = baml_compiler2_hir::loc::LetLoc::new(db, file, *local_id);
+                    baml_compiler2_hir::body::let_body_source_map(db, let_loc)
+                })
         });
 
     diags

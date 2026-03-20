@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: expected 0 argument(s), got 3
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ // Control flow visualization graph test cases
+   │ │ 
+   │ ╰─ expected 0 argument(s), got 3
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: int.to_string
+    ╭─[ main.baml:16:2 ]
+    │
+ 16 │     z.to_string()
+    │  ────────┬───────  
+    │          ╰───────── unresolved member: int.to_string
+    │ 
+    │ Note: Error code: E0001
+────╯

@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+type user.foo = user.bar
+type user.bar = int
+function user.Foo() -> user.foo {
+  { : 1
+    1 : 1
+  }
+}
+function user.Bar() -> user.foo {
+  { : true
+    true : true
+  }
+  !! 120..124: type mismatch: expected user.foo, got true
+}
+type user.Json = int | float | string | user.Json[] | map<string, user.Json>
+function user.Baz() -> user.Json {
+  { : "hello"
+    "hello" : "hello"
+  }
+}
+type user.JSON = int | float | string | bool | user.JSON[] | map<string, unknown>
+  !! 11..67: unresolved type: json
+class user.NotJSON {
+  inner: unknown
+}
+function user.EchoJSON(i: user.JSON) -> user.JSON {
+  { : user.NotJSON
+    NotJSON { inner: "Whoops" } : user.NotJSON
+  }
+}
+function user.MakeJSON(i: user.NotJSON) -> user.JSON {
+  { : unknown
+    i.inner : unknown
+  }
+  !! 92..97: unresolved type: name
+}

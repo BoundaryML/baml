@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.OpenRouterMistralSmall3_1_24b$new() -> ?  [expr] {
+  PrimitiveClient { name: "OpenRouterMistral...", provider: "openai-generic", options: PrimitiveClientOptions { base_url: "https://openroute...", default_role: null, allowed_roles: null, remap_roles: null, api_key: env.get_or_panic("OPENROUTER_API_KEY"), provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map { "model": 1, "temperature": 0.1 } } }
+}

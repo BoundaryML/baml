@@ -23,6 +23,7 @@ use baml_compiler_hir::{
 };
 use baml_compiler_tir::{self, class_field_types, enum_variants, type_aliases, typing_context};
 use baml_db::{FileId, SourceFile, baml_compiler_parser};
+use baml_lsp2_actions::check_file as lsp2_check_file;
 use baml_workspace::Project;
 
 use crate::ProjectDatabase;
@@ -250,6 +251,46 @@ pub fn collect_diagnostics(
         }
     }
 
+    diagnostics
+}
+
+/// Collect all diagnostics from the **compiler2** pipeline (parse + HIR2 + TIR2).
+///
+/// This is distinct from [`collect_diagnostics`], which uses the legacy
+/// `baml_compiler_hir` / `baml_compiler_tir` pipeline. Here we aggregate
+/// per-file results from `baml_lsp2_actions::check_file` for snapshot tests
+/// and other consumers that need compiler2-only diagnostics.
+///
+/// Diagnostics are sorted by (file_id, primary span start, message) for
+/// stable snapshot output.
+pub fn collect_compiler2_diagnostics(
+    db: &ProjectDatabase,
+    source_files: &[SourceFile],
+) -> Vec<Diagnostic> {
+    let mut diagnostics: Vec<Diagnostic> = Vec::new();
+    for file in source_files {
+        diagnostics.extend(lsp2_check_file(db, *file));
+    }
+    diagnostics.sort_by(|a, b| {
+        let a_span = a.primary_span();
+        let b_span = b.primary_span();
+        match (a_span, b_span) {
+            (Some(sa), Some(sb)) => {
+                let file_cmp = sa.file_id.as_u32().cmp(&sb.file_id.as_u32());
+                if file_cmp != std::cmp::Ordering::Equal {
+                    return file_cmp;
+                }
+                let start_cmp = sa.range.start().cmp(&sb.range.start());
+                if start_cmp != std::cmp::Ordering::Equal {
+                    return start_cmp;
+                }
+                a.message.cmp(&b.message)
+            }
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => a.message.cmp(&b.message),
+        }
+    });
     diagnostics
 }
 
