@@ -5,7 +5,6 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.HelloWorld(name: string) -> string {
   baml.llm.call_llm_function(GPT4, "HelloWorld", map { "name": name }) : unknown
   !! 43..104: unresolved name: GPT4
-  !! 43..104: type mismatch: expected string, got unknown
 }
 function user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("HelloWorld", map { "name": name }) : baml.llm.PromptAst

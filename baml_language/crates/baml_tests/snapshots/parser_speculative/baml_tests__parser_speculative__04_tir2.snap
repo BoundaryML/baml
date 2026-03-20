@@ -5,7 +5,6 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.Ambiguous(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "Ambiguous", map { "input": input }) : unknown
   !! 0..220: unresolved name: GPT4
-  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("Ambiguous", map { "input": input }) : baml.llm.PromptAst
@@ -16,7 +15,6 @@ function user.Ambiguous$build_request(input: string) -> baml.http.Request {
 function user.AnotherLLM(input: string) -> string {
   baml.llm.call_llm_function(null, "AnotherLLM", map { "input": input }) : unknown
   !! 220..421: type mismatch: expected baml.llm.Client, got null
-  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.AnotherLLM$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("AnotherLLM", map { "input": input }) : baml.llm.PromptAst
@@ -41,7 +39,6 @@ function user.ProcessData(data: user.JsonData) -> string {
 function user.ExtractData(text: string) -> user.JsonData {
   baml.llm.call_llm_function(GPT4, "ExtractData", map { "text": text }) : unknown
   !! 46..146: unresolved name: GPT4
-  !! 46..146: type mismatch: expected user.JsonData, got unknown
 }
 function user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("ExtractData", map { "text": text }) : baml.llm.PromptAst
@@ -52,7 +49,6 @@ function user.ExtractData$build_request(text: string) -> baml.http.Request {
 function user.LLMAnalyze(text: string) -> user.Analysis {
   baml.llm.call_llm_function(GPT4, "LLMAnalyze", map { "text": text }) : unknown
   !! 0..242: unresolved name: GPT4
-  !! 0..0: type mismatch: expected user.Analysis, got unknown
 }
 function user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("LLMAnalyze", map { "text": text }) : baml.llm.PromptAst
@@ -91,7 +87,6 @@ function user.ProcessAnalysis(analysis: user.Analysis) -> string {
 function user.ChainedProcess(input: string) -> string {
   baml.llm.call_llm_function(GPT4, "ChainedProcess", map { "input": input }) : unknown
   !! 724..860: unresolved name: GPT4
-  !! 724..860: type mismatch: expected string, got unknown
 }
 function user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("ChainedProcess", map { "input": input }) : baml.llm.PromptAst

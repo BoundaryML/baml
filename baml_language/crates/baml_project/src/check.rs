@@ -261,14 +261,17 @@ pub fn collect_diagnostics(
 /// per-file results from `baml_lsp2_actions::check_file` for snapshot tests
 /// and other consumers that need compiler2-only diagnostics.
 ///
+/// Files checked are [`baml_compiler2_hir::compiler2_all_files`]: user project
+/// sources plus compiler2 stdlib stubs under `<builtin>/baml/...` (packages
+/// `baml`, `env`, etc.), not only [`ProjectDatabase::get_source_files`] (which
+/// excludes those builtins for the v1 compiler).
+///
 /// Diagnostics are sorted by (file_id, primary span start, message) for
 /// stable snapshot output.
-pub fn collect_compiler2_diagnostics(
-    db: &ProjectDatabase,
-    source_files: &[SourceFile],
-) -> Vec<Diagnostic> {
+pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
+    let source_files = baml_compiler2_hir::compiler2_all_files(db);
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
-    for file in source_files {
+    for file in &source_files {
         diagnostics.extend(lsp2_check_file(db, *file));
     }
     diagnostics.sort_by(|a, b| {

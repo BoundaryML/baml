@@ -961,6 +961,7 @@ fn generate_compiler2_diagnostics_test(project: &TestProject) -> TokenStream {
         #[test]
         fn test_05_diagnostics2() {
             use baml_compiler_diagnostics::{DiagnosticPhase, RenderConfig, render_diagnostic};
+            use baml_compiler2_hir::compiler2_all_files;
             use baml_project::collect_compiler2_diagnostics;
             use std::path::PathBuf;
 
@@ -970,8 +971,8 @@ fn generate_compiler2_diagnostics_test(project: &TestProject) -> TokenStream {
 
             #file_loaders
 
-            let all_files = db.get_source_files();
-            let diagnostics = collect_compiler2_diagnostics(&db, &all_files);
+            let all_files = compiler2_all_files(&db);
+            let diagnostics = collect_compiler2_diagnostics(&db);
 
             let mut sources: HashMap<baml_db::FileId, String> = HashMap::new();
             let mut file_paths: HashMap<baml_db::FileId, PathBuf> = HashMap::new();

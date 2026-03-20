@@ -14,7 +14,6 @@ class user.NestedGenerics {
 function user.BadParam(x: map<string, int>) -> string {
   baml.llm.call_llm_function(GPT4, "BadParam", map { "x": x }) : unknown
   !! 655..777: unresolved name: GPT4
-  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.BadParam$render_prompt(x: map<string, int>) -> baml.llm.PromptAst {
   baml.llm.render_prompt("BadParam", map { "x": x }) : baml.llm.PromptAst
@@ -25,7 +24,6 @@ function user.BadParam$build_request(x: map<string, int>) -> baml.http.Request {
 function user.BadReturnType() -> map<string, int> {
   baml.llm.call_llm_function(GPT4, "BadReturnType", map {  }) : unknown
   !! 777..897: unresolved name: GPT4
-  !! 0..0: type mismatch: expected map<string, int>, got unknown
 }
 function user.BadReturnType$render_prompt() -> baml.llm.PromptAst {
   baml.llm.render_prompt("BadReturnType", map {  }) : baml.llm.PromptAst

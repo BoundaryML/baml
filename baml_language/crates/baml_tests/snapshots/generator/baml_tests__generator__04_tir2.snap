@@ -9,7 +9,6 @@ class user.MyClass {
 function user.GetUser() -> user.MyClass {
   baml.llm.call_llm_function(null, "GetUser", map {  }) : unknown
   !! 347..397: type mismatch: expected baml.llm.Client, got null
-  !! 347..397: type mismatch: expected user.MyClass, got unknown
 }
 function user.GetUser$render_prompt() -> baml.llm.PromptAst {
   baml.llm.render_prompt("GetUser", map {  }) : baml.llm.PromptAst

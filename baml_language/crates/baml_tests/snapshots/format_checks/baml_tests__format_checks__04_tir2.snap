@@ -394,7 +394,6 @@ function user.TriviaLongValueClientBlock$new() -> ? {
 }
 function user.TestTarget() -> string {
   baml.llm.call_llm_function(BasicClient, "TestTarget", map {  }) : unknown
-  !! 13587..13635: type mismatch: expected string, got unknown
 }
 function user.TestTarget$render_prompt() -> baml.llm.PromptAst {
   baml.llm.render_prompt("TestTarget", map {  }) : baml.llm.PromptAst
@@ -705,7 +704,6 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
 function user.LlmBasic(name: string) -> string {
   baml.llm.call_llm_function(GPT4, "LlmBasic", map { "name": name }) : unknown
   !! 11234..11368: unresolved name: GPT4
-  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("LlmBasic", map { "name": name }) : baml.llm.PromptAst
@@ -716,7 +714,6 @@ function user.LlmBasic$build_request(name: string) -> baml.http.Request {
 function user.LlmMultiLine(text: string) -> string {
   baml.llm.call_llm_function(GPT4, "LlmMultiLine", map { "text": text }) : unknown
   !! 11368..11593: unresolved name: GPT4
-  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("LlmMultiLine", map { "text": text }) : baml.llm.PromptAst
@@ -726,7 +723,6 @@ function user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
 }
 function user.LlmStringClient(text: string) -> string {
   baml.llm.call_llm_function(Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "LlmStringClient", map { "text": text }) : unknown
-  !! 11690..11758: type mismatch: expected string, got unknown
 }
 function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("LlmStringClient", map { "text": text }) : baml.llm.PromptAst
@@ -737,7 +733,6 @@ function user.LlmStringClient$build_request(text: string) -> baml.http.Request {
 function user.LlmReversedOrder(text: string) -> string {
   baml.llm.call_llm_function(GPT4, "LlmReversedOrder", map { "text": text }) : unknown
   !! 11758..11928: unresolved name: GPT4
-  !! 0..0: type mismatch: expected string, got unknown
 }
 function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("LlmReversedOrder", map { "text": text }) : baml.llm.PromptAst
@@ -748,7 +743,6 @@ function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request 
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
   baml.llm.call_llm_function(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : unknown
   !! 12113..12264: unresolved name: GPT4
-  !! 12113..12264: type mismatch: expected string, got unknown
 }
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.PromptAst
