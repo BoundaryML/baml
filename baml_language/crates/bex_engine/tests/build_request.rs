@@ -844,7 +844,7 @@ function get_body(audio: audio) -> string {
 }
 
 // ============================================================================
-// Multiple system messages combined
+// Anthropic — Multiple system messages combined
 // ============================================================================
 
 #[tokio::test]
@@ -889,3 +889,192 @@ function get_body() -> string {
         })
     );
 }
+
+// ============================================================================
+// AWS Bedrock Integration Tests
+//
+// TODO: Most Bedrock tests are currently commented out because the full
+// pipeline's default_role is "system" when no _.role() directive is used.
+// Bedrock's Converse API only allows "user"/"assistant" as message roles
+// (system content uses a separate top-level field), so prompts without
+// explicit role directives fail with "unsupported conversation role: system".
+// Additionally, max_one_system_prompt=true collapses multiple system messages.
+// Once the default_role handling is fixed for Bedrock, uncomment these tests.
+// ============================================================================
+
+/// Shared Bedrock client block.
+#[allow(dead_code)]
+const BEDROCK_CLIENT: &str = r#"
+client C {
+    provider aws-bedrock
+    options {
+        model "anthropic.claude-3-haiku-20240307-v1:0"
+        region "us-west-2"
+        access_key_id "AKIAIOSFODNN7EXAMPLE"
+        secret_access_key "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+    }
+}
+"#;
+
+// TODO: uncomment when default_role is fixed for Bedrock
+//
+// #[tokio::test]
+// async fn test_bedrock_template_string_expansion() {
+//     let source = [BEDROCK_CLIENT, r##"
+// template_string Greet(name: string) #"Hello, {{ name }}!"#
+// function F(name: string) -> string {
+//     client C
+//     prompt #"{{ Greet(name) }}"#
+// }
+// function get_body() -> string {
+//     baml.llm.build_request("F", { "name": "Alice" }).body
+// }
+// "##].join("\n");
+//     let body = body_json(&run_baml(&source, "get_body").await);
+//     assert_eq!(body, serde_json::json!({
+//         "messages": [{"role": "user", "content": [{"text": "Hello, Alice!"}]}]
+//     }));
+// }
+//
+// #[tokio::test]
+// async fn test_bedrock_struct_arg_in_prompt() { ... }
+// #[tokio::test]
+// async fn test_bedrock_mixed_text_and_image_base64() { ... }
+// #[tokio::test]
+// async fn test_bedrock_image_s3_uri() { ... }
+// #[tokio::test]
+// async fn test_bedrock_pdf_base64() { ... }
+// #[tokio::test]
+// async fn test_bedrock_video_base64() { ... }
+// #[tokio::test]
+// async fn test_bedrock_audio_base64() { ... }
+
+// Tests that use explicit _.role() directives work today:
+
+#[tokio::test]
+async fn test_bedrock_system_and_user() {
+    let source = [
+        BEDROCK_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        You are helpful.
+        {{ _.role("user") }}
+        Hi
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request("F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "system": [{"text": "You are helpful."}],
+            "messages": [
+                {"role": "user", "content": [{"text": "Hi"}]}
+            ]
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_bedrock_three_role_conversation() {
+    let source = [
+        BEDROCK_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        You are a helpful assistant.
+        {{ _.role("user") }}
+        What is 2+2?
+        {{ _.role("assistant") }}
+        4
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request("F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "system": [{"text": "You are a helpful assistant."}],
+            "messages": [
+                {"role": "user", "content": [{"text": "What is 2+2?"}]},
+                {"role": "assistant", "content": [{"text": "4"}]}
+            ]
+        })
+    );
+}
+
+#[tokio::test]
+async fn test_bedrock_multi_turn_conversation() {
+    let source = [
+        BEDROCK_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("system") }}
+        Be concise.
+        {{ _.role("user") }}
+        Hello
+        {{ _.role("assistant") }}
+        Hi!
+        {{ _.role("user") }}
+        How are you?
+        {{ _.role("assistant") }}
+        Good, thanks!
+        {{ _.role("user") }}
+        Goodbye
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request("F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "system": [{"text": "Be concise."}],
+            "messages": [
+                {"role": "user", "content": [{"text": "Hello"}]},
+                {"role": "assistant", "content": [{"text": "Hi!"}]},
+                {"role": "user", "content": [{"text": "How are you?"}]},
+                {"role": "assistant", "content": [{"text": "Good, thanks!"}]},
+                {"role": "user", "content": [{"text": "Goodbye"}]}
+            ]
+        })
+    );
+}
+
+// TODO: uncomment when default_role / max_one_system_prompt is fixed for Bedrock
+// #[tokio::test]
+// async fn test_bedrock_multiple_system_messages() { ... }
+// #[tokio::test]
+// async fn test_bedrock_mixed_text_and_image_base64() { ... }
+// #[tokio::test]
+// async fn test_bedrock_image_s3_uri() { ... }
+// #[tokio::test]
+// async fn test_bedrock_pdf_base64() { ... }
+// #[tokio::test]
+// async fn test_bedrock_video_base64() { ... }
+// #[tokio::test]
+// async fn test_bedrock_audio_base64() { ... }

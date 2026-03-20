@@ -3,11 +3,11 @@ recorded_at = "2026-03-06T15:49:28Z"
 git_sha = "2d37cdf9c"
 
 [artifacts.bridge_cffi]
-file_bytes = 12413696
-stripped_bytes = 12413688
-gzip_bytes = 4522593
+file_bytes = 15687976
+stripped_bytes = 15687968
+gzip_bytes = 5676327
 
 [artifacts.bridge_cffi-stripped]
-file_bytes = 8499472
-stripped_bytes = 8499464
-gzip_bytes = 3003494
+file_bytes = 12068632
+stripped_bytes = 12068624
+gzip_bytes = 4278884

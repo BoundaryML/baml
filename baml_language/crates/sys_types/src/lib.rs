@@ -651,13 +651,13 @@ impl Default for SysOpsBuilder {
 // Blanket SysOpLlm implementation (delegates to sys_llm)
 // ============================================================================
 
-/// Blanket implementation of `SysOpLlm` for all types.
+/// Blanket implementation of `SysOpLlm` for types that also implement
+/// `SysOpHttp`, `SysOpEnv`, and `SysOpFs`.
 ///
 /// Every type gets the real LLM behavior via `sys_llm::execute_*` functions.
-/// When future cross-op calls are needed (e.g., HTTP for media URL resolution),
-/// the bound can be tightened to `impl<T: SysOpHttp> SysOpLlm for T` and
-/// closures can be passed to the `execute_*` functions.
-impl<T> SysOpLlm for T {
+/// The trait bounds allow `build_request` to bridge through the caller's
+/// implementations of HTTP, env, and fs operations.
+impl<T: SysOpHttp + SysOpEnv + SysOpFs + Default + 'static> SysOpLlm for T {
     fn baml_llm_primitive_client_render_prompt(
         &self,
         _call_id: CallId,
@@ -702,10 +702,102 @@ impl<T> SysOpLlm for T {
         primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
     ) -> SysOpOutput<bex_heap::builtin_types::owned::HttpRequest> {
-        SysOpOutput::Ready(
-            sys_llm::execute_build_request_from_owned(&primitive_client, prompt)
-                .map_err(OpErrorKind::from),
-        )
+        // Bridge SysOpHttp into an HttpSendFn callback that sys_llm can use
+        // without depending on sys_types or a specific HTTP client.
+        let http_send: sys_llm::HttpSendFn = Arc::new(|req| {
+            Box::pin(async move {
+                let output = T::default().baml_http_send(CallId::next(), req);
+                let resp = match output {
+                    SysOpOutput::Ready(Ok(v)) => v,
+                    SysOpOutput::Ready(Err(e)) => {
+                        return Err(sys_llm::LlmOpError::Other(format!("{e}")));
+                    }
+                    SysOpOutput::Async(fut) => fut
+                        .await
+                        .map_err(|e| sys_llm::LlmOpError::Other(format!("{e}")))?,
+                };
+
+                let status = resp.status_code;
+                let headers = resp.headers.clone();
+
+                let text_output = T::default().baml_http_response_text(CallId::next(), resp);
+                let body = match text_output {
+                    SysOpOutput::Ready(Ok(v)) => v,
+                    SysOpOutput::Ready(Err(e)) => {
+                        return Err(sys_llm::LlmOpError::Other(format!("{e}")));
+                    }
+                    SysOpOutput::Async(fut) => fut
+                        .await
+                        .map_err(|e| sys_llm::LlmOpError::Other(format!("{e}")))?,
+                };
+
+                Ok(sys_llm::HttpSendResponse {
+                    status_code: u16::try_from(status).map_err(|_| {
+                        sys_llm::LlmOpError::Other(format!("invalid HTTP status code: {status}"))
+                    })?,
+                    headers,
+                    body,
+                })
+            })
+        });
+
+        // Bridge SysOpEnv into an EnvReadFn callback.
+        let env_read: sys_llm::EnvReadFn = Arc::new(|key| {
+            Box::pin(async move {
+                let output = T::default().env_get(CallId::next(), key);
+                match output {
+                    SysOpOutput::Ready(Ok(v)) => Ok(v),
+                    SysOpOutput::Ready(Err(e)) => Err(sys_llm::LlmOpError::Other(format!("{e}"))),
+                    SysOpOutput::Async(fut) => fut
+                        .await
+                        .map_err(|e| sys_llm::LlmOpError::Other(format!("{e}"))),
+                }
+            })
+        });
+
+        // Bridge SysOpFs into an FsReadFn callback.
+        // Composes baml.fs.open + File.read to read a file by path.
+        let fs_read: sys_llm::FsReadFn = Arc::new(|path| {
+            Box::pin(async move {
+                // Open the file.
+                let open_output = T::default().baml_fs_open(CallId::next(), path);
+                let file = match open_output {
+                    SysOpOutput::Ready(Ok(v)) => v,
+                    SysOpOutput::Ready(Err(e)) => {
+                        return Err(sys_llm::LlmOpError::Other(format!("{e}")));
+                    }
+                    SysOpOutput::Async(fut) => fut
+                        .await
+                        .map_err(|e| sys_llm::LlmOpError::Other(format!("{e}")))?,
+                };
+
+                // Read the file contents.
+                let read_output = T::default().baml_fs_file_read(CallId::next(), file);
+                let contents = match read_output {
+                    SysOpOutput::Ready(Ok(v)) => v,
+                    SysOpOutput::Ready(Err(e)) => {
+                        return Err(sys_llm::LlmOpError::Other(format!("{e}")));
+                    }
+                    SysOpOutput::Async(fut) => fut
+                        .await
+                        .map_err(|e| sys_llm::LlmOpError::Other(format!("{e}")))?,
+                };
+
+                Ok(contents.into_bytes())
+            })
+        });
+
+        SysOpOutput::async_op(async move {
+            sys_llm::execute_build_request_from_owned(
+                &primitive_client,
+                prompt,
+                &http_send,
+                &env_read,
+                &fs_read,
+            )
+            .await
+            .map_err(OpErrorKind::from)
+        })
     }
 
     fn baml_llm_primitive_client_parse(

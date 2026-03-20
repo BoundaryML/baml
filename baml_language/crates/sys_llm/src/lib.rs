@@ -6,6 +6,7 @@
 //! - `specialize_prompt()` - Transform a generic `PromptAst` for a specific LLM provider
 //! - `execute_*` entry points for trait-based dispatch from `sys_types`
 
+pub(crate) mod auth_request;
 mod build_request;
 pub(crate) mod jinja;
 mod model_features;
@@ -14,8 +15,16 @@ mod provider;
 mod render_prompt;
 mod specialize_prompt;
 pub(crate) mod types;
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod wasm;
 
-use std::str::FromStr;
+use std::{
+    future::Future,
+    panic::{RefUnwindSafe, UnwindSafe},
+    pin::Pin,
+    str::FromStr,
+    sync::Arc,
+};
 
 use bex_external_types::BexExternalValue;
 use bex_heap::builtin_types;
@@ -34,6 +43,58 @@ pub use types::{
     Class as OutputClass, ClassField as OutputClassField, Enum as OutputEnum,
     EnumValue as OutputEnumValue, LlmOpError, RenderOptions,
 };
+
+// ============================================================================
+// HTTP callback types (for cross-op calls from build_request)
+// ============================================================================
+
+/// Response from an HTTP call made during provider-specific request building.
+pub struct HttpSendResponse {
+    /// HTTP status code.
+    pub status_code: u16,
+    /// Response headers.
+    pub headers: indexmap::IndexMap<String, String>,
+    /// Response body text.
+    pub body: String,
+}
+
+/// Future returned by an [`HttpSendFn`] callback.
+pub type HttpSendFut = Pin<Box<dyn Future<Output = Result<HttpSendResponse, LlmOpError>> + Send>>;
+
+/// Callback for making HTTP requests from within provider-specific `build_request` code.
+///
+/// Injected by the `SysOpLlm` blanket impl in `sys_types`, bridging to the
+/// `SysOpHttp` trait so that `sys_llm` can make HTTP calls without depending
+/// on a specific HTTP client.
+pub type HttpSendFn = Arc<dyn Fn(builtin_types::owned::HttpRequest) -> HttpSendFut + Send + Sync>;
+
+// ============================================================================
+// Env callback types (for reading environment variables from build_request)
+// ============================================================================
+
+/// Future returned by an [`EnvReadFn`] callback.
+pub type EnvReadFut = Pin<Box<dyn Future<Output = Result<Option<String>, LlmOpError>> + Send>>;
+
+/// Callback for reading environment variables from within provider-specific code.
+///
+/// Injected by the `SysOpLlm` blanket impl in `sys_types`, bridging to the
+/// `SysOpEnv` trait so that `sys_llm` can read env vars without depending
+/// on `std::env` or a specific runtime.
+pub type EnvReadFn = Arc<dyn Fn(String) -> EnvReadFut + Send + Sync + UnwindSafe + RefUnwindSafe>;
+
+// ============================================================================
+// Fs callback types (for reading files from build_request)
+// ============================================================================
+
+/// Future returned by an [`FsReadFn`] callback.
+pub type FsReadFut = Pin<Box<dyn Future<Output = Result<Vec<u8>, LlmOpError>> + Send>>;
+
+/// Callback for reading file contents from within provider-specific code.
+///
+/// Injected by the `SysOpLlm` blanket impl in `sys_types`, bridging to the
+/// `SysOpFs` trait so that `sys_llm` can read files without depending
+/// on `std::fs` or a specific runtime.
+pub type FsReadFn = Arc<dyn Fn(String) -> FsReadFut + Send + Sync + UnwindSafe + RefUnwindSafe>;
 
 // ============================================================================
 // Clean (owned-type) entry points for trait-based dispatch
@@ -89,11 +150,18 @@ pub fn execute_specialize_prompt_from_owned(
 }
 
 /// Build an HTTP request from a prompt given already-extracted owned types.
-pub fn execute_build_request_from_owned(
+///
+/// The callback arguments bridge `sys_types` traits (`SysOpHttp`, `SysOpEnv`,
+/// `SysOpFs`) into `sys_llm` without creating a direct dependency.
+pub async fn execute_build_request_from_owned(
     client: &builtin_types::owned::LlmPrimitiveClient,
     prompt: bex_vm_types::PromptAst,
+    http_send: &HttpSendFn,
+    env_read: &EnvReadFn,
+    fs_read: &FsReadFn,
 ) -> Result<builtin_types::owned::HttpRequest, LlmOpError> {
-    build_request::build_request(client, prompt, false)
+    build_request::build_request(client, prompt, false, http_send, env_read, fs_read)
+        .await
         .map_err(|e| LlmOpError::Other(e.to_string()))
 }
 

@@ -8,8 +8,9 @@ use indexmap::IndexMap;
 use serde::Serialize;
 
 use crate::build_request::{
-    BuildRequestError, LlmPrimitiveClient, LlmProvider, LlmRequestBuilder, get_string_option,
-    mime_type_as_ok, openai::build_openai_url,
+    BuildRequestCallbacks, BuildRequestError, LlmPrimitiveClient, LlmProvider, LlmRequestBuilder,
+    RawHttpRequest, build_headers, forward_options, get_string_option, mime_type_as_ok,
+    openai::build_openai_url,
 };
 
 /// A single message in the `OpenAI` Responses API format.
@@ -71,28 +72,20 @@ pub(crate) struct OpenAiResponsesBuilder<'a> {
 }
 
 impl LlmRequestBuilder for OpenAiResponsesBuilder<'_> {
-    fn provider_skip_keys(&self) -> &'static [&'static str] {
-        &[]
-    }
-
-    fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError> {
-        build_openai_url(*self.provider, client, "/responses")
-    }
-
-    fn build_auth_headers(&self, client: &LlmPrimitiveClient) -> IndexMap<String, String> {
-        let mut headers = IndexMap::new();
-        if let Some(api_key) = get_string_option(client, "api_key") {
-            headers.insert("authorization".to_string(), format!("Bearer {api_key}"));
-        }
-        headers
-    }
-
-    fn build_body(
+    async fn build_request(
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
         stream: bool,
-    ) -> Result<String, BuildRequestError> {
+        _callbacks: &BuildRequestCallbacks<'_>,
+    ) -> Result<RawHttpRequest, BuildRequestError> {
+        // URL
+        let url = build_openai_url(*self.provider, client, "/responses")?;
+
+        // Base headers (auth headers added by LlmRequestAuthorizer after building)
+        let headers = build_headers(IndexMap::new(), client);
+
+        // Body
         let mut body = serde_json::Map::new();
         if let Some(model) = get_string_option(client, "model") {
             body.insert("model".to_string(), serde_json::Value::String(model));
@@ -100,26 +93,25 @@ impl LlmRequestBuilder for OpenAiResponsesBuilder<'_> {
         if stream {
             body.insert("stream".to_string(), serde_json::Value::Bool(true));
         }
-        body.extend(self.build_prompt_body(client, prompt)?);
-        self.forward_options(client, &mut body);
-        serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
-            key: "body".into(),
-            reason: e.to_string(),
-        })
-    }
-
-    fn build_prompt_body(
-        &self,
-        client: &LlmPrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-    ) -> Result<serde_json::Map<String, serde_json::Value>, BuildRequestError> {
-        let mut map = serde_json::Map::new();
         let input = prompt_to_responses_input(&prompt, &client.default_role)?;
-        map.insert(
+        body.insert(
             "input".to_string(),
             serde_json::to_value(input).expect("infallible"),
         );
-        Ok(map)
+        forward_options(&[], client, &mut body);
+
+        let body_str =
+            serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
+                key: "body".into(),
+                reason: e.to_string(),
+            })?;
+
+        Ok(RawHttpRequest {
+            method: "POST".to_string(),
+            url,
+            headers,
+            body: body_str,
+        })
     }
 }
 
@@ -621,9 +613,7 @@ mod tests {
     #[test]
     fn responses_url_default() {
         let client = make_client("openai-responses", vec![]);
-        let url = OpenAiResponsesBuilder::new(&LlmProvider::OpenAiResponses)
-            .build_url(&client)
-            .unwrap();
+        let url = build_openai_url(LlmProvider::OpenAiResponses, &client, "/responses").unwrap();
         assert_eq!(url, "https://api.openai.com/v1/responses");
     }
 
@@ -636,23 +626,34 @@ mod tests {
                 BexExternalValue::String("https://custom.api.com/v1".into()),
             )],
         );
-        let url = OpenAiResponsesBuilder::new(&LlmProvider::OpenAiResponses)
-            .build_url(&client)
-            .unwrap();
+        let url = build_openai_url(LlmProvider::OpenAiResponses, &client, "/responses").unwrap();
         assert_eq!(url, "https://custom.api.com/v1/responses");
     }
 
-    #[test]
-    fn stream_true_sets_stream() {
+    #[tokio::test]
+    async fn stream_true_sets_stream() {
         let client = make_client(
             "openai-responses",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
-        let builder = OpenAiResponsesBuilder::new(&LlmProvider::OpenAiResponses);
-        let body_str = builder
-            .build_body(&client, msg("user", "hi"), true)
-            .unwrap();
-        let body: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+        let result = {
+            let (h, e, f) = crate::build_request::stub_callbacks();
+            let builder = OpenAiResponsesBuilder::new(&LlmProvider::OpenAiResponses);
+            builder
+                .build_request(
+                    &client,
+                    msg("user", "hi"),
+                    true,
+                    &crate::build_request::BuildRequestCallbacks {
+                        http_send: &h,
+                        env_read: &e,
+                        fs_read: &f,
+                    },
+                )
+                .await
+        }
+        .unwrap();
+        let body: serde_json::Value = serde_json::from_str(&result.body).unwrap();
         assert_eq!(
             body,
             serde_json::json!({
@@ -665,17 +666,30 @@ mod tests {
         );
     }
 
-    #[test]
-    fn stream_false_omits_stream() {
+    #[tokio::test]
+    async fn stream_false_omits_stream() {
         let client = make_client(
             "openai-responses",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
-        let builder = OpenAiResponsesBuilder::new(&LlmProvider::OpenAiResponses);
-        let body_str = builder
-            .build_body(&client, msg("user", "hi"), false)
-            .unwrap();
-        let body: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+        let result = {
+            let (h, e, f) = crate::build_request::stub_callbacks();
+            let builder = OpenAiResponsesBuilder::new(&LlmProvider::OpenAiResponses);
+            builder
+                .build_request(
+                    &client,
+                    msg("user", "hi"),
+                    false,
+                    &crate::build_request::BuildRequestCallbacks {
+                        http_send: &h,
+                        env_read: &e,
+                        fs_read: &f,
+                    },
+                )
+                .await
+        }
+        .unwrap();
+        let body: serde_json::Value = serde_json::from_str(&result.body).unwrap();
         assert_eq!(
             body,
             serde_json::json!({

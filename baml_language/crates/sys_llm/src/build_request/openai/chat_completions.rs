@@ -9,8 +9,9 @@ use serde::Serialize;
 use crate::{
     LlmProvider,
     build_request::{
-        BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder, get_string_option,
-        mime_type_as_ok, openai::build_openai_url,
+        BuildRequestCallbacks, BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder,
+        RawHttpRequest, build_headers, forward_options, get_string_option, mime_type_as_ok,
+        openai::build_openai_url,
     },
 };
 
@@ -68,33 +69,24 @@ impl<'a> OpenAiBuilder<'a> {
     }
 }
 
+/// Option keys specific to `OpenAI` that should not be forwarded to the body.
+const OPENAI_SKIP_KEYS: &[&str] = &["resource_name", "api_version"];
+
 impl LlmRequestBuilder for OpenAiBuilder<'_> {
-    fn provider_skip_keys(&self) -> &'static [&'static str] {
-        &["resource_name", "api_version"]
-    }
-
-    fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError> {
-        build_openai_url(*self.provider, client, "/chat/completions")
-    }
-
-    fn build_auth_headers(&self, client: &LlmPrimitiveClient) -> IndexMap<String, String> {
-        let mut headers = IndexMap::new();
-        if let Some(api_key) = get_string_option(client, "api_key") {
-            if *self.provider == LlmProvider::AzureOpenAi {
-                headers.insert("api-key".to_string(), api_key);
-            } else {
-                headers.insert("authorization".to_string(), format!("Bearer {api_key}"));
-            }
-        }
-        headers
-    }
-
-    fn build_body(
+    async fn build_request(
         &self,
         client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
         stream: bool,
-    ) -> Result<String, BuildRequestError> {
+        _callbacks: &BuildRequestCallbacks<'_>,
+    ) -> Result<RawHttpRequest, BuildRequestError> {
+        // URL
+        let url = build_openai_url(*self.provider, client, "/chat/completions")?;
+
+        // Base headers (auth headers added by LlmRequestAuthorizer after building)
+        let headers = build_headers(IndexMap::new(), client);
+
+        // Body
         let mut body = serde_json::Map::new();
         if let Some(model) = get_string_option(client, "model") {
             body.insert("model".to_string(), serde_json::Value::String(model));
@@ -106,8 +98,15 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
                 serde_json::json!({ "include_usage": true }),
             );
         }
-        body.extend(self.build_prompt_body(client, prompt)?);
-        self.forward_options(client, &mut body);
+
+        // TODO: Handle default role in Ollama once compiler2 is merged.
+        let messages = prompt_to_openai_messages(&prompt, client.default_role.as_str())?;
+        body.insert(
+            "messages".to_string(),
+            serde_json::to_value(messages).expect("infallible"),
+        );
+
+        forward_options(OPENAI_SKIP_KEYS, client, &mut body);
 
         // Azure OpenAI: default max_tokens to 4096 if neither max_tokens nor
         // max_completion_tokens is set. Holdover from engine, not sure why this was the case.
@@ -122,27 +121,18 @@ impl LlmRequestBuilder for OpenAiBuilder<'_> {
             }
         }
 
-        serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
-            key: "body".into(),
-            reason: e.to_string(),
+        let body_str =
+            serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
+                key: "body".into(),
+                reason: e.to_string(),
+            })?;
+
+        Ok(RawHttpRequest {
+            method: "POST".to_string(),
+            url,
+            headers,
+            body: body_str,
         })
-    }
-
-    fn build_prompt_body(
-        &self,
-        client: &LlmPrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-    ) -> Result<serde_json::Map<String, serde_json::Value>, BuildRequestError> {
-        let mut map = serde_json::Map::new();
-
-        // TODO: Handle default role in Ollama once compiler2 is merged.
-
-        let messages = prompt_to_openai_messages(&prompt, client.default_role.as_str())?;
-        map.insert(
-            "messages".to_string(),
-            serde_json::to_value(messages).expect("infallible"),
-        );
-        Ok(map)
     }
 }
 
@@ -362,7 +352,7 @@ fn openai_media_part(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{str::FromStr, sync::Arc};
 
     use baml_base::MediaKind;
     use baml_builtins::{MediaContent, MediaValue, PromptAst};
@@ -370,7 +360,7 @@ mod tests {
     use indexmap::IndexMap;
 
     use super::*;
-    use crate::build_request::{LlmPrimitiveClient, LlmRequestBuilder, build_request};
+    use crate::build_request::{LlmPrimitiveClient, LlmRequestBuilder};
 
     // -- helpers --
 
@@ -402,6 +392,27 @@ mod tests {
 
     fn parse_body(body: &str) -> serde_json::Value {
         serde_json::from_str(body).unwrap()
+    }
+
+    /// Build an [`OpenAiBuilder`] request directly, bypassing auth.
+    async fn build_raw(
+        provider: &str,
+        client: &LlmPrimitiveClient,
+        prompt: Arc<PromptAst>,
+        stream: bool,
+    ) -> Result<crate::build_request::RawHttpRequest, crate::build_request::BuildRequestError> {
+        let (h, e, f) = crate::build_request::stub_callbacks();
+        let callbacks = crate::build_request::BuildRequestCallbacks {
+            http_send: &h,
+            env_read: &e,
+            fs_read: &f,
+        };
+        let provider = crate::LlmProvider::from_str(provider).map_err(|_| {
+            crate::build_request::BuildRequestError::UnsupportedLlmProvider(provider.to_string())
+        })?;
+        OpenAiBuilder::new(&provider)
+            .build_request(client, prompt, stream, &callbacks)
+            .await
     }
 
     // ========================================================================
@@ -881,8 +892,7 @@ mod tests {
                 ("api_key", BexExternalValue::String("sk-test".into())),
             ],
         );
-        let builder = OpenAiBuilder::new(&LlmProvider::AzureOpenAi);
-        let url = builder.build_url(&client).unwrap();
+        let url = build_openai_url(LlmProvider::AzureOpenAi, &client, "/chat/completions").unwrap();
         assert_eq!(
             url,
             "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview"
@@ -905,28 +915,15 @@ mod tests {
                 ),
             ],
         );
-        let builder = OpenAiBuilder::new(&LlmProvider::AzureOpenAi);
-        let url = builder.build_url(&client).unwrap();
+        let url = build_openai_url(LlmProvider::AzureOpenAi, &client, "/chat/completions").unwrap();
         assert_eq!(
             url,
             "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-02-15-preview"
         );
     }
 
-    #[test]
-    fn azure_auth_header_uses_api_key() {
-        let client = make_client(
-            "azure-openai",
-            vec![("api_key", BexExternalValue::String("sk-azure".into()))],
-        );
-        let builder = OpenAiBuilder::new(&LlmProvider::AzureOpenAi);
-        let headers = builder.build_auth_headers(&client);
-        assert_eq!(headers.get("api-key").unwrap(), "sk-azure");
-        assert!(headers.get("authorization").is_none());
-    }
-
-    #[test]
-    fn azure_defaults_max_tokens_4096() {
+    #[tokio::test]
+    async fn azure_defaults_max_tokens_4096() {
         let client = make_client(
             "azure-openai",
             vec![
@@ -939,7 +936,9 @@ mod tests {
                 ("api_key", BexExternalValue::String("sk".into())),
             ],
         );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("azure-openai", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -953,8 +952,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn azure_no_default_when_max_tokens_set() {
+    #[tokio::test]
+    async fn azure_no_default_when_max_tokens_set() {
         let client = make_client(
             "azure-openai",
             vec![
@@ -967,7 +966,9 @@ mod tests {
                 ("max_tokens", BexExternalValue::Int(1000)),
             ],
         );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("azure-openai", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -981,8 +982,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn azure_no_default_when_max_completion_tokens_set() {
+    #[tokio::test]
+    async fn azure_no_default_when_max_completion_tokens_set() {
         let client = make_client(
             "azure-openai",
             vec![
@@ -995,7 +996,9 @@ mod tests {
                 ("max_completion_tokens", BexExternalValue::Int(2000)),
             ],
         );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("azure-openai", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -1009,13 +1012,15 @@ mod tests {
         );
     }
 
-    #[test]
-    fn openai_no_default_max_tokens() {
+    #[tokio::test]
+    async fn openai_no_default_max_tokens() {
         let client = make_client(
             "openai",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("openai", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -1028,10 +1033,12 @@ mod tests {
         );
     }
 
-    #[test]
-    fn openai_no_model_when_absent() {
+    #[tokio::test]
+    async fn openai_no_model_when_absent() {
         let client = make_client("openai", vec![]);
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("openai", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -1043,8 +1050,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn azure_missing_api_version() {
+    #[tokio::test]
+    async fn azure_missing_api_version() {
         let client = make_client(
             "azure-openai",
             vec![
@@ -1052,7 +1059,9 @@ mod tests {
                 ("resource_name", BexExternalValue::String("res".into())),
             ],
         );
-        let err = build_request(&client, msg("user", "hi"), false).unwrap_err();
+        let err = build_raw("azure-openai", &client, msg("user", "hi"), false)
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("api_version"));
     }
 
@@ -1060,15 +1069,17 @@ mod tests {
     // Chat Completions: other OpenAI-like providers
     // ========================================================================
 
-    #[test]
-    fn openai_generic_requires_base_url() {
+    #[tokio::test]
+    async fn openai_generic_requires_base_url() {
         let client = make_client("openai-generic", vec![]);
-        let err = build_request(&client, msg("user", "hi"), false).unwrap_err();
+        let err = build_raw("openai-generic", &client, msg("user", "hi"), false)
+            .await
+            .unwrap_err();
         assert!(err.to_string().contains("base_url"));
     }
 
-    #[test]
-    fn openai_generic_with_base_url() {
+    #[tokio::test]
+    async fn openai_generic_with_base_url() {
         let client = make_client(
             "openai-generic",
             vec![
@@ -1080,12 +1091,10 @@ mod tests {
                 ("api_key", BexExternalValue::String("sk-custom".into())),
             ],
         );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("openai-generic", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         assert_eq!(result.url, "https://my-llm.example.com/v1/chat/completions");
-        assert_eq!(
-            result.headers.get("authorization").unwrap(),
-            "Bearer sk-custom"
-        );
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -1098,13 +1107,15 @@ mod tests {
         );
     }
 
-    #[test]
-    fn ollama_default_url() {
+    #[tokio::test]
+    async fn ollama_default_url() {
         let client = make_client(
             "ollama",
             vec![("model", BexExternalValue::String("llama3".into()))],
         );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("ollama", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         assert_eq!(result.url, "http://localhost:11434/v1/chat/completions");
         let body = parse_body(&result.body);
         assert_eq!(
@@ -1118,8 +1129,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn ollama_custom_base_url() {
+    #[tokio::test]
+    async fn ollama_custom_base_url() {
         let client = make_client(
             "ollama",
             vec![
@@ -1130,23 +1141,14 @@ mod tests {
                 ("model", BexExternalValue::String("llama3".into())),
             ],
         );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("ollama", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         assert_eq!(result.url, "http://remote:11434/v1/chat/completions");
     }
 
-    #[test]
-    fn ollama_no_auth_header() {
-        let client = make_client(
-            "ollama",
-            vec![("model", BexExternalValue::String("llama3".into()))],
-        );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
-        assert!(result.headers.get("authorization").is_none());
-        assert!(result.headers.get("api-key").is_none());
-    }
-
-    #[test]
-    fn openrouter_default_url() {
+    #[tokio::test]
+    async fn openrouter_default_url() {
         let client = make_client(
             "openrouter",
             vec![
@@ -1154,12 +1156,10 @@ mod tests {
                 ("api_key", BexExternalValue::String("sk-or-test".into())),
             ],
         );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("openrouter", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         assert_eq!(result.url, "https://openrouter.ai/api/v1/chat/completions");
-        assert_eq!(
-            result.headers.get("authorization").unwrap(),
-            "Bearer sk-or-test"
-        );
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -1172,8 +1172,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn openrouter_forwards_options() {
+    #[tokio::test]
+    async fn openrouter_forwards_options() {
         let client = make_client(
             "openrouter",
             vec![
@@ -1182,7 +1182,9 @@ mod tests {
                 ("max_tokens", BexExternalValue::Int(500)),
             ],
         );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("openrouter", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -1197,13 +1199,15 @@ mod tests {
         );
     }
 
-    #[test]
-    fn stream_true_sets_stream_and_stream_options() {
+    #[tokio::test]
+    async fn stream_true_sets_stream_and_stream_options() {
         let client = make_client(
             "openai",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
-        let result = build_request(&client, msg("user", "hi"), true).unwrap();
+        let result = build_raw("openai", &client, msg("user", "hi"), true)
+            .await
+            .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
@@ -1218,13 +1222,15 @@ mod tests {
         );
     }
 
-    #[test]
-    fn stream_false_omits_stream_fields() {
+    #[tokio::test]
+    async fn stream_false_omits_stream_fields() {
         let client = make_client(
             "openai",
             vec![("model", BexExternalValue::String("gpt-4o".into()))],
         );
-        let result = build_request(&client, msg("user", "hi"), false).unwrap();
+        let result = build_raw("openai", &client, msg("user", "hi"), false)
+            .await
+            .unwrap();
         let body = parse_body(&result.body);
         assert_eq!(
             body,
