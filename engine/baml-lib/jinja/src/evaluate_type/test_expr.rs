@@ -435,3 +435,93 @@ fn test_filter_chain_type_propagation() {
         vec!["'int_var' is a int, expected string"]
     );
 }
+
+#[test]
+fn test_string_method_format() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_variable("n", Type::Int);
+
+    // String literal .format() should return String
+    assert_eq!(
+        assert_evaluates_to!(r#""{:,}".format(n)"#, &types),
+        Type::String
+    );
+}
+
+#[test]
+fn test_string_method_on_variable() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_variable("s", Type::String);
+
+    // String variable .upper() should return String
+    assert_eq!(assert_evaluates_to!(r#"s.upper()"#, &types), Type::String);
+
+    // String variable .lower() should return String
+    assert_eq!(assert_evaluates_to!(r#"s.lower()"#, &types), Type::String);
+}
+
+#[test]
+fn test_string_method_returns_bool() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_variable("s", Type::String);
+
+    assert_eq!(
+        assert_evaluates_to!(r#"s.startswith("hello")"#, &types),
+        Type::Bool
+    );
+
+    assert_eq!(
+        assert_evaluates_to!(r#"s.endswith("world")"#, &types),
+        Type::Bool
+    );
+
+    assert_eq!(assert_evaluates_to!(r#"s.isdigit()"#, &types), Type::Bool);
+}
+
+#[test]
+fn test_string_method_returns_int() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_variable("s", Type::String);
+
+    assert_eq!(assert_evaluates_to!(r#"s.find("x")"#, &types), Type::Int);
+
+    assert_eq!(assert_evaluates_to!(r#"s.count("x")"#, &types), Type::Int);
+}
+
+#[test]
+fn test_string_method_returns_list() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_variable("s", Type::String);
+
+    assert_eq!(
+        assert_evaluates_to!(r#"s.split(",")"#, &types),
+        Type::List(Box::new(Type::String))
+    );
+
+    assert_eq!(
+        assert_evaluates_to!(r#"s.splitlines()"#, &types),
+        Type::List(Box::new(Type::String))
+    );
+}
+
+#[test]
+fn test_string_method_invalid() {
+    let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+    types.add_variable("s", Type::String);
+
+    // Unknown method on string should still error
+    let errors = assert_fails_to!(r#"s.nonexistent()"#, &types);
+    assert_eq!(errors.len(), 2);
+    assert!(errors[0].contains("expected class"));
+}
+
+#[test]
+fn test_string_literal_method_chaining() {
+    let types = PredefinedTypes::default(JinjaContext::Prompt);
+
+    // Method on literal string should return String
+    assert_eq!(
+        assert_evaluates_to!(r#""hello".upper()"#, &types),
+        Type::String
+    );
+}
