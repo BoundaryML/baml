@@ -568,6 +568,9 @@ pub(crate) mod support {
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let pkg_items = package_items(db, pkg_id);
 
+        // Pre-compute throw sets for the package
+        let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
+
         // Pre-compute invalid alias cycles for the package
         let invalid_cycles = detect_invalid_alias_cycles(db, pkg_id);
 
@@ -738,16 +741,35 @@ pub(crate) mod support {
                                     .to_string()
                             })
                             .unwrap_or_else(|| "?".into());
-                        let throws = sig
-                            .throws
-                            .as_ref()
-                            .map(|t| {
-                                let mut diags = Vec::new();
-                                lower_type_expr_in_ns(db, t, &pkg_items, ns, gp, &mut diags)
-                                    .to_string()
-                            })
-                            .map(|t| format!(" throws {t}"))
-                            .unwrap_or_default();
+                        // Compute inferred throws from transitive throw set
+                        let inferred_throws: Option<String> = {
+                            let key = baml_base::Name::new(&*fqn);
+                            throw_sets
+                                .transitive_for(&key)
+                                .filter(|facts| !facts.is_empty())
+                                .map(|facts| {
+                                    let types: Vec<String> =
+                                        facts.iter().map(|f| f.to_string()).collect();
+                                    types.join(" | ")
+                                })
+                        };
+
+                        let throws = if let Some(t) = &sig.throws {
+                            let mut diags = Vec::new();
+                            let declared =
+                                lower_type_expr_in_ns(db, t, &pkg_items, ns, gp, &mut diags);
+                            match &inferred_throws {
+                                Some(inferred) => {
+                                    format!(" throws {declared} infers {inferred}")
+                                }
+                                None => format!(" throws {declared}"),
+                            }
+                        } else {
+                            match &inferred_throws {
+                                Some(inferred) => format!(" throws {inferred}"),
+                                None => " throws never".to_string(),
+                            }
+                        };
                         sig_display =
                             format!("{generics_display}({}) -> {ret}{throws}", params.join(", "));
                         break;
