@@ -112,8 +112,8 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     user.tags[0].len();
     user.scores[0][0];
     items[0].label.len();
-    env.get_or_panic("API_KEY");
-    env.get_or_panic("DATABASE_URL");
+    env.API_KEY;
+    env.DATABASE_URL;
     user.name
 }
 
@@ -334,7 +334,7 @@ class TriviaFieldAttrsBlock {
 }
 
 function ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("ManyOptionsClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "max_tokens": 4096, "temperature": 0.7, "top_p": 0.95, "frequency_penalty": 0.5, "presence_penalty": 0.3, "stream": true, "stop_sequences": ["END", "STOP", "DONE", "COMPLETE", "FINISHED"], "api_key": env.get_or_panic("OPENAI_API_KEY"), "base_url": "https://api.openai.com/v1" })
+    baml.llm.build_primitive_client("ManyOptionsClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4", "max_tokens": 4096, "temperature": 0.7, "top_p": 0.95, "frequency_penalty": 0.5, "presence_penalty": 0.3, "stream": true, "stop_sequences": ["END", "STOP", "DONE", "COMPLETE", "FINISHED"], "api_key": env.OPENAI_API_KEY, "base_url": "https://api.openai.com/v1" })
 }
 
 function TestTarget() -> string {
@@ -382,7 +382,7 @@ function TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
 }
 
 function EnvClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("EnvClient", "openai", "user", ["user", "assistant", "system"], { "api_key": env.get_or_panic("OPENAI_API_KEY"), "model": "gpt-4" })
+    baml.llm.build_primitive_client("EnvClient", "openai", "user", ["user", "assistant", "system"], { "api_key": env.OPENAI_API_KEY, "model": "gpt-4" })
 }
 
 function LongNestedValuesClient.resolve() -> baml.llm.PrimitiveClient {

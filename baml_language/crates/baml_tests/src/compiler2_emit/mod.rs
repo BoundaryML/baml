@@ -48,18 +48,18 @@ fn builtin_functions_included() {
         .function_global_indices
         .keys()
         .any(|k| k.starts_with("baml."));
-    let has_env = program
+    let has_baml_env = program
         .function_global_indices
         .keys()
-        .any(|k| k.starts_with("env."));
+        .any(|k| k.starts_with("baml.env."));
     assert!(
         has_baml,
         "expected at least one 'baml.*' function, got: {:?}",
         program.function_global_indices.keys().collect::<Vec<_>>()
     );
     assert!(
-        has_env,
-        "expected at least one 'env.*' function, got: {:?}",
+        has_baml_env,
+        "expected at least one 'baml.env.*' function, got: {:?}",
         program.function_global_indices.keys().collect::<Vec<_>>()
     );
 }

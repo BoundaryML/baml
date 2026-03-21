@@ -141,10 +141,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
 
         // Check return type — use the span from the item tree's SpannedTypeExpr.
         if let Some(ret_te) = &sig.return_type {
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                 db,
                 ret_te,
                 &pkg_items,
+                &pkg_info.namespace_path,
                 &mut type_errors,
             );
             if !type_errors.is_empty() {
@@ -169,10 +170,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         // Check parameter types — use the type_expr span, not the whole param span.
         for (i, (_name, te)) in sig.params.iter().enumerate() {
             type_errors.clear();
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                 db,
                 te,
                 &pkg_items,
+                &pkg_info.namespace_path,
                 &mut type_errors,
             );
             if !type_errors.is_empty() {

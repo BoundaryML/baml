@@ -5,13 +5,10 @@
 //!
 //! # Layout: folder tree = package
 //!
-//! The first directory under `baml_std/` is the **package** name:
+//! Everything lives under `baml_std/baml/` → package **baml**.
+//! Sub-namespaces (env, llm, http, etc.) are expressed via the macro's namespace argument.
 //!
-//! - `baml_std/baml/...` → package **baml** (containers, string, env, http, math, sys, media)
-//! - `baml_std/env/...` → package **env**
-//!
-//! So adding a new std package = add `baml_std/<pkg>/` and register files with that package.
-//! Namespaces within a package are still specified explicitly in the macro (hardcoded for now).
+//! Namespaces within the package are specified explicitly in the `builtin!` macro.
 //!
 //! # Virtual path
 //!
@@ -72,8 +69,7 @@ macro_rules! builtin {
 
 /// All builtin `.baml` files, in registration order.
 ///
-/// Package = first directory under `baml_std/` (baml, env, …). Namespaces are explicit.
-/// Register baml before env so `env` can call `baml.env.get` / `baml.sys.panic`.
+/// All builtins are in the `baml` package. Namespaces are explicit per entry.
 pub const ALL: &[BuiltinFile] = &[
     // --- baml_std/baml/ ---
     builtin!(
@@ -115,6 +111,6 @@ pub const ALL: &[BuiltinFile] = &[
         "../baml_std/baml/llm_types.baml"
     ),
     builtin!("baml", ["llm"], "llm.baml", "../baml_std/baml/llm.baml"),
-    // --- baml_std/env/ ---
-    builtin!("env", root, "env.baml", "../baml_std/env/env.baml"),
+    // // --- baml_std/env/ ---
+    // builtin!("env", root, "env.baml", "../baml_std/env/env.baml"),
 ];

@@ -59,10 +59,13 @@ pub fn lower_type_expr_in_ns(
             // references like `baml.llm.PromptAst` in companion functions.
             let resolved = resolved.or_else(|| {
                 if segments.len() >= 2 {
-                    let first = segments[0].clone();
-                    let pkg_id = PackageId::new(db, first);
-                    let pkg = baml_compiler2_hir::package::package_items(db, pkg_id);
-                    pkg.lookup_type(&segments[1..])
+                    if segments[0].as_str() == "root" {
+                        package_items.lookup_type(&segments[1..])
+                    } else {
+                        let pkg_id = PackageId::new(db, segments[0].clone());
+                        let pkg = baml_compiler2_hir::package::package_items(db, pkg_id);
+                        pkg.lookup_type(&segments[1..])
+                    }
                 } else {
                     None
                 }

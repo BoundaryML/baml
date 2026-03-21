@@ -25,8 +25,8 @@ class Client {
   counter int
 
   function to_primitive_client(self) -> PrimitiveClient {
-    if (self.name.contains("/")) {
-      PrimitiveClient.from_short_hand(self.name)
+    if (self.name.includes("/")) {
+      throw root.errors.InvalidArgument { message: "Invalid short hand name: " + self.name };
     } else {
       self.get_constructor()()
     }
@@ -34,7 +34,7 @@ class Client {
 
   function get_constructor(
     self
-  ) -> () -> PrimitiveClient throws baml.errors.InvalidArgument {
+  ) -> () -> PrimitiveClient throws root.errors.InvalidArgument {
     $rust_io_function
   }
 
@@ -49,8 +49,8 @@ class Client {
   ) -> OrchestrationStep[] {
     match (self.client_type) {
       ClientType.Primitive => {
-        let resolve_fn = self.get_constructor()
-        let primitive = resolve_fn()
+        let resolve_fn = self.get_constructor();
+        let primitive = resolve_fn();
         [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }]
       }
 
@@ -71,15 +71,15 @@ class Client {
           let idx = planner_state.rr_pick_index(
             self.name,
             self.sub_clients.length(),
-          )
-          self.sub_clients.at(idx).build_plan_with_state(planner_state)
+          );
+          self.sub_clients[idx].build_plan_with_state(planner_state)
         }
       }
     }
   }
 
   function build_plan(self) -> OrchestrationStep[] {
-    let planner_state = PlannerState { rr_client_names: [] }
+    let planner_state = PlannerState { rr_client_names: [] };
     self.build_plan_with_state(planner_state)
   }
 
@@ -90,27 +90,27 @@ class Client {
     match (self.retry) {
       null => self.build_attempt_with_state(planner_state),
       r: RetryPolicy => {
-        let result: OrchestrationStep[] = []
-        let current_delay = r.initial_delay_ms + 0.0
+        let result: OrchestrationStep[] = [];
+        let current_delay = r.initial_delay_ms + 0.0;
 
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
-          let delay = 0
+          let delay = 0;
           if (attempt > 0) {
-            delay = baml.math.trunc(current_delay)
-            let next = current_delay * r.multiplier
+            delay = root.math.trunc(current_delay)
+            let next = current_delay * r.multiplier;
             if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0
+              current_delay = r.max_delay_ms + 0.0;
             } else {
-              current_delay = next
+              current_delay = next;
             }
           }
 
-          let inner = self.build_attempt_with_state(planner_state)
+          let inner = self.build_attempt_with_state(planner_state);
           for (let step in inner) {
             result.push(OrchestrationStep {
               primitive_client: step.primitive_client,
               delay_ms: delay,
-            })
+            });
           }
         }
 
@@ -135,7 +135,7 @@ class Client {
         for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
           let attempt_delay = inherited_delay_ms
           if (attempt > 0) {
-            attempt_delay = baml.math.trunc(current_delay)
+            attempt_delay = root.math.trunc(current_delay)
             let next = current_delay * r.multiplier
             if (next > r.max_delay_ms + 0.0) {
               current_delay = r.max_delay_ms + 0.0
@@ -176,7 +176,7 @@ class Client {
         let prompt = primitive.render_prompt(context.jinja_string, context.args)
         let specialized = primitive.specialize_prompt(prompt)
         let http_request = primitive.build_request(specialized)
-        let http_response = baml.http.send(http_request)
+        let http_response = root.http.send(http_request)
 
         if (http_response.ok()) {
           let body = http_response.text()
@@ -188,7 +188,7 @@ class Client {
         }
 
         if (active_delay_ms > 0) {
-          baml.sys.sleep(active_delay_ms)
+          root.sys.sleep(active_delay_ms)
         }
 
         ExecutionResult { ok: false, value: null }
@@ -209,7 +209,7 @@ class Client {
 
       ClientType.RoundRobin => {
         let idx = round_robin_next(self.name) % self.sub_clients.length()
-        self.sub_clients.at(idx).execute(
+        self.sub_clients[idx].execute(
           context,
           active_delay_ms,
         )
@@ -250,21 +250,21 @@ class PrimitiveClient {
     self,
     template: string,
     args: map<string, unknown>,
-  ) -> PromptAst throws baml.errors.RenderPrompt {
+  ) -> PromptAst throws root.errors.RenderPrompt {
     $rust_io_function
   }
 
   function specialize_prompt(
     self,
     prompt: PromptAst,
-  ) -> PromptAst throws baml.errors.RenderPrompt | baml.errors.LlmClient {
+  ) -> PromptAst throws root.errors.RenderPrompt | root.errors.LlmClient {
     $rust_io_function
   }
 
   function build_request(
     self,
     prompt: PromptAst,
-  ) -> baml.http.Request throws baml.errors.LlmClient {
+  ) -> root.http.Request throws root.errors.LlmClient {
     $rust_io_function
   }
 
@@ -272,27 +272,27 @@ class PrimitiveClient {
     self,
     http_response_body: string,
     type_def: type,
-  ) -> unknown throws baml.errors.LlmClient {
+  ) -> unknown throws root.errors.LlmClient {
     $rust_io_function
   }
 }
 
-function get_jinja_template(function_name: string) -> string throws baml.errors.InvalidArgument {
+function get_jinja_template(function_name: string) -> string throws root.errors.InvalidArgument {
   $rust_io_function
 }
 
-function get_client(function_name: string) -> Client throws baml.errors.InvalidArgument {
+function get_client(function_name: string) -> Client throws root.errors.InvalidArgument {
   $rust_io_function
 }
 
-function round_robin_next(client_name: string) -> int throws baml.errors.InvalidArgument {
+function round_robin_next(client_name: string) -> int throws root.errors.InvalidArgument {
   $rust_io_function
 }
 
-function round_robin_peek(client_name: string) -> int throws baml.errors.InvalidArgument {
+function round_robin_peek(client_name: string) -> int throws root.errors.InvalidArgument {
   $rust_io_function
 }
 
-function get_return_type(function_name: string) -> type throws baml.errors.InvalidArgument {
+function get_return_type(function_name: string) -> type throws root.errors.InvalidArgument {
   $rust_io_function
 }

@@ -15,7 +15,7 @@ use baml_compiler2_hir::{
 };
 
 use crate::{
-    lower_type_expr::{lower_type_expr, qualify_def},
+    lower_type_expr::{lower_type_expr_in_ns, qualify_def},
     ty::{PrimitiveType, Ty},
 };
 
@@ -82,7 +82,9 @@ pub fn function_throw_sets<'db>(
 
             let declared_throws = sig.throws.as_ref().map(|te| {
                 let mut diags = Vec::new();
-                let lowered = lower_type_expr(db, te, pkg_items, &mut diags);
+                let ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
+                    .namespace_path;
+                let lowered = lower_type_expr_in_ns(db, te, pkg_items, &ns, &mut diags);
                 // These diagnostics are reported at the signature site by inference;
                 // throw graph propagation still uses best-effort lowering.
                 drop(diags);

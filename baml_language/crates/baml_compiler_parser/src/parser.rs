@@ -48,7 +48,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Throw => SyntaxKind::KW_THROW,
         TokenKind::Watch => SyntaxKind::KW_WATCH,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
-        TokenKind::Env => SyntaxKind::KW_ENV,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
@@ -3406,11 +3405,12 @@ impl<'a> Parser<'a> {
                         );
                     }
                 }
-                Event::Token { kind, .. } => {
+                Event::Token { kind, text, .. } => {
                     if depth == 0 {
-                        // The most recent thing is a bare token (no wrapping node)
-                        // Only WORD tokens can be type names
-                        return *kind == SyntaxKind::WORD;
+                        // Only WORD tokens can be type names, and literals
+                        // like null/true/false are never constructors.
+                        return *kind == SyntaxKind::WORD
+                            && !matches!(text.as_str(), "null" | "true" | "false");
                     }
                 }
                 Event::UnexpectedToken { .. } | Event::SyntaxHint { .. } => {}
@@ -3501,8 +3501,11 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::Match) {
             // Match expression
             self.parse_match_expr();
-        } else if self.at(TokenKind::Env) {
-            // env.FIELD or env.method(...)
+        } else if self.at(TokenKind::Word)
+            && self.current().map(|t| t.text.as_str()) == Some("env")
+            && self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
+        {
+            // env.FIELD sugar
             self.parse_env_access();
         } else {
             self.error_unexpected_token("expression".to_string());
@@ -3515,11 +3518,11 @@ impl<'a> Parser<'a> {
 
     /// Parse `env.FIELD` expressions.
     ///
-    /// Produces an `ENV_ACCESS_EXPR` node: `KW_ENV DOT WORD`.
-    /// HIR lowering decides how to desugar based on context.
+    /// Produces an `ENV_ACCESS_EXPR` node: `WORD("env") DOT WORD`.
+    /// AST lowering desugars to `baml.env.get_or_panic("FIELD")`.
     fn parse_env_access(&mut self) {
         self.with_node(SyntaxKind::ENV_ACCESS_EXPR, |p| {
-            p.bump(); // consume `env` (TokenKind::Env)
+            p.bump(); // consume `env` (Word)
             if p.eat(TokenKind::Dot) {
                 if p.at(TokenKind::Word) {
                     p.bump(); // consume field name
@@ -4258,10 +4261,14 @@ impl<'a> Parser<'a> {
         }
 
         // Check for `env.` prefix - environment variable access
-        if self.at(TokenKind::Env) {
-            if let Some(next) = self.peek(1) {
-                if next.kind == TokenKind::Dot {
-                    return true;
+        if self.at(TokenKind::Word) {
+            if let Some(token) = self.current() {
+                if token.text.as_str() == "env" {
+                    if let Some(next) = self.peek(1) {
+                        if next.kind == TokenKind::Dot {
+                            return true;
+                        }
+                    }
                 }
             }
         }

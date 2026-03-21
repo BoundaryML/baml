@@ -3,14 +3,15 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
-    store_global ?100
+    store_global ?99
     load_const ?
     return
 }
 
 function user.OpenRouterMistralSmall3_1_24b$new() -> null {
     load_const "OPENROUTER_API_KEY"
-    call env.get_or_panic
+    load_const null
+    call_indirect
     store_var _2
     alloc_instance PrimitiveClient
     copy 0

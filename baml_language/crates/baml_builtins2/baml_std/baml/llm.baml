@@ -18,58 +18,58 @@ class PlannerState {
   rr_client_names string[]
 
   function rr_local_offset(self, client_name: string) -> int {
-    let offset = 0
+    let offset = 0;
     for (let seen_name in self.rr_client_names) {
       if (seen_name == client_name) {
-        offset += 1
+        offset += 1;
       }
     }
     offset
   }
 
   function rr_pick_index(self, client_name: string, sub_client_count: int) -> int {
-    let local_offset = self.rr_local_offset(client_name)
-    self.rr_client_names.push(client_name)
-    let base = round_robin_peek(client_name)
+    let local_offset = self.rr_local_offset(client_name);
+    self.rr_client_names.push(client_name);
+    let base = round_robin_peek(client_name);
     (base + local_offset) % sub_client_count
   }
 }
 
 function resolve_primitive(function_name: string) -> PrimitiveClient {
-  let llm_client = get_client(function_name)
-  let resolve_fn = llm_client.get_constructor()
+  let llm_client = get_client(function_name);
+  let resolve_fn = llm_client.get_constructor();
   resolve_fn()
 }
 
 function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst {
-  let jinja_string = get_jinja_template(function_name)
-  let primitive_client = resolve_primitive(function_name)
-  let prompt = primitive_client.render_prompt(jinja_string, args)
+  let jinja_string = get_jinja_template(function_name);
+  let primitive_client = resolve_primitive(function_name);
+  let prompt = primitive_client.render_prompt(jinja_string, args);
 
-  return primitive_client.specialize_prompt(prompt)
+  primitive_client.specialize_prompt(prompt)
 }
 
-function build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request {
-  let primitive_client = resolve_primitive(function_name)
-  let specialized_prompt = render_prompt(function_name, args)
+function build_request(function_name: string, args: map<string, unknown>) -> root.http.Request {
+  let primitive_client = resolve_primitive(function_name);
+  let specialized_prompt = render_prompt(function_name, args);
 
-  return primitive_client.build_request(specialized_prompt)
+  primitive_client.build_request(specialized_prompt)
 }
 
 function call_llm_function(client: Client, function_name: string, args: map<string, unknown>) -> unknown {
-  let jinja_string = get_jinja_template(function_name)
+  let jinja_string = get_jinja_template(function_name);
 
   let context = ExecutionContext {
     jinja_string: jinja_string,
     args: args,
     function_name: function_name,
-  }
+  };
 
-  let result = client.execute(context, 0)
+  let result = client.execute(context, 0);
 
   if (result.ok) {
-    return result.value
+    return result.value;
   }
 
-  throw baml.errors.DevOther { message: "All orchestration steps failed" }
+  throw root.errors.DevOther { message: "All orchestration steps failed" };
 }

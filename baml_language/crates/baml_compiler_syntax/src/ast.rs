@@ -2516,11 +2516,19 @@ impl FieldAccessExpr {
 
 impl EnvAccessExpr {
     /// Get the field name (the env var name or method name after `env.`).
+    /// Skips the leading `"env"` WORD and finds the WORD after the DOT.
     pub fn field(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::WORD)
+        let mut seen_dot = false;
+        for elem in self.syntax.children_with_tokens() {
+            if let rowan::NodeOrToken::Token(t) = elem {
+                if t.kind() == SyntaxKind::DOT {
+                    seen_dot = true;
+                } else if seen_dot && t.kind() == SyntaxKind::WORD {
+                    return Some(t);
+                }
+            }
+        }
+        None
     }
 }
 

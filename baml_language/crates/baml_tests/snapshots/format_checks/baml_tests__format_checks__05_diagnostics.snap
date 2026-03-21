@@ -2228,6 +2228,66 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0007
 ─────╯
 
+  [type] Error: Unknown variable `env`
+     ╭─[ chain_expr.baml:264:5 ]
+     │
+ 264 │     env.API_KEY;
+     │     ─────┬─────  
+     │          ╰─────── Unknown variable `env`
+     │ 
+     │ Note: Error code: E0003
+─────╯
+
+  [type] Error: Unknown variable `env`
+     ╭─[ chain_expr.baml:265:5 ]
+     │
+ 265 │     env.DATABASE_URL;
+     │     ────────┬───────  
+     │             ╰───────── Unknown variable `env`
+     │ 
+     │ Note: Error code: E0003
+─────╯
+
+  [type] Error: Unknown variable `env`
+     ╭─[ config_decls.baml:245:17 ]
+     │
+ 245 │         api_key env.OPENAI_API_KEY
+     │                 ─────────┬────────  
+     │                          ╰────────── Unknown variable `env`
+     │ 
+     │ Note: Error code: E0003
+─────╯
+
+  [type] Error: Unknown variable `env`
+     ╭─[ config_decls.baml:245:17 ]
+     │
+ 245 │         api_key env.OPENAI_API_KEY
+     │                 ─────────┬────────  
+     │                          ╰────────── Unknown variable `env`
+     │ 
+     │ Note: Error code: E0003
+─────╯
+
+  [type] Error: Unknown variable `env`
+    ╭─[ config_decls.baml:78:17 ]
+    │
+ 78 │         api_key env.OPENAI_API_KEY
+    │                 ─────────┬────────  
+    │                          ╰────────── Unknown variable `env`
+    │ 
+    │ Note: Error code: E0003
+────╯
+
+  [type] Error: Unknown variable `env`
+    ╭─[ config_decls.baml:78:17 ]
+    │
+ 78 │         api_key env.OPENAI_API_KEY
+    │                 ─────────┬────────  
+    │                          ╰────────── Unknown variable `env`
+    │ 
+    │ Note: Error code: E0003
+────╯
+
   [type] Error: Expected `(x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>`, found `int`
     ╭─[ function_decls.baml:73:5 ]
     │

@@ -357,8 +357,8 @@ fn extract_builtin_pipeline(func: &FunctionDef) -> Option<BuiltinPipeline> {
 /// Extract error categories from the `throws` clause of an IO function.
 ///
 /// The `throws` field is `Option<SpannedTypeExpr>`. For a single error like
-/// `throws baml.errors.Io`, it's `TypeExpr::Path(["baml", "errors", "Io"])`.
-/// For multiple errors like `throws baml.errors.Io | baml.errors.Timeout`,
+/// `throws root.errors.Io`, it's `TypeExpr::Path(["root", "errors", "Io"])`.
+/// For multiple errors like `throws root.errors.Io | root.errors.Timeout`,
 /// it's `TypeExpr::Union([Path(...), Path(...)])`.
 fn extract_throws(func: &FunctionDef) -> Vec<String> {
     let Some(throws_expr) = &func.throws else {
@@ -371,7 +371,7 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
     match ty {
         TypeExpr::Path(segments) => {
             let path: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
-            if path.len() >= 3 && path[0] == "baml" && path[1] == "errors" {
+            if path.len() >= 3 && (path[0] == "baml" || path[0] == "root") && path[1] == "errors" {
                 vec![path[2..].join(".")]
             } else {
                 vec![

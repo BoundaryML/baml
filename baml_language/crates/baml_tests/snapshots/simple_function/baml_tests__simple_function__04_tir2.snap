@@ -5,6 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
 function user.HelloWorld(name: string) -> string {
   baml.llm.call_llm_function(GPT4, "HelloWorld", map { "name": name }) : unknown
   !! 43..104: unresolved name: GPT4
+  !! 43..104: type mismatch: expected string, got unknown
 }
 function user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst {
   baml.llm.render_prompt("HelloWorld", map { "name": name }) : baml.llm.PromptAst
@@ -16,3 +17,410 @@ class user.User {
   name: string
   age: int
 }
+
+=== TIR2 (package baml) ===
+
+--- <builtin>/baml/containers.baml ---
+class baml.Array {
+}
+class baml.Map {
+}
+
+--- <builtin>/baml/core.baml ---
+
+--- <builtin>/baml/env/env.baml ---
+function baml.env.get_or_panic(key: string) -> string {
+  { : "" | string
+    let val = get(key) : string?
+    if (val Eq null : bool) : "" | string
+      { : ""
+        root.sys.panic("env var not found: " Add key) : null
+        "" : ""
+      }
+    else
+      { : string
+        val : string
+      }
+  }
+}
+
+--- <builtin>/baml/errors/errors.baml ---
+class baml.errors.InvalidArgument {
+  message: string
+}
+class baml.errors.Io {
+  message: string
+}
+class baml.errors.Timeout {
+  message: string
+  duration_ms: int?
+}
+class baml.errors.Unsupported {
+  message: string
+}
+class baml.errors.AccessError {
+  message: string
+}
+class baml.errors.RenderPrompt {
+  message: string
+}
+class baml.errors.NotImplemented {
+  message: string
+}
+class baml.errors.LlmClient {
+  message: string
+}
+class baml.errors.DevOther {
+  message: string
+}
+class baml.errors.HostPanic {
+  message: string
+}
+
+--- <builtin>/baml/fs/fs.baml ---
+class baml.fs.File {
+  _handle: $rust_type
+}
+
+--- <builtin>/baml/http/http.baml ---
+class baml.http.Request {
+  method: string
+  url: string
+  headers: map<string, string>
+  body: string
+}
+class baml.http.Response {
+  status_code: int
+  headers: map<string, string>
+  url: string
+  _body: $rust_type
+}
+function baml.http.Response.ok(self: baml.http.Response) -> bool {
+  { : bool
+    self.status_code Ge 200 And self.status_code Lt 300 : bool
+  }
+}
+
+--- <builtin>/baml/llm/llm.baml ---
+class baml.llm.OrchestrationStep {
+  primitive_client: baml.llm.PrimitiveClient
+  delay_ms: int
+}
+class baml.llm.ExecutionResult {
+  ok: bool
+  value: unknown
+}
+class baml.llm.ExecutionContext {
+  jinja_string: string
+  args: map<string, unknown>
+  function_name: string
+}
+class baml.llm.PlannerState {
+  rr_client_names: string[]
+}
+function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
+  { : int
+    let offset = 0 : 0 -> int
+    for seen_name in self.rr_client_names
+      { : void
+        if (seen_name Eq client_name : bool) : void
+          { : void
+            offset Add= 1 : int
+          }
+      }
+    offset : int
+  }
+}
+function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, sub_client_count: int) -> int {
+  { : int
+    let local_offset = self.rr_local_offset(client_name) : int
+    self.rr_client_names.push(client_name) : int
+    let base = round_robin_peek(client_name) : int
+    base Add local_offset Mod sub_client_count : int
+  }
+}
+function baml.llm.resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient {
+  { : baml.llm.PrimitiveClient
+    let llm_client = get_client(function_name) : baml.llm.Client
+    let resolve_fn = llm_client.get_constructor() : () -> baml.llm.PrimitiveClient
+    resolve_fn() : baml.llm.PrimitiveClient
+  }
+}
+function baml.llm.render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
+  { : baml.llm.PromptAst
+    let jinja_string = get_jinja_template(function_name) : string
+    let primitive_client = resolve_primitive(function_name) : baml.llm.PrimitiveClient
+    let prompt = primitive_client.render_prompt(jinja_string, args) : baml.llm.PromptAst
+    primitive_client.specialize_prompt(prompt) : baml.llm.PromptAst
+  }
+}
+function baml.llm.build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request {
+  { : baml.http.Request
+    let primitive_client = resolve_primitive(function_name) : baml.llm.PrimitiveClient
+    let specialized_prompt = render_prompt(function_name, args) : baml.llm.PromptAst
+    primitive_client.build_request(specialized_prompt) : baml.http.Request
+  }
+}
+function baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> unknown {
+  { : never
+    let jinja_string = get_jinja_template(function_name) : string
+    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : unknown
+    let result = client.execute(context, 0) : baml.llm.ExecutionResult
+    if (result.ok : bool) : void
+      { : never
+        return result.value : unknown
+      }
+    throw DevOther { message: "All orchestration..." } : unknown
+  }
+}
+
+--- <builtin>/baml/llm/llm_types.baml ---
+class baml.llm.PromptAst {
+  _data: $rust_type
+}
+enum baml.llm.ClientType
+class baml.llm.RetryPolicy {
+  max_retries: int
+  initial_delay_ms: int
+  multiplier: float
+  max_delay_ms: int
+}
+class baml.llm.Client {
+  name: string
+  client_type: baml.llm.ClientType
+  sub_clients: baml.llm.Client[]
+  retry: baml.llm.RetryPolicy?
+  counter: int
+}
+function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient {
+  { : baml.llm.PrimitiveClient
+    if (self.name.includes("/") : bool) : baml.llm.PrimitiveClient
+      { : never
+        throw InvalidArgument { message: "Invalid short han..." Add self.name } : unknown
+      }
+    else
+      { : baml.llm.PrimitiveClient
+        self.get_constructor()() : baml.llm.PrimitiveClient
+      }
+  }
+}
+function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
+  { : baml.llm.OrchestrationStep[]
+    let planner_state = PlannerState { rr_client_names: [] } : unknown
+    self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
+  }
+}
+function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
+  { : unknown[] | baml.llm.OrchestrationStep[] | never[]
+    match (self.client_type : baml.llm.ClientType) : unknown[] | baml.llm.OrchestrationStep[] | never[]
+      ClientType.Primitive =>
+        { : unknown[]
+          let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
+          let primitive = resolve_fn() : baml.llm.PrimitiveClient
+          [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }] : unknown[]
+        }
+      ClientType.Fallback =>
+        { : baml.llm.OrchestrationStep[]
+          let steps = [] : baml.llm.OrchestrationStep[]
+          for sub in self.sub_clients
+            { : void
+              for step in sub.build_plan_with_state(planner_state)
+                { : null
+                  steps.push(step) : null
+                }
+            }
+          steps : baml.llm.OrchestrationStep[]
+        }
+      ClientType.RoundRobin =>
+        { : never[] | baml.llm.OrchestrationStep[]
+          if (self.sub_clients.length() Eq 0 : bool) : never[] | baml.llm.OrchestrationStep[]
+            { : never[]
+              [] : never[]
+            }
+          else
+            { : baml.llm.OrchestrationStep[]
+              let idx = planner_state.rr_pick_index(self.name, self.sub_clients.length()) : int
+              self.sub_clients[idx].build_plan_with_state(planner_state) : baml.llm.OrchestrationStep[]
+            }
+        }
+  }
+}
+function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
+  { : baml.llm.OrchestrationStep[]
+    let planner_state = PlannerState { rr_client_names: [] } : unknown
+    self.build_plan_with_state(planner_state) : baml.llm.OrchestrationStep[]
+  }
+}
+function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
+  { : baml.llm.OrchestrationStep[]
+    match (self.retry : baml.llm.RetryPolicy?) : baml.llm.OrchestrationStep[]
+      null =>
+        self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
+      r: RetryPolicy =>
+        { : baml.llm.OrchestrationStep[]
+          let result = [] : baml.llm.OrchestrationStep[]
+          let current_delay = r.initial_delay_ms Add 0.0 : float
+          { : void
+            let attempt = 0 : 0 -> int
+            while attempt Le r.max_retries
+              { : void
+                let delay = 0 : 0 -> int
+                if (attempt Gt 0 : bool) : void
+                  { : void
+                    delay = root.math.trunc(current_delay) : int
+                    let next = current_delay Mul r.multiplier : float
+                    if (next Gt r.max_delay_ms Add 0.0 : bool) : void
+                      { : void
+                        current_delay = r.max_delay_ms Add 0.0 : float
+                      }
+                    else
+                      { : void
+                        current_delay = next : float
+                      }
+                  }
+                let inner = self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
+                for step in inner
+                  { : void
+                    result.push(OrchestrationStep { primitive_client: step.primitive_client, delay_ms: delay }) : null
+                  }
+              }
+          }
+          result : baml.llm.OrchestrationStep[]
+        }
+  }
+}
+function baml.llm.Client.execute(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.ExecutionResult {
+  { : baml.llm.ExecutionResult | unknown
+    match (self.retry : baml.llm.RetryPolicy?) : baml.llm.ExecutionResult | unknown
+      null =>
+        self.execute_once(context, inherited_delay_ms) : baml.llm.ExecutionResult
+      r: RetryPolicy =>
+        { : unknown
+          let current_delay = r.initial_delay_ms Add 0.0 : float
+          { : void
+            let attempt = 0 : 0 -> int
+            while attempt Le r.max_retries
+              { : void
+                let attempt_delay = inherited_delay_ms : int
+                if (attempt Gt 0 : bool) : void
+                  { : void
+                    attempt_delay = root.math.trunc(current_delay) : int
+                    let next = current_delay Mul r.multiplier : float
+                    if (next Gt r.max_delay_ms Add 0.0 : bool) : void
+                      { : void
+                        current_delay = r.max_delay_ms Add 0.0 : float
+                      }
+                    else
+                      { : void
+                        current_delay = next : float
+                      }
+                  }
+                if (attempt Eq r.max_retries : bool) : void
+                  { : void
+                    attempt_delay = inherited_delay_ms : int
+                  }
+                let result = self.execute_once(context, attempt_delay) : baml.llm.ExecutionResult
+                if (result.ok : bool) : void
+                  { : never
+                    return result : baml.llm.ExecutionResult
+                  }
+              }
+          }
+          ExecutionResult { ok: false, value: null } : unknown
+        }
+  }
+}
+function baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.ExecutionResult {
+  { : unknown | baml.llm.ExecutionResult
+    match (self.client_type : baml.llm.ClientType) : unknown | baml.llm.ExecutionResult
+      ClientType.Primitive =>
+        { : unknown
+          let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
+          let primitive = resolve_fn() : baml.llm.PrimitiveClient
+          let prompt = primitive.render_prompt(context.jinja_string, context.args) : baml.llm.PromptAst
+          let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
+          let http_request = primitive.build_request(specialized) : baml.http.Request
+          let http_response = root.http.send(http_request) : baml.http.Response
+          if (http_response.ok() : bool) : void
+            { : never
+              let body = http_response.text() : string
+              let return_type = get_return_type(context.function_name) : type
+              return ExecutionResult { ok: true, value: primitive.parse(body, return_type) } : baml.llm.ExecutionResult
+            }
+          if (active_delay_ms Gt 0 : bool) : void
+            { : null
+              root.sys.sleep(active_delay_ms) : null
+            }
+          ExecutionResult { ok: false, value: null } : unknown
+        }
+      ClientType.Fallback =>
+        { : unknown
+          for sub in self.sub_clients
+            { : void
+              let result = sub.execute(context, active_delay_ms) : baml.llm.ExecutionResult
+              if (result.ok : bool) : void
+                { : never
+                  return result : baml.llm.ExecutionResult
+                }
+            }
+          ExecutionResult { ok: false, value: null } : unknown
+        }
+      ClientType.RoundRobin =>
+        { : baml.llm.ExecutionResult
+          let idx = round_robin_next(self.name) Mod self.sub_clients.length() : int
+          self.sub_clients[idx].execute(context, active_delay_ms) : baml.llm.ExecutionResult
+        }
+  }
+}
+class baml.llm.PrimitiveClientOptions {
+  base_url: string | null
+  default_role: string | null
+  allowed_roles: string[] | null
+  remap_roles: map<string, string> | null
+  api_key: string | null
+  provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | null
+  headers: map<string, string>
+  query_params: map<string, string>
+  request_body: map<string, unknown>
+}
+class baml.llm.AzureOpenAiOptions {
+  resource_name: string
+  api_version: string
+}
+class baml.llm.AnthropicOptions {
+  anthropic_version: string | null
+}
+class baml.llm.PrimitiveClient {
+  name: string
+  provider: string
+  options: baml.llm.PrimitiveClientOptions
+}
+
+--- <builtin>/baml/math/math.baml ---
+
+--- <builtin>/baml/media/media.baml ---
+class baml.media.Pdf {
+  _data: $rust_type
+}
+class baml.media.Audio {
+  _data: $rust_type
+}
+class baml.media.Video {
+  _data: $rust_type
+}
+class baml.media.Image {
+  _data: $rust_type
+}
+
+--- <builtin>/baml/net/net.baml ---
+class baml.net.Socket {
+  _handle: $rust_type
+}
+
+--- <builtin>/baml/string.baml ---
+class baml.String {
+}
+
+--- <builtin>/baml/sys/sys.baml ---
+
+--- <builtin>/baml/unstable/unstable.baml ---

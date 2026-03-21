@@ -16,6 +16,16 @@ use crate::ast::{
     SpreadField, Stmt, StmtId, TypeAnnotId, TypeExpr, UnaryOp,
 };
 
+/// Returns true if `kind` can serve as an identifier token in expression position.
+///
+/// The parser allows `KW_CLIENT` (and `WORD`) inside PATH_EXPR / FIELD_ACCESS_EXPR
+/// nodes when `client` is used as a variable or field name. This must match
+/// exactly what `parse_path_or_ident` accepts; adding a new keyword there
+/// requires adding it here too.
+fn is_ident_token(kind: SyntaxKind) -> bool {
+    kind == SyntaxKind::WORD || kind == SyntaxKind::KW_CLIENT
+}
+
 /// Lower a CST `ExprFunctionBody` to an owned `ExprBody` + parallel `AstSourceMap`.
 pub(crate) fn lower(
     expr_body: &baml_compiler_syntax::ast::ExprFunctionBody,
@@ -123,7 +133,7 @@ impl LoweringContext {
     ) -> Option<ExprId> {
         let span = token.text_range();
         match token.kind() {
-            SyntaxKind::WORD => {
+            k if is_ident_token(k) => {
                 let text = token.text();
                 let expr = match text {
                     "true" => Expr::Literal(Literal::Bool(true)),
@@ -205,7 +215,7 @@ impl LoweringContext {
                 BlockElement::ExprToken(token) => {
                     let span = token.text_range();
                     let expr_id = match token.kind() {
-                        SyntaxKind::WORD => {
+                        k if is_ident_token(k) => {
                             let text = token.text();
                             let e = match text {
                                 "true" => Expr::Literal(Literal::Bool(true)),
@@ -352,7 +362,7 @@ impl LoweringContext {
                                 rhs = Some(expr_id);
                             }
                         }
-                        SyntaxKind::WORD => {
+                        k if is_ident_token(k) => {
                             let text = token.text();
                             let expr_id = match text {
                                 "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
@@ -435,7 +445,7 @@ impl LoweringContext {
                                 rhs = Some(expr_id);
                             }
                         }
-                        SyntaxKind::WORD => {
+                        k if is_ident_token(k) => {
                             let text = token.text();
                             let expr_id = match text {
                                 "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
@@ -498,7 +508,7 @@ impl LoweringContext {
                                 span,
                             ));
                         }
-                        SyntaxKind::WORD => {
+                        k if is_ident_token(k) => {
                             let text = token.text();
                             let expr_id = match text {
                                 "true" => self.alloc_expr(Expr::Literal(Literal::Bool(true)), span),
@@ -605,7 +615,7 @@ impl LoweringContext {
                                 scrutinee =
                                     Some(self.alloc_expr(Expr::Literal(Literal::Int(value)), span));
                             }
-                            SyntaxKind::WORD => {
+                            k if is_ident_token(k) => {
                                 let text = token.text();
                                 let e = match text {
                                     "true" => Expr::Literal(Literal::Bool(true)),
@@ -656,7 +666,7 @@ impl LoweringContext {
                                 if let rowan::NodeOrToken::Token(t) = tok {
                                     match t.kind() {
                                         SyntaxKind::KW_IF => continue,
-                                        SyntaxKind::WORD => {
+                                        k if is_ident_token(k) => {
                                             let text = t.text();
                                             let range = t.text_range();
                                             let e = match text {
@@ -720,7 +730,7 @@ impl LoweringContext {
                             token.text_range(),
                         ));
                     }
-                    SyntaxKind::WORD if seen_fat_arrow && body.is_none() => {
+                    k if is_ident_token(k) && seen_fat_arrow && body.is_none() => {
                         let text = token.text();
                         let range = token.text_range();
                         let e = match text {
@@ -763,7 +773,7 @@ impl LoweringContext {
                         SyntaxKind::MINUS => {
                             pending_negation = true;
                         }
-                        SyntaxKind::WORD => {
+                        k if is_ident_token(k) => {
                             let text = token.text().to_string();
 
                             if let Some(PatternElement::SegmentsAwaitingWord(mut segs, start)) =
@@ -1087,7 +1097,7 @@ impl LoweringContext {
                             token.text_range(),
                         ));
                     }
-                    SyntaxKind::WORD if seen_fat_arrow && body.is_none() => {
+                    k if is_ident_token(k) && seen_fat_arrow && body.is_none() => {
                         let expr = match token.text() {
                             "true" => Expr::Literal(Literal::Bool(true)),
                             "false" => Expr::Literal(Literal::Bool(false)),
@@ -1206,7 +1216,7 @@ impl LoweringContext {
                         token.text_range(),
                     ));
                 }
-                SyntaxKind::WORD => {
+                k if is_ident_token(k) => {
                     let expr = match token.text() {
                         "true" => Expr::Literal(Literal::Bool(true)),
                         "false" => Expr::Literal(Literal::Bool(false)),
@@ -1228,11 +1238,11 @@ impl LoweringContext {
         let callee = if let Some(n) = callee_node {
             self.lower_expr(&n)
         } else {
-            // No callee node - check for a WORD token (simple function name)
+            // No callee node - check for an identifier token (simple function name)
             let word_token = node
                 .children_with_tokens()
                 .filter_map(rowan::NodeOrToken::into_token)
-                .find(|t| t.kind() == SyntaxKind::WORD);
+                .find(|t| is_ident_token(t.kind()));
 
             if let Some(token) = word_token {
                 self.alloc_expr(
@@ -1282,7 +1292,7 @@ impl LoweringContext {
                                         ),
                                     );
                                 }
-                                SyntaxKind::WORD => {
+                                k if is_ident_token(k) => {
                                     let text = token.text();
                                     let e = match text {
                                         "true" => Expr::Literal(Literal::Bool(true)),
@@ -1305,12 +1315,12 @@ impl LoweringContext {
     }
 
     fn lower_path_expr(&mut self, node: &SyntaxNode) -> ExprId {
-        // PATH_EXPR contains WORD tokens joined by DOTs
+        // PATH_EXPR contains WORD (or keyword-as-ident) tokens joined by DOTs.
         let mut segments = Vec::new();
 
         for elem in node.children_with_tokens() {
             if let rowan::NodeOrToken::Token(token) = elem {
-                if token.kind() == SyntaxKind::WORD {
+                if is_ident_token(token.kind()) {
                     segments.push(Name::new(token.text()));
                 }
             }
@@ -1363,7 +1373,7 @@ impl LoweringContext {
                     }
                 }
                 rowan::NodeOrToken::Token(token) => {
-                    if token.kind() == SyntaxKind::WORD && base.is_some() {
+                    if is_ident_token(token.kind()) && base.is_some() {
                         field = Some(Name::new(token.text()));
                     }
                 }
@@ -1377,29 +1387,36 @@ impl LoweringContext {
     }
 
     fn lower_env_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
-        // ENV_ACCESS_EXPR is `env.VAR_NAME` — lower as field access on path "env"
+        // Desugar `env.VAR_NAME` → `baml.env.get_or_panic("VAR_NAME")`
         let range = node.text_range();
-        let env_expr = self.alloc_expr(Expr::Path(vec![Name::new("env")]), range);
 
-        // Find the field name after the DOT
-        let mut field = None;
+        let mut field_text = None;
         let mut seen_dot = false;
         for elem in node.children_with_tokens() {
             if let rowan::NodeOrToken::Token(token) = elem {
                 if token.kind() == SyntaxKind::DOT {
                     seen_dot = true;
-                } else if seen_dot && token.kind() == SyntaxKind::WORD {
-                    field = Some(Name::new(token.text()));
+                } else if seen_dot && is_ident_token(token.kind()) {
+                    field_text = Some(token.text().to_string());
                     break;
                 }
             }
         }
 
-        let field = field.unwrap_or_else(|| Name::new("_"));
+        let var_name = field_text.unwrap_or_else(|| "_".to_string());
+        let callee = self.alloc_expr(
+            Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("env"),
+                Name::new("get_or_panic"),
+            ]),
+            range,
+        );
+        let arg = self.alloc_expr(Expr::Literal(Literal::String(var_name)), range);
         self.alloc_expr(
-            Expr::FieldAccess {
-                base: env_expr,
-                field,
+            Expr::Call {
+                callee,
+                args: vec![arg],
             },
             range,
         )
@@ -1479,7 +1496,7 @@ impl LoweringContext {
                     if token.kind() == SyntaxKind::L_BRACE {
                         break;
                     }
-                    if token.kind() == SyntaxKind::WORD && type_name.is_none() {
+                    if is_ident_token(token.kind()) && type_name.is_none() {
                         type_name = Some(Name::new(token.text()));
                     }
                 }
@@ -1491,7 +1508,7 @@ impl LoweringContext {
                         .children_with_tokens()
                         .filter_map(rowan::NodeOrToken::into_token)
                     {
-                        if token.kind() == SyntaxKind::WORD {
+                        if is_ident_token(token.kind()) {
                             last_word = Some(Name::new(token.text()));
                         }
                     }
@@ -1519,7 +1536,7 @@ impl LoweringContext {
                                 seen_colon = true;
                             }
                             rowan::NodeOrToken::Token(t)
-                                if t.kind() == SyntaxKind::WORD && !seen_colon =>
+                                if is_ident_token(t.kind()) && !seen_colon =>
                             {
                                 if key.is_none() {
                                     key = Some(Name::new(t.text()));
@@ -1588,9 +1605,7 @@ impl LoweringContext {
                         rowan::NodeOrToken::Token(t) => {
                             if t.kind() == SyntaxKind::COLON {
                                 seen_colon = true;
-                            } else if !seen_colon
-                                && key_expr.is_none()
-                                && t.kind() == SyntaxKind::WORD
+                            } else if !seen_colon && key_expr.is_none() && is_ident_token(t.kind())
                             {
                                 let span = t.text_range();
                                 key_expr = Some(self.alloc_expr(
@@ -1637,7 +1652,7 @@ impl LoweringContext {
             if let rowan::NodeOrToken::Token(token) = elem {
                 let span = token.text_range();
                 match token.kind() {
-                    SyntaxKind::WORD => {
+                    k if is_ident_token(k) => {
                         let text = token.text();
                         let e = match text {
                             "true" => Expr::Literal(Literal::Bool(true)),
@@ -1690,7 +1705,7 @@ impl LoweringContext {
                 let text = token.text().to_string();
                 Some(self.alloc_expr(Expr::Literal(Literal::Float(text)), span))
             }
-            SyntaxKind::WORD => {
+            k if is_ident_token(k) => {
                 let text = token.text();
                 let e = match text {
                     "true" => Expr::Literal(Literal::Bool(true)),
@@ -1746,7 +1761,7 @@ impl LoweringContext {
                                     self.alloc_expr(Expr::Literal(Literal::String(content)), span),
                                 );
                             }
-                            SyntaxKind::WORD => {
+                            k if is_ident_token(k) => {
                                 let text = token.text();
                                 let e = match text {
                                     "true" => Expr::Literal(Literal::Bool(true)),
@@ -1783,7 +1798,7 @@ impl LoweringContext {
                                 let name = child
                                     .children_with_tokens()
                                     .filter_map(rowan::NodeOrToken::into_token)
-                                    .find(|t| t.kind() == SyntaxKind::WORD)
+                                    .find(|t| is_ident_token(t.kind()))
                                     .map(|t| Name::new(t.text()))
                                     .unwrap_or(Name::new("_"));
                                 let range = child.text_range();
@@ -1807,7 +1822,7 @@ impl LoweringContext {
                         SyntaxKind::KW_LET | SyntaxKind::KW_WATCH => {
                             seen_let_kw = true;
                         }
-                        SyntaxKind::WORD if seen_let_kw && pattern_id.is_none() => {
+                        k if is_ident_token(k) && seen_let_kw && pattern_id.is_none() => {
                             let range = token.text_range();
                             pattern_id =
                                 Some(self.alloc_pattern(
@@ -1877,7 +1892,7 @@ impl LoweringContext {
                             );
                             break;
                         }
-                        SyntaxKind::WORD => {
+                        k if is_ident_token(k) => {
                             let text = token.text();
                             let e = match text {
                                 "true" => Expr::Literal(Literal::Bool(true)),
@@ -1981,7 +1996,7 @@ impl LoweringContext {
                         seen_in = true;
                     }
                     // Non-parenthesized form: `for i in xs` — bare WORD before KW_IN
-                    SyntaxKind::WORD if !seen_in => {
+                    k if is_ident_token(k) && !seen_in => {
                         iter_name = Name::new(token.text());
                     }
                     _ => {
@@ -1997,7 +2012,7 @@ impl LoweringContext {
                         // Extract the variable name from the first WORD token in the node.
                         for t in child.children_with_tokens() {
                             if let rowan::NodeOrToken::Token(tok) = t {
-                                if tok.kind() == SyntaxKind::WORD {
+                                if is_ident_token(tok.kind()) {
                                     iter_name = Name::new(tok.text());
                                     break;
                                 }

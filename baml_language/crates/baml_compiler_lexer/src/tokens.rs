@@ -93,8 +93,6 @@ pub enum TokenKind {
     Watch,
     #[token("instanceof")]
     Instanceof,
-    #[token("env")]
-    Env,
     #[token("dynamic")]
     Dynamic,
 
@@ -290,7 +288,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Throws => "throws",
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",
-            TokenKind::Env => "env",
             TokenKind::Dynamic => "dynamic",
 
             // Identifiers and literals

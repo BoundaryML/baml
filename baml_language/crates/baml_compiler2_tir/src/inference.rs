@@ -226,8 +226,12 @@ pub fn infer_scope_types<'db>(
                             .return_type
                             .as_ref()
                             .map(|te| {
-                                crate::lower_type_expr::lower_type_expr(
-                                    db, te, pkg_items, &mut diags,
+                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                    db,
+                                    te,
+                                    pkg_items,
+                                    &pkg_info.namespace_path,
+                                    &mut diags,
                                 )
                             })
                             .unwrap_or(Ty::Unknown);
@@ -271,8 +275,9 @@ pub fn infer_scope_types<'db>(
                                 enclosing_class_name
                                     .as_ref()
                                     .and_then(|cn| {
-                                        // Look up the class to get its definition's package
-                                        pkg_items.lookup_type(&[cn.clone()]).map(|def| {
+                                        let mut ns_path = pkg_info.namespace_path.clone();
+                                        ns_path.push(cn.clone());
+                                        pkg_items.lookup_type(&ns_path).map(|def| {
                                             Ty::Class(crate::lower_type_expr::qualify_def(
                                                 db, def, cn,
                                             ))
@@ -281,10 +286,11 @@ pub fn infer_scope_types<'db>(
                                     .unwrap_or(Ty::Unknown)
                             } else {
                                 let mut param_diags = Vec::new();
-                                let ty = crate::lower_type_expr::lower_type_expr(
+                                let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
                                     param_te,
                                     pkg_items,
+                                    &pkg_info.namespace_path,
                                     &mut param_diags,
                                 );
                                 if !param_diags.is_empty() {
@@ -520,8 +526,12 @@ pub fn resolve_class_fields<'db>(
                 .as_ref()
                 .map(|te| {
                     let mut diags = Vec::new();
-                    let ty = crate::lower_type_expr::lower_type_expr(
-                        db, &te.expr, pkg_items, &mut diags,
+                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                        db,
+                        &te.expr,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &mut diags,
                     );
                     for d in diags {
                         all_diags.push((d, te.span));
@@ -560,7 +570,13 @@ pub fn resolve_type_alias<'db>(
         .as_ref()
         .map(|te| {
             let mut diags = Vec::new();
-            let ty = crate::lower_type_expr::lower_type_expr(db, &te.expr, pkg_items, &mut diags);
+            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &te.expr,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &mut diags,
+            );
             for d in diags {
                 all_diags.push((d, te.span));
             }

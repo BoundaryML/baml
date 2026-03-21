@@ -39,7 +39,6 @@ pub enum SyntaxKind {
     // Other keywords
     KW_WATCH,
     KW_INSTANCEOF,
-    KW_ENV,
     KW_DYNAMIC,
 
     // Literals
@@ -225,11 +224,9 @@ pub enum SyntaxKind {
     PATH_EXPR,
     /// `env.FIELD` expression (e.g., `env.API_KEY`).
     ///
-    /// Structure: `KW_ENV DOT WORD`
+    /// Structure: `WORD("env") DOT WORD`
     ///
-    /// Desugared during HIR lowering:
-    /// - In non-call position: `env.FOO` → `env.get_or_panic("FOO")`
-    /// - In call position: `env.get(...)` → call to `env.get` module function
+    /// Desugared at AST lowering to `baml.env.get_or_panic("FIELD")`.
     ENV_ACCESS_EXPR,
     PAREN_EXPR,
     BLOCK_EXPR,
@@ -389,7 +386,6 @@ impl SyntaxKind {
                 | Self::KW_THROWS
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
-                | Self::KW_ENV
                 | Self::KW_DYNAMIC
         )
     }

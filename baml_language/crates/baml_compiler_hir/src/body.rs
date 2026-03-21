@@ -2515,13 +2515,16 @@ impl LoweringContext {
 
         let callee = if let Some(n) = callee_node {
             if n.kind() == SyntaxKind::ENV_ACCESS_EXPR {
-                // env.method(...) → Path(["env", method])
-                // Don't use lower_expr which would desugar to get_or_panic
+                // env.method(...) → Path(["baml", "env", method])
                 use baml_compiler_syntax::ast::EnvAccessExpr;
                 use rowan::ast::AstNode;
                 if let Some(field_token) = EnvAccessExpr::cast(n.clone()).and_then(|e| e.field()) {
                     self.alloc_expr(
-                        Expr::Path(vec![Name::new("env"), Name::new(field_token.text())]),
+                        Expr::Path(vec![
+                            Name::new("baml"),
+                            Name::new("env"),
+                            Name::new(field_token.text()),
+                        ]),
                         n.text_range(),
                     )
                 } else {
@@ -2701,12 +2704,7 @@ impl LoweringContext {
 
     /// Lower an `ENV_ACCESS_EXPR` to a desugared call.
     ///
-    /// In non-call position (standalone `env.FOO`), desugars to:
-    ///   `env.get_or_panic("FOO")`
-    ///
-    /// When used as a callee in a `CALL_EXPR` (e.g. `env.get(...)`), the
-    /// `lower_call_expr` method handles it specially — converting the
-    /// `ENV_ACCESS_EXPR` callee into a path into the env module.
+    /// `env.FOO` desugars to `baml.env.get_or_panic("FOO")`.
     fn lower_env_access_expr(&mut self, node: &baml_compiler_syntax::SyntaxNode) -> ExprId {
         use baml_compiler_syntax::ast::EnvAccessExpr;
         use rowan::ast::AstNode;
@@ -2716,9 +2714,13 @@ impl LoweringContext {
         };
         let field_name = field_token.text().to_string();
 
-        // Synthesize: env.get_or_panic("FIELD_NAME")
+        // Synthesize: baml.env.get_or_panic("FIELD_NAME")
         let callee = self.alloc_expr(
-            Expr::Path(vec![Name::new("env"), Name::new("get_or_panic")]),
+            Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("env"),
+                Name::new("get_or_panic"),
+            ]),
             node.text_range(),
         );
         let arg = self.alloc_expr(

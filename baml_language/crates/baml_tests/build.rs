@@ -707,6 +707,21 @@ fn generate_tir2_test(project: &TestProject) -> TokenStream {
                 output.push_str(&render_tir(&db, *source_file));
             }
 
+            // Also dump compiler2 stdlib (`package baml`) so builtins (e.g. llm_types)
+            // appear in the same snapshot as the user test file.
+            writeln!(output, "\n=== TIR2 (package baml) ===").unwrap();
+            use baml_base::Name;
+            use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
+            let mut baml_files: Vec<_> = compiler2_all_files(&db)
+                .into_iter()
+                .filter(|f| file_package(&db, *f).package == Name::new("baml"))
+                .collect();
+            baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
+            for sf in baml_files {
+                writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
+                output.push_str(&render_tir(&db, sf));
+            }
+
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_tir2", output);
             });

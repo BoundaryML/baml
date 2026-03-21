@@ -75,7 +75,6 @@ define_keyword_tokens! {
     "assert" => SyntaxKind::KW_ASSERT => Assert;
     "watch" => SyntaxKind::KW_WATCH => Watch;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
-    "env" => SyntaxKind::KW_ENV => Env;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
 }
 

@@ -11,7 +11,7 @@ class Response {
   url string
   _body $rust_type
 
-  function text(self) -> string throws baml.errors.Io {
+  function text(self) -> string throws root.errors.Io {
     $rust_io_function
   }
 
@@ -20,10 +20,10 @@ class Response {
   }
 }
 
-function fetch(url: string) -> Response throws baml.errors.Io | baml.errors.Timeout {
+function fetch(url: string) -> Response throws root.errors.Io | root.errors.Timeout {
   $rust_io_function
 }
 
-function send(request: Request) -> Response throws baml.errors.Io | baml.errors.Timeout {
+function send(request: Request) -> Response throws root.errors.Io | root.errors.Timeout {
   $rust_io_function
 }

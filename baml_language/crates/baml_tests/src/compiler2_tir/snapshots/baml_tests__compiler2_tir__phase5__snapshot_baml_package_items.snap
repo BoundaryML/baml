@@ -10,6 +10,7 @@ namespace baml:
   function deep_equals<T>
 namespace baml.env:
   function get
+  function get_or_panic
 namespace baml.errors:
   class AccessError { methods: [] }
   class DevOther { methods: [] }
@@ -43,7 +44,7 @@ namespace baml.llm:
   class PromptAst { methods: [] }
   class RetryPolicy { methods: [] }
   function build_request
-  function call_llm_function<T>
+  function call_llm_function
   function get_client
   function get_jinja_template
   function get_return_type

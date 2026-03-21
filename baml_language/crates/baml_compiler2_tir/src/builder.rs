@@ -119,6 +119,8 @@ pub struct TypeInferenceBuilder<'db> {
     /// Resolved type alias map: alias qualified name → expanded Ty.
     /// Used by the normalizer for structural subtype checking.
     aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
+    /// Namespace path for the file being analyzed (e.g. `["env"]` for `baml/env.baml`).
+    ns_context: Vec<Name>,
     /// Residual throw facts for each catch expression after applying all clauses.
     catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
     /// Match expressions that the exhaustiveness checker determined cover all cases.
@@ -133,6 +135,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         scope: ScopeId<'db>,
         aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
     ) -> Self {
+        let db = context.db();
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, scope.file(db));
+        let ns_context = pkg_info.namespace_path.clone();
         Self {
             context,
             expressions: FxHashMap::default(),
@@ -145,6 +150,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             locals: FxHashMap::default(),
             declared_types: FxHashMap::default(),
             aliases,
+            ns_context,
             catch_residual_throws: FxHashMap::default(),
             exhaustive_matches: FxHashSet::default(),
         }
@@ -630,10 +636,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let init_ty = if let Some(init) = initializer {
                     if let Some(ann_idx) = type_annotation {
                         let mut diags = Vec::new();
-                        let ann_ty = crate::lower_type_expr::lower_type_expr(
+                        let ann_ty = crate::lower_type_expr::lower_type_expr_in_ns(
                             self.context.db(),
                             &body.type_annotations[*ann_idx],
                             self.package_items,
+                            &self.ns_context,
                             &mut diags,
                         );
                         for diag in diags {
@@ -1126,10 +1133,11 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         let mut diags = Vec::new();
-        let declared_ty = crate::lower_type_expr::lower_type_expr(
+        let declared_ty = crate::lower_type_expr::lower_type_expr_in_ns(
             self.context.db(),
             declared_expr,
             self.package_items,
+            &self.ns_context,
             &mut diags,
         );
         let span = throws_span.unwrap_or(fallback_span);
@@ -1368,10 +1376,11 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn lower_pattern_type_expr(&mut self, expr: &TypeExpr, at_expr: ExprId) -> Ty {
         let mut diags = Vec::new();
-        let ty = crate::lower_type_expr::lower_type_expr(
+        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
             self.context.db(),
             expr,
             self.package_items,
+            &self.ns_context,
             &mut diags,
         );
         for diag in diags {
@@ -1910,10 +1919,16 @@ impl<'db> TypeInferenceBuilder<'db> {
         if segments.len() == 1 {
             let name = &segments[0];
             let ty = self.infer_single_name(name);
+            let ns_name: Vec<Name> = self
+                .ns_context
+                .iter()
+                .chain(std::iter::once(name))
+                .cloned()
+                .collect();
             if matches!(ty, Ty::Unknown)
                 && !self.locals.contains_key(name)
-                && self.package_items.lookup_value(&[name.clone()]).is_none()
-                && self.package_items.lookup_type(&[name.clone()]).is_none()
+                && self.package_items.lookup_value(&ns_name).is_none()
+                && self.package_items.lookup_type(&ns_name).is_none()
             {
                 self.context
                     .report_simple(TirTypeError::UnresolvedName { name: name.clone() }, expr_id);
@@ -1926,18 +1941,24 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Resolve a multi-segment path like `baml.llm.render_prompt`.
+    /// Resolve a multi-segment path like `baml.llm.render_prompt` or `root.sys.panic`.
     ///
-    /// The first segment must be a known package name. The remaining
-    /// segments are resolved through that package's namespaces.
+    /// The first segment is either a literal package name or `root`
+    /// (which maps to the current file's package).
     fn infer_multi_segment_path(&mut self, segments: &[Name], expr_id: ExprId) -> Ty {
-        let pkg_name = &segments[0];
-        if self.locals.contains_key(pkg_name) {
+        let first = &segments[0];
+        if self.locals.contains_key(first) {
             return Ty::Unknown;
         }
 
         let db = self.context.db();
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name.clone());
+        let pkg_name = if first.as_str() == "root" {
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, self.scope.file(db));
+            pkg_info.package.clone()
+        } else {
+            first.clone()
+        };
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name);
         let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
 
         if pkg_items.namespaces.is_empty() {
@@ -2056,13 +2077,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                 other => other.clone(),
             };
         }
-        // Check value namespace (functions, template strings)
-        if let Some(def) = self.package_items.lookup_value(&[name.clone()]) {
+        // Build namespace-qualified lookup path.
+        let lookup_path: Vec<Name> = self
+            .ns_context
+            .iter()
+            .chain(std::iter::once(name))
+            .cloned()
+            .collect();
+        if let Some(def) = self.package_items.lookup_value(&lookup_path) {
             match def {
                 Definition::Function(func_loc) => {
                     // Get function signature to build the function type
                     let db = self.context.db();
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                    let sig_ns =
+                        baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
+                            .namespace_path;
                     let mut diags = Vec::new();
                     let ty = Ty::Function {
                         params: sig
@@ -2071,10 +2101,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                             .map(|(n, te)| {
                                 (
                                     Some(n.clone()),
-                                    crate::lower_type_expr::lower_type_expr(
+                                    crate::lower_type_expr::lower_type_expr_in_ns(
                                         db,
                                         te,
                                         self.package_items,
+                                        &sig_ns,
                                         &mut diags,
                                     ),
                                 )
@@ -2084,10 +2115,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                             sig.return_type
                                 .as_ref()
                                 .map(|te| {
-                                    crate::lower_type_expr::lower_type_expr(
+                                    crate::lower_type_expr::lower_type_expr_in_ns(
                                         db,
                                         te,
                                         self.package_items,
+                                        &sig_ns,
                                         &mut diags,
                                     )
                                 })
@@ -2100,7 +2132,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
                 _ => Ty::Unknown,
             }
-        } else if let Some(def) = self.package_items.lookup_type(&[name.clone()]) {
+        } else if let Some(def) = self.package_items.lookup_type(&lookup_path) {
             let db = self.context.db();
             match def {
                 Definition::Class(_) => {
@@ -2576,13 +2608,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         // Check if the root segment is a known package (not a local variable)
-        let pkg_name = &segments[0];
-        if self.locals.contains_key(pkg_name) {
-            return None; // It's a local variable, not a package
+        let first = &segments[0];
+        if self.locals.contains_key(first) {
+            return None;
         }
 
         let db = self.context.db();
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name.clone());
+        let resolved_pkg_name = if first.as_str() == "root" {
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, self.scope.file(db));
+            pkg_info.package
+        } else {
+            first.clone()
+        };
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, resolved_pkg_name);
         let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
 
         // Check that this package actually has items (non-empty = real package)
@@ -2615,7 +2653,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             if let Some(def) = pkg_items.lookup_type(item_path) {
                 match def {
                     Definition::Class(_class_loc) => {
-                        if pkg_name.as_str() == self.package_id.name(db).as_str() {
+                        if first.as_str() == "root"
+                            || first.as_str() == self.package_id.name(db).as_str()
+                        {
                             let class_qtn = crate::lower_type_expr::qualify_def(
                                 db,
                                 def,
@@ -2759,6 +2799,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         let file = class_loc.file(db);
+        let stub_pkg = baml_compiler2_hir::file_package::file_package(db, file);
+        let stub_ns: &[Name] = &stub_pkg.namespace_path;
         let item_tree = baml_compiler2_hir::file_item_tree(db, file);
         let class_data = &item_tree[class_loc.id(db)];
 
@@ -2832,6 +2874,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 db,
                                 te,
                                 self.package_items,
+                                stub_ns,
                                 &bindings,
                                 &mut diags,
                             )
@@ -2847,6 +2890,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             db,
                             te,
                             self.package_items,
+                            stub_ns,
                             &bindings,
                             &mut diags,
                         )
@@ -2879,6 +2923,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             db,
                             &te.expr,
                             self.package_items,
+                            stub_ns,
                             &bindings,
                             &mut diags,
                         )

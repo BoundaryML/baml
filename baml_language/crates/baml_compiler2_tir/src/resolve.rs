@@ -23,8 +23,8 @@ use text_size::TextSize;
 /// 1. Let-bindings in the current scope (`ScopeBindings::bindings`)
 /// 2. Parameters of the enclosing Function/Lambda scope (`ScopeBindings::params`)
 /// 3. Walk ancestor scopes repeating 1-2
-/// 4. Package-level names via `package_items` (functions, classes, enums, type aliases)
-/// 5. Builtin package names (`baml`, `env`)
+/// 4. Package-level names in the file's own namespace via `package_items`
+/// 5. Builtin package names (`baml`)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedName<'db> {
     /// Local variable (let binding or parameter).
@@ -34,7 +34,7 @@ pub enum ResolvedName<'db> {
     },
     /// A top-level item from `package_items`.
     Item(Definition<'db>),
-    /// A builtin function/type from the `baml` or `env` packages.
+    /// A builtin function/type from the `baml` package.
     Builtin(Definition<'db>),
     /// Could not resolve.
     Unknown,
@@ -96,18 +96,25 @@ pub fn resolve_name_at<'db>(
             let pkg_id = PackageId::new(db, pkg_info.package.clone());
             let pkg_items = package_items(db, pkg_id);
 
-            // Check value namespace first (functions, template strings)
-            if let Some(def) = pkg_items.lookup_value(&[name.clone()]) {
+            // Build the lookup path: [namespace_path..., name].
+            // For files with non-empty namespace_path (e.g. ["llm"]),
+            // this resolves bare names only within that namespace.
+            // For root namespace files (namespace_path == []), this is
+            // equivalent to the previous [name] lookup.
+            let mut full_path: Vec<Name> = pkg_info.namespace_path.clone();
+            full_path.push(name.clone());
+
+            if let Some(def) = pkg_items.lookup_value(&full_path) {
                 return ResolvedName::Item(def);
             }
-            // Check type namespace (classes, enums, type aliases)
-            if let Some(def) = pkg_items.lookup_type(&[name.clone()]) {
+            if let Some(def) = pkg_items.lookup_type(&full_path) {
                 return ResolvedName::Item(def);
             }
 
-            // Check builtin packages (baml, env)
-            for builtin_pkg_name in &["baml", "env"] {
-                let builtin_pkg_id = PackageId::new(db, Name::new(*builtin_pkg_name));
+            // Check builtin package (`baml`) — only if this file's own
+            // package is not already `baml` (avoids double lookup).
+            if pkg_info.package.as_str() != "baml" {
+                let builtin_pkg_id = PackageId::new(db, Name::new("baml"));
                 let builtin_items = package_items(db, builtin_pkg_id);
                 if let Some(def) = builtin_items.lookup_value(&[name.clone()]) {
                     return ResolvedName::Builtin(def);
@@ -125,9 +132,10 @@ pub fn resolve_name_at<'db>(
 /// Resolve a path expression at a given position.
 ///
 /// Single-segment paths are resolved via `resolve_name_at`.
-/// Multi-segment paths (e.g. `baml.llm.render_prompt`) are resolved
-/// by treating the first segment as a package name and looking up
-/// the remaining segments in that package.
+/// Multi-segment paths are resolved by treating the first segment as either:
+/// - `root` — substituted with the current file's package
+/// - a literal package name (e.g. `baml`)
+/// The remaining segments are looked up inside that package.
 pub fn resolve_path_at<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -142,18 +150,23 @@ pub fn resolve_path_at<'db>(
         return resolve_name_at(db, file, at_offset, &segments[0]);
     }
 
-    // Multi-segment: first segment is a package name
-    let pkg_name = &segments[0];
-    let pkg_id = PackageId::new(db, pkg_name.clone());
+    // First segment: `root` maps to the current file's package,
+    // anything else is a literal package name.
+    let pkg_name = if segments[0].as_str() == "root" {
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+        pkg_info.package.clone()
+    } else {
+        segments[0].clone()
+    };
+
+    let pkg_id = PackageId::new(db, pkg_name);
     let pkg_items = package_items(db, pkg_id);
 
     let after_pkg = &segments[1..];
 
-    // Try value namespace (functions)
     if let Some(def) = pkg_items.lookup_value(after_pkg) {
         return ResolvedName::Builtin(def);
     }
-    // Try type namespace (classes, enums)
     if let Some(def) = pkg_items.lookup_type(after_pkg) {
         return ResolvedName::Builtin(def);
     }

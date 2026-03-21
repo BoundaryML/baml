@@ -3,6 +3,8 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
+    store_global ?185
+    call ?
     store_global ?186
     call ?
     store_global ?187
@@ -68,8 +70,6 @@ function $init() -> null {
     store_global ?217
     call ?
     store_global ?218
-    call ?
-    store_global ?219
     load_const ?
     return
 }
@@ -1497,7 +1497,8 @@ function user.DeeplyNestedClient$new() -> null {
 
 function user.EnvClient$new() -> null {
     load_const "OPENAI_API_KEY"
-    call env.get_or_panic
+    load_const null
+    call_indirect
     store_var _2
     alloc_instance PrimitiveClient
     copy 0
@@ -3723,7 +3724,8 @@ function user.ManyNestedExprs(items: int[]) -> int {
 
 function user.ManyOptionsClient$new() -> null {
     load_const "OPENAI_API_KEY"
-    call env.get_or_panic
+    load_const null
+    call_indirect
     store_var _2
     alloc_instance PrimitiveClient
     copy 0

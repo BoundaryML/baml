@@ -6,13 +6,13 @@ fn user.OpenRouterMistralSmall3_1_24b$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: string
+    let _2: void
     let _3: void
     let _4: map<void, void>
     let _5: map<"model" | "temperature", 1 | 0.1>
 
     bb0: {
-        _2 = call const fn env.get_or_panic(const "OPENROUTER_API_KEY") -> [bb1];
+        _2 = call const null(const "OPENROUTER_API_KEY") -> [bb1];
     }
 
     bb1: {

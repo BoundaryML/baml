@@ -204,22 +204,9 @@ fn baml_package_contains_env_functions() {
         env_ns.values.contains_key(&Name::new("get")),
         "baml.env.get (low-level) should be in baml.env namespace"
     );
-
-    // Package "env" has get and get_or_panic (they call baml.env.get / baml.sys.panic)
-    let env_pkg = PackageId::new(&db, Name::new("env"));
-    let env_items = package_items(&db, env_pkg);
-    let empty_ns: Vec<Name> = vec![];
-    let env_root = env_items
-        .namespaces
-        .get(&empty_ns)
-        .expect("env package should have root namespace");
     assert!(
-        env_root.values.contains_key(&Name::new("get")),
-        "env.get should be in env package"
-    );
-    assert!(
-        env_root.values.contains_key(&Name::new("get_or_panic")),
-        "env.get_or_panic should be in env package"
+        env_ns.values.contains_key(&Name::new("get_or_panic")),
+        "baml.env.get_or_panic should be in baml.env namespace"
     );
 }
 

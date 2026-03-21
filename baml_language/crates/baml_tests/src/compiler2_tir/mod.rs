@@ -38,7 +38,7 @@ pub(crate) mod support {
             ScopeInference, infer_scope_types, render_scope_diagnostics, resolve_class_fields,
             resolve_type_alias,
         },
-        lower_type_expr::lower_type_expr,
+        lower_type_expr::lower_type_expr_in_ns,
     };
     use baml_project::ProjectDatabase;
 
@@ -602,12 +602,42 @@ pub(crate) mod support {
                         let func_loc = FunctionLoc::new(db, file, *local_id);
                         func_body_opt = Some(function_body(db, func_loc));
                         let sig = function_signature(db, func_loc);
+                        let ns = &pkg_info.namespace_path;
+
+                        let enclosing_class_ty: Option<baml_compiler2_tir::ty::Ty> =
+                            scope.parent.and_then(|parent_idx| {
+                                let parent = &index.scopes[parent_idx.index() as usize];
+                                if matches!(parent.kind, ScopeKind::Class) {
+                                    parent.name.as_ref().and_then(|cn| {
+                                        let mut ns_path = ns.to_vec();
+                                        ns_path.push(cn.clone());
+                                        pkg_items.lookup_type(&ns_path).map(|def| {
+                                            baml_compiler2_tir::ty::Ty::Class(
+                                                baml_compiler2_tir::lower_type_expr::qualify_def(
+                                                    db, def, cn,
+                                                ),
+                                            )
+                                        })
+                                    })
+                                } else {
+                                    None
+                                }
+                            });
+
                         let params: Vec<String> = sig
                             .params
                             .iter()
                             .map(|(pname, ptype)| {
-                                let mut diags = Vec::new();
-                                let ty = lower_type_expr(db, ptype, &pkg_items, &mut diags);
+                                let ty = if pname.as_str() == "self"
+                                    && matches!(ptype, baml_compiler2_ast::TypeExpr::Unknown)
+                                {
+                                    enclosing_class_ty
+                                        .clone()
+                                        .unwrap_or(baml_compiler2_tir::ty::Ty::Unknown)
+                                } else {
+                                    let mut diags = Vec::new();
+                                    lower_type_expr_in_ns(db, ptype, &pkg_items, ns, &mut diags)
+                                };
                                 format!("{}: {}", pname, ty)
                             })
                             .collect();
@@ -616,7 +646,7 @@ pub(crate) mod support {
                             .as_ref()
                             .map(|t| {
                                 let mut diags = Vec::new();
-                                lower_type_expr(db, t, &pkg_items, &mut diags).to_string()
+                                lower_type_expr_in_ns(db, t, &pkg_items, ns, &mut diags).to_string()
                             })
                             .unwrap_or_else(|| "?".into());
                         let throws = sig
@@ -624,7 +654,7 @@ pub(crate) mod support {
                             .as_ref()
                             .map(|t| {
                                 let mut diags = Vec::new();
-                                lower_type_expr(db, t, &pkg_items, &mut diags).to_string()
+                                lower_type_expr_in_ns(db, t, &pkg_items, ns, &mut diags).to_string()
                             })
                             .map(|t| format!(" throws {t}"))
                             .unwrap_or_default();

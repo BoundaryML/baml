@@ -825,7 +825,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         match type_expr {
             ast::TypeExpr::Path(segments) => {
                 let is_builtin_error = segments.len() >= 3
-                    && segments[0].as_str() == "baml"
+                    && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
                     && segments[1].as_str() == "errors";
                 if !is_builtin_error {
                     invalid.push(Self::render_type_expr(type_expr));

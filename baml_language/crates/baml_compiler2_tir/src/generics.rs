@@ -20,7 +20,7 @@ use baml_base::Name;
 use baml_compiler2_ast::TypeExpr;
 use rustc_hash::FxHashMap;
 
-use crate::{infer_context::TirTypeError, lower_type_expr::lower_type_expr, ty::Ty};
+use crate::{infer_context::TirTypeError, lower_type_expr::lower_type_expr_in_ns, ty::Ty};
 
 // ── Type variable binding ─────────────────────────────────────────────────────
 
@@ -104,16 +104,20 @@ fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Opti
 ///
 /// Diagnostics from the lowering step (for non-variable paths that genuinely
 /// don't exist) are collected into `diagnostics`.
+///
+/// `ns_context` is the defining file's namespace within its package (e.g. `["llm"]`
+/// for `<builtin>/baml/llm/llm.baml`); unqualified type paths resolve there first.
 pub fn lower_type_expr_with_generics(
     db: &dyn crate::Db,
     expr: &TypeExpr,
     package_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    ns_context: &[Name],
     bindings: &FxHashMap<Name, Ty>,
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     // Fast path: empty bindings — no substitution needed.
     if bindings.is_empty() {
-        return lower_type_expr(db, expr, package_items, diagnostics);
+        return lower_type_expr_in_ns(db, expr, package_items, ns_context, diagnostics);
     }
 
     // Intercept single-segment paths that are type variables.
@@ -129,6 +133,7 @@ pub fn lower_type_expr_with_generics(
             db,
             inner,
             package_items,
+            ns_context,
             bindings,
             diagnostics,
         ))),
@@ -136,6 +141,7 @@ pub fn lower_type_expr_with_generics(
             db,
             inner,
             package_items,
+            ns_context,
             bindings,
             diagnostics,
         ))),
@@ -144,6 +150,7 @@ pub fn lower_type_expr_with_generics(
                 db,
                 key,
                 package_items,
+                ns_context,
                 bindings,
                 diagnostics,
             )),
@@ -151,6 +158,7 @@ pub fn lower_type_expr_with_generics(
                 db,
                 value,
                 package_items,
+                ns_context,
                 bindings,
                 diagnostics,
             )),
@@ -158,7 +166,16 @@ pub fn lower_type_expr_with_generics(
         TypeExpr::Union(members) => Ty::Union(
             members
                 .iter()
-                .map(|m| lower_type_expr_with_generics(db, m, package_items, bindings, diagnostics))
+                .map(|m| {
+                    lower_type_expr_with_generics(
+                        db,
+                        m,
+                        package_items,
+                        ns_context,
+                        bindings,
+                        diagnostics,
+                    )
+                })
                 .collect(),
         ),
         TypeExpr::Function { params, ret } => Ty::Function {
@@ -171,6 +188,7 @@ pub fn lower_type_expr_with_generics(
                             db,
                             &p.ty,
                             package_items,
+                            ns_context,
                             bindings,
                             diagnostics,
                         ),
@@ -181,6 +199,7 @@ pub fn lower_type_expr_with_generics(
                 db,
                 ret,
                 package_items,
+                ns_context,
                 bindings,
                 diagnostics,
             )),
@@ -188,7 +207,7 @@ pub fn lower_type_expr_with_generics(
         // For all other type expressions (primitives, multi-segment paths, etc.),
         // lower normally and then substitute in the result.
         other => {
-            let ty = lower_type_expr(db, other, package_items, diagnostics);
+            let ty = lower_type_expr_in_ns(db, other, package_items, ns_context, diagnostics);
             substitute_ty(&ty, bindings)
         }
     }
