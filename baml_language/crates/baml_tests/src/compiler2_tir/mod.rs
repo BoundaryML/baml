@@ -232,6 +232,28 @@ pub(crate) mod support {
         }
     }
 
+    /// Like `expr_desc` but enriches Call expressions with type params from inference.
+    fn expr_desc_rich(expr_id: ExprId, body: &ExprBody, inference: &ScopeInference) -> String {
+        let expr = &body.exprs[expr_id];
+        if let Expr::Call { callee, args } = expr {
+            let callee_str = expr_desc(*callee, body);
+            let arg_strs: Vec<String> = args.iter().map(|a| expr_desc(*a, body)).collect();
+            let type_params = if let Some(callee_ty) = inference.expression_type(*callee) {
+                collect_typevars(callee_ty)
+            } else {
+                Vec::new()
+            };
+            let tp_display = if type_params.is_empty() {
+                String::new()
+            } else {
+                format!("<{}>", type_params.join(", "))
+            };
+            format!("{callee_str}{tp_display}({})", arg_strs.join(", "))
+        } else {
+            expr_desc(expr_id, body)
+        }
+    }
+
     /// Returns true if an expression is "compound" and should be rendered
     /// with recursive indented output rather than a single-line `expr_desc`.
     fn is_compound(expr: &Expr) -> bool {
@@ -303,7 +325,7 @@ pub(crate) mod support {
                 }
             }
             Expr::Catch { base, clauses } => {
-                let base_desc = expr_desc(*base, body);
+                let base_desc = expr_desc_rich(*base, body, inference);
                 let base_ty = expr_ty(inference, *base);
                 writeln!(output, "{pad}catch ({base_desc} : {base_ty}) : {ty}").ok();
                 for clause in clauses {
@@ -322,10 +344,68 @@ pub(crate) mod support {
                     }
                 }
             }
+            Expr::Call { callee, args } => {
+                // Show type params at call site when callee has TypeVars
+                let callee_desc = expr_desc(*callee, body);
+                let arg_strs: Vec<String> = args.iter().map(|a| expr_desc(*a, body)).collect();
+                let type_params = if let Some(callee_ty) = inference.expression_type(*callee) {
+                    collect_typevars(callee_ty)
+                } else {
+                    Vec::new()
+                };
+                let tp_display = if type_params.is_empty() {
+                    String::new()
+                } else {
+                    format!("<{}>", type_params.join(", "))
+                };
+                writeln!(
+                    output,
+                    "{pad}{callee_desc}{tp_display}({}) : {ty}",
+                    arg_strs.join(", ")
+                )
+                .ok();
+            }
             _ => {
                 let desc = expr_desc(expr_id, body);
                 writeln!(output, "{pad}{desc} : {ty}").ok();
             }
+        }
+    }
+
+    /// Collect unique TypeVar names from a Ty (in order of appearance).
+    fn collect_typevars(ty: &baml_compiler2_tir::ty::Ty) -> Vec<String> {
+        use baml_compiler2_tir::ty::Ty;
+        let mut result = Vec::new();
+        collect_typevars_inner(ty, &mut result);
+        result
+    }
+
+    fn collect_typevars_inner(ty: &baml_compiler2_tir::ty::Ty, out: &mut Vec<String>) {
+        use baml_compiler2_tir::ty::Ty;
+        match ty {
+            Ty::TypeVar(name) => {
+                let s = name.to_string();
+                if !out.contains(&s) {
+                    out.push(s);
+                }
+            }
+            Ty::List(inner) | Ty::Optional(inner) => collect_typevars_inner(inner, out),
+            Ty::Map(k, v) => {
+                collect_typevars_inner(k, out);
+                collect_typevars_inner(v, out);
+            }
+            Ty::Union(members) => {
+                for m in members {
+                    collect_typevars_inner(m, out);
+                }
+            }
+            Ty::Function { params, ret } => {
+                for (_, p) in params {
+                    collect_typevars_inner(p, out);
+                }
+                collect_typevars_inner(ret, out);
+            }
+            _ => {}
         }
     }
 
@@ -362,7 +442,7 @@ pub(crate) mod support {
                         writeln!(output, "{pad}let {pat_name} = : {ty_display}").ok();
                         render_expr(*init, body, inference, indent + 2, output);
                     } else {
-                        let init_desc = expr_desc(*init, body);
+                        let init_desc = expr_desc_rich(*init, body, inference);
                         writeln!(output, "{pad}let {pat_name} = {init_desc} : {ty_display}").ok();
                     }
                 } else {
@@ -375,7 +455,7 @@ pub(crate) mod support {
                     writeln!(output, "{pad}return : {ty}").ok();
                     render_expr(*expr_id, body, inference, indent + 2, output);
                 } else {
-                    let desc = expr_desc(*expr_id, body);
+                    let desc = expr_desc_rich(*expr_id, body, inference);
                     writeln!(output, "{pad}return {desc} : {ty}").ok();
                 }
             }
@@ -388,7 +468,7 @@ pub(crate) mod support {
                     writeln!(output, "{pad}throw : {ty}").ok();
                     render_expr(*value, body, inference, indent + 2, output);
                 } else {
-                    let desc = expr_desc(*value, body);
+                    let desc = expr_desc_rich(*value, body, inference);
                     writeln!(output, "{pad}throw {desc} : {ty}").ok();
                 }
             }
@@ -624,6 +704,14 @@ pub(crate) mod support {
                                 }
                             });
 
+                        let gp = &func_data.generic_params;
+                        let generics_display = if gp.is_empty() {
+                            String::new()
+                        } else {
+                            let names: Vec<String> = gp.iter().map(|n| n.to_string()).collect();
+                            format!("<{}>", names.join(", "))
+                        };
+
                         let params: Vec<String> = sig
                             .params
                             .iter()
@@ -636,7 +724,7 @@ pub(crate) mod support {
                                         .unwrap_or(baml_compiler2_tir::ty::Ty::Unknown)
                                 } else {
                                     let mut diags = Vec::new();
-                                    lower_type_expr_in_ns(db, ptype, &pkg_items, ns, &mut diags)
+                                    lower_type_expr_in_ns(db, ptype, &pkg_items, ns, gp, &mut diags)
                                 };
                                 format!("{}: {}", pname, ty)
                             })
@@ -646,7 +734,8 @@ pub(crate) mod support {
                             .as_ref()
                             .map(|t| {
                                 let mut diags = Vec::new();
-                                lower_type_expr_in_ns(db, t, &pkg_items, ns, &mut diags).to_string()
+                                lower_type_expr_in_ns(db, t, &pkg_items, ns, gp, &mut diags)
+                                    .to_string()
                             })
                             .unwrap_or_else(|| "?".into());
                         let throws = sig
@@ -654,11 +743,13 @@ pub(crate) mod support {
                             .as_ref()
                             .map(|t| {
                                 let mut diags = Vec::new();
-                                lower_type_expr_in_ns(db, t, &pkg_items, ns, &mut diags).to_string()
+                                lower_type_expr_in_ns(db, t, &pkg_items, ns, gp, &mut diags)
+                                    .to_string()
                             })
                             .map(|t| format!(" throws {t}"))
                             .unwrap_or_default();
-                        sig_display = format!("({}) -> {ret}{throws}", params.join(", "));
+                        sig_display =
+                            format!("{generics_display}({}) -> {ret}{throws}", params.join(", "));
                         break;
                     }
                 }

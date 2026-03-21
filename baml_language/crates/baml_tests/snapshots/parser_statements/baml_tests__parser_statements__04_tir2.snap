@@ -381,16 +381,12 @@ function baml.llm.build_request(function_name: string, args: map<string, unknown
     primitive_client.build_request(specialized_prompt) : baml.http.Request
   }
 }
-function baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> unknown {
-  { : never
+function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T {
+  { : T
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : unknown
-    let result = client.execute(context, 0) : baml.llm.ExecutionResult
-    if (result.ok : bool) : void
-      { : never
-        return result.value : unknown
-      }
-    throw DevOther { message: "All orchestration..." } : unknown
+    let result = client.execute<T>(context, 0) : T
+    result : T
   }
 }
 
@@ -509,18 +505,21 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
         }
   }
 }
-function baml.llm.Client.execute(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> baml.llm.ExecutionResult {
-  { : baml.llm.ExecutionResult | unknown
-    match (self.retry : baml.llm.RetryPolicy?) : baml.llm.ExecutionResult | unknown
+function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T {
+  { : never
+    match (self.retry : baml.llm.RetryPolicy?) : never
       null =>
-        self.execute_once(context, inherited_delay_ms) : baml.llm.ExecutionResult
+        { : never
+          let result = self.execute_once<T>(context, inherited_delay_ms) : T
+          return result : T
+        }
       r: RetryPolicy =>
-        { : unknown
+        { : never
           let current_delay = r.initial_delay_ms Add 0.0 : float
           { : void
             let attempt = 0 : 0 -> int
             while attempt Le r.max_retries
-              { : void
+              { : never
                 let attempt_delay = inherited_delay_ms : int
                 if (attempt Gt 0 : bool) : void
                   { : void
@@ -539,58 +538,78 @@ function baml.llm.Client.execute(self: baml.llm.Client, context: baml.llm.Execut
                   { : void
                     attempt_delay = inherited_delay_ms : int
                   }
-                let result = self.execute_once(context, attempt_delay) : baml.llm.ExecutionResult
-                if (result.ok : bool) : void
-                  { : never
-                    return result : baml.llm.ExecutionResult
-                  }
+                let result2 = : unknown -> T
+                  catch (self.execute_once<T>(context, attempt_delay) : T) : unknown
+                    catch (e)
+                      _ =>
+                        { : never
+                          continue
+                        }
+                return result2 : T
               }
           }
-          ExecutionResult { ok: false, value: null } : unknown
+          throw DevOther { message: "All orchestration..." } : unknown
         }
   }
+  ?? 4138..4152: unreachable arm
 }
-function baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> baml.llm.ExecutionResult {
-  { : unknown | baml.llm.ExecutionResult
-    match (self.client_type : baml.llm.ClientType) : unknown | baml.llm.ExecutionResult
+function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T {
+  { : T
+    match (self.client_type : baml.llm.ClientType) : T
       ClientType.Primitive =>
-        { : unknown
+        { : T
           let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
           let primitive = resolve_fn() : baml.llm.PrimitiveClient
           let prompt = primitive.render_prompt(context.jinja_string, context.args) : baml.llm.PromptAst
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request(specialized) : baml.http.Request
           let http_response = root.http.send(http_request) : baml.http.Response
-          if (http_response.ok() : bool) : void
-            { : never
+          if (http_response.ok() : bool) : T
+            { : T
               let body = http_response.text() : string
               let return_type = get_return_type(context.function_name) : type
-              return ExecutionResult { ok: true, value: primitive.parse(body, return_type) } : baml.llm.ExecutionResult
+              let result = : unknown -> T
+                catch (primitive.parse<T>(body, return_type) : T) : unknown
+                  catch (e)
+                    _ =>
+                      { : never
+                        if (active_delay_ms Gt 0 : bool) : void
+                          { : null
+                            root.sys.sleep(active_delay_ms) : null
+                          }
+                        throw e : never
+                      }
+              result : T
             }
-          if (active_delay_ms Gt 0 : bool) : void
-            { : null
-              root.sys.sleep(active_delay_ms) : null
+          else
+            { : never
+              throw DevOther { message: "HTTP request failed" } : unknown
             }
-          ExecutionResult { ok: false, value: null } : unknown
         }
       ClientType.Fallback =>
-        { : unknown
+        { : never
           for sub in self.sub_clients
-            { : void
-              let result = sub.execute(context, active_delay_ms) : baml.llm.ExecutionResult
-              if (result.ok : bool) : void
-                { : never
-                  return result : baml.llm.ExecutionResult
-                }
+            { : never
+              let result2 = : unknown -> T
+                catch (sub.execute<T>(context, active_delay_ms) : T) : unknown
+                  catch (e)
+                    _ =>
+                      { : never
+                        continue
+                      }
+              return result2 : T
             }
-          ExecutionResult { ok: false, value: null } : unknown
+          throw DevOther { message: "All orchestration..." } : unknown
         }
       ClientType.RoundRobin =>
-        { : baml.llm.ExecutionResult
+        { : never
           let idx = round_robin_next(self.name) Mod self.sub_clients.length() : int
-          self.sub_clients[idx].execute(context, active_delay_ms) : baml.llm.ExecutionResult
+          let result3 = self.sub_clients[idx].execute<T>(context, active_delay_ms) : T
+          return result3 : T
         }
   }
+  ?? 5057..5201: unreachable arm
+  ?? 5546..5560: unreachable arm
 }
 class baml.llm.PrimitiveClientOptions {
   base_url: string | null

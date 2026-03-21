@@ -719,7 +719,11 @@ fn local_variable_ty(
                 let pkg = package_items(db, pkg_id);
                 let mut diags = Vec::new();
                 Some(baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                    db, te, pkg, &mut diags,
+                    db,
+                    te,
+                    pkg,
+                    &[],
+                    &mut diags,
                 ))
             })
         }

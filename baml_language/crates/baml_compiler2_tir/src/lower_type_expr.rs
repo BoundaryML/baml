@@ -22,9 +22,17 @@ pub fn lower_type_expr(
     db: &dyn crate::Db,
     type_expr: &TypeExpr,
     package_items: &PackageItems<'_>,
+    generic_params: &[baml_base::Name],
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
-    lower_type_expr_in_ns(db, type_expr, package_items, &[], diagnostics)
+    lower_type_expr_in_ns(
+        db,
+        type_expr,
+        package_items,
+        &[],
+        generic_params,
+        diagnostics,
+    )
 }
 
 /// Like [`lower_type_expr`], but resolves unqualified names relative to
@@ -38,6 +46,7 @@ pub fn lower_type_expr_in_ns(
     type_expr: &TypeExpr,
     package_items: &PackageItems<'_>,
     ns_context: &[baml_base::Name],
+    generic_params: &[baml_base::Name],
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     match type_expr {
@@ -81,6 +90,12 @@ pub fn lower_type_expr_in_ns(
                     Definition::Let(_) | _ => Ty::Unknown,
                 }
             } else {
+                // Check if this is a generic type parameter (e.g. T, K, V).
+                if segments.len() == 1 {
+                    if generic_params.iter().any(|p| *p == segments[0]) {
+                        return Ty::TypeVar(segments[0].clone());
+                    }
+                }
                 let name = segments
                     .iter()
                     .map(|n| n.as_str())
@@ -111,6 +126,7 @@ pub fn lower_type_expr_in_ns(
             inner,
             package_items,
             ns_context,
+            generic_params,
             diagnostics,
         ))),
         TypeExpr::List(inner) => Ty::List(Box::new(lower_type_expr_in_ns(
@@ -118,6 +134,7 @@ pub fn lower_type_expr_in_ns(
             inner,
             package_items,
             ns_context,
+            generic_params,
             diagnostics,
         ))),
         TypeExpr::Map { key, value } => Ty::Map(
@@ -126,6 +143,7 @@ pub fn lower_type_expr_in_ns(
                 key,
                 package_items,
                 ns_context,
+                generic_params,
                 diagnostics,
             )),
             Box::new(lower_type_expr_in_ns(
@@ -133,13 +151,23 @@ pub fn lower_type_expr_in_ns(
                 value,
                 package_items,
                 ns_context,
+                generic_params,
                 diagnostics,
             )),
         ),
         TypeExpr::Union(members) => Ty::Union(
             members
                 .iter()
-                .map(|m| lower_type_expr_in_ns(db, m, package_items, ns_context, diagnostics))
+                .map(|m| {
+                    lower_type_expr_in_ns(
+                        db,
+                        m,
+                        package_items,
+                        ns_context,
+                        generic_params,
+                        diagnostics,
+                    )
+                })
                 .collect(),
         ),
         TypeExpr::Function { params, ret } => Ty::Function {
@@ -148,7 +176,14 @@ pub fn lower_type_expr_in_ns(
                 .map(|p| {
                     (
                         p.name.clone(),
-                        lower_type_expr_in_ns(db, &p.ty, package_items, ns_context, diagnostics),
+                        lower_type_expr_in_ns(
+                            db,
+                            &p.ty,
+                            package_items,
+                            ns_context,
+                            generic_params,
+                            diagnostics,
+                        ),
                     )
                 })
                 .collect(),
@@ -157,6 +192,7 @@ pub fn lower_type_expr_in_ns(
                 ret,
                 package_items,
                 ns_context,
+                generic_params,
                 diagnostics,
             )),
         },

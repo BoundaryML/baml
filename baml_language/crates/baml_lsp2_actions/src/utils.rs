@@ -160,6 +160,7 @@ pub fn display_ty(ty: &Ty) -> String {
                 .collect();
             format!("({}) -> {}", ps.join(", "), display_ty(ret))
         }
+        Ty::TypeVar(name) => name.to_string(),
         Ty::Never => "never".to_string(),
         Ty::Void => "void".to_string(),
         Ty::BuiltinUnknown | Ty::Unknown => "unknown".to_string(),

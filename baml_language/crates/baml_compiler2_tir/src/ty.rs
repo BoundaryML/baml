@@ -153,6 +153,14 @@ pub enum Ty {
         params: Vec<(Option<Name>, Ty)>,
         ret: Box<Ty>,
     },
+    /// A type variable (generic parameter) — e.g. `T` in `Array<T>`.
+    ///
+    /// First-class in the resolved type system. At definition sites, `T` is
+    /// represented as `TypeVar("T")` rather than `Ty::Unknown`. At call sites,
+    /// the inference algorithm in `check_expr` substitutes concrete types.
+    /// Any `TypeVar` remaining after inference is erased to `Ty::Unknown` with
+    /// a `CannotInferTypeParameter` diagnostic before reaching VIR/runtime.
+    TypeVar(Name),
     /// The bottom type — expression never produces a value.
     /// Assigned to `return`, `break`, `continue`, and blocks that always diverge.
     /// `Never` is a subtype of every type: `join(Never, T) = T`.
@@ -344,6 +352,7 @@ impl fmt::Display for Ty {
                     .collect();
                 write!(f, "({}) -> {ret}", ps.join(", "))
             }
+            Ty::TypeVar(name) => write!(f, "{name}"),
             Ty::Never => write!(f, "never"),
             Ty::Void => write!(f, "void"),
             Ty::BuiltinUnknown => write!(f, "unknown"),

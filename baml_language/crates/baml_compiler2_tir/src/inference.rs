@@ -219,6 +219,26 @@ pub fn infer_scope_types<'db>(
                     let body = baml_compiler2_hir::body::function_body(db, func_loc);
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
 
+                    // Compute the generic params for this function scope.
+                    // If this is a method inside a class, also include the class's generic params.
+                    let mut generic_params = func_data.generic_params.clone();
+                    if let Some(parent_idx) = scope.parent {
+                        let parent = &index.scopes[parent_idx.index() as usize];
+                        if matches!(parent.kind, ScopeKind::Class) {
+                            if let Some(class_name) = &parent.name {
+                                for (_class_id, class_data) in &item_tree.classes {
+                                    if class_data.name == *class_name {
+                                        let mut merged = class_data.generic_params.clone();
+                                        merged.extend(generic_params);
+                                        generic_params = merged;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    builder.set_generic_params(generic_params.clone());
+
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
                         // Get declared return type
                         let mut diags = Vec::new();
@@ -231,6 +251,7 @@ pub fn infer_scope_types<'db>(
                                     te,
                                     pkg_items,
                                     &pkg_info.namespace_path,
+                                    &generic_params,
                                     &mut diags,
                                 )
                             })
@@ -291,6 +312,7 @@ pub fn infer_scope_types<'db>(
                                     param_te,
                                     pkg_items,
                                     &pkg_info.namespace_path,
+                                    &generic_params,
                                     &mut param_diags,
                                 );
                                 if !param_diags.is_empty() {
@@ -531,6 +553,7 @@ pub fn resolve_class_fields<'db>(
                         &te.expr,
                         pkg_items,
                         &pkg_info.namespace_path,
+                        &class_data.generic_params,
                         &mut diags,
                     );
                     for d in diags {
@@ -575,6 +598,7 @@ pub fn resolve_type_alias<'db>(
                 &te.expr,
                 pkg_items,
                 &pkg_info.namespace_path,
+                &[],
                 &mut diags,
             );
             for d in diags {

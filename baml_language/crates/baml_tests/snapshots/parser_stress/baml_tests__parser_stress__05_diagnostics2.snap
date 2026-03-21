@@ -2,855 +2,37 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved type: T
-   ╭─[ containers.baml:6:35 ]
-   │
- 6 │   function at(self, index: int) -> T? {
-   │                                   ─┬─  
-   │                                    ╰─── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:11:28 ]
-    │
- 11 │   function push(self, item: T) -> int {
-    │                            ─┬  
-    │                             ╰── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:16:24 ]
-    │
- 16 │   function pop(self) -> T? {
-    │                        ─┬─  
-    │                         ╰─── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:20:31 ]
-    │
- 20 │   function concat(self, other: T[]) -> T[] {
-    │                               ──┬─  
-    │                                 ╰─── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:20:39 ]
-    │
- 20 │   function concat(self, other: T[]) -> T[] {
-    │                                       ──┬─  
-    │                                         ╰─── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:24:28 ]
-    │
- 24 │   function reverse(self) -> T[] {
-    │                            ──┬─  
-    │                              ╰─── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:28:48 ]
-    │
- 28 │   function slice(self, start: int, end: int) -> T[] {
-    │                                                ──┬─  
-    │                                                  ╰─── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: K
-    ╭─[ containers.baml:44:26 ]
-    │
- 44 │   function has(self, key: K) -> bool {
-    │                          ─┬  
-    │                           ╰── unresolved type: K
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: K
-    ╭─[ containers.baml:49:25 ]
-    │
- 49 │   function keys(self) -> K[] {
-    │                         ──┬─  
-    │                           ╰─── unresolved type: K
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: V
-    ╭─[ containers.baml:53:27 ]
-    │
- 53 │   function values(self) -> V[] {
-    │                           ──┬─  
-    │                             ╰─── unresolved type: V
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: K
-    ╭─[ containers.baml:58:26 ]
-    │
- 58 │   function set(self, key: K, value: V) -> null {
-    │                          ─┬  
-    │                           ╰── unresolved type: K
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: V
-    ╭─[ containers.baml:58:36 ]
-    │
- 58 │   function set(self, key: K, value: V) -> null {
-    │                                    ─┬  
-    │                                     ╰── unresolved type: V
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: K
-    ╭─[ containers.baml:63:26 ]
-    │
- 63 │   function get(self, key: K) -> V? {
-    │                          ─┬  
-    │                           ╰── unresolved type: K
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: V
-    ╭─[ containers.baml:63:32 ]
-    │
- 63 │   function get(self, key: K) -> V? {
-    │                                ─┬─  
-    │                                 ╰─── unresolved type: V
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-   ╭─[ core.baml:2:29 ]
-   │
- 2 │ function deep_copy<T>(value: T) -> T {
-   │                             ─┬  
-   │                              ╰── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: T
-   ╭─[ core.baml:2:35 ]
-   │
- 2 │ function deep_copy<T>(value: T) -> T {
-   │                                   ─┬  
-   │                                    ╰── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: T
-   ╭─[ core.baml:7:27 ]
-   │
- 7 │ function deep_equals<T>(a: T, b: T) -> bool {
-   │                           ─┬  
-   │                            ╰── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: T
-   ╭─[ core.baml:7:33 ]
-   │
- 7 │ function deep_equals<T>(a: T, b: T) -> bool {
-   │                                 ─┬  
-   │                                  ╰── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: T
-   ╭─[ unstable.baml:2:26 ]
-   │
- 2 │ function string<T>(value: T) -> string {
-   │                          ─┬  
-   │                           ╰── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: type mismatch: expected string, got unknown
-   ╭─[ large_file.baml:1:1 ]
-   │
- 1 │ class User1 {
-   │ │ 
-   │ ╰─ type mismatch: expected string, got unknown
-   │ 
-   │ Note: Error code: E0001
-───╯
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:158:17 ]
+     │
+ 158 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:188:17 ]
+     │
+ 188 │ ╭─▶             _ => {
+     ┆ ┆   
+ 193 │ ├─▶             }
+     │ │                   
+     │ ╰─────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:207:17 ]
+     │
+ 207 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
 
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6599:2 ]
@@ -860,18 +42,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6604 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6606:43 ]
-      │
- 6606 │ ╭─▶ function Process2(input: string) -> string {
-      ┆ ┆   
- 6609 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -896,18 +66,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6614 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6616:43 ]
-      │
- 6616 │ ╭─▶ function Process4(input: string) -> string {
-      ┆ ┆   
- 6619 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1020,18 +178,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6661:44 ]
-      │
- 6661 │ ╭─▶ function Process13(input: string) -> string {
-      ┆ ┆   
- 6664 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6661:44 ]
       │
@@ -1040,18 +186,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6664 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6666:44 ]
-      │
- 6666 │ ╭─▶ function Process14(input: string) -> string {
-      ┆ ┆   
- 6669 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1100,18 +234,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6684 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6686:44 ]
-      │
- 6686 │ ╭─▶ function Process18(input: string) -> string {
-      ┆ ┆   
- 6689 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1176,18 +298,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6711:44 ]
-      │
- 6711 │ ╭─▶ function Process23(input: string) -> string {
-      ┆ ┆   
- 6714 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6711:44 ]
       │
@@ -1212,18 +322,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6721:44 ]
-      │
- 6721 │ ╭─▶ function Process25(input: string) -> string {
-      ┆ ┆   
- 6724 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6721:44 ]
       │
@@ -1236,18 +334,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6726:44 ]
-      │
- 6726 │ ╭─▶ function Process26(input: string) -> string {
-      ┆ ┆   
- 6729 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6726:44 ]
       │
@@ -1256,18 +342,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6729 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6731:44 ]
-      │
- 6731 │ ╭─▶ function Process27(input: string) -> string {
-      ┆ ┆   
- 6734 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1344,18 +418,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6761:44 ]
-      │
- 6761 │ ╭─▶ function Process33(input: string) -> string {
-      ┆ ┆   
- 6764 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6761:44 ]
       │
@@ -1404,18 +466,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6781:44 ]
-      │
- 6781 │ ╭─▶ function Process37(input: string) -> string {
-      ┆ ┆   
- 6784 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6781:44 ]
       │
@@ -1440,18 +490,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6791:44 ]
-      │
- 6791 │ ╭─▶ function Process39(input: string) -> string {
-      ┆ ┆   
- 6794 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6791:44 ]
       │
@@ -1460,18 +498,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6794 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6796:44 ]
-      │
- 6796 │ ╭─▶ function Process40(input: string) -> string {
-      ┆ ┆   
- 6799 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1512,18 +538,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6811:44 ]
-      │
- 6811 │ ╭─▶ function Process43(input: string) -> string {
-      ┆ ┆   
- 6814 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6811:44 ]
       │
@@ -1556,18 +570,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6824 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6826:44 ]
-      │
- 6826 │ ╭─▶ function Process46(input: string) -> string {
-      ┆ ┆   
- 6829 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1608,18 +610,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6841:44 ]
-      │
- 6841 │ ╭─▶ function Process49(input: string) -> string {
-      ┆ ┆   
- 6844 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6841:44 ]
       │
@@ -1628,18 +618,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6844 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6846:44 ]
-      │
- 6846 │ ╭─▶ function Process50(input: string) -> string {
-      ┆ ┆   
- 6849 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1716,18 +694,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6876:44 ]
-      │
- 6876 │ ╭─▶ function Process56(input: string) -> string {
-      ┆ ┆   
- 6879 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6876:44 ]
       │
@@ -1740,18 +706,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6881:44 ]
-      │
- 6881 │ ╭─▶ function Process57(input: string) -> string {
-      ┆ ┆   
- 6884 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6881:44 ]
       │
@@ -1760,18 +714,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6884 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6886:44 ]
-      │
- 6886 │ ╭─▶ function Process58(input: string) -> string {
-      ┆ ┆   
- 6889 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1800,18 +742,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6896:44 ]
-      │
- 6896 │ ╭─▶ function Process60(input: string) -> string {
-      ┆ ┆   
- 6899 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6896:44 ]
       │
@@ -1820,18 +750,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6899 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6901:44 ]
-      │
- 6901 │ ╭─▶ function Process61(input: string) -> string {
-      ┆ ┆   
- 6904 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1848,18 +766,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6906:44 ]
-      │
- 6906 │ ╭─▶ function Process62(input: string) -> string {
-      ┆ ┆   
- 6909 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6906:44 ]
       │
@@ -1868,18 +774,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6909 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6911:44 ]
-      │
- 6911 │ ╭─▶ function Process63(input: string) -> string {
-      ┆ ┆   
- 6914 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1920,18 +814,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6926:44 ]
-      │
- 6926 │ ╭─▶ function Process66(input: string) -> string {
-      ┆ ┆   
- 6929 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6926:44 ]
       │
@@ -1940,18 +822,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6929 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6931:44 ]
-      │
- 6931 │ ╭─▶ function Process67(input: string) -> string {
-      ┆ ┆   
- 6934 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -1980,18 +850,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6941:44 ]
-      │
- 6941 │ ╭─▶ function Process69(input: string) -> string {
-      ┆ ┆   
- 6944 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:6941:44 ]
       │
@@ -2000,18 +858,6 @@ source: crates/baml_tests/src/generated_tests.rs
  6944 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:6946:44 ]
-      │
- 6946 │ ╭─▶ function Process70(input: string) -> string {
-      ┆ ┆   
- 6949 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -2160,18 +1006,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:7006:44 ]
-      │
- 7006 │ ╭─▶ function Process82(input: string) -> string {
-      ┆ ┆   
- 7009 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:7006:44 ]
       │
@@ -2180,18 +1014,6 @@ source: crates/baml_tests/src/generated_tests.rs
  7009 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:7011:44 ]
-      │
- 7011 │ ╭─▶ function Process83(input: string) -> string {
-      ┆ ┆   
- 7014 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -2292,18 +1114,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:7051:44 ]
-      │
- 7051 │ ╭─▶ function Process91(input: string) -> string {
-      ┆ ┆   
- 7054 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:7051:44 ]
       │
@@ -2324,18 +1134,6 @@ source: crates/baml_tests/src/generated_tests.rs
  7059 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:7061:44 ]
-      │
- 7061 │ ╭─▶ function Process93(input: string) -> string {
-      ┆ ┆   
- 7064 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯
@@ -2376,18 +1174,6 @@ source: crates/baml_tests/src/generated_tests.rs
       │     Note: Error code: E0001
 ──────╯
 
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:7076:44 ]
-      │
- 7076 │ ╭─▶ function Process96(input: string) -> string {
-      ┆ ┆   
- 7079 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
-      │     
-      │     Note: Error code: E0001
-──────╯
-
   [type] Error: unresolved name: GPT4
       ╭─[ large_file.baml:7076:44 ]
       │
@@ -2408,18 +1194,6 @@ source: crates/baml_tests/src/generated_tests.rs
  7084 │ ├─▶ }
       │ │       
       │ ╰─────── unresolved name: GPT4
-      │     
-      │     Note: Error code: E0001
-──────╯
-
-  [type] Error: type mismatch: expected string, got unknown
-      ╭─[ large_file.baml:7086:44 ]
-      │
- 7086 │ ╭─▶ function Process98(input: string) -> string {
-      ┆ ┆   
- 7089 │ ├─▶ }
-      │ │       
-      │ ╰─────── type mismatch: expected string, got unknown
       │     
       │     Note: Error code: E0001
 ──────╯

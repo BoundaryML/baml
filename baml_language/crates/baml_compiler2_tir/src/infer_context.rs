@@ -98,6 +98,8 @@ pub enum TirTypeError {
     },
     /// Declared throws contains extra types that never escape.
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
+    /// A type parameter could not be inferred at a call site.
+    CannotInferTypeParameter { name: Name },
 }
 
 impl fmt::Display for TirTypeError {
@@ -187,6 +189,9 @@ impl fmt::Display for TirTypeError {
                 "extraneous throws declaration: {}",
                 extra_types.join(", ")
             ),
+            TirTypeError::CannotInferTypeParameter { name } => {
+                write!(f, "cannot infer type parameter `{name}`")
+            }
         }
     }
 }

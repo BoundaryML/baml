@@ -1223,7 +1223,7 @@ mod tests {
 
     #[test]
     fn test_sys_op_enum_paths() {
-        let (_vm, io, _cd) = extract_native_builtins();
+        let (_vm, io, _cd) = extract_native_builtins().unwrap();
         let code = generate_sys_op_enum(&io);
 
         assert!(code.contains("SysOp::BamlFsOpen => \"baml.fs.open\""));
@@ -1233,7 +1233,7 @@ mod tests {
 
     #[test]
     fn test_sys_op_enum_error_categories() {
-        let (_vm, io, _cd) = extract_native_builtins();
+        let (_vm, io, _cd) = extract_native_builtins().unwrap();
         let code = generate_sys_op_enum(&io);
 
         assert!(code.contains("SysOp::BamlFsOpen => &[SysOpErrorCategory::Io]"));
@@ -1245,7 +1245,7 @@ mod tests {
 
     #[test]
     fn test_sys_op_enum_panic_categories() {
-        let (_vm, io, _cd) = extract_native_builtins();
+        let (_vm, io, _cd) = extract_native_builtins().unwrap();
         let code = generate_sys_op_enum(&io);
 
         assert!(code.contains("SysOp::BamlSysPanic => &[SysOpPanicCategory::HostPanic]"));
@@ -1254,7 +1254,7 @@ mod tests {
 
     #[test]
     fn test_sys_op_for_path() {
-        let (_vm, io, _cd) = extract_native_builtins();
+        let (_vm, io, _cd) = extract_native_builtins().unwrap();
         let code = generate_sys_op_enum(&io);
 
         assert!(code.contains("\"baml.fs.open\" => Some(SysOp::BamlFsOpen)"));
@@ -1263,7 +1263,7 @@ mod tests {
 
     #[test]
     fn test_sys_ops_struct_field_names() {
-        let (_vm, io, _cd) = extract_native_builtins();
+        let (_vm, io, _cd) = extract_native_builtins().unwrap();
         let code = generate_io_traits(&io, &_cd);
 
         let expected_fields = [
@@ -1287,7 +1287,7 @@ mod tests {
 
     #[test]
     fn test_owned_fs_file() {
-        let (_vm, io, cd) = extract_native_builtins();
+        let (_vm, io, cd) = extract_native_builtins().unwrap();
         let code = generate_io_traits(&io, &cd);
 
         assert!(code.contains("pub mod fs {"));
@@ -1297,7 +1297,7 @@ mod tests {
 
     #[test]
     fn test_owned_http_response() {
-        let (_vm, io, cd) = extract_native_builtins();
+        let (_vm, io, cd) = extract_native_builtins().unwrap();
         let code = generate_io_traits(&io, &cd);
 
         assert!(code.contains("pub mod http {"));
@@ -1318,7 +1318,7 @@ mod tests {
 
     #[test]
     fn test_view_fs_file() {
-        let (_vm, io, cd) = extract_native_builtins();
+        let (_vm, io, cd) = extract_native_builtins().unwrap();
         let code = generate_io_traits(&io, &cd);
 
         assert!(code.contains("pub struct File<'a>"));
@@ -1332,7 +1332,7 @@ mod tests {
 
     #[test]
     fn test_class_trait_llm_primitive_client() {
-        let (_vm, io, cd) = extract_native_builtins();
+        let (_vm, io, cd) = extract_native_builtins().unwrap();
         let code = generate_io_traits(&io, &cd);
 
         assert!(
@@ -1356,7 +1356,7 @@ mod tests {
 
     #[test]
     fn test_namespace_traits() {
-        let (_vm, io, cd) = extract_native_builtins();
+        let (_vm, io, cd) = extract_native_builtins().unwrap();
         let code = generate_io_traits(&io, &cd);
 
         assert!(
@@ -1387,7 +1387,7 @@ mod tests {
 
     #[test]
     fn test_root_trait() {
-        let (_vm, io, cd) = extract_native_builtins();
+        let (_vm, io, cd) = extract_native_builtins().unwrap();
         let code = generate_io_traits(&io, &cd);
 
         assert!(
@@ -1410,7 +1410,7 @@ mod tests {
 
     #[test]
     fn test_sys_ops_from_impl() {
-        let (_vm, io, cd) = extract_native_builtins();
+        let (_vm, io, cd) = extract_native_builtins().unwrap();
         let code = generate_io_traits(&io, &cd);
 
         assert!(

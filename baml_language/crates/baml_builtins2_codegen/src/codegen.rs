@@ -1,7 +1,7 @@
 //! Code generation for modular `BamlClass*` / `BamlNamespace*` / `BamlPackageBaml`
 //! traits from extracted `NativeBuiltin` records.
 //!
-//! `generate_native_trait` takes the output of `extract_native_builtins()` and emits
+//! `generate_native_trait` takes the output of `extract_native_builtins()?` and emits
 //! a Rust source `String` containing a hierarchy of traits:
 //!
 //! - **`BamlClass*`** traits (leaf): required methods with bare names, `__glue_*`
@@ -1268,7 +1268,7 @@ mod tests {
 
     #[test]
     fn test_generate_produces_class_traits() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1303,7 +1303,7 @@ mod tests {
 
     #[test]
     fn test_generate_produces_namespace_traits() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1322,7 +1322,7 @@ mod tests {
 
     #[test]
     fn test_generate_produces_root_trait() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1337,7 +1337,7 @@ mod tests {
 
     #[test]
     fn test_bare_method_names_on_class_traits() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1356,7 +1356,7 @@ mod tests {
 
     #[test]
     fn test_glue_methods_present() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1375,7 +1375,7 @@ mod tests {
 
     #[test]
     fn test_dispatch_methods_present() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1406,7 +1406,7 @@ mod tests {
 
     #[test]
     fn test_root_dispatches_to_children() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1425,7 +1425,7 @@ mod tests {
 
     #[test]
     fn test_root_free_fns_on_baml_package() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1440,7 +1440,7 @@ mod tests {
 
     #[test]
     fn test_array_push_mut_receiver() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1455,7 +1455,7 @@ mod tests {
 
     #[test]
     fn test_vm_param_matches_vm_usage() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         for b in &builtins {
@@ -1489,7 +1489,7 @@ mod tests {
 
     #[test]
     fn test_namespace_media_aggregates_classes() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1502,7 +1502,7 @@ mod tests {
 
     #[test]
     fn test_media_dispatch_routes_to_class_dispatchers() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1517,7 +1517,7 @@ mod tests {
 
     #[test]
     fn test_static_constructors_on_class_trait() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1528,7 +1528,7 @@ mod tests {
 
     #[test]
     fn test_view_module_generated() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(output.contains("pub mod view"), "missing view module");
@@ -1537,7 +1537,7 @@ mod tests {
 
     #[test]
     fn test_view_media_pdf_struct() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         assert!(
@@ -1557,7 +1557,7 @@ mod tests {
 
     #[test]
     fn test_copy_media_pdf_struct() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         // copy::media::Pdf should have _data: Arc<dyn Any + Send + Sync>
@@ -1574,7 +1574,7 @@ mod tests {
 
     #[test]
     fn test_view_namespace_structure() {
-        let (builtins, _io_builtins, class_defs) = extract_native_builtins();
+        let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
         // Check namespace sub-modules exist

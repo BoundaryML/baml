@@ -7,6 +7,7 @@
 //! `//baml:mut_self`, `//baml:vm`, and `//baml:mut_vm` directive scanning.
 
 use baml_base::FileId;
+use baml_compiler_diagnostics::ToDiagnostic;
 use baml_compiler_syntax::{NodeOrToken, SyntaxKind, SyntaxNode};
 use baml_compiler2_ast::ast::{
     BuiltinKind, ClassDef, FunctionBodyDef, FunctionDef, Item, TypeExpr,
@@ -17,6 +18,25 @@ use crate::types::{
     VmUsage,
 };
 
+/// Returned when a builtin `.baml` file has parse errors or HIR lowering diagnostics.
+pub struct ExtractNativeBuiltinsError {
+    message: String,
+}
+
+impl std::fmt::Debug for ExtractNativeBuiltinsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+impl std::fmt::Display for ExtractNativeBuiltinsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ExtractNativeBuiltinsError {}
+
 /// Parse, lower, and extract all `$rust_function` and `$rust_io_function` builtins
 /// from the `.baml` stdlib.
 ///
@@ -24,22 +44,40 @@ use crate::types::{
 /// - `vm_builtins`: `$rust_function` builtins (synchronous, run inline in VM)
 /// - `io_builtins`: `$rust_io_function` builtins (async, dispatched via engine)
 /// - `class_defs`: class definitions with fields (for view/owned struct generation)
-pub fn extract_native_builtins() -> (Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>) {
+///
+/// Fails with [`ExtractNativeBuiltinsError`] if any file has parse errors or non-empty HIR
+/// diagnostics (so codegen never runs on a silently broken stdlib).
+pub fn extract_native_builtins()
+-> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
+{
     let mut vm_builtins = Vec::new();
     let mut io_builtins = Vec::new();
     let mut class_defs = Vec::new();
+    let mut diagnostic_lines: Vec<String> = Vec::new();
 
     for builtin_file in baml_builtins2::ALL {
+        let path = builtin_file.virtual_path();
         // Lex and parse into a lossless CST.
         let tokens = baml_compiler_lexer::lex_lossless(builtin_file.contents, FileId::new(0));
         let (green, errors) = baml_compiler_parser::parse_file(&tokens);
+        for e in &errors {
+            let d = e.to_diagnostic();
+            diagnostic_lines.push(format!("  {path}: [{}] {}", d.id.code(), d.message));
+        }
         if !errors.is_empty() {
             continue;
         }
         let cst_root = SyntaxNode::new_root(green);
 
         // Lower CST → AST items.
-        let (items, _diags) = baml_compiler2_ast::lower_file(&cst_root);
+        let (items, diags) = baml_compiler2_ast::lower_file(&cst_root);
+        for hir in &diags {
+            let d = hir.to_diagnostic();
+            diagnostic_lines.push(format!("  {path}: [{}] {}", d.id.code(), d.message));
+        }
+        if !diags.is_empty() {
+            continue;
+        }
 
         // Build the namespace prefix from the file's package and namespace slices.
         // e.g. package="baml", namespace=["math"] → "baml.math"
@@ -85,7 +123,16 @@ pub fn extract_native_builtins() -> (Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec
         }
     }
 
-    (vm_builtins, io_builtins, class_defs)
+    if !diagnostic_lines.is_empty() {
+        return Err(ExtractNativeBuiltinsError {
+            message: format!(
+                "extract_native_builtins failed (fix stdlib .baml sources):\n{}",
+                diagnostic_lines.join("\n")
+            ),
+        });
+    }
+
+    Ok((vm_builtins, io_builtins, class_defs))
 }
 
 /// Extract `$rust_function` and `$rust_io_function` methods from a class definition.
@@ -620,7 +667,7 @@ mod tests {
 
     #[test]
     fn test_extract_class_fields() {
-        let (_vm, _io, class_defs) = extract_native_builtins();
+        let (_vm, _io, class_defs) = extract_native_builtins().unwrap();
 
         let pdf = class_defs
             .iter()
@@ -768,7 +815,7 @@ mod tests {
 
     #[test]
     fn test_extract_vm_builtins_unchanged() {
-        let (vm_builtins, _io, _class_defs) = extract_native_builtins();
+        let (vm_builtins, _io, _class_defs) = extract_native_builtins().unwrap();
         assert!(
             vm_builtins.len() >= 24,
             "Expected at least 24 VM builtins, got {}",
@@ -844,7 +891,7 @@ mod tests {
 
     #[test]
     fn test_io_builtin_throws() {
-        let (_vm, io_builtins, _class_defs) = extract_native_builtins();
+        let (_vm, io_builtins, _class_defs) = extract_native_builtins().unwrap();
 
         let fs_open = io_builtins
             .iter()

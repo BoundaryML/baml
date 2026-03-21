@@ -153,6 +153,9 @@ pub fn convert_tir2_ty(ty: &Tir2Ty) -> Ty {
         }
         Tir2Ty::Unknown => Ty::Void { attr }, // error recovery
         Tir2Ty::Error => Ty::Void { attr },   // error recovery
+        // TypeVar should never reach MIR — it is erased to Unknown before VIR.
+        // Map defensively to Void as error recovery.
+        Tir2Ty::TypeVar(_) => Ty::Void { attr },
     }
 }
 
@@ -660,7 +663,7 @@ impl<'db> LoweringContext<'db> {
         let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
         let pkg_items = package_items(self.db, pkg_id);
         let mut diags = Vec::new();
-        let tir_ty = lower_type_expr(self.db, ty_expr, &pkg_items, &mut diags);
+        let tir_ty = lower_type_expr(self.db, ty_expr, &pkg_items, &[], &mut diags);
         convert_tir2_ty(&tir_ty)
     }
 }
@@ -686,7 +689,7 @@ impl<'db> LoweringContext<'db> {
             .as_ref()
             .map(|te| {
                 let mut diags = Vec::new();
-                let tir_ty = lower_type_expr(self.db, te, &pkg_items, &mut diags);
+                let tir_ty = lower_type_expr(self.db, te, &pkg_items, &[], &mut diags);
                 convert_tir2_ty(&tir_ty)
             })
             .unwrap_or(Ty::Null {
@@ -736,7 +739,7 @@ impl<'db> LoweringContext<'db> {
                     })
             } else {
                 let mut diags = Vec::new();
-                let tir_ty = lower_type_expr(self.db, param_te, &pkg_items, &mut diags);
+                let tir_ty = lower_type_expr(self.db, param_te, &pkg_items, &[], &mut diags);
                 convert_tir2_ty(&tir_ty)
             };
             let local = self

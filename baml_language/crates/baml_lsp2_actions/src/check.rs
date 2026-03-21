@@ -126,6 +126,15 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
     let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+
+    // Build a method → enclosing class list so we can merge class generic params.
+    let mut method_to_class = Vec::new();
+    for (class_id, class_data) in &item_tree.classes {
+        for &method_id in &class_data.methods {
+            method_to_class.push((method_id, *class_id));
+        }
+    }
+
     for (local_id, func_data) in &item_tree.functions {
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
         let body = baml_compiler2_hir::body::function_body(db, func_loc);
@@ -139,6 +148,16 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
         let mut type_errors = Vec::new();
 
+        // Compute the effective generic params: method params + enclosing class params.
+        let mut generic_params = func_data.generic_params.clone();
+        if let Some((_, class_id)) = method_to_class.iter().find(|(mid, _)| mid == local_id) {
+            let class_data = &item_tree[*class_id];
+            // Prepend class generic params (class params come first, method params after)
+            let mut merged = class_data.generic_params.clone();
+            merged.extend(generic_params);
+            generic_params = merged;
+        }
+
         // Check return type — use the span from the item tree's SpannedTypeExpr.
         if let Some(ret_te) = &sig.return_type {
             baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
@@ -146,6 +165,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 ret_te,
                 &pkg_items,
                 &pkg_info.namespace_path,
+                &generic_params,
                 &mut type_errors,
             );
             if !type_errors.is_empty() {
@@ -175,6 +195,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
                 te,
                 &pkg_items,
                 &pkg_info.namespace_path,
+                &generic_params,
                 &mut type_errors,
             );
             if !type_errors.is_empty() {
@@ -258,5 +279,6 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::ThrowsContractViolation { .. } => DiagnosticId::ThrowsContractViolation,
         TirTypeError::ExtraneousThrowsDeclaration { .. } => DiagnosticId::ThrowsContractExtraneous,
+        TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
     }
 }

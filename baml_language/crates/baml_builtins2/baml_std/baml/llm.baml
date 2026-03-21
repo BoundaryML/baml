@@ -56,7 +56,7 @@ function build_request(function_name: string, args: map<string, unknown>) -> roo
   primitive_client.build_request(specialized_prompt)
 }
 
-function call_llm_function(client: Client, function_name: string, args: map<string, unknown>) -> unknown {
+function call_llm_function<T>(client: Client, function_name: string, args: map<string, unknown>) -> T {
   let jinja_string = get_jinja_template(function_name);
 
   let context = ExecutionContext {
@@ -65,11 +65,6 @@ function call_llm_function(client: Client, function_name: string, args: map<stri
     function_name: function_name,
   };
 
-  let result = client.execute(context, 0);
-
-  if (result.ok) {
-    return result.value;
-  }
-
-  throw root.errors.DevOther { message: "All orchestration steps failed" };
+  let result: T = client.execute(context, 0);
+  result
 }

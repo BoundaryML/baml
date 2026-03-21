@@ -2,195 +2,37 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved type: T
-   ╭─[ containers.baml:6:35 ]
-   │
- 6 │   function at(self, index: int) -> T? {
-   │                                   ─┬─  
-   │                                    ╰─── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:158:17 ]
+     │
+ 158 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
 
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:11:28 ]
-    │
- 11 │   function push(self, item: T) -> int {
-    │                            ─┬  
-    │                             ╰── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:188:17 ]
+     │
+ 188 │ ╭─▶             _ => {
+     ┆ ┆   
+ 193 │ ├─▶             }
+     │ │                   
+     │ ╰─────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0001
+─────╯
 
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:16:24 ]
-    │
- 16 │   function pop(self) -> T? {
-    │                        ─┬─  
-    │                         ╰─── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:20:31 ]
-    │
- 20 │   function concat(self, other: T[]) -> T[] {
-    │                               ──┬─  
-    │                                 ╰─── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:20:39 ]
-    │
- 20 │   function concat(self, other: T[]) -> T[] {
-    │                                       ──┬─  
-    │                                         ╰─── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:24:28 ]
-    │
- 24 │   function reverse(self) -> T[] {
-    │                            ──┬─  
-    │                              ╰─── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-    ╭─[ containers.baml:28:48 ]
-    │
- 28 │   function slice(self, start: int, end: int) -> T[] {
-    │                                                ──┬─  
-    │                                                  ╰─── unresolved type: T
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: K
-    ╭─[ containers.baml:44:26 ]
-    │
- 44 │   function has(self, key: K) -> bool {
-    │                          ─┬  
-    │                           ╰── unresolved type: K
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: K
-    ╭─[ containers.baml:49:25 ]
-    │
- 49 │   function keys(self) -> K[] {
-    │                         ──┬─  
-    │                           ╰─── unresolved type: K
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: V
-    ╭─[ containers.baml:53:27 ]
-    │
- 53 │   function values(self) -> V[] {
-    │                           ──┬─  
-    │                             ╰─── unresolved type: V
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: K
-    ╭─[ containers.baml:58:26 ]
-    │
- 58 │   function set(self, key: K, value: V) -> null {
-    │                          ─┬  
-    │                           ╰── unresolved type: K
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: V
-    ╭─[ containers.baml:58:36 ]
-    │
- 58 │   function set(self, key: K, value: V) -> null {
-    │                                    ─┬  
-    │                                     ╰── unresolved type: V
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: K
-    ╭─[ containers.baml:63:26 ]
-    │
- 63 │   function get(self, key: K) -> V? {
-    │                          ─┬  
-    │                           ╰── unresolved type: K
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: V
-    ╭─[ containers.baml:63:32 ]
-    │
- 63 │   function get(self, key: K) -> V? {
-    │                                ─┬─  
-    │                                 ╰─── unresolved type: V
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: unresolved type: T
-   ╭─[ core.baml:2:29 ]
-   │
- 2 │ function deep_copy<T>(value: T) -> T {
-   │                             ─┬  
-   │                              ╰── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: T
-   ╭─[ core.baml:2:35 ]
-   │
- 2 │ function deep_copy<T>(value: T) -> T {
-   │                                   ─┬  
-   │                                    ╰── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: T
-   ╭─[ core.baml:7:27 ]
-   │
- 7 │ function deep_equals<T>(a: T, b: T) -> bool {
-   │                           ─┬  
-   │                            ╰── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: T
-   ╭─[ core.baml:7:33 ]
-   │
- 7 │ function deep_equals<T>(a: T, b: T) -> bool {
-   │                                 ─┬  
-   │                                  ╰── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: unresolved type: T
-   ╭─[ unstable.baml:2:26 ]
-   │
- 2 │ function string<T>(value: T) -> string {
-   │                          ─┬  
-   │                           ╰── unresolved type: T
-   │ 
-   │ Note: Error code: E0002
-───╯
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:207:17 ]
+     │
+ 207 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
 
   [parse] Error: Expected function name, found integer
    ╭─[ syntax_errors.baml:6:10 ]

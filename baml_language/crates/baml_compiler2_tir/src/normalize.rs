@@ -78,6 +78,8 @@ enum StructuralTy {
         body: Box<StructuralTy>,
     },
     TyVar(QualifiedTypeName),
+    /// A generic type parameter — opaque, only subtypes itself and BuiltinUnknown.
+    TypeVar(Name),
     // Special
     Never,
     Void,
@@ -119,6 +121,13 @@ impl StructuralTy {
         // If self is BuiltinUnknown and other is not BuiltinUnknown (reflexivity
         // already handled equal case above), it's not a subtype.
         if matches!(self, StructuralTy::BuiltinUnknown) {
+            return false;
+        }
+
+        // TypeVar (generic parameter) is opaque — only subtypes itself (reflexivity
+        // above) and BuiltinUnknown (above). Never (bottom) is already handled above.
+        // Must come before Unknown/Error check to avoid bidirectional compatibility.
+        if matches!(self, StructuralTy::TypeVar(_)) || matches!(other, StructuralTy::TypeVar(_)) {
             return false;
         }
 
@@ -361,6 +370,7 @@ fn normalize_impl(
                 .collect(),
             ret: Box::new(normalize_impl(ret, aliases, recursive, expanding)),
         },
+        Ty::TypeVar(name) => StructuralTy::TypeVar(name.clone()),
         // `$rust_type` — opaque Rust-managed state. Treated as Unknown
         // in the structural type system (cannot be constructed or destructured
         // by user code).

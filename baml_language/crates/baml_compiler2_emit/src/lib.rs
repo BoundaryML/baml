@@ -145,7 +145,11 @@ pub fn generate_project_bytecode(
                     .map(|te| {
                         let mut diags = Vec::new();
                         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                            db, &te.expr, &pkg_items, &mut diags,
+                            db,
+                            &te.expr,
+                            &pkg_items,
+                            &[],
+                            &mut diags,
                         );
                         baml_compiler2_mir::convert_tir2_ty(&tir_ty)
                     })
@@ -526,8 +530,13 @@ fn compute_function_metadata_from_item_tree(
 
     let resolve = |te: &TypeExpr| -> baml_type::Ty {
         let mut diags = Vec::new();
-        let tir_ty =
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(db, te, &pkg_items, &mut diags);
+        let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
+            db,
+            te,
+            &pkg_items,
+            &[],
+            &mut diags,
+        );
         baml_compiler2_mir::convert_tir2_ty(&tir_ty)
     };
 

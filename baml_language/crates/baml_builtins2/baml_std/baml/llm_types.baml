@@ -119,16 +119,19 @@ class Client {
     }
   }
 
-  function execute(
+  function execute<T>(
     self,
     context: ExecutionContext,
     inherited_delay_ms: int,
-  ) -> ExecutionResult {
+  ) -> T {
     match (self.retry) {
-      null => self.execute_once(
-        context,
-        inherited_delay_ms,
-      ),
+      null => {
+        let result: T = self.execute_once(
+          context,
+          inherited_delay_ms,
+        );
+        return result;
+      },
       r: RetryPolicy => {
         let current_delay = r.initial_delay_ms + 0.0
 
@@ -148,26 +151,26 @@ class Client {
             attempt_delay = inherited_delay_ms
           }
 
-          let result = self.execute_once(
+          let result2: T = self.execute_once(
             context,
             attempt_delay,
-          )
+          ) catch (e) {
+            _ => { continue; }
+          };
 
-          if (result.ok) {
-            return result
-          }
+          return result2;
         }
 
-        ExecutionResult { ok: false, value: null }
+        throw root.errors.DevOther { message: "All orchestration steps failed" };
       }
     }
   }
 
-  function execute_once(
+  function execute_once<T>(
     self,
     context: ExecutionContext,
     active_delay_ms: int,
-  ) -> ExecutionResult {
+  ) -> T {
     match (self.client_type) {
       ClientType.Primitive => {
         let resolve_fn = self.get_constructor()
@@ -181,38 +184,40 @@ class Client {
         if (http_response.ok()) {
           let body = http_response.text()
           let return_type = get_return_type(context.function_name)
-          return ExecutionResult {
-            ok: true,
-            value: primitive.parse(body, return_type),
-          }
+          let result: T = primitive.parse(body, return_type) catch (e) {
+            _ => {
+              if (active_delay_ms > 0) {
+                root.sys.sleep(active_delay_ms)
+              }
+              throw e;
+            }
+          };
+          result
+        } else {
+          throw root.errors.DevOther { message: "HTTP request failed" };
         }
-
-        if (active_delay_ms > 0) {
-          root.sys.sleep(active_delay_ms)
-        }
-
-        ExecutionResult { ok: false, value: null }
       }
 
       ClientType.Fallback => {
         for (let sub in self.sub_clients) {
-          let result = sub.execute(
+          let result2: T = sub.execute(
             context,
             active_delay_ms,
-          )
-          if (result.ok) {
-            return result
-          }
+          ) catch (e) {
+            _ => { continue; }
+          };
+          return result2;
         }
-        ExecutionResult { ok: false, value: null }
+        throw root.errors.DevOther { message: "All orchestration steps failed" };
       }
 
       ClientType.RoundRobin => {
         let idx = round_robin_next(self.name) % self.sub_clients.length()
-        self.sub_clients[idx].execute(
+        let result3: T = self.sub_clients[idx].execute(
           context,
           active_delay_ms,
-        )
+        );
+        return result3;
       }
     }
   }
@@ -268,11 +273,11 @@ class PrimitiveClient {
     $rust_io_function
   }
 
-  function parse(
+  function parse<T>(
     self,
     http_response_body: string,
     type_def: type,
-  ) -> unknown throws root.errors.LlmClient {
+  ) -> T throws root.errors.LlmClient {
     $rust_io_function
   }
 }
