@@ -29,7 +29,7 @@ use crate::{
     semantic_index::{DefinitionSite, FileSemanticIndex, ScopeBindings, SemanticIndexExtra},
 };
 
-pub(crate) struct SemanticIndexBuilder<'db> {
+pub struct SemanticIndexBuilder<'db> {
     db: &'db dyn crate::Db,
     file: SourceFile,
 
@@ -51,7 +51,7 @@ pub(crate) struct SemanticIndexBuilder<'db> {
 }
 
 impl<'db> SemanticIndexBuilder<'db> {
-    pub(crate) fn new(db: &'db dyn crate::Db, file: SourceFile) -> Self {
+    pub fn new(db: &'db dyn crate::Db, file: SourceFile) -> Self {
         Self {
             db,
             file,
@@ -71,7 +71,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     ///
     /// `file_range` is the full text range of the file (used for
     /// Project/Package/Namespace/File scopes).
-    pub(crate) fn build(
+    pub fn build(
         mut self,
         items: Vec<ast::Item>,
         file_range: TextRange,

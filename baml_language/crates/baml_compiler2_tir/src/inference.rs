@@ -193,7 +193,7 @@ pub fn infer_scope_types<'db>(
 ) -> ScopeInference<'db> {
     let file = scope_id.file(db);
     let file_scope = scope_id.file_scope_id(db);
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let scope = &index.scopes[file_scope.index() as usize];
 
     // Get package items for cross-file resolution
@@ -211,7 +211,7 @@ pub fn infer_scope_types<'db>(
             // Find the function by matching scope range AND name against item_tree functions.
             // Both checks are required to disambiguate companion functions that
             // share the parent's span.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
             let mut found = false;
             for (local_id, func_data) in &item_tree.functions {
                 if func_data.span == scope.range && scope.name.as_ref() == Some(&func_data.name) {
@@ -360,7 +360,7 @@ pub fn infer_scope_types<'db>(
         ScopeKind::Let => {
             // Top-level let binding — find the matching let in the item tree
             // and type-infer its initializer expression.
-            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
             for (local_id, let_data) in &item_tree.lets {
                 if let_data.span == scope.range && scope.name.as_ref() == Some(&let_data.name) {
                     let let_loc = LetLoc::new(db, file, *local_id);
@@ -532,7 +532,7 @@ pub fn resolve_class_fields<'db>(
     class_loc: ClassLoc<'db>,
 ) -> Arc<ResolvedClassFields> {
     let file = class_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = package_items(db, pkg_id);
@@ -581,7 +581,7 @@ pub fn resolve_type_alias<'db>(
     alias_loc: TypeAliasLoc<'db>,
 ) -> Arc<ResolvedTypeAlias> {
     let file = alias_loc.file(db);
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = package_items(db, pkg_id);
@@ -635,9 +635,9 @@ pub fn render_scope_diagnostics<'db>(
     // Find the source map by matching scope range against item_tree functions.
     let file = scope_id.file(db);
     let file_scope = scope_id.file_scope_id(db);
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let scope = &index.scopes[file_scope.index() as usize];
-    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
 
     let source_map = item_tree
         .functions
@@ -675,7 +675,7 @@ pub fn collect_file_diagnostics<'db>(
     db: &'db dyn crate::Db,
     file: baml_base::SourceFile,
 ) -> TypeCheckDiagnostics<'db> {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let mut all_diagnostics = TypeCheckDiagnostics::default();
 
     for scope_id in &index.scope_ids {

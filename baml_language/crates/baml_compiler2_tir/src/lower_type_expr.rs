@@ -72,7 +72,7 @@ pub fn lower_type_expr_in_ns(
                         package_items.lookup_type(&segments[1..])
                     } else {
                         let pkg_id = PackageId::new(db, segments[0].clone());
-                        let pkg = baml_compiler2_hir::package::package_items(db, pkg_id);
+                        let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
                         pkg.lookup_type(&segments[1..])
                     }
                 } else {

@@ -35,4 +35,4 @@ pub mod ty;
 /// Extends `baml_compiler2_hir::Db`. Use `infer_scope_types` for type
 /// inference queries, `resolve_name_at` for name resolution.
 #[salsa::db]
-pub trait Db: baml_compiler2_hir::Db {}
+pub trait Db: baml_compiler2_ppir::Db {}

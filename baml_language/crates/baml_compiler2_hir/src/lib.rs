@@ -13,7 +13,7 @@
 //! - Cross-file aggregation: `namespace_items`, `package_items`
 
 pub mod body;
-mod builder;
+pub mod builder;
 pub mod contributions;
 pub mod diagnostic;
 pub mod file_package;
@@ -30,8 +30,9 @@ use std::sync::Arc;
 
 use baml_base::SourceFile;
 
+pub use builder::SemanticIndexBuilder;
+
 use crate::{
-    builder::SemanticIndexBuilder,
     contributions::FileSymbolContributions,
     item_tree::ItemTree,
     semantic_index::{FileSemanticIndex, ScopeBindings},

@@ -11,7 +11,7 @@
 use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageId, package_items},
+    package::PackageId,
     scope::ScopeKind,
     semantic_index::DefinitionSite,
 };
@@ -51,7 +51,7 @@ pub fn resolve_name_at<'db>(
     at_offset: TextSize,
     name: &Name,
 ) -> ResolvedName<'db> {
-    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let scope_id = index.scope_at_offset(at_offset, None);
 
     // Walk ancestor scopes from innermost to outermost
@@ -94,7 +94,7 @@ pub fn resolve_name_at<'db>(
         if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
             let pkg_id = PackageId::new(db, pkg_info.package.clone());
-            let pkg_items = package_items(db, pkg_id);
+            let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
             // Build the lookup path: [namespace_path..., name].
             // For files with non-empty namespace_path (e.g. ["llm"]),
@@ -115,7 +115,7 @@ pub fn resolve_name_at<'db>(
             // package is not already `baml` (avoids double lookup).
             if pkg_info.package.as_str() != "baml" {
                 let builtin_pkg_id = PackageId::new(db, Name::new("baml"));
-                let builtin_items = package_items(db, builtin_pkg_id);
+                let builtin_items = baml_compiler2_ppir::package_items(db, builtin_pkg_id);
                 if let Some(def) = builtin_items.lookup_value(&[name.clone()]) {
                     return ResolvedName::Builtin(def);
                 }
@@ -160,7 +160,7 @@ pub fn resolve_path_at<'db>(
     };
 
     let pkg_id = PackageId::new(db, pkg_name);
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let after_pkg = &segments[1..];
 
