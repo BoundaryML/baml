@@ -5,21 +5,78 @@
 //!   - Vertex AI: `https://{location}-aiplatform.googleapis.com/v1/...`  (`OAuth2`)
 //!   - Google AI: `https://generativelanguage.googleapis.com/v1beta/...` (API key)
 //!
-//! Body serialization uses the official `google-cloud-aiplatform-v1` crate's
-//! typed `GenerateContentRequest` struct.
+//! Body serialization mirrors the `GenerateContentRequest` schema from the
+//! Google Cloud AI Platform v1 REST API. The types here are local serde structs
+//! (not the `google-cloud-aiplatform-v1` crate) so the builder works on wasm32.
 //!
 //! Auth is NOT handled here -- `auth_request` will be responsible for adding
 //! `OAuth2` bearer tokens or API-key query params.
 
 use baml_base::MediaKind;
 use baml_builtins::{MediaContent, PromptAst, PromptAstSimple};
-use google_cloud_aiplatform_v1::model::{self as gcp, part};
 use indexmap::IndexMap;
+use serde::Serialize;
 
 use super::{
     BuildRequestCallbacks, BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder,
     RawHttpRequest, build_headers, forward_options, get_string_option, mime_type_as_ok,
 };
+
+// ---------------------------------------------------------------------------
+// GenerateContentRequest serde types (camelCase, matching the REST API)
+// ---------------------------------------------------------------------------
+
+/// Top-level request body for `generateContent`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GenerateContentRequest {
+    contents: Vec<Content>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system_instruction: Option<Content>,
+}
+
+/// A message in the conversation.
+#[derive(Debug, Serialize)]
+struct Content {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    role: Option<String>,
+    parts: Vec<Part>,
+}
+
+/// A single part within a `Content` message.
+///
+/// Serializes as exactly one of `{ "text": "..." }`,
+/// `{ "inlineData": { ... } }`, or `{ "fileData": { ... } }`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum Part {
+    Text(String),
+    InlineData(Blob),
+    FileData(FileData),
+}
+
+/// Inline binary data (base64-encoded by serde via the REST API convention).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Blob {
+    mime_type: String,
+    /// Base64-encoded data -- passed through as-is since BAML already stores it
+    /// in base64 form.
+    data: String,
+}
+
+/// Reference to a file by URI (e.g. `gs://` or `https://`).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FileData {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mime_type: Option<String>,
+    file_uri: String,
+}
+
+// ---------------------------------------------------------------------------
+// Builder
+// ---------------------------------------------------------------------------
 
 /// Builder for Google Cloud Vertex AI and Google AI (Gemini) providers.
 pub(crate) struct GoogleBuilder;
@@ -46,16 +103,13 @@ impl LlmRequestBuilder for GoogleBuilder {
         let url = build_url(client, &model, stream)?;
         let headers = build_headers(IndexMap::new(), client);
 
-        // Build typed GenerateContentRequest from the prompt.
-        let (system_instruction, contents) = prompt_to_gcp_types(prompt, &client.default_role)?;
+        let (system_instruction, contents) =
+            extract_system_and_contents(prompt, &client.default_role)?;
 
-        let mut req = gcp::GenerateContentRequest::new()
-            .set_model(model)
-            .set_contents(contents);
-
-        if let Some(si) = system_instruction {
-            req = req.set_system_instruction(si);
-        }
+        let req = GenerateContentRequest {
+            contents,
+            system_instruction,
+        };
 
         // Serialize the typed request to a JSON map, then merge forwarded options.
         let mut body: serde_json::Map<String, serde_json::Value> = serde_json::to_value(&req)
@@ -63,10 +117,6 @@ impl LlmRequestBuilder for GoogleBuilder {
             .as_object()
             .cloned()
             .unwrap_or_default();
-
-        // The SDK always emits "model" in the body but the REST API takes it
-        // in the URL, not the body. Remove it to match what the API expects.
-        body.remove("model");
 
         forward_options(GOOGLE_SKIP_KEYS, client, &mut body);
 
@@ -169,20 +219,23 @@ fn build_url(
 }
 
 // ---------------------------------------------------------------------------
-// BAML PromptAst -> GCP SDK type conversions
+// BAML PromptAst -> GenerateContentRequest conversion
 // ---------------------------------------------------------------------------
 
-/// Convert a BAML `PromptAst` into GCP `Content` types for the request.
+/// Extract system instruction and contents from a `PromptAst`.
 ///
-/// Returns `(system_instruction, contents)` where system messages are collected
-/// into a single `Content` for `systemInstruction` and non-system messages
-/// become the `contents` array.
-fn prompt_to_gcp_types(
+/// System messages are collected into a single `Content` for `systemInstruction`.
+/// Non-system messages become entries in the `contents` array.
+///
+/// Roles are passed through as-is. The upstream compiler is responsible for
+/// remapping "assistant" -> "model" via `allowed_roles` / `default_role` config.
+/// This will be handled by compiler2's role remapping.
+fn extract_system_and_contents(
     prompt: bex_vm_types::PromptAst,
     default_role: &str,
-) -> Result<(Option<gcp::Content>, Vec<gcp::Content>), BuildRequestError> {
-    let mut system_parts: Vec<gcp::Part> = Vec::new();
-    let mut contents: Vec<gcp::Content> = Vec::new();
+) -> Result<(Option<Content>, Vec<Content>), BuildRequestError> {
+    let mut system_parts: Vec<Part> = Vec::new();
+    let mut contents: Vec<Content> = Vec::new();
 
     let items = match prompt.as_ref() {
         PromptAst::Vec(v) => v.clone(),
@@ -204,15 +257,17 @@ fn prompt_to_gcp_types(
                 metadata: _,
             } => {
                 let parts = content_to_parts(content)?;
-                contents.push(gcp::Content::new().set_role(role.clone()).set_parts(parts));
+                contents.push(Content {
+                    role: Some(role.clone()),
+                    parts,
+                });
             }
             PromptAst::Simple(content) => {
                 let parts = content_to_parts(content)?;
-                contents.push(
-                    gcp::Content::new()
-                        .set_role(default_role.to_string())
-                        .set_parts(parts),
-                );
+                contents.push(Content {
+                    role: Some(default_role.to_string()),
+                    parts,
+                });
             }
             PromptAst::Vec(_) => unreachable!(),
         }
@@ -221,18 +276,19 @@ fn prompt_to_gcp_types(
     let system_instruction = if system_parts.is_empty() {
         None
     } else {
-        Some(gcp::Content::new().set_parts(system_parts))
+        Some(Content {
+            role: None,
+            parts: system_parts,
+        })
     };
 
     Ok((system_instruction, contents))
 }
 
-/// Convert a `PromptAstSimple` content node into GCP `Part` values.
-fn content_to_parts(content: &PromptAstSimple) -> Result<Vec<gcp::Part>, BuildRequestError> {
+/// Convert a `PromptAstSimple` content node into `Part` values.
+fn content_to_parts(content: &PromptAstSimple) -> Result<Vec<Part>, BuildRequestError> {
     match content {
-        PromptAstSimple::String(s) => {
-            Ok(vec![gcp::Part::new().set_data(part::Data::Text(s.clone()))])
-        }
+        PromptAstSimple::String(s) => Ok(vec![Part::Text(s.clone())]),
         PromptAstSimple::Media(media) => media.read_content(|c| media_to_part(media, c)),
         PromptAstSimple::Multiple(items) => {
             let mut parts = Vec::new();
@@ -244,37 +300,29 @@ fn content_to_parts(content: &PromptAstSimple) -> Result<Vec<gcp::Part>, BuildRe
     }
 }
 
-/// Convert a media value into a GCP `Part` (`InlineData` or `FileData`).
+/// Convert a media value into a `Part` (`InlineData` or `FileData`).
 fn media_to_part(
     media: &baml_builtins::MediaValue,
     content: &MediaContent,
-) -> Result<Vec<gcp::Part>, BuildRequestError> {
+) -> Result<Vec<Part>, BuildRequestError> {
     match content {
         MediaContent::Url { url, .. } => {
-            let mut fd = gcp::FileData::new().set_file_uri(url.clone());
-            if let Some(mime) = &media.mime_type {
-                fd = fd.set_mime_type(mime.clone());
-            }
-            Ok(vec![
-                gcp::Part::new().set_data(part::Data::FileData(Box::new(fd))),
-            ])
+            let mime_type = media.mime_type.clone();
+            Ok(vec![Part::FileData(FileData {
+                mime_type,
+                file_uri: url.clone(),
+            })])
         }
         MediaContent::Base64 { base64_data, .. }
         | MediaContent::File {
             base64_data: Some(base64_data),
             ..
         } => {
-            let mime = mime_type_as_ok(media)?.to_string();
-            let raw_bytes =
-                base64::Engine::decode(&base64::engine::general_purpose::STANDARD, base64_data)
-                    .map_err(|e| BuildRequestError::InvalidOption {
-                        key: "media".into(),
-                        reason: format!("invalid base64: {e}"),
-                    })?;
-            let blob = gcp::Blob::new().set_mime_type(mime).set_data(raw_bytes);
-            Ok(vec![
-                gcp::Part::new().set_data(part::Data::InlineData(Box::new(blob))),
-            ])
+            let mime_type = mime_type_as_ok(media)?.to_string();
+            Ok(vec![Part::InlineData(Blob {
+                mime_type,
+                data: base64_data.clone(),
+            })])
         }
         MediaContent::File {
             base64_data: None, ..
@@ -536,13 +584,13 @@ mod tests {
     }
 
     // ========================================================================
-    // Body: assistant role remapped to model
+    // Body: roles passed through as-is
     // ========================================================================
 
-    #[tokio::test]
     // Roles are passed through as-is. The upstream compiler is responsible for
     // remapping "assistant" -> "model" via allowed_roles / default_role config.
     // This will be handled by compiler2's role remapping.
+    #[tokio::test]
     async fn vertex_roles_passed_through() {
         let client = make_vertex_client(vertex_opts());
         let prompt = Arc::new(PromptAst::Vec(vec![

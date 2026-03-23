@@ -187,7 +187,6 @@ pyo3 = { version = "0.23.3", default-features = false }
 pyo3-async-runtimes = { version = "0.23" }
 pyo3-build-config = "0.23"
 wee_alloc = "0.4"
-google-cloud-aiplatform-v1 = { version = "1.8", default-features = false, features = [ "prediction-service" ] }
 wiremock = "0.6"
 vfs = "0.12"
 wasm-logger = "0.2.0"

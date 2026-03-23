@@ -21,7 +21,6 @@ aws-smithy-runtime-api = { workspace = true }
 aws-smithy-types = { workspace = true }
 aws-types = { workspace = true }
 base64 = { workspace = true }
-google-cloud-aiplatform-v1 = { workspace = true }
 indexmap = { workspace = true }
 minijinja = { workspace = true }
 minijinja-contrib = { workspace = true }
