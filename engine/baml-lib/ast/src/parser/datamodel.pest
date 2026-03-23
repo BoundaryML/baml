@@ -62,7 +62,7 @@ field_attribute = { "@" ~ (path_identifier | identifier) ~ arguments_list? }
 // Pest is greedy, order is very important here.
 field_type          = { (union | non_union) ~ optional_token? }
 optional_token      = { "?" }
-union               = { base_type_with_attr ~ (field_operator ~ base_type_with_attr)+ }
+union               = { base_type_with_attr ~ (NEWLINE? ~ field_operator ~ NEWLINE? ~ base_type_with_attr)+ }
 literal_type        = { numeric_literal | quoted_string_literal }
 base_type_with_attr = { base_type ~ (NEWLINE? ~ field_attribute)* }
 base_type           = { array_notation | map | path_identifier | identifier | group | tuple | parenthesized_type | literal_type }

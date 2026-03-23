@@ -1,5 +1,14 @@
 type Primitive = int | string | bool | float
 
+// Wrapped union type aliases (newlines around pipe operators)
+type WrappedUnion = int
+    | string
+    | bool
+
+type WrappedUnion2 = int |
+    string |
+    bool
+
 type List = string[]
 
 type Graph = map<string, string[]>
