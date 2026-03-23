@@ -175,7 +175,9 @@ pub fn package_dependencies<'db>(
     package_id: PackageId<'db>,
 ) -> Vec<PackageId<'db>> {
     match package_id.name(db).as_str() {
-        "user" => vec![PackageId::new(db, Name::new("baml"))],
-        _ => vec![],
+        // The "baml" package provides core builtins; every other package
+        // implicitly depends on it.
+        "baml" => vec![],
+        _ => vec![PackageId::new(db, Name::new("baml"))],
     }
 }

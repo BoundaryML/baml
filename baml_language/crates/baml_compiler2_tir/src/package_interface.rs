@@ -491,6 +491,29 @@ pub fn package_resolution_context<'db>(
 // ── PackageResolutionContext lookup methods ─────────────────────────────────
 
 impl<'db> PackageResolutionContext<'db> {
+    /// Get `PackageItems` for an accessible package (own or declared dependency).
+    ///
+    /// Returns `Some` for the own package and any declared dependency,
+    /// `None` for undeclared packages.
+    pub fn items_for_package(
+        &self,
+        db: &'db dyn crate::Db,
+        pkg_name: &Name,
+    ) -> Option<&'db PackageItems<'db>> {
+        if pkg_name.as_str() == self.own_package_name.as_str() {
+            Some(self.own_items)
+        } else if self
+            .dep_interfaces
+            .iter()
+            .any(|(n, _)| n.as_str() == pkg_name.as_str())
+        {
+            let pkg_id = PackageId::new(db, pkg_name.clone());
+            Some(package_items(db, pkg_id))
+        } else {
+            None
+        }
+    }
+
     /// Resolve a type by path. Own-package via PackageItems, then deps.
     pub fn resolve_type(
         &self,

@@ -29,7 +29,6 @@ pub mod signature;
 use std::sync::Arc;
 
 use baml_base::SourceFile;
-
 pub use builder::SemanticIndexBuilder;
 
 use crate::{

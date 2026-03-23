@@ -2027,8 +2027,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             first.clone()
         };
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name);
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let Some(pkg_items) = self.res_ctx.items_for_package(db, &pkg_name) else {
+            return Ty::Unknown;
+        };
 
         if pkg_items.namespaces.is_empty() {
             return Ty::Unknown;
@@ -2502,7 +2503,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> FxHashMap<Name, Ty> {
         let mut result = FxHashMap::default();
         let short = Self::unqualify(class_name);
-        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package());
+        let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
+            return result;
+        };
         if let Some(def) = pkg_items_for_class.lookup_type_any_ns(&short) {
             if let Definition::Class(class_loc) = def {
                 let file = class_loc.file(self.context.db());
@@ -2542,18 +2545,13 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// Returns `self.package_items` when the class is in the current package,
     /// or loads the correct foreign package's items when the class lives in a
-    /// different package (e.g., `baml` builtins).
+    /// declared dependency package.
     fn resolve_class_pkg_items(
         &self,
         class_pkg: &baml_base::Name,
-    ) -> &'db baml_compiler2_hir::package::PackageItems<'db> {
+    ) -> Option<&'db baml_compiler2_hir::package::PackageItems<'db>> {
         let db = self.context.db();
-        if class_pkg.as_str() == self.package_id.name(db).as_str() {
-            self.package_items
-        } else {
-            let foreign_pkg_id = baml_compiler2_hir::package::PackageId::new(db, class_pkg.clone());
-            baml_compiler2_ppir::package_items(db, foreign_pkg_id)
-        }
+        self.res_ctx.items_for_package(db, class_pkg)
     }
 
     /// Look up a class method by name from the item tree.
@@ -2572,7 +2570,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         baml_compiler2_hir::loc::FunctionLoc<'db>,
     )> {
         let short = Self::unqualify(class_name);
-        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package());
+        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package())?;
         let def = pkg_items_for_class.lookup_type_any_ns(&short)?;
         let Definition::Class(class_loc) = def else {
             return None;
@@ -2704,8 +2702,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             first.clone()
         };
-        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, resolved_pkg_name);
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let Some(pkg_items) = self.res_ctx.items_for_package(db, &resolved_pkg_name) else {
+            return None;
+        };
 
         // Check that this package actually has items (non-empty = real package)
         if pkg_items.namespaces.is_empty() {
@@ -2871,9 +2870,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         member_name: &Name,
     ) -> Option<BuiltinResolution<'db>> {
         let db = self.context.db();
-        let baml_pkg_id =
-            baml_compiler2_hir::package::PackageId::new(db, baml_base::Name::new("baml"));
-        let baml_items = baml_compiler2_ppir::package_items(db, baml_pkg_id);
+        let baml_items = self
+            .res_ctx
+            .items_for_package(db, &baml_base::Name::new("baml"))?;
 
         // Look up the class by path (e.g. &["Array"] or &["media", "Image"]).
         let path: Vec<Name> = class_path.iter().map(|s| baml_base::Name::new(s)).collect();
@@ -3029,21 +3028,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         let db = self.context.db();
         let short = Self::unqualify(enum_name);
 
-        // First try the current package (common case: same-package enum).
-        let pkg_items_to_search = if *enum_name.package() == self.package_id.name(db) {
-            None // use self.package_items below
+        // Resolve the package that owns the enum via res_ctx.
+        let items = if *enum_name.package() == self.package_id.name(db) {
+            self.package_items
         } else {
-            // Cross-package enum: look it up in the enum's own package.
-            let pkg_id =
-                baml_compiler2_hir::package::PackageId::new(db, enum_name.package().clone());
-            Some(baml_compiler2_ppir::package_items(db, pkg_id))
+            match self.res_ctx.items_for_package(db, enum_name.package()) {
+                Some(items) => items,
+                None => return Vec::new(),
+            }
         };
 
         // Build the lookup path: namespace segments + enum name.
         let mut lookup_path: Vec<Name> = enum_name.namespace().to_vec();
         lookup_path.push(short);
-
-        let items = pkg_items_to_search.unwrap_or(self.package_items);
         if let Some(def) = items.lookup_type(&lookup_path) {
             if let Definition::Enum(enum_loc) = def {
                 let file = enum_loc.file(db);

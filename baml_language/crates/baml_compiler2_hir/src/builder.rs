@@ -71,11 +71,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     ///
     /// `file_range` is the full text range of the file (used for
     /// Project/Package/Namespace/File scopes).
-    pub fn build(
-        mut self,
-        items: Vec<ast::Item>,
-        file_range: TextRange,
-    ) -> FileSemanticIndex<'db> {
+    pub fn build(mut self, items: Vec<ast::Item>, file_range: TextRange) -> FileSemanticIndex<'db> {
         let pkg_info = file_package(self.db, self.file);
 
         // Build scope chain: Project → Package → Namespace* → File

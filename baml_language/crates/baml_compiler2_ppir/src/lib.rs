@@ -31,10 +31,7 @@ pub trait Db: baml_compiler2_hir::Db {}
 
 /// Canonical file_semantic_index — currently delegates to HIR.
 /// Will later merge synthetic stream_* items into the index.
-pub fn file_semantic_index<'db>(
-    db: &'db dyn Db,
-    file: SourceFile,
-) -> &'db FileSemanticIndex<'db> {
+pub fn file_semantic_index<'db>(db: &'db dyn Db, file: SourceFile) -> &'db FileSemanticIndex<'db> {
     baml_compiler2_hir::file_semantic_index(db, file)
 }
 

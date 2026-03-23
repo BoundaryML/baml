@@ -10,10 +10,7 @@
 
 use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::{
-    contributions::Definition,
-    package::PackageId,
-    scope::ScopeKind,
-    semantic_index::DefinitionSite,
+    contributions::Definition, package::PackageId, scope::ScopeKind, semantic_index::DefinitionSite,
 };
 use text_size::TextSize;
 
@@ -90,11 +87,12 @@ pub fn resolve_name_at<'db>(
             }
         }
 
-        // At File/Package scope, check package_items
+        // At File/Package scope, check package_items via PackageResolutionContext
         if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
             let pkg_id = PackageId::new(db, pkg_info.package.clone());
-            let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+            let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
+            let pkg_items = res_ctx.own_items;
 
             // Build the lookup path: [namespace_path..., name].
             // For files with non-empty namespace_path (e.g. ["llm"]),
@@ -111,16 +109,15 @@ pub fn resolve_name_at<'db>(
                 return ResolvedName::Item(def);
             }
 
-            // Check builtin package (`baml`) — only if this file's own
-            // package is not already `baml` (avoids double lookup).
-            if pkg_info.package.as_str() != "baml" {
-                let builtin_pkg_id = PackageId::new(db, Name::new("baml"));
-                let builtin_items = baml_compiler2_ppir::package_items(db, builtin_pkg_id);
-                if let Some(def) = builtin_items.lookup_value(&[name.clone()]) {
-                    return ResolvedName::Builtin(def);
-                }
-                if let Some(def) = builtin_items.lookup_type(&[name.clone()]) {
-                    return ResolvedName::Builtin(def);
+            // Check declared dependencies (e.g. `baml` builtins) via res_ctx.
+            for (dep_name, _) in &res_ctx.dep_interfaces {
+                if let Some(dep_items) = res_ctx.items_for_package(db, dep_name) {
+                    if let Some(def) = dep_items.lookup_value(&[name.clone()]) {
+                        return ResolvedName::Builtin(def);
+                    }
+                    if let Some(def) = dep_items.lookup_type(&[name.clone()]) {
+                        return ResolvedName::Builtin(def);
+                    }
                 }
             }
         }
@@ -152,15 +149,20 @@ pub fn resolve_path_at<'db>(
 
     // First segment: `root` maps to the current file's package,
     // anything else is a literal package name.
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_name = if segments[0].as_str() == "root" {
-        let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
         pkg_info.package.clone()
     } else {
         segments[0].clone()
     };
 
-    let pkg_id = PackageId::new(db, pkg_name);
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    // Use PackageResolutionContext to validate access to the target package.
+    let own_pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let res_ctx = crate::package_interface::package_resolution_context(db, own_pkg_id);
+
+    let Some(pkg_items) = res_ctx.items_for_package(db, &pkg_name) else {
+        return ResolvedName::Unknown;
+    };
 
     let after_pkg = &segments[1..];
 
