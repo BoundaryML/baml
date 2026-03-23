@@ -81,7 +81,7 @@ fn parse_union(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
                     types.push(f)
                 }
             }
-            Rule::field_operator => {}
+            Rule::field_operator | Rule::NEWLINE => {}
 
             _ => unreachable_rule(&current, "union", diagnostics),
         }
