@@ -33,14 +33,13 @@ pub(crate) enum LlmProvider {
     #[strum(serialize = "anthropic")]
     Anthropic,
 
-    // --- Providers not yet supported by build_request ---
-    /// Google AI (Gemini) — deferred
-    #[strum(serialize = "google-ai")]
-    GoogleAi,
-
-    /// Vertex AI — deferred
+    /// Vertex AI -- uses `GenerateContentRequest` serialization
     #[strum(serialize = "vertex-ai")]
     VertexAi,
+
+    /// Google AI (Gemini) -- uses `GenerateContentRequest` serialization
+    #[strum(serialize = "google-ai")]
+    GoogleAi,
 
     /// AWS Bedrock — uses Converse API with `SigV4` signing
     #[strum(serialize = "aws-bedrock")]

@@ -4,6 +4,7 @@
 
 mod anthropic;
 mod bedrock;
+mod google;
 mod openai;
 
 use std::str::FromStr;
@@ -101,6 +102,15 @@ pub(crate) fn forward_options(
     }
 }
 
+/// Check if a Vertex AI client is configured for Anthropic (Claude) models.
+///
+/// The legacy engine detects this via `anthropic_version` in the options, or
+/// model names starting with "claude".
+fn is_anthropic_on_vertex(client: &LlmPrimitiveClient) -> bool {
+    client.options.contains_key("anthropic_version")
+        || get_string_option(client, "model").is_some_and(|m| m.starts_with("claude"))
+}
+
 /// Build a provider-specific HTTP request from a specialized prompt.
 ///
 /// Returns an owned `HttpRequest` matching the `baml.http.Request` class:
@@ -147,10 +157,21 @@ pub(crate) async fn build_request(
                 .build_request(client, prompt, stream, &callbacks)
                 .await?
         }
-        LlmProvider::GoogleAi
-        | LlmProvider::VertexAi
-        | LlmProvider::BamlFallback
-        | LlmProvider::BamlRoundRobin => {
+        LlmProvider::VertexAi if is_anthropic_on_vertex(client) => {
+            let mut raw = anthropic::AnthropicBuilder
+                .build_request(client, prompt, stream, &callbacks)
+                .await?;
+            // Anthropic-on-Vertex uses rawPredict/streamRawPredict endpoints
+            // with the standard Anthropic body format (including stream: true).
+            raw.url = google::vertex_anthropic_url(client, stream)?;
+            raw
+        }
+        LlmProvider::VertexAi | LlmProvider::GoogleAi => {
+            google::GoogleBuilder
+                .build_request(client, prompt, stream, &callbacks)
+                .await?
+        }
+        LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => {
             return Err(BuildRequestError::UnsupportedLlmProvider(
                 client.provider.clone(),
             ));
@@ -181,6 +202,17 @@ pub(crate) async fn build_request(
             crate::auth_request::BedrockAuth
                 .authorize(raw, client, &callbacks)
                 .await?
+        }
+        LlmProvider::VertexAi if is_anthropic_on_vertex(client) => {
+            // Anthropic-on-Vertex needs the anthropic-version header.
+            // Vertex OAuth2 auth is not yet implemented here.
+            crate::auth_request::AnthropicAuth
+                .authorize(raw, client, &callbacks)
+                .await?
+        }
+        LlmProvider::VertexAi | LlmProvider::GoogleAi => {
+            // Auth not yet implemented -- return the raw request as-is.
+            raw
         }
         _ => unreachable!("unsupported providers rejected above"),
     };
@@ -1032,6 +1064,165 @@ mod tests {
                     "temperature": 0.5,
                 }
             })
+        );
+    }
+
+    // ========================================================================
+    // Vertex AI tests (Gemini + Anthropic-on-Vertex)
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_vertex_gemini_url_and_body() {
+        let client = make_client(
+            "vertex-ai",
+            vec![
+                ("model", BexExternalValue::String("gemini-1.5-pro".into())),
+                ("location", BexExternalValue::String("us-central1".into())),
+                ("project_id", BexExternalValue::String("my-project".into())),
+            ],
+        );
+        let prompt = msg("user", "Hello");
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
+        assert_eq!(result.method, "POST");
+        assert!(result.url.contains("generateContent"));
+        assert!(!result.url.contains("rawPredict"));
+        let body = parse_body(&result);
+        assert!(body.get("contents").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_vertex_anthropic_uses_raw_predict() {
+        let client = make_client(
+            "vertex-ai",
+            vec![
+                (
+                    "model",
+                    BexExternalValue::String("claude-3-5-sonnet@20241022".into()),
+                ),
+                ("location", BexExternalValue::String("us-east5".into())),
+                ("project_id", BexExternalValue::String("my-project".into())),
+                (
+                    "anthropic_version",
+                    BexExternalValue::String("vertex-2023-10-16".into()),
+                ),
+                ("max_tokens", BexExternalValue::Int(1000)),
+            ],
+        );
+        let prompt = Arc::new(PromptAst::Vec(vec![
+            msg("system", "Be helpful."),
+            msg("user", "Hello"),
+        ]));
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
+
+        // URL should use rawPredict, not generateContent
+        assert!(
+            result.url.contains("rawPredict"),
+            "expected rawPredict in URL, got: {}",
+            result.url
+        );
+        assert!(result.url.contains("claude-3-5-sonnet@20241022:rawPredict"),);
+        assert_eq!(
+            result.url,
+            "https://us-east5-aiplatform.googleapis.com/v1/projects/my-project/locations/us-east5/publishers/google/models/claude-3-5-sonnet@20241022:rawPredict"
+        );
+
+        // Body should be Anthropic format (messages, system, max_tokens)
+        let body = parse_body(&result);
+        assert!(
+            body.get("messages").is_some(),
+            "expected Anthropic body format"
+        );
+        assert!(body.get("system").is_some());
+        assert!(
+            body.get("contents").is_none(),
+            "should NOT have Gemini contents"
+        );
+        assert_eq!(body["max_tokens"], 1000);
+
+        // Should have anthropic-version header
+        assert_eq!(
+            result.headers.get("anthropic-version").unwrap(),
+            "vertex-2023-10-16"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_vertex_anthropic_stream_uses_stream_raw_predict() {
+        let client = make_client(
+            "vertex-ai",
+            vec![
+                (
+                    "model",
+                    BexExternalValue::String("claude-3-5-sonnet@20241022".into()),
+                ),
+                ("location", BexExternalValue::String("us-east5".into())),
+                ("project_id", BexExternalValue::String("my-project".into())),
+                (
+                    "anthropic_version",
+                    BexExternalValue::String("vertex-2023-10-16".into()),
+                ),
+            ],
+        );
+        let prompt = msg("user", "Hello");
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, true, &h, &e, &f).await
+        }
+        .unwrap();
+        assert!(result.url.contains("streamRawPredict"));
+
+        // Anthropic body should have stream: true
+        let body = parse_body(&result);
+        assert_eq!(body["stream"], true);
+    }
+
+    #[tokio::test]
+    async fn test_vertex_claude_model_detected_without_anthropic_version() {
+        let client = make_client(
+            "vertex-ai",
+            vec![
+                ("model", BexExternalValue::String("claude-3-haiku".into())),
+                ("location", BexExternalValue::String("us-east5".into())),
+                ("project_id", BexExternalValue::String("my-project".into())),
+            ],
+        );
+        let prompt = msg("user", "Hello");
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
+        // Model name starts with "claude" so it should use rawPredict
+        assert!(result.url.contains("rawPredict"));
+    }
+
+    // ========================================================================
+    // Google AI tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_google_ai_url() {
+        let client = make_client(
+            "google-ai",
+            vec![("model", BexExternalValue::String("gemini-1.5-flash".into()))],
+        );
+        let prompt = msg("user", "Hello");
+        let result = {
+            let (h, e, f) = stub_callbacks();
+            build_request(&client, prompt, false, &h, &e, &f).await
+        }
+        .unwrap();
+        assert_eq!(
+            result.url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
         );
     }
 }
