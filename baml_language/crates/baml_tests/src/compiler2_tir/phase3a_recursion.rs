@@ -69,7 +69,7 @@ fn type_alias_cycle_used_in_function() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     type user.Loop = user.Loop
       !! 0..16: recursive type alias cycle: Loop
-    function user.f(x: user.Loop) -> user.Loop {
+    function user.f(x: user.Loop) -> user.Loop throws never {
       { : never
         return x : user.Loop
       }

@@ -7,7 +7,7 @@ fn literal_int() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { return 1; }");
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         return 1 : 1
       }
@@ -20,7 +20,7 @@ fn let_binding_widens() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { let x = 1; return x; }");
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         let x = 1 : 1 -> int
         return x : int
@@ -40,7 +40,7 @@ fn class_field_access() {
     class user.Foo {
       name: string
     }
-    function user.f(x: user.Foo) -> string {
+    function user.f(x: user.Foo) -> string throws never {
       { : never
         return x.name : string
       }
@@ -53,7 +53,7 @@ fn type_mismatch() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> string { return 1; }");
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> string {
+    function user.f() -> string throws never {
       { : never
         return 1 : 1
       }
@@ -73,7 +73,7 @@ fn unresolved_field() {
     class user.Foo {
       name: string
     }
-    function user.f(x: user.Foo) -> string {
+    function user.f(x: user.Foo) -> string throws never {
       { : never
         return x.missing : unknown
       }
@@ -90,7 +90,7 @@ fn binary_op_int_add() {
         "function f(a: int, b: int) -> int { return a + b; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(a: int, b: int) -> int {
+    function user.f(a: int, b: int) -> int throws never {
       { : never
         return a Add b : int
       }
@@ -106,7 +106,7 @@ fn if_else_joins_types() {
         "function f(x: bool) -> int { return if (x) { 1 } else { 2 }; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(x: bool) -> int {
+    function user.f(x: bool) -> int throws never {
       { : never
         return : 1 | 2
           if (x : bool) : 1 | 2
@@ -131,7 +131,7 @@ fn enum_variant_resolution() {
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
     enum user.Color
-    function user.f() -> user.Color {
+    function user.f() -> user.Color throws never {
       { : never
         return Color.Red : user.Color.Red
       }
@@ -167,12 +167,12 @@ fn two_functions_independent() {
         "function ok() -> int { return 1; }\nfunction bad() -> string { return 42; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.ok() -> int {
+    function user.ok() -> int throws never {
       { : never
         return 1 : 1
       }
     }
-    function user.bad() -> string {
+    function user.bad() -> string throws never {
       { : never
         return 42 : 42
       }
