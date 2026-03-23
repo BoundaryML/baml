@@ -27,6 +27,7 @@ use text_size::TextRange;
 
 use crate::{
     infer_context::{InferContext, RelatedLocation, TirTypeError, TypeCheckDiagnostics},
+    package_interface::PackageResolutionContext,
     ty::{Freshness, PrimitiveType, Ty},
 };
 
@@ -94,7 +95,9 @@ pub struct TypeInferenceBuilder<'db> {
     /// method or free function, records the structural path so MIR can emit
     /// the correct QualifiedName without re-doing resolution.
     resolutions: FxHashMap<ExprId, crate::inference::MethodResolution<'db>>,
-    /// Package items for cross-file name resolution.
+    /// Resolution context: own PackageItems + dependency PackageInterfaces.
+    res_ctx: &'db PackageResolutionContext<'db>,
+    /// Convenience: own package items (from res_ctx).
     package_items: &'db PackageItems<'db>,
     /// Current package ID (for throw-set queries).
     package_id: PackageId<'db>,
@@ -135,12 +138,13 @@ pub struct TypeInferenceBuilder<'db> {
 impl<'db> TypeInferenceBuilder<'db> {
     pub fn new(
         context: InferContext<'db>,
-        package_items: &'db PackageItems<'db>,
+        res_ctx: &'db PackageResolutionContext<'db>,
         package_id: PackageId<'db>,
         scope: ScopeId<'db>,
         aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
     ) -> Self {
         let db = context.db();
+        let package_items = res_ctx.own_items;
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, scope.file(db));
         let ns_context = pkg_info.namespace_path.clone();
         Self {
@@ -148,6 +152,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             expressions: FxHashMap::default(),
             bindings: FxHashMap::default(),
             resolutions: FxHashMap::default(),
+            res_ctx,
             package_items,
             package_id,
             scope,

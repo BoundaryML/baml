@@ -24,6 +24,7 @@ pub mod inference;
 pub mod lower_type_expr;
 pub mod narrowing;
 pub mod normalize;
+pub mod package_interface;
 pub mod resolve;
 pub mod throw_inference;
 pub mod ty;

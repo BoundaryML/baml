@@ -199,11 +199,12 @@ pub fn infer_scope_types<'db>(
     // Get package items for cross-file resolution
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = package_items(db, pkg_id);
+    let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
+    let pkg_items = res_ctx.own_items;
 
     let aliases = collect_type_aliases(db, pkg_items);
     let context = InferContext::new(db, scope_id);
-    let mut builder = TypeInferenceBuilder::new(context, pkg_items, pkg_id, scope_id, aliases);
+    let mut builder = TypeInferenceBuilder::new(context, res_ctx, pkg_id, scope_id, aliases);
 
     // Dispatch based on scope kind
     match &scope.kind {

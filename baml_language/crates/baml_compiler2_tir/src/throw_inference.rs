@@ -11,7 +11,7 @@ use baml_base::Name;
 use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
-    package::{PackageId, PackageItems, package_items},
+    package::{PackageId, PackageItems, package_dependencies, package_items},
 };
 
 use crate::{
@@ -64,11 +64,24 @@ pub fn function_throw_sets<'db>(
     package_id: PackageId<'db>,
 ) -> FunctionThrowSets {
     let pkg_items = package_items(db, package_id);
+    // Load dependency interfaces for cross-package throw lookup
+    let dep_interfaces: Vec<(Name, &crate::package_interface::PackageInterface)> =
+        package_dependencies(db, package_id)
+            .iter()
+            .map(|dep_id| {
+                let name = dep_id.name(db).clone();
+                let iface = crate::package_interface::package_interface(db, *dep_id);
+                (name, iface)
+            })
+            .collect();
+
     let mut graph: baml_compiler_analysis::AnalysisGraph<Name, ThrowFact> =
         baml_compiler_analysis::AnalysisGraph::new();
 
     let mut call_edges: BTreeMap<Name, BTreeSet<Name>> = BTreeMap::new();
     let mut has_declared_contract: BTreeMap<Name, bool> = BTreeMap::new();
+    // Track direct facts separately so we can merge cross-package facts before adding to graph
+    let mut direct_facts: BTreeMap<Name, BTreeSet<ThrowFact>> = BTreeMap::new();
 
     for ns in pkg_items.namespaces.values() {
         for (short_name, def) in &ns.values {
@@ -94,8 +107,6 @@ pub fn function_throw_sets<'db>(
                     &func_data.generic_params,
                     &mut diags,
                 );
-                // These diagnostics are reported at the signature site by inference;
-                // throw graph propagation still uses best-effort lowering.
                 drop(diags);
                 flatten_ty_to_facts(&lowered)
             });
@@ -108,7 +119,7 @@ pub fn function_throw_sets<'db>(
                 BTreeSet::new()
             };
 
-            graph.add_node(key.clone(), direct);
+            direct_facts.insert(key.clone(), direct);
             has_declared_contract.insert(key.clone(), declared_throws.is_some());
 
             if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
@@ -117,12 +128,40 @@ pub fn function_throw_sets<'db>(
         }
     }
 
+    // Process call edges: for cross-package targets, merge their throw facts
+    // into the caller's direct facts; for same-package targets, add edges.
     for (from, targets) in &call_edges {
         if has_declared_contract.get(from).copied().unwrap_or(false) {
             continue;
         }
         for to in targets {
-            graph.add_edge(from.clone(), to.clone());
+            if let Some(dep_throws) = lookup_dep_throw_set(&dep_interfaces, to) {
+                // Cross-package: merge dependency's transitive throw facts into caller's direct facts
+                direct_facts
+                    .entry(from.clone())
+                    .or_default()
+                    .extend(dep_throws.iter().cloned());
+            } else {
+                // Same-package: will add edge after nodes are added
+                // (edges added below)
+            }
+        }
+    }
+
+    // Add all nodes with their (possibly enriched) direct facts
+    for (key, facts) in &direct_facts {
+        graph.add_node(key.clone(), facts.clone());
+    }
+
+    // Add same-package call edges
+    for (from, targets) in &call_edges {
+        if has_declared_contract.get(from).copied().unwrap_or(false) {
+            continue;
+        }
+        for to in targets {
+            if lookup_dep_throw_set(&dep_interfaces, to).is_none() {
+                graph.add_edge(from.clone(), to.clone());
+            }
         }
     }
 
@@ -355,6 +394,19 @@ fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
             out.insert(ty.clone());
         }
     }
+}
+
+/// Look up a function's transitive throw set from dependency interfaces.
+fn lookup_dep_throw_set<'a>(
+    dep_interfaces: &'a [(Name, &crate::package_interface::PackageInterface)],
+    target_name: &Name,
+) -> Option<&'a BTreeSet<ThrowFact>> {
+    for (_dep_name, dep_iface) in dep_interfaces {
+        if let Some(throws) = dep_iface.throw_sets.transitive_for(target_name) {
+            return Some(throws);
+        }
+    }
+    None
 }
 
 pub fn is_banned_catch_binding_type(ty: &TypeExpr) -> Option<&'static str> {

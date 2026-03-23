@@ -358,14 +358,14 @@ pub fn generate_project_bytecode(
         }
 
         // Track package init order for runtime.
-        // Sort packages: non-user packages first (alphabetical), then "user".
-        // This ensures `baml.$init` runs before the user package's `$init`.
-        let mut sorted_pkg_names: Vec<&String> = pkg_lets.keys().collect();
-        sorted_pkg_names.sort_by(|a, b| match (a.as_str(), b.as_str()) {
-            ("user", _) => std::cmp::Ordering::Greater,
-            (_, "user") => std::cmp::Ordering::Less,
-            (a, b) => a.cmp(b),
-        });
+        // Topological sort: dependencies before dependents.
+        let pkg_name_list: Vec<baml_base::Name> =
+            pkg_lets.keys().map(|s| baml_base::Name::new(s)).collect();
+        let sorted_pkg_name_owned = topological_sort_packages(db, &pkg_name_list);
+        let sorted_pkg_names: Vec<&String> = sorted_pkg_name_owned
+            .iter()
+            .filter_map(|name| pkg_lets.keys().find(|k| k.as_str() == name.as_str()))
+            .collect();
         let mut package_init_order: Vec<String> = Vec::new();
 
         for pkg_name in &sorted_pkg_names {
@@ -575,6 +575,61 @@ fn build_line_starts(text: &str) -> Vec<u32> {
 }
 
 // ─── Let-binding helpers ─────────────────────────────────────────────────────
+
+/// Topological sort of packages: dependencies come before dependents.
+/// Falls back to alphabetical order for packages at the same depth.
+fn topological_sort_packages(
+    db: &dyn baml_compiler2_tir::Db,
+    pkg_names: &[baml_base::Name],
+) -> Vec<baml_base::Name> {
+    use std::collections::{HashMap, VecDeque};
+
+    use baml_compiler2_hir::package::{PackageId, package_dependencies};
+
+    let pkg_set: std::collections::HashSet<&baml_base::Name> = pkg_names.iter().collect();
+    let mut in_degree: HashMap<baml_base::Name, usize> = HashMap::new();
+    let mut dependents: HashMap<baml_base::Name, Vec<baml_base::Name>> = HashMap::new();
+
+    for name in pkg_names {
+        in_degree.entry(name.clone()).or_insert(0);
+        let pkg_id = PackageId::new(db, name.clone());
+        for dep_id in package_dependencies(db, pkg_id) {
+            let dep_name = dep_id.name(db).clone();
+            if pkg_set.contains(&dep_name) {
+                *in_degree.entry(name.clone()).or_insert(0) += 1;
+                dependents.entry(dep_name).or_default().push(name.clone());
+            }
+        }
+    }
+
+    // Kahn's algorithm
+    let mut initial: Vec<baml_base::Name> = in_degree
+        .iter()
+        .filter(|(_, deg)| **deg == 0)
+        .map(|(name, _)| name.clone())
+        .collect();
+    initial.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+    let mut queue: VecDeque<baml_base::Name> = initial.into_iter().collect();
+
+    let mut result = Vec::new();
+    while let Some(name) = queue.pop_front() {
+        result.push(name.clone());
+        if let Some(deps) = dependents.get(&name) {
+            let mut next = Vec::new();
+            for dep in deps {
+                let deg = in_degree.get_mut(dep).unwrap();
+                *deg -= 1;
+                if *deg == 0 {
+                    next.push(dep.clone());
+                }
+            }
+            next.sort_by(|a, b| a.as_str().cmp(b.as_str()));
+            queue.extend(next);
+        }
+    }
+
+    result
+}
 
 /// Topologically sort let bindings by their dependencies.
 ///

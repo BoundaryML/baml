@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.MayFail(x: int) -> string {
+function user.MayFail(x: int) -> string throws never {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -11,7 +11,7 @@ function user.MayFail(x: int) -> string {
         "ok" : "ok"
   }
 }
-function user.MayFailIntOrString(x: int) -> string {
+function user.MayFailIntOrString(x: int) -> string throws never {
   { : "ok"
     match (x : int) : "ok"
       0 =>
@@ -22,7 +22,7 @@ function user.MayFailIntOrString(x: int) -> string {
         "ok" : "ok"
   }
 }
-function user.AlsoMayFail(x: int) -> string {
+function user.AlsoMayFail(x: int) -> string throws never {
   { : "also ok"
     match (x : int) : "also ok"
       0 =>
@@ -31,7 +31,7 @@ function user.AlsoMayFail(x: int) -> string {
         "also ok" : "also ok"
   }
 }
-function user.SingleCatchWildcard(x: int) -> string {
+function user.SingleCatchWildcard(x: int) -> string throws never {
   { : string | "caught"
     catch (MayFail(x) : string) : unknown
       catch (e)
@@ -39,7 +39,7 @@ function user.SingleCatchWildcard(x: int) -> string {
           "caught" : "caught"
   }
 }
-function user.SingleCatchTyped(x: int) -> string {
+function user.SingleCatchTyped(x: int) -> string throws never {
   { : string | "caught string"
     catch (MayFail(x) : string) : unknown
       catch (e)
@@ -47,7 +47,7 @@ function user.SingleCatchTyped(x: int) -> string {
           "caught string" : "caught string"
   }
 }
-function user.CatchWithFallback(x: int) -> string {
+function user.CatchWithFallback(x: int) -> string throws never {
   { : string | "caught string" | "caught int fallback"
     catch (MayFailIntOrString(x) : string) : unknown
       catch (e)
@@ -58,7 +58,7 @@ function user.CatchWithFallback(x: int) -> string {
           "caught int fallback" : "caught int fallback"
   }
 }
-function user.CatchWithTypedArm(x: int) -> string {
+function user.CatchWithTypedArm(x: int) -> string throws never {
   { : string | "caught string"
     catch (MayFail(x) : string) : unknown
       catch (e)
@@ -66,7 +66,7 @@ function user.CatchWithTypedArm(x: int) -> string {
           "caught string" : "caught string"
   }
 }
-function user.MultipleCatchArms(x: int) -> string {
+function user.MultipleCatchArms(x: int) -> string throws never {
   { : string | "caught string" | "caught int"
     catch (MayFailIntOrString(x) : string) : unknown
       catch (e)
@@ -76,7 +76,7 @@ function user.MultipleCatchArms(x: int) -> string {
           "caught int" : "caught int"
   }
 }
-function user.NestedCatch(x: int) -> string {
+function user.NestedCatch(x: int) -> string throws never {
   { : string | "inner caught"
     let inner = : string | "inner caught"
       catch (MayFail(x) : string) : string | "inner caught"
@@ -89,7 +89,7 @@ function user.NestedCatch(x: int) -> string {
           inner : string | "inner caught"
   }
 }
-function user.CatchAndRethrow(x: int) -> string {
+function user.CatchAndRethrow(x: int) -> string throws never {
   { : string
     catch (MayFail(x) : string) : unknown
       catch (e)
@@ -97,14 +97,14 @@ function user.CatchAndRethrow(x: int) -> string {
           throw e : never
   }
 }
-function user.ThrowStatement(x: int) -> string {
+function user.ThrowStatement(x: int) -> string throws never {
   { : never
     throw "error" : "error"
     "unreachable" : unknown
   }
   !! 3181..3199: unreachable code: 1 statement(s) after diverging statement
 }
-function user.ChainedCatchClauses(x: int) -> string {
+function user.ChainedCatchClauses(x: int) -> string throws never {
   { : string | "first handler" | "second handler"
     catch (MayFailIntOrString(x) : string) : unknown
       catch (e)
@@ -127,7 +127,7 @@ class baml.Map {
 --- <builtin>/baml/core.baml ---
 
 --- <builtin>/baml/env/env.baml ---
-function baml.env.get_or_panic(key: string) -> string {
+function baml.env.get_or_panic(key: string) -> string throws never {
   { : "" | string
     let val = get(key) : string?
     if (val Eq null : bool) : "" | string
@@ -193,7 +193,7 @@ class baml.http.Response {
   url: string
   _body: $rust_type
 }
-function baml.http.Response.ok(self: baml.http.Response) -> bool {
+function baml.http.Response.ok(self: baml.http.Response) -> bool throws never {
   { : bool
     self.status_code Ge 200 And self.status_code Lt 300 : bool
   }
@@ -216,7 +216,7 @@ class baml.llm.ExecutionContext {
 class baml.llm.PlannerState {
   rr_client_names: string[]
 }
-function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
+function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int throws never {
   { : int
     let offset = 0 : 0 -> int
     for seen_name in self.rr_client_names
@@ -229,7 +229,7 @@ function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, clie
     offset : int
   }
 }
-function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, sub_client_count: int) -> int {
+function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, sub_client_count: int) -> int throws never {
   { : int
     let local_offset = self.rr_local_offset(client_name) : int
     self.rr_client_names.push(client_name) : int
@@ -237,14 +237,14 @@ function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client
     base Add local_offset Mod sub_client_count : int
   }
 }
-function baml.llm.resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient {
+function baml.llm.resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient throws never {
   { : baml.llm.PrimitiveClient
     let llm_client = get_client(function_name) : baml.llm.Client
     let resolve_fn = llm_client.get_constructor() : () -> baml.llm.PrimitiveClient
     resolve_fn() : baml.llm.PrimitiveClient
   }
 }
-function baml.llm.render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
+function baml.llm.render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst throws never {
   { : baml.llm.PromptAst
     let jinja_string = get_jinja_template(function_name) : string
     let primitive_client = resolve_primitive(function_name) : baml.llm.PrimitiveClient
@@ -252,14 +252,14 @@ function baml.llm.render_prompt(function_name: string, args: map<string, unknown
     primitive_client.specialize_prompt(prompt) : baml.llm.PromptAst
   }
 }
-function baml.llm.build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request {
+function baml.llm.build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request throws never {
   { : baml.http.Request
     let primitive_client = resolve_primitive(function_name) : baml.llm.PrimitiveClient
     let specialized_prompt = render_prompt(function_name, args) : baml.llm.PromptAst
     primitive_client.build_request(specialized_prompt) : baml.http.Request
   }
 }
-function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T {
+function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws never {
   { : T
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : unknown
@@ -286,7 +286,7 @@ class baml.llm.Client {
   retry: baml.llm.RetryPolicy?
   counter: int
 }
-function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient {
+function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient throws never {
   { : baml.llm.PrimitiveClient
     if (self.name.includes("/") : bool) : baml.llm.PrimitiveClient
       { : never
@@ -298,13 +298,13 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
       }
   }
 }
-function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
+function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
     let planner_state = PlannerState { rr_client_names: [] } : unknown
     self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
+function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
   { : unknown[] | baml.llm.OrchestrationStep[] | never[]
     match (self.client_type : baml.llm.ClientType) : unknown[] | baml.llm.OrchestrationStep[] | never[]
       ClientType.Primitive =>
@@ -339,13 +339,13 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
         }
   }
 }
-function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
+function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
     let planner_state = PlannerState { rr_client_names: [] } : unknown
     self.build_plan_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
+function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
     match (self.retry : baml.llm.RetryPolicy?) : baml.llm.OrchestrationStep[]
       null =>
@@ -383,7 +383,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
         }
   }
 }
-function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T {
+function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws never {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
       null =>
@@ -431,7 +431,7 @@ function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.Exe
   }
   ?? 4138..4152: unreachable arm
 }
-function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T {
+function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T throws never {
   { : T
     match (self.client_type : baml.llm.ClientType) : T
       ClientType.Primitive =>

@@ -166,3 +166,16 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
 
     PackageItems { namespaces, extra }
 }
+
+/// Declares the packages that `package_id` depends on.
+/// Currently hardcoded: "user" depends on "baml", everything else depends on nothing.
+#[salsa::tracked(returns(ref))]
+pub fn package_dependencies<'db>(
+    db: &'db dyn crate::Db,
+    package_id: PackageId<'db>,
+) -> Vec<PackageId<'db>> {
+    match package_id.name(db).as_str() {
+        "user" => vec![PackageId::new(db, Name::new("baml"))],
+        _ => vec![],
+    }
+}

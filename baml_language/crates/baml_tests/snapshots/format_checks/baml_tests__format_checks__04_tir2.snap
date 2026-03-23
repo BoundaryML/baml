@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
+function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int throws never {
   { : int
     a Add b : int
     a Sub b : int
@@ -104,7 +104,7 @@ class user.ChainMetadata {
   created_at: string
   tags: string[]
 }
-function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<string, int>) -> string {
+function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<string, int>) -> string throws never {
   { : string
     user : user.ChainUser
     user.name : string
@@ -294,7 +294,7 @@ class user.InnerNested {
 class user.WithMethod {
   name: string
 }
-function user.WithMethod.greet() -> string {
+function user.WithMethod.greet() -> string throws never {
   { : "hello"
     "hello" : "hello"
   }
@@ -302,7 +302,7 @@ function user.WithMethod.greet() -> string {
 class user.WithLongMethod {
   name: string
 }
-function user.WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
+function user.WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> throws never {
   { : map<string, int | string | bool>
     map { "result": 1 } : map<string, int | string | bool>
   }
@@ -323,94 +323,94 @@ class user.DeepLevel3 {
   data: string
   nested: map<string, map<string, int>>
 }
-function user.BasicClient$new() -> ? {
+function user.BasicClient$new() -> ? throws never {
   PrimitiveClient { name: "BasicClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.FullClient$new() -> ? {
+function user.FullClient$new() -> ? throws never {
   PrimitiveClient { name: "FullClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4", "max_tokens": 100, "temperature": 0.7, "top_p": 0.9 } } } : unknown
 }
-function user.StringProviderClient$new() -> ? {
+function user.StringProviderClient$new() -> ? throws never {
   PrimitiveClient { name: "StringProviderClient", provider: "openai-generic", options: PrimitiveClientOptions { base_url: "https://openroute...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": 1 } } } : unknown
 }
-function user.NestedConfigClient$new() -> ? {
+function user.NestedConfigClient$new() -> ? throws never {
   PrimitiveClient { name: "NestedConfigClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.ArrayConfigClient$new() -> ? {
+function user.ArrayConfigClient$new() -> ? throws never {
   PrimitiveClient { name: "ArrayConfigClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4", "stop_sequences": ["END", "STOP", "DONE"] } } } : unknown
 }
-function user.LongOptionClient$new() -> ? {
+function user.LongOptionClient$new() -> ? throws never {
   PrimitiveClient { name: "LongOptionClient", provider: "openai", options: PrimitiveClientOptions { base_url: "https://some-real...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "some-extremely-lo..." } } } : unknown
 }
-function user.TypedValuesClient$new() -> ? {
+function user.TypedValuesClient$new() -> ? throws never {
   PrimitiveClient { name: "TypedValuesClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4", "temperature": 0.5, "max_tokens": 2048, "stream": "true" } } } : unknown
 }
-function user.EnvClient$new() -> ? {
+function user.EnvClient$new() -> ? throws never {
   PrimitiveClient { name: "EnvClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: env.get_or_panic("OPENAI_API_KEY"), provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.ArrayOfObjectsClient$new() -> ? {
+function user.ArrayOfObjectsClient$new() -> ? throws never {
   PrimitiveClient { name: "ArrayOfObjectsClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4", "tools": [] } } } : unknown
 }
-function user.RawStringConfigClient$new() -> ? {
+function user.RawStringConfigClient$new() -> ? throws never {
   PrimitiveClient { name: "RawStringConfigCl...", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4", "system_prompt": "#Youareahelpfulas..." } } } : unknown
 }
-function user.MixedValuesClient$new() -> ? {
+function user.MixedValuesClient$new() -> ? throws never {
   PrimitiveClient { name: "MixedValuesClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4", "max_tokens": 100, "temperature": 0.7, "stream": "true", "stop": ["END"], "inline_string": "#inlineraw#" } } } : unknown
 }
-function user.TriviaClient$new() -> ? {
+function user.TriviaClient$new() -> ? throws never {
   PrimitiveClient { name: "TriviaClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.TriviaClientBlock$new() -> ? {
+function user.TriviaClientBlock$new() -> ? throws never {
   PrimitiveClient { name: "TriviaClientBlock", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns$new() -> ? {
+function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns$new() -> ? throws never {
   PrimitiveClient { name: "ThisIsAnExtremely...", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.DeeplyNestedClient$new() -> ? {
+function user.DeeplyNestedClient$new() -> ? throws never {
   PrimitiveClient { name: "DeeplyNestedClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ { custom_config: _ { retry_on_failure: "true", timeout_ms: 30000, metadata: _ { team: "platform", environment: "production" } } }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.LongNestedValuesClient$new() -> ? {
+function user.LongNestedValuesClient$new() -> ? throws never {
   PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: PrimitiveClientOptions { base_url: "https://some-extr...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map { "model": 5 } } } : unknown
 }
-function user.ManyOptionsClient$new() -> ? {
+function user.ManyOptionsClient$new() -> ? throws never {
   PrimitiveClient { name: "ManyOptionsClient", provider: "openai", options: PrimitiveClientOptions { base_url: "https://api.opena...", default_role: null, allowed_roles: null, remap_roles: null, api_key: env.get_or_panic("OPENAI_API_KEY"), provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4", "max_tokens": 4096, "temperature": 0.7, "top_p": 0.95, "frequency_penalty": 0.5, "presence_penalty": 0.3, "stream": "true", "stop_sequences": ["END", "STOP", "DONE", "COMPLETE", "FINISHED"] } } } : unknown
 }
-function user.LongArrayClient$new() -> ? {
+function user.LongArrayClient$new() -> ? throws never {
   PrimitiveClient { name: "LongArrayClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4", "stop_sequences": ["STOP_GENERATION_NOW", "END_OF_RESPONSE_M...", "COMPLETION_FINISH...", "TERMINATE_OUTPUT_...", "FINAL_ANSWER_DELI..."] } } } : unknown
 }
-function user.LongArrayOfObjectsClient$new() -> ? {
+function user.LongArrayOfObjectsClient$new() -> ? throws never {
   PrimitiveClient { name: "LongArrayOfObject...", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4", "tools": [] } } } : unknown
 }
-function user.TriviaDeeplyNestedClient$new() -> ? {
+function user.TriviaDeeplyNestedClient$new() -> ? throws never {
   PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.TriviaDeeplyNestedClientBlock$new() -> ? {
+function user.TriviaDeeplyNestedClientBlock$new() -> ? throws never {
   PrimitiveClient { name: "TriviaDeeplyNeste...", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.TriviaLongValueClient$new() -> ? {
+function user.TriviaLongValueClient$new() -> ? throws never {
   PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: PrimitiveClientOptions { base_url: "https://some-real...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "some-extremely-lo..." } } } : unknown
 }
-function user.TriviaLongValueClientBlock$new() -> ? {
+function user.TriviaLongValueClientBlock$new() -> ? throws never {
   PrimitiveClient { name: "TriviaLongValueCl...", provider: "openai", options: PrimitiveClientOptions { base_url: "https://some-real...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "some-extremely-lo..." } } } : unknown
 }
-function user.TestTarget() -> string {
+function user.TestTarget() -> string throws never {
   baml.llm.call_llm_function<T>(BasicClient, "TestTarget", map {  }) : string
 }
-function user.TestTarget$render_prompt() -> baml.llm.PromptAst {
+function user.TestTarget$render_prompt() -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt("TestTarget", map {  }) : baml.llm.PromptAst
 }
-function user.TestTarget$build_request() -> baml.http.Request {
+function user.TestTarget$build_request() -> baml.http.Request throws never {
   baml.llm.build_request("TestTarget", map {  }) : baml.http.Request
 }
-function user.C$new() -> ? {
+function user.C$new() -> ? throws never {
   PrimitiveClient { name: "C", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.ExtraWhitespaceClient$new() -> ? {
+function user.ExtraWhitespaceClient$new() -> ? throws never {
   PrimitiveClient { name: "ExtraWhitespaceCl...", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
-function user.CommaClient$new() -> ? {
+function user.CommaClient$new() -> ? throws never {
   PrimitiveClient { name: "CommaClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4", "max_tokens": 100 } } } : unknown
 }
-function user.SameLineClient$new() -> ? {
+function user.SameLineClient$new() -> ? throws never {
   PrimitiveClient { name: "SameLineClient", provider: "openai", options: PrimitiveClientOptions { base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "model": "gpt-4" } } } : unknown
 }
 enum user.Minimal
@@ -435,133 +435,133 @@ enum user.LongVariantNames
 enum user.ManyVariants
 enum user.ExtraWhitespace
 enum user.DottedAttrEnum
-function user.Minimal() -> int {
+function user.Minimal() -> int throws never {
   { : 1
     1 : 1
   }
 }
-function user.SingleParam(x: int) -> int {
+function user.SingleParam(x: int) -> int throws never {
   { : int
     x : int
   }
 }
-function user.MultipleParams(a: int, b: int, c: string) -> int {
+function user.MultipleParams(a: int, b: int, c: string) -> int throws never {
   { : int
     a Add b : int
   }
 }
-function user.ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+function user.ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string throws never {
   { : "result"
     "result" : "result"
   }
 }
-function user.VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string {
+function user.VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string throws never {
   { : "result"
     "result" : "result"
   }
 }
-function user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+function user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string throws never {
   { : "result"
     "result" : "result"
   }
 }
-function user.ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int {
+function user.ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int throws never {
   { : 1
     1 : 1
   }
 }
-function user.LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, second_argument: int, third_argument: bool) -> string {
+function user.LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, second_argument: int, third_argument: bool) -> string throws never {
   { : "result"
     "result" : "result"
   }
 }
-function user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>> {
+function user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>> throws never {
   { : map<string, map<string, int | string | bool | float | null>>
     map { "a": map { "b": 1 } } : map<string, map<string, int | string | bool | float | null>>
   }
 }
-function user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+function user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> throws never {
   { : map<string, int | string | bool | float | null>
     map { "a": 1 } : map<string, int | string | bool | float | null>
   }
 }
-function user.ComplexReturn(x: int) -> int | string | null {
+function user.ComplexReturn(x: int) -> int | string | null throws never {
   { : int
     x : int
   }
 }
-function user.NestedGenericReturn() -> map<string, map<string, map<string, int | string | bool | null | float>>> {
+function user.NestedGenericReturn() -> map<string, map<string, map<string, int | string | bool | null | float>>> throws never {
   { : map<string, map<string, map<string, int | string | bool | null | float>>>
     map { "a": map { "b": map { "c": 1 } } } : map<string, map<string, map<string, int | string | bool | null | float>>>
   }
 }
-function user.DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> {
+function user.DeepFnReturn() -> (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool> throws never {
   { : 1
     1 : 1
   }
   !! 2354..2355: type mismatch: expected (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>, got 1
 }
-function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string) -> string {
+function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (x: int) -> (y: int) -> (z: int) -> string) -> string throws never {
   { : "done"
     "done" : "done"
   }
 }
-function user.ConstrainedParams(name: string, score: int) -> string {
+function user.ConstrainedParams(name: string, score: int) -> string throws never {
   { : "done"
     "done" : "done"
   }
 }
-function user.TriviaFunc(x: int) -> int {
+function user.TriviaFunc(x: int) -> int throws never {
   { : int
     x : int
   }
 }
-function user.TriviaFuncBlock(x: int) -> int {
+function user.TriviaFuncBlock(x: int) -> int throws never {
   { : int
     x : int
   }
 }
-function user.MultiParamTrivia(a: int, b: string) -> int {
+function user.MultiParamTrivia(a: int, b: string) -> int throws never {
   { : int
     a : int
   }
 }
-function user.MultiParamTriviaBlock(a: int, b: string) -> int {
+function user.MultiParamTriviaBlock(a: int, b: string) -> int throws never {
   { : int
     a : int
   }
 }
-function user.TriviaWrapParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+function user.TriviaWrapParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string throws never {
   { : "result"
     "result" : "result"
   }
 }
-function user.TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+function user.TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string throws never {
   { : "result"
     "result" : "result"
   }
 }
-function user.TriviaWrapReturnType(x: int) -> int | string | bool | null {
+function user.TriviaWrapReturnType(x: int) -> int | string | bool | null throws never {
   { : int
     x : int
   }
 }
-function user.TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
+function user.TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null throws never {
   { : int
     x : int
   }
 }
-function user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+function user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> throws never {
   { : map<string, int | string | bool | float | null>
     map { "a": 1 } : map<string, int | string | bool | float | null>
   }
 }
-function user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+function user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> throws never {
   { : map<string, int | string | bool | float | null>
     map { "a": 1 } : map<string, int | string | bool | float | null>
   }
 }
-function user.MultiStatement(a: int, b: int) -> int {
+function user.MultiStatement(a: int, b: int) -> int throws never {
   { : never
     let x = a Add b : int
     let y = x Mul 2 : int
@@ -572,12 +572,12 @@ function user.MultiStatement(a: int, b: int) -> int {
     return x : int
   }
 }
-function user.FinalExpr(a: int, b: int) -> int {
+function user.FinalExpr(a: int, b: int) -> int throws never {
   { : int
     a Add b : int
   }
 }
-function user.DeeplyNestedBody(a: int, b: int, c: int) -> int {
+function user.DeeplyNestedBody(a: int, b: int, c: int) -> int throws never {
   { : never
     if (a Gt 0 : bool) : never
       { : never
@@ -618,7 +618,7 @@ function user.DeeplyNestedBody(a: int, b: int, c: int) -> int {
       }
   }
 }
-function user.ManyNestedExprs(items: int[]) -> int {
+function user.ManyNestedExprs(items: int[]) -> int throws never {
   { : unknown
     let a = items[0] : int
     let b = items[1] : int
@@ -646,7 +646,7 @@ function user.ManyNestedExprs(items: int[]) -> int {
   }
   !! 10192..10197: operator `Add` cannot be applied to `1 | int` and `int`
 }
-function user.NestedLoops(matrix: int[][]) -> int {
+function user.NestedLoops(matrix: int[][]) -> int throws never {
   { : never
     let total = 0 : 0 -> int
     for row in matrix
@@ -675,7 +675,7 @@ function user.NestedLoops(matrix: int[][]) -> int {
     return total : int
   }
 }
-function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
+function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int throws never {
   { : never
     if (a Gt 0 : bool) : never
       { : never
@@ -701,66 +701,66 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
       }
   }
 }
-function user.LlmBasic(name: string) -> string {
+function user.LlmBasic(name: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmBasic", map { "name": name }) : string
   !! 11234..11368: unresolved name: GPT4
 }
-function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
+function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt("LlmBasic", map { "name": name }) : baml.llm.PromptAst
 }
-function user.LlmBasic$build_request(name: string) -> baml.http.Request {
+function user.LlmBasic$build_request(name: string) -> baml.http.Request throws never {
   baml.llm.build_request("LlmBasic", map { "name": name }) : baml.http.Request
 }
-function user.LlmMultiLine(text: string) -> string {
+function user.LlmMultiLine(text: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmMultiLine", map { "text": text }) : string
   !! 11368..11593: unresolved name: GPT4
 }
-function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
+function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt("LlmMultiLine", map { "text": text }) : baml.llm.PromptAst
 }
-function user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
+function user.LlmMultiLine$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request("LlmMultiLine", map { "text": text }) : baml.http.Request
 }
-function user.LlmStringClient(text: string) -> string {
+function user.LlmStringClient(text: string) -> string throws never {
   baml.llm.call_llm_function<T>(Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "LlmStringClient", map { "text": text }) : string
 }
-function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
+function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt("LlmStringClient", map { "text": text }) : baml.llm.PromptAst
 }
-function user.LlmStringClient$build_request(text: string) -> baml.http.Request {
+function user.LlmStringClient$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request("LlmStringClient", map { "text": text }) : baml.http.Request
 }
-function user.LlmReversedOrder(text: string) -> string {
+function user.LlmReversedOrder(text: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmReversedOrder", map { "text": text }) : string
   !! 11758..11928: unresolved name: GPT4
 }
-function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst {
+function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt("LlmReversedOrder", map { "text": text }) : baml.llm.PromptAst
 }
-function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request {
+function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request("LlmReversedOrder", map { "text": text }) : baml.http.Request
 }
-function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : string
   !! 12113..12264: unresolved name: GPT4
 }
-function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
+function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt("LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.PromptAst
 }
-function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request {
+function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request throws never {
   baml.llm.build_request("LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
 }
-function user.ExtraWhitespace(a: int, b: int) -> int {
+function user.ExtraWhitespace(a: int, b: int) -> int throws never {
   { : int
     a Add b : int
   }
 }
-function user.F() -> int {
+function user.F() -> int throws never {
   { : 1
     1 : 1
   }
 }
-function user.MyFunction(a: int, b: int) -> int {
+function user.MyFunction(a: int, b: int) -> int throws never {
   { : 1
     if (a Gt b : bool) : void
       { : void
@@ -789,7 +789,7 @@ function user.MyFunction(a: int, b: int) -> int {
     1 : 1
   }
 }
-function user.LoopStmts(items: int[], flag: bool) -> int {
+function user.LoopStmts(items: int[], flag: bool) -> int throws never {
   { : never
     let a = 0 : 0 -> int
     while a Lt 10
@@ -1083,7 +1083,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
   !! 13436..13441: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
   !! 13526..13532: operator `Add` cannot be applied to `int` and `unknown | 0`
 }
-function user.AssertStmts(x: int, y: int) -> int {
+function user.AssertStmts(x: int, y: int) -> int throws never {
   { : int
     assert x Gt 0
     assert x Lt 100
@@ -1104,7 +1104,7 @@ class user.MatchFailure {
 }
 enum user.MatchStatus
 type user.MatchResult = user.MatchSuccess | user.MatchFailure
-function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bool) -> string {
+function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bool) -> string throws never {
   { : "zero" | "other"
     match (x : int) : "zero" | "other"
       0 =>
@@ -1374,7 +1374,7 @@ class user.OtherTriple {
   b: user.OtherVec
   c: user.OtherVec
 }
-function user.OtherExprs(a: int, b: int) -> int {
+function user.OtherExprs(a: int, b: int) -> int throws never {
   { : int
     0 : 0
     1 : 1
@@ -1565,7 +1565,7 @@ class baml.Map {
 --- <builtin>/baml/core.baml ---
 
 --- <builtin>/baml/env/env.baml ---
-function baml.env.get_or_panic(key: string) -> string {
+function baml.env.get_or_panic(key: string) -> string throws never {
   { : "" | string
     let val = get(key) : string?
     if (val Eq null : bool) : "" | string
@@ -1631,7 +1631,7 @@ class baml.http.Response {
   url: string
   _body: $rust_type
 }
-function baml.http.Response.ok(self: baml.http.Response) -> bool {
+function baml.http.Response.ok(self: baml.http.Response) -> bool throws never {
   { : bool
     self.status_code Ge 200 And self.status_code Lt 300 : bool
   }
@@ -1654,7 +1654,7 @@ class baml.llm.ExecutionContext {
 class baml.llm.PlannerState {
   rr_client_names: string[]
 }
-function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
+function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int throws never {
   { : int
     let offset = 0 : 0 -> int
     for seen_name in self.rr_client_names
@@ -1667,7 +1667,7 @@ function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, clie
     offset : int
   }
 }
-function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, sub_client_count: int) -> int {
+function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, sub_client_count: int) -> int throws never {
   { : int
     let local_offset = self.rr_local_offset(client_name) : int
     self.rr_client_names.push(client_name) : int
@@ -1675,14 +1675,14 @@ function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client
     base Add local_offset Mod sub_client_count : int
   }
 }
-function baml.llm.resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient {
+function baml.llm.resolve_primitive(function_name: string) -> baml.llm.PrimitiveClient throws never {
   { : baml.llm.PrimitiveClient
     let llm_client = get_client(function_name) : baml.llm.Client
     let resolve_fn = llm_client.get_constructor() : () -> baml.llm.PrimitiveClient
     resolve_fn() : baml.llm.PrimitiveClient
   }
 }
-function baml.llm.render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
+function baml.llm.render_prompt(function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst throws never {
   { : baml.llm.PromptAst
     let jinja_string = get_jinja_template(function_name) : string
     let primitive_client = resolve_primitive(function_name) : baml.llm.PrimitiveClient
@@ -1690,14 +1690,14 @@ function baml.llm.render_prompt(function_name: string, args: map<string, unknown
     primitive_client.specialize_prompt(prompt) : baml.llm.PromptAst
   }
 }
-function baml.llm.build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request {
+function baml.llm.build_request(function_name: string, args: map<string, unknown>) -> baml.http.Request throws never {
   { : baml.http.Request
     let primitive_client = resolve_primitive(function_name) : baml.llm.PrimitiveClient
     let specialized_prompt = render_prompt(function_name, args) : baml.llm.PromptAst
     primitive_client.build_request(specialized_prompt) : baml.http.Request
   }
 }
-function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T {
+function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws never {
   { : T
     let jinja_string = get_jinja_template(function_name) : string
     let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : unknown
@@ -1724,7 +1724,7 @@ class baml.llm.Client {
   retry: baml.llm.RetryPolicy?
   counter: int
 }
-function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient {
+function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient throws never {
   { : baml.llm.PrimitiveClient
     if (self.name.includes("/") : bool) : baml.llm.PrimitiveClient
       { : never
@@ -1736,13 +1736,13 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
       }
   }
 }
-function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
+function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
     let planner_state = PlannerState { rr_client_names: [] } : unknown
     self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
+function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
   { : unknown[] | baml.llm.OrchestrationStep[] | never[]
     match (self.client_type : baml.llm.ClientType) : unknown[] | baml.llm.OrchestrationStep[] | never[]
       ClientType.Primitive =>
@@ -1777,13 +1777,13 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
         }
   }
 }
-function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
+function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
     let planner_state = PlannerState { rr_client_names: [] } : unknown
     self.build_plan_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
-function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
+function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
     match (self.retry : baml.llm.RetryPolicy?) : baml.llm.OrchestrationStep[]
       null =>
@@ -1821,7 +1821,7 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
         }
   }
 }
-function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T {
+function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws never {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
       null =>
@@ -1869,7 +1869,7 @@ function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.Exe
   }
   ?? 4138..4152: unreachable arm
 }
-function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T {
+function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T throws never {
   { : T
     match (self.client_type : baml.llm.ClientType) : T
       ClientType.Primitive =>
