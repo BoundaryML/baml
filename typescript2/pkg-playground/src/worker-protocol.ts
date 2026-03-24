@@ -15,9 +15,34 @@ export interface DiagnosticEntry {
   message: string;
 }
 
+export type FunctionKind = 'llm' | 'expr';
+
+export interface LlmCapabilities {
+  /** Whether render_prompt sub-function exists. Call via `callFunction("${name}.render_prompt", args)`. */
+  renderPrompt: boolean;
+  /** Whether build_request sub-function exists. Call via `callFunction("${name}.build_request", args)`. */
+  buildRequest: boolean;
+  /** The LLM client name (e.g., "MyClient"). */
+  clientName?: string;
+}
+
+/** Metadata about a BAML function exposed to the playground.
+ *
+ *  Sub-functions (render_prompt, build_request) are not separate entries —
+ *  they are represented as capabilities on the parent function.
+ *  To call them, use the naming convention with `callFunction`:
+ *  - `callFunction("${fn.name}.render_prompt", args)` → PromptAst
+ *  - `callFunction("${fn.name}.build_request", args)` → HTTP Request
+ */
+export interface FunctionInfo {
+  name: string;
+  kind: FunctionKind;
+  capabilities?: LlmCapabilities;
+}
+
 export interface ProjectUpdate {
   isBexCurrent: boolean;
-  functions: string[];
+  functions: FunctionInfo[];
 }
 
 export type PlaygroundNotification =

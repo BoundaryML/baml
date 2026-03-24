@@ -19,6 +19,7 @@ import type {
   DiagnosticEntry,
   FetchLogEntry,
   EnvVarRequest,
+  FunctionInfo,
   ProjectUpdate,
   RunEntry,
   WorkerOutMessage,
@@ -94,8 +95,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const outputRef = useRef<HTMLDivElement>(null);
 
   const [controlFlowGraph, setControlFlowGraph] = useState<ControlFlowGraph | null>(null);
-  const [activeTab, setActiveTab] = useState<'run' | 'graph'>('run');
+  const [activeTab, setActiveTab] = useState<'run' | 'graph' | 'prompt' | 'curl'>('run');
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(null);
+  const [promptPreviewResult, setPromptPreviewResult] = useState<string | null>(null);
+  const [curlPreviewResult, setCurlPreviewResult] = useState<string | null>(null);
+  const [promptPreviewError, setPromptPreviewError] = useState<string | null>(null);
+  const [curlPreviewError, setCurlPreviewError] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const [buildTime, setBuildTime] = useState<number | null>(null);
   const [envRequests, setEnvRequests] = useState<EnvVarRequest[]>([]);
@@ -328,6 +334,83 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     port.postMessage({ type: 'requestControlFlowGraph', project: selectedProject, functionName: selectedFn });
   }, [port, selectedFn, selectedProject]);
 
+  // Clear preview results when selected function changes
+  useEffect(() => {
+    setPromptPreviewResult(null);
+    setCurlPreviewResult(null);
+    setPromptPreviewError(null);
+    setCurlPreviewError(null);
+    setPreviewLoading(false);
+  }, [selectedFn]);
+
+  // Re-trigger preview when the project update changes (e.g. Bex becomes available)
+  const projectUpdateVersion = selectedProject ? projectUpdates[selectedProject] : undefined;
+
+  // Auto-refresh prompt/curl preview when args change while tab is active
+  useEffect(() => {
+    if (activeTab !== 'prompt' && activeTab !== 'curl') return;
+    if (!selectedFn || !selectedProject) return;
+
+    const subFn = activeTab === 'prompt' ? 'render_prompt' : 'build_request';
+    const setResult = activeTab === 'prompt' ? setPromptPreviewResult : setCurlPreviewResult;
+    const setError = activeTab === 'prompt' ? setPromptPreviewError : setCurlPreviewError;
+
+    // Clear previous result while loading
+    setResult(null);
+    setError(null);
+
+    // Don't attempt if args are empty or not valid JSON
+    if (!argsJson.trim()) {
+      setPreviewLoading(false);
+      return;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(argsJson);
+    } catch {
+      setPreviewLoading(false);
+      setError('Invalid JSON — fix args to preview');
+      return;
+    }
+
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      setPreviewLoading(false);
+      setError('Args must be a JSON object');
+      return;
+    }
+
+    setPreviewLoading(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
+        const callId = nextCallIdRef.current++;
+        const resultStr = await new Promise<string>((resolve, reject) => {
+          pendingCallsRef.current.set(callId, { resolve, reject });
+          port.postMessage({
+            type: 'callFunction',
+            id: callId,
+            name: `${selectedFn}.${subFn}`,
+            argsProto: new Uint8Array(argsProto),
+            project: selectedProject,
+          });
+        });
+        setResult(resultStr);
+        setError(null);
+        setPreviewLoading(false);
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
+        setResult(null);
+        setError(errMsg);
+        setPreviewLoading(false);
+      }
+    }, 500);
+
+    return () => { clearTimeout(timer); setPreviewLoading(false); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, selectedFn, selectedProject, argsJson, port, projectUpdateVersion]);
+
   // Sync existing envVars to the port whenever port changes
   useEffect(() => {
     for (const [key, value] of Object.entries(envVars)) {
@@ -417,12 +500,23 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   // ── Derived state ──────────────────────────────────────────────────────
 
   const currentUpdate = selectedProject ? projectUpdates[selectedProject] : undefined;
-  const functionNames = currentUpdate?.functions ?? [];
+  const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
+  const functionNames = functions.map((f) => f.name);
   const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
+
+  const selectedFnInfo = functions.find((f) => f.name === selectedFn);
+  const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
+  const canPreviewCurl = selectedFnInfo?.capabilities?.buildRequest ?? false;
 
   useEffect(() => {
     setSelectedFn((prev) => prev && !functionNames.includes(prev) ? null : prev);
   }, [functionNames]);
+
+  // Reset active tab if current tab is no longer available for the selected function
+  useEffect(() => {
+    if (activeTab === 'prompt' && !canPreviewPrompt) setActiveTab('run');
+    if (activeTab === 'curl' && !canPreviewCurl) setActiveTab('run');
+  }, [activeTab, canPreviewPrompt, canPreviewCurl]);
 
   const errors = diags.filter((d) => d.severity === 'error');
   const warnings = diags.filter((d) => d.severity === 'warning');
@@ -685,6 +779,30 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           >
             Graph
           </button>
+          {canPreviewPrompt && (
+            <button
+              onClick={() => setActiveTab('prompt')}
+              className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
+                activeTab === 'prompt'
+                  ? 'border-vsc-accent text-vsc-text font-semibold'
+                  : 'border-transparent text-vsc-text-muted'
+              }`}
+            >
+              Prompt
+            </button>
+          )}
+          {canPreviewCurl && (
+            <button
+              onClick={() => setActiveTab('curl')}
+              className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
+                activeTab === 'curl'
+                  ? 'border-vsc-accent text-vsc-text font-semibold'
+                  : 'border-transparent text-vsc-text-muted'
+              }`}
+            >
+              cURL
+            </button>
+          )}
         </div>
       )}
 
@@ -700,6 +818,40 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           ) : (
             <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
               Loading graph...
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* Prompt preview */}
+      {selectedFn && activeTab === 'prompt' ? (
+        <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
+          {promptPreviewResult != null ? (
+            <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
+          ) : promptPreviewError ? (
+            <div className="flex items-center justify-center text-vsc-error text-xs h-full">
+              {promptPreviewError}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
+              {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* cURL preview */}
+      {selectedFn && activeTab === 'curl' ? (
+        <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
+          {curlPreviewResult != null ? (
+            <ResultDisplay resultJson={curlPreviewResult} customRenderers={resultRenderers} />
+          ) : curlPreviewError ? (
+            <div className="flex items-center justify-center text-vsc-error text-xs h-full">
+              {curlPreviewError}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
+              {previewLoading ? 'Loading cURL preview...' : 'Enter args to preview cURL'}
             </div>
           )}
         </div>

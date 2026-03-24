@@ -571,9 +571,7 @@ impl super::BexLsp for BexMulitProject {
 
     fn request_control_flow_graph(&self, function_name: &str) {
         let graph = self.ast_control_flow_graph(function_name);
-        let graph_json = graph
-            .as_ref()
-            .and_then(|g| serde_json::to_value(g).ok());
+        let graph_json = graph.as_ref().and_then(|g| serde_json::to_value(g).ok());
         self.playground_sender.send_playground_notification(
             crate::bex_lsp::PlaygroundNotification::ControlFlowGraphResult {
                 function_name: function_name.to_string(),
@@ -616,9 +614,9 @@ impl super::BexLsp for BexMulitProject {
                 line,
                 character: column,
             };
-            let byte_offset = u32::try_from(
-                baml_project::position::lsp_position_to_offset(text, &position),
-            )
+            let byte_offset = u32::try_from(baml_project::position::lsp_position_to_offset(
+                text, &position,
+            ))
             .unwrap_or(0);
 
             return db.playground_cursor_context(file_path, byte_offset);
@@ -631,9 +629,7 @@ impl super::BexLsp for BexMulitProject {
         let ctx = self.playground_cursor_context(file_path, line, column);
         let ctx_json = serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null);
         self.playground_sender.send_playground_notification(
-            crate::bex_lsp::PlaygroundNotification::CursorContext {
-                context: ctx_json,
-            },
+            crate::bex_lsp::PlaygroundNotification::CursorContext { context: ctx_json },
         );
     }
 }

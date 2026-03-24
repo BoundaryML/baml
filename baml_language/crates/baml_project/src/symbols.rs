@@ -6,7 +6,7 @@
 pub use baml_db::baml_compiler_hir::SymbolKind;
 use baml_db::{
     Name, Span,
-    baml_compiler_hir::{self, Db, ItemId, file_item_tree, project_items},
+    baml_compiler_hir::{self, Db, ItemId, file_item_tree, file_namespace, project_items},
     baml_compiler_parser::syntax_tree,
     baml_compiler_syntax::ast::{FunctionDef, Item, SourceFile},
     baml_workspace::Project,
@@ -76,6 +76,11 @@ pub fn list_functions_with_metadata(db: &dyn Db, project: Project) -> Vec<Functi
             let item_tree = file_item_tree(db, file);
             let func = &item_tree[func_loc.id(db)];
 
+            // Skip functions from builtin files (e.g., <builtin>/baml/llm.baml)
+            if file_namespace(db, file).is_some() {
+                continue;
+            }
+
             // Skip sub-functions — they become capabilities on the parent
             match &func.compiler_generated {
                 Some(baml_compiler_hir::CompilerGenerated::LlmRenderPrompt { .. })
@@ -104,12 +109,10 @@ pub fn list_functions_with_metadata(db: &dyn Db, project: Project) -> Vec<Functi
             // - User-defined (None) → check CST for LLM body
             let is_llm = match &func.compiler_generated {
                 Some(baml_compiler_hir::CompilerGenerated::LlmCall { .. }) => true,
-                None => get_fn_defs()
-                    .into_iter()
-                    .any(|f: FunctionDef| {
-                        f.name().as_ref().map(|n| n.text()) == Some(func.name.as_str())
-                            && f.llm_body().is_some()
-                    }),
+                None => get_fn_defs().into_iter().any(|f: FunctionDef| {
+                    f.name().as_ref().map(|n| n.text()) == Some(func.name.as_str())
+                        && f.llm_body().is_some()
+                }),
                 _ => false,
             };
 

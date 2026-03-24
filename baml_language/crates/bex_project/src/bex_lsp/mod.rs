@@ -114,9 +114,7 @@ pub enum PlaygroundNotification {
         graph: Option<serde_json::Value>,
     },
     #[serde(rename_all = "camelCase")]
-    CursorContext {
-        context: serde_json::Value,
-    },
+    CursorContext { context: serde_json::Value },
 }
 
 pub trait PlaygroundSender: Send + Sync {

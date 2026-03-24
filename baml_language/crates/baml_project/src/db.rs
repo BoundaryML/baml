@@ -554,7 +554,8 @@ impl ProjectDatabase {
                     continue;
                 }
 
-                let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+                let func_loc =
+                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let body = baml_compiler2_hir::body::function_body(self, func_loc);
 
                 return match body.as_ref() {
@@ -581,11 +582,7 @@ impl ProjectDatabase {
 
     /// Given a file path and byte offset, return context about what entity
     /// the cursor is on — used by the playground for navigation.
-    pub fn playground_cursor_context(
-        &self,
-        file_path: &str,
-        byte_offset: u32,
-    ) -> CursorContext {
+    pub fn playground_cursor_context(&self, file_path: &str, byte_offset: u32) -> CursorContext {
         let empty = CursorContext {
             function_name: None,
             is_workflow: false,
@@ -657,8 +654,7 @@ impl ProjectDatabase {
                 let workflow_memberships = self.find_workflow_memberships(&func_name);
 
                 // Find source_expr_id if cursor is inside a function body
-                let source_expr_id =
-                    self.find_source_expr_id_at(source_file, offset);
+                let source_expr_id = self.find_source_expr_id_at(source_file, offset);
 
                 CursorContext {
                     function_name: Some(func_name),
@@ -688,11 +684,10 @@ impl ProjectDatabase {
         source_file: SourceFile,
         offset: text_size::TextSize,
     ) -> CursorContext {
-        let (func_name, is_workflow) =
-            match self.find_enclosing_function(source_file, offset) {
-                Some((name, workflow)) => (Some(name), workflow),
-                None => (None, false),
-            };
+        let (func_name, is_workflow) = match self.find_enclosing_function(source_file, offset) {
+            Some((name, workflow)) => (Some(name), workflow),
+            None => (None, false),
+        };
 
         let workflow_memberships = func_name
             .as_ref()
@@ -756,11 +751,8 @@ impl ProjectDatabase {
         let item_tree = &index.item_tree;
         for (local_id, func_data) in item_tree.functions.iter() {
             if func_data.span == func_scope_range {
-                let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
-                    self,
-                    source_file,
-                    *local_id,
-                );
+                let func_loc =
+                    baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
                 let sig = baml_compiler2_hir::signature::function_signature(self, func_loc);
                 let body = baml_compiler2_hir::body::function_body(self, func_loc);
                 let is_workflow = matches!(
@@ -853,10 +845,8 @@ impl ProjectDatabase {
                 continue;
             }
 
-            let func_loc =
-                baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
-            let source_map =
-                baml_compiler2_hir::body::function_body_source_map(self, func_loc)?;
+            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
+            let source_map = baml_compiler2_hir::body::function_body_source_map(self, func_loc)?;
             let body = baml_compiler2_hir::body::function_body(self, func_loc);
             let expr_body = match body.as_ref() {
                 baml_compiler2_hir::body::FunctionBody::Expr(eb) => Some(eb),

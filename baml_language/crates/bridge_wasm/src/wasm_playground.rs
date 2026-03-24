@@ -63,9 +63,7 @@ pub enum PlaygroundNotification {
         graph: Option<serde_json::Value>,
     },
     #[serde(rename_all = "camelCase")]
-    CursorContext {
-        context: serde_json::Value,
-    },
+    CursorContext { context: serde_json::Value },
 }
 
 impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
@@ -79,18 +77,22 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                     project,
                     update: ProjectUpdate {
                         is_bex_current: update.is_bex_current,
-                        functions: update.functions.into_iter().map(|f| FunctionInfo {
-                            name: f.name,
-                            kind: match f.kind {
-                                bex_project::FunctionKind::Llm => FunctionKind::Llm,
-                                bex_project::FunctionKind::Expr => FunctionKind::Expr,
-                            },
-                            capabilities: f.capabilities.map(|c| LlmCapabilities {
-                                render_prompt: c.render_prompt,
-                                build_request: c.build_request,
-                                client_name: c.client_name,
-                            }),
-                        }).collect(),
+                        functions: update
+                            .functions
+                            .into_iter()
+                            .map(|f| FunctionInfo {
+                                name: f.name,
+                                kind: match f.kind {
+                                    bex_project::FunctionKind::Llm => FunctionKind::Llm,
+                                    bex_project::FunctionKind::Expr => FunctionKind::Expr,
+                                },
+                                capabilities: f.capabilities.map(|c| LlmCapabilities {
+                                    render_prompt: c.render_prompt,
+                                    build_request: c.build_request,
+                                    client_name: c.client_name,
+                                }),
+                            })
+                            .collect(),
                     },
                 }
             }

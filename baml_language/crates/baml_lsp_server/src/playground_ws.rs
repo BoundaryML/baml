@@ -98,7 +98,5 @@ pub enum WsOutMessage {
         graph: Option<serde_json::Value>,
     },
     #[serde(rename = "cursorContext")]
-    CursorContext {
-        context: serde_json::Value,
-    },
+    CursorContext { context: serde_json::Value },
 }
