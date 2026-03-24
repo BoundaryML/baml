@@ -51,6 +51,9 @@ async fn handled_runtime_error_continues_execution() {
     );
 }
 
+// TODO: This throws an error because there is a statement (a bare expresession 0) after the
+// diverging statement `throw 7;`. Do we really want this to be an error, or should it be a
+// warning?
 #[tokio::test]
 #[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
 async fn handled_throw_from_callee_returns_fallback_value() {
@@ -286,7 +289,6 @@ async fn typed_catch_arm_matches_primitive_throw_value() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
 async fn catch_binds_to_throw_expression_not_throw_payload() {
     let output = baml_test!(
         "
@@ -300,8 +302,8 @@ async fn catch_binds_to_throw_expression_not_throw_payload() {
 
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
-        load_const 1
-        throw
+        load_const 2
+        return
     }
     ");
 
@@ -572,6 +574,7 @@ async fn unhandled_throw_string_shows_value() {
     );
 }
 
+// TODO: This may break after we update Pattern syntax.
 #[tokio::test]
 #[ignore = "compiler2: catch/throw not yet supported - fails with unreachable code or missing catch semantics"]
 async fn unhandled_throw_string_in_match_shows_value() {

@@ -1003,7 +1003,19 @@ impl<'db> LoweringContext<'db> {
 
             AstExpr::Throw { value } => {
                 let val_op = self.lower_to_operand(value);
-                self.builder.throw(val_op);
+                if let Some(catch_ctx) = &self.catch_context {
+                    // Inside a catch block: store the value into the error
+                    // local and jump to the handler instead of unwinding.
+                    let error_local = catch_ctx.error_local;
+                    let unwind_target = catch_ctx.unwind_target;
+                    self.builder.assign(
+                        Place::Local(error_local),
+                        Rvalue::Use(val_op),
+                    );
+                    self.builder.goto(unwind_target);
+                } else {
+                    self.builder.throw(val_op);
+                }
                 // Start a dead block for any code after this (unreachable)
                 let dead = self.builder.create_block();
                 self.builder.set_current_block(dead);
