@@ -294,7 +294,7 @@ use baml_compiler2_hir::{
     },
     file_semantic_index,
     loc::{FunctionLoc, LetLoc},
-    package::{PackageId, package_items},
+    package::{PackageId, package_dependencies, package_items},
     scope::FileScopeId,
     signature::function_signature,
 };

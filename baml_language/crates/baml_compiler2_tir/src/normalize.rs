@@ -188,15 +188,22 @@ impl StructuralTy {
                 inner1.is_subtype_of(inner2, assumptions)
             }
 
-            // Map covariance in value, invariant in key
+            // Map: covariant in both key and value.
+            //
+            // Keys use subtyping (not equality) so that:
+            //   - map<never, T>   <: map<K, V>    (empty map is assignable anywhere)
+            //   - map<"lit", T>   <: map<string, V>  (literal keys widen to string)
+            //   - map<string, T>  <: map<string, V>  (same key type)
+            //
+            // This allows passing `{}` (`map<never, never>`) and `{"foo": "bar"}`
+            // (`map<literal "foo", literal "bar">`) to functions like
+            // baml.llm.build_request(), which takes `map<string, unknown>`.
             (
                 StructuralTy::Map { key: k1, value: v1 },
                 StructuralTy::Map { key: k2, value: v2 },
             ) => {
-                let keys_compatible = k1 == k2
-                    || matches!(k1.as_ref(), StructuralTy::Unknown | StructuralTy::Error)
-                    || matches!(k2.as_ref(), StructuralTy::Unknown | StructuralTy::Error);
-                keys_compatible && v1.is_subtype_of(v2, assumptions)
+                k1.is_subtype_of(k2, assumptions)
+                    && v1.is_subtype_of(v2, assumptions)
             }
 
             // Int <: Float
@@ -1198,6 +1205,104 @@ mod tests {
             &Ty::Map(
                 Box::new(Ty::Primitive(PrimitiveType::String)),
                 Box::new(Ty::Primitive(PrimitiveType::Int)),
+            ),
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_map_key_covariance_never() {
+        let aliases = HashMap::new();
+        // map<never, never> <: map<string, unknown> — empty map assignable anywhere
+        assert!(is_subtype_of(
+            &Ty::Map(Box::new(Ty::Never), Box::new(Ty::Never)),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::BuiltinUnknown),
+            ),
+            &aliases
+        ));
+        // map<never, never> <: map<string, int>
+        assert!(is_subtype_of(
+            &Ty::Map(Box::new(Ty::Never), Box::new(Ty::Never)),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::Int)),
+            ),
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_map_key_covariance_literal() {
+        let aliases = HashMap::new();
+        // map<"name", "World"> <: map<string, unknown>
+        assert!(is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Literal(LiteralValue::String("name".into()), Freshness::Fresh)),
+                Box::new(Ty::Literal(LiteralValue::String("World".into()), Freshness::Fresh)),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::BuiltinUnknown),
+            ),
+            &aliases
+        ));
+        // map<"name", "World"> <: map<string, string>
+        assert!(is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Literal(LiteralValue::String("name".into()), Freshness::Fresh)),
+                Box::new(Ty::Literal(LiteralValue::String("World".into()), Freshness::Fresh)),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+            ),
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_map_value_covariance() {
+        let aliases = HashMap::new();
+        // map<string, int> <: map<string, float>
+        assert!(is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::Int)),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::Float)),
+            ),
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_map_key_not_supertype() {
+        let aliases = HashMap::new();
+        // map<string, int> NOT <: map<"name", int> — widening key is not subtyping
+        assert!(!is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::Int)),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Literal(LiteralValue::String("name".into()), Freshness::Fresh)),
+                Box::new(Ty::Primitive(PrimitiveType::Int)),
+            ),
+            &aliases
+        ));
+        // map<string, string> NOT <: map<int, string> — incompatible key types
+        assert!(!is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::Int)),
+                Box::new(Ty::Primitive(PrimitiveType::String)),
             ),
             &aliases
         ));
