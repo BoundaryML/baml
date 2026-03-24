@@ -227,8 +227,6 @@ function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.Orchestra
 function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
     match (self.retry : baml.llm.RetryPolicy?) : baml.llm.OrchestrationStep[]
-      null =>
-        self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
       r: RetryPolicy =>
         { : baml.llm.OrchestrationStep[]
           let result = [] : baml.llm.OrchestrationStep[]
@@ -260,16 +258,13 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
           }
           result : baml.llm.OrchestrationStep[]
         }
+      null =>
+        self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
 function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> T throws never {
   { : never
     match (self.retry : baml.llm.RetryPolicy?) : never
-      null =>
-        { : never
-          let result = self.execute_once<T>(context, inherited_delay_ms) : T
-          return result : T
-        }
       r: RetryPolicy =>
         { : never
           let current_delay = r.initial_delay_ms Add 0.0 : float
@@ -307,8 +302,13 @@ function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.Exe
           }
           throw DevOther { message: "All orchestration..." } : unknown
         }
+      null =>
+        { : never
+          let result = self.execute_once<T>(context, inherited_delay_ms) : T
+          return result : T
+        }
   }
-  ?? 4183..4197: unreachable arm
+  ?? 4032..4046: unreachable arm
 }
 function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T throws never {
   { : T

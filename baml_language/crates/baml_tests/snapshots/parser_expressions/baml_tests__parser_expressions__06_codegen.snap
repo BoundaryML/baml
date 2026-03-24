@@ -32,7 +32,7 @@ function user.FieldAccess(user: User) -> string {
 
 function user.IndexAccess(users: IndexUser[]) -> string {
     load_var users
-    load_var _7
+    load_const 0
     load_array_element
     load_field .name
     return

@@ -59,7 +59,7 @@ function user.Headers() -> string {
     load_const 1
     load_const 2
     bin_op +
-    load_var _8
+    load_const "to_string"
     load_map_element
     call_indirect
     return

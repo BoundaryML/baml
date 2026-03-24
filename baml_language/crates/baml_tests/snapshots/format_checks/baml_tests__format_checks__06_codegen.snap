@@ -1110,12 +1110,12 @@ function user.C$new() -> null {
 function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> string {
     load_var user
     load_field .name
-    load_var _25
+    load_const "len"
     load_map_element
     call_indirect
     pop 1
     load_var items
-    load_var _28
+    load_const "len"
     load_map_element
     call_indirect
     pop 1
@@ -1123,19 +1123,19 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     load_var user
     load_field .profile
     load_field .items
-    load_var _33
+    load_const "get"
     load_map_element
     call_indirect
     pop 1
     load_const 0
     load_var items
-    load_var _36
+    load_const "get"
     load_map_element
     call_indirect
     pop 1
     load_const 0
     load_var items
-    load_var _39
+    load_const "get"
     load_map_element
     call_indirect
     pop 1
@@ -1155,7 +1155,7 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     load_var user
     load_field .profile
     load_field .items
-    load_var _62
+    load_const "len"
     load_map_element
     call_indirect
     store_var _58
@@ -1182,37 +1182,37 @@ function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int
     store_var _78
     load_var user
     load_field .scores
-    load_var _83
+    load_const "len"
     load_map_element
     call_indirect
     store_var _80
     load_var user
     load_field .scores
-    load_var _89
+    load_const 0
     load_array_element
-    load_var _90
+    load_const "len"
     load_map_element
     call_indirect
     store_var _85
     load_const 0
     load_var items
-    load_var _94
+    load_const "get"
     load_map_element
     call_indirect
     pop 1
     load_var user
     load_field .tags
-    load_var _99
+    load_const 0
     load_array_element
-    load_var _100
+    load_const "len"
     load_map_element
     call_indirect
     pop 1
     load_var items
-    load_var _109
+    load_const 0
     load_array_element
     load_field .label
-    load_var _110
+    load_const "len"
     load_map_element
     call_indirect
     pop 1
@@ -2012,7 +2012,7 @@ function user.LongNestedValuesClient$new() -> null {
     copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
     copy 0
-    load_const 5
+    load_const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
     store_field .model
     copy 0
     load_const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
@@ -3720,11 +3720,11 @@ function user.LoopStmts(items: int[], flag: bool) -> int {
 
 function user.ManyNestedExprs(items: int[]) -> int {
     load_var items
-    load_var _3
+    load_const 0
     load_array_element
     store_var a
     load_var items
-    load_var _5
+    load_const 1
     load_array_element
     store_var b
     load_var a
@@ -5016,7 +5016,7 @@ function user.StringProviderClient$new() -> null {
     copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
     copy 0
-    load_const 1
+    load_const "mistralai/mistral-small-3.1-24b-instruct"
     store_field .model
     copy 0
     load_const "https://openrouter.ai/api/v1"
