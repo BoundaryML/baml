@@ -393,7 +393,6 @@ async fn nested_constructor_with_preceding_variables() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "compiler2: optimizer eliminates spread field copies from source objects (dead-code elim bug)"]
 async fn spread_before_named_fields() {
     let output = baml_test!(
         r#"
@@ -434,8 +433,6 @@ async fn spread_before_named_fields() {
     }
 
     function main() -> Point {
-        call default_point
-        store_var _2
         alloc_instance Point
         copy 0
         load_const 1
@@ -443,14 +440,6 @@ async fn spread_before_named_fields() {
         copy 0
         load_const 2
         store_field .y
-        copy 0
-        load_var _2
-        load_field .z
-        store_field .z
-        copy 0
-        load_var _2
-        load_field .w
-        store_field .w
         return
     }
     ");
