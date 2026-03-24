@@ -61,7 +61,6 @@ async fn deep_copy_object() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: array element access returns 'unknown | T' making the result non-indexable (field assignment fails type-check)"]
 async fn deep_copy_independence() {
     let output = baml_test!(
         r#"
