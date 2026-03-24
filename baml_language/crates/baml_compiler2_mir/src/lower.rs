@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use baml_base::Name;
 use baml_compiler2_ast::ExprId;
 use baml_type::{MediaKind, Ty, TyAttr, TypeName};
+use indexmap::IndexMap;
 
 use crate::{builder::MirBuilder, cleanup, ir::*};
 
@@ -326,11 +327,17 @@ struct LoweringContext<'db> {
     file: baml_base::SourceFile,
     func_loc: Option<FunctionLoc<'db>>,
 
-    // Schema maps built from PackageItems
-    class_fields: HashMap<String, HashMap<String, usize>>,
-    enum_variants: HashMap<String, HashMap<String, usize>>,
+    // Schema maps built from PackageItems.
+    // class_fields and class_type_tags are keyed by TypeName (name + module_path)
+    // so that e.g. baml.http.Request and a user-defined Request are distinct.
+    // enum_variants is keyed by Name (short name only) because match-arm lowering
+    // (AstPattern::EnumVariant) only provides the enum's short Name, not a full
+    // TypeName with module_path. Upgrading to TypeName would require resolving the
+    // enum's package at each match site.
+    class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
+    enum_variants: IndexMap<Name, IndexMap<String, usize>>,
     #[allow(dead_code)]
-    class_type_tags: HashMap<String, i64>,
+    class_type_tags: IndexMap<TypeName, i64>,
 
     // Type alias maps for inline expansion in convert_tir2_ty
     type_aliases: HashMap<QualifiedTypeName, Tir2Ty>,
@@ -348,6 +355,62 @@ struct LoweringContext<'db> {
 }
 
 impl<'db> LoweringContext<'db> {
+    /// Populate class_fields, class_type_tags, and enum_variants from a single
+    /// package's items.
+    fn populate_from_package(
+        db: &'db dyn crate::Db,
+        pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+        pkg_name: &Name,
+        class_fields: &mut IndexMap<TypeName, IndexMap<String, usize>>,
+        class_type_tags: &mut IndexMap<TypeName, i64>,
+        class_type_tag_counter: &mut i64,
+        enum_variants: &mut IndexMap<Name, IndexMap<String, usize>>,
+    ) {
+        for (ns_names, ns) in &pkg_items.namespaces {
+            // Build module_path: [pkg_name] ++ ns_names
+            let mut module_path: Vec<Name> = vec![pkg_name.clone()];
+            module_path.extend(ns_names.iter().cloned());
+
+            for (_name, def) in &ns.types {
+                match def {
+                    Definition::Class(class_loc) => {
+                        let cfile = class_loc.file(db);
+                        let citree = file_item_tree(db, cfile);
+                        let class_data = &citree[class_loc.id(db)];
+
+                        let tn = TypeName {
+                            name: class_data.name.clone(),
+                            module_path: module_path.clone(),
+                            display_name: class_data.name.clone(),
+                        };
+
+                        let mut fields = IndexMap::new();
+                        for (idx, field) in class_data.fields.iter().enumerate() {
+                            fields.insert(field.name.to_string(), idx);
+                        }
+                        let type_tag =
+                            baml_type::typetag::CLASS_BASE + *class_type_tag_counter;
+                        *class_type_tag_counter += 1;
+                        class_type_tags.insert(tn.clone(), type_tag);
+                        class_fields.insert(tn, fields);
+                    }
+                    Definition::Enum(enum_loc) => {
+                        let efile = enum_loc.file(db);
+                        let eitree = file_item_tree(db, efile);
+                        let enum_data = &eitree[enum_loc.id(db)];
+
+                        let mut variants = IndexMap::new();
+                        for (idx, variant) in enum_data.variants.iter().enumerate() {
+                            variants.insert(variant.name.to_string(), idx);
+                        }
+                        enum_variants.insert(enum_data.name.clone(), variants);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
     fn new(
         db: &'db dyn crate::Db,
         func_loc: FunctionLoc<'db>,
@@ -426,47 +489,39 @@ impl<'db> LoweringContext<'db> {
         // --- Build class_fields / enum_variants / class_type_tags from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = package_items(db, pkg_id);
 
-        let mut class_fields: HashMap<String, HashMap<String, usize>> = HashMap::new();
-        let mut class_type_tags: HashMap<String, i64> = HashMap::new();
+        let mut class_fields: IndexMap<TypeName, IndexMap<String, usize>> = IndexMap::new();
+        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
         let mut class_type_tag_counter = 0i64;
-        let mut enum_variants: HashMap<String, HashMap<String, usize>> = HashMap::new();
+        let mut enum_variants: IndexMap<Name, IndexMap<String, usize>> = IndexMap::new();
 
-        for ns in pkg_items.namespaces.values() {
-            for (_name, def) in &ns.types {
-                match def {
-                    Definition::Class(class_loc) => {
-                        let cfile = class_loc.file(db);
-                        let citree = file_item_tree(db, cfile);
-                        let class_data = &citree[class_loc.id(db)];
-                        let class_name = class_data.name.to_string();
-
-                        let mut fields = HashMap::new();
-                        for (idx, field) in class_data.fields.iter().enumerate() {
-                            fields.insert(field.name.to_string(), idx);
-                        }
-                        let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
-                        class_type_tag_counter += 1;
-                        class_type_tags.insert(class_name.clone(), type_tag);
-                        class_fields.insert(class_name, fields);
-                    }
-                    Definition::Enum(enum_loc) => {
-                        let efile = enum_loc.file(db);
-                        let eitree = file_item_tree(db, efile);
-                        let enum_data = &eitree[enum_loc.id(db)];
-                        let enum_name = enum_data.name.to_string();
-
-                        let mut variants = HashMap::new();
-                        for (idx, variant) in enum_data.variants.iter().enumerate() {
-                            variants.insert(variant.name.to_string(), idx);
-                        }
-                        enum_variants.insert(enum_name, variants);
-                    }
-                    _ => {}
-                }
-            }
+        // Include classes from dependency packages first (e.g., "baml" builtins).
+        // Inserted first so current-package classes take priority on collision.
+        for &dep_id in package_dependencies(db, pkg_id) {
+            let dep_items = package_items(db, dep_id);
+            let dep_name = dep_id.name(db);
+            Self::populate_from_package(
+                db,
+                &dep_items,
+                &dep_name,
+                &mut class_fields,
+                &mut class_type_tags,
+                &mut class_type_tag_counter,
+                &mut enum_variants,
+            );
         }
+
+        // Include classes from the current package (overwrites on collision).
+        let pkg_items = package_items(db, pkg_id);
+        Self::populate_from_package(
+            db,
+            &pkg_items,
+            &pkg_info.package,
+            &mut class_fields,
+            &mut class_type_tags,
+            &mut class_type_tag_counter,
+            &mut enum_variants,
+        );
 
         // --- Build type alias maps for inline expansion ---
         let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
@@ -608,47 +663,38 @@ impl<'db> LoweringContext<'db> {
         // --- Build class_fields / enum_variants / class_type_tags from PackageItems ---
         let pkg_info = file_package(db, file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = package_items(db, pkg_id);
 
-        let mut class_fields: HashMap<String, HashMap<String, usize>> = HashMap::new();
-        let mut class_type_tags: HashMap<String, i64> = HashMap::new();
+        let mut class_fields: IndexMap<TypeName, IndexMap<String, usize>> = IndexMap::new();
+        let mut class_type_tags: IndexMap<TypeName, i64> = IndexMap::new();
         let mut class_type_tag_counter = 0i64;
-        let mut enum_variants: HashMap<String, HashMap<String, usize>> = HashMap::new();
+        let mut enum_variants: IndexMap<Name, IndexMap<String, usize>> = IndexMap::new();
 
-        for ns in pkg_items.namespaces.values() {
-            for (_name, def) in &ns.types {
-                match def {
-                    Definition::Class(class_loc) => {
-                        let cfile = class_loc.file(db);
-                        let citree = file_item_tree(db, cfile);
-                        let class_data = &citree[class_loc.id(db)];
-                        let class_name = class_data.name.to_string();
-
-                        let mut fields = HashMap::new();
-                        for (idx, field) in class_data.fields.iter().enumerate() {
-                            fields.insert(field.name.to_string(), idx);
-                        }
-                        let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
-                        class_type_tag_counter += 1;
-                        class_type_tags.insert(class_name.clone(), type_tag);
-                        class_fields.insert(class_name, fields);
-                    }
-                    Definition::Enum(enum_loc) => {
-                        let efile = enum_loc.file(db);
-                        let eitree = file_item_tree(db, efile);
-                        let enum_data = &eitree[enum_loc.id(db)];
-                        let enum_name = enum_data.name.to_string();
-
-                        let mut variants = HashMap::new();
-                        for (idx, variant) in enum_data.variants.iter().enumerate() {
-                            variants.insert(variant.name.to_string(), idx);
-                        }
-                        enum_variants.insert(enum_name, variants);
-                    }
-                    _ => {}
-                }
-            }
+        // Include classes from dependency packages first.
+        for &dep_id in package_dependencies(db, pkg_id) {
+            let dep_items = package_items(db, dep_id);
+            let dep_name = dep_id.name(db);
+            Self::populate_from_package(
+                db,
+                &dep_items,
+                &dep_name,
+                &mut class_fields,
+                &mut class_type_tags,
+                &mut class_type_tag_counter,
+                &mut enum_variants,
+            );
         }
+
+        // Include classes from the current package (overwrites on collision).
+        let pkg_items = package_items(db, pkg_id);
+        Self::populate_from_package(
+            db,
+            &pkg_items,
+            &pkg_info.package,
+            &mut class_fields,
+            &mut class_type_tags,
+            &mut class_type_tag_counter,
+            &mut enum_variants,
+        );
 
         // --- Build type alias maps for inline expansion ---
         let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
@@ -1703,14 +1749,14 @@ impl<'db> LoweringContext<'db> {
         // Look up field index from class_fields
         let field_idx = if let Ty::Class(ref tn, _) = base_ty {
             self.class_fields
-                .get(tn.name.as_str())
+                .get(tn)
                 .and_then(|fields| fields.get(&field_str))
                 .copied()
         } else {
             None
         };
 
-        let base_local = self.operand_to_local(base_op, base_ty);
+        let base_local = self.operand_to_local(base_op, base_ty.clone());
 
         if let Some(idx) = field_idx {
             self.builder.assign(
@@ -1721,7 +1767,15 @@ impl<'db> LoweringContext<'db> {
                 })),
             );
         } else {
-            // Fallback: dynamic field access via index
+            if let Ty::Class(ref tn, _) = base_ty {
+                panic!(
+                    "internal compiler error: MIR failed to resolve field access \
+                     .{} against class definition '{}' (module_path: {:?}). \
+                     This class should be in class_fields but isn't.",
+                    field_str, tn.name, tn.module_path,
+                );
+            }
+            // Dynamic map access — only valid for map types, unknown, etc.
             let key_local = self.builder.temp(Ty::String {
                 attr: TyAttr::default(),
             });
@@ -2213,7 +2267,7 @@ impl<'db> LoweringContext<'db> {
                 let base_place = self.lower_lvalue(base_id);
                 let base_ty = self.expr_ty(base_id);
                 if let Ty::Class(ref tn, _) = base_ty {
-                    if let Some(fields) = self.class_fields.get(tn.name.as_str()) {
+                    if let Some(fields) = self.class_fields.get(tn) {
                         if let Some(&idx) = fields.get(field_name.as_str()) {
                             return Place::Field {
                                 base: Box::new(base_place),
@@ -2221,7 +2275,14 @@ impl<'db> LoweringContext<'db> {
                             };
                         }
                     }
+                    panic!(
+                        "internal compiler error: MIR failed to resolve field access \
+                         .{} against class definition '{}' (module_path: {:?}). \
+                         This class should be in class_fields but isn't.",
+                        field_name, tn.name, tn.module_path,
+                    );
                 }
+                // Dynamic map access — only valid for map types, unknown, etc.
                 let key_local = self.builder.temp(Ty::String {
                     attr: TyAttr::default(),
                 });
@@ -2371,7 +2432,7 @@ impl<'db> LoweringContext<'db> {
                     // Look up variant index
                     let idx = self
                         .enum_variants
-                        .get(enum_name.as_str())
+                        .get(&enum_name)
                         .and_then(|m| m.get(variant.as_str()))
                         .copied();
                     let Some(idx) = idx else { return false };
@@ -2407,7 +2468,7 @@ impl<'db> LoweringContext<'db> {
                                 }
                                 let idx = self
                                     .enum_variants
-                                    .get(enum_name.as_str())
+                                    .get(&enum_name)
                                     .and_then(|m| m.get(variant.as_str()))
                                     .copied();
                                 let Some(idx) = idx else { return false };
@@ -2488,7 +2549,7 @@ impl<'db> LoweringContext<'db> {
         // For enum switches: "EnumName.VariantName"; for int switches: the integer value.
         let arm_names: Vec<(i64, String)> = match &switch_kind {
             Some(Some(enum_name)) => {
-                if let Some(variants) = self.enum_variants.get(enum_name.as_str()) {
+                if let Some(variants) = self.enum_variants.get(enum_name) {
                     // Build reverse map: variant_idx -> variant_name
                     let reverse: std::collections::HashMap<i64, &str> = variants
                         .iter()
