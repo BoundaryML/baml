@@ -790,6 +790,7 @@ dependencies = [
  "baml_workspace",
  "bex_vm_types",
  "lsp-types",
+ "rowan 0.16.1",
  "salsa",
  "serde",
  "text-size",

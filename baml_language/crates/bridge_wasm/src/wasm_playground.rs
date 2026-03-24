@@ -8,9 +8,37 @@ use crate::send_wrapper::SendWrapper;
 #[derive(Tsify, Serialize)]
 #[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
+pub struct FunctionInfo {
+    pub name: String,
+    pub kind: FunctionKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<LlmCapabilities>,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub enum FunctionKind {
+    Llm,
+    Expr,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmCapabilities {
+    pub render_prompt: bool,
+    pub build_request: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_name: Option<String>,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
-    pub functions: Vec<String>,
+    pub functions: Vec<FunctionInfo>,
 }
 
 #[derive(Tsify, Serialize)]
@@ -51,7 +79,18 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                     project,
                     update: ProjectUpdate {
                         is_bex_current: update.is_bex_current,
-                        functions: update.functions,
+                        functions: update.functions.into_iter().map(|f| FunctionInfo {
+                            name: f.name,
+                            kind: match f.kind {
+                                bex_project::FunctionKind::Llm => FunctionKind::Llm,
+                                bex_project::FunctionKind::Expr => FunctionKind::Expr,
+                            },
+                            capabilities: f.capabilities.map(|c| LlmCapabilities {
+                                render_prompt: c.render_prompt,
+                                build_request: c.build_request,
+                                client_name: c.client_name,
+                            }),
+                        }).collect(),
                     },
                 }
             }

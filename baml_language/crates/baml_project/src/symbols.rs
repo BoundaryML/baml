@@ -7,8 +7,11 @@ pub use baml_db::baml_compiler_hir::SymbolKind;
 use baml_db::{
     Name, Span,
     baml_compiler_hir::{self, Db, ItemId, file_item_tree, project_items},
+    baml_compiler_parser::syntax_tree,
+    baml_compiler_syntax::ast::{FunctionDef, Item, SourceFile},
     baml_workspace::Project,
 };
+use rowan::ast::AstNode;
 use text_size::TextRange;
 
 /// Information about a symbol in the project.
@@ -45,6 +48,95 @@ pub fn list_functions(db: &dyn Db, project: Project) -> Vec<Symbol> {
             })
         })
         .collect()
+}
+
+/// Extended function metadata for the playground.
+#[derive(Debug, Clone)]
+pub struct FunctionSymbol {
+    pub name: String,
+    /// Whether this is an LLM function (has LLM body in CST).
+    pub is_llm: bool,
+    /// The LLM client name (if LLM function).
+    pub client_name: Option<String>,
+    /// Whether this function is compiler-generated (render_prompt, build_request, resolve).
+    pub is_sub_function: bool,
+}
+
+/// List user-facing functions with metadata for the playground.
+///
+/// Filters out compiler-generated sub-functions (render_prompt, build_request, resolve)
+/// and returns structured metadata per function.
+pub fn list_functions_with_metadata(db: &dyn Db, project: Project) -> Vec<FunctionSymbol> {
+    let items = project_items(db, project);
+    let mut functions = Vec::new();
+
+    for item in items.items(db) {
+        if let ItemId::Function(func_loc) = item {
+            let file = func_loc.file(db);
+            let item_tree = file_item_tree(db, file);
+            let func = &item_tree[func_loc.id(db)];
+
+            // Skip sub-functions — they become capabilities on the parent
+            match &func.compiler_generated {
+                Some(baml_compiler_hir::CompilerGenerated::LlmRenderPrompt { .. })
+                | Some(baml_compiler_hir::CompilerGenerated::LlmBuildRequest { .. })
+                | Some(baml_compiler_hir::CompilerGenerated::ClientResolve { .. }) => {
+                    continue;
+                }
+                _ => {}
+            }
+
+            // Helper to get function defs from the CST for this file
+            let get_fn_defs = || -> Vec<FunctionDef> {
+                let tree = syntax_tree(db, file);
+                let source_file = SourceFile::cast(tree).unwrap();
+                source_file
+                    .items()
+                    .filter_map(|i: Item| match i {
+                        Item::Function(f) => Some(f),
+                        _ => None,
+                    })
+                    .collect()
+            };
+
+            // Determine if LLM function:
+            // - LlmCall compiler-generated → is_llm = true
+            // - User-defined (None) → check CST for LLM body
+            let is_llm = match &func.compiler_generated {
+                Some(baml_compiler_hir::CompilerGenerated::LlmCall { .. }) => true,
+                None => get_fn_defs()
+                    .into_iter()
+                    .any(|f: FunctionDef| {
+                        f.name().as_ref().map(|n| n.text()) == Some(func.name.as_str())
+                            && f.llm_body().is_some()
+                    }),
+                _ => false,
+            };
+
+            // Get client name for LLM functions from CST
+            let client_name = if is_llm {
+                get_fn_defs()
+                    .into_iter()
+                    .find(|f: &FunctionDef| {
+                        f.name().as_ref().map(|n| n.text()) == Some(func.name.as_str())
+                    })
+                    .and_then(|f: FunctionDef| f.llm_body())
+                    .and_then(|body| body.client_field())
+                    .and_then(|c| c.value())
+            } else {
+                None
+            };
+
+            functions.push(FunctionSymbol {
+                name: func.name.to_string(),
+                is_llm,
+                client_name,
+                is_sub_function: false,
+            });
+        }
+    }
+
+    functions
 }
 
 /// List all classes in the project.

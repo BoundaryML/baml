@@ -481,9 +481,25 @@ impl BexMulitProject {
         let db_guard = project.project.db.lock().unwrap();
         let db = db_guard.db();
         let functions = match db_guard.project() {
-            Some(p) => baml_project::list_functions(db, p)
+            Some(p) => baml_project::list_functions_with_metadata(db, p)
                 .into_iter()
-                .map(|f| f.name)
+                .map(|f| crate::bex_lsp::FunctionInfo {
+                    name: f.name,
+                    kind: if f.is_llm {
+                        crate::bex_lsp::FunctionKind::Llm
+                    } else {
+                        crate::bex_lsp::FunctionKind::Expr
+                    },
+                    capabilities: if f.is_llm {
+                        Some(crate::bex_lsp::LlmCapabilities {
+                            render_prompt: true,
+                            build_request: true,
+                            client_name: f.client_name,
+                        })
+                    } else {
+                        None
+                    },
+                })
                 .collect(),
             None => vec![],
         };
