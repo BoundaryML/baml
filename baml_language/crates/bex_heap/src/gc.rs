@@ -406,7 +406,7 @@ impl BexHeap {
 mod tests {
     use std::sync::Arc;
 
-    use bex_vm_types::{Object, Value};
+    use bex_vm_types::{Class, Enum, Object, Value};
 
     use super::*;
     use crate::Tlab;
@@ -464,78 +464,90 @@ mod tests {
         assert!(stats.collected_count > 0);
     }
 
-    #[cfg(feature = "heap_debug")]
-    #[test]
-    #[ignore = "Requires heap_debug feature and epoch validation which now uses HeapPtr"]
-    fn test_gc_stale_runtime_index_panics() {
-        // This test was checking that stale ObjectIndex causes panic.
-        // With HeapPtr, the safety model is different - we need to update
-        // how epoch validation works with pointers.
-        //
-        // use std::panic::{AssertUnwindSafe, catch_unwind};
-        // use crate::{HeapDebuggerConfig, HeapVerifyMode};
-        //
-        // let debug = HeapDebuggerConfig {
-        //     enabled: true,
-        //     verify: HeapVerifyMode::Off,
-        // };
-        // let heap = BexHeap::with_tlab_size_and_debug(vec![], 8, debug);
-        // let mut tlab = Tlab::new(Arc::clone(&heap));
-        //
-        // let old_ptr = tlab.alloc_string("alive".to_string());
-        // let (_, remapped) = unsafe { heap.collect_garbage(&[old_ptr]) };
-        // let new_ptr = remapped[0];
-        // assert_ne!(old_ptr.as_ptr(), new_ptr.as_ptr());
-        //
-        // // Using old_ptr after GC should be detectable
-        // // (would need epoch stored in HeapPtr)
-    }
+    // TODO: Epoch-based stale pointer detection tests removed.
+    // HeapPtr::get() does not currently validate epochs — it's a raw dereference.
+    // If epoch validation is added to get() in the future, add tests here for:
+    // - test_gc_stale_heap_ptr_panics: using a pre-GC HeapPtr after GC should panic
+    // - test_handle_resolved_ptr_stale_after_gc_panics: similar for handle-resolved ptrs
 
     #[cfg(feature = "heap_debug")]
     #[test]
-    #[ignore = "Requires heap_debug feature and epoch validation which now uses HeapPtr"]
-    fn test_handle_resolved_index_stale_after_gc_panics() {
-        // See above - this test needs updating for HeapPtr model
-    }
-
-    #[cfg(feature = "heap_debug")]
-    #[test]
-    #[ignore = "Requires heap_debug feature with Instance/Variant using HeapPtr"]
     fn test_full_verify_panics_on_bad_variant() {
-        // This test creates a Variant with an ObjectIndex, which is now HeapPtr
-        // We need to create a valid HeapPtr pointing to an Enum.
-        //
-        // use std::panic::{AssertUnwindSafe, catch_unwind};
-        // use crate::{HeapDebuggerConfig, HeapVerifyMode};
-        //
-        // let compile_time = vec![Object::Enum(Enum {
-        //     name: "E".to_string(),
-        //     variant_names: vec!["A".to_string()],
-        // })];
-        // let debug = HeapDebuggerConfig {
-        //     enabled: true,
-        //     verify: HeapVerifyMode::Full,
-        // };
-        // let heap = BexHeap::with_tlab_size_and_debug(compile_time, 4, debug);
-        // let mut tlab = Tlab::new(Arc::clone(&heap));
-        //
-        // let enm_ptr = heap.compile_time_ptr(0);
-        // let _bad_variant = tlab.alloc(Object::Variant(bex_vm_types::types::Variant {
-        //     enm: enm_ptr,
-        //     index: 3, // Out of bounds variant index
-        // }));
-        //
-        // let result = catch_unwind(AssertUnwindSafe(|| {
-        //     heap.verify_quick();
-        // }));
-        // assert!(result.is_err());
+        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        let compile_time = vec![Object::Enum(Enum {
+            name: baml_type::TypeName::local(baml_type::Name::new("E")),
+            variants: vec![bex_vm_types::EnumVariant {
+                name: "A".to_string(),
+                description: None,
+                alias: None,
+                skip: false,
+            }],
+            description: None,
+            alias: None,
+            ty_attr: baml_type::TyAttr::default(),
+        })];
+        let debug = HeapDebuggerConfig {
+            enabled: true,
+            verify: HeapVerifyMode::Full,
+        };
+        let heap = BexHeap::with_tlab_size_and_debug(compile_time, 4, debug);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let enm_ptr = heap.compile_time_ptr(0);
+        let _bad_variant = tlab.alloc(Object::Variant(bex_vm_types::types::Variant {
+            enm: enm_ptr,
+            index: 3, // Out of bounds variant index
+        }));
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            heap.verify_quick();
+        }));
+        assert!(result.is_err());
     }
 
     #[cfg(feature = "heap_debug")]
     #[test]
-    #[ignore = "Requires heap_debug feature with Instance using HeapPtr"]
     fn test_full_verify_panics_on_instance_field_mismatch() {
-        // Similar to above - needs Instance.class to be a valid HeapPtr
+        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        let compile_time = vec![Object::Class(Class {
+            name: baml_type::TypeName::local(baml_type::Name::new("C")),
+            fields: vec![bex_vm_types::ClassField {
+                name: "x".to_string(),
+                field_type: baml_type::Ty::Int {
+                    attr: baml_type::TyAttr::default(),
+                },
+                description: None,
+                alias: None,
+                skip: false,
+                field_attr: Default::default(),
+            }],
+            description: None,
+            alias: None,
+            type_tag: 100,
+            ty_attr: baml_type::TyAttr::default(),
+        })];
+        let debug = HeapDebuggerConfig {
+            enabled: true,
+            verify: HeapVerifyMode::Full,
+        };
+        let heap = BexHeap::with_tlab_size_and_debug(compile_time, 4, debug);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+
+        let class_ptr = heap.compile_time_ptr(0);
+        // Instance has 3 fields but class expects 1 — should panic on verify
+        let _bad_instance = tlab.alloc(Object::Instance(bex_vm_types::types::Instance {
+            class: class_ptr,
+            fields: vec![Value::Int(1), Value::Int(2), Value::Int(3)],
+        }));
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            heap.verify_quick();
+        }));
+        assert!(result.is_err());
     }
 
     #[test]
