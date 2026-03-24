@@ -607,7 +607,6 @@ mod tests {
                 _ => panic!("Expected String"),
             }
         }
-
     }
 
     /// Tests set_object for field mutation patterns.

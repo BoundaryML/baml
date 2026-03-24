@@ -473,8 +473,8 @@ mod tests {
     #[cfg(feature = "heap_debug")]
     #[test]
     fn test_full_verify_panics_on_bad_variant() {
-        use std::panic::{AssertUnwindSafe, catch_unwind};
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
+        use std::panic::{AssertUnwindSafe, catch_unwind};
 
         let compile_time = vec![Object::Enum(Enum {
             name: baml_type::TypeName::local(baml_type::Name::new("E")),
@@ -510,23 +510,21 @@ mod tests {
     #[cfg(feature = "heap_debug")]
     #[test]
     fn test_full_verify_panics_on_instance_field_mismatch() {
-        use std::panic::{AssertUnwindSafe, catch_unwind};
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
+        use std::panic::{AssertUnwindSafe, catch_unwind};
 
         let compile_time = vec![Object::Class(Class {
             name: baml_type::TypeName::local(baml_type::Name::new("C")),
-            fields: vec![
-                bex_vm_types::ClassField {
-                    name: "x".to_string(),
-                    field_type: baml_type::Ty::Int {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    description: None,
-                    alias: None,
-                    skip: false,
-                    field_attr: Default::default(),
+            fields: vec![bex_vm_types::ClassField {
+                name: "x".to_string(),
+                field_type: baml_type::Ty::Int {
+                    attr: baml_type::TyAttr::default(),
                 },
-            ],
+                description: None,
+                alias: None,
+                skip: false,
+                field_attr: Default::default(),
+            }],
             description: None,
             alias: None,
             type_tag: 100,
