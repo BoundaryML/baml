@@ -15,6 +15,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useUser } from "@/components/providers/user-provider";
 import { BepContent } from "@/components/bep/bep-content";
 import { BepNav } from "@/components/bep/bep-nav";
+import { BepTableOfContents } from "@/components/bep/bep-table-of-contents";
 import { BepStatusSelect } from "@/components/bep/bep-status-select";
 import { BepVersionSelect } from "@/components/bep/bep-version-select";
 import { BepExportDialog } from "@/components/bep/bep-export-dialog";
@@ -957,6 +958,7 @@ const [copied, setCopied] = useState(false);
                               }))}
                           />
                         )}
+                        <BepTableOfContents content={currentContent} />
                       </div>
                     )}
                   </>
