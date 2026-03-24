@@ -69,18 +69,18 @@ pub fn file_actions(db: &dyn Db, file: SourceFile) -> Vec<FileAction> {
 
     // Iterate value-namespace contributions: functions, tests, template strings,
     // clients, generators, retry policies all live here.
-    for (_name, contrib) in &contribs.values {
+    for (name, contrib) in &contribs.values {
         match contrib.definition {
             Definition::Function(_) => {
                 actions.push(FileAction {
-                    name: _name.to_string(),
+                    name: name.to_string(),
                     name_span: contrib.name_span,
                     kind: FileActionKind::RunInPlayground,
                 });
             }
             Definition::Test(_) => {
                 actions.push(FileAction {
-                    name: _name.to_string(),
+                    name: name.to_string(),
                     name_span: contrib.name_span,
                     kind: FileActionKind::RunTest,
                 });

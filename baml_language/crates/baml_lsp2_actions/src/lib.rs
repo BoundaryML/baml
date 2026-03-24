@@ -53,6 +53,13 @@ pub mod type_info;
 pub mod usages;
 pub mod utils;
 
+#[cfg(test)]
+mod definition_at_tests;
+#[cfg(test)]
+mod testing;
+#[cfg(test)]
+mod usages_at_tests;
+
 // ── Db trait ──────────────────────────────────────────────────────────────────
 
 /// Database trait for `baml_lsp2_actions` queries.

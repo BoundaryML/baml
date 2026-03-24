@@ -153,26 +153,23 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
             }
 
             // Look up the inferred type.
-            let ty = match inference.binding_type(*pattern) {
-                Some(ty) => ty,
-                None => {
-                    // Try other scopes for nested blocks.
-                    let ty_str = find_binding_ty_any_scope(db, &index, *pattern);
-                    if let Some(ty_str) = ty_str {
-                        // Emit hint: position at end of pattern span.
-                        let pat_span = source_map.pattern_span(*pattern);
-                        if !pat_span.is_empty() {
-                            out.push(InlineAnnotation {
-                                offset: pat_span.end(),
-                                label: format!(": {ty_str}"),
-                                kind: AnnotationKind::Type,
-                                padding_left: false,
-                                padding_right: true,
-                            });
-                        }
+            let Some(ty) = inference.binding_type(*pattern) else {
+                // Try other scopes for nested blocks.
+                let ty_str = find_binding_ty_any_scope(db, index, *pattern);
+                if let Some(ty_str) = ty_str {
+                    // Emit hint: position at end of pattern span.
+                    let pat_span = source_map.pattern_span(*pattern);
+                    if !pat_span.is_empty() {
+                        out.push(InlineAnnotation {
+                            offset: pat_span.end(),
+                            label: format!(": {ty_str}"),
+                            kind: AnnotationKind::Type,
+                            padding_left: false,
+                            padding_right: true,
+                        });
                     }
-                    continue;
                 }
+                continue;
             };
 
             // Suppress noisy / unhelpful types.

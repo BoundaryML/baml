@@ -97,7 +97,7 @@ pub fn definition_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<
 
 /// Resolve a local variable's definition site to a `Location`.
 ///
-/// Finds the enclosing function by matching the scope range against item_tree
+/// Finds the enclosing function by matching the scope range against `item_tree`
 /// functions, then uses the appropriate source map to get the span.
 fn local_definition_location(
     db: &dyn Db,

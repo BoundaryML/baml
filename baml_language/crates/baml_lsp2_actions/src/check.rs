@@ -163,7 +163,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                 db,
                 ret_te,
-                &pkg_items,
+                pkg_items,
                 &pkg_info.namespace_path,
                 &generic_params,
                 &mut type_errors,
@@ -193,7 +193,7 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                 db,
                 te,
-                &pkg_items,
+                pkg_items,
                 &pkg_info.namespace_path,
                 &generic_params,
                 &mut type_errors,
