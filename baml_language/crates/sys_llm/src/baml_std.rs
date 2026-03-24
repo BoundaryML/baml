@@ -19,7 +19,7 @@ impl PrimitiveClient {
         self.options
             .default_role
             .clone()
-            .unwrap_or_else(|| "user".to_string())
+            .unwrap_or_else(|| "system".to_string())
     }
 
     pub fn allowed_roles(&self) -> Vec<String> {

@@ -25,6 +25,7 @@ pub(crate) fn specialize_prompt_from_owned(
     let provider = LlmProvider::from_str(&client.provider).unwrap_or(LlmProvider::OpenAiGeneric);
 
     let features = ModelFeatures::for_provider(provider, &client.options);
+    let prompt = transformations::wrap_simple_as_message(prompt, &client.default_role());
     let prompt = transformations::merge_adjacent_roles(prompt);
     let prompt = transformations::consolidate_system_prompts(prompt, &features);
 

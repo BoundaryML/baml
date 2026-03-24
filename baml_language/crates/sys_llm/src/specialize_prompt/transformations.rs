@@ -5,6 +5,24 @@ use serde_json::Value;
 
 use crate::{AllowedMetadata, ModelFeatures};
 
+/// Wrap a top-level `PromptAst::Simple` in a `Message` with the client's default role.
+///
+/// Prompts without explicit `{{ _.role() }}` directives produce `Simple` nodes.
+/// Downstream code (merge, consolidate, builders) expects `Message` nodes.
+pub(super) fn wrap_simple_as_message(
+    prompt: bex_vm_types::PromptAst,
+    default_role: &str,
+) -> bex_vm_types::PromptAst {
+    match prompt.as_ref() {
+        PromptAst::Simple(content) => Arc::new(PromptAst::Message {
+            role: default_role.to_string(),
+            content: content.clone(),
+            metadata: Value::default(),
+        }),
+        _ => prompt,
+    }
+}
+
 /// Merge adjacent messages with the same role.
 ///
 /// Walks the top-level `PromptAst::Vec` and merges consecutive `Message` nodes
