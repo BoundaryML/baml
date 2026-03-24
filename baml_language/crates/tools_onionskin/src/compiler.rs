@@ -26,32 +26,32 @@ use salsa::{Event, EventKind, Setter};
 fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
     use baml_compiler2_ast::TypeExpr;
     match ty {
-        TypeExpr::Path(segments) => segments
+        TypeExpr::Path { segments, .. } => segments
             .iter()
             .map(|n| n.as_str())
             .collect::<Vec<_>>()
             .join("."),
-        TypeExpr::Int => "int".into(),
-        TypeExpr::Float => "float".into(),
-        TypeExpr::String => "string".into(),
-        TypeExpr::Bool => "bool".into(),
-        TypeExpr::Null => "null".into(),
-        TypeExpr::Never => "never".into(),
-        TypeExpr::Media(k) => format!("{:?}", k).to_lowercase(),
-        TypeExpr::Optional(inner) => format!("{}?", hir2_type_expr_to_string(inner)),
-        TypeExpr::List(inner) => format!("{}[]", hir2_type_expr_to_string(inner)),
-        TypeExpr::Map { key, value } => format!(
+        TypeExpr::Int { .. } => "int".into(),
+        TypeExpr::Float { .. } => "float".into(),
+        TypeExpr::String { .. } => "string".into(),
+        TypeExpr::Bool { .. } => "bool".into(),
+        TypeExpr::Null { .. } => "null".into(),
+        TypeExpr::Never { .. } => "never".into(),
+        TypeExpr::Media { kind, .. } => format!("{:?}", kind).to_lowercase(),
+        TypeExpr::Optional { inner, .. } => format!("{}?", hir2_type_expr_to_string(inner)),
+        TypeExpr::List { inner, .. } => format!("{}[]", hir2_type_expr_to_string(inner)),
+        TypeExpr::Map { key, value, .. } => format!(
             "map<{}, {}>",
             hir2_type_expr_to_string(key),
             hir2_type_expr_to_string(value)
         ),
-        TypeExpr::Union(members) => members
+        TypeExpr::Union { variants, .. } => variants
             .iter()
             .map(hir2_type_expr_to_string)
             .collect::<Vec<_>>()
             .join(" | "),
-        TypeExpr::Literal(lit) => lit.to_string(),
-        TypeExpr::Function { params, ret } => {
+        TypeExpr::Literal { value, .. } => value.to_string(),
+        TypeExpr::Function { params, ret, .. } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|p| {
@@ -63,11 +63,11 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
                 .collect();
             format!("({}) -> {}", ps.join(", "), hir2_type_expr_to_string(ret))
         }
-        TypeExpr::BuiltinUnknown => "unknown".into(),
-        TypeExpr::Type => "type".into(),
-        TypeExpr::Rust => "$rust_type".into(),
-        TypeExpr::Error => "error".into(),
-        TypeExpr::Unknown => "?".into(),
+        TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
+        TypeExpr::Type { .. } => "type".into(),
+        TypeExpr::Rust { .. } => "$rust_type".into(),
+        TypeExpr::Error { .. } => "error".into(),
+        TypeExpr::Unknown { .. } => "?".into(),
     }
 }
 

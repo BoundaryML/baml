@@ -1408,7 +1408,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         match &body.patterns[pattern_id] {
             baml_compiler2_ast::Pattern::Binding(name) => {
                 if self.is_bare_type_sugar_binding(name) {
-                    self.lower_pattern_type_expr(&TypeExpr::Path(vec![name.clone()]), at_expr)
+                    self.lower_pattern_type_expr(
+                        &TypeExpr::Path {
+                            segments: vec![name.clone()],
+                            attrs: vec![],
+                        },
+                        at_expr,
+                    )
                 } else {
                     scrutinee_ty.clone()
                 }
@@ -1534,8 +1540,13 @@ impl<'db> TypeInferenceBuilder<'db> {
         match pattern {
             baml_compiler2_ast::Pattern::Binding(name) => {
                 if self.is_bare_type_sugar_binding(name) {
-                    let lowered =
-                        self.lower_pattern_type_expr(&TypeExpr::Path(vec![name.clone()]), at_expr);
+                    let lowered = self.lower_pattern_type_expr(
+                        &TypeExpr::Path {
+                            segments: vec![name.clone()],
+                            attrs: vec![],
+                        },
+                        at_expr,
+                    );
                     if Self::ty_covers_fact(&lowered, throw_fact) {
                         PatternMatchStrength::DefiniteMatch
                     } else if is_unknown {
@@ -2642,7 +2653,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .iter()
                         .map(|(n, te)| {
                             let param_ty = if n.as_str() == "self"
-                                && matches!(te, baml_compiler2_ast::TypeExpr::Unknown)
+                                && matches!(te, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
                                 // self with no annotation → use the enclosing class type
                                 class_ty.clone()
@@ -3011,7 +3022,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .iter()
                     .map(|(n, te)| {
                         let ty = if n.as_str() == "self"
-                            && matches!(te, baml_compiler2_ast::TypeExpr::Unknown)
+                            && matches!(te, baml_compiler2_ast::TypeExpr::Unknown { .. })
                         {
                             builtin_class_ty.clone()
                         } else {

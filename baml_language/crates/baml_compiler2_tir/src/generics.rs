@@ -88,7 +88,9 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
 /// intercept `T` references that would otherwise produce `Ty::Unknown`.
 fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Option<Ty> {
     match expr {
-        TypeExpr::Path(segments) if segments.len() == 1 => bindings.get(&segments[0]).cloned(),
+        TypeExpr::Path { segments, .. } if segments.len() == 1 => {
+            bindings.get(&segments[0]).cloned()
+        }
         _ => None,
     }
 }
@@ -130,7 +132,7 @@ pub fn lower_type_expr_with_generics(
     // rather than lowering first then substituting, so that type-variable references
     // in nested positions are also intercepted before triggering "unresolved type".
     match expr {
-        TypeExpr::Optional(inner) => Ty::Optional(Box::new(lower_type_expr_with_generics(
+        TypeExpr::Optional { inner, .. } => Ty::Optional(Box::new(lower_type_expr_with_generics(
             db,
             inner,
             package_items,
@@ -138,7 +140,7 @@ pub fn lower_type_expr_with_generics(
             bindings,
             diagnostics,
         ))),
-        TypeExpr::List(inner) => Ty::List(Box::new(lower_type_expr_with_generics(
+        TypeExpr::List { inner, .. } => Ty::List(Box::new(lower_type_expr_with_generics(
             db,
             inner,
             package_items,
@@ -146,7 +148,7 @@ pub fn lower_type_expr_with_generics(
             bindings,
             diagnostics,
         ))),
-        TypeExpr::Map { key, value } => Ty::Map(
+        TypeExpr::Map { key, value, .. } => Ty::Map(
             Box::new(lower_type_expr_with_generics(
                 db,
                 key,
@@ -164,7 +166,9 @@ pub fn lower_type_expr_with_generics(
                 diagnostics,
             )),
         ),
-        TypeExpr::Union(members) => Ty::Union(
+        TypeExpr::Union {
+            variants: members, ..
+        } => Ty::Union(
             members
                 .iter()
                 .map(|m| {
@@ -179,7 +183,7 @@ pub fn lower_type_expr_with_generics(
                 })
                 .collect(),
         ),
-        TypeExpr::Function { params, ret } => Ty::Function {
+        TypeExpr::Function { params, ret, .. } => Ty::Function {
             params: params
                 .iter()
                 .map(|p| {

@@ -484,8 +484,8 @@ fn lookup_dep_throw_set<'a>(
 
 pub fn is_banned_catch_binding_type(ty: &TypeExpr) -> Option<&'static str> {
     match ty {
-        TypeExpr::BuiltinUnknown => Some("unknown"),
-        TypeExpr::Path(segments) if segments.len() == 1 && segments[0].as_str() == "any" => {
+        TypeExpr::BuiltinUnknown { .. } => Some("unknown"),
+        TypeExpr::Path { segments, .. } if segments.len() == 1 && segments[0].as_str() == "any" => {
             Some("any")
         }
         _ => None,

@@ -50,7 +50,7 @@ pub fn lower_type_expr_in_ns(
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     match type_expr {
-        TypeExpr::Path(segments) => {
+        TypeExpr::Path { segments, .. } => {
             // When we have a namespace context, try the qualified path first.
             // e.g. for ns_context=["fs"], segments=["File"], try ["fs", "File"].
             let resolved = if !ns_context.is_empty() {
@@ -107,13 +107,13 @@ pub fn lower_type_expr_in_ns(
                 Ty::Unknown
             }
         }
-        TypeExpr::Int => Ty::Primitive(PrimitiveType::Int),
-        TypeExpr::Float => Ty::Primitive(PrimitiveType::Float),
-        TypeExpr::String => Ty::Primitive(PrimitiveType::String),
-        TypeExpr::Bool => Ty::Primitive(PrimitiveType::Bool),
-        TypeExpr::Null => Ty::Primitive(PrimitiveType::Null),
-        TypeExpr::Never => Ty::Never,
-        TypeExpr::Media(kind) => Ty::Primitive(match kind {
+        TypeExpr::Int { .. } => Ty::Primitive(PrimitiveType::Int),
+        TypeExpr::Float { .. } => Ty::Primitive(PrimitiveType::Float),
+        TypeExpr::String { .. } => Ty::Primitive(PrimitiveType::String),
+        TypeExpr::Bool { .. } => Ty::Primitive(PrimitiveType::Bool),
+        TypeExpr::Null { .. } => Ty::Primitive(PrimitiveType::Null),
+        TypeExpr::Never { .. } => Ty::Never,
+        TypeExpr::Media { kind, .. } => Ty::Primitive(match kind {
             baml_base::MediaKind::Image => PrimitiveType::Image,
             baml_base::MediaKind::Audio => PrimitiveType::Audio,
             baml_base::MediaKind::Video => PrimitiveType::Video,
@@ -121,7 +121,7 @@ pub fn lower_type_expr_in_ns(
             // Generic media — treated as unknown for type resolution purposes
             baml_base::MediaKind::Generic => return Ty::Unknown,
         }),
-        TypeExpr::Optional(inner) => Ty::Optional(Box::new(lower_type_expr_in_ns(
+        TypeExpr::Optional { inner, .. } => Ty::Optional(Box::new(lower_type_expr_in_ns(
             db,
             inner,
             package_items,
@@ -129,7 +129,7 @@ pub fn lower_type_expr_in_ns(
             generic_params,
             diagnostics,
         ))),
-        TypeExpr::List(inner) => Ty::List(Box::new(lower_type_expr_in_ns(
+        TypeExpr::List { inner, .. } => Ty::List(Box::new(lower_type_expr_in_ns(
             db,
             inner,
             package_items,
@@ -137,7 +137,7 @@ pub fn lower_type_expr_in_ns(
             generic_params,
             diagnostics,
         ))),
-        TypeExpr::Map { key, value } => Ty::Map(
+        TypeExpr::Map { key, value, .. } => Ty::Map(
             Box::new(lower_type_expr_in_ns(
                 db,
                 key,
@@ -155,7 +155,9 @@ pub fn lower_type_expr_in_ns(
                 diagnostics,
             )),
         ),
-        TypeExpr::Union(members) => Ty::Union(
+        TypeExpr::Union {
+            variants: members, ..
+        } => Ty::Union(
             members
                 .iter()
                 .map(|m| {
@@ -170,7 +172,7 @@ pub fn lower_type_expr_in_ns(
                 })
                 .collect(),
         ),
-        TypeExpr::Function { params, ret } => Ty::Function {
+        TypeExpr::Function { params, ret, .. } => Ty::Function {
             params: params
                 .iter()
                 .map(|p| {
@@ -196,13 +198,13 @@ pub fn lower_type_expr_in_ns(
                 diagnostics,
             )),
         },
-        TypeExpr::Literal(lit) => Ty::Literal(lit.clone(), Freshness::Regular),
-        TypeExpr::BuiltinUnknown => Ty::BuiltinUnknown,
-        TypeExpr::Error | TypeExpr::Unknown => Ty::Unknown,
+        TypeExpr::Literal { value: lit, .. } => Ty::Literal(lit.clone(), Freshness::Regular),
+        TypeExpr::BuiltinUnknown { .. } => Ty::BuiltinUnknown,
+        TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => Ty::Unknown,
         // Dedicated Ty::Type variant — see ty.rs doc comment for design rationale.
-        TypeExpr::Type => Ty::Type,
+        TypeExpr::Type { .. } => Ty::Type,
         // `$rust_type` — opaque Rust-managed state field type.
-        TypeExpr::Rust => Ty::RustType,
+        TypeExpr::Rust { .. } => Ty::RustType,
     }
 }
 

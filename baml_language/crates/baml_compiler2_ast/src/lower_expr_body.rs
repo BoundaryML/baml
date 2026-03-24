@@ -792,7 +792,10 @@ impl LoweringContext {
                                 // Treat it as a named type.
                                 let pat = Pattern::TypedBinding {
                                     name,
-                                    ty: crate::ast::TypeExpr::Path(vec![Name::new(&text)]),
+                                    ty: crate::ast::TypeExpr::Path {
+                                        segments: vec![Name::new(&text)],
+                                        attrs: vec![],
+                                    },
                                 };
                                 elements.push(self.alloc_pattern(pat, token.text_range()));
                                 continue;

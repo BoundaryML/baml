@@ -179,48 +179,48 @@ pub fn display_ty(ty: &Ty) -> String {
 /// produces output that matches the user's source syntax.
 pub fn display_type_expr(te: &TypeExpr) -> String {
     match te {
-        TypeExpr::Path(segments) => {
+        TypeExpr::Path { segments, .. } => {
             // Use only the last segment for brevity (e.g. `baml.Foo` → `Foo`).
             segments
                 .last()
                 .map(|n| n.as_str().to_string())
                 .unwrap_or_else(|| "unknown".to_string())
         }
-        TypeExpr::Int => "int".to_string(),
-        TypeExpr::Float => "float".to_string(),
-        TypeExpr::String => "string".to_string(),
-        TypeExpr::Bool => "bool".to_string(),
-        TypeExpr::Null => "null".to_string(),
-        TypeExpr::Media(kind) => format!("{kind:?}").to_lowercase(),
-        TypeExpr::Optional(inner) => {
+        TypeExpr::Int { .. } => "int".to_string(),
+        TypeExpr::Float { .. } => "float".to_string(),
+        TypeExpr::String { .. } => "string".to_string(),
+        TypeExpr::Bool { .. } => "bool".to_string(),
+        TypeExpr::Null { .. } => "null".to_string(),
+        TypeExpr::Media { kind, .. } => format!("{kind:?}").to_lowercase(),
+        TypeExpr::Optional { inner, .. } => {
             let s = display_type_expr(inner);
-            if matches!(**inner, TypeExpr::Union(_)) {
+            if matches!(**inner, TypeExpr::Union { .. }) {
                 format!("({s})?")
             } else {
                 format!("{s}?")
             }
         }
-        TypeExpr::List(inner) => {
+        TypeExpr::List { inner, .. } => {
             let s = display_type_expr(inner);
-            if matches!(**inner, TypeExpr::Union(_)) {
+            if matches!(**inner, TypeExpr::Union { .. }) {
                 format!("({s})[]")
             } else {
                 format!("{s}[]")
             }
         }
-        TypeExpr::Map { key, value } => {
+        TypeExpr::Map { key, value, .. } => {
             format!(
                 "map<{}, {}>",
                 display_type_expr(key),
                 display_type_expr(value)
             )
         }
-        TypeExpr::Union(members) => {
-            let parts: Vec<_> = members.iter().map(display_type_expr).collect();
+        TypeExpr::Union { variants, .. } => {
+            let parts: Vec<_> = variants.iter().map(display_type_expr).collect();
             parts.join(" | ")
         }
-        TypeExpr::Literal(lit) => lit.to_string(),
-        TypeExpr::Function { params, ret } => {
+        TypeExpr::Literal { value, .. } => value.to_string(),
+        TypeExpr::Function { params, ret, .. } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|p| {
@@ -232,10 +232,10 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                 .collect();
             format!("({}) -> {}", ps.join(", "), display_type_expr(ret))
         }
-        TypeExpr::BuiltinUnknown => "unknown".to_string(),
-        TypeExpr::Never => "never".to_string(),
-        TypeExpr::Type => "type".to_string(),
-        TypeExpr::Rust => "$rust_type".to_string(),
-        TypeExpr::Error | TypeExpr::Unknown => "unknown".to_string(),
+        TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
+        TypeExpr::Never { .. } => "never".to_string(),
+        TypeExpr::Type { .. } => "type".to_string(),
+        TypeExpr::Rust { .. } => "$rust_type".to_string(),
+        TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => "unknown".to_string(),
     }
 }

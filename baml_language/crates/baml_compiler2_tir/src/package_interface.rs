@@ -270,7 +270,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                         let mut params = Vec::new();
                         for (param_name, param_te) in &sig.params {
                             let param_ty = if param_name.as_str() == "self"
-                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
+                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
                                 build_self_type_for_class(class_data, ns_path)
                             } else {

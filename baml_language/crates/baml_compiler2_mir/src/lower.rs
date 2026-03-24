@@ -838,7 +838,7 @@ impl LoweringContext<'_> {
         // which correctly resolves to the enclosing class type.
         for (param_name, param_te) in &sig.params {
             let param_ty = if param_name.as_str() == "self"
-                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
+                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
             {
                 // self parameter: TIR resolves this via enclosing class lookup.
                 // Read the same resolution here.

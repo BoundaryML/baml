@@ -291,7 +291,7 @@ pub fn infer_scope_types<'db>(
                         );
                         for (i, (param_name, param_te)) in sig.params.iter().enumerate() {
                             let param_ty = if param_name.as_str() == "self"
-                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
+                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
                                 // `self` parameter with no type annotation — infer from enclosing class
                                 enclosing_class_name
