@@ -921,45 +921,47 @@ const [copied, setCopied] = useState(false);
                         />
                       </div>
                     ) : (
-                      <div className="relative">
-                        <BepContent
-                          content={currentContent}
-                          linkContext={{
-                            bepNumber,
-                            isHistorical: isViewingHistorical,
-                            versionNumber:
-                              isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
-                                ? routeInfo.versionNumber
-                                : null,
-                          }}
-                        />
-                        {effectiveVersionId && (
-                          <CommentSidebar
-                            contentSelector="[data-bep-content]"
-                            bepId={bep._id}
-                            versionId={effectiveVersionId}
-                            pageId={currentPageId}
-                            readOnly={isViewingHistorical}
-                            comments={(pageComments ?? [])
-                              .filter((c) => c.anchor)
-                              .map((c) => ({
-                                _id: c._id,
-                                parentId: c.parentId,
-                                anchor: c.anchor as {
-                                  nodeId: string;
-                                  nodeType: string;
-                                  nodeText: string;
-                                },
-                                authorName: c.authorName,
-                                content: c.content,
-                                type: c.type,
-                                createdAt: c.createdAt,
-                                resolved: c.resolved,
-                              }))}
-                          />
-                        )}
+                      <>
                         <BepTableOfContents content={currentContent} />
-                      </div>
+                        <div className="relative">
+                          <BepContent
+                            content={currentContent}
+                            linkContext={{
+                              bepNumber,
+                              isHistorical: isViewingHistorical,
+                              versionNumber:
+                                isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
+                                  ? routeInfo.versionNumber
+                                  : null,
+                            }}
+                          />
+                          {effectiveVersionId && (
+                            <CommentSidebar
+                              contentSelector="[data-bep-content]"
+                              bepId={bep._id}
+                              versionId={effectiveVersionId}
+                              pageId={currentPageId}
+                              readOnly={isViewingHistorical}
+                              comments={(pageComments ?? [])
+                                .filter((c) => c.anchor)
+                                .map((c) => ({
+                                  _id: c._id,
+                                  parentId: c.parentId,
+                                  anchor: c.anchor as {
+                                    nodeId: string;
+                                    nodeType: string;
+                                    nodeText: string;
+                                  },
+                                  authorName: c.authorName,
+                                  content: c.content,
+                                  type: c.type,
+                                  createdAt: c.createdAt,
+                                  resolved: c.resolved,
+                                }))}
+                            />
+                          )}
+                        </div>
+                      </>
                     )}
                   </>
                 )}
