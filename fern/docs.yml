@@ -454,6 +454,9 @@ navigation:
               - page: Tracking Usage
                 icon: fa-regular fa-bar-chart
                 path: 01-guide/07-observability/studio.mdx
+              - page: Respan
+                icon: fa-regular fa-chart-line
+                path: 01-guide/07-observability/respan.mdx
       - section: Comparisons
         contents:
           - page: BAML vs Langchain

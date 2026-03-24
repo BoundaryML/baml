@@ -1,0 +1,326 @@
+---
+title: Respan
+---
+
+[Respan](https://respan.ai) is an open-source observability platform for LLM applications. You can use it alongside BAML to get detailed traces, token usage, cost tracking, and prompt analytics in the Respan dashboard.
+
+There are three ways to integrate BAML with Respan, depending on how much control you need:
+
+1. **Wrap BAML calls with Respan decorators** — easiest, gives you workflow-level traces
+2. **Use `on_log_event` to forward events** — real-time event streaming to Respan
+3. **Use `Collector` for rich trace data** — most detailed, includes token usage, HTTP requests, and timing
+
+## Prerequisites
+
+- A [Respan](https://platform.respan.ai) account and API key
+- BAML installed and configured in your project
+
+<CodeGroup>
+```bash Python
+pip install respan-tracing
+```
+
+```bash TypeScript
+npm install @respan/tracing
+```
+</CodeGroup>
+
+Set your Respan API key:
+
+```bash
+export RESPAN_API_KEY=your_respan_api_key
+```
+
+## Option 1: Wrap BAML Calls with Respan Decorators
+
+The simplest approach. Use Respan's `@workflow` and `@task` decorators around your BAML function calls to get structured traces in the Respan dashboard.
+
+<CodeGroup>
+```python Python
+from respan_tracing import RespanTelemetry, workflow, task
+from baml_client import b
+
+# Initialize Respan telemetry
+telemetry = RespanTelemetry(app_name="my-baml-app")
+
+@task(name="extract_resume")
+async def extract_resume(text: str):
+    return await b.ExtractResume(text)
+
+@task(name="classify_sentiment")
+async def classify_sentiment(text: str):
+    return await b.ClassifySentiment(text)
+
+@workflow(name="analyze_document")
+async def analyze_document(text: str):
+    resume = await extract_resume(text)
+    sentiment = await classify_sentiment(text)
+    return {"resume": resume, "sentiment": sentiment}
+```
+
+```typescript TypeScript
+import { RespanTelemetry } from '@respan/tracing'
+import { b } from 'baml_client'
+
+const respan = new RespanTelemetry({
+  apiKey: process.env.RESPAN_API_KEY,
+  appName: 'my-baml-app',
+})
+await respan.initialize()
+
+async function analyzeDocument(text: string) {
+  return await respan.withWorkflow(
+    { name: 'analyze_document' },
+    async () => {
+      const resume = await respan.withTask(
+        { name: 'extract_resume' },
+        () => b.ExtractResume(text)
+      )
+      const sentiment = await respan.withTask(
+        { name: 'classify_sentiment' },
+        () => b.ClassifySentiment(text)
+      )
+      return { resume, sentiment }
+    }
+  )
+}
+
+await analyzeDocument("John Doe, Software Engineer...")
+await respan.shutdown()
+```
+</CodeGroup>
+
+## Option 2: Forward Events with `on_log_event`
+
+BAML fires a callback for every LLM call. You can forward these events to Respan's [trace ingestion API](https://respan.ai/docs/apis/observe/traces/traces-ingest-from-logs) in real time.
+
+<CodeGroup>
+```python Python
+import os
+import requests
+from baml_client import b
+from baml_client.tracing import trace, on_log_event, flush
+
+RESPAN_API_KEY = os.environ["RESPAN_API_KEY"]
+RESPAN_INGEST_URL = "https://api.respan.ai/v1/traces/ingest"
+
+def forward_to_respan(event):
+    """Forward BAML log events to Respan."""
+    requests.post(
+        RESPAN_INGEST_URL,
+        headers={
+            "Authorization": f"Bearer {RESPAN_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json=[
+            {
+                "trace_unique_id": event.metadata.root_event_id,
+                "span_unique_id": event.metadata.event_id,
+                "span_parent_id": event.metadata.parent_id,
+                "span_name": "baml_llm_call",
+                "input": event.prompt,
+                "output": event.raw_output,
+                "start_time": event.start_time,
+                "timestamp": event.start_time,
+                "metadata": {
+                    "source": "baml",
+                    "parsed_output": event.parsed_output,
+                },
+            }
+        ],
+    )
+
+# Register the callback — all BAML LLM calls will be forwarded
+on_log_event(forward_to_respan)
+
+@trace
+async def process_document(text: str):
+    result = await b.ExtractResume(text)
+    return result
+
+# Don't forget to flush before your app exits
+flush()
+```
+
+```typescript TypeScript
+import { b } from 'baml_client'
+import { traceAsync, onLogEvent, flush } from 'baml_client/tracing'
+
+const RESPAN_API_KEY = process.env.RESPAN_API_KEY!
+const RESPAN_INGEST_URL = 'https://api.respan.ai/v1/traces/ingest'
+
+// Register the callback — all BAML LLM calls will be forwarded
+onLogEvent((event) => {
+  fetch(RESPAN_INGEST_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${RESPAN_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify([
+      {
+        trace_unique_id: event.metadata.rootEventId,
+        span_unique_id: event.metadata.eventId,
+        span_parent_id: event.metadata.parentId,
+        span_name: 'baml_llm_call',
+        input: event.prompt,
+        output: event.rawOutput,
+        start_time: event.startTime,
+        timestamp: event.startTime,
+        metadata: {
+          source: 'baml',
+          parsed_output: event.parsedOutput,
+        },
+      },
+    ]),
+  })
+})
+
+const processDocument = traceAsync('processDocument', async (text: string) => {
+  return await b.ExtractResume(text)
+})
+
+await processDocument("John Doe, Software Engineer...")
+flush()
+```
+</CodeGroup>
+
+## Option 3: Use Collector for Rich Traces
+
+The [`Collector`](/guide/baml-advanced/collector-track-tokens) gives you the most detailed data — token counts, timing, HTTP request/response details, and retry information. Combine it with Respan's ingestion API for full observability.
+
+<CodeGroup>
+```python Python
+import os
+import requests
+from baml_client import b
+from baml_py import Collector
+
+RESPAN_API_KEY = os.environ["RESPAN_API_KEY"]
+RESPAN_INGEST_URL = "https://api.respan.ai/v1/traces/ingest"
+
+collector = Collector(name="respan-collector")
+
+result = await b.ExtractResume(
+    "John Doe, Software Engineer...",
+    baml_options={"collector": collector},
+)
+
+# Extract rich data from the collector
+log = collector.last
+assert log is not None
+
+span = {
+    "trace_unique_id": f"baml-{log.id}",
+    "span_unique_id": log.id,
+    "span_name": log.function_name,
+    "input": str(log.raw_llm_response),
+    "output": str(result),
+    "start_time": log.timing.start_time.isoformat(),
+    "latency": log.timing.duration_ms / 1000,
+    "model": log.calls[-1].model if log.calls else None,
+    "prompt_tokens": log.usage.input_tokens if log.usage else None,
+    "completion_tokens": log.usage.output_tokens if log.usage else None,
+    "metadata": {
+        "source": "baml",
+        "function_name": log.function_name,
+        "tags": log.tags,
+    },
+}
+
+requests.post(
+    RESPAN_INGEST_URL,
+    headers={
+        "Authorization": f"Bearer {RESPAN_API_KEY}",
+        "Content-Type": "application/json",
+    },
+    json=[span],
+)
+```
+
+```typescript TypeScript
+import { b } from 'baml_client'
+import { Collector } from '@boundaryml/baml'
+
+const RESPAN_API_KEY = process.env.RESPAN_API_KEY!
+const RESPAN_INGEST_URL = 'https://api.respan.ai/v1/traces/ingest'
+
+const collector = new Collector('respan-collector')
+
+const result = await b.ExtractResume("John Doe, Software Engineer...", {
+  collector,
+})
+
+const log = collector.last!
+
+await fetch(RESPAN_INGEST_URL, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${RESPAN_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify([
+    {
+      trace_unique_id: `baml-${log.id}`,
+      span_unique_id: log.id,
+      span_name: log.functionName,
+      input: log.rawLlmResponse,
+      output: JSON.stringify(result),
+      latency: (log.timing?.durationMs ?? 0) / 1000,
+      prompt_tokens: log.usage?.inputTokens,
+      completion_tokens: log.usage?.outputTokens,
+      metadata: {
+        source: 'baml',
+        function_name: log.functionName,
+        tags: log.tags,
+      },
+    },
+  ]),
+})
+```
+</CodeGroup>
+
+## Adding Metadata for Filtering
+
+Respan supports [span attributes](https://respan.ai/docs/integrations/respan-native#attributes) like `customer_identifier` and `trace_group_identifier` for filtering traces in the dashboard. You can combine these with BAML's `set_tags`:
+
+```python
+from respan_tracing import RespanTelemetry, workflow, task, get_client
+from baml_client import b
+from baml_client.tracing import set_tags
+
+telemetry = RespanTelemetry(app_name="my-baml-app")
+
+@workflow(name="process_user_request")
+async def process_user_request(user_id: str, text: str):
+    # Set Respan attributes for dashboard filtering
+    client = get_client()
+    client.update_current_span(
+        respan_params={
+            "customer_identifier": user_id,
+            "trace_group_identifier": "resume-extraction",
+            "metadata": {"pipeline_version": "v2"},
+        }
+    )
+
+    # Set BAML tags (visible in Boundary Studio if also enabled)
+    set_tags(userId=user_id)
+
+    return await b.ExtractResume(text)
+```
+
+## Which Option Should I Use?
+
+| Approach | Effort | Detail Level | Best For |
+|----------|--------|-------------|----------|
+| **Respan decorators** | Low | Workflow-level spans | Quick setup, structured traces |
+| **`on_log_event`** | Medium | Per-LLM-call events | Real-time streaming, custom filtering |
+| **`Collector` + API** | Medium | Full LLM metadata (tokens, HTTP, timing) | Cost tracking, debugging, detailed analytics |
+
+You can also combine approaches — for example, use Respan decorators for workflow structure and the `Collector` for detailed LLM metrics within each task.
+
+## Further Reading
+
+- [Respan Tracing SDK docs](https://respan.ai/docs/sdks/python/tracing/overview)
+- [Respan trace ingestion API](https://respan.ai/docs/apis/observe/traces/traces-ingest-from-logs)
+- [BAML Collector reference](/guide/baml-advanced/collector-track-tokens)
