@@ -12,6 +12,7 @@
 import type { ChangeEvent, FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
+import { PanelLeft } from 'lucide-react';
 import type { RuntimePort } from './runtime-port';
 import type {
   ControlFlowGraph,
@@ -22,12 +23,14 @@ import type {
   FunctionInfo,
   ProjectUpdate,
   RunEntry,
+  TestInfo,
   WorkerOutMessage,
 } from './worker-protocol';
 import type { ResultRendererProps } from './result-renderers';
 import { ResultDisplay } from './ResultDisplay';
 import { registerBuiltinResultRenderers } from './renderers/registerBuiltins';
 import { GraphView } from './graph/GraphView';
+import { FunctionSidebar } from './FunctionSidebar';
 
 registerBuiltinResultRenderers();
 
@@ -102,6 +105,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [promptPreviewError, setPromptPreviewError] = useState<string | null>(null);
   const [curlPreviewError, setCurlPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [buildTime, setBuildTime] = useState<number | null>(null);
   const [envRequests, setEnvRequests] = useState<EnvVarRequest[]>([]);
@@ -497,11 +501,70 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     }
   }, [selectedFn, selectedProject, argsJson, isRunning, port]);
 
+  const handleSelectTest = useCallback((test: TestInfo) => {
+    setSelectedFn(test.functionName);
+    setArgsJson(test.argsJson);
+    setActiveTab('run');
+  }, []);
+
+  const handleRunTest = useCallback(async (test: TestInfo) => {
+    if (!selectedProject || isRunning) return;
+
+    setSelectedFn(test.functionName);
+    setArgsJson(test.argsJson);
+    setActiveTab('run');
+
+    const runId = nextCallIdRef.current++;
+    const startTime = performance.now();
+    const newRun: RunEntry = {
+      id: runId,
+      functionName: test.functionName,
+      argsJson: test.argsJson,
+      fetchLogs: [],
+      result: null,
+      error: null,
+      status: 'running',
+      startTime,
+      durationMs: null,
+    };
+    setRuns((prev) => [...prev, newRun]);
+    setExpandedLogId(null);
+
+    requestAnimationFrame(() => {
+      outputRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    try {
+      const parsed = JSON.parse(test.argsJson);
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error('Test args must be a JSON object');
+      }
+      const argsProto = encodeCallArgs(parsed as Record<string, unknown>);
+      const resultStr = await new Promise<string>((resolve, reject) => {
+        pendingCallsRef.current.set(runId, { resolve, reject });
+        port.postMessage({
+          type: 'callFunction',
+          id: runId,
+          name: test.functionName,
+          argsProto: new Uint8Array(argsProto),
+          project: selectedProject,
+        });
+      });
+      const dur = Math.round(performance.now() - startTime);
+      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultStr, status: 'success', durationMs: dur } : r));
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      const dur = Math.round(performance.now() - startTime);
+      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, error: errMsg, status: 'error', durationMs: dur } : r));
+    }
+  }, [selectedProject, isRunning, port]);
+
   // ── Derived state ──────────────────────────────────────────────────────
 
   const currentUpdate = selectedProject ? projectUpdates[selectedProject] : undefined;
   const functions: FunctionInfo[] = currentUpdate?.functions ?? [];
   const functionNames = functions.map((f) => f.name);
+  const tests: TestInfo[] = currentUpdate?.tests ?? [];
   const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
 
   const selectedFnInfo = functions.find((f) => f.name === selectedFn);
@@ -703,277 +766,286 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         </div>
       )}
 
-      {/* Functions toolbar */}
-      <div className="px-2.5 py-1.5 border-b border-vsc-border shrink-0">
-        {functionNames.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1">
-            {functionNames.map((name) => {
-              const sel = selectedFn === name;
-              return (
-                <button
-                  key={name}
-                  onClick={() => setSelectedFn(sel ? null : name)}
-                  className={`px-2 py-0.5 rounded font-vsc-mono text-[11px] cursor-pointer border ${
-                    sel
-                      ? 'bg-vsc-accent text-vsc-accent-fg border-vsc-accent font-semibold'
-                      : 'bg-transparent text-vsc-accent border-vsc-border'
-                  }`}
-                >
-                  {name}()
-                </button>
-              );
-            })}
-            {selectedFn && (
-              <>
-                <button
-                  disabled={hasErrors || isRunning || !selectedProject}
-                  onClick={onRunFunction}
-                  className={`px-3 py-0.5 rounded border-none ml-1 font-semibold text-[11px] ${
-                    hasErrors || isRunning || !selectedProject
-                      ? 'bg-vsc-text-faint text-vsc-text-muted cursor-not-allowed'
-                      : 'bg-vsc-green text-white cursor-pointer'
-                  }`}
-                >
-                  {isRunning ? 'Running...' : 'Run'}
-                </button>
-                {runs.length > 0 && !isRunning && (
-                  <button
-                    onClick={() => {
-                      const runIds = runs.map((r) => r.id);
-                      port.postMessage({ type: 'clearHandles', runIds });
-                      setRuns([]);
-                    }}
-                    className="px-2 py-0.5 rounded ml-0.5 border border-vsc-border bg-transparent text-vsc-text-muted text-[10px] cursor-pointer"
-                  >
-                    Clear
-                  </button>
-                )}
-              </>
+      {/* Sidebar toggle */}
+      <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
+        <button
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          className="p-0.5 rounded hover:bg-vsc-hover cursor-pointer"
+          title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+        >
+          <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
+        </button>
+        {selectedFn && (
+          <span className="text-[11px] font-vsc-mono text-vsc-accent font-semibold">{selectedFn}()</span>
+        )}
+        {selectedFn && (
+          <div className="flex items-center gap-1 ml-auto">
+            <button
+              disabled={hasErrors || isRunning || !selectedProject}
+              onClick={onRunFunction}
+              className={`px-3 py-0.5 rounded border-none font-semibold text-[11px] ${
+                hasErrors || isRunning || !selectedProject
+                  ? 'bg-vsc-text-faint text-vsc-text-muted cursor-not-allowed'
+                  : 'bg-vsc-green text-white cursor-pointer'
+              }`}
+            >
+              {isRunning ? 'Running...' : 'Run'}
+            </button>
+            {runs.length > 0 && !isRunning && (
+              <button
+                onClick={() => {
+                  const runIds = runs.map((r) => r.id);
+                  port.postMessage({ type: 'clearHandles', runIds });
+                  setRuns([]);
+                }}
+                className="px-2 py-0.5 rounded border border-vsc-border bg-transparent text-vsc-text-muted text-[10px] cursor-pointer"
+              >
+                Clear
+              </button>
             )}
           </div>
-        ) : (
-          <span className="text-vsc-text-faint text-[11px]">No functions yet</span>
         )}
       </div>
 
-      {/* Tab switcher */}
-      {selectedFn && (
-        <div className="flex items-center gap-0 px-2.5 py-0 border-b border-vsc-border shrink-0 bg-vsc-surface">
-          <button
-            onClick={() => setActiveTab('run')}
-            className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
-              activeTab === 'run'
-                ? 'border-vsc-accent text-vsc-text font-semibold'
-                : 'border-transparent text-vsc-text-muted'
-            }`}
-          >
-            Run
-          </button>
-          <button
-            onClick={() => setActiveTab('graph')}
-            className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
-              activeTab === 'graph'
-                ? 'border-vsc-accent text-vsc-text font-semibold'
-                : 'border-transparent text-vsc-text-muted'
-            }`}
-          >
-            Graph
-          </button>
-          {canPreviewPrompt && (
-            <button
-              onClick={() => setActiveTab('prompt')}
-              className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
-                activeTab === 'prompt'
-                  ? 'border-vsc-accent text-vsc-text font-semibold'
-                  : 'border-transparent text-vsc-text-muted'
-              }`}
-            >
-              Prompt
-            </button>
-          )}
-          {canPreviewCurl && (
-            <button
-              onClick={() => setActiveTab('curl')}
-              className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
-                activeTab === 'curl'
-                  ? 'border-vsc-accent text-vsc-text font-semibold'
-                  : 'border-transparent text-vsc-text-muted'
-              }`}
-            >
-              cURL
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Graph view */}
-      {selectedFn && activeTab === 'graph' ? (
-        <div className="flex-1 min-h-0" style={{ minHeight: 300 }}>
-          {controlFlowGraph ? (
-            <GraphView
-              graph={controlFlowGraph}
-              selectedNodeId={highlightedNodeId}
-              onNodeClick={(nodeId) => setHighlightedNodeId(nodeId)}
-            />
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
-              Loading graph...
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      {/* Prompt preview */}
-      {selectedFn && activeTab === 'prompt' ? (
-        <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
-          {promptPreviewResult != null ? (
-            <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
-          ) : promptPreviewError ? (
-            <div className="flex items-center justify-center text-vsc-error text-xs h-full">
-              {promptPreviewError}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
-              {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      {/* cURL preview */}
-      {selectedFn && activeTab === 'curl' ? (
-        <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
-          {curlPreviewResult != null ? (
-            <ResultDisplay resultJson={curlPreviewResult} customRenderers={resultRenderers} />
-          ) : curlPreviewError ? (
-            <div className="flex items-center justify-center text-vsc-error text-xs h-full">
-              {curlPreviewError}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
-              {previewLoading ? 'Loading cURL preview...' : 'Enter args to preview cURL'}
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      {/* Execution area */}
-      {selectedFn && activeTab === 'run' ? (
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Args */}
-          <div className="flex items-center border-b border-vsc-border shrink-0">
-            <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
-              args
-            </span>
-            <input
-              spellCheck={false}
-              value={argsJson}
-              onChange={onArgsJsonChange}
-              className="flex-1 px-2 py-1 font-vsc-mono text-xs bg-vsc-input-bg text-vsc-input-fg border-none outline-none"
-              placeholder='{"key": "value"}'
+      {/* Main layout: sidebar + content */}
+      <div className="flex flex-1 min-h-0">
+        {/* Sidebar */}
+        {sidebarOpen && (
+          <div className="shrink-0 border-r border-vsc-border overflow-hidden" style={{ width: 220 }}>
+            <FunctionSidebar
+              functions={functions}
+              tests={tests}
+              selectedFn={selectedFn}
+              onSelectFn={setSelectedFn}
+              onSelectTest={handleSelectTest}
+              onRunTest={handleRunTest}
+              isRunning={isRunning}
             />
           </div>
+        )}
 
-          {/* Run history (scrollable) */}
-          <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
-            {runs.length === 0 && (
-              <div className="p-5 text-center text-vsc-text-faint text-[11px]">
-                Press Run to execute {selectedFn}()
+        {/* Content area */}
+        <div className="flex-1 flex flex-col min-h-0 min-w-0">
+          {/* Tab switcher */}
+          {selectedFn && (
+            <div className="flex items-center gap-0 px-2.5 py-0 border-b border-vsc-border shrink-0 bg-vsc-surface">
+              <button
+                onClick={() => setActiveTab('run')}
+                className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
+                  activeTab === 'run'
+                    ? 'border-vsc-accent text-vsc-text font-semibold'
+                    : 'border-transparent text-vsc-text-muted'
+                }`}
+              >
+                Run
+              </button>
+              <button
+                onClick={() => setActiveTab('graph')}
+                className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
+                  activeTab === 'graph'
+                    ? 'border-vsc-accent text-vsc-text font-semibold'
+                    : 'border-transparent text-vsc-text-muted'
+                }`}
+              >
+                Graph
+              </button>
+              {canPreviewPrompt && (
+                <button
+                  onClick={() => setActiveTab('prompt')}
+                  className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
+                    activeTab === 'prompt'
+                      ? 'border-vsc-accent text-vsc-text font-semibold'
+                      : 'border-transparent text-vsc-text-muted'
+                  }`}
+                >
+                  Prompt
+                </button>
+              )}
+              {canPreviewCurl && (
+                <button
+                  onClick={() => setActiveTab('curl')}
+                  className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
+                    activeTab === 'curl'
+                      ? 'border-vsc-accent text-vsc-text font-semibold'
+                      : 'border-transparent text-vsc-text-muted'
+                  }`}
+                >
+                  cURL
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Graph view */}
+          {selectedFn && activeTab === 'graph' ? (
+            <div className="flex-1 min-h-0" style={{ minHeight: 300 }}>
+              {controlFlowGraph ? (
+                <GraphView
+                  graph={controlFlowGraph}
+                  selectedNodeId={highlightedNodeId}
+                  onNodeClick={(nodeId) => setHighlightedNodeId(nodeId)}
+                />
+              ) : (
+                <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
+                  Loading graph...
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {/* Prompt preview */}
+          {selectedFn && activeTab === 'prompt' ? (
+            <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
+              {promptPreviewResult != null ? (
+                <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
+              ) : promptPreviewError ? (
+                <div className="flex items-center justify-center text-vsc-error text-xs h-full">
+                  {promptPreviewError}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
+                  {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {/* cURL preview */}
+          {selectedFn && activeTab === 'curl' ? (
+            <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
+              {curlPreviewResult != null ? (
+                <ResultDisplay resultJson={curlPreviewResult} customRenderers={resultRenderers} />
+              ) : curlPreviewError ? (
+                <div className="flex items-center justify-center text-vsc-error text-xs h-full">
+                  {curlPreviewError}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
+                  {previewLoading ? 'Loading cURL preview...' : 'Enter args to preview cURL'}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {/* Execution area */}
+          {selectedFn && activeTab === 'run' ? (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Args */}
+              <div className="flex items-center border-b border-vsc-border shrink-0">
+                <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
+                  args
+                </span>
+                <input
+                  spellCheck={false}
+                  value={argsJson}
+                  onChange={onArgsJsonChange}
+                  className="flex-1 px-2 py-1 font-vsc-mono text-xs bg-vsc-input-bg text-vsc-input-fg border-none outline-none"
+                  placeholder='{"key": "value"}'
+                />
               </div>
-            )}
 
-            {[...runs].reverse().map((run, runIdx) => {
-              const isLatest = runIdx === 0;
-              const statusCls = run.status === 'error' ? 'bg-vsc-red' : run.status === 'success' ? 'bg-vsc-green' : 'bg-vsc-text-muted';
-
-              return (
-                <div key={run.id} className={!isLatest ? 'border-b-2 border-vsc-border' : ''}>
-                  {/* Run header */}
-                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border-subtle">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`} />
-                    <span className="text-vsc-accent font-semibold text-[11px]">
-                      {run.functionName}()
-                    </span>
-                    <span className="text-vsc-text-faint text-[10px] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                      {run.argsJson}
-                    </span>
-                    {run.status === 'running' && (
-                      <span className="text-vsc-text-muted text-[10px]">running...</span>
-                    )}
-                    {run.durationMs != null && (
-                      <span className="text-vsc-text-faint text-[10px] shrink-0">{run.durationMs}ms</span>
-                    )}
+              {/* Run history (scrollable) */}
+              <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
+                {runs.length === 0 && (
+                  <div className="p-5 text-center text-vsc-text-faint text-[11px]">
+                    Press Run to execute {selectedFn}()
                   </div>
+                )}
 
-                  {/* Fetch logs for this run */}
-                  {run.fetchLogs.map((log) => {
-                    const isExp = expandedLogId === log.id;
-                    const statusColorCls = log.status === null ? 'text-vsc-text-muted'
-                      : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
-                      : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
-                    return (
-                      <div key={`n-${log.id}`}>
-                        <div
-                          onClick={() => setExpandedLogId(isExp ? null : log.id)}
-                          className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
-                        >
-                          <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
-                          <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
-                          <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
-                          {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
-                          <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
-                        </div>
-                        {isExp && (
-                          <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
-                            {log.error && <pre className={`${codeBlockCls} border-vsc-red! text-vsc-red!`}>{log.error}</pre>}
-                            <div>
-                              <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
-                              <pre className={codeBlockCls}>{JSON.stringify(log.requestHeaders, null, 2)}</pre>
+                {[...runs].reverse().map((run, runIdx) => {
+                  const isLatest = runIdx === 0;
+                  const statusCls = run.status === 'error' ? 'bg-vsc-red' : run.status === 'success' ? 'bg-vsc-green' : 'bg-vsc-text-muted';
+
+                  return (
+                    <div key={run.id} className={!isLatest ? 'border-b-2 border-vsc-border' : ''}>
+                      {/* Run header */}
+                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border-subtle">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`} />
+                        <span className="text-vsc-accent font-semibold text-[11px]">
+                          {run.functionName}()
+                        </span>
+                        <span className="text-vsc-text-faint text-[10px] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                          {run.argsJson}
+                        </span>
+                        {run.status === 'running' && (
+                          <span className="text-vsc-text-muted text-[10px]">running...</span>
+                        )}
+                        {run.durationMs != null && (
+                          <span className="text-vsc-text-faint text-[10px] shrink-0">{run.durationMs}ms</span>
+                        )}
+                      </div>
+
+                      {/* Fetch logs for this run */}
+                      {run.fetchLogs.map((log) => {
+                        const isExp = expandedLogId === log.id;
+                        const statusColorCls = log.status === null ? 'text-vsc-text-muted'
+                          : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
+                          : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
+                        return (
+                          <div key={`n-${log.id}`}>
+                            <div
+                              onClick={() => setExpandedLogId(isExp ? null : log.id)}
+                              className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
+                            >
+                              <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                              <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
+                              <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
+                              {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
+                              <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
                             </div>
-                            {log.requestBody && (
-                              <div>
-                                <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
-                                <pre className={codeBlockCls}>{tryFormatJson(log.requestBody)}</pre>
-                              </div>
-                            )}
-                            {log.responseBody != null && (
-                              <div>
-                                <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
-                                <pre className={codeBlockCls}>{tryFormatJson(log.responseBody)}</pre>
+                            {isExp && (
+                              <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
+                                {log.error && <pre className={`${codeBlockCls} border-vsc-red! text-vsc-red!`}>{log.error}</pre>}
+                                <div>
+                                  <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
+                                  <pre className={codeBlockCls}>{JSON.stringify(log.requestHeaders, null, 2)}</pre>
+                                </div>
+                                {log.requestBody && (
+                                  <div>
+                                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
+                                    <pre className={codeBlockCls}>{tryFormatJson(log.requestBody)}</pre>
+                                  </div>
+                                )}
+                                {log.responseBody != null && (
+                                  <div>
+                                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
+                                    <pre className={codeBlockCls}>{tryFormatJson(log.responseBody)}</pre>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
 
-                  {/* Result / Error for this run */}
-                  {run.error && (
-                    <div className="py-1.5 pr-2.5 pl-[22px]">
-                      <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">Error</div>
-                      <pre className={`${codeBlockCls} border-vsc-red! text-vsc-red!`}>{run.error}</pre>
+                      {/* Result / Error for this run */}
+                      {run.error && (
+                        <div className="py-1.5 pr-2.5 pl-[22px]">
+                          <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">Error</div>
+                          <pre className={`${codeBlockCls} border-vsc-red! text-vsc-red!`}>{run.error}</pre>
+                        </div>
+                      )}
+                      {run.result != null && (
+                        <div className="py-1.5 pr-2.5 pl-[22px]">
+                          <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
+                          <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {run.result != null && (
-                    <div className="py-1.5 pr-2.5 pl-[22px]">
-                      <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
-                      <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
-      {/* No function selected fallback */}
-      {!selectedFn && (
-        <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
-          Select a function to run
+          {/* No function selected fallback */}
+          {!selectedFn && (
+            <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
+              Select a function to run
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
     </>
   );
