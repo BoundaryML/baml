@@ -105,17 +105,17 @@ pub fn external_to_baml_value(
             )))
         }
 
-        // BexExternalValue::Adt(BexExternalAdt::Media(media)) if options.serialize_media => Some(
-        //     BamlValueVariant::MediaValue(bex_media_to_proto_media(media)),
-        // ),
+        BexExternalValue::Adt(BexExternalAdt::Media(media)) if options.serialize_media => Some(
+            BamlValueVariant::MediaValue(bex_media_to_proto_media(media)),
+        ),
 
-        // BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt_ast))
-        //     if options.serialize_prompt_ast =>
-        // {
-        //     Some(BamlValueVariant::PromptAstValue(
-        //         bex_prompt_ast_to_proto_prompt_ast(prompt_ast),
-        //     ))
-        // }
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt_ast))
+            if options.serialize_prompt_ast =>
+        {
+            Some(BamlValueVariant::PromptAstValue(
+                bex_prompt_ast_to_proto_prompt_ast(prompt_ast),
+            ))
+        }
         BexExternalValue::RustData(arc) => {
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
                 return external_to_baml_value(&converted, options);
