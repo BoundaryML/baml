@@ -145,7 +145,7 @@ impl BexProject {
         let bytecode = match self.get_bytecode() {
             Ok(bc) => bc,
             Err(e) => {
-                tracing::warn!("update_bex: get_bytecode failed: {e}");
+                log::warn!("update_bex: get_bytecode failed: {e}");
                 return Err(RuntimeError::Compilation {
                     message: format!("get_bytecode failed: {e}"),
                 });
@@ -155,12 +155,12 @@ impl BexProject {
         {
             Ok(r) => r,
             Err(e) => {
-                tracing::warn!("update_bex: BexEngine::new failed: {e}");
+                log::warn!("update_bex: BexEngine::new failed: {e}");
                 return Err(RuntimeError::Engine(e));
             }
         };
         self.set_current_bex(runtime);
-        tracing::info!("update_bex: success");
+        log::info!("update_bex: success");
         Ok(())
     }
 }

@@ -142,6 +142,83 @@ pub fn list_functions_with_metadata(db: &dyn Db, project: Project) -> Vec<Functi
     functions
 }
 
+/// Extended test metadata for the playground.
+#[derive(Debug, Clone)]
+pub struct TestSymbol {
+    pub name: String,
+    /// The first function this test targets (from function_refs[0]).
+    pub function_name: String,
+    /// Test args serialized as a JSON string.
+    pub args_json: String,
+}
+
+/// Convert a TestArgValue to serde_json::Value for serialization.
+fn test_arg_to_json(val: &baml_compiler_hir::TestArgValue) -> serde_json::Value {
+    match val {
+        baml_compiler_hir::TestArgValue::Int(n) => serde_json::Value::Number((*n).into()),
+        baml_compiler_hir::TestArgValue::Float(f) => serde_json::Number::from_f64(*f)
+            .map(serde_json::Value::Number)
+            .unwrap_or(serde_json::Value::Null),
+        baml_compiler_hir::TestArgValue::Bool(b) => serde_json::Value::Bool(*b),
+        baml_compiler_hir::TestArgValue::String(s) => serde_json::Value::String(s.clone()),
+        baml_compiler_hir::TestArgValue::Null => serde_json::Value::Null,
+        baml_compiler_hir::TestArgValue::Array(arr) => {
+            serde_json::Value::Array(arr.iter().map(test_arg_to_json).collect())
+        }
+        baml_compiler_hir::TestArgValue::Map(map) => serde_json::Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.clone(), test_arg_to_json(v)))
+                .collect(),
+        ),
+    }
+}
+
+/// List tests with full metadata for the playground.
+///
+/// Filters out tests from builtin files and returns structured metadata
+/// including the parent function name and serialized args.
+pub fn list_tests_with_metadata(db: &dyn Db, project: Project) -> Vec<TestSymbol> {
+    let items = project_items(db, project);
+    let mut tests = Vec::new();
+
+    for item in items.items(db) {
+        if let ItemId::Test(test_loc) = item {
+            let file = test_loc.file(db);
+
+            // Skip tests from builtin files
+            if file_namespace(db, file).is_some() {
+                continue;
+            }
+
+            let item_tree = file_item_tree(db, file);
+            let test = &item_tree[test_loc.id(db)];
+
+            // Skip tests with no function references
+            let function_name = match test.function_refs.first() {
+                Some(name) => name.to_string(),
+                None => continue,
+            };
+
+            // Serialize test args to JSON
+            let args_obj: serde_json::Map<String, serde_json::Value> = test
+                .args
+                .iter()
+                .map(|(k, v)| (k.clone(), test_arg_to_json(v)))
+                .collect();
+            let args_json = serde_json::to_string(&serde_json::Value::Object(args_obj))
+                .unwrap_or_else(|_| "{}".to_string());
+
+            tests.push(TestSymbol {
+                name: test.name.to_string(),
+                function_name,
+                args_json,
+            });
+        }
+    }
+
+    tests
+}
+
 /// List all classes in the project.
 pub fn list_classes(db: &dyn Db, project: Project) -> Vec<Symbol> {
     let mut classes = Vec::new();

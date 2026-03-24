@@ -36,9 +36,19 @@ pub struct LlmCapabilities {
 #[derive(Tsify, Serialize)]
 #[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
+pub struct TestInfo {
+    pub name: String,
+    pub function_name: String,
+    pub args_json: String,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
+    pub tests: Vec<TestInfo>,
 }
 
 #[derive(Tsify, Serialize)]
@@ -91,6 +101,15 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                                     build_request: c.build_request,
                                     client_name: c.client_name,
                                 }),
+                            })
+                            .collect(),
+                        tests: update
+                            .tests
+                            .into_iter()
+                            .map(|t| TestInfo {
+                                name: t.name,
+                                function_name: t.function_name,
+                                args_json: t.args_json,
                             })
                             .collect(),
                     },

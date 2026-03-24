@@ -40,9 +40,21 @@ export interface FunctionInfo {
   capabilities?: LlmCapabilities;
 }
 
+/** Metadata about a BAML test case.
+ *
+ *  Each test targets a single function (the first in `functions [...]`)
+ *  and carries pre-serialized args JSON for immediate use.
+ */
+export interface TestInfo {
+  name: string;
+  functionName: string;
+  argsJson: string;
+}
+
 export interface ProjectUpdate {
   isBexCurrent: boolean;
   functions: FunctionInfo[];
+  tests: TestInfo[];
 }
 
 export type PlaygroundNotification =

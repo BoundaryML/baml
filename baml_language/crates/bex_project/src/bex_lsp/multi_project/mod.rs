@@ -504,9 +504,22 @@ impl BexMulitProject {
             None => vec![],
         };
 
+        let tests = match db_guard.project() {
+            Some(p) => baml_project::list_tests_with_metadata(db, p)
+                .into_iter()
+                .map(|t| crate::bex_lsp::TestInfo {
+                    name: t.name,
+                    function_name: t.function_name,
+                    args_json: t.args_json,
+                })
+                .collect(),
+            None => vec![],
+        };
+
         crate::bex_lsp::ProjectUpdate {
             is_bex_current,
             functions,
+            tests,
         }
     }
 

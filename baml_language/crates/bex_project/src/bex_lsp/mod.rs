@@ -88,9 +88,18 @@ pub struct LlmCapabilities {
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TestInfo {
+    pub name: String,
+    pub function_name: String,
+    pub args_json: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
+    pub tests: Vec<TestInfo>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

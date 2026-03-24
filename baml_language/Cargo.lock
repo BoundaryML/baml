@@ -793,6 +793,7 @@ dependencies = [
  "rowan 0.16.1",
  "salsa",
  "serde",
+ "serde_json",
  "text-size",
 ]
 

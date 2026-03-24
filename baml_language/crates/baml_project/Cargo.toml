@@ -40,5 +40,6 @@ lsp-types = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 text-size = { workspace = true }
 
