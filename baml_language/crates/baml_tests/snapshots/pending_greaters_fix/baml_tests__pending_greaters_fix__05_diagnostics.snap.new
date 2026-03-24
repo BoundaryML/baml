@@ -1,0 +1,100 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 17146
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:152:17 ]
+     │
+ 152 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:189:17 ]
+     │
+ 189 │ ╭─▶             _ => {
+     ┆ ┆   
+ 194 │ ├─▶             }
+     │ │                   
+     │ ╰─────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:208:17 ]
+     │
+ 208 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+   ╭─[ extra_greater.baml:7:29 ]
+   │
+ 7 │   bad_field map<string, int>>
+   │                             ┬  
+   │                             ╰── Unmatched '>' in type expression (found 1 extra)
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [type] Error: unresolved name: GPT4
+    ╭─[ extra_greater.baml:20:2 ]
+    │
+ 20 │ ╭─▶ }
+    ┆ ┆   
+ 26 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+    ╭─[ extra_greater.baml:23:38 ]
+    │
+ 23 │ function BadParam(x: map<string, int>>) -> string {
+    │                                      ┬  
+    │                                      ╰── Unmatched '>' in type expression (found 1 extra)
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [type] Error: unresolved name: GPT4
+    ╭─[ extra_greater.baml:26:2 ]
+    │
+ 26 │ ╭─▶ }
+    ┆ ┆   
+ 32 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+    ╭─[ extra_greater.baml:29:45 ]
+    │
+ 29 │ function BadReturnType() -> map<string, int>> {
+    │                                             ┬  
+    │                                             ╰── Unmatched '>' in type expression (found 1 extra)
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Unmatched '>' in type expression (found 1 extra)
+    ╭─[ extra_greater.baml:35:33 ]
+    │
+ 35 │ type BadAlias = map<string, int>>
+    │                                 ┬  
+    │                                 ╰── Unmatched '>' in type expression (found 1 extra)
+    │ 
+    │ Note: Error code: E0010
+────╯

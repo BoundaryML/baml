@@ -1550,15 +1550,18 @@ impl<'db> LoweringContext<'db> {
         // Prefer the explicitly written type name. If absent (e.g., when the
         // type is a qualified path like `baml.errors.DevOther`), fall back to
         // the TIR-inferred type to get the short class name.
+        //
+        // We also extract a `TypeName` for looking up fields in `class_fields`,
+        // which is keyed by `TypeName`.
+        let ty = self.expr_ty(expr_id);
+        let type_name_key: Option<TypeName> = match &ty {
+            Ty::Class(tn, _) => Some(tn.clone()),
+            _ => None,
+        };
         let class_name = if let Some(n) = type_name {
             n.to_string()
         } else {
-            // Try to extract the class name from the TIR type of this expression.
-            let ty = self.expr_ty(expr_id);
-            match &ty {
-                Ty::Class(tn, _) => tn.name.to_string(),
-                _ => String::new(),
-            }
+            type_name_key.as_ref().map_or_else(String::new, |tn| tn.name.to_string())
         };
 
         if spreads.is_empty() {
@@ -1578,9 +1581,9 @@ impl<'db> LoweringContext<'db> {
             // order), then assemble the aggregate respecting override semantics:
             // later source entries override earlier ones for the same class field.
 
-            let field_count = self
-                .class_fields
-                .get(&class_name)
+            let field_count = type_name_key
+                .as_ref()
+                .and_then(|tn| self.class_fields.get(tn))
                 .map(|f| f.len())
                 .unwrap_or(0);
 
@@ -1617,7 +1620,7 @@ impl<'db> LoweringContext<'db> {
 
             // Build per-class-field operand array. Process all entries in source
             // position order; later entries overwrite earlier ones.
-            let field_name_to_idx: &HashMap<String, usize> = match self.class_fields.get(&class_name) {
+            let field_name_to_idx: &IndexMap<String, usize> = match type_name_key.as_ref().and_then(|tn| self.class_fields.get(tn)) {
                 Some(m) => m,
                 None => {
                     // Unknown class — just emit named fields in order.
