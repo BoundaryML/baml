@@ -43,9 +43,8 @@ use crate::{Db, definition::Location, utils};
 /// and decide whether to include it.
 pub fn usages_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Location> {
     // ── Step 1: find and resolve the token at the cursor ─────────────────────
-    let token = match utils::find_token_at_offset(db, file, offset) {
-        Some(t) => t,
-        None => return Vec::new(),
+    let Some(token) = utils::find_token_at_offset(db, file, offset) else {
+        return Vec::new();
     };
 
     if token.kind() != SyntaxKind::WORD {
@@ -293,7 +292,7 @@ fn collect_source_files(db: &dyn Db, reference_file: SourceFile) -> Vec<SourceFi
     };
 
     let pkg_info = file_package(db, reference_file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = PackageId::new(db, pkg_info.package);
     let items = package_items(db, pkg_id);
 
     // `PackageItems.namespaces` maps namespace path -> `NamespaceItems`.

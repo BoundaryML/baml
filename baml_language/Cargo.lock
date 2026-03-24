@@ -1285,12 +1285,15 @@ name = "baml_lsp2_actions"
 version = "0.1.0"
 dependencies = [
  "baml_base",
+ "baml_builtins2",
  "baml_compiler2_ast",
  "baml_compiler2_hir",
+ "baml_compiler2_ppir",
  "baml_compiler2_tir",
  "baml_compiler_diagnostics",
  "baml_compiler_parser",
  "baml_compiler_syntax",
+ "baml_workspace",
  "rowan 0.16.1",
  "salsa",
  "text-size",

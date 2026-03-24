@@ -152,9 +152,8 @@ enum CompletionContext {
 ///
 /// Returns an empty `Vec` if no completions are applicable.
 pub fn completions_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Completion> {
-    let token = match utils::find_token_at_offset(db, file, offset) {
-        Some(t) => t,
-        None => return completions_at_empty_file(db, file),
+    let Some(token) = utils::find_token_at_offset(db, file, offset) else {
+        return completions_at_empty_file(db, file);
     };
 
     let context = detect_context(&token, offset);
@@ -193,7 +192,7 @@ fn detect_context(
     while let Some(current) = node {
         let kind = current.kind();
 
-        match SyntaxKind::from(kind) {
+        match kind {
             // Inside a TYPE_EXPR node → type position.
             SyntaxKind::TYPE_EXPR
             | SyntaxKind::UNION_TYPE
@@ -251,9 +250,8 @@ fn is_field_access_position(token: &baml_compiler_syntax::SyntaxToken) -> bool {
     }
 
     // Check previous sibling tokens in the parent node.
-    let parent = match token.parent() {
-        Some(p) => p,
-        None => return false,
+    let Some(parent) = token.parent() else {
+        return false;
     };
 
     // Walk siblings before our token.
@@ -287,7 +285,7 @@ fn is_field_access_position(token: &baml_compiler_syntax::SyntaxToken) -> bool {
     }
 
     // Also check parent's kind: PATH_EXPR with multiple segments indicates field access.
-    if SyntaxKind::from(parent.kind()) == SyntaxKind::PATH_EXPR {
+    if parent.kind() == SyntaxKind::PATH_EXPR {
         // In a PATH_EXPR like `foo.bar`, `bar` is a field access on `foo`.
         // Count WORD tokens — if more than one, we're in multi-segment path.
         let words: Vec<_> = parent
@@ -326,7 +324,7 @@ fn is_field_access_position(token: &baml_compiler_syntax::SyntaxToken) -> bool {
 fn is_in_type_annotation(node: &SyntaxNode) -> bool {
     let mut current: Option<SyntaxNode> = Some(node.clone());
     while let Some(n) = current {
-        let k = SyntaxKind::from(n.kind());
+        let k = n.kind();
         if k == SyntaxKind::TYPE_EXPR {
             return true;
         }
@@ -368,7 +366,7 @@ fn completions_for_type_position(
 
     // ── User package types ────────────────────────────────────────────────────
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = PackageId::new(db, pkg_info.package);
     let pkg = package_items(db, pkg_id);
 
     for ns_items in pkg.namespaces.values() {
@@ -425,9 +423,8 @@ fn completions_for_field_access(
     offset: TextSize,
 ) -> Vec<Completion> {
     // Find the base expression: the WORD token preceding the `.`.
-    let base_name = match find_base_for_field_access(token) {
-        Some(name) => name,
-        None => return Vec::new(),
+    let Some(base_name) = find_base_for_field_access(token) else {
+        return Vec::new();
     };
 
     let base = Name::new(&base_name);
@@ -657,7 +654,7 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
             Some(Ty::Class(baml_compiler2_tir::ty::QualifiedTypeName::new(
                 pkg_info.package,
-                pkg_info.namespace_path.clone(),
+                pkg_info.namespace_path,
                 class.name.clone(),
             )))
         }
@@ -667,7 +664,7 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db));
             Some(Ty::Enum(baml_compiler2_tir::ty::QualifiedTypeName::new(
                 pkg_info.package,
-                pkg_info.namespace_path.clone(),
+                pkg_info.namespace_path,
                 enum_data.name.clone(),
             )))
         }
@@ -713,18 +710,12 @@ fn local_variable_ty(
         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(param_idx) => {
             // Get declared type from function signature.
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-            sig.params.get(param_idx).and_then(|(_, te)| {
+            sig.params.get(param_idx).map(|(_, te)| {
                 let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                let pkg_id = PackageId::new(db, pkg_info.package.clone());
+                let pkg_id = PackageId::new(db, pkg_info.package);
                 let pkg = package_items(db, pkg_id);
                 let mut diags = Vec::new();
-                Some(baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                    db,
-                    te,
-                    pkg,
-                    &[],
-                    &mut diags,
-                ))
+                baml_compiler2_tir::lower_type_expr::lower_type_expr(db, te, pkg, &[], &mut diags)
             })
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
@@ -805,7 +796,7 @@ fn completions_for_value_position(
 
     // ── Package-level values (functions, template strings, clients) ───────────
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = PackageId::new(db, pkg_info.package);
     let pkg = package_items(db, pkg_id);
 
     let local_sort_base = sort_prefix + 1000;

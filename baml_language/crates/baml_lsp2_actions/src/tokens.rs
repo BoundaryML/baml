@@ -1,4 +1,4 @@
-//! Semantic tokens for BAML files (compiler2 / lsp2_actions version).
+//! Semantic tokens for BAML files (compiler2 / `lsp2_actions` version).
 //!
 //! Provides `semantic_tokens(db, file) -> Vec<SemanticToken>` using a hybrid
 //! CST + compiler2 approach:
@@ -402,7 +402,7 @@ fn resolve_type_name(db: &dyn Db, file: SourceFile, name: &str) -> SemanticToken
 
     // Look up in package items.
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package);
     let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
     let name_obj = baml_base::Name::new(name);
 
