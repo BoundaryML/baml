@@ -259,6 +259,60 @@ fn bex_prompt_ast_simple_to_proto_prompt_ast_simple(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use bex_project::{BexExternalValue, MediaContent, MediaValue, PromptAst, PromptAstSimple};
+
+    use super::*;
+    use crate::baml::cffi::baml_outbound_value::Value as BamlValueVariant;
+
+    #[test]
+    fn rust_data_prompt_ast_converts_to_handle() {
+        let prompt = Arc::new(PromptAst::Simple(Arc::new(PromptAstSimple::String(
+            "hello".to_string(),
+        ))));
+        let value = BexExternalValue::RustData(prompt);
+        let options = HandleTableOptions::for_in_process();
+        let result = external_to_baml_value(&value, &options);
+        assert!(result.is_ok());
+        assert!(matches!(
+            result.unwrap().value,
+            Some(BamlValueVariant::HandleValue(_))
+        ));
+    }
+
+    #[test]
+    fn rust_data_media_value_converts_to_handle() {
+        let media = Arc::new(MediaValue::new(
+            bex_project::MediaKind::Image,
+            MediaContent::Url {
+                url: "https://example.com/img.png".to_string(),
+                base64_data: None,
+            },
+            Some("image/png".to_string()),
+        ));
+        let value = BexExternalValue::RustData(media);
+        let options = HandleTableOptions::for_in_process();
+        let result = external_to_baml_value(&value, &options);
+        assert!(result.is_ok());
+        assert!(matches!(
+            result.unwrap().value,
+            Some(BamlValueVariant::HandleValue(_))
+        ));
+    }
+
+    #[test]
+    fn rust_data_unknown_type_returns_error() {
+        let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
+        let value = BexExternalValue::RustData(unknown);
+        let options = HandleTableOptions::for_in_process();
+        let result = external_to_baml_value(&value, &options);
+        assert!(result.is_err());
+    }
+}
+
 fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
     let field_type = match ty {
         Ty::Null { .. } => Some(FieldType::NullType(BamlFieldTypeNull {})),
