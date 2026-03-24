@@ -807,10 +807,6 @@ mod tests {
             make("baml.llm.get_jinja_template").sys_op_variant_name(),
             "BamlLlmGetJinjaTemplate"
         );
-        assert_eq!(
-            make("baml.llm.round_robin_next").sys_op_variant_name(),
-            "BamlLlmRoundRobinNext"
-        );
     }
 
     #[test]
@@ -917,13 +913,6 @@ mod tests {
             .find(|b| b.path == "baml.sys.panic")
             .unwrap();
         assert!(sys_panic.throws.is_empty());
-
-        // LLM functions have throws too
-        let get_client = io_builtins
-            .iter()
-            .find(|b| b.path == "baml.llm.get_client")
-            .unwrap();
-        assert_eq!(get_client.throws, vec!["InvalidArgument"]);
 
         let render_prompt = io_builtins
             .iter()

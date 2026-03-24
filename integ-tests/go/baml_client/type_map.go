@@ -349,9 +349,10 @@ var typeMap = map[string]reflect.Type{
 	"STREAM_TYPES.RecursiveUnion":     reflect.TypeOf((*stream_types.Union2MapStringKeyRecursiveUnionValueOrString)(nil)),
 	"STREAM_TYPES.TodoTool":           reflect.TypeOf((*stream_types.Union2AddTodoItemOrTodoMessageToUser)(nil)),
 
+	"CHECKED_TYPES.BlockConstraint": reflect.TypeOf(types.Checked[types.BlockConstraint]{}),
 	"CHECKED_TYPES.int":             reflect.TypeOf(types.Checked[int64]{}),
 	"CHECKED_TYPES.string":          reflect.TypeOf(types.Checked[string]{}),
-	"CHECKED_TYPES.BlockConstraint": reflect.TypeOf(types.Checked[types.BlockConstraint]{}),
 
-	"STREAM_STATE_TYPES.Optional__string": reflect.TypeOf(baml.StreamState[*string]{}),
+	"STREAM_STATE_TYPES.Optional__string":        reflect.TypeOf(baml.StreamState[*string]{}),
+	"STREAM_STATE_TYPES.Optional__string_active": reflect.TypeOf(baml.StreamState[*string]{}),
 }

@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/compiler2_tir/stream_expansion.rs
+expression: "render_tir(&db, file)"
+---
+class user.AtomicPoint {
+  x: float
+  y: float
+}
+class user.stream_AtomicPoint {
+  x: null | float
+  y: null | float
+}

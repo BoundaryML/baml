@@ -31,12 +31,32 @@ client<llm> MyClient3 {
 
 //----
 //- diagnostics
-// Error: client_response_type must be one of openai, openai-responses, anthropic, google, vertex, openrouter. Got: invalid
-//    ╭─[ client_bad_response_format.baml:5:25 ]
-//    │
-//  5 │     client_response_type "invalid"
-//    │                         ─────┬────  
-//    │                              ╰────── client_response_type must be one of openai, openai-responses, anthropic, google, vertex, openrouter. Got: invalid
-//    │ 
-//    │ Note: Error code: E0022
-// ───╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

@@ -25,6 +25,13 @@ const badgeVariants = cva(
         concern: "border-transparent bg-red-500 text-white",
         question: "border-transparent bg-blue-500 text-white",
         decision: "border-transparent bg-green-500 text-white",
+        bdfl: "border-transparent bg-amber-500 text-white",
+        team: "border-transparent bg-indigo-500 text-white",
+        unset: "border-transparent bg-gray-400 text-white",
+        // Legacy role variants (shown with striped pattern to indicate migration needed)
+        admin: "border-transparent bg-amber-500/70 text-white",
+        shepherd: "border-transparent bg-indigo-500/70 text-white",
+        member: "border-transparent bg-gray-400/70 text-white",
       },
     },
     defaultVariants: {

@@ -67,6 +67,8 @@ pub enum OptimizationStatus {
     },
     /// Optimization has completed
     Completed,
+    /// Optimization failed with an error
+    Failed { message: String },
     /// Status unknown (couldn't read state)
     Unknown,
 }
@@ -223,6 +225,15 @@ impl App {
         let Ok(storage) = OptimizationStorage::from_existing(storage_path) else {
             return;
         };
+
+        // Check for error signal from orchestrator — quit TUI so error shows in plain terminal
+        if let Some(error_message) = storage.load_error() {
+            self.status = OptimizationStatus::Failed {
+                message: error_message,
+            };
+            self.should_quit = true;
+            return;
+        }
 
         // Load candidates
         let Ok(new_candidates) = storage.load_candidates() else {
@@ -602,9 +613,11 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
             format!("{} Running {}/{}", spinner, display_iteration, total_trials)
         }
         OptimizationStatus::Completed => "✓ Complete".to_string(),
+        OptimizationStatus::Failed { ref message } => format!("✗ Error: {}", message),
         OptimizationStatus::Unknown => "".to_string(),
     };
 
+    let is_error = matches!(app.status, OptimizationStatus::Failed { .. });
     let stats = format!(
         "Candidates: {} | Pareto: {} | Objectives: {} | {}",
         app.candidates.len(),
@@ -612,8 +625,9 @@ fn render_header(frame: &mut Frame, app: &App, area: Rect) {
         objectives_str,
         status_display
     );
+    let stats_color = if is_error { Color::Red } else { Color::Gray };
     let paragraph = Paragraph::new(stats)
-        .style(Style::default().fg(Color::Gray))
+        .style(Style::default().fg(stats_color))
         .block(block);
 
     frame.render_widget(paragraph, area);

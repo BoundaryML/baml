@@ -7580,10 +7580,13 @@ components:
       properties:
         i_16_digits:
           type: integer
+        literal_status:
+          type: string
         s_20_words:
           type: string
       required:
       - i_16_digits
+      - literal_status
       - s_20_words
       additionalProperties: false
     ClientDetails1559:

@@ -1,47 +1,25 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== MIR ===
-fn MyClient.resolve() -> baml.llm.PrimitiveClient {
+=== MIR2 ===
+fn user.MyClient$new() -> null {
     // Locals:
-    let _0: baml.llm.PrimitiveClient // return
-    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
-    let _2: "MyClient"
-    let _3: "openai"
-    let _4: "user"
-    let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
-    let _9: map<string, unknown>
-    let _10: "model"
-    let _11: "gpt-4"
-    let _12: null
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
 
     bb0: {
-        _1 = const fn baml.llm.build_primitive_client;
-        _2 = const "MyClient";
-        _3 = const "openai";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
-        _5 = [copy _6, copy _7, copy _8];
-        _10 = const "model";
-        _11 = const "gpt-4";
-        _9 = { copy _10: copy _11 };
-        _12 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "MyClient", const "openai", copy _1 };
+        goto -> bb1;
     }
 
     bb1: {
         return;
-    }
-
-    bb2: {
-        _0 = await _12 -> [bb3];
-    }
-
-    bb3: {
-        goto -> bb1;
     }
 }

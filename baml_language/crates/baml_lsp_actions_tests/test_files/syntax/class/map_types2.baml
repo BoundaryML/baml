@@ -59,6 +59,44 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 
 //----
 //- diagnostics
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unresolved type: map
+//     ╭─[ class_map_types2.baml:26:5 ]
+//     │
+//  26 │   d1 map<>
+//     │     ───┬──  
+//     │        ╰──── unresolved type: map
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
 // Error: Expected type, found '>'
 //     ╭─[ class_map_types2.baml:26:10 ]
 //     │
@@ -68,39 +106,21 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: map<K, V> requires exactly 2 type parameters, found 0
-//     ╭─[ class_map_types2.baml:26:5 ]
-//     │
-//  26 │   d1 map<>
-//     │     ───┬──  
-//     │        ╰──── map<K, V> requires exactly 2 type parameters, found 0
-//     │ 
-//     │ Note: Error code: E0039
-// ────╯
-// Error: map<K, V> requires exactly 2 type parameters, found 1
+// Error: unresolved type: map
 //     ╭─[ class_map_types2.baml:27:5 ]
 //     │
 //  27 │   d2 map<string>
 //     │     ──────┬─────  
-//     │           ╰─────── map<K, V> requires exactly 2 type parameters, found 1
+//     │           ╰─────── unresolved type: map
 //     │ 
-//     │ Note: Error code: E0039
+//     │ Note: Error code: E0002
 // ────╯
-// Error: map<K, V> requires exactly 2 type parameters, found 3
+// Error: unresolved type: map
 //     ╭─[ class_map_types2.baml:28:5 ]
 //     │
 //  28 │   d3 map<string, string, string>
 //     │     ──────────────┬─────────────  
-//     │                   ╰─────────────── map<K, V> requires exactly 2 type parameters, found 3
+//     │                   ╰─────────────── unresolved type: map
 //     │ 
-//     │ Note: Error code: E0039
-// ────╯
-// Error: Invalid type MapDummy for map key. Only strings, string literals and enums are valid map keys.
-//     ╭─[ class_map_types2.baml:31:53 ]
-//     │
-//  31 │ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> map<string, int> {
-//     │                                                     ───────────┬──────────  
-//     │                                                                ╰──────────── Invalid type MapDummy for map key. Only strings, string literals and enums are valid map keys.
-//     │ 
-//     │ Note: Error code: E0067
+//     │ Note: Error code: E0002
 // ────╯

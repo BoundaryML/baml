@@ -127,29 +127,32 @@ test Bar {
 
 //----
 //- diagnostics
-// Error: Duplicate test `Bar` for function `InputEnum`
-//     ╭─[ functions_v2_tests_failing_tests.baml:77:6 ]
-//     │
-//  77 │ test Bar {
-//     │      ─┬─  
-//     │       ╰─── test `Bar` for `InputEnum` redefined here
-//     │       │   
-//     │       ╰─── test `Bar` for `InputEnum` first defined in functions_v2_tests_failing_tests.baml
-//     │ 
-//     │ Note: Error code: E0011
-// ────╯
-// Error: Duplicate test `Foo` for function `InputImage`
-//     ╭─[ functions_v2_tests_failing_tests.baml:71:6 ]
-//     │
-//  71 │ test Foo {
-//     │      ─┬─  
-//     │       ╰─── test `Foo` for `InputImage` redefined here
-//     │
-//     ├─[ functions_v2_tests_failing_tests.baml:71:6 ]
-//     │
-//  65 │ test Foo {
-//     │      ─┬─  
-//     │       ╰─── test `Foo` for `InputImage` first defined in functions_v2_tests_failing_tests.baml
-//     │ 
-//     │ Note: Error code: E0011
-// ────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

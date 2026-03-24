@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function Calculate() -> int {
+function user.Calculate() -> int {
     load_const 1
     load_const 2
     bin_op +
@@ -22,19 +22,7 @@ function Calculate() -> int {
     return
 }
 
-function FieldAccess(user: User) -> string {
-    load_var user
-    load_field .name
-    store_var name
-    load_var user
-    load_field .profile
-    load_field .bio
-    store_var bio
-    load_var user
-    load_field .tags
-    load_const 0
-    load_array_element
-    store_var firstTag
+function user.FieldAccess(user: User) -> string {
     load_var user
     load_field .profile
     load_field .settings
@@ -42,70 +30,30 @@ function FieldAccess(user: User) -> string {
     return
 }
 
-function IndexAccess(users: IndexUser[]) -> string {
+function user.IndexAccess(users: IndexUser[]) -> string {
     load_var users
-    load_const 0
-    load_array_element
-    store_var first
-    load_var users
-    load_const 1
-    load_array_element
-    store_var second
-    load_var users
-    load_const 0
-    load_array_element
-    load_field .tags
-    load_const 0
-    load_array_element
-    store_var tag
-    load_var users
-    load_const 0
+    load_var _7
     load_array_element
     load_field .name
     return
 }
 
-function TestPrecedence() -> bool {
-    load_const 2
-    load_const 3
-    bin_op *
-    load_const 4
-    bin_op +
-    store_var c
-    load_const 2
-    load_const 3
-    load_const 4
-    bin_op *
-    bin_op +
-    load_const 10
-    load_const 2
-    bin_op +
-    cmp_op >
-    store_var b
+function user.TestPrecedence() -> bool {
+    load_const true
+    store_var d
     load_const true
     pop_jump_if_false L0
-    jump L3
+    jump L1
 
   L0:
     load_const false
+    store_var d
+    load_const false
     pop_jump_if_false L1
-    jump L2
+    load_const false
+    store_var d
 
   L1:
-    load_const false
-    store_var d
-    jump L4
-
-  L2:
-    load_const false
-    store_var d
-    jump L4
-
-  L3:
-    load_const true
-    store_var d
-
-  L4:
     load_var d
     return
 }

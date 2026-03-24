@@ -25,13 +25,14 @@ bex_resource_types = { workspace = true }
 bex_vm_types = { workspace = true }
 colored = { workspace = true }
 indexmap = { workspace = true }
+log = { workspace = true }
 thiserror = { workspace = true }
 
 [build-dependencies]
 baml_builtins2_codegen = { workspace = true }
 
 [dev-dependencies]
-baml_compiler_emit = { workspace = true }
+baml_compiler2_emit = { workspace = true }
 baml_tests = { workspace = true }
 anyhow = { workspace = true }
 divan = { workspace = true }

@@ -2270,7 +2270,7 @@ class ClassWithoutDoneAst:
     def __init__(self, tb: type_builder.TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
         self._bldr = _tb.class_("ClassWithoutDone")
-        self._properties: typing.Set[str] = set([  "i_16_digits",  "s_20_words",  ])
+        self._properties: typing.Set[str] = set([  "i_16_digits",  "s_20_words",  "literal_status",  ])
         self._props = ClassWithoutDoneProperties(self._bldr, self._properties)
 
     def type(self) -> baml_py.FieldType:
@@ -2305,6 +2305,10 @@ class ClassWithoutDoneProperties:
     @property
     def s_20_words(self) -> type_builder.ClassPropertyViewer:
         return type_builder.ClassPropertyViewer(self.__bldr.property("s_20_words"))
+    
+    @property
+    def literal_status(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("literal_status"))
     
     
 

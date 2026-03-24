@@ -27,39 +27,71 @@ function ThrowNewInCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: Unreachable catch arm
-//     ╭─[ throw_throw_in_catch.baml:24:7 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//     ╭─[ throw_throw_in_catch.baml:9:11 ]
 //     │
-//  24 │     _ => throw "wrapped: original error"
-//     │       ┬  
-//     │       ╰── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
+//   9 │ ╭─▶     _ => throw e
+//  10 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
 // ────╯
-// Warning: Unreachable catch arm
-//    ╭─[ throw_throw_in_catch.baml:9:7 ]
-//    │
-//  9 │     _ => throw e
-//    │       ┬  
-//    │       ╰── Unreachable catch arm
-//    │ 
-//    │ Note: Error code: E0095
-// ───╯
-// Warning: Unreachable catch arm
-//     ╭─[ throw_throw_in_catch.baml:16:7 ]
+// Error: unreachable arm
+//     ╭─[ throw_throw_in_catch.baml:16:20 ]
 //     │
 //  16 │     _: string => "handled string",
-//     │       ────┬────  
-//     │           ╰────── Unreachable catch arm
+//     │                    ────────┬───────  
+//     │                            ╰───────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0095
+//     │ Note: Error code: E0001
 // ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ throw_throw_in_catch.baml:17:7 ]
+// Error: unreachable arm
+//     ╭─[ throw_throw_in_catch.baml:17:15 ]
 //     │
-//  17 │     other => throw other
-//     │       ──┬──  
-//     │         ╰──── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
+//  17 │ ╭─▶     other => throw other
+//  18 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ throw_throw_in_catch.baml:24:11 ]
+//     │
+//  24 │ ╭─▶     _ => throw "wrapped: original error"
+//  25 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
 // ────╯

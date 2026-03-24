@@ -14,11 +14,9 @@ use std::{
 pub use baml_base::{Literal, MediaKind, Name, Span};
 
 mod attr;
-mod convert;
 mod defs;
 pub mod typetag;
 pub use attr::*;
-pub use convert::{convert_tir_ty, fqn_to_type_name, sanitize_for_runtime};
 pub use defs::*;
 
 /// A lightweight name type for class/enum/type-alias references.
@@ -30,9 +28,8 @@ pub use defs::*;
 pub struct TypeName {
     /// Short name: "Response", "User"
     pub name: Name,
-    /// Module path segments: empty for local types, ["http"] for baml.http.Response
-    // TODO(perf): module_path is unused by all post-TIR consumers. Could be simplified
-    // to just { name, display_name } in a follow-up to reduce TypeName from 72 to 48 bytes.
+    /// Module path segments: empty for local types, ["baml", "http"] for baml.http.Response.
+    /// Used by runtime maps (SysOpContext) to distinguish `baml.SomeType` from local `SomeType`.
     pub module_path: Vec<Name>,
     /// Pre-computed display string: "baml.http.Response" for builtins, "User" for locals.
     /// Does NOT participate in PartialEq/Hash.
@@ -46,6 +43,24 @@ impl TypeName {
             display_name: name.clone(),
             name,
             module_path: vec![],
+        }
+    }
+
+    /// Create a TypeName from a dotted path like `"baml.http.Response"`.
+    ///
+    /// The last segment becomes `name`, everything before it becomes `module_path`,
+    /// and `display_name` is the full dotted path.
+    pub fn from_dotted_path(path: &str) -> Self {
+        let segments: Vec<&str> = path.split('.').collect();
+        let name = Name::new(*segments.last().expect("path must be non-empty"));
+        let module_path = segments[..segments.len() - 1]
+            .iter()
+            .map(|s| Name::new(*s))
+            .collect();
+        Self {
+            display_name: Name::new(path),
+            name,
+            module_path,
         }
     }
 }
@@ -79,7 +94,7 @@ impl fmt::Display for TypeName {
 ///
 /// Every variant carries an `attr: TyAttr` (or trailing `TyAttr` for tuple
 /// variants) that holds SAP streaming annotations. All existing code uses
-/// `TyAttr::default()` — only Phase 3 (stream type generation) will populate
+/// `TyAttr::default()` — only stream type generation (HIR lowering) will populate
 /// non-default values.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
@@ -182,6 +197,9 @@ impl Ty {
     // --- TyAttr accessor ---
 
     /// Replace the TyAttr on this type, returning a new Ty with the given attr.
+    ///
+    /// Used during HIR lowering to apply SAP attributes (sap_in_progress) to the
+    /// resolved type of generated stream_* class fields.
     pub fn with_attr(self, attr: TyAttr) -> Ty {
         match self {
             Ty::Int { .. } => Ty::Int { attr },
@@ -460,8 +478,7 @@ impl Ty {
     pub fn is_compiler_only(&self) -> bool {
         matches!(
             self,
-            Ty::TypeAlias(..)
-                | Ty::Function { .. }
+            Ty::Function { .. }
                 | Ty::Void { .. }
                 | Ty::WatchAccessor(..)
                 | Ty::BuiltinUnknown { .. }
@@ -473,10 +490,9 @@ impl Ty {
     /// variants are found.
     pub fn validate_runtime(&self) -> Result<(), String> {
         match self {
-            Ty::TypeAlias(tn, _) => Err(format!(
-                "TypeAlias '{}' should be expanded before reaching runtime",
-                tn.display_name
-            )),
+            // Recursive type aliases are intentionally preserved at runtime
+            // for output format rendering (cycle detection needs the alias name).
+            Ty::TypeAlias(_, _) => Ok(()),
             Ty::Void { .. } => Err("Void type should not reach runtime".to_string()),
             Ty::WatchAccessor(inner, _) => inner.validate_runtime(),
             Ty::BuiltinUnknown { .. } => Ok(()),
@@ -710,10 +726,11 @@ mod tests {
             .validate_runtime()
             .is_err()
         );
+        // TypeAlias is now allowed at runtime for recursive type alias rendering
         assert!(
             Ty::TypeAlias(TypeName::local(Name::new("MyAlias")), TyAttr::default())
                 .validate_runtime()
-                .is_err()
+                .is_ok()
         );
     }
 }

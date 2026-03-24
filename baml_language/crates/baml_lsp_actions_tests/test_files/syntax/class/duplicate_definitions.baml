@@ -59,46 +59,32 @@ type A = int
 
 //----
 //- diagnostics
-// Error: Duplicate class `A`
-//    ╭─[ class_duplicate_definitions.baml:1:7 ]
-//    │
-//  1 │ class A {
-//    │       ┬  
-//    │       ╰── class `A` redefined here
-//    │ 
-//  5 │ class A {
-//    │       ┬  
-//    │       ╰── `A` first defined in class_duplicate_definitions.baml
-//    │ 
-//    │ Note: Error code: E0011
-// ───╯
-// Error: Duplicate class `A`
-//    ╭─[ class_duplicate_definitions.baml:5:7 ]
-//    │
-//  5 │ class A {
-//    │       ┬  
-//    │       ╰── class `A` redefined here
-//    │
-//    ├─[ class_duplicate_definitions.baml:5:7 ]
-//    │
-//  1 │ class A {
-//    │       ┬  
-//    │       ╰── `A` first defined in class_duplicate_definitions.baml
-//    │ 
-//    │ Note: Error code: E0011
-// ───╯
-// Error: Duplicate type alias `A`
-//    ╭─[ class_duplicate_definitions.baml:9:6 ]
-//    │
-//  9 │ type A = int
-//    │      ┬  
-//    │      ╰── type alias `A` redefined here
-//    │
-//    ├─[ class_duplicate_definitions.baml:9:6 ]
-//    │
-//  1 │ class A {
-//    │       ┬  
-//    │       ╰── `A` first defined in class_duplicate_definitions.baml
-//    │ 
-//    │ Note: Error code: E0011
-// ───╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

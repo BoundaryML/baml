@@ -1,4 +1,4 @@
-import { query, mutation, internalQuery } from "./_generated/server";
+import { query, mutation, internalQuery, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { bepStatus } from "./schema";
 import { internal } from "./_generated/api";
@@ -129,7 +129,20 @@ export const getById = internalQuery({
   },
 });
 
-// Internal query to get version by ID with editor name
+// Internal mutation to store Slack thread timestamp
+export const storeSlackThreadTs = internalMutation({
+  args: {
+    bepId: v.id("beps"),
+    slackThreadTs: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.bepId, {
+      slackThreadTs: args.slackThreadTs,
+    });
+  },
+});
+
+// Internal query to get version by ID with editor name and slackUserId
 export const getVersionById = internalQuery({
   args: { id: v.id("bepVersions") },
   handler: async (ctx, args) => {
@@ -140,6 +153,7 @@ export const getVersionById = internalQuery({
     return {
       ...version,
       editedByName: editor?.name ?? "Unknown",
+      editedBySlackUserId: editor?.slackUserId,
     };
   },
 });
@@ -163,6 +177,82 @@ export const getVersionsByBep = internalQuery({
         };
       })
     );
+  },
+});
+
+// Internal query to get BEP overview data for Slack thread
+export const getBepOverview = internalQuery({
+  args: { bepId: v.id("beps") },
+  handler: async (ctx, args) => {
+    const bep = await ctx.db.get(args.bepId);
+    if (!bep) return null;
+
+    // Get first version to find the original author
+    const firstVersion = await ctx.db
+      .query("bepVersions")
+      .withIndex("by_bep_version", (q) => q.eq("bepId", args.bepId).eq("version", 1))
+      .unique();
+
+    let authorName = "Unknown";
+    let authorSlackUserId: string | undefined;
+    if (firstVersion) {
+      const author = await ctx.db.get(firstVersion.editedBy);
+      if (author) {
+        authorName = author.name;
+        authorSlackUserId = author.slackUserId;
+      }
+    }
+
+    // Get shepherd info
+    const shepherdsWithNulls = await Promise.all(
+      bep.shepherds.map(async (id) => {
+        const user = await ctx.db.get(id);
+        return user ? { name: user.name, slackUserId: user.slackUserId } : null;
+      })
+    );
+    const shepherds = shepherdsWithNulls.filter(
+      (s): s is { name: string; slackUserId: string | undefined } => s !== null
+    );
+
+    // Get all comments for this BEP to find unique commenters and last comment
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_bep", (q) => q.eq("bepId", args.bepId))
+      .collect();
+
+    // Find unique commenters
+    const commenterMap = new Map<string, { name: string; slackUserId?: string }>();
+    let lastComment: { authorName: string; authorSlackUserId?: string; createdAt: number } | null = null;
+
+    for (const comment of comments) {
+      const author = await ctx.db.get(comment.authorId);
+      if (author) {
+        commenterMap.set(comment.authorId, {
+          name: author.name,
+          slackUserId: author.slackUserId,
+        });
+        if (!lastComment || comment.createdAt > lastComment.createdAt) {
+          lastComment = {
+            authorName: author.name,
+            authorSlackUserId: author.slackUserId,
+            createdAt: comment.createdAt,
+          };
+        }
+      }
+    }
+
+    return {
+      number: bep.number,
+      title: bep.title,
+      status: bep.status,
+      updatedAt: bep.updatedAt,
+      slackThreadTs: bep.slackThreadTs,
+      author: { name: authorName, slackUserId: authorSlackUserId },
+      shepherds,
+      commenters: Array.from(commenterMap.values()),
+      lastComment,
+      commentCount: comments.length,
+    };
   },
 });
 
@@ -255,6 +345,11 @@ export const create = mutation({
       editedBy: args.userId,
       editNote: "Initial creation",
       createdAt: now,
+    });
+
+    // Notify Slack about the new BEP
+    await ctx.scheduler.runAfter(0, internal.slack.notifyBepCreated, {
+      bepId,
     });
 
     return { bepId, number: bepNumber };
@@ -393,6 +488,12 @@ export const update = mutation({
         previousVersionId: latestVersion._id,
       });
     }
+
+    // Notify Slack about the new version
+    await ctx.scheduler.runAfter(0, internal.slack.notifyBepVersionCreated, {
+      bepId: args.id,
+      versionId: newVersionId,
+    });
   },
 });
 
@@ -407,12 +508,11 @@ export const updateStatus = mutation({
       updatedAt: Date.now(),
     });
 
-    // TODO: Trigger Slack notification
-    // await ctx.scheduler.runAfter(0, internal.notifications.sendSlack, {
-    //   type: "status_change",
-    //   bepId: args.id,
-    //   newStatus: args.status,
-    // });
+    // Notify Slack about the status change
+    await ctx.scheduler.runAfter(0, internal.slack.notifyStatusChanged, {
+      bepId: args.id,
+      newStatus: args.status,
+    });
   },
 });
 
@@ -664,6 +764,12 @@ export const importVersion = mutation({
           previousVersionId: latestVersion._id,
         });
       }
+
+      // 7a. Notify Slack about the new version
+      await ctx.scheduler.runAfter(0, internal.slack.notifyBepVersionCreated, {
+        bepId: args.bepId,
+        versionId,
+      });
 
       return {
         versionId,

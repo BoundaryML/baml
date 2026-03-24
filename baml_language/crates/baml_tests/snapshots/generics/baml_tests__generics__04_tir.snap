@@ -1,8 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== TYPE INFERENCE ===
-  Function GetTodo:
-    Return: Unknown { attr: TyAttr(None) }
-    Errors:
-      - Unknown type for variable `baml`
+=== TIR2 ===
+class user.Todo {
+  id: int
+  title: string
+  completed: bool
+  userId: int
+}
+function user.GetTodo() -> user.Todo throws never {
+  { : unknown
+    <missing>(HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." }) : unknown
+  }
+  !! 165..185: unresolved name: baml
+}

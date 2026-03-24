@@ -66,9 +66,10 @@ pub(crate) fn lower_config_value(
         .and_then(|cv| cv.scalar_text())
         .unwrap_or_default();
 
-    // env.VAR_NAME → env.get_or_panic("VAR_NAME")
+    // env.VAR_NAME → baml.env.get_or_panic("VAR_NAME")
     if let Some(var_name) = text.strip_prefix("env.") {
         let callee = alloc(Expr::Path(vec![
+            Name::new("baml"),
             Name::new("env"),
             Name::new("get_or_panic"),
         ]));

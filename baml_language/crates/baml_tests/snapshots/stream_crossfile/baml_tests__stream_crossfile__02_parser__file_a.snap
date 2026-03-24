@@ -1,0 +1,44 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Education"
+    L_BRACE "{"
+    FIELD
+      WORD "school"
+      TYPE_EXPR "string"
+        WORD "string"
+    FIELD
+      WORD "degree"
+      TYPE_EXPR "Degree"
+        WORD "Degree"
+    FIELD
+      WORD "year"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  ENUM_DEF
+    KW_ENUM "enum"
+    WORD "Degree"
+    L_BRACE "{"
+    ENUM_VARIANT "Bachelors"
+      WORD "Bachelors"
+    ENUM_VARIANT "Masters"
+      WORD "Masters"
+    ENUM_VARIANT "PhD"
+      WORD "PhD"
+    R_BRACE "}"
+  TYPE_ALIAS_DEF
+    WORD "type"
+    WORD "EducationList"
+    EQUALS "="
+    TYPE_EXPR "Education[]"
+      WORD "Education"
+      L_BRACKET "["
+      R_BRACKET "]"
+
+=== ERRORS ===
+None

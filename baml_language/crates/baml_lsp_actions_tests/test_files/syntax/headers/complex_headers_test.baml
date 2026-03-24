@@ -66,12 +66,80 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `string`, found `int`
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: Duplicate binding `hello` in `ComplexHeaderTest`
+//     ╭─[ headers_complex_headers_test.baml:20:17 ]
+//     │
+//  11 │         let hello = "Hello";
+//     │             ──┬──  
+//     │               ╰──── first defined as binding here
+//     │ 
+//  20 │             let hello = "Hello";
+//     │                 ──┬──  
+//     │                   ╰──── duplicate binding definition
+//     │ 
+//  23 │             let hello = "Hello";
+//     │                 ──┬──  
+//     │                   ╰──── duplicate binding definition
+//     │ 
+//     │ Note: Error code: E0012
+// ────╯
+// Error: type mismatch: expected string, got int
 //     ╭─[ headers_complex_headers_test.baml:43:5 ]
 //     │
 //  43 │     final_result
 //     │     ──────┬─────  
-//     │           ╰─────── Expected `string`, found `int`
+//     │           ╰─────── type mismatch: expected string, got int
 //     │ 
 //     │ Note: Error code: E0001
+// ────╯
+// Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `2`
+//     ╭─[ headers_complex_headers_test.baml:54:25 ]
+//     │
+//  54 │         let processed = item * 2;
+//     │                         ────┬───  
+//     │                             ╰───── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `2`
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: Duplicate binding `result` in `ForLoopWithHeaders`
+//     ╭─[ headers_complex_headers_test.baml:57:13 ]
+//     │
+//  49 │     let result = 0;
+//     │         ───┬──  
+//     │            ╰──── first defined as binding here
+//     │ 
+//  57 │         let result = result + processed;
+//     │             ───┬──  
+//     │                ╰──── duplicate binding definition
+//     │ 
+//     │ Note: Error code: E0012
 // ────╯

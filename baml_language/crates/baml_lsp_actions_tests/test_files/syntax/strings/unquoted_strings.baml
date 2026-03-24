@@ -18,21 +18,41 @@ client<llm> Hello {
 
 //----
 //- diagnostics
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 // Error: Expected config key, found error
 //    ╭─[ strings_unquoted_strings.baml:4:16 ]
 //    │
 //  4 │     thing hello'world
 //    │                ┬  
 //    │                ╰── Expected config key, found error
-//    │ 
-//    │ Note: Error code: E0010
-// ───╯
-// Error: Expected identifier, found '#'
-//    ╭─[ strings_unquoted_strings.baml:6:13 ]
-//    │
-//  6 │     banned2 #helloworld
-//    │             ┬  
-//    │             ╰── Expected identifier, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
@@ -45,12 +65,12 @@ client<llm> Hello {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected identifier, found '('
-//    ╭─[ strings_unquoted_strings.baml:7:18 ]
+// Error: Expected identifier, found '#'
+//    ╭─[ strings_unquoted_strings.baml:6:13 ]
 //    │
-//  7 │     banned3 hello(world)
-//    │                  ┬  
-//    │                  ╰── Expected identifier, found '('
+//  6 │     banned2 #helloworld
+//    │             ┬  
+//    │             ╰── Expected identifier, found '#'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
@@ -63,12 +83,12 @@ client<llm> Hello {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Expected identifier, found ')'
-//    ╭─[ strings_unquoted_strings.baml:7:24 ]
+// Error: Expected identifier, found '('
+//    ╭─[ strings_unquoted_strings.baml:7:18 ]
 //    │
 //  7 │     banned3 hello(world)
-//    │                        ┬  
-//    │                        ╰── Expected identifier, found ')'
+//    │                  ┬  
+//    │                  ╰── Expected identifier, found '('
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
@@ -78,6 +98,15 @@ client<llm> Hello {
 //  7 │     banned3 hello(world)
 //    │                        ┬  
 //    │                        ╰── Expected config key, found ')'
+//    │ 
+//    │ Note: Error code: E0010
+// ───╯
+// Error: Expected identifier, found ')'
+//    ╭─[ strings_unquoted_strings.baml:7:24 ]
+//    │
+//  7 │     banned3 hello(world)
+//    │                        ┬  
+//    │                        ╰── Expected identifier, found ')'
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯

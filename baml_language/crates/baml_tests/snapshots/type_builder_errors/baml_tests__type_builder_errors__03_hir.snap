@@ -1,43 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function TypeBuilderFn.build_request(from_text: string) -> baml.http.Request {
-    baml.llm.build_request("TypeBuilderFn", { "from_text": from_text })
-}
-
-function TypeBuilderFn.render_prompt(from_text: string) -> baml.llm.PromptAst {
-    baml.llm.render_prompt("TypeBuilderFn", { "from_text": from_text })
-}
-
-function TypeBuilderFn(from_text: string) -> Resume {
-    baml.llm.call_llm_function("TypeBuilderFn", { "from_text": from_text })
-}
-
-class Resume {
+=== HIR2 ===
+class user.Resume {
   name: string
 }
-
-test MultipleTypeBuilderBlocks {
-  functions: ["TypeBuilderFn"]
-  type_builder {
-    class Foo {
-      foo: string
-    }
-    dynamic class Bar {
-      bar: int
-    }
-  }
+function user.TypeBuilderFn(from_text: string) -> user.Resume  [llm] {
+  baml.llm.call_llm_function(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text })
 }
-
-test SingleTypeBuilderBlock {
-  functions: ["TypeBuilderFn"]
-  type_builder {
-    class LocalClass {
-      x: string
-    }
-    dynamic class LocalDynamic {
-      y: int
-    }
-  }
+function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text })
+}
+function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text })
 }

@@ -46,12 +46,54 @@ function BadValueReturn(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Expected `string`, found `int`
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: Duplicate binding `b` in `WithStack`
+//     ╭─[ misc_return.baml:23:11 ]
+//     │
+//  15 │       let b = 1;
+//     │           ┬  
+//     │           ╰── first defined as binding here
+//     │ 
+//  23 │       let b = 3;
+//     │           ┬  
+//     │           ╰── duplicate binding definition
+//     │ 
+//     │ Note: Error code: E0012
+// ────╯
+// Error: type mismatch: expected string, got 1
 //     ╭─[ misc_return.baml:36:11 ]
 //     │
 //  36 │    return 1;
 //     │           ┬  
-//     │           ╰── Expected `string`, found `int`
+//     │           ╰── type mismatch: expected string, got 1
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

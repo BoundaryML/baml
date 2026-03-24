@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function boolArray() -> bool[] {
+function user.boolArray() -> bool[] {
     load_const true
     load_const false
     load_const true
@@ -9,7 +9,7 @@ function boolArray() -> bool[] {
     return
 }
 
-function boolValues() -> map<string, bool> {
+function user.boolValues() -> map<string, bool> {
     load_const true
     load_const false
     load_const "hello"
@@ -18,7 +18,7 @@ function boolValues() -> map<string, bool> {
     return
 }
 
-function floatArray() -> float[] {
+function user.floatArray() -> float[] {
     load_const 1
     load_const 2
     load_const 3
@@ -26,7 +26,7 @@ function floatArray() -> float[] {
     return
 }
 
-function floatValues() -> map<string, float> {
+function user.floatValues() -> map<string, float> {
     load_const 1
     load_const 2
     load_const "hello"
@@ -35,7 +35,7 @@ function floatValues() -> map<string, float> {
     return
 }
 
-function intArray() -> int[] {
+function user.intArray() -> int[] {
     load_const 1
     load_const 2
     load_const 3
@@ -43,7 +43,7 @@ function intArray() -> int[] {
     return
 }
 
-function intValues() -> map<string, int> {
+function user.intValues() -> map<string, int> {
     load_const 1
     load_const 2
     load_const "hello"
@@ -52,7 +52,7 @@ function intValues() -> map<string, int> {
     return
 }
 
-function mixedArray() -> int | string[] {
+function user.mixedArray() -> int | string[] {
     load_const 1
     load_const "two"
     load_const 3
@@ -60,7 +60,7 @@ function mixedArray() -> int | string[] {
     return
 }
 
-function point() -> Point {
+function user.point() -> Point {
     alloc_instance Point
     copy 0
     load_const 1
@@ -71,7 +71,7 @@ function point() -> Point {
     return
 }
 
-function pointArray() -> Point[] {
+function user.pointArray() -> Point[] {
     alloc_instance Point
     copy 0
     load_const 1
@@ -97,7 +97,7 @@ function pointArray() -> Point[] {
     return
 }
 
-function stringArray() -> string[] {
+function user.stringArray() -> string[] {
     load_const "hello"
     load_const "world"
     load_const "test"
@@ -105,7 +105,7 @@ function stringArray() -> string[] {
     return
 }
 
-function stringValues() -> map<string, string> {
+function user.stringValues() -> map<string, string> {
     load_const "world"
     load_const "test"
     load_const "hello"
@@ -114,7 +114,7 @@ function stringValues() -> map<string, string> {
     return
 }
 
-function vec2d() -> Vec2D {
+function user.vec2d() -> Vec2D {
     alloc_instance Vec2D
     copy 0
     alloc_instance Point

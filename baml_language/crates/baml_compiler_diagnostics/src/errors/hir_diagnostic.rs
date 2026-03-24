@@ -295,4 +295,12 @@ pub enum HirDiagnostic {
 
     /// Syntax error in `type_builder` block content.
     TypeBuilderSyntaxError { message: String, span: Span },
+
+    // ============ Reserved Prefix Diagnostics ============
+    /// User-defined item uses the reserved `stream_` prefix.
+    ReservedStreamPrefix {
+        item_kind: &'static str, // "class", "type alias", "enum", "function"
+        item_name: String,
+        span: Span,
+    },
 }

@@ -27,6 +27,12 @@ export const summaryStatus = v.union(
 );
 
 export const userRole = v.union(
+  // New roles
+  v.literal("bdfl"),
+  v.literal("team"),
+  v.literal("unset"),
+  // Legacy roles (kept for backwards compatibility with existing data)
+  // Run `npx convex run migrations:migrateUserRoles` to migrate to new roles
   v.literal("admin"),
   v.literal("shepherd"),
   v.literal("member")
@@ -38,15 +44,21 @@ export const userRole = v.union(
 
 export default defineSchema({
   // ─────────────────────────────────────────────────────────────────────────
-  // USERS (simple name-based auth)
+  // USERS (GitHub OAuth or passkey auth)
   // ─────────────────────────────────────────────────────────────────────────
   users: defineTable({
     name: v.string(),
     avatarUrl: v.optional(v.string()),
+    githubId: v.optional(v.string()),
     role: userRole,
     createdAt: v.number(),
+    // Special account fields for BoundaryML team members
+    isSpecialAccount: v.optional(v.boolean()),
+    boundaryEmail: v.optional(v.string()),
+    slackUserId: v.optional(v.string()),
   })
-    .index("by_name", ["name"]),
+    .index("by_name", ["name"])
+    .index("by_github_id", ["githubId"]),
 
   // ─────────────────────────────────────────────────────────────────────────
   // BEPs (main proposals)
@@ -71,6 +83,9 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
     supersededBy: v.optional(v.id("beps")),
+
+    // Slack integration - thread_ts for #beps channel notifications
+    slackThreadTs: v.optional(v.string()),
   })
     .index("by_number", ["number"])
     .index("by_status", ["status"])

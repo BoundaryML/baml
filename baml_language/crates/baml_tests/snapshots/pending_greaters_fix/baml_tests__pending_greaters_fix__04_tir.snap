@@ -1,16 +1,38 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== TYPE INFERENCE ===
-  Function BadParam.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
-  Function BadParam.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
-  Function BadReturnType.build_request:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["http"] }, name: "Request" }, TyAttr(None))
-  Function BadReturnType:
-    Return: Map { key: String { attr: TyAttr(None) }, value: Int { attr: TyAttr(None) }, attr: TyAttr(None) }
-  Function BadReturnType.render_prompt:
-    Return: Class(QualifiedName { namespace: Builtin { path: ["llm"] }, name: "PromptAst" }, TyAttr(None))
-  Function BadParam:
-    Return: String { attr: TyAttr(None) }
+=== TIR2 ===
+class user.MalformedClass {
+  bad_field: map<string, int>
+  good_field: map<string, int>
+  another_field: string
+}
+class user.NestedGenerics {
+  nested: map<string, map<string, int>>
+  simple: map<string, int>
+}
+function user.BadParam(x: map<string, int>) -> string throws never {
+  baml.llm.call_llm_function<T>(GPT4, "BadParam", map { "x": x }) : string
+  !! 655..777: unresolved name: GPT4
+}
+function user.BadParam$render_prompt(x: map<string, int>) -> baml.llm.PromptAst throws never {
+  baml.llm.render_prompt(GPT4, "BadParam", map { "x": x }) : baml.llm.PromptAst
+  !! 655..777: unresolved name: GPT4
+}
+function user.BadParam$build_request(x: map<string, int>) -> baml.http.Request throws never {
+  baml.llm.build_request(GPT4, "BadParam", map { "x": x }) : baml.http.Request
+  !! 655..777: unresolved name: GPT4
+}
+function user.BadReturnType() -> map<string, int> throws never {
+  baml.llm.call_llm_function<T>(GPT4, "BadReturnType", map {  }) : map<string, int>
+  !! 777..897: unresolved name: GPT4
+}
+function user.BadReturnType$render_prompt() -> baml.llm.PromptAst throws never {
+  baml.llm.render_prompt(GPT4, "BadReturnType", map {  }) : baml.llm.PromptAst
+  !! 777..897: unresolved name: GPT4
+}
+function user.BadReturnType$build_request() -> baml.http.Request throws never {
+  baml.llm.build_request(GPT4, "BadReturnType", map {  }) : baml.http.Request
+  !! 777..897: unresolved name: GPT4
+}
+type user.BadAlias = map<string, int>

@@ -1,25 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function GetTransform() -> (x: int) -> int {
-    1
+=== HIR2 ===
+type user.BinaryOp = (a: int, b: int) -> int
+type user.Complex = (items: int[], lookup: map<string, int>) -> string?
+type user.Curried = (x: int) -> (y: int) -> int
+type user.FunctionFactory = (config: string) -> (int) -> int
+type user.IntToInt = (x: int) -> int
+type user.MixedParams = (x: int, int, z: string) -> bool
+type user.Producer = () -> string
+type user.UnionParam = (value: int | string) -> bool
+type user.UnnamedParams = (int, int) -> int
+function user.GetTransform() -> (x: int) -> int  [expr] {
+  {  } 1
 }
-
-type Complex = (items: int[], lookup: map<string, int>) -> string?
-
-type Curried = (x: int) -> (y: int) -> int
-
-type IntToInt = (x: int) -> int
-
-type Producer = () -> string
-
-type UnionParam = (value: int | string) -> bool
-
-type MixedParams = (x: int, int, z: string) -> bool
-
-type BinaryOp = (a: int, b: int) -> int
-
-type UnnamedParams = (int, int) -> int
-
-type FunctionFactory = (config: string) -> (int) -> int

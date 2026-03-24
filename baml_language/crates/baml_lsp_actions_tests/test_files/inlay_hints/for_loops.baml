@@ -28,11 +28,35 @@ function qux() -> () {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 //
 //- inlay_hints
-// for_loops.baml:12:15 (Type) ": int"
-//   edit@12:15 ": int"
-// for_loops.baml:18:15 (Type) ": int"
-// for_loops.baml:24:15 (Type) ": Color[]"
-//   target "Color" -> for_loops.baml:1:6
+// <no-inlay-hints>

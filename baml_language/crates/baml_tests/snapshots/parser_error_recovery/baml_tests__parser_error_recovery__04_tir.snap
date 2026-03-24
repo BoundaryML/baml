@@ -1,12 +1,38 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== TYPE INFERENCE ===
-  Function Foo:
-    Return: Unknown { attr: TyAttr(None) }
-    Errors:
-      - Unknown type for variable `GPT4`
-  Function Incomplete:
-    Return: Unknown { attr: TyAttr(None) }
-  Function NextFunction:
-    Return: String { attr: TyAttr(None) }
+=== TIR2 ===
+enum user.Status
+function user.Foo() -> unknown throws never {
+  { : unknown
+    GPT4 : unknown
+  }
+  !! 185..189: unresolved name: GPT4
+}
+class user.User {
+  name: string
+}
+class user.Another {
+  field: int
+}
+class user.Partial {
+  field1: unknown
+  field2: unknown
+  field3: string
+  field4: string
+  string: unknown
+}
+function user.NextFunction() -> string throws never {
+  { : never
+    return "parsed" : "parsed"
+  }
+}
+enum user.VALUE1
+enum user.ValidEnum
+class user.Test {
+  field1: string
+  field2: string
+  another: unknown
+  string: ")  // Should still parse this
+}"
+}

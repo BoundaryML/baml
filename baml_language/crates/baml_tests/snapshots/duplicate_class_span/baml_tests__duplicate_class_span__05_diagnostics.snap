@@ -1,49 +1,35 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
-  [validation] Error: Duplicate class `A`
-   ╭─[ repro.baml:1:7 ]
-   │
- 1 │ class A {
-   │       ┬  
-   │       ╰── class `A` redefined here
-   │ 
- 5 │ class A {
-   │       ┬  
-   │       ╰── `A` first defined in repro.baml
-   │ 
-   │ Note: Error code: E0011
-───╯
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:159:17 ]
+     │
+ 159 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
 
-  [validation] Error: Duplicate class `A`
-   ╭─[ repro.baml:5:7 ]
-   │
- 5 │ class A {
-   │       ┬  
-   │       ╰── class `A` redefined here
-   │
-   ├─[ repro.baml:5:7 ]
-   │
- 1 │ class A {
-   │       ┬  
-   │       ╰── `A` first defined in repro.baml
-   │ 
-   │ Note: Error code: E0011
-───╯
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:189:17 ]
+     │
+ 189 │ ╭─▶             _ => {
+     ┆ ┆   
+ 194 │ ├─▶             }
+     │ │                   
+     │ ╰─────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0001
+─────╯
 
-  [validation] Error: Duplicate type alias `A`
-   ╭─[ repro.baml:9:6 ]
-   │
- 9 │ type A = int
-   │      ┬  
-   │      ╰── type alias `A` redefined here
-   │
-   ├─[ repro.baml:9:6 ]
-   │
- 1 │ class A {
-   │       ┬  
-   │       ╰── `A` first defined in repro.baml
-   │ 
-   │ Note: Error code: E0011
-───╯
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:208:17 ]
+     │
+ 208 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯

@@ -21,21 +21,50 @@ class InterfaceOne {
 
 //----
 //- diagnostics
-// Error: Unknown type `strin`
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unresolved type: strin
 //    ╭─[ class_spelling_error.baml:2:12 ]
 //    │
 //  2 │   interface strin
 //    │            ───┬──  
-//    │               ╰──── Unknown type `strin`
+//    │               ╰──── unresolved type: strin
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: Unknown type `InterfaceT`
+// Error: unresolved type: InterfaceT
 //    ╭─[ class_spelling_error.baml:6:7 ]
 //    │
 //  6 │   uses InterfaceT
 //    │       ─────┬─────  
-//    │            ╰─────── Unknown type `InterfaceT`
+//    │            ╰─────── unresolved type: InterfaceT
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯

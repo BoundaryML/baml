@@ -1,11 +1,10 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
-=== MIR ===
-fn Foo() -> null {
+=== MIR2 ===
+fn user.Foo() -> void {
     // Locals:
-    let _0: null // return
+    let _0: void // _0 // return
 
     bb0: {
         _0 = const null;
@@ -17,64 +16,26 @@ fn Foo() -> null {
     }
 }
 
-fn GPT4.resolve() -> baml.llm.PrimitiveClient {
+fn user.Incomplete(_1: void) -> void {
     // Locals:
-    let _0: baml.llm.PrimitiveClient // return
-    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
-    let _2: "GPT4"
-    let _3: "unknown"
-    let _4: "user"
-    let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
-    let _9: map<string, unknown>
-    let _10: null
+    let _0: void // return
+    let _1: void // param
 
     bb0: {
-        _1 = const fn baml.llm.build_primitive_client;
-        _2 = const "GPT4";
-        _3 = const "unknown";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
-        _5 = [copy _6, copy _7, copy _8];
-        _9 = {  };
-        _10 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        _0 = await _10 -> [bb3];
-    }
-
-    bb3: {
-        goto -> bb1;
+        unreachable;
     }
 }
 
-fn Incomplete:
-  (no MIR due to errors: function body is missing)
-
-fn NextFunction() -> string {
+fn user.NextFunction() -> string {
     // Locals:
-    let _0: string // return
-    let _1: void
+    let _0: string // _0 // return
 
     bb0: {
         _0 = const "parsed";
-        goto -> bb2;
+        goto -> bb1;
     }
 
     bb1: {
-        return;
-    }
-
-    bb2: {
         return;
     }
 }

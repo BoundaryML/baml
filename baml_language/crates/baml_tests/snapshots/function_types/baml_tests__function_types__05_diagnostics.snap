@@ -1,13 +1,45 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
-  [type] Error: Expected `(x: int) -> int`, found `int`
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:159:17 ]
+     │
+ 159 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:189:17 ]
+     │
+ 189 │ ╭─▶             _ => {
+     ┆ ┆   
+ 194 │ ├─▶             }
+     │ │                   
+     │ ╰─────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:208:17 ]
+     │
+ 208 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: type mismatch: expected (x: int) -> int, got 1
     ╭─[ function_types.baml:25:5 ]
     │
  25 │     1
     │     ┬  
-    │     ╰── Expected `(x: int) -> int`, found `int`
+    │     ╰── type mismatch: expected (x: int) -> int, got 1
     │ 
     │ Note: Error code: E0001
 ────╯

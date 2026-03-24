@@ -241,6 +241,8 @@ pub struct ClassWithoutDone {
     pub i_16_digits: Option<i64>,
 
     pub s_20_words: baml::StreamState<Option<String>>,
+
+    pub literal_status: baml::StreamState<Option<String>>,
 }
 
 impl ::std::convert::AsRef<ClassWithoutDone> for ClassWithoutDone {

@@ -1,187 +1,40 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== MIR ===
-fn FormatMessage(name: string) -> string {
+=== MIR2 ===
+fn user.FormatMessage(name: string) -> string {
     // Locals:
-    let _0: string // return
+    let _0: string // _0 // return
     let _1: string // name // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "FormatMessage"
-    let _4: map<string, unknown>
-    let _5: "name"
-    let _6: string
+    let _2: map<string, unknown>
 
     bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "FormatMessage";
-        _5 = const "name";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
+        _2 = { const "name": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const null, const "FormatMessage", copy _2) -> [bb1];
     }
 
     bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-}
-
-fn FormatMessage.render_prompt(name: string) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // return
-    let _1: string // name // param
-    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
-    let _3: "FormatMessage"
-    let _4: map<string, unknown>
-    let _5: "name"
-    let _6: string
-
-    bb0: {
-        _2 = const fn baml.llm.render_prompt;
-        _3 = const "FormatMessage";
-        _5 = const "name";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-}
-
-fn FormatMessage.build_request(name: string) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // return
-    let _1: string // name // param
-    let _2: (string, map<string, unknown>) -> baml.http.Request
-    let _3: "FormatMessage"
-    let _4: map<string, unknown>
-    let _5: "name"
-    let _6: string
-
-    bb0: {
-        _2 = const fn baml.llm.build_request;
-        _3 = const "FormatMessage";
-        _5 = const "name";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-}
-
-fn ProcessText.build_request(input: string) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // return
-    let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> baml.http.Request
-    let _3: "ProcessText"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
-
-    bb0: {
-        _2 = const fn baml.llm.build_request;
-        _3 = const "ProcessText";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-}
-
-fn ProcessText.render_prompt(input: string) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // return
-    let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> baml.llm.PromptAst
-    let _3: "ProcessText"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
-
-    bb0: {
-        _2 = const fn baml.llm.render_prompt;
-        _3 = const "ProcessText";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-}
-
-fn ProcessText(input: string) -> string {
-    // Locals:
-    let _0: string // return
-    let _1: string // input // param
-    let _2: (string, map<string, unknown>) -> unknown
-    let _3: "ProcessText"
-    let _4: map<string, unknown>
-    let _5: "input"
-    let _6: string
-
-    bb0: {
-        _2 = const fn baml.llm.call_llm_function;
-        _3 = const "ProcessText";
-        _5 = const "input";
-        _6 = copy _1;
-        _4 = { copy _5: copy _6 };
-        _0 = call copy _2(copy _3, copy _4) -> [bb2];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-}
-
-fn GetRole() -> "admin" | "user" | "guest" {
-    // Locals:
-    let _0: "admin" | "user" | "guest" // return
-    let _1: void
-
-    bb0: {
-        _0 = const "user";
         goto -> bb2;
     }
 
-    bb1: {
+    bb2: {
         return;
+    }
+}
+
+fn user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "name": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const null, const "FormatMessage", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
     }
 
     bb2: {
@@ -189,42 +42,96 @@ fn GetRole() -> "admin" | "user" | "guest" {
     }
 }
 
-fn GPT4.resolve() -> baml.llm.PrimitiveClient {
+fn user.FormatMessage$build_request(name: string) -> baml.http.Request {
     // Locals:
-    let _0: baml.llm.PrimitiveClient // return
-    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
-    let _2: "GPT4"
-    let _3: "unknown"
-    let _4: "user"
-    let _5: string[]
-    let _6: "user"
-    let _7: "assistant"
-    let _8: "system"
-    let _9: map<string, unknown>
-    let _10: null
+    let _0: baml.http.Request // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
 
     bb0: {
-        _1 = const fn baml.llm.build_primitive_client;
-        _2 = const "GPT4";
-        _3 = const "unknown";
-        _4 = const "user";
-        _6 = const "user";
-        _7 = const "assistant";
-        _8 = const "system";
-        _5 = [copy _6, copy _7, copy _8];
-        _9 = {  };
-        _10 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
+        _2 = { const "name": copy _1 };
+        _0 = call const fn baml.llm.build_request(const null, const "FormatMessage", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const null, const "ProcessText", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.ProcessText(input: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const null, const "ProcessText", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.ProcessText$build_request(input: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // input // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "input": copy _1 };
+        _0 = call const fn baml.llm.build_request(const null, const "ProcessText", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.GetRole() -> "admin" | "user" | "guest" {
+    // Locals:
+    let _0: "admin" | "user" | "guest" // _0 // return
+
+    bb0: {
+        _0 = const "user";
+        goto -> bb1;
     }
 
     bb1: {
         return;
-    }
-
-    bb2: {
-        _0 = await _10 -> [bb3];
-    }
-
-    bb3: {
-        goto -> bb1;
     }
 }

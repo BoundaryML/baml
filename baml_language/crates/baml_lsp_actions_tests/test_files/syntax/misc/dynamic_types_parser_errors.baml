@@ -102,6 +102,44 @@ test IncompleteSyntax {
 
 //----
 //- diagnostics
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unresolved type: Resume
+//    ╭─[ misc_dynamic_types_parser_errors.baml:1:45 ]
+//    │
+//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
+//    │                                             ───┬───  
+//    │                                                ╰───── unresolved type: Resume
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
 // Error: Expected Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute., found identifier
 //     ╭─[ misc_dynamic_types_parser_errors.baml:40:13 ]
 //     │
@@ -219,21 +257,21 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Expected type alias name, found dynamic
-//     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
-//     │
-//  54 │     dynamic class Bar {
-//     │     ───┬───  
-//     │        ╰───── Expected type alias name, found dynamic
-//     │ 
-//     │ Note: Error code: E0010
-// ────╯
 // Error: Expected '=', found dynamic
 //     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
 //     │
 //  54 │     dynamic class Bar {
 //     │     ───┬───  
 //     │        ╰───── Expected '=', found dynamic
+//     │ 
+//     │ Note: Error code: E0010
+// ────╯
+// Error: Expected type alias name, found dynamic
+//     ╭─[ misc_dynamic_types_parser_errors.baml:54:5 ]
+//     │
+//  54 │     dynamic class Bar {
+//     │     ───┬───  
+//     │        ╰───── Expected type alias name, found dynamic
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
@@ -246,45 +284,3 @@ test IncompleteSyntax {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Only tests may have a type_builder block.
-//    ╭─[ misc_dynamic_types_parser_errors.baml:4:3 ]
-//    │
-//  4 │   type_builder {
-//    │   ──────┬─────  
-//    │         ╰─────── type_builder not allowed in function
-//    │ 
-//    │ Note: Error code: E0040
-// ───╯
-// Error: Definition of multiple `type_builder` blocks in the same parent block
-//     ╭─[ misc_dynamic_types_parser_errors.baml:24:3 ]
-//     │
-//  24 │   type_builder {
-//     │   ──────┬─────  
-//     │         ╰─────── duplicate type_builder block
-//     │
-//     ├─[ misc_dynamic_types_parser_errors.baml:24:3 ]
-//     │
-//  16 │   type_builder {
-//     │   ──────┬─────  
-//     │         ╰─────── first type_builder block here
-//     │ 
-//     │ Note: Error code: E0041
-// ────╯
-// Error: Missing `args` property
-//     ╭─[ misc_dynamic_types_parser_errors.baml:37:6 ]
-//     │
-//  37 │ test IncompleteDynamicDef {
-//     │      ──────────┬─────────  
-//     │                ╰─────────── Missing `args` property
-//     │ 
-//     │ Note: Error code: E0035
-// ────╯
-// Error: Unknown type `Resume`
-//    ╭─[ misc_dynamic_types_parser_errors.baml:1:45 ]
-//    │
-//  1 │ function TypeBuilderFn(from_text: string) -> Resume {
-//    │                                             ───┬───  
-//    │                                                ╰───── Unknown type `Resume`
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯

@@ -1,50 +1,34 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function Foo() -> <unknown> {
-    GPT4
+=== HIR2 ===
+enum user.Status {ACTIVE, INACTIVE, PENDING}
+function user.Foo() -> ?  [expr] {
+  {  } GPT4
 }
-
-enum Status {
-  ACTIVE
-  INACTIVE
-  PENDING
-}
-
-class Another {
+class user.Another {
   field: int
 }
-
-class User {
+class user.User {
   name: string
 }
-
-function Incomplete(param1: string) -> <unknown> {
-    // missing body
-}
-
-function NextFunction() -> string {
-    return "parsed";
-}
-
-class Partial {
-  field1: str
-  field2: <unknown>
+class user.Partial {
+  field1: user.str
+  field2: ?
   field3: string
   field4: string
-  string: <unknown>
+  string: ?
 }
-
-enum ValidEnum {
-  OPTION1
-  OPTION2
+enum user.VALUE1 {}
+enum user.ValidEnum {OPTION1, OPTION2}
+function user.Incomplete(param1: string) -> ?  [missing]
+function user.NextFunction() -> string  [expr] {
+  { return "parsed" }
 }
-
-class Test {
+class user.Test {
   field1: string
   field2: string
-  another: closed
+  another: user.closed
   string: ")  // Should still parse this
 }"
 }

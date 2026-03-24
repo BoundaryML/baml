@@ -101,30 +101,60 @@ function BreakContinue() -> int {
 
 //----
 //- diagnostics
-// Error: Unknown variable `i`
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unresolved name: i
 //     ╭─[ loops_c_for.baml:21:9 ]
 //     │
 //  21 │     for (; i <= 10; i += 1) {
 //     │            ┬  
-//     │            ╰── Unknown variable `i`
+//     │            ╰── unresolved name: i
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `i`
+// Error: unresolved name: i
 //     ╭─[ loops_c_for.baml:22:8 ]
 //     │
 //  22 │        s += i;
 //     │             ┬  
-//     │             ╰── Unknown variable `i`
+//     │             ╰── unresolved name: i
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `i`
-//     ╭─[ loops_c_for.baml:21:18 ]
+// Error: unreachable code: 1 statement(s) after diverging statement
+//     ╭─[ loops_c_for.baml:51:12 ]
 //     │
-//  21 │     for (; i <= 10; i += 1) {
-//     │                     ┬  
-//     │                     ╰── Unknown variable `i`
-//     │ 
-//     │ Note: Error code: E0003
+//  51 │ ╭─▶     for (;;) {
+//  52 │ ├─▶        break;
+//     │ │                   
+//     │ ╰─────────────────── unreachable code: 1 statement(s) after diverging statement
+//     │     
+//     │     Note: Error code: E0001
 // ────╯

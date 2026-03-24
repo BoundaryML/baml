@@ -44,29 +44,32 @@ class HasThreeBlockAttributes {
 
 //----
 //- diagnostics
-// Error: Attribute `@alias` can only be defined once on field `key2` in class `TestClassAlias`
-//    ╭─[ class_attributes.baml:7:32 ]
-//    │
-//  7 │   key2 string @alias("key21") @alias("key22")
-//    │                ──┬──           ──┬──  
-//    │                  ╰──────────────────── first definition here
-//    │                                  │    
-//    │                                  ╰──── duplicate attribute
-//    │ 
-//    │ Note: Error code: E0014
-// ───╯
-// Error: Attribute `@@description` can only be defined once on class `HasThreeBlockAttributes`
-//     ╭─[ class_attributes.baml:23:5 ]
-//     │
-//  23 │   @@description("A second description")
-//     │     ─────┬─────  
-//     │          ╰─────── duplicate attribute
-//     │
-//     ├─[ class_attributes.baml:23:5 ]
-//     │
-//  21 │   @@description("A test")
-//     │     ─────┬─────  
-//     │          ╰─────── first definition here
-//     │ 
-//     │ Note: Error code: E0014
-// ────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

@@ -64,11 +64,16 @@ fn make_llm_companion(
         span: parent.span,
     };
     let param_names: Vec<Name> = parent.params.iter().map(|p| p.name.clone()).collect();
+    // Extract client name from parent's LLM declarative meta.
+    let client_name = match &parent.declarative_meta {
+        Some(DeclarativeMeta::Llm(llm)) => llm.client.as_ref().map(|n| n.as_str().to_string()),
+        _ => None,
+    };
     let (body, source_map) = synthesize_llm_builtin_call(
         target,
         parent.name.as_str(),
         &param_names,
-        None,
+        client_name.as_deref(),
         parent.span,
     );
     FunctionDef {

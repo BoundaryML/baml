@@ -25,7 +25,35 @@ function Describe(pet: Pet) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 //
 //- semantic_tokens
 // match_expr.baml:1:1 (keyword) len=5 "class"
@@ -55,26 +83,19 @@ function Describe(pet: Pet) -> string {
 // match_expr.baml:16:1 (keyword) len=4 "type"
 // match_expr.baml:16:6 (type) len=3 "Pet"
 // match_expr.baml:16:10 (operator) len=1 "="
-// match_expr.baml:16:12 (class) len=3 "Cat"
+// match_expr.baml:16:12 (namespace) len=3 "Cat"
 // match_expr.baml:16:16 (operator) len=1 "|"
-// match_expr.baml:16:18 (class) len=3 "Dog"
+// match_expr.baml:16:18 (namespace) len=3 "Dog"
 // match_expr.baml:16:22 (operator) len=1 "|"
-// match_expr.baml:16:24 (class) len=6 "Lizard"
+// match_expr.baml:16:24 (namespace) len=6 "Lizard"
 // match_expr.baml:18:1 (keyword) len=8 "function"
 // match_expr.baml:18:10 (function) len=8 "Describe"
 // match_expr.baml:18:19 (parameter) len=3 "pet"
-// match_expr.baml:18:24 (type) len=3 "Pet"
+// match_expr.baml:18:24 (namespace) len=3 "Pet"
 // match_expr.baml:18:32 (type) len=6 "string"
 // match_expr.baml:19:3 (keyword) len=5 "match"
-// match_expr.baml:19:10 (parameter) len=3 "pet"
-// match_expr.baml:20:5 (variable) len=3 "cat"
-// match_expr.baml:20:10 (class) len=3 "Cat"
-// match_expr.baml:20:17 (variable) len=3 "cat"
-// match_expr.baml:20:21 (property) len=4 "name"
-// match_expr.baml:21:5 (variable) len=3 "dog"
-// match_expr.baml:21:10 (class) len=3 "Dog"
-// match_expr.baml:21:17 (variable) len=3 "dog"
-// match_expr.baml:21:21 (property) len=4 "name"
+// match_expr.baml:20:10 (namespace) len=3 "Cat"
+// match_expr.baml:21:10 (namespace) len=3 "Dog"
 // match_expr.baml:22:10 (string) len=1 "\""
 // match_expr.baml:22:11 (string) len=5 "other"
 // match_expr.baml:22:17 (string) len=3 "pet"

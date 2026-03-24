@@ -43,75 +43,68 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 
 //----
 //- diagnostics
-// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     ╭─[ expr_instanceof_narrowing.baml:11:9 ]
-//     │
-//  11 │     if (x instanceof Foo) {
-//     │         ────────┬───────  
-//     │                 ╰───────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     │ 
-//     │ Note: Error code: E0098
-// ────╯
-// Error: Type `Foo | Bar` has no field `field`
-//     ╭─[ expr_instanceof_narrowing.baml:13:16 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unresolved member: user.Bar.field
+//     ╭─[ expr_instanceof_narrowing.baml:13:15 ]
 //     │
 //  13 │         return x.field;
-//     │                ───┬───  
-//     │                   ╰───── Type `Foo | Bar` has no field `field`
+//     │               ────┬───  
+//     │                   ╰───── unresolved member: user.Bar.field
 //     │ 
-//     │ Note: Error code: E0007
+//     │ Note: Error code: E0001
 // ────╯
-// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     ╭─[ expr_instanceof_narrowing.baml:35:9 ]
-//     │
-//  35 │     if (x instanceof Foo) {
-//     │         ────────┬───────  
-//     │                 ╰───────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     │ 
-//     │ Note: Error code: E0098
-// ────╯
-// Error: Type `Foo | Bar | Baz` has no field `field`
-//     ╭─[ expr_instanceof_narrowing.baml:36:16 ]
-//     │
-//  36 │         return x.field;
-//     │                ───┬───  
-//     │                   ╰───── Type `Foo | Bar | Baz` has no field `field`
-//     │ 
-//     │ Note: Error code: E0007
-// ────╯
-// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     ╭─[ expr_instanceof_narrowing.baml:37:16 ]
-//     │
-//  37 │     } else if (x instanceof Baz) {
-//     │                ────────┬───────  
-//     │                        ╰───────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     │ 
-//     │ Note: Error code: E0098
-// ────╯
-// Error: Type `Foo | Bar | Baz` has no field `field`
-//     ╭─[ expr_instanceof_narrowing.baml:38:16 ]
-//     │
-//  38 │         return x.field;
-//     │                ───┬───  
-//     │                   ╰───── Type `Foo | Bar | Baz` has no field `field`
-//     │ 
-//     │ Note: Error code: E0007
-// ────╯
-// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     ╭─[ expr_instanceof_narrowing.baml:22:9 ]
-//     │
-//  22 │     if (x instanceof Foo) {
-//     │         ────────┬───────  
-//     │                 ╰───────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     │ 
-//     │ Note: Error code: E0098
-// ────╯
-// Error: Type `Foo | null` has no field `field`
-//     ╭─[ expr_instanceof_narrowing.baml:23:16 ]
+// Error: unresolved member: null.field
+//     ╭─[ expr_instanceof_narrowing.baml:23:15 ]
 //     │
 //  23 │         return x.field;
-//     │                ───┬───  
-//     │                   ╰───── Type `Foo | null` has no field `field`
+//     │               ────┬───  
+//     │                   ╰───── unresolved member: null.field
 //     │ 
-//     │ Note: Error code: E0007
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unresolved member: user.Bar.field
+//     ╭─[ expr_instanceof_narrowing.baml:36:15 ]
+//     │
+//  36 │         return x.field;
+//     │               ────┬───  
+//     │                   ╰───── unresolved member: user.Bar.field
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unresolved member: user.Bar.field
+//     ╭─[ expr_instanceof_narrowing.baml:38:15 ]
+//     │
+//  38 │         return x.field;
+//     │               ────┬───  
+//     │                   ╰───── unresolved member: user.Bar.field
+//     │ 
+//     │ Note: Error code: E0001
 // ────╯

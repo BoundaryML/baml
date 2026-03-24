@@ -37,22 +37,35 @@ function quux(a: map<string, Color | int | string | "hello">) -> map<string, Col
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 //
 //- inlay_hints
-// let_type.baml:9:8 (Type) ": string"
-//   edit@9:8 ": string"
-// let_type.baml:15:8 (Type) ": Color"
-//   target "Color" -> let_type.baml:1:6
-//   edit@15:8 ": Color"
-// let_type.baml:21:8 (Type) ": Color | int | string | \"hello\""
-//   target "Color" -> let_type.baml:1:6
-//   edit@21:8 ": Color | int | string | \"hello\""
-// let_type.baml:27:8 (Type) ": map<string, Color | int | string | \"hello\">"
-//   target "Color" -> let_type.baml:1:6
-//   edit@27:8 ": map<string, Color | int | string | \"hello\">"
-// let_type.baml:33:8 (Type) ": (a: map<string, Color | int | string | \"hello\">) -> map<string, Color | int | string | \"hello\">"
-//   target "Color" -> let_type.baml:1:6
-//   target "Color" -> let_type.baml:1:6
-//   edit@33:8 ": (a: map<string, Color | int | string | \"hello\">) -> map<string, Color | int | string | \"hello\">"
-// let_type.baml:35:5 (Parameter) "a:"
+// <no-inlay-hints>

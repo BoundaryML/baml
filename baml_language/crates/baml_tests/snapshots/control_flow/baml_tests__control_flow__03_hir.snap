@@ -1,110 +1,37 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function IfElseWithHeaders(flag: bool) -> string {
-    //# Checkflag
-    if (flag) {
-        //# Truebranch
-        "yes"
-    } else {
-        //# Falsebranch
-        "no"
-    }
+=== HIR2 ===
+function user.ElseIfChain(x: int) -> string  [expr] {
+  {  } if (x Eq 1) { // [1] Case one } "one" else if (x Eq 2) { // [1] Case two } "two" else if (x Eq 3) { // [1] Case three } "three" else { // [1] Default case } "other"
 }
-
-function Headers() -> string {
-    //# Setup
-    let x = 1;
-    //## Configuration
-    let y = 2;
-    //# Processing
-    let z = x + y;
-    z.to_string()
+function user.Headers() -> string  [expr] {
+  { // [1] Setup; let x = 1; // [2] Configuration; let y = 2; // [1] Processing; let z = x Add y } z.to_string()
 }
-
-function SimpleFunction() -> int {
-    42
+function user.IfElseWithHeaders(flag: bool) -> string  [expr] {
+  { // [1] Check flag } if (flag) { // [1] True branch } "yes" else { // [1] False branch } "no"
 }
-
-function LlmFunction(input: string) -> string {
-    baml.llm.call_llm_function("LlmFunction", { "input": input })
+function user.LlmFunction(input: string) -> string  [llm] {
+  baml.llm.call_llm_function(TestClient, "LlmFunction", map { "input": input })
 }
-
-function NestedControlFlow(x: int) -> string {
-    //# Outer
-    if (x > 0) {
-        //# Positive
-        if (x > 100) {
-            //# Large
-            "large"
-        } else {
-            //# Small
-            "small"
-        }
-    } else {
-        //# Non-positive
-        "zero or negative"
-    }
+function user.LlmFunction$build_request(input: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request(TestClient, "LlmFunction", map { "input": input })
 }
-
-function ElseIfChain(x: int) -> string {
-    if (x == 1) {
-        //# Caseone
-        "one"
-    } else if (x == 2) {
-        //# Casetwo
-        "two"
-    } else if (x == 3) {
-        //# Casethree
-        "three"
-    } else {
-        //# Defaultcase
-        "other"
-    }
+function user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(TestClient, "LlmFunction", map { "input": input })
 }
-
-function WhileWithHeaders() -> int {
-    //# Initialize
-    let count = 0;
-    //# Loop
-    while (count < 10) {
-        //# Iteration
-        count += 1;
-    }
-    //# Done
-    count
+function user.MatchExpression(x: int) -> string  [expr] {
+  {  } match (x) { 1 => { // [1] One } "one", 2 => { // [1] Two } "two", _ => { // [1] Default } "other" }
 }
-
-function MatchExpression(x: int) -> string {
-    match (x) {
-        1 => {
-            //# One
-            "one"
-        },
-        2 => {
-            //# Two
-            "two"
-        },
-        _ => {
-            //# Default
-            "other"
-        },
-    }
+function user.NestedControlFlow(x: int) -> string  [expr] {
+  { // [1] Outer } if (x Gt 0) { // [1] Positive } if (x Gt 100) { // [1] Large } "large" else { // [1] Small } "small" else { // [1] Non-positive } "zero or negative"
 }
-
-function LlmFunction.render_prompt(input: string) -> baml.llm.PromptAst {
-    baml.llm.render_prompt("LlmFunction", { "input": input })
+function user.SimpleFunction() -> int  [expr] {
+  {  } 42
 }
-
-function LlmFunction.build_request(input: string) -> baml.http.Request {
-    baml.llm.build_request("LlmFunction", { "input": input })
+function user.TestClient$new() -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
-
-function TestClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("TestClient", "openai", "user", ["user", "assistant", "system"], { "model": "gpt-4" })
-}
-
-client TestClient {
-  provider: openai
+function user.WhileWithHeaders() -> int  [expr] {
+  { // [1] Initialize; let count = 0; // [1] Loop; while count Lt 10 { // [1] Iteration; count Add= 1 }; // [1] Done } count
 }

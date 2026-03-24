@@ -31,5 +31,6 @@ var typeMap = map[string]reflect.Type{
 	"TYPES.SmallThing":                reflect.TypeOf(types.SmallThing{}),
 	"STREAM_TYPES.SmallThing":         reflect.TypeOf(stream_types.SmallThing{}),
 
-	"STREAM_STATE_TYPES.Optional__string": reflect.TypeOf(baml.StreamState[*string]{}),
+	"STREAM_STATE_TYPES.Optional__string":        reflect.TypeOf(baml.StreamState[*string]{}),
+	"STREAM_STATE_TYPES.Optional__string_active": reflect.TypeOf(baml.StreamState[*string]{}),
 }

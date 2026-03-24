@@ -38,6 +38,35 @@ test Foo {
 
 //----
 //- diagnostics
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 // Error: Expected identifier, found ','
 //     ╭─[ misc_bad_syntax.baml:15:7 ]
 //     │
@@ -46,22 +75,4 @@ test Foo {
 //     │       ╰── Expected identifier, found ','
 //     │ 
 //     │ Note: Error code: E0010
-// ────╯
-// Error: Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
-//     ╭─[ misc_bad_syntax.baml:12:3 ]
-//     │
-//  12 │   input [
-//     │   ──┬──  
-//     │     ╰──── Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
-//     │ 
-//     │ Note: Error code: E0034
-// ────╯
-// Error: Missing `args` property
-//     ╭─[ misc_bad_syntax.baml:10:6 ]
-//     │
-//  10 │ test Foo {
-//     │      ─┬─  
-//     │       ╰─── Missing `args` property
-//     │ 
-//     │ Note: Error code: E0035
 // ────╯

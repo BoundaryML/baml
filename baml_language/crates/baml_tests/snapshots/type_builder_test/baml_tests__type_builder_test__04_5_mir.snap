@@ -1,72 +1,72 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== MIR ===
-fn Fn.build_request() -> baml.http.Request {
+=== MIR2 ===
+fn user.Fn() -> string {
     // Locals:
-    let _0: baml.http.Request // return
-    let _1: (string, map<string, unknown>) -> baml.http.Request
-    let _2: "Fn"
+    let _0: string // _0 // return
+    let _1: baml.llm.Client
+    let _2: void[]
     let _3: map<string, unknown>
 
     bb0: {
-        _1 = const fn baml.llm.build_request;
-        _2 = const "Fn";
+        _2 = [];
+        _1 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _2, const null, const 0_i64 };
         _3 = {  };
-        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+        _0 = call const fn baml.llm.call_llm_function(copy _1, const "Fn", copy _3) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
-fn Fn.render_prompt() -> baml.llm.PromptAst {
+fn user.Fn$build_request() -> baml.http.Request {
     // Locals:
-    let _0: baml.llm.PromptAst // return
-    let _1: (string, map<string, unknown>) -> baml.llm.PromptAst
-    let _2: "Fn"
+    let _0: baml.http.Request // _0 // return
+    let _1: baml.llm.Client
+    let _2: void[]
     let _3: map<string, unknown>
 
     bb0: {
-        _1 = const fn baml.llm.render_prompt;
-        _2 = const "Fn";
+        _2 = [];
+        _1 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _2, const null, const 0_i64 };
         _3 = {  };
-        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+        _0 = call const fn baml.llm.build_request(copy _1, const "Fn", copy _3) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
-fn Fn() -> string {
+fn user.Fn$render_prompt() -> baml.llm.PromptAst {
     // Locals:
-    let _0: string // return
-    let _1: (string, map<string, unknown>) -> unknown
-    let _2: "Fn"
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: baml.llm.Client
+    let _2: void[]
     let _3: map<string, unknown>
 
     bb0: {
-        _1 = const fn baml.llm.call_llm_function;
-        _2 = const "Fn";
+        _2 = [];
+        _1 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _2, const null, const 0_i64 };
         _3 = {  };
-        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+        _0 = call const fn baml.llm.render_prompt(copy _1, const "Fn", copy _3) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }

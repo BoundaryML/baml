@@ -45,30 +45,59 @@ function CatchOuter(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: Unreachable catch arm
-//     ╭─[ throw_throw_with_catch.baml:27:5 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//     ╭─[ throw_throw_with_catch.baml:27:9 ]
 //     │
 //  27 │     _ => throw "wrapped"
-//     │     ┬  
-//     │     ╰── Unreachable catch arm
+//     │         ────────┬───────  
+//     │                 ╰───────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0095
+//     │ Note: Error code: E0001
 // ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ throw_throw_with_catch.baml:29:5 ]
+// Error: unreachable arm
+//     ╭─[ throw_throw_with_catch.baml:29:10 ]
 //     │
 //  29 │     _ => "ultimately caught"
-//     │     ┬  
-//     │     ╰── Unreachable catch arm
+//     │          ─────────┬─────────  
+//     │                   ╰─────────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0095
+//     │ Note: Error code: E0001
 // ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ throw_throw_with_catch.baml:42:5 ]
+// Error: unreachable arm
+//     ╭─[ throw_throw_with_catch.baml:42:10 ]
 //     │
 //  42 │     _ => "caught outer"
-//     │     ┬  
-//     │     ╰── Unreachable catch arm
+//     │          ───────┬──────  
+//     │                 ╰──────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0095
+//     │ Note: Error code: E0001
 // ────╯

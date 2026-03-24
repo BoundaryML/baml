@@ -19,12 +19,32 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// Error: unknown role "system" in remap_roles. Allowed roles: "user", "assistant"
-//    ╭─[ client_remap_role_invalid_role.baml:8:7 ]
-//    │
-//  8 │       system "instructions"
-//    │       ───┬──  
-//    │          ╰──── unknown role "system" in remap_roles. Allowed roles: "user", "assistant"
-//    │ 
-//    │ Note: Error code: E0044
-// ───╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

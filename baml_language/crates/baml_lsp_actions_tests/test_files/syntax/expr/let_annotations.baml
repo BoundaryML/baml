@@ -24,25 +24,50 @@ function Ok() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `int`, found `float`
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: type mismatch: expected int, got 10.0
 //    ╭─[ expr_let_annotations.baml:5:17 ]
 //    │
 //  5 │   let y : int = 10.0;
-//    │          ──┬─   ──┬─  
-//    │            ╰────────── Type required here
-//    │                   │   
-//    │                   ╰─── Expected `int`, found `float`
+//    │                 ──┬─  
+//    │                   ╰─── type mismatch: expected int, got 10.0
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: Expected `int`, found `string`
+// Error: type mismatch: expected int, got "hello"
 //    ╭─[ expr_let_annotations.baml:6:16 ]
 //    │
 //  6 │   let c: int = "hello";
-//    │         ──┬─   ───┬───  
-//    │           ╰───────────── Type required here
-//    │                   │     
-//    │                   ╰───── Expected `int`, found `string`
+//    │                ───┬───  
+//    │                   ╰───── type mismatch: expected int, got "hello"
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

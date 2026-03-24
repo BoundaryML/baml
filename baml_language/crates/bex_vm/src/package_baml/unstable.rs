@@ -91,7 +91,7 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             }
 
             Object::String(s) => Ok(format!("\"{s}\"")),
-            Object::Enum(e) => Ok(e.name.clone()),
+            Object::Enum(e) => Ok(e.name.display_name.to_string()),
             Object::Variant(variant) => {
                 let Object::Enum(enm) = vm.get_object(variant.enm) else {
                     return Err(VmError::RuntimeError(RuntimeError::Other(

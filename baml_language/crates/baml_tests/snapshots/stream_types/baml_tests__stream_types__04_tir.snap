@@ -1,0 +1,101 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Primitives {
+  name: string
+  count: int
+  flag: bool
+  score: float
+}
+enum user.Status
+class user.WithEnum {
+  status: user.Status
+}
+class user.WithLiterals {
+  type: "resume"
+  version: 1
+  enabled: true
+}
+class user.Inner {
+  value: string
+}
+class user.Outer {
+  inner: user.Inner
+}
+class user.WithLists {
+  strings: string[]
+  ints: int[]
+  classes: user.Inner[]
+}
+class user.WithMaps {
+  simple: map<string, int>
+  complex: map<string, user.Inner>
+}
+class user.WithNested {
+  matrix: int[][]
+  class_matrix: user.Inner[][]
+  nested_map: map<string, int[]>
+  class_nested_map: map<string, user.Inner[]>
+}
+class user.WithUnions {
+  simple: int | string
+  with_class: user.Inner | user.Primitives
+  mixed: int | user.Inner
+}
+class user.WithOptionals {
+  name: string?
+  inner: user.Inner?
+  items: int[]?
+}
+type user.SimpleAlias = string
+type user.ClassAlias = user.Inner
+type user.UnionAlias = int | user.Inner
+type user.OptionalAlias = user.Inner?
+class user.DynamicClass {
+  name: string
+}
+class user.Education {
+  school: string
+  year: int
+}
+type user.AliasedType = string | int
+class user.AllDefaults {
+  name: string
+  age: int
+  score: float
+  active: bool
+  type: "resume"
+  version: 42
+  status: user.Status
+  edu: user.Education
+  scores: int[]
+  education: user.Education[]
+  nested_edu: user.Education[][]
+  edu_map: map<string, user.Education>
+  data: user.AliasedType
+  mixed: int | user.Education
+  maybe: string?
+  maybe_list: int[]?
+}
+class user.Resume {
+  name: string
+  age: int
+  type: "resume"
+  status: user.Status
+  education: user.Education[]
+  scores: int[]
+  metadata: map<string, string>
+}
+type user.MixedType = int | user.Education
+class user.TreeNode {
+  value: string
+  children: user.TreeNode[]
+}
+class user.Container {
+  matrix: int[][]
+  grid: user.TreeNode[][]
+  groups: map<string, user.TreeNode[]>
+}
+type user.Foo = int | string
+type user.Bar = user.Foo | bool

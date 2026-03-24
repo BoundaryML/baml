@@ -403,7 +403,7 @@ pub fn infer_scope_types<'db>(
 // ── Type Alias Collection ────────────────────────────────────────────────────
 
 /// Build a map of alias name → resolved Ty from all type aliases in the package.
-fn collect_type_aliases<'db>(
+pub fn collect_type_aliases<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
 ) -> HashMap<crate::ty::QualifiedTypeName, Ty> {

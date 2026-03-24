@@ -126,10 +126,10 @@ pub enum BexVariant<'a> {
 }
 
 impl<'a> BexClass<'a> {
-    pub fn class_name(&self) -> &'a String {
+    pub fn class_name(&self) -> &str {
         match self {
             BexClass::ExternalClass { name, .. } => name,
-            BexClass::Value(class, ..) => &class.name,
+            BexClass::Value(class, ..) => class.name.display_name.as_str(),
         }
     }
 
@@ -163,10 +163,10 @@ impl<'a> BexClass<'a> {
 }
 
 impl<'a> BexVariant<'a> {
-    pub fn enum_name(&self) -> &'a String {
+    pub fn enum_name(&self) -> &str {
         match self {
             BexVariant::ExternalVariant { name, .. } => name,
-            BexVariant::Value(enum_, ..) => &enum_.name,
+            BexVariant::Value(enum_, ..) => enum_.name.display_name.as_str(),
         }
     }
 
@@ -377,7 +377,7 @@ impl<'a> BexValue<'a> {
                         actual: class_obj.to_string(),
                     });
                 };
-                if class.name != expected_class_name {
+                if class.name.display_name.as_str() != expected_class_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_class_name,
                         actual: class.name.to_string(),
@@ -431,7 +431,7 @@ impl<'a> BexValue<'a> {
                         actual: enum_obj.to_string(),
                     });
                 };
-                if enum_.name != expected_enum_name {
+                if enum_.name.display_name.as_str() != expected_enum_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_enum_name,
                         actual: enum_.name.to_string(),
@@ -662,7 +662,7 @@ impl<'a> BexValue<'a> {
                             })
                             .collect::<Result<_, _>>()?;
                         Ok(BexExternalValue::Instance {
-                            class_name: class.name.clone(),
+                            class_name: class.name.to_string(),
                             fields,
                         })
                     }
@@ -680,7 +680,7 @@ impl<'a> BexValue<'a> {
                             }
                         })?;
                         Ok(BexExternalValue::Variant {
-                            enum_name: enum_.name.clone(),
+                            enum_name: enum_.name.to_string(),
                             variant_name: variant_def.name.clone(),
                         })
                     }

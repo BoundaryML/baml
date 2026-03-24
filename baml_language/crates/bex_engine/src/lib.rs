@@ -342,10 +342,10 @@ pub struct BexEngine {
     globals: GlobalPool,
     /// Resolved function/class/enum names for lookup
     resolved_function_names: HashMap<String, (HeapPtr, bex_vm_types::FunctionKind)>,
-    /// Resolved class names for instance allocation
-    resolved_class_names: HashMap<String, HeapPtr>,
-    /// Resolved enum names for variant allocation
-    resolved_enum_names: HashMap<String, HeapPtr>,
+    /// Resolved class names for instance allocation (`IndexMap` preserves definition order)
+    resolved_class_names: indexmap::IndexMap<String, HeapPtr>,
+    /// Resolved enum names for variant allocation (`IndexMap` preserves definition order)
+    resolved_enum_names: indexmap::IndexMap<String, HeapPtr>,
     /// System operations provider.
     sys_ops: std::sync::Arc<sys_types::SysOps>,
     /// Context passed to `sys_ops` that need engine-level information.
@@ -428,7 +428,7 @@ impl BexEngine {
             .enumerate()
             .filter_map(|(idx, obj)| {
                 if let Object::Class(class) = obj {
-                    Some((class.name.clone(), idx))
+                    Some((class.name.to_string(), idx))
                 } else {
                     None
                 }
@@ -440,7 +440,7 @@ impl BexEngine {
             .enumerate()
             .filter_map(|(idx, obj)| {
                 if let Object::Enum(enm) = obj {
-                    Some((enm.name.clone(), idx))
+                    Some((enm.name.to_string(), idx))
                 } else {
                     None
                 }
@@ -463,13 +463,13 @@ impl BexEngine {
                 .collect();
 
         // Build class name lookup table from pre-computed indices.
-        let resolved_class_names: HashMap<String, HeapPtr> = class_indices
+        let resolved_class_names: indexmap::IndexMap<String, HeapPtr> = class_indices
             .into_iter()
             .map(|(name, idx)| (name, heap.compile_time_ptr(idx)))
             .collect();
 
         // Build enum name lookup table from pre-computed indices.
-        let resolved_enum_names: HashMap<String, HeapPtr> = enum_indices
+        let resolved_enum_names: indexmap::IndexMap<String, HeapPtr> = enum_indices
             .into_iter()
             .map(|(name, idx)| (name, heap.compile_time_ptr(idx)))
             .collect();
@@ -492,7 +492,10 @@ impl BexEngine {
                 let mut vm = BexVm::new(
                     Arc::clone(&heap),
                     globals.clone(),
-                    resolved_class_names.clone(),
+                    resolved_class_names
+                        .iter()
+                        .map(|(k, v)| (k.clone(), *v))
+                        .collect(),
                 );
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
@@ -529,26 +532,18 @@ impl BexEngine {
         // This avoids passing raw HeapPtrs to sys_ops.
         let llm_functions = Self::extract_llm_function_info(&resolved_function_names);
 
-        // Client metadata and round-robin counters are no longer populated from compile-time
-        // metadata. Clients flow through let-binding globals ($init populates their slots),
-        // and round-robin counters will be initialized from Client global slots in a future phase.
-        // For now, both maps are empty — `get_client` is no longer called (clients are passed
-        // directly as arguments), and `round_robin_next`/`round_robin_peek` work on the
-        // `round_robin_counters` map which starts empty.
-        let client_metadata: std::collections::HashMap<String, sys_types::ClientBuildMeta> =
-            std::collections::HashMap::new();
-        let round_robin_counters: std::collections::HashMap<
-            String,
-            std::sync::Arc<std::sync::atomic::AtomicUsize>,
-        > = std::collections::HashMap::new();
+        // Extract class and enum definitions for output format rendering.
+        let class_definitions = Self::extract_class_definitions(&resolved_class_names);
+        let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
         let sys_op_ctx = sys_types::SysOpContext {
             llm_functions: Arc::new(llm_functions),
             function_global_indices: Arc::new(bytecode.function_global_indices),
             template_strings_macros: Arc::new(bytecode.template_strings_macros),
-            client_metadata: Arc::new(client_metadata),
-            round_robin_counters: Arc::new(round_robin_counters),
             cancel: CancellationToken::new(),
+            class_definitions: Arc::new(class_definitions),
+            enum_definitions: Arc::new(enum_definitions),
+            type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
         };
 
         Ok(Self {
@@ -614,6 +609,71 @@ impl BexEngine {
             }
         }
         llm_functions
+    }
+
+    /// Extract class definitions from the heap for output format rendering.
+    fn extract_class_definitions(
+        resolved_class_names: &indexmap::IndexMap<String, HeapPtr>,
+    ) -> indexmap::IndexMap<baml_type::TypeName, sys_types::ClassDefinition> {
+        let mut defs = indexmap::IndexMap::new();
+        for (_name, ptr) in resolved_class_names {
+            // SAFETY: ptr is from resolved_class_names, a compile-time object
+            let obj = unsafe { ptr.get() };
+            if let Object::Class(cls) = obj {
+                defs.insert(
+                    cls.name.clone(),
+                    sys_types::ClassDefinition {
+                        name: cls.name.display_name.to_string(),
+                        description: cls.description.clone(),
+                        alias: cls.alias.clone(),
+                        fields: cls
+                            .fields
+                            .iter()
+                            .map(|f| sys_types::ClassFieldDefinition {
+                                name: f.name.clone(),
+                                field_type: f.field_type.clone(),
+                                description: f.description.clone(),
+                                alias: f.alias.clone(),
+                                skip: f.skip,
+                            })
+                            .collect(),
+                    },
+                );
+            }
+        }
+        defs
+    }
+
+    /// Extract enum definitions from the heap for output format rendering.
+    fn extract_enum_definitions(
+        resolved_enum_names: &indexmap::IndexMap<String, HeapPtr>,
+    ) -> indexmap::IndexMap<baml_type::TypeName, sys_types::EnumDefinition> {
+        let mut defs = indexmap::IndexMap::new();
+        for (_name, ptr) in resolved_enum_names {
+            // SAFETY: ptr is from resolved_enum_names, a compile-time object
+            let obj = unsafe { ptr.get() };
+            if let Object::Enum(enm) = obj {
+                defs.insert(
+                    enm.name.clone(),
+                    sys_types::EnumDefinition {
+                        name: enm.name.display_name.to_string(),
+                        description: enm.description.clone(),
+                        alias: enm.alias.clone(),
+                        variants: enm
+                            .variants
+                            .iter()
+                            .filter(|v| !v.skip)
+                            .map(|v| sys_types::EnumVariantDefinition {
+                                name: v.name.clone(),
+                                description: v.description.clone(),
+                                alias: v.alias.clone(),
+                            })
+                            .collect(),
+                    },
+                );
+            }
+        }
+        defs
     }
 
     /// Get a reference to the shared heap.
@@ -815,7 +875,10 @@ impl BexEngine {
         let mut vm = BexVm::new(
             Arc::clone(&self.heap),
             self.globals.clone(),
-            self.resolved_class_names.clone(),
+            self.resolved_class_names
+                .iter()
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
         );
 
         // Snapshot args for the root FunctionStart event before converting to VM values
@@ -939,18 +1002,48 @@ impl BexEngine {
     }
 
     /// Look up a function by name and return its heap pointer.
+    ///
+    /// Tries the exact name first, then falls back to `"user.{name}"` to handle
+    /// the compiler2 pipeline which qualifies user-defined functions with the
+    /// package prefix (e.g. `"main"` → `"user.main"`).
     fn lookup_function(&self, function_name: &str) -> Result<HeapPtr, EngineError> {
+        // Try exact match first
+        if let Some((ptr, _kind)) = self.resolved_function_names.get(function_name) {
+            return Ok(*ptr);
+        }
+        // Fall back to "user." prefix (compiler2 qualifies user functions)
+        let qualified = format!("user.{function_name}");
         self.resolved_function_names
-            .get(function_name)
+            .get(&qualified)
             .map(|(ptr, _kind)| *ptr)
             .ok_or_else(|| EngineError::FunctionNotFound {
                 name: function_name.to_string(),
             })
     }
 
+    /// Resolve a function name to the key actually present in `resolved_function_names`.
+    ///
+    /// Returns `Some(key)` where `key` is either `name` or `"user.{name}"`,
+    /// or `None` if neither is found.
+    fn resolve_function_name<'a>(&'a self, name: &str) -> Option<&'a str> {
+        if self.resolved_function_names.contains_key(name) {
+            return Some(
+                self.resolved_function_names
+                    .get_key_value(name)
+                    .map(|(k, _)| k.as_str())
+                    .unwrap(),
+            );
+        }
+        let qualified = format!("user.{name}");
+        self.resolved_function_names
+            .get_key_value(&qualified)
+            .map(|(k, _)| k.as_str())
+    }
+
     /// Get the return type for a function by dereferencing its heap object.
     fn function_return_type(&self, name: &str) -> Option<Ty> {
-        let (ptr, _kind) = self.resolved_function_names.get(name)?;
+        let resolved = self.resolve_function_name(name)?;
+        let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
         // SAFETY: ptr is from resolved_function_names, a compile-time object
         let obj = unsafe { ptr.get() };
         match obj {
@@ -961,9 +1054,14 @@ impl BexEngine {
 
     /// Get parameter names and types for a function by dereferencing its heap object.
     pub fn function_params(&self, name: &str) -> Result<Vec<(&str, &Ty)>, EngineError> {
+        let resolved = self
+            .resolve_function_name(name)
+            .ok_or(EngineError::FunctionNotFound {
+                name: name.to_string(),
+            })?;
         let (ptr, _kind) =
             self.resolved_function_names
-                .get(name)
+                .get(resolved)
                 .ok_or(EngineError::FunctionNotFound {
                     name: name.to_string(),
                 })?;

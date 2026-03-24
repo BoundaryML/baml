@@ -1,13 +1,45 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
-  [type] Error: Cannot apply operator 'Add' to types `int` and `string`
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:159:17 ]
+     │
+ 159 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:189:17 ]
+     │
+ 189 │ ╭─▶             _ => {
+     ┆ ┆   
+ 194 │ ├─▶             }
+     │ │                   
+     │ ╰─────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:208:17 ]
+     │
+ 208 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: type mismatch: expected int, got string
    ╭─[ simple_type_error.baml:2:3 ]
    │
  2 │   1 + "foo"
    │   ────┬────  
-   │       ╰────── Cannot apply operator 'Add' to types `int` and `string`
+   │       ╰────── type mismatch: expected int, got string
    │ 
-   │ Note: Error code: E0004
+   │ Note: Error code: E0001
 ───╯

@@ -1994,10 +1994,30 @@ impl<'db> TypeInferenceBuilder<'db> {
                 .chain(std::iter::once(name))
                 .cloned()
                 .collect();
+            // Namespace shorthands like `env`, `sys`, `http` etc. can appear as
+            // the base of a FieldAccess expression (e.g. `env.get("KEY")`), where
+            // the parent will route them to the `"baml"` package.  Don't emit
+            // `UnresolvedName` for these bare identifiers — the parent expression
+            // is responsible for resolution and will emit an error if the member
+            // doesn't exist.
+            let is_baml_ns_shorthand = matches!(
+                name.as_str(),
+                "env"
+                    | "sys"
+                    | "http"
+                    | "math"
+                    | "fs"
+                    | "net"
+                    | "media"
+                    | "llm"
+                    | "errors"
+                    | "unstable"
+            );
             if matches!(ty, Ty::Unknown)
                 && !self.locals.contains_key(name)
                 && self.package_items.lookup_value(&ns_name).is_none()
                 && self.package_items.lookup_type(&ns_name).is_none()
+                && !is_baml_ns_shorthand
             {
                 self.context
                     .report_simple(TirTypeError::UnresolvedName { name: name.clone() }, expr_id);
@@ -2702,17 +2722,39 @@ impl<'db> TypeInferenceBuilder<'db> {
         } else {
             first.clone()
         };
-        let Some(pkg_items) = self.res_ctx.items_for_package(db, &resolved_pkg_name) else {
+
+        // Try to resolve the package. If not found, check if the first segment
+        // is a known namespace shorthand for the `"baml"` package (e.g. `env.get`
+        // → `baml.env.get`, `sys.panic` → `baml.sys.panic`).
+        let baml_ns_shorthands: &[&str] = &[
+            "env", "sys", "http", "math", "fs", "net", "media", "llm", "errors", "unstable",
+        ];
+        let (pkg_items, item_path_owned): (
+            &baml_compiler2_hir::package::PackageItems<'db>,
+            Vec<Name>,
+        ) = if let Some(items) = self.res_ctx.items_for_package(db, &resolved_pkg_name) {
+            // Found the package directly.
+            if items.namespaces.is_empty() {
+                return None;
+            }
+            let ip = segments[1..].to_vec();
+            (items, ip)
+        } else if baml_ns_shorthands.contains(&first.as_str()) {
+            // `env.X` → treat as `baml.env.X`: look up in the `"baml"` package
+            // with the namespace prefix prepended to the item path.
+            let baml_name = Name::new("baml");
+            let Some(baml_items) = self.res_ctx.items_for_package(db, &baml_name) else {
+                return None;
+            };
+            // Prepend the namespace segment (`first`) to the item path.
+            let mut ip = vec![first.clone()];
+            ip.extend_from_slice(&segments[1..]);
+            (baml_items, ip)
+        } else {
             return None;
         };
 
-        // Check that this package actually has items (non-empty = real package)
-        if pkg_items.namespaces.is_empty() {
-            return None;
-        }
-
-        // The remaining segments (after the package name) form the item path.
-        let item_path = &segments[1..];
+        let item_path: &[Name] = &item_path_owned;
 
         // Record types for intermediate expressions (so MIR doesn't panic on them).
         let mut cur = base_id;

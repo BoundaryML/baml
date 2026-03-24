@@ -1,13 +1,66 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
-  [type] Error: Type `int` has no field `missing`
-    ╭─[ regressions.baml:78:9 ]
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:159:17 ]
+     │
+ 159 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:189:17 ]
+     │
+ 189 │ ╭─▶             _ => {
+     ┆ ┆   
+ 194 │ ├─▶             }
+     │ │                   
+     │ ╰─────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:208:17 ]
+     │
+ 208 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: type mismatch: expected string, got user.Status
+    ╭─[ regressions.baml:25:5 ]
     │
- 78 │         x.missing
-    │         ────┬────  
-    │             ╰────── Type `int` has no field `missing`
+ 25 │     WrapperAlwaysThrows(n) catch (e) {
+    │     ───────────┬──────────  
+    │                ╰──────────── type mismatch: expected string, got user.Status
     │ 
-    │ Note: Error code: E0007
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected string, got user.Status
+    ╭─[ regressions.baml:43:5 ]
+    │
+ 43 │     ThrowsAllStatusVariants(n) catch (e) {
+    │     ─────────────┬────────────  
+    │                  ╰────────────── type mismatch: expected string, got user.Status
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unreachable code: 2 statement(s) after diverging statement
+    ╭─[ regressions.baml:75:6 ]
+    │
+ 75 │ ╭─▶     {
+ 76 │ ├─▶         throw "error"
+    │ │                           
+    │ ╰─────────────────────────── unreachable code: 2 statement(s) after diverging statement
+    │     
+    │     Note: Error code: E0001
 ────╯

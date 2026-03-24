@@ -57,6 +57,35 @@ type Four = int | string | b
 
 //----
 //- diagnostics
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 // Error: Unknown keyword 'typpe'. Did you mean 'type'? Usage: type Name = expression
 //    ╭─[ class_invalid_type_aliases.baml:9:1 ]
 //    │
@@ -65,32 +94,4 @@ type Four = int | string | b
 //    │   ╰──── Unknown keyword 'typpe'. Did you mean 'type'? Usage: type Name = expression
 //    │ 
 //    │ Note: Error code: E0010
-// ───╯
-// Error: Duplicate class `One`
-//    ╭─[ class_invalid_type_aliases.baml:1:7 ]
-//    │
-//  1 │ class One {
-//    │       ─┬─  
-//    │        ╰─── class `One` redefined here
-//    │ 
-//  6 │ type One = int
-//    │      ─┬─  
-//    │       ╰─── `One` first defined in class_invalid_type_aliases.baml
-//    │ 
-//    │ Note: Error code: E0011
-// ───╯
-// Error: Duplicate type alias `One`
-//    ╭─[ class_invalid_type_aliases.baml:6:6 ]
-//    │
-//  6 │ type One = int
-//    │      ─┬─  
-//    │       ╰─── type alias `One` redefined here
-//    │
-//    ├─[ class_invalid_type_aliases.baml:6:6 ]
-//    │
-//  1 │ class One {
-//    │       ─┬─  
-//    │        ╰─── `One` first defined in class_invalid_type_aliases.baml
-//    │ 
-//    │ Note: Error code: E0011
 // ───╯

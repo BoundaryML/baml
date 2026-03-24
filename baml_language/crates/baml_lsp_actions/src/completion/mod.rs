@@ -6,7 +6,7 @@
 mod context;
 mod providers;
 
-use baml_db::{SourceFile, baml_compiler_hir::Db, baml_compiler_parser, baml_workspace::Project};
+use baml_db::{SourceFile, baml_compiler_parser, baml_compiler2_hir::Db, baml_workspace::Project};
 pub use context::CompletionContext;
 use text_size::TextSize;
 

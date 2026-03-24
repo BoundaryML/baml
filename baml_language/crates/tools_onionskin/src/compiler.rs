@@ -9,15 +9,13 @@ use std::{
 
 use anyhow::Result;
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticPhase, RenderConfig, render_diagnostic};
-use baml_compiler_hir::{ItemId, function_body, function_signature, function_signature_source_map};
 use baml_compiler_syntax::{
     SyntaxElement, SyntaxNode, SyntaxToken, WalkEvent,
     ast::{Item as AstItem, SourceFile as AstSourceFile},
 };
-use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
 use baml_db::{
-    FileId, SourceFile, baml_compiler_emit, baml_compiler_hir, baml_compiler_lexer,
-    baml_compiler_parser, baml_compiler_syntax, baml_compiler_tir, baml_workspace,
+    FileId, SourceFile, baml_compiler_lexer, baml_compiler_parser, baml_compiler_syntax,
+    baml_compiler2_hir, baml_compiler2_ppir, baml_workspace,
 };
 use baml_project::{ProjectDatabase, collect_diagnostics};
 use regex::Regex;
@@ -38,6 +36,7 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
         TypeExpr::String => "string".into(),
         TypeExpr::Bool => "bool".into(),
         TypeExpr::Null => "null".into(),
+        TypeExpr::Never => "never".into(),
         TypeExpr::Media(k) => format!("{:?}", k).to_lowercase(),
         TypeExpr::Optional(inner) => format!("{}?", hir2_type_expr_to_string(inner)),
         TypeExpr::List(inner) => format!("{}[]", hir2_type_expr_to_string(inner)),
@@ -69,7 +68,6 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
         TypeExpr::Rust => "$rust_type".into(),
         TypeExpr::Error => "error".into(),
         TypeExpr::Unknown => "?".into(),
-        TypeExpr::Never => "never".into(),
     }
 }
 
@@ -468,6 +466,14 @@ fn assignop_sym(op: &baml_compiler2_ast::AssignOp) -> &'static str {
     }
 }
 
+fn catch_clause_kind_sym(kind: baml_compiler2_ast::CatchClauseKind) -> &'static str {
+    match kind {
+        baml_compiler2_ast::CatchClauseKind::Catch => "catch",
+        baml_compiler2_ast::CatchClauseKind::CatchAll => "catch_all",
+        baml_compiler2_ast::CatchClauseKind::CatchAllPanics => "catch_all_panics",
+    }
+}
+
 /// Render an expression as rich `DetailSpan`s with inline type annotations on
 /// every sub-expression. E.g. `Add1(Add2(x: int): int): int`.
 fn expr_desc_spans<'db>(
@@ -595,23 +601,21 @@ fn expr_desc_spans<'db>(
             spans.extend(expr_desc_spans(*scrutinee, body, inference));
             spans.push(DetailSpan::Code(") { ... }".into()));
         }
-        Expr::Missing => {
-            spans.push(DetailSpan::Code("<missing>".into()));
-        }
         Expr::Catch { base, clauses } => {
-            spans.push(DetailSpan::Code("catch (".into()));
             spans.extend(expr_desc_spans(*base, body, inference));
-            spans.push(DetailSpan::Code(") {".into()));
             for clause in clauses {
                 spans.push(DetailSpan::Code(format!(
-                    "  {clause:?} =>",
-                    clause = clause.kind
+                    " {}(...)",
+                    catch_clause_kind_sym(clause.kind)
                 )));
             }
-            spans.push(DetailSpan::Code("}".into()));
         }
-        Expr::Throw { .. } => {
-            spans.push(DetailSpan::Code("throw { ... }".into()));
+        Expr::Throw { value } => {
+            spans.push(DetailSpan::Code("throw ".into()));
+            spans.extend(expr_desc_spans(*value, body, inference));
+        }
+        Expr::Missing => {
+            spans.push(DetailSpan::Code("<missing>".into()));
         }
     }
 
@@ -1044,6 +1048,8 @@ impl CompilerRunner {
     }
 
     fn run_hir(&mut self) {
+        use baml_compiler2_ast::FunctionBodyDef;
+
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
@@ -1054,10 +1060,9 @@ impl CompilerRunner {
         for (path, source_file) in sorted_files {
             let file_path = path.display().to_string();
 
-            // Use real baml_compiler_hir for item extraction
-            let item_tree = baml_compiler_hir::file_item_tree(&self.db, *source_file);
-            let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
-            let items = items_struct.items(&self.db);
+            // Use compiler2 HIR item tree via ppir semantic index
+            let index = baml_compiler2_ppir::file_semantic_index(&self.db, *source_file);
+            let item_tree = &index.item_tree;
 
             // Check if THIS specific file was modified
             let file_recomputed = self.modified_files.contains(path);
@@ -1070,184 +1075,206 @@ impl CompilerRunner {
             writeln!(output, "File: {file_path}").ok();
             output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
 
-            // Show real HIR items with pretty printing
-            if items.is_empty() {
+            let total_items = item_tree.functions.len()
+                + item_tree.classes.len()
+                + item_tree.enums.len()
+                + item_tree.type_aliases.len()
+                + item_tree.clients.len()
+                + item_tree.tests.len()
+                + item_tree.generators.len()
+                + item_tree.template_strings.len()
+                + item_tree.retry_policies.len();
+
+            // Show HIR items with pretty printing
+            if total_items == 0 {
                 let no_items = "  (no items)".to_string();
                 writeln!(output, "{no_items}").ok();
                 output_annotated.push((no_items, status));
             } else {
-                for item in items {
-                    match item {
-                        ItemId::Function(func_loc) => {
-                            let func = &item_tree[func_loc.id(&self.db)];
-                            let signature = function_signature(&self.db, *func_loc);
-                            let body = function_body(&self.db, *func_loc);
-
-                            // Build function header
-                            let params_str: Vec<String> = signature
-                                .params
-                                .iter()
-                                .map(|p| {
+                for (local_id, func) in &item_tree.functions {
+                    let params_str: Vec<String> = func
+                        .params
+                        .iter()
+                        .map(|p| {
+                            p.type_expr
+                                .as_ref()
+                                .map(|te| {
                                     format!(
                                         "{}: {}",
-                                        p.name,
-                                        baml_compiler_hir::pretty::type_ref_to_str(&p.type_ref)
+                                        p.name.as_str(),
+                                        hir2_type_expr_to_string(&te.expr)
                                     )
                                 })
-                                .collect();
-                            let return_str =
-                                baml_compiler_hir::pretty::type_ref_to_str(&signature.return_type);
+                                .unwrap_or_else(|| p.name.as_str().to_string())
+                        })
+                        .collect();
+                    let return_str = func
+                        .return_type
+                        .as_ref()
+                        .map(|te| hir2_type_expr_to_string(&te.expr))
+                        .unwrap_or_else(|| "?".to_string());
 
-                            // Print body based on type
-                            match &*body {
-                                baml_compiler_hir::FunctionBody::Expr(expr_body, _source_map) => {
-                                    let body_code = baml_compiler_hir::body_to_code(expr_body);
-                                    // Combine header with body, putting { on same line
-                                    let header = format!(
-                                        "function {}({}) -> {} {{",
-                                        func.name,
-                                        params_str.join(", "),
-                                        return_str
-                                    );
-                                    writeln!(output, "{header}").ok();
-                                    output_annotated.push((header, status));
-
-                                    // Skip the opening brace line from body_code and print rest
-                                    let body_lines: Vec<&str> = body_code.lines().collect();
-                                    // body_code starts with "{", so skip first line and last "}"
-                                    for line in body_lines
-                                        .iter()
-                                        .skip(1)
-                                        .take(body_lines.len().saturating_sub(2))
-                                    {
-                                        writeln!(output, "{line}").ok();
-                                        output_annotated.push((line.to_string(), status));
-                                    }
-                                    let closing = "}".to_string();
-                                    writeln!(output, "{closing}").ok();
-                                    output_annotated.push((closing, status));
-                                }
-                                baml_compiler_hir::FunctionBody::Llm(_) => {
-                                    let header = format!(
-                                        "function {}({}) -> {}",
-                                        func.name,
-                                        params_str.join(", "),
-                                        return_str
-                                    );
-                                    writeln!(output, "{header}").ok();
-                                    output_annotated.push((header, status));
-                                    let line = "  <LLM function>".to_string();
-                                    writeln!(output, "{line}").ok();
-                                    output_annotated.push((line, status));
-                                }
-                                baml_compiler_hir::FunctionBody::Missing => {
-                                    let header = format!(
-                                        "function {}({}) -> {}",
-                                        func.name,
-                                        params_str.join(", "),
-                                        return_str
-                                    );
-                                    writeln!(output, "{header}").ok();
-                                    output_annotated.push((header, status));
-                                    let line = "  <missing body>".to_string();
-                                    writeln!(output, "{line}").ok();
-                                    output_annotated.push((line, status));
-                                }
-                            }
-                            writeln!(output).ok();
-                            output_annotated.push((String::new(), LineStatus::Unknown));
-                        }
-                        ItemId::Class(class_loc) => {
-                            let class = &item_tree[class_loc.id(&self.db)];
-                            let header = format!("class {}", class.name);
+                    match &func.body {
+                        Some(FunctionBodyDef::Expr(_, _)) => {
+                            let header = format!(
+                                "function {}({}) -> {} {{",
+                                func.name,
+                                params_str.join(", "),
+                                return_str
+                            );
                             writeln!(output, "{header}").ok();
                             output_annotated.push((header, status));
 
-                            for field in &class.fields {
-                                let field_str = format!(
-                                    "  {}: {}",
-                                    field.name,
-                                    baml_compiler_hir::pretty::type_ref_to_str(&field.type_ref)
-                                );
-                                writeln!(output, "{field_str}").ok();
-                                output_annotated.push((field_str, status));
+                            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(
+                                &self.db,
+                                *source_file,
+                                *local_id,
+                            );
+                            let body = baml_compiler2_hir::body::function_body(&self.db, func_loc);
+                            if let baml_compiler2_hir::body::FunctionBody::Expr(ref eb) = *body {
+                                let expr_count = eb.exprs.len();
+                                let line = format!("  <expr body: {} nodes>", expr_count);
+                                writeln!(output, "{line}").ok();
+                                output_annotated.push((line, status));
                             }
-                            writeln!(output).ok();
-                            output_annotated.push((String::new(), LineStatus::Unknown));
+
+                            let closing = "}".to_string();
+                            writeln!(output, "{closing}").ok();
+                            output_annotated.push((closing, status));
                         }
-                        ItemId::Enum(enum_loc) => {
-                            let enum_def = &item_tree[enum_loc.id(&self.db)];
-                            let header = format!("enum {}", enum_def.name);
+                        _ if func.declarative_meta.is_some() => {
+                            let header = format!(
+                                "function {}({}) -> {}",
+                                func.name,
+                                params_str.join(", "),
+                                return_str
+                            );
                             writeln!(output, "{header}").ok();
                             output_annotated.push((header, status));
-
-                            for variant in &enum_def.variants {
-                                let variant_str = format!("  {}", variant.name);
-                                writeln!(output, "{variant_str}").ok();
-                                output_annotated.push((variant_str, status));
-                            }
-                            writeln!(output).ok();
-                            output_annotated.push((String::new(), LineStatus::Unknown));
+                            let line = "  <LLM function>".to_string();
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
                         }
-                        ItemId::TypeAlias(alias_loc) => {
-                            let alias = &item_tree[alias_loc.id(&self.db)];
-                            let line = format!(
-                                "type {} = {}",
-                                alias.name,
-                                baml_compiler_hir::pretty::type_ref_to_str(&alias.type_ref)
+                        Some(FunctionBodyDef::Builtin(_)) => {
+                            let header = format!(
+                                "function {}({}) -> {}",
+                                func.name,
+                                params_str.join(", "),
+                                return_str
                             );
+                            writeln!(output, "{header}").ok();
+                            output_annotated.push((header, status));
+                            let line = "  <builtin>".to_string();
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
-                            writeln!(output).ok();
-                            output_annotated.push((String::new(), LineStatus::Unknown));
                         }
-                        ItemId::Client(client_loc) => {
-                            let client = &item_tree[client_loc.id(&self.db)];
-                            let line =
-                                format!("client {} (provider: {})", client.name, client.provider);
-                            writeln!(output, "{line}").ok();
-                            output_annotated.push((line, status));
-                            writeln!(output).ok();
-                            output_annotated.push((String::new(), LineStatus::Unknown));
-                        }
-                        ItemId::Test(test_loc) => {
-                            let test = &item_tree[test_loc.id(&self.db)];
-                            let line = format!("test {}", test.name);
-                            writeln!(output, "{line}").ok();
-                            output_annotated.push((line, status));
-                            writeln!(output).ok();
-                            output_annotated.push((String::new(), LineStatus::Unknown));
-                        }
-                        ItemId::Generator(gen_loc) => {
-                            let generator = &item_tree[gen_loc.id(&self.db)];
-                            let output_type =
-                                generator.output_type.as_deref().unwrap_or("<missing>");
-                            let line = format!(
-                                "generator {} (output_type: {})",
-                                generator.name, output_type
+                        None => {
+                            let header = format!(
+                                "function {}({}) -> {}",
+                                func.name,
+                                params_str.join(", "),
+                                return_str
                             );
+                            writeln!(output, "{header}").ok();
+                            output_annotated.push((header, status));
+                            let line = "  <missing body>".to_string();
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
-                            writeln!(output).ok();
-                            output_annotated.push((String::new(), LineStatus::Unknown));
-                        }
-                        ItemId::TemplateString(ts_loc) => {
-                            let ts = &item_tree[ts_loc.id(&self.db)];
-                            let line = format!("template_string {}", ts.name);
-                            writeln!(output, "{line}").ok();
-                            output_annotated.push((line, status));
-                            writeln!(output).ok();
-                            output_annotated.push((String::new(), LineStatus::Unknown));
-                        }
-                        ItemId::RetryPolicy(rp_loc) => {
-                            let rp = &item_tree[rp_loc.id(&self.db)];
-                            let line = format!("retry_policy {}", rp.name);
-                            writeln!(output, "{line}").ok();
-                            output_annotated.push((line, status));
-                            writeln!(output).ok();
-                            output_annotated.push((String::new(), LineStatus::Unknown));
                         }
                     }
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+
+                for (_, class) in &item_tree.classes {
+                    let header = format!("class {}", class.name);
+                    writeln!(output, "{header}").ok();
+                    output_annotated.push((header, status));
+
+                    for field in &class.fields {
+                        let ty_str = field
+                            .type_expr
+                            .as_ref()
+                            .map(|te| hir2_type_expr_to_string(&te.expr))
+                            .unwrap_or_else(|| "?".to_string());
+                        let field_str = format!("  {}: {}", field.name, ty_str);
+                        writeln!(output, "{field_str}").ok();
+                        output_annotated.push((field_str, status));
+                    }
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+
+                for (_, enum_def) in &item_tree.enums {
+                    let header = format!("enum {}", enum_def.name);
+                    writeln!(output, "{header}").ok();
+                    output_annotated.push((header, status));
+
+                    for variant in &enum_def.variants {
+                        let variant_str = format!("  {}", variant.name);
+                        writeln!(output, "{variant_str}").ok();
+                        output_annotated.push((variant_str, status));
+                    }
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+
+                for (_, alias) in &item_tree.type_aliases {
+                    let ty_str = alias
+                        .type_expr
+                        .as_ref()
+                        .map(|te| hir2_type_expr_to_string(&te.expr))
+                        .unwrap_or_else(|| "?".to_string());
+                    let line = format!("type {} = {}", alias.name, ty_str);
+                    writeln!(output, "{line}").ok();
+                    output_annotated.push((line, status));
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+
+                for (_, client) in &item_tree.clients {
+                    let provider_str = client
+                        .provider
+                        .as_ref()
+                        .map(|p| p.as_str().to_string())
+                        .unwrap_or_else(|| "<unknown>".to_string());
+                    let line = format!("client {} (provider: {})", client.name, provider_str);
+                    writeln!(output, "{line}").ok();
+                    output_annotated.push((line, status));
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+
+                for (_, test) in &item_tree.tests {
+                    let line = format!("test {}", test.name);
+                    writeln!(output, "{line}").ok();
+                    output_annotated.push((line, status));
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+
+                for (_, generator) in &item_tree.generators {
+                    let line = format!("generator {}", generator.name);
+                    writeln!(output, "{line}").ok();
+                    output_annotated.push((line, status));
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+
+                for (_, ts) in &item_tree.template_strings {
+                    let line = format!("template_string {}", ts.name);
+                    writeln!(output, "{line}").ok();
+                    output_annotated.push((line, status));
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
+                }
+
+                for (_, rp) in &item_tree.retry_policies {
+                    let line = format!("retry_policy {}", rp.name);
+                    writeln!(output, "{line}").ok();
+                    output_annotated.push((line, status));
+                    writeln!(output).ok();
+                    output_annotated.push((String::new(), LineStatus::Unknown));
                 }
             }
 
@@ -1263,10 +1290,9 @@ impl CompilerRunner {
     fn run_hir2(&mut self) {
         use baml_compiler2_ast::FunctionBodyDef;
         use baml_compiler2_hir::{
-            file_package::file_package,
-            namespace::{NamespaceId, namespace_items},
-            scope::ScopeKind,
+            file_package::file_package, namespace::NamespaceId, scope::ScopeKind,
         };
+        use baml_compiler2_ppir::namespace_items;
 
         let mut output = String::new();
         let mut output_annotated = Vec::new();
@@ -1398,7 +1424,7 @@ impl CompilerRunner {
                     LineStatus::Cached
                 };
 
-                let index = baml_compiler2_hir::file_semantic_index(&self.db, *source_file);
+                let index = baml_compiler2_ppir::file_semantic_index(&self.db, *source_file);
                 let items = &index.item_tree;
 
                 // Build file summary string
@@ -1490,10 +1516,6 @@ impl CompilerRunner {
                         ScopeKind::Block => "Block",
                         ScopeKind::Lambda => "Lambda",
                         ScopeKind::Item => "Item",
-                        ScopeKind::Let => "Let",
-                        ScopeKind::MatchArm => "MatchArm",
-                        ScopeKind::CatchClause => "CatchClause",
-                        ScopeKind::CatchArm => "CatchArm",
                         _ => unreachable!(),
                     };
                     let name_str = scope
@@ -1531,24 +1553,23 @@ impl CompilerRunner {
                     file_detail.push(format!("Diagnostics ({per_file_count}):"));
                     if let Some(extra) = &index.extra {
                         for diag in &extra.diagnostics {
-                            let baml_compiler2_hir::diagnostic::Hir2Diagnostic::DuplicateDefinition {
+                            if let baml_compiler2_hir::diagnostic::Hir2Diagnostic::DuplicateDefinition {
                                 name,
                                 scope,
                                 sites,
-                            } = diag else {
-                                continue;
-                            };
-                            let use_dot = sites[0].kind.is_member();
-                            let qualified = match (scope, use_dot) {
-                                (Some(s), true) => format!("{}.{}", s, name),
-                                _ => name.to_string(),
-                            };
-                            let in_scope = match (scope, use_dot) {
-                                (Some(s), false) => format!(" in `{}`", s),
-                                _ => String::new(),
-                            };
-                            file_detail
-                                .push(format!("  !! duplicate `{}`{}", qualified, in_scope,));
+                            } = diag {
+                                let use_dot = sites[0].kind.is_member();
+                                let qualified = match (scope, use_dot) {
+                                    (Some(s), true) => format!("{}.{}", s, name),
+                                    _ => name.to_string(),
+                                };
+                                let in_scope = match (scope, use_dot) {
+                                    (Some(s), false) => format!(" in `{}`", s),
+                                    _ => String::new(),
+                                };
+                                file_detail
+                                    .push(format!("  !! duplicate `{}`{}", qualified, in_scope,));
+                            }
                         }
                     }
                 }
@@ -1580,14 +1601,11 @@ impl CompilerRunner {
                             .as_ref()
                             .map(|te| hir2_type_expr_to_string(&te.expr))
                             .unwrap_or_else(|| "?".to_string());
-                        let body_kind = if f.declarative_meta.is_some() {
-                            "llm"
-                        } else {
-                            match &f.body {
-                                Some(FunctionBodyDef::Expr(_, _)) => "expr",
-                                Some(FunctionBodyDef::Builtin(_)) => "builtin",
-                                None => "-",
-                            }
+                        let body_kind = match &f.body {
+                            Some(FunctionBodyDef::Expr(_, _)) => "expr",
+                            Some(FunctionBodyDef::Builtin(_)) => "builtin",
+                            None if f.declarative_meta.is_some() => "llm",
+                            None => "-",
                         };
                         let sig = format!("({}) -> {}", params_str.join(", "), ret_str);
                         let mut detail = vec![
@@ -1615,33 +1633,31 @@ impl CompilerRunner {
                     let mut errors = Vec::new();
                     // Per-file Hir2Diagnostics (e.g. duplicate members within a scope)
                     for diag in file_diagnostics {
-                        let baml_compiler2_hir::diagnostic::Hir2Diagnostic::DuplicateDefinition {
+                        if let baml_compiler2_hir::diagnostic::Hir2Diagnostic::DuplicateDefinition {
                             name,
                             scope,
                             sites,
-                        } = diag
-                        else {
-                            continue;
-                        };
-                        let matches = match scope {
-                            Some(s) => s.as_str() == item_name,
-                            None => name.as_str() == item_name,
-                        };
-                        if matches {
-                            let use_dot = sites[0].kind.is_member();
-                            let qualified = match (scope, use_dot) {
-                                (Some(s), true) => format!("{}.{}", s, name),
-                                _ => name.to_string(),
+                        } = diag {
+                            let matches = match scope {
+                                Some(s) => s.as_str() == item_name,
+                                None => name.as_str() == item_name,
                             };
-                            errors.push(format!("!! duplicate `{}`", qualified));
-                            for (i, site) in sites.iter().enumerate() {
-                                errors.push(format!(
-                                    "   {}. {} at {}..{}",
-                                    i + 1,
-                                    site.kind.as_str(),
-                                    u32::from(site.range.start()),
-                                    u32::from(site.range.end()),
-                                ));
+                            if matches {
+                                let use_dot = sites[0].kind.is_member();
+                                let qualified = match (scope, use_dot) {
+                                    (Some(s), true) => format!("{}.{}", s, name),
+                                    _ => name.to_string(),
+                                };
+                                errors.push(format!("!! duplicate `{}`", qualified));
+                                for (i, site) in sites.iter().enumerate() {
+                                    errors.push(format!(
+                                        "   {}. {} at {}..{}",
+                                        i + 1,
+                                        site.kind.as_str(),
+                                        u32::from(site.range.start()),
+                                        u32::from(site.range.end()),
+                                    ));
+                                }
                             }
                         }
                     }
@@ -1945,6 +1961,8 @@ impl CompilerRunner {
                     .join("."),
                 Expr::If { .. } => "if ...".into(),
                 Expr::Match { .. } => "match ...".into(),
+                Expr::Catch { .. } => "catch ...".into(),
+                Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
                 Expr::Binary { op, .. } => format!("... {op:?} ..."),
                 Expr::Unary { op, expr: inner } => format!("{op:?} {}", expr_desc(*inner, body)),
                 Expr::Call { callee, args } => {
@@ -1966,8 +1984,6 @@ impl CompilerRunner {
                 Expr::FieldAccess { base, field } => format!("{}.{field}", expr_desc(*base, body)),
                 Expr::Index { base, .. } => format!("{}[...]", expr_desc(*base, body)),
                 Expr::Missing => "<missing>".into(),
-                Expr::Catch { .. } => "catch (...) { ... }".into(),
-                Expr::Throw { .. } => "throw { ... }".into(),
             }
         }
 
@@ -2016,7 +2032,7 @@ impl CompilerRunner {
             writeln!(output, "File: {file_path}").ok();
             output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
 
-            let index = baml_compiler2_hir::file_semantic_index(&self.db, *source_file);
+            let index = baml_compiler2_ppir::file_semantic_index(&self.db, *source_file);
 
             for (i, scope) in index.scopes.iter().enumerate() {
                 let scope_id = index.scope_ids[i];
@@ -2364,6 +2380,27 @@ impl CompilerRunner {
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
                         }
+                        Stmt::Throw { value } => {
+                            let ty = inference
+                                .expression_type(*value)
+                                .map(|t| t.to_string())
+                                .unwrap_or_else(|| "unknown".into());
+                            let desc = expr_desc(*value, body);
+                            let line = format!("{pad}throw {desc} : {ty}");
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            if matches!(&body.exprs[*value], Expr::Block { .. }) {
+                                render_expr(
+                                    *value,
+                                    body,
+                                    inference,
+                                    indent + 2,
+                                    output,
+                                    output_annotated,
+                                    status,
+                                );
+                            }
+                        }
                         Stmt::Expr(expr_id) => {
                             render_expr(
                                 *expr_id,
@@ -2386,32 +2423,6 @@ impl CompilerRunner {
                             output_annotated.push((line, status));
                             render_expr(
                                 *body_expr,
-                                body,
-                                inference,
-                                indent + 2,
-                                output,
-                                output_annotated,
-                                status,
-                            );
-                        }
-                        Stmt::For {
-                            binding,
-                            collection,
-                            body: for_body,
-                        } => {
-                            let coll_desc = expr_desc(*collection, body);
-                            let bind_name = match &body.patterns[*binding] {
-                                baml_compiler2_ast::Pattern::Binding(n) => n.to_string(),
-                                baml_compiler2_ast::Pattern::TypedBinding { name, .. } => {
-                                    name.to_string()
-                                }
-                                _ => "_".to_string(),
-                            };
-                            let line = format!("{pad}for {bind_name} in {coll_desc}");
-                            writeln!(output, "{line}").ok();
-                            output_annotated.push((line, status));
-                            render_expr(
-                                *for_body,
                                 body,
                                 inference,
                                 indent + 2,
@@ -2458,6 +2469,32 @@ impl CompilerRunner {
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
                         }
+                        Stmt::For {
+                            binding,
+                            collection,
+                            body: body_expr,
+                        } => {
+                            let pat_name = match &body.patterns[*binding] {
+                                Pattern::Binding(n) => n.to_string(),
+                                Pattern::TypedBinding { name, ty } => {
+                                    format!("{name}: {}", hir2_type_expr_to_string(ty))
+                                }
+                                other => format!("{other:?}"),
+                            };
+                            let coll_desc = expr_desc(*collection, body);
+                            let line = format!("{pad}for {pat_name} in {coll_desc}");
+                            writeln!(output, "{line}").ok();
+                            output_annotated.push((line, status));
+                            render_expr(
+                                *body_expr,
+                                body,
+                                inference,
+                                indent + 2,
+                                output,
+                                output_annotated,
+                                status,
+                            );
+                        }
                         Stmt::HeaderComment { name, level } => {
                             let line = format!("{pad}// [{level}] {name}");
                             writeln!(output, "{line}").ok();
@@ -2465,12 +2502,6 @@ impl CompilerRunner {
                         }
                         Stmt::Missing => {
                             let line = format!("{pad}<missing stmt>");
-                            writeln!(output, "{line}").ok();
-                            output_annotated.push((line, status));
-                        }
-                        Stmt::Throw { value } => {
-                            let desc = expr_desc(*value, body);
-                            let line = format!("{pad}throw {desc}");
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
                         }
@@ -2532,10 +2563,9 @@ impl CompilerRunner {
     /// Reuses HIR2's package grouping, then enriches items with type-checked info.
     fn build_tir2_column_data(&mut self) {
         use baml_compiler2_hir::{
-            file_package::file_package,
-            namespace::{NamespaceId, namespace_items},
-            scope::ScopeKind,
+            file_package::file_package, namespace::NamespaceId, scope::ScopeKind,
         };
+        use baml_compiler2_ppir::namespace_items;
 
         let mut sorted_files: Vec<_> = self.source_files.iter().collect();
         sorted_files.sort_by_key(|(path, _)| path.as_path());
@@ -2649,7 +2679,7 @@ impl CompilerRunner {
                     .map(|f| f.to_string_lossy().to_string())
                     .unwrap_or_else(|| path.display().to_string());
 
-                let index = baml_compiler2_hir::file_semantic_index(&self.db, *source_file);
+                let index = baml_compiler2_ppir::file_semantic_index(&self.db, *source_file);
                 let items = &index.item_tree;
 
                 // Build summary parts
@@ -3052,6 +3082,25 @@ impl CompilerRunner {
                         Stmt::Return(None) => {
                             lines.push(plain(format!("{pad}  return")));
                         }
+                        Stmt::Throw { value } => {
+                            if matches!(
+                                &body.exprs[*value],
+                                Expr::Block { .. } | Expr::If { .. } | Expr::Match { .. }
+                            ) {
+                                lines.push(plain(format!("{pad}  throw")));
+                                Self::render_expr_to_lines(
+                                    *value,
+                                    body,
+                                    inference,
+                                    indent + 2,
+                                    lines,
+                                );
+                            } else {
+                                let mut line = vec![DetailSpan::Code(format!("{pad}  throw "))];
+                                line.extend(expr_desc_spans(*value, body, inference));
+                                lines.push(line);
+                            }
+                        }
                         Stmt::Expr(e) => {
                             if matches!(
                                 &body.exprs[*e],
@@ -3074,30 +3123,6 @@ impl CompilerRunner {
                             line.push(DetailSpan::Code(")".into()));
                             lines.push(line);
                             Self::render_expr_to_lines(*wb, body, inference, indent + 4, lines);
-                        }
-                        Stmt::For {
-                            binding,
-                            collection,
-                            body: for_body,
-                        } => {
-                            let bind_name = match &body.patterns[*binding] {
-                                baml_compiler2_ast::Pattern::Binding(n) => n.to_string(),
-                                baml_compiler2_ast::Pattern::TypedBinding { name, .. } => {
-                                    name.to_string()
-                                }
-                                _ => "_".to_string(),
-                            };
-                            let mut line =
-                                vec![DetailSpan::Code(format!("{pad}  for {bind_name} in "))];
-                            line.extend(expr_desc_spans(*collection, body, inference));
-                            lines.push(line);
-                            Self::render_expr_to_lines(
-                                *for_body,
-                                body,
-                                inference,
-                                indent + 4,
-                                lines,
-                            );
                         }
                         Stmt::Assign { target, value } => {
                             let mut line = vec![DetailSpan::Code(format!("{pad}  "))];
@@ -3124,18 +3149,24 @@ impl CompilerRunner {
                         Stmt::Continue => {
                             lines.push(plain(format!("{pad}  continue")));
                         }
+                        Stmt::For {
+                            binding,
+                            collection,
+                            body: wb,
+                        } => {
+                            let pname = pat_desc(*binding, body);
+                            let mut line =
+                                vec![DetailSpan::Code(format!("{pad}  for {pname} in "))];
+                            line.extend(expr_desc_spans(*collection, body, inference));
+                            lines.push(line);
+                            Self::render_expr_to_lines(*wb, body, inference, indent + 4, lines);
+                        }
                         Stmt::HeaderComment { name, level } => {
                             let marker = "#".repeat(*level);
                             lines.push(plain(format!("{pad}  {marker} {name}")));
                         }
                         Stmt::Missing => {
                             lines.push(plain(format!("{pad}  <missing stmt>")));
-                        }
-                        Stmt::Throw { value } => {
-                            let desc = expr_desc_spans(*value, body, inference);
-                            let mut line = vec![DetailSpan::Code(format!("{pad}throw "))];
-                            line.extend(desc);
-                            lines.push(line);
                         }
                     }
                 }
@@ -3184,109 +3215,18 @@ impl CompilerRunner {
     }
 
     fn run_thir(&mut self) {
+        // The THIR phase used the legacy baml_compiler_tir pipeline which has been removed.
+        // Type inference is now handled by baml_compiler2_tir (see TIR2 tab).
         let mut output = String::new();
         let mut output_annotated = Vec::new();
-        let mut interactive_state = ThirInteractiveState::default();
 
-        // Build initial typing context with all function types
-        let globals = typing_context(&self.db, self.project_root)
-            .functions(&self.db)
-            .clone();
-        let class_fields = class_field_types(&self.db, self.project_root)
-            .classes(&self.db)
-            .clone();
-        let type_aliases_map = type_aliases(&self.db, self.project_root)
-            .aliases(&self.db)
-            .clone();
-        let _recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
-        let enum_variants_map = enum_variants(&self.db, self.project_root);
-        let enum_variants_data = enum_variants_map.enums(&self.db).clone();
+        let msg = "(THIR tab: legacy type-inference pipeline removed — see TIR2 tab for type info)"
+            .to_string();
+        writeln!(output, "{msg}").ok();
+        output_annotated.push((msg, LineStatus::Unknown));
 
-        let resolution_ctx =
-            baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
-
-        // Sort files alphabetically
-        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
-        sorted_files.sort_by_key(|(path, _)| path.as_path());
-
-        for (path, source_file) in sorted_files {
-            let file_path = path.display().to_string();
-            let file_recomputed = self.modified_files.contains(path);
-
-            writeln!(output, "File: {file_path}").ok();
-            output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
-            interactive_state
-                .source_lines
-                .push(format!("File: {file_path}"));
-            interactive_state.line_info.push(ThirLineInfo {
-                function_name: String::new(),
-                expr_type: None,
-                description: "File header".to_string(),
-            });
-
-            // Get HIR items for this file
-            let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
-            let items = items_struct.items(&self.db);
-
-            for item in items {
-                if let ItemId::Function(func_id) = item {
-                    let signature = function_signature(&self.db, *func_id);
-                    let sig_source_map = function_signature_source_map(&self.db, *func_id);
-                    let func_name = signature.name.to_string();
-                    let body = function_body(&self.db, *func_id);
-
-                    // Run type inference with global function types and type validation
-                    let inference_result = baml_compiler_tir::infer_function(
-                        &self.db,
-                        &signature,
-                        Some(&sig_source_map),
-                        &body,
-                        Some(globals.clone()),
-                        Some(class_fields.clone()),
-                        Some(type_aliases_map.clone()),
-                        Some(enum_variants_data.clone()),
-                        *func_id,
-                    );
-
-                    // Note: Type error collection moved to run_diagnostics() using collect_diagnostics()
-
-                    // Use tree view for both modes - interactive mode parses this afterward
-                    let tree_output = baml_compiler_tir::render_function_tree(
-                        &self.db,
-                        &resolution_ctx,
-                        &func_name,
-                        &signature,
-                        &body,
-                        &inference_result,
-                    );
-
-                    let status = if file_recomputed {
-                        LineStatus::Recomputed
-                    } else {
-                        LineStatus::Cached
-                    };
-
-                    for line in tree_output.lines() {
-                        writeln!(output, "{}", line).ok();
-                        output_annotated.push((line.to_string(), status));
-                    }
-                    writeln!(output).ok();
-                    output_annotated.push((String::new(), LineStatus::Unknown));
-                }
-            }
-
-            writeln!(output).ok();
-            output_annotated.push((String::new(), LineStatus::Unknown));
-            interactive_state.source_lines.push(String::new());
-            interactive_state.line_info.push(ThirLineInfo {
-                function_name: String::new(),
-                expr_type: None,
-                description: String::new(),
-            });
-        }
-
-        interactive_state.total_lines = interactive_state.line_info.len();
-        self.thir_interactive_state = interactive_state;
+        // Reset interactive state to empty
+        self.thir_interactive_state = ThirInteractiveState::default();
 
         self.phase_outputs.insert(CompilerPhase::Thir, output);
         self.phase_outputs_annotated
@@ -3294,110 +3234,14 @@ impl CompilerRunner {
     }
 
     fn run_typed_ir(&mut self) {
-        use baml_compiler_vir::{lower_from_hir, pretty_print};
-
+        // The TypedIR phase used the legacy baml_compiler_vir pipeline which has been removed.
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
-        // Build typing context and class fields for inference
-        let globals = typing_context(&self.db, self.project_root)
-            .functions(&self.db)
-            .clone();
-        let class_fields = class_field_types(&self.db, self.project_root)
-            .classes(&self.db)
-            .clone();
-        let type_aliases_map = type_aliases(&self.db, self.project_root)
-            .aliases(&self.db)
-            .clone();
-        let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
-        let enum_variants_map = enum_variants(&self.db, self.project_root);
-        let enum_variants_data = enum_variants_map.enums(&self.db).clone();
-
-        let resolution_ctx =
-            baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
-
-        // Sort files alphabetically
-        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
-        sorted_files.sort_by_key(|(path, _)| path.as_path());
-
-        for (path, source_file) in sorted_files {
-            let file_path = path.display().to_string();
-            let file_recomputed = self.modified_files.contains(path);
-
-            writeln!(output, "File: {file_path}").ok();
-            output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
-
-            // Get HIR items for this file
-            let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
-            let items = items_struct.items(&self.db);
-
-            for item in items {
-                if let ItemId::Function(func_id) = item {
-                    let signature = function_signature(&self.db, *func_id);
-                    let sig_source_map = function_signature_source_map(&self.db, *func_id);
-                    let func_name = signature.name.to_string();
-                    let body = function_body(&self.db, *func_id);
-
-                    // Skip non-expression bodies
-                    let baml_compiler_hir::FunctionBody::Expr(_, _) = &*body else {
-                        continue;
-                    };
-
-                    // Run type inference
-                    let inference_result = baml_compiler_tir::infer_function(
-                        &self.db,
-                        &signature,
-                        Some(&sig_source_map),
-                        &body,
-                        Some(globals.clone()),
-                        Some(class_fields.clone()),
-                        Some(type_aliases_map.clone()),
-                        Some(enum_variants_data.clone()),
-                        *func_id,
-                    );
-
-                    // Try to lower to TypedIR
-                    let status = if file_recomputed {
-                        LineStatus::Recomputed
-                    } else {
-                        LineStatus::Cached
-                    };
-
-                    let header = format!("=== Function: {} ===", func_name);
-                    writeln!(output, "{}", header).ok();
-                    output_annotated.push((header, status));
-
-                    match lower_from_hir(
-                        &body,
-                        &inference_result,
-                        &resolution_ctx,
-                        &type_aliases_map,
-                        &recursive_aliases,
-                    ) {
-                        Ok(typed_ir) => {
-                            // Pretty print the TypedIR
-                            let ir_output = pretty_print(&typed_ir);
-                            for line in ir_output.lines() {
-                                writeln!(output, "{}", line).ok();
-                                output_annotated.push((line.to_string(), status));
-                            }
-                        }
-                        Err(e) => {
-                            // Show error if lowering failed
-                            let error_line = format!("  <lowering failed: {}>", e);
-                            writeln!(output, "{}", error_line).ok();
-                            output_annotated.push((error_line, LineStatus::Recomputed));
-                        }
-                    }
-
-                    writeln!(output).ok();
-                    output_annotated.push((String::new(), LineStatus::Unknown));
-                }
-            }
-
-            writeln!(output).ok();
-            output_annotated.push((String::new(), LineStatus::Unknown));
-        }
+        let msg =
+            "(TypedIR tab: legacy VIR pipeline removed — see TIR2/Control Flow tabs)".to_string();
+        writeln!(output, "{msg}").ok();
+        output_annotated.push((msg, LineStatus::Unknown));
 
         self.phase_outputs.insert(CompilerPhase::TypedIr, output);
         self.phase_outputs_annotated
@@ -3423,7 +3267,7 @@ impl CompilerRunner {
             let file_path = path.display().to_string();
             let file_recomputed = self.modified_files.contains(path);
 
-            let index = baml_compiler2_hir::file_semantic_index(&self.db, *source_file);
+            let index = baml_compiler2_ppir::file_semantic_index(&self.db, *source_file);
             let item_tree = &index.item_tree;
 
             // Sort functions by name for deterministic output.
@@ -3499,166 +3343,15 @@ impl CompilerRunner {
     }
 
     fn run_mir(&mut self) {
-        use baml_compiler_hir::CompilerGenerated;
-
+        // The MIR phase used the legacy baml_compiler_vir/baml_compiler_mir pipelines which have
+        // been removed. MIR2 (baml_compiler2_mir) is the replacement — used internally by codegen.
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
-        // Build typing context and class fields map for MIR lowering
-        let file_list: Vec<_> = self.source_files.values().copied().collect();
-        let globals = typing_context(&self.db, self.project_root)
-            .functions(&self.db)
-            .clone();
-        let class_field_types_map = class_field_types(&self.db, self.project_root)
-            .classes(&self.db)
-            .clone();
-        let type_aliases_map = type_aliases(&self.db, self.project_root)
-            .aliases(&self.db)
-            .clone();
-        let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
-
-        // Build classes map (class name -> field name -> field index) for MIR lowering
-        // Also build class type tags for TypeTag switch optimization
-        let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
-        let mut class_type_tags: HashMap<String, i64> = HashMap::new();
-        let mut class_type_tag_counter = 0i64;
-        // Build enums map (enum name -> variant name -> variant index) for MIR lowering
-        let mut enums: HashMap<String, HashMap<String, usize>> = HashMap::new();
-        for file in &file_list {
-            let item_tree = baml_compiler_hir::file_item_tree(&self.db, *file);
-            let items_struct = baml_compiler_hir::file_items(&self.db, *file);
-            for item in items_struct.items(&self.db) {
-                if let ItemId::Class(class_loc) = item {
-                    let class = &item_tree[class_loc.id(&self.db)];
-                    let class_name = class.name.to_string();
-
-                    let mut field_indices = HashMap::new();
-                    for (idx, field) in class.fields.iter().enumerate() {
-                        field_indices.insert(field.name.to_string(), idx);
-                    }
-                    // Compute type tag for this class (CLASS_BASE + counter)
-                    let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
-                    class_type_tag_counter += 1;
-                    class_type_tags.insert(class_name.clone(), type_tag);
-                    classes.insert(class_name, field_indices);
-                }
-                if let ItemId::Enum(enum_loc) = item {
-                    let enum_def = &item_tree[enum_loc.id(&self.db)];
-                    let enum_name = enum_def.name.to_string();
-
-                    let mut variant_indices = HashMap::new();
-                    for (idx, variant) in enum_def.variants.iter().enumerate() {
-                        variant_indices.insert(variant.name.to_string(), idx);
-                    }
-                    enums.insert(enum_name, variant_indices);
-                }
-            }
-        }
-
-        let resolution_ctx =
-            baml_compiler_tir::TypeResolutionContext::new(&self.db, self.project_root);
-
-        // Sort files alphabetically
-        let mut sorted_files: Vec<_> = self.source_files.iter().collect();
-        sorted_files.sort_by_key(|(path, _)| path.as_path());
-
-        for (path, source_file) in sorted_files {
-            let file_path = path.display().to_string();
-            let file_recomputed = self.modified_files.contains(path);
-
-            writeln!(output, "File: {file_path}").ok();
-            output_annotated.push((format!("File: {file_path}"), LineStatus::Unknown));
-
-            // Get HIR items for this file
-            let items_struct = baml_compiler_hir::file_items(&self.db, *source_file);
-            let items = items_struct.items(&self.db);
-
-            let item_tree = baml_compiler_hir::file_item_tree(&self.db, *source_file);
-
-            for item in items {
-                if let ItemId::Function(func_id) = item {
-                    let func = &item_tree[func_id.id(&self.db)];
-
-                    // Skip compiler-generated functions (render_prompt, build_request, etc.)
-                    if let Some(ref cg) = func.compiler_generated {
-                        match cg {
-                            CompilerGenerated::ClientResolve { .. }
-                            | CompilerGenerated::LlmRenderPrompt { .. }
-                            | CompilerGenerated::LlmBuildRequest { .. }
-                            | CompilerGenerated::LlmCall { .. } => continue,
-                        }
-                    }
-
-                    let signature = function_signature(&self.db, *func_id);
-                    let sig_source_map = function_signature_source_map(&self.db, *func_id);
-                    let func_name = signature.name.to_string();
-                    let body = function_body(&self.db, *func_id);
-
-                    // Run type inference with global function types
-                    let inference_result = baml_compiler_tir::infer_function(
-                        &self.db,
-                        &signature,
-                        Some(&sig_source_map),
-                        &body,
-                        Some(globals.clone()),
-                        Some(class_field_types_map.clone()),
-                        None, // type_aliases
-                        None, // enum_variants
-                        *func_id,
-                    );
-
-                    // Lower HIR → VIR → MIR
-                    let mir_output = match baml_compiler_vir::lower_from_hir(
-                        &body,
-                        &inference_result,
-                        &resolution_ctx,
-                        &type_aliases_map,
-                        &recursive_aliases,
-                    ) {
-                        Ok(vir) => {
-                            let mir = baml_compiler_mir::lower(
-                                &signature,
-                                &vir,
-                                &self.db,
-                                &classes,
-                                &enums,
-                                &class_type_tags,
-                                &resolution_ctx,
-                                &type_aliases_map,
-                                &recursive_aliases,
-                            );
-                            baml_compiler_mir::pretty::display_function(&mir)
-                        }
-                        Err(baml_compiler_vir::LoweringError::LlmFunction) => {
-                            "(LLM function - no MIR)".to_string()
-                        }
-                        Err(err) => {
-                            format!("(no MIR due to errors: {})", err)
-                        }
-                    };
-
-                    let status = if file_recomputed {
-                        LineStatus::Recomputed
-                    } else {
-                        LineStatus::Cached
-                    };
-
-                    // Add function header
-                    writeln!(output, "=== Function: {} ===", func_name).ok();
-                    output_annotated.push((format!("=== Function: {} ===", func_name), status));
-
-                    for line in mir_output.lines() {
-                        writeln!(output, "{}", line).ok();
-                        output_annotated.push((line.to_string(), status));
-                    }
-                    writeln!(output).ok();
-                    output_annotated.push((String::new(), LineStatus::Unknown));
-                }
-            }
-
-            writeln!(output).ok();
-            output_annotated.push((String::new(), LineStatus::Unknown));
-        }
+        let msg =
+            "(MIR tab: legacy VIR/MIR pipeline removed — see Codegen tab for bytecode)".to_string();
+        writeln!(output, "{msg}").ok();
+        output_annotated.push((msg, LineStatus::Unknown));
 
         self.phase_outputs.insert(CompilerPhase::Mir, output);
         self.phase_outputs_annotated
@@ -3819,23 +3512,10 @@ impl CompilerRunner {
     }
 
     fn run_codegen(&mut self) {
-        // Include both user files and builtin files so codegen can compile
-        // builtin functions (e.g., baml.llm.render_prompt) that compiler-generated
-        // functions call.
-        let mut files: Vec<_> = self.source_files.values().copied().collect();
-        files.extend(&self.builtin_files);
-
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
-        let program = match baml_compiler_emit::compile_files(
-            &self.db,
-            &files,
-            baml_compiler_emit::OptLevel::One,
-            &baml_compiler_emit::CompileOptions {
-                emit_test_cases: false,
-            },
-        ) {
+        let program = match self.db.get_bytecode() {
             Ok(p) => p,
             Err(err) => {
                 writeln!(output, "=== NO CODEGEN DUE TO ERRORS ===").ok();
@@ -3882,7 +3562,7 @@ impl CompilerRunner {
         func_names.sort();
         for func_name in func_names {
             if let Some(&idx) = program.function_indices.get(func_name)
-                && let Some(baml_compiler_emit::Object::Function(func)) = program.objects.get(idx)
+                && let Some(bex_vm_types::Object::Function(func)) = program.objects.get(idx)
             {
                 let func_header = format!(
                     "\nFunction {} (arity: {}, kind: {:?}):",
@@ -3934,17 +3614,7 @@ impl CompilerRunner {
         let mut output = String::new();
         let mut output_annotated = Vec::new();
 
-        // Compile the program (include builtins so codegen can resolve builtin functions)
-        let mut files: Vec<_> = self.source_files.values().copied().collect();
-        files.extend(&self.builtin_files);
-        let program = match baml_compiler_emit::compile_files(
-            &self.db,
-            &files,
-            baml_compiler_emit::OptLevel::One,
-            &baml_compiler_emit::CompileOptions {
-                emit_test_cases: false,
-            },
-        ) {
+        let program = match self.db.get_bytecode() {
             Ok(p) => p,
             Err(err) => {
                 writeln!(output, "=== VM RUNNER ===").ok();
@@ -4091,15 +3761,7 @@ impl CompilerRunner {
         use bex_vm::{BexVm, VmExecState};
         use bex_vm_types::Object;
 
-        let files: Vec<_> = self.source_files.values().copied().collect();
-        let program = match baml_compiler_emit::compile_files(
-            &self.db,
-            &files,
-            baml_compiler_emit::OptLevel::One,
-            &baml_compiler_emit::CompileOptions {
-                emit_test_cases: false,
-            },
-        ) {
+        let program = match self.db.get_bytecode() {
             Ok(p) => p,
             Err(err) => {
                 self.vm_runner_state.execution_result = Some(VmExecutionResult::Error(format!(

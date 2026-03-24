@@ -1,16 +1,22 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== TYPE INFERENCE ===
-  Function Bar:
-    Return: Literal(Int(1), TyAttr(None))
-    Errors:
-      - Unknown type unknown_param_type
-  Function Foo:
-    Return: Literal(Int(1), TyAttr(None))
-    Errors:
-      - Unknown type blah
-  Function Baz:
-    Return: Null { attr: TyAttr(None) }
-    Errors:
-      - Unknown type unknown_optional
+=== TIR2 ===
+function user.Foo() -> unknown throws never {
+  { : 1
+    1 : 1
+  }
+  !! 131..136: unresolved type: blah
+}
+function user.Bar(x: unknown) -> int throws never {
+  { : 1
+    1 : 1
+  }
+  !! 208..229: unresolved type: unknown_param_type
+}
+function user.Baz() -> unknown? throws never {
+  { : null
+    null : null
+  }
+  !! 311..329: unresolved type: unknown_optional
+}

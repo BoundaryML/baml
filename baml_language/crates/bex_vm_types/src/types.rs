@@ -61,6 +61,11 @@ pub struct Program {
     /// E.g., `["baml.$init", "$init"]` — builtins before user package.
     /// Empty when there are no top-level let bindings in any package.
     pub package_init_order: Vec<String>,
+
+    /// Recursive type alias definitions for output format rendering.
+    /// Only recursive aliases are stored (non-recursive ones are expanded inline).
+    /// Keyed by [`baml_type::TypeName`] for consistent identity with `Ty::TypeAlias`.
+    pub recursive_type_alias_defs: IndexMap<baml_type::TypeName, Ty>,
 }
 
 /// Metadata for building a client tree at runtime.
@@ -359,13 +364,16 @@ pub struct ClassField {
     pub field_type: Ty,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub skip: bool,
+    pub field_attr: baml_type::FieldAttr,
 }
 
 /// Runtime class representation.
 #[derive(Clone, Debug)]
 pub struct Class {
-    /// Class name.
-    pub name: String,
+    /// Type identity: carries short name, module path, and display name.
+    /// Use `name.display_name` for the display string (e.g. "baml.llm.OrchestrationStep" or "Person").
+    pub name: baml_type::TypeName,
 
     /// Class fields with type and schema metadata.
     pub fields: Vec<ClassField>,
@@ -418,8 +426,9 @@ pub struct EnumVariant {
 /// Runtime enum representation.
 #[derive(Clone, Debug)]
 pub struct Enum {
-    /// Enum name.
-    pub name: String,
+    /// Type identity: carries short name, module path, and display name.
+    /// Use `name.display_name` for the display string.
+    pub name: baml_type::TypeName,
 
     /// Enum variants with schema metadata.
     pub variants: Vec<EnumVariant>,

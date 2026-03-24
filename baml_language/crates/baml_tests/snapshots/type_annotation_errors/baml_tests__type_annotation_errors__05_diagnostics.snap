@@ -1,8 +1,49 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:159:17 ]
+     │
+ 159 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:189:17 ]
+     │
+ 189 │ ╭─▶             _ => {
+     ┆ ┆   
+ 194 │ ├─▶             }
+     │ │                   
+     │ ╰─────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:208:17 ]
+     │
+ 208 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved type: Foo
+   ╭─[ type_malformed.baml:7:5 ]
+   │
+ 7 │ type Foo
+   │     ──┬─  
+   │       ╰─── unresolved type: Foo
+   │ 
+   │ Note: Error code: E0002
+───╯
+
   [parse] Error: Expected '=', found identifier
    ╭─[ type_malformed.baml:7:6 ]
    │
@@ -22,13 +63,3 @@ expression: output
     │ 
     │ Note: Error code: E0010
 ────╯
-
-  [type] Error: Unknown type `Foo`
-   ╭─[ type_malformed.baml:7:5 ]
-   │
- 7 │ type Foo
-   │     ──┬─  
-   │       ╰─── Unknown type `Foo`
-   │ 
-   │ Note: Error code: E0002
-───╯

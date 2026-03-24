@@ -41,21 +41,32 @@ test Foo {
 
 //----
 //- diagnostics
-// Error: Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
-//     ╭─[ misc_values.baml:18:3 ]
-//     │
-//  18 │   input {
-//     │   ──┬──  
-//     │     ╰──── Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
-//     │ 
-//     │ Note: Error code: E0034
-// ────╯
-// Error: Missing `args` property
-//     ╭─[ misc_values.baml:16:6 ]
-//     │
-//  16 │ test Foo {
-//     │      ─┬─  
-//     │       ╰─── Missing `args` property
-//     │ 
-//     │ Note: Error code: E0035
-// ────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

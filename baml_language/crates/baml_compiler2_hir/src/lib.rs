@@ -13,7 +13,7 @@
 //! - Cross-file aggregation: `namespace_items`, `package_items`
 
 pub mod body;
-pub mod builder;
+mod builder;
 pub mod contributions;
 pub mod diagnostic;
 pub mod file_package;
@@ -57,15 +57,6 @@ pub trait Db: baml_workspace::Db {
     fn compiler2_extra_files(&self) -> Option<baml_workspace::Compiler2ExtraFiles> {
         None
     }
-
-    /// Returns synthetic `Item::Let` items to inject into a file's HIR index.
-    ///
-    /// Used by tests to inject compiler-generated let bindings without needing
-    /// BAML surface syntax. The default implementation returns an empty Vec.
-    /// Override this in test databases to inject synthetic let items.
-    fn synthetic_items_for_file(&self, _file: SourceFile) -> Vec<baml_compiler2_ast::Item> {
-        Vec::new()
-    }
 }
 
 // ── compiler2_all_files ───────────────────────────────────────────────────────
@@ -106,9 +97,7 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
 pub fn file_semantic_index<'db>(db: &'db dyn Db, file: SourceFile) -> FileSemanticIndex<'db> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
-    let (mut items, _ast_diagnostics) = baml_compiler2_ast::lower_file(&tree);
-    // Merge any synthetic compiler-generated items (e.g., Item::Let for tests).
-    items.extend(db.synthetic_items_for_file(file));
+    let (items, _ast_diagnostics) = baml_compiler2_ast::lower_file(&tree);
     SemanticIndexBuilder::new(db, file).build(items, file_range)
 }
 

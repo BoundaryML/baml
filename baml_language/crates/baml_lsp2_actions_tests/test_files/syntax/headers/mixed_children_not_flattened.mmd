@@ -1,0 +1,10 @@
+flowchart TD
+  subgraph sg0["Parent"]
+    direction TB
+    subgraph sg1["MD Child"]
+      direction TB
+      n0["Loop Child"]
+    end
+  end
+%%__BAML_SPANMAP__={"n0":{"file_path":"tests/validation_files/headers/mixed_children_not_flattened.baml","start_line":5,"start":8,"end_line":5,"end":22}}
+  click n0 call bamlMermaidNodeClick() "Go to source"

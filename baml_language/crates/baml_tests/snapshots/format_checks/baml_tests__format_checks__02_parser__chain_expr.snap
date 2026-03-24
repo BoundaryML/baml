@@ -966,13 +966,13 @@ SOURCE_FILE
             L_PAREN "("
             R_PAREN ")"
         SEMICOLON ";"
-        PATH_EXPR "// ===== Env access =====
+        ENV_ACCESS_EXPR "// ===== Env access =====
     env.API_KEY"
           WORD "env"
           DOT "."
           WORD "API_KEY"
         SEMICOLON ";"
-        PATH_EXPR "env.DATABASE_URL"
+        ENV_ACCESS_EXPR "env.DATABASE_URL"
           WORD "env"
           DOT "."
           WORD "DATABASE_URL"

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
 use baml_compiler2_ast::ExprId;
@@ -62,11 +62,24 @@ impl VizContext {
 
 use baml_compiler2_tir::ty::{PrimitiveType, QualifiedTypeName, Ty as Tir2Ty};
 
-fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
+pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
     let module_path = std::iter::once(qtn.package().clone())
         .chain(qtn.namespace().iter().cloned())
         .collect::<Vec<_>>();
-    let display_name = smol_str::SmolStr::new(qtn.to_string());
+    // For user-defined types (package = "user"), display with only the local
+    // namespace path so snapshots show `Point` rather than `user.Point`.
+    // For builtin types (package = "baml", etc.), keep the full FQ path.
+    let display_name = if qtn.package().as_str() == "user" {
+        let parts: Vec<_> = qtn
+            .namespace()
+            .iter()
+            .map(|n| n.to_string())
+            .chain(std::iter::once(qtn.name().to_string()))
+            .collect();
+        smol_str::SmolStr::new(parts.join("."))
+    } else {
+        smol_str::SmolStr::new(qtn.to_string())
+    };
     TypeName {
         name: qtn.name().clone(),
         module_path,
@@ -74,7 +87,11 @@ fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
     }
 }
 
-pub fn convert_tir2_ty(ty: &Tir2Ty) -> Ty {
+pub fn convert_tir2_ty(
+    ty: &Tir2Ty,
+    type_aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
+    recursive_aliases: &HashSet<QualifiedTypeName>,
+) -> Ty {
     let attr = TyAttr::default();
     match ty {
         // Primitives
@@ -91,7 +108,18 @@ pub fn convert_tir2_ty(ty: &Tir2Ty) -> Ty {
         // Named types
         Tir2Ty::Class(qtn) => Ty::Class(qtn_to_type_name(qtn), attr),
         Tir2Ty::Enum(qtn) => Ty::Enum(qtn_to_type_name(qtn), attr),
-        Tir2Ty::TypeAlias(qtn) => Ty::TypeAlias(qtn_to_type_name(qtn), attr),
+        Tir2Ty::TypeAlias(qtn) => {
+            if recursive_aliases.contains(qtn) {
+                // Keep recursive aliases opaque — they need runtime resolution
+                Ty::TypeAlias(qtn_to_type_name(qtn), attr)
+            } else if let Some(target) = type_aliases.get(qtn) {
+                // Expand non-recursive aliases inline
+                convert_tir2_ty(target, type_aliases, recursive_aliases)
+            } else {
+                // Unknown alias (e.g. from another package) — keep opaque
+                Ty::TypeAlias(qtn_to_type_name(qtn), attr)
+            }
+        }
 
         // EnumVariant → preserve variant-level type info
         Tir2Ty::EnumVariant(qtn, variant) => {
@@ -99,28 +127,46 @@ pub fn convert_tir2_ty(ty: &Tir2Ty) -> Ty {
         }
 
         // Containers
-        Tir2Ty::List(inner) => Ty::List(Box::new(convert_tir2_ty(inner)), attr),
+        Tir2Ty::List(inner) => Ty::List(
+            Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
+            attr,
+        ),
         Tir2Ty::Map(k, v) => Ty::Map {
-            key: Box::new(convert_tir2_ty(k)),
-            value: Box::new(convert_tir2_ty(v)),
+            key: Box::new(convert_tir2_ty(k, type_aliases, recursive_aliases)),
+            value: Box::new(convert_tir2_ty(v, type_aliases, recursive_aliases)),
             attr,
         },
-        Tir2Ty::Union(members) => Ty::Union(members.iter().map(convert_tir2_ty).collect(), attr),
-        Tir2Ty::Optional(inner) => Ty::Optional(Box::new(convert_tir2_ty(inner)), attr),
+        Tir2Ty::Union(members) => Ty::Union(
+            members
+                .iter()
+                .map(|m| convert_tir2_ty(m, type_aliases, recursive_aliases))
+                .collect(),
+            attr,
+        ),
+        Tir2Ty::Optional(inner) => Ty::Optional(
+            Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
+            attr,
+        ),
         Tir2Ty::Literal(lit, _freshness) => Ty::Literal(lit.clone(), attr),
 
         // Evolving containers → freeze to regular containers
-        Tir2Ty::EvolvingList(inner) => Ty::List(Box::new(convert_tir2_ty(inner)), attr),
+        Tir2Ty::EvolvingList(inner) => Ty::List(
+            Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
+            attr,
+        ),
         Tir2Ty::EvolvingMap(k, v) => Ty::Map {
-            key: Box::new(convert_tir2_ty(k)),
-            value: Box::new(convert_tir2_ty(v)),
+            key: Box::new(convert_tir2_ty(k, type_aliases, recursive_aliases)),
+            value: Box::new(convert_tir2_ty(v, type_aliases, recursive_aliases)),
             attr,
         },
 
         // Functions — drop param names
         Tir2Ty::Function { params, ret } => Ty::Function {
-            params: params.iter().map(|(_, t)| convert_tir2_ty(t)).collect(),
-            ret: Box::new(convert_tir2_ty(ret)),
+            params: params
+                .iter()
+                .map(|(_, t)| convert_tir2_ty(t, type_aliases, recursive_aliases))
+                .collect(),
+            ret: Box::new(convert_tir2_ty(ret, type_aliases, recursive_aliases)),
             attr,
         },
 
@@ -286,6 +332,10 @@ struct LoweringContext<'db> {
     #[allow(dead_code)]
     class_type_tags: HashMap<String, i64>,
 
+    // Type alias maps for inline expansion in convert_tir2_ty
+    type_aliases: HashMap<QualifiedTypeName, Tir2Ty>,
+    recursive_aliases: HashSet<QualifiedTypeName>,
+
     // Watch/viz state (carried forward as-is)
     watched_locals_stack: Vec<Local>,
     #[allow(dead_code)]
@@ -418,6 +468,11 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
+        // --- Build type alias maps for inline expansion ---
+        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
+        let recursive_aliases =
+            baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+
         // --- Determine arity from function signature ---
         let sig = function_signature(db, func_loc);
         let arity = sig.params.len();
@@ -462,6 +517,8 @@ impl<'db> LoweringContext<'db> {
             class_fields,
             enum_variants,
             class_type_tags,
+            type_aliases,
+            recursive_aliases,
             watched_locals_stack: Vec::new(),
             viz_context: VizContext::new(func_data.name.to_string()),
             pending_header: None,
@@ -593,6 +650,11 @@ impl<'db> LoweringContext<'db> {
             }
         }
 
+        // --- Build type alias maps for inline expansion ---
+        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
+        let recursive_aliases =
+            baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+
         LoweringContext {
             db,
             builder: MirBuilder::new(let_name.clone(), 0),
@@ -611,6 +673,8 @@ impl<'db> LoweringContext<'db> {
             class_fields,
             enum_variants,
             class_type_tags,
+            type_aliases,
+            recursive_aliases,
             watched_locals_stack: Vec::new(),
             viz_context: VizContext::new(let_name.to_string()),
             pending_header: None,
@@ -638,7 +702,7 @@ impl<'db> LoweringContext<'db> {
     fn expr_ty(&self, expr_id: AstExprId) -> Ty {
         self.expr_types
             .get(&expr_id)
-            .map(convert_tir2_ty)
+            .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
             })
@@ -648,7 +712,7 @@ impl<'db> LoweringContext<'db> {
     fn pat_ty(&self, pat_id: AstPatId) -> Ty {
         self.pat_types
             .get(&pat_id)
-            .map(convert_tir2_ty)
+            .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
             })
@@ -664,7 +728,7 @@ impl<'db> LoweringContext<'db> {
         let pkg_items = package_items(self.db, pkg_id);
         let mut diags = Vec::new();
         let tir_ty = lower_type_expr(self.db, ty_expr, &pkg_items, &[], &mut diags);
-        convert_tir2_ty(&tir_ty)
+        convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
     }
 }
 
@@ -690,7 +754,7 @@ impl<'db> LoweringContext<'db> {
             .map(|te| {
                 let mut diags = Vec::new();
                 let tir_ty = lower_type_expr(self.db, te, &pkg_items, &[], &mut diags);
-                convert_tir2_ty(&tir_ty)
+                convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
             })
             .unwrap_or(Ty::Null {
                 attr: TyAttr::default(),
@@ -731,7 +795,7 @@ impl<'db> LoweringContext<'db> {
                             let tir_ty = baml_compiler2_tir::ty::Ty::Class(
                                 baml_compiler2_tir::lower_type_expr::qualify_def(self.db, def, cn),
                             );
-                            convert_tir2_ty(&tir_ty)
+                            convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
                         })
                     })
                     .unwrap_or(Ty::Null {
@@ -740,7 +804,7 @@ impl<'db> LoweringContext<'db> {
             } else {
                 let mut diags = Vec::new();
                 let tir_ty = lower_type_expr(self.db, param_te, &pkg_items, &[], &mut diags);
-                convert_tir2_ty(&tir_ty)
+                convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
             };
             let local = self
                 .builder
@@ -2534,7 +2598,7 @@ impl<'db> LoweringContext<'db> {
                 let ty = self
                     .pat_types
                     .get(&pat_id)
-                    .map(convert_tir2_ty)
+                    .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
                     .unwrap_or_else(|| self.builder.local_ty(scrutinee));
                 let local = self
                     .builder

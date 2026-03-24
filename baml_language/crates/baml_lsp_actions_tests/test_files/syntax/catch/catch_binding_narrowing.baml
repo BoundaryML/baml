@@ -29,48 +29,77 @@ function MultipleNarrowedArms(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: Unreachable catch arm
-//     ╭─[ catch_catch_binding_narrowing.baml:24:5 ]
-//     │
-//  24 │     TimeoutError => "timeout",
-//     │     ──────┬─────  
-//     │           ╰─────── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
-// ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_catch_binding_narrowing.baml:25:5 ]
-//     │
-//  25 │     ParseError => "parse error",
-//     │     ─────┬────  
-//     │          ╰────── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
-// ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_catch_binding_narrowing.baml:26:5 ]
-//     │
-//  26 │     _ => "unknown"
-//     │     ┬  
-//     │     ╰── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
-// ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_catch_binding_narrowing.baml:16:5 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//     ╭─[ catch_catch_binding_narrowing.baml:16:21 ]
 //     │
 //  16 │     TimeoutError => "retry",
-//     │     ──────┬─────  
-//     │           ╰─────── Unreachable catch arm
+//     │                     ───┬───  
+//     │                        ╰───── unreachable arm
 //     │ 
-//     │ Note: Error code: E0095
+//     │ Note: Error code: E0001
 // ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_catch_binding_narrowing.baml:17:5 ]
+// Error: unreachable arm
+//     ╭─[ catch_catch_binding_narrowing.baml:17:10 ]
 //     │
 //  17 │     _ => "other"
-//     │     ┬  
-//     │     ╰── Unreachable catch arm
+//     │          ───┬───  
+//     │             ╰───── unreachable arm
 //     │ 
-//     │ Note: Error code: E0095
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ catch_catch_binding_narrowing.baml:24:21 ]
+//     │
+//  24 │     TimeoutError => "timeout",
+//     │                     ────┬────  
+//     │                         ╰────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ catch_catch_binding_narrowing.baml:25:19 ]
+//     │
+//  25 │     ParseError => "parse error",
+//     │                   ──────┬──────  
+//     │                         ╰──────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ catch_catch_binding_narrowing.baml:26:10 ]
+//     │
+//  26 │     _ => "unknown"
+//     │          ────┬────  
+//     │              ╰────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
 // ────╯

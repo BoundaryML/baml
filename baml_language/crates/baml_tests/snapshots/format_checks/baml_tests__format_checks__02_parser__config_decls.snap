@@ -340,7 +340,7 @@ SOURCE_FILE
           CONFIG_ITEM
             WORD "api_key"
             CONFIG_VALUE
-              PATH_EXPR "env.OPENAI_API_KEY"
+              ENV_ACCESS_EXPR "env.OPENAI_API_KEY"
                 WORD "env"
                 DOT "."
                 WORD "OPENAI_API_KEY"
@@ -920,7 +920,7 @@ llm /* 6 type trailing */
           CONFIG_ITEM
             WORD "api_key"
             CONFIG_VALUE
-              PATH_EXPR "env.OPENAI_API_KEY"
+              ENV_ACCESS_EXPR "env.OPENAI_API_KEY"
                 WORD "env"
                 DOT "."
                 WORD "OPENAI_API_KEY"

@@ -28,7 +28,35 @@ function ClassifyEmail(email: Email) -> Category {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 //
 //- semantic_tokens
 // llm_function.baml:1:1 (keyword) len=5 "class"
@@ -55,8 +83,8 @@ function ClassifyEmail(email: Email) -> Category {
 // llm_function.baml:18:1 (keyword) len=8 "function"
 // llm_function.baml:18:10 (function) len=13 "ClassifyEmail"
 // llm_function.baml:18:24 (parameter) len=5 "email"
-// llm_function.baml:18:31 (class) len=5 "Email"
-// llm_function.baml:18:41 (enum) len=8 "Category"
+// llm_function.baml:18:31 (namespace) len=5 "Email"
+// llm_function.baml:18:41 (namespace) len=8 "Category"
 // llm_function.baml:19:3 (property) len=6 "client"
 // llm_function.baml:20:3 (property) len=6 "prompt"
 // llm_function.baml:20:10 (string) len=1 "#"

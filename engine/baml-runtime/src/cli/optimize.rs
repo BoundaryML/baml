@@ -267,10 +267,8 @@ impl OptimizeArgs {
 
         self.dotenv.load()?;
 
-        // Suppress BAML logging and tracing when TUI is active
+        // Redirect BAML logging to a file when TUI is active (instead of suppressing it)
         if !self.no_ui {
-            // Set BAML_LOG=off to disable all logging output
-            std::env::set_var("BAML_LOG", "off");
             // Remove BAML_TRACE_FILE to prevent trace output during TUI
             std::env::remove_var("BAML_TRACE_FILE");
         }
@@ -485,6 +483,11 @@ impl OptimizeArgs {
         // Launch live TUI in a separate thread (default behavior, unless --no-ui)
         let tui_handle = if !self.no_ui {
             let run_dir_clone = run_dir.clone();
+            // Redirect BAML log output to a file so the TUI can display it on error
+            let log_file_path = run_dir.join("optimize.log");
+            if let Err(e) = baml_log::set_log_file(&log_file_path) {
+                eprintln!("Warning: could not redirect logs to file: {}", e);
+            }
             println!("Launching live TUI viewer...");
             println!("(Press 'q' to close TUI, 'Enter' to stop optimization and apply selected candidate)\n");
 
@@ -505,6 +508,8 @@ impl OptimizeArgs {
             Ok(result) => {
                 // If TUI was launched in live mode, wait for it to close and get the selected candidate
                 if let Some(handle) = tui_handle {
+                    // Stop redirecting logs now that optimization is done
+                    let _ = baml_log::clear_log_file();
                     // Wait for TUI to close - user can press Enter to apply a candidate
                     let tui_result = handle.join();
 
@@ -586,12 +591,54 @@ impl OptimizeArgs {
                 Ok(OptimizeRunResult::Success)
             }
             Err(e) => {
-                // If TUI was launched, wait for it to close even on error
+                // Build a detailed error message from the full anyhow chain
+                let mut detail = String::new();
+                for (i, cause) in e.chain().enumerate() {
+                    if i == 0 {
+                        detail.push_str(&format!("{cause}\n"));
+                    } else {
+                        detail.push_str(&format!("  Caused by: {cause}\n"));
+                    }
+                }
+
+                // Signal the error to the TUI via file, then wait for it to close
                 if let Some(handle) = tui_handle {
+                    // Stop redirecting logs before writing error
+                    let _ = baml_log::clear_log_file();
+
+                    // Append unique error/warning lines from the log file
+                    let log_path = run_dir.join("optimize.log");
+                    if let Ok(log_content) = std::fs::read_to_string(&log_path) {
+                        let mut seen = std::collections::HashSet::new();
+                        let error_lines: Vec<&str> = log_content
+                            .lines()
+                            .rev()
+                            .filter(|line| {
+                                line.contains("ERROR")
+                                    || line.contains("WARN")
+                                    || line.contains("error")
+                            })
+                            .filter(|line| seen.insert(*line))
+                            .take(15)
+                            .collect();
+                        if !error_lines.is_empty() {
+                            detail.push_str("\nRecent log errors:\n");
+                            for line in error_lines.into_iter().rev() {
+                                detail.push_str(&format!("  {line}\n"));
+                            }
+                        }
+                    }
+
+                    if let Ok(storage) =
+                        crate::optimize::storage::OptimizationStorage::from_existing(&run_dir)
+                    {
+                        let _ = storage.write_error(&detail);
+                    }
+                    // TUI will detect error.json and quit; wait for it
                     let _ = handle.join();
                 }
 
-                eprintln!("\nOptimization failed: {e}");
+                eprintln!("\nOptimization failed:\n{detail}");
                 Ok(OptimizeRunResult::Failed)
             }
         }

@@ -18,12 +18,32 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// Error: remap_roles values must be quoted strings
-//    ╭─[ client_remap_role_non_string_values.baml:7:16 ]
-//    │
-//  7 │       assistant 123
-//    │                ──┬─  
-//    │                  ╰─── remap_roles values must be quoted strings
-//    │ 
-//    │ Note: Error code: E0044
-// ───╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

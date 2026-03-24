@@ -1,55 +1,54 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function ConsecutiveHeaders() -> string {
-    notify_block FirstHeader
-    notify_block SecondHeader
-    notify_block ThirdHeader
-    notify_block SubsectionA
-    notify_block SubsectionB
-    notify_block SubsectionC
+function user.ConsecutiveHeaders() -> string {
+    notify_block First Header
+    notify_block Second Header
+    notify_block Third Header
+    notify_block Subsection A
+    notify_block Subsection B
+    notify_block Subsection C
     load_const "multiple consecutive headers"
     return
 }
 
-function HeaderLevels() -> string {
-    notify_block Level1
-    notify_block Level2
-    notify_block Level3
-    notify_block Level4
-    notify_block Level5
-    notify_block Level6
-    notify_block Level7-Morethan6levels
-    notify_block Level8
-    notify_block Level9
+function user.HeaderLevels() -> string {
+    notify_block Level 1
+    notify_block Level 2
+    notify_block Level 3
+    notify_block Level 4
+    notify_block Level 5
+    notify_block Level 6
+    notify_block Level 7 - More than 6 levels
+    notify_block Level 8
+    notify_block Level 9
     load_const "deep nesting"
     return
 }
 
-function HeaderOnlyFunction() -> string {
-    notify_block JustHeaders
-    notify_block NoCode
-    notify_block OnlyDocumentation
-    notify_block PureAnnotation
-    notify_block NoExpressions
-    notify_block UntilTheEnd
+function user.HeaderOnlyFunction() -> string {
+    notify_block Just Headers
+    notify_block No Code
+    notify_block Only Documentation
+    notify_block Pure Annotation
+    notify_block No Expressions
+    notify_block Until The End
     load_const "default"
     return
 }
 
-function HeadersAndComments() -> string {
-    notify_block HeaderBeforeComment
-    notify_block HeaderAfterComment
-    notify_block HeaderAfterDocComment
+function user.HeadersAndComments() -> string {
+    notify_block Header Before Comment
+    notify_block Header After Comment
+    notify_block Header After Doc Comment
     load_const "test"
     return
 }
 
-function HeadersAroundExpressions() -> string {
-    notify_block BeforeLet
-    notify_block AfterLet
-    notify_block BeforeIf
-    viz_enter BeforeIf
+function user.HeadersAroundExpressions() -> string {
+    notify_block Before Let
+    notify_block After Let
+    notify_block Before If
     load_const 5
     load_const 0
     cmp_op >
@@ -57,115 +56,108 @@ function HeadersAroundExpressions() -> string {
     jump L1
 
   L0:
-    notify_block InsideElse
+    notify_block Inside Else
     jump L2
 
   L1:
-    notify_block InsideIf
+    notify_block Inside If
 
   L2:
-    viz_exit BeforeIf
-    notify_block AfterIf
-    notify_block BeforeFor
+    notify_block After If
+    notify_block Before For
     load_const 1
     load_const 2
     load_const 3
     alloc_array 3
-    store_var _iter
-    load_var _iter
-    call baml.Array.length
-    store_var _len
+    store_var _4
     load_const 0
-    store_var _i
-    viz_enter BeforeFor
+    store_var __for_idx
 
   L3:
-    load_var _i
-    load_var _len
+    load_var __for_idx
+    load_var _4
+    call baml.Array.length
     cmp_op <
     pop_jump_if_false L4
     jump L5
 
   L4:
-    viz_exit BeforeFor
-    notify_block AfterFor
-    notify_block FinalSection
+    notify_block After For
+    notify_block Final Section
     load_const 5
     return
 
   L5:
-    load_var _iter
-    load_var _i
+    load_var _4
+    load_var __for_idx
     load_array_element
     store_var i
-    load_var _i
+    notify_block Inside For
+    load_var __for_idx
     load_const 1
     bin_op +
-    store_var _i
-    notify_block InsideFor
+    store_var __for_idx
     jump L3
 }
 
-function HeadersInComplexNesting() -> string {
-    notify_block MainFunction
-    notify_block InsideBlockExpression
-    viz_enter InsideBlockExpression
+function user.HeadersInComplexNesting() -> string {
+    notify_block Main Function
+    notify_block Inside Block Expression
     load_const true
     pop_jump_if_false L0
     jump L1
 
   L0:
-    notify_block InsideElse
+    notify_block Inside Else
     load_const "else value"
     jump L2
 
   L1:
-    notify_block InsideIfTrue
-    notify_block VeryDeepBlock
-    notify_block BacktoIfLevel
+    notify_block Inside If True
+    notify_block Very Deep Block
+    notify_block Back to If Level
     load_const "deep value"
 
   L2:
-    viz_exit InsideBlockExpression
-    notify_block BacktoBlockLevel
+    notify_block Back to Block Level
     store_var result
-    notify_block BacktoFunctionLevel
+    notify_block Back to Function Level
     load_var result
     return
 }
 
-function HeadersWithSpecialChars() -> string {
+function user.HeadersWithSpecialChars() -> string {
     notify_block Header-With-Dashes
     notify_block Header_With_Underscores
     notify_block Header.With.Dots
-    notify_block HeaderWithSlashes
+    notify_block Header/With/Slashes
     notify_block Header\With\Backslashes
     notify_block Header|With|Pipes
     load_const "special chars"
     return
 }
 
-function HeadersWithWhitespace() -> string {
-    notify_block ExtraSpacesBeforeTitle
-    notify_block MixedTabsAndSpaces
-    notify_block AllTabs
-    notify_block TrailingSpaces
-    notify_block MultipleSpacesBetweenWords
+function user.HeadersWithWhitespace() -> string {
+    notify_block Extra Spaces Before Title
+    notify_block Mixed Tabs And Spaces
+    notify_block All Tabs
+    notify_block Trailing Spaces
+    notify_block Multiple  Spaces  Between  Words
     load_const "whitespace test"
     return
 }
 
-function UnicodeHeaders() -> string {
+function user.UnicodeHeaders() -> string {
     notify_block 你好世界
-    notify_block Émojis🎉🎊
-    notify_block Special«Characters»™
+    notify_block Émojis 🎉🎊
+    notify_block Special «Characters» ™
     load_const "test"
     return
 }
 
-function VeryLongHeaderTitle() -> string {
-    notify_block ThisIsAnExtremelyLongHeaderTitleThatGoesOnAndOnAndOnAndContainsManyWordsToTestHowTheParserHandlesVeryLongHeaderTitlesThatMightSpanMultipleLinesInSomeEditorsButShouldStillBeParsedAsASingleHeader
-    notify_block AnotherLongTitleWithSpecialCharacters!@$%^&*()_+-=[]{}|;':",.<>?AndNumbers1234567890
+function user.VeryLongHeaderTitle() -> string {
+    notify_block This Is An Extremely Long Header Title That Goes On And On And On And Contains Many Words To Test How The Parser Handles Very Long Header Titles That Might Span Multiple Lines In Some Editors But Should Still Be Parsed As A Single Header
+    notify_block Another Long Title With Special Characters !@#$%^&*()_+-=[]{}|;':",./<>? And Numbers 1234567890
     load_const "long headers"
     return
 }

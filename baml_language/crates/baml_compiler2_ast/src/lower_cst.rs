@@ -286,58 +286,50 @@ pub(crate) fn synthesize_llm_builtin_call(
         Name::new(builtin_name),
     ]));
 
-    // Build the call argument list.
-    // For `call_llm_function`, prepend the client as the first argument.
-    // For companion builtins (render_prompt, build_request), pass only function_name and args.
-    let call = if builtin_name == "call_llm_function" {
-        // Build the client expression from the client name.
-        let client_arg = match client_name {
-            Some(name) if name.contains('/') => {
-                // Shorthand client (e.g. "openai/gpt-4o"): build an inline Client object.
-                let name_lit = alloc(Expr::Literal(Literal::String(name.to_string())));
-                let ct_path = alloc(Expr::Path(vec![
-                    Name::new("baml"),
-                    Name::new("llm"),
-                    Name::new("ClientType"),
-                ]));
-                let ct_variant = alloc(Expr::FieldAccess {
-                    base: ct_path,
-                    field: Name::new("Primitive"),
-                });
-                let sub = alloc(Expr::Array { elements: vec![] });
-                let retry = alloc(Expr::Null);
-                let counter = alloc(Expr::Literal(Literal::Int(0)));
-                alloc(Expr::Object {
-                    type_name: Some(Name::new("Client")),
-                    fields: vec![
-                        (Name::new("name"), name_lit),
-                        (Name::new("client_type"), ct_variant),
-                        (Name::new("sub_clients"), sub),
-                        (Name::new("retry"), retry),
-                        (Name::new("counter"), counter),
-                    ],
-                    spreads: vec![],
-                })
-            }
-            Some(name) => {
-                // Named client: Expr::Path(["MyClient"]) — TIR resolves to the let binding.
-                alloc(Expr::Path(vec![Name::new(name)]))
-            }
-            None => {
-                // No client specified (e.g. missing `client` field) — use null as fallback.
-                alloc(Expr::Null)
-            }
-        };
-        alloc(Expr::Call {
-            callee,
-            args: vec![client_arg, fn_name_expr, args_map],
-        })
-    } else {
-        alloc(Expr::Call {
-            callee,
-            args: vec![fn_name_expr, args_map],
-        })
+    // Build the client expression from the client name.
+    // All LLM builtins (call_llm_function, render_prompt, build_request) take
+    // a Client as the first argument.
+    let client_arg = match client_name {
+        Some(name) if name.contains('/') => {
+            // Shorthand client (e.g. "openai/gpt-4o"): build an inline Client object.
+            let name_lit = alloc(Expr::Literal(Literal::String(name.to_string())));
+            let ct_path = alloc(Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("llm"),
+                Name::new("ClientType"),
+            ]));
+            let ct_variant = alloc(Expr::FieldAccess {
+                base: ct_path,
+                field: Name::new("Primitive"),
+            });
+            let sub = alloc(Expr::Array { elements: vec![] });
+            let retry = alloc(Expr::Null);
+            let counter = alloc(Expr::Literal(Literal::Int(0)));
+            alloc(Expr::Object {
+                type_name: Some(Name::new("baml.llm.Client")),
+                fields: vec![
+                    (Name::new("name"), name_lit),
+                    (Name::new("client_type"), ct_variant),
+                    (Name::new("sub_clients"), sub),
+                    (Name::new("retry"), retry),
+                    (Name::new("counter"), counter),
+                ],
+                spreads: vec![],
+            })
+        }
+        Some(name) => {
+            // Named client: Expr::Path(["MyClient"]) — TIR resolves to the let binding.
+            alloc(Expr::Path(vec![Name::new(name)]))
+        }
+        None => {
+            // No client specified (e.g. missing `client` field) — use null as fallback.
+            alloc(Expr::Null)
+        }
     };
+    let call = alloc(Expr::Call {
+        callee,
+        args: vec![client_arg, fn_name_expr, args_map],
+    });
 
     let body = ExprBody {
         exprs,
@@ -882,6 +874,7 @@ fn synthesize_client_new_companion(
     };
 
     // Named PrimitiveClientOptions fields — default null
+    let mut model = alloc(Expr::Null);
     let mut base_url = alloc(Expr::Null);
     let mut default_role = alloc(Expr::Null);
     let mut api_key = alloc(Expr::Null);
@@ -912,6 +905,9 @@ fn synthesize_client_new_companion(
                 };
                 match opt_key.text() {
                     // Named scalar fields
+                    "model" => {
+                        model = crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                    }
                     "base_url" => {
                         base_url =
                             crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
@@ -972,7 +968,7 @@ fn synthesize_client_new_companion(
     // Build provider_options from accumulated provider-specific keys
     let provider_options = if let Some(av) = anthropic_version {
         alloc(Expr::Object {
-            type_name: Some(Name::new("AnthropicOptions")),
+            type_name: Some(Name::new("baml.llm.AnthropicOptions")),
             fields: vec![(Name::new("anthropic_version"), av)],
             spreads: vec![],
         })
@@ -980,7 +976,7 @@ fn synthesize_client_new_companion(
         let rn = resource_name.unwrap_or_else(|| alloc(Expr::Null));
         let av = api_version.unwrap_or_else(|| alloc(Expr::Null));
         alloc(Expr::Object {
-            type_name: Some(Name::new("AzureOpenAiOptions")),
+            type_name: Some(Name::new("baml.llm.AzureOpenAiOptions")),
             fields: vec![
                 (Name::new("resource_name"), rn),
                 (Name::new("api_version"), av),
@@ -997,8 +993,9 @@ fn synthesize_client_new_companion(
 
     // PrimitiveClientOptions { ... }
     let options_expr = alloc(Expr::Object {
-        type_name: Some(Name::new("PrimitiveClientOptions")),
+        type_name: Some(Name::new("baml.llm.PrimitiveClientOptions")),
         fields: vec![
+            (Name::new("model"), model),
             (Name::new("base_url"), base_url),
             (Name::new("default_role"), default_role),
             (Name::new("allowed_roles"), allowed_roles),
@@ -1018,7 +1015,7 @@ fn synthesize_client_new_companion(
         provider.as_deref().unwrap_or("unknown").to_string(),
     )));
     let root = alloc(Expr::Object {
-        type_name: Some(Name::new("PrimitiveClient")),
+        type_name: Some(Name::new("baml.llm.PrimitiveClient")),
         fields: vec![
             (Name::new("name"), name_lit),
             (Name::new("provider"), provider_lit),

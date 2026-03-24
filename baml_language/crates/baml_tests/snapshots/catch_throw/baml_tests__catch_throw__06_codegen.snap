@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function AlsoMayFail(x: int) -> string {
+function user.AlsoMayFail(x: int) -> string {
     load_var x
     copy 0
     load_const 0
@@ -20,10 +20,10 @@ function AlsoMayFail(x: int) -> string {
     throw
 }
 
-function CatchAndRethrow(x: int) -> string {
+function user.CatchAndRethrow(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFail
+    call user.MayFail
     pop_unwind
     jump L1
 
@@ -35,16 +35,14 @@ function CatchAndRethrow(x: int) -> string {
     return
 }
 
-function CatchWithFallback(x: int) -> string {
+function user.CatchWithFallback(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFailIntOrString
+    call user.MayFailIntOrString
     pop_unwind
     jump L5
 
   L0:
-    load_var _2
-    store_var e
     load_var _2
     type_tag
     load_const 1
@@ -54,10 +52,6 @@ function CatchWithFallback(x: int) -> string {
 
   L1:
     load_var _2
-    store_var _3
-    load_var _3
-    store_var e2
-    load_var _3
     type_tag
     load_const 0
     cmp_op ==
@@ -65,7 +59,7 @@ function CatchWithFallback(x: int) -> string {
     jump L3
 
   L2:
-    load_var _3
+    load_var _2
     throw
 
   L3:
@@ -79,16 +73,14 @@ function CatchWithFallback(x: int) -> string {
     return
 }
 
-function CatchWithTypedArm(x: int) -> string {
+function user.CatchWithTypedArm(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFail
+    call user.MayFail
     pop_unwind
     jump L3
 
   L0:
-    load_var _2
-    store_var e
     load_var _2
     type_tag
     load_const 1
@@ -107,16 +99,14 @@ function CatchWithTypedArm(x: int) -> string {
     return
 }
 
-function ChainedCatchClauses(x: int) -> string {
+function user.ChainedCatchClauses(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFailIntOrString
+    call user.MayFailIntOrString
     pop_unwind
     jump L5
 
   L0:
-    load_var _2
-    store_var e
     load_var _2
     type_tag
     load_const 1
@@ -126,10 +116,6 @@ function ChainedCatchClauses(x: int) -> string {
 
   L1:
     load_var _2
-    store_var _3
-    load_var _3
-    store_var e2
-    load_var _3
     type_tag
     load_const 0
     cmp_op ==
@@ -137,7 +123,7 @@ function ChainedCatchClauses(x: int) -> string {
     jump L3
 
   L2:
-    load_var _3
+    load_var _2
     throw
 
   L3:
@@ -151,7 +137,7 @@ function ChainedCatchClauses(x: int) -> string {
     return
 }
 
-function MayFail(x: int) -> string {
+function user.MayFail(x: int) -> string {
     load_var x
     copy 0
     load_const 0
@@ -170,7 +156,7 @@ function MayFail(x: int) -> string {
     throw
 }
 
-function MayFailIntOrString(x: int) -> string {
+function user.MayFailIntOrString(x: int) -> string {
     load_var x
     copy 0
     load_const 0
@@ -201,16 +187,14 @@ function MayFailIntOrString(x: int) -> string {
     throw
 }
 
-function MultipleCatchArms(x: int) -> string {
+function user.MultipleCatchArms(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFailIntOrString
+    call user.MayFailIntOrString
     pop_unwind
     jump L5
 
   L0:
-    load_var _2
-    store_var e
     load_var _2
     type_tag
     load_const 1
@@ -241,46 +225,40 @@ function MultipleCatchArms(x: int) -> string {
     return
 }
 
-function NestedCatch(x: int) -> string {
+function user.NestedCatch(x: int) -> string {
     push_unwind L0, slot 3
     load_var x
-    call MayFail
+    call user.MayFail
     pop_unwind
     store_var inner
     jump L1
 
   L0:
-    load_var _3
-    store_var e
     load_const "inner caught"
     store_var inner
 
   L1:
-    push_unwind L2, slot 5
+    push_unwind L2, slot 4
     load_var x
-    call AlsoMayFail
+    call user.AlsoMayFail
     pop_unwind
     jump L3
 
   L2:
-    load_var _7
-    store_var e
     load_var inner
 
   L3:
     return
 }
 
-function SingleCatchTyped(x: int) -> string {
+function user.SingleCatchTyped(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFail
+    call user.MayFail
     pop_unwind
     jump L3
 
   L0:
-    load_var _2
-    store_var e
     load_var _2
     type_tag
     load_const 1
@@ -299,23 +277,21 @@ function SingleCatchTyped(x: int) -> string {
     return
 }
 
-function SingleCatchWildcard(x: int) -> string {
+function user.SingleCatchWildcard(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFail
+    call user.MayFail
     pop_unwind
     jump L1
 
   L0:
-    load_var _2
-    store_var e
     load_const "caught"
 
   L1:
     return
 }
 
-function ThrowStatement(x: int) -> string {
+function user.ThrowStatement(x: int) -> string {
     load_const "error"
     throw
 }

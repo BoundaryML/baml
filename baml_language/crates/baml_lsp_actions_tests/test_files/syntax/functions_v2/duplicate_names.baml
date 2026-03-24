@@ -62,6 +62,35 @@ function Bar(a: string, b: int | bool) -> int {
 
 //----
 //- diagnostics
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 // Error: Old-style function syntax. Use: function Name(params...) -> ReturnType { ... }
 //    ╭─[ functions_v2_duplicate_names.baml:1:14 ]
 //    │
@@ -71,67 +100,50 @@ function Bar(a: string, b: int | bool) -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Duplicate function `Bar`
-//    ╭─[ functions_v2_duplicate_names.baml:1:10 ]
-//    │
-//  1 │ function Bar {
-//    │          ─┬─  
-//    │           ╰─── function `Bar` redefined here
-//    │ 
-//  6 │ function Bar(a: string, b: int | bool) -> int {
-//    │          ─┬─  
-//    │           ╰─── `Bar` first defined in functions_v2_duplicate_names.baml
-//    │ 
-//    │ Note: Error code: E0011
-// ───╯
-// Error: Duplicate function `Bar`
-//    ╭─[ functions_v2_duplicate_names.baml:6:10 ]
-//    │
-//  6 │ function Bar(a: string, b: int | bool) -> int {
-//    │          ─┬─  
-//    │           ╰─── function `Bar` redefined here
-//    │
-//    ├─[ functions_v2_duplicate_names.baml:6:10 ]
-//    │
-//  1 │ function Bar {
-//    │          ─┬─  
-//    │           ╰─── `Bar` first defined in functions_v2_duplicate_names.baml
-//    │ 
-//    │ Note: Error code: E0011
-// ───╯
-// Error: Unknown variable `input`
+// Error: unresolved name: input
 //    ╭─[ functions_v2_duplicate_names.baml:2:3 ]
 //    │
 //  2 │   input string
 //    │   ──┬──  
-//    │     ╰──── Unknown variable `input`
+//    │     ╰──── unresolved name: input
 //    │ 
-//    │ Note: Error code: E0003
+//    │ Note: Error code: E0001
 // ───╯
-// Error: Unknown variable `string`
+// Error: unresolved name: string
 //    ╭─[ functions_v2_duplicate_names.baml:2:9 ]
 //    │
 //  2 │   input string
 //    │         ───┬──  
-//    │            ╰──── Unknown variable `string`
+//    │            ╰──── unresolved name: string
 //    │ 
-//    │ Note: Error code: E0003
+//    │ Note: Error code: E0001
 // ───╯
-// Error: Unknown variable `output`
+// Error: unresolved name: output
 //    ╭─[ functions_v2_duplicate_names.baml:3:3 ]
 //    │
 //  3 │   output string
 //    │   ───┬──  
-//    │      ╰──── Unknown variable `output`
+//    │      ╰──── unresolved name: output
 //    │ 
-//    │ Note: Error code: E0003
+//    │ Note: Error code: E0001
 // ───╯
-// Error: Unknown variable `string`
+// Error: unresolved name: string
 //    ╭─[ functions_v2_duplicate_names.baml:3:10 ]
 //    │
 //  3 │   output string
 //    │          ───┬──  
-//    │             ╰──── Unknown variable `string`
+//    │             ╰──── unresolved name: string
 //    │ 
-//    │ Note: Error code: E0003
+//    │ Note: Error code: E0001
+// ───╯
+// Error: type mismatch: expected baml.llm.Client, got () -> unknown
+//    ╭─[ functions_v2_duplicate_names.baml:4:2 ]
+//    │
+//  4 │ ╭─▶ }
+//    ┆ ┆   
+//  9 │ ├─▶ }
+//    │ │       
+//    │ ╰─────── type mismatch: expected baml.llm.Client, got () -> unknown
+//    │     
+//    │     Note: Error code: E0001
 // ───╯

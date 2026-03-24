@@ -71,30 +71,59 @@ function Foo() -> Bar {
 
 //----
 //- diagnostics
-// Error: Unknown variable `a`
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unresolved name: a
 //     ╭─[ expr_constructors_invalid.baml:11:21 ]
 //     │
 //  11 │     query_params: { a 10 },
 //     │                     ┬  
-//     │                     ╰── Unknown variable `a`
+//     │                     ╰── unresolved name: a
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `Authorization`
+// Error: unresolved name: Authorization
 //     ╭─[ expr_constructors_invalid.baml:15:16 ]
 //     │
 //  15 │     headers: { Authorization "Bearer mytoken" },
 //     │                ──────┬──────  
-//     │                      ╰──────── Unknown variable `Authorization`
+//     │                      ╰──────── unresolved name: Authorization
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `foo`
+// Error: unresolved name: foo
 //     ╭─[ expr_constructors_invalid.baml:16:21 ]
 //     │
 //  16 │     query_params: { foo "bar" },
 //     │                     ─┬─  
-//     │                      ╰─── Unknown variable `foo`
+//     │                      ╰─── unresolved name: foo
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯

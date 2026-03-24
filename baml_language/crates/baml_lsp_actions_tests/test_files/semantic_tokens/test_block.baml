@@ -27,7 +27,35 @@ test BasicTest {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 //
 //- semantic_tokens
 // test_block.baml:1:1 (keyword) len=5 "class"
@@ -48,7 +76,7 @@ test BasicTest {
 // test_block.baml:12:1 (keyword) len=8 "function"
 // test_block.baml:12:10 (function) len=9 "Summarize"
 // test_block.baml:12:20 (parameter) len=5 "input"
-// test_block.baml:12:27 (class) len=5 "Input"
+// test_block.baml:12:27 (namespace) len=5 "Input"
 // test_block.baml:12:37 (type) len=6 "string"
 // test_block.baml:13:3 (property) len=6 "client"
 // test_block.baml:14:3 (property) len=6 "prompt"

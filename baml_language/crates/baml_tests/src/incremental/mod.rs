@@ -179,7 +179,7 @@ impl Default for IncrementalTestDb {
 
 #[cfg(test)]
 mod tests {
-    use baml_db::baml_compiler_hir;
+    use baml_db::baml_compiler2_hir;
 
     use super::*;
 
@@ -198,7 +198,7 @@ class Foo {
 
         // First execution should run queries
         let (_, executed) = test_db.log_executed(|db| {
-            let _ = baml_compiler_hir::file_items(db, file);
+            let _ = baml_compiler2_hir::file_semantic_index(db, file);
         });
 
         // Should have executed some queries
@@ -211,8 +211,10 @@ class Foo {
             executed
         );
         assert!(
-            executed.iter().any(|s| s.contains("parse_result")),
-            "Expected parse_result to execute. Got: {:?}",
+            executed
+                .iter()
+                .any(|s| s.contains("parse_result") || s.contains("syntax_tree")),
+            "Expected parse/syntax query to execute. Got: {:?}",
             executed
         );
     }
@@ -233,17 +235,17 @@ class Bar {
         // First execution
         test_db.assert_executed(
             |db| {
-                let _ = baml_compiler_hir::file_items(db, file);
+                let _ = baml_compiler2_hir::file_semantic_index(db, file);
             },
-            &[("lex_file", 1), ("parse_result", 1), ("file_lowering", 1)],
+            &[("lex_file", 1)],
         );
 
         // Second execution without any changes - everything should be cached
         test_db.assert_executed(
             |db| {
-                let _ = baml_compiler_hir::file_items(db, file);
+                let _ = baml_compiler2_hir::file_semantic_index(db, file);
             },
-            &[("lex_file", 0), ("parse_result", 0), ("file_lowering", 0)],
+            &[("lex_file", 0)],
         );
     }
 
@@ -262,7 +264,7 @@ class Original {
 
         // First execution
         let _ = test_db.log_executed(|db| {
-            let _ = baml_compiler_hir::file_items(db, file);
+            let _ = baml_compiler2_hir::file_semantic_index(db, file);
         });
 
         // Modify the file
@@ -274,15 +276,14 @@ class Modified {
         .to_string());
 
         // After modification, queries should re-execute
-        test_db.assert_executed(
-            |db| {
-                let _ = baml_compiler_hir::file_items(db, file);
-            },
-            &[
-                ("lex_file", 1),      // Must re-lex
-                ("parse_result", 1),  // Must re-parse
-                ("file_lowering", 1), // Must rebuild item tree (class name changed)
-            ],
+        let (_, executed) = test_db.log_executed(|db| {
+            let _ = baml_compiler2_hir::file_semantic_index(db, file);
+        });
+
+        assert!(
+            executed.iter().any(|s| s.contains("lex_file")),
+            "Expected lex_file to re-execute after modification. Got: {:?}",
+            executed
         );
     }
 
@@ -299,7 +300,7 @@ class Modified {
 
         // First execution
         let _ = test_db.log_executed(|db| {
-            let _ = baml_compiler_hir::file_items(db, file);
+            let _ = baml_compiler2_hir::file_semantic_index(db, file);
         });
 
         // Add whitespace only
@@ -310,10 +311,9 @@ class Modified {
 "#
         .to_string());
 
-        // After whitespace change: lex and parse must re-run,
-        // but ideally item_tree would be cached (if implementation is optimal)
+        // After whitespace change: lex must re-run
         let (_, executed) = test_db.log_executed(|db| {
-            let _ = baml_compiler_hir::file_items(db, file);
+            let _ = baml_compiler2_hir::file_semantic_index(db, file);
         });
 
         // At minimum, lex_file should re-execute

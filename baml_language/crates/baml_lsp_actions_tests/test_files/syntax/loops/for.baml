@@ -60,34 +60,41 @@ function SumUnknownType(xs: int, b: string) -> int {
 
 //----
 //- diagnostics
-// Error: Expected `int`, found `string`
-//     ╭─[ loops_for.baml:16:12 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: cannot iterate over type `int`
+//     ╭─[ loops_for.baml:28:16 ]
 //     │
-//  16 │        result = x;
-//     │                 ┬  
-//     │                 ╰── Expected `int`, found `string`
+//  28 │     for (let x in xs) {
+//     │                   ─┬  
+//     │                    ╰── cannot iterate over type `int`
 //     │ 
 //     │ Note: Error code: E0001
-// ────╯
-// Error: Type `int` has no field `length`
-//     ╭─[ loops_for.baml:28:2 ]
-//     │
-//  28 │ ╭─▶     for (let x in xs) {
-//     ┆ ┆   
-//  35 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── Type `int` has no field `length`
-//     │     
-//     │     Note: Error code: E0007
-// ────╯
-// Error: Type `int` is not indexable
-//     ╭─[ loops_for.baml:28:2 ]
-//     │
-//  28 │ ╭─▶     for (let x in xs) {
-//     ┆ ┆   
-//  35 │ ├─▶     }
-//     │ │           
-//     │ ╰─────────── Type `int` is not indexable
-//     │     
-//     │     Note: Error code: E0008
 // ────╯

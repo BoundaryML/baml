@@ -161,11 +161,12 @@ function createComponents(linkContext?: BepLinkContext): Components {
 }
 
 export function BepContent({ content, linkContext }: BepContentProps) {
+  const components = useMemo(() => createComponents(linkContext), [linkContext]);
+
   if (!content) {
     return <div className="text-muted-foreground">No content</div>;
   }
 
-  const components = useMemo(() => createComponents(linkContext), [linkContext]);
   const contentWithoutFrontmatter = content.replace(/^---[\s\S]*?---\n*/, "");
 
   return (

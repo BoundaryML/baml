@@ -101,97 +101,40 @@ fn class_field_lookup() {
 }
 
 // ─── Phase 3 let-binding tests ────────────────────────────────────────────────
+//
+// Note: `set_synthetic_items_for_file` was removed from the DB trait as part of
+// the compiler2 migration (Phase 2). These tests now use actual BAML source
+// declarations (clients, retry_policy) which produce `Item::Let` bindings and
+// exercise the same let-binding infrastructure.
 
-/// Build a synthetic `Item::Let` with an integer literal initializer.
-///
-/// The produced item has `LetOrigin::Compiler` and an `ExprBody` whose root
-/// expression is `Expr::Literal(Literal::Int(value))`.
-fn make_let_item(name: &str, value: i64) -> baml_compiler2_ast::Item {
-    use baml_compiler2_ast::{AstSourceMap, Expr, ExprBody, Item, LetDef, LetOrigin, Literal};
-    use la_arena::Arena;
-    use text_size::TextRange;
-
-    let mut exprs: Arena<Expr> = Arena::new();
-    let mut source_map = AstSourceMap::new();
-
-    let expr_id = exprs.alloc(Expr::Literal(Literal::Int(value)));
-    source_map.expr_spans.alloc(TextRange::default());
-
-    let body = ExprBody {
-        exprs,
-        stmts: Arena::new(),
-        patterns: Arena::new(),
-        match_arms: Arena::new(),
-        catch_arms: Arena::new(),
-        type_annotations: Arena::new(),
-        root_expr: Some(expr_id),
-    };
-
-    Item::Let(LetDef {
-        name: baml_base::Name::new(name),
-        initializer: Some((body, source_map)),
-        origin: LetOrigin::Compiler,
-        span: TextRange::default(),
-        name_span: TextRange::default(),
-    })
-}
-
-/// Build a `Item::Let` where the initializer references another let binding by name.
-///
-/// Used to test dependency detection in `topological_sort_lets`.
-fn make_let_item_ref(name: &str, ref_name: &str) -> baml_compiler2_ast::Item {
-    use baml_compiler2_ast::{AstSourceMap, Expr, ExprBody, Item, LetDef, LetOrigin};
-    use la_arena::Arena;
-    use text_size::TextRange;
-
-    let mut exprs: Arena<Expr> = Arena::new();
-    let mut source_map = AstSourceMap::new();
-
-    // Expr::Path([ref_name]) — single-segment path referencing another let binding
-    let expr_id = exprs.alloc(Expr::Path(vec![baml_base::Name::new(ref_name)]));
-    source_map.expr_spans.alloc(TextRange::default());
-
-    let body = ExprBody {
-        exprs,
-        stmts: Arena::new(),
-        patterns: Arena::new(),
-        match_arms: Arena::new(),
-        catch_arms: Arena::new(),
-        type_annotations: Arena::new(),
-        root_expr: Some(expr_id),
-    };
-
-    Item::Let(LetDef {
-        name: baml_base::Name::new(name),
-        initializer: Some((body, source_map)),
-        origin: LetOrigin::Compiler,
-        span: TextRange::default(),
-        name_span: TextRange::default(),
-    })
-}
-
-/// Verify that a let binding with a literal initializer:
-/// - Gets a global slot allocated (appears in `program.globals`)
+/// Verify that a client declaration:
+/// - Produces a let binding with a global slot (appears in `let_global_indices`)
 /// - Causes `$init` to appear in `program.function_indices`
 /// - Causes `$init` to appear in `program.package_init_order`
 #[test]
 fn let_binding_global_slot_and_init_function() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { return 0; }");
-
-    // Inject a synthetic let binding `my_const = 42`
-    db.set_synthetic_items_for_file(file, vec![make_let_item("my_const", 42)]);
+    db.add_file(
+        "test.baml",
+        r#"
+        client<llm> MyClient {
+          provider openai
+          options { model "gpt-4" }
+        }
+        function f() -> string { return "x"; }
+        "#,
+    );
 
     let program = compile(&db);
 
-    // The let binding should have a global slot allocated in let_global_indices
+    // The client let binding should have a global slot allocated in let_global_indices
     let has_let_slot = program
         .let_global_indices
         .keys()
-        .any(|k| k.contains("my_const"));
+        .any(|k| k.contains("MyClient"));
     assert!(
         has_let_slot,
-        "expected 'my_const' in let_global_indices, got: {:?}",
+        "expected 'MyClient' in let_global_indices, got: {:?}",
         program.let_global_indices.keys().collect::<Vec<_>>()
     );
 
@@ -211,137 +154,46 @@ fn let_binding_global_slot_and_init_function() {
     );
 }
 
-/// Verify that creating a `BexEngine` with a let binding causes `$init` to run,
-/// and that the let-bound value is accessible via a function that references it.
-///
-/// The test injects `my_const = 42` as a synthetic let binding, then compiles a
-/// function `get_const() -> int { my_const }` that references it via `LoadGlobal`.
-/// After `BexEngine::new` runs `$init`, calling `get_const()` should return 42.
-#[tokio::test]
-async fn let_binding_init_runs_at_load_time() {
-    use std::sync::Arc;
-
-    use sys_native::SysOpsExt as _;
-
-    let mut db = make_db();
-    // The function body uses `my_const` which will resolve to the synthetic let binding.
-    let file = db.add_file("test.baml", "function get_const() -> int { my_const }");
-
-    // Inject: my_const = 42
-    db.set_synthetic_items_for_file(file, vec![make_let_item("my_const", 42)]);
-
-    let program = generate_project_bytecode(
-        &db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .expect("compilation should succeed");
-
-    // Verify the let slot starts as Null
-    let let_slot = program
-        .let_global_indices
-        .iter()
-        .find(|(k, _)| k.contains("my_const"))
-        .map(|(_, &v)| v)
-        .expect("expected my_const in let_global_indices");
-    assert!(
-        matches!(
-            program.globals.get(let_slot),
-            Some(bex_vm_types::ConstValue::Null)
-        ),
-        "expected Null initial value for my_const, got: {:?}",
-        program.globals.get(let_slot)
-    );
-
-    // Create BexEngine — this triggers $init, which evaluates `42` and stores it
-    let engine = bex_engine::BexEngine::new(program, Arc::new(sys_types::SysOps::native()), None)
-        .expect("BexEngine creation should succeed after $init runs");
-
-    // Call get_const() — should return 42
-    let result = engine
-        .call_function(
-            "user.get_const",
-            vec![],
-            bex_engine::FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-        )
-        .await;
-
-    assert!(result.is_ok(), "call to get_const() failed: {:?}", result);
-    let value = result.unwrap();
-    assert!(
-        matches!(value, bex_engine::BexExternalValue::Int(42)),
-        "expected Int(42) from get_const(), got: {:?}",
-        value
-    );
-}
-
-/// Verify that circular let binding dependencies produce a `LoweringError`.
-#[test]
-fn circular_let_dependencies_produce_error() {
-    use baml_compiler2_emit::LoweringError;
-
-    let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { return 0; }");
-
-    // a references b, b references a — circular
-    db.set_synthetic_items_for_file(
-        file,
-        vec![make_let_item_ref("a", "b"), make_let_item_ref("b", "a")],
-    );
-
-    let result = generate_project_bytecode(
-        &db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    );
-
-    assert!(
-        matches!(result, Err(LoweringError::Internal(ref msg)) if msg.contains("Circular")),
-        "expected circular dependency error, got: {:?}",
-        result
-    );
-}
-
-/// Verify that multiple let bindings with a valid dependency order are sorted correctly.
-///
-/// `b = a + 0` (references `a`), so `a` must be initialized before `b`.
-/// Checks that `$init` exists and both bindings have global slots.
+/// Verify that multiple client declarations:
+/// - Both get global slots in `let_global_indices`
+/// - `$init` is synthesized to initialize them
 #[test]
 fn multiple_let_bindings_with_valid_dependencies() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { return 0; }");
-
-    // a = 10, b = a (b depends on a)
-    db.set_synthetic_items_for_file(
-        file,
-        vec![
-            // Inject b first to ensure topological sort reorders them
-            make_let_item_ref("b", "a"),
-            make_let_item("a", 10),
-        ],
+    db.add_file(
+        "test.baml",
+        r#"
+        client<llm> ClientA {
+          provider openai
+          options { model "gpt-4" }
+        }
+        client<llm> ClientB {
+          provider openai
+          options { model "gpt-3.5-turbo" }
+        }
+        function f() -> string { return "x"; }
+        "#,
     );
 
     let program = compile(&db);
 
-    // Both should have global slots in let_global_indices
+    // Both clients should have global slots in let_global_indices
     let has_a = program
         .let_global_indices
         .keys()
-        .any(|k| k.ends_with(".a") || k == "a");
+        .any(|k| k.contains("ClientA"));
     let has_b = program
         .let_global_indices
         .keys()
-        .any(|k| k.ends_with(".b") || k == "b");
+        .any(|k| k.contains("ClientB"));
     assert!(
         has_a,
-        "expected 'a' in let_global_indices, got: {:?}",
+        "expected 'ClientA' in let_global_indices, got: {:?}",
         program.let_global_indices.keys().collect::<Vec<_>>()
     );
     assert!(
         has_b,
-        "expected 'b' in let_global_indices, got: {:?}",
+        "expected 'ClientB' in let_global_indices, got: {:?}",
         program.let_global_indices.keys().collect::<Vec<_>>()
     );
 

@@ -27,12 +27,41 @@ function MayThrowMultiple(x: int) -> string throws string | int {
 
 //----
 //- diagnostics
-// Warning: `throws` declaration includes types the function never throws: int
-//     ╭─[ throw_throws_basic_syntax.baml:21:37 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: extraneous throws declaration: int
+//     ╭─[ throw_throws_basic_syntax.baml:21:51 ]
 //     │
 //  21 │ function MayThrowMultiple(x: int) -> string throws string | int {
-//     │                                     ───┬───  
-//     │                                        ╰───── `throws` declaration includes types the function never throws: int
+//     │                                                   ──────┬──────  
+//     │                                                         ╰──────── extraneous throws declaration: int
 //     │ 
-//     │ Note: Error code: E0097
+//     │ Note: Error code: E0001
 // ────╯

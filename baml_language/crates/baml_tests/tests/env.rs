@@ -19,8 +19,7 @@ async fn env_get_or_panic_existing_var() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "BAML_TEST_ENV_PANIC"
-        dispatch_future env.get_or_panic
-        await
+        call baml.env.get_or_panic
         return
     }
     "#);
@@ -44,12 +43,11 @@ async fn env_get_or_panic_missing_var() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "BAML_TEST_MISSING_PANIC"
-        dispatch_future env.get_or_panic
-        await
+        call baml.env.get_or_panic
         return
     }
     "#);
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call env.get_or_panic: Environment variable 'BAML_TEST_MISSING_PANIC' not found");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.sys.panic: env var not found: BAML_TEST_MISSING_PANIC");
 }
 
 #[tokio::test]
@@ -66,7 +64,7 @@ async fn env_get_existing_var() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string? {
         load_const "BAML_TEST_ENV_GET"
-        dispatch_future env.get
+        dispatch_future baml.env.get
         await
         return
     }
@@ -94,7 +92,7 @@ async fn env_get_missing_var_returns_null() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string? {
         load_const "BAML_TEST_NONEXISTENT_VAR"
-        dispatch_future env.get
+        dispatch_future baml.env.get
         await
         return
     }
@@ -122,8 +120,7 @@ async fn env_sugar_existing_var() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "BAML_TEST_SUGAR_VAR"
-        dispatch_future env.get_or_panic
-        await
+        call baml.env.get_or_panic
         return
     }
     "#);
@@ -147,10 +144,9 @@ async fn env_sugar_missing_var() {
     insta::assert_snapshot!(output.bytecode, @r#"
     function main() -> string {
         load_const "BAML_TEST_SUGAR_MISSING"
-        dispatch_future env.get_or_panic
-        await
+        call baml.env.get_or_panic
         return
     }
     "#);
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call env.get_or_panic: Environment variable 'BAML_TEST_SUGAR_MISSING' not found");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"failed to call baml.sys.panic: env var not found: BAML_TEST_SUGAR_MISSING");
 }

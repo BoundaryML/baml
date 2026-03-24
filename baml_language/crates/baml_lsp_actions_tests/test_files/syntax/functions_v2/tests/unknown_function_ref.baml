@@ -21,21 +21,32 @@ test TestAllUnknown {
 
 //----
 //- diagnostics
-// Error: Unknown function `FakeFunction` in test block
-//    ╭─[ functions_v2_tests_unknown_function_ref.baml:9:28 ]
-//    │
-//  9 │   functions [RealFunction, FakeFunction]
-//    │                            ──────┬─────  
-//    │                                  ╰─────── no function named `FakeFunction` exists
-//    │ 
-//    │ Note: Error code: E0088
-// ───╯
-// Error: Unknown function `NobodyHome` in test block
-//     ╭─[ functions_v2_tests_unknown_function_ref.baml:16:14 ]
-//     │
-//  16 │   functions [NobodyHome]
-//     │              ─────┬────  
-//     │                   ╰────── no function named `NobodyHome` exists
-//     │ 
-//     │ Note: Error code: E0088
-// ────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

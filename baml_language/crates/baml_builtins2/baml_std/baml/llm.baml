@@ -27,31 +27,24 @@ class PlannerState {
     offset
   }
 
-  function rr_pick_index(self, client_name: string, sub_client_count: int) -> int {
+  function rr_pick_index(self, client_name: string, counter: int, sub_client_count: int) -> int {
     let local_offset = self.rr_local_offset(client_name);
     self.rr_client_names.push(client_name);
-    let base = round_robin_peek(client_name);
-    (base + local_offset) % sub_client_count
+    (counter + local_offset) % sub_client_count
   }
 }
 
-function resolve_primitive(function_name: string) -> PrimitiveClient {
-  let llm_client = get_client(function_name);
-  let resolve_fn = llm_client.get_constructor();
-  resolve_fn()
-}
-
-function render_prompt(function_name: string, args: map<string, unknown>) -> PromptAst {
+function render_prompt(client: Client, function_name: string, args: map<string, unknown>) -> PromptAst {
   let jinja_string = get_jinja_template(function_name);
-  let primitive_client = resolve_primitive(function_name);
+  let primitive_client = client.to_primitive_client();
   let prompt = primitive_client.render_prompt(jinja_string, args);
 
   primitive_client.specialize_prompt(prompt)
 }
 
-function build_request(function_name: string, args: map<string, unknown>) -> root.http.Request {
-  let primitive_client = resolve_primitive(function_name);
-  let specialized_prompt = render_prompt(function_name, args);
+function build_request(client: Client, function_name: string, args: map<string, unknown>) -> root.http.Request {
+  let primitive_client = client.to_primitive_client();
+  let specialized_prompt = render_prompt(client, function_name, args);
 
   primitive_client.build_request(specialized_prompt)
 }

@@ -16,7 +16,7 @@ class RetryPolicy {
 }
 
 /// An LLM client (primitive, fallback, or round-robin).
-/// Built by get_client from compiler metadata.
+/// Compiled as a global variable from `client<llm>` declarations.
 class Client {
   name string
   client_type ClientType
@@ -70,6 +70,7 @@ class Client {
         } else {
           let idx = planner_state.rr_pick_index(
             self.name,
+            self.counter,
             self.sub_clients.length(),
           );
           self.sub_clients[idx].build_plan_with_state(planner_state)
@@ -212,7 +213,8 @@ class Client {
       }
 
       ClientType.RoundRobin => {
-        let idx = round_robin_next(self.name) % self.sub_clients.length()
+        let idx = self.counter % self.sub_clients.length()
+        self.counter += 1
         let result3: T = self.sub_clients[idx].execute(
           context,
           active_delay_ms,
@@ -224,6 +226,7 @@ class Client {
 }
 
 class PrimitiveClientOptions {
+  model string | null
   base_url string | null
   default_role string | null
   allowed_roles string[] | null
@@ -283,18 +286,6 @@ class PrimitiveClient {
 }
 
 function get_jinja_template(function_name: string) -> string throws root.errors.InvalidArgument {
-  $rust_io_function
-}
-
-function get_client(function_name: string) -> Client throws root.errors.InvalidArgument {
-  $rust_io_function
-}
-
-function round_robin_next(client_name: string) -> int throws root.errors.InvalidArgument {
-  $rust_io_function
-}
-
-function round_robin_peek(client_name: string) -> int throws root.errors.InvalidArgument {
   $rust_io_function
 }
 

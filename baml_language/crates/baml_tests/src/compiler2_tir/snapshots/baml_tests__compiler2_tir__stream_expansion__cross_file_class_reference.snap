@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/compiler2_tir/stream_expansion.rs
+expression: "render_tir(&db, file)"
+---
+class user.Resume {
+  name: string
+  education: user.Education[]
+}
+class user.stream_Resume {
+  name: null | string
+  education: never[] | user.stream_Education[]
+}

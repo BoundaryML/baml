@@ -1,4 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== TYPE INFERENCE ===
+=== TIR2 ===
+class user.A {
+  field: string
+}
+class user.A {
+  field: string
+}
+type user.A = int

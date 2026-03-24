@@ -6,7 +6,6 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useUser } from "@/components/providers/user-provider";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BepContent } from "@/components/bep/bep-content";
 import { MDXEditorComponent, MDXEditorHandle } from "@/components/editor/mdx";
@@ -228,9 +227,12 @@ function SingleComment({
 
   const replyCount = replies?.length ?? 0;
 
+  // Cap indentation at depth 4 to prevent content from becoming too narrow
+  const effectiveDepth = Math.min(depth, 4);
+
   return (
     <div className={cn("group", comment.resolved && "opacity-50")}>
-      <div className={cn("flex gap-3", depth > 0 && "ml-12")}>
+      <div className="flex gap-3" style={effectiveDepth > 0 ? { marginLeft: `${effectiveDepth * 1.5}rem` } : undefined}>
         <Avatar name={comment.authorName} size={depth > 0 ? "sm" : "md"} />
         <div className="flex-1 min-w-0">
           {/* Header */}
@@ -295,7 +297,7 @@ function SingleComment({
               {getReactionCount("heart") > 0 && getReactionCount("heart")}
             </Button>
 
-            {depth < 2 && !readOnly && (
+            {!readOnly && (
               <Button
                 variant="ghost"
                 size="sm"

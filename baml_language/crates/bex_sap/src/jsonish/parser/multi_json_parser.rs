@@ -1,0 +1,149 @@
+use super::{ParseOptions, entry};
+use crate::jsonish::{JsonishError, Value};
+
+pub(super) fn parse<'s>(
+    str: &'s str,
+    options: &ParseOptions,
+) -> Result<Vec<Value<'s>>, JsonishError> {
+    // Find all balanced JSON objects but w/o any fixes.
+    let mut stack = Vec::new();
+    let mut json_str_start = None;
+    let mut json_objects = Vec::new();
+
+    for (index, character) in str.char_indices() {
+        match character {
+            '{' | '[' => {
+                if stack.is_empty() {
+                    json_str_start = Some(index);
+                }
+                stack.push(character);
+            }
+            '}' | ']' => {
+                if let Some(last) = stack.last() {
+                    let expected_open = if character == '}' { '{' } else { '[' };
+                    if *last == expected_open {
+                        stack.pop();
+                    } else {
+                        return Err(JsonishError::MismatchedBrackets);
+                    }
+                }
+
+                if stack.is_empty() {
+                    let end_index = index + 1;
+                    let json_str = if let Some(start) = json_str_start {
+                        &str[start..end_index]
+                    } else {
+                        &str[..end_index]
+                    };
+                    match entry::parse_func(
+                        json_str,
+                        options.next_from_mode(super::ParsingMode::AllJsonObjects),
+                        false,
+                    ) {
+                        Ok(json) => json_objects.push(json),
+                        Err(_e) => {
+                            // Ignore errors
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if !stack.is_empty() {
+        // We reached the end but the stack is not empty
+        if let Some(start) = json_str_start {
+            let json_str = &str[start..];
+            match entry::parse_func(
+                json_str,
+                options.next_from_mode(super::ParsingMode::AllJsonObjects),
+                false,
+            ) {
+                Ok(json) => {
+                    complete_stack_head(&mut json_objects);
+                    json_objects.push(json);
+                }
+                Err(_e) => {
+                    // Ignore errors
+                }
+            }
+        }
+    }
+
+    match json_objects.len() {
+        0 => Err(JsonishError::NoJsonObjectsFound),
+        _ => Ok(json_objects),
+    }
+}
+
+fn complete_stack_head(stack: &mut [Value<'_>]) {
+    if let Some(v) = stack.last_mut() {
+        v.complete_deeply();
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::borrow::Cow;
+
+    use super::*;
+    use crate::jsonish::CompletionState;
+
+    #[test]
+    fn test_parse() -> Result<(), JsonishError> {
+        let res = parse(
+            r#"```json
+{
+    "a": 1
+}
+```
+
+Also we've got a few more!
+```python
+print("Hello, world!")
+```
+
+```test json
+["This is a test"]
+```
+"#,
+            &ParseOptions::default(),
+        );
+
+        let res = res?;
+        assert_eq!(res.len(), 2);
+        {
+            let value = &res[0];
+            let Value::AnyOf(value, _) = value else {
+                panic!("Expected AnyOf, got {value:#?}");
+            };
+            assert!(
+                value.contains(&Value::Object(
+                    [(
+                        Cow::Borrowed("a"),
+                        Value::Number((1).into(), CompletionState::Complete)
+                    )]
+                    .into_iter()
+                    .collect(),
+                    CompletionState::Complete
+                ))
+            );
+        }
+        {
+            let value = &res[1];
+            let Value::AnyOf(value, _) = value else {
+                panic!("Expected AnyOf, got {value:#?}");
+            };
+            assert!(value.contains(&Value::Array(
+                vec![Value::String(
+                    Cow::Borrowed("This is a test"),
+                    CompletionState::Complete
+                )],
+                CompletionState::Complete
+            )));
+        }
+
+        Ok(())
+    }
+}

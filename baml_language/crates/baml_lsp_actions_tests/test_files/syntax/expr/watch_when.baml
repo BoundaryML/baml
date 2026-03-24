@@ -39,4 +39,62 @@ function BadFunction2(i: string) -> bool {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unresolved member: int.$watch
+//    ╭─[ expr_watch_when.baml:2:20 ]
+//    │
+//  2 │ ╭─▶   watch let x = 10;
+//  3 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
+//    │ │                                                                  
+//    │ ╰────────────────────────────────────────────────────────────────── unresolved member: int.$watch
+//    │     
+//    │     Note: Error code: E0001
+// ───╯
+// Error: unresolved member: int.$watch
+//    ╭─[ expr_watch_when.baml:3:61 ]
+//    │
+//  3 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
+//  4 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
+//    │ │                                                                  
+//    │ ╰────────────────────────────────────────────────────────────────── unresolved member: int.$watch
+//    │     
+//    │     Note: Error code: E0001
+// ───╯
+// Error: unresolved member: int.$watch
+//    ╭─[ expr_watch_when.baml:4:61 ]
+//    │
+//  4 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
+//  5 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
+//    │ │                                                                  
+//    │ ╰────────────────────────────────────────────────────────────────── unresolved member: int.$watch
+//    │     
+//    │     Note: Error code: E0001
+// ───╯

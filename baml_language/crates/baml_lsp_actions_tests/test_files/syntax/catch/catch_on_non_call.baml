@@ -13,21 +13,50 @@ function CatchOnVariable(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: Unreachable catch arm
-//     ╭─[ catch_catch_on_non_call.baml:10:5 ]
-//     │
-//  10 │     _ => "caught"
-//     │     ┬  
-//     │     ╰── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
-// ────╯
-// Warning: Unreachable catch arm
-//    ╭─[ catch_catch_on_non_call.baml:4:5 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//    ╭─[ catch_catch_on_non_call.baml:4:10 ]
 //    │
 //  4 │     _ => "caught"
-//    │     ┬  
-//    │     ╰── Unreachable catch arm
+//    │          ────┬───  
+//    │              ╰───── unreachable arm
 //    │ 
-//    │ Note: Error code: E0095
+//    │ Note: Error code: E0001
 // ───╯
+// Error: unreachable arm
+//     ╭─[ catch_catch_on_non_call.baml:10:10 ]
+//     │
+//  10 │     _ => "caught"
+//     │          ────┬───  
+//     │              ╰───── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

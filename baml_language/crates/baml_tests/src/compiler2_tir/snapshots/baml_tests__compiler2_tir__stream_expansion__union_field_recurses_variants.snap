@@ -1,0 +1,20 @@
+---
+source: crates/baml_tests/src/compiler2_tir/stream_expansion.rs
+expression: "render_tir(&db, file)"
+---
+class user.Inner {
+  value: string
+}
+class user.WithUnions {
+  simple: int | string
+  with_class: user.Inner | string
+  mixed: int | user.Inner
+}
+class user.stream_Inner {
+  value: null | string
+}
+class user.stream_WithUnions {
+  simple: null | int | string
+  with_class: null | user.stream_Inner | string
+  mixed: null | int | user.stream_Inner
+}

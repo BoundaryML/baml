@@ -18,21 +18,50 @@ class TestLiterals {
 
 //----
 //- diagnostics
-// Error: Unknown type `True`
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unresolved type: False
 //    ╭─[ class_misspeled_boolean_literals.baml:3:4 ]
 //    │
 //  3 │   b "boolean" | True | False
 //    │    ────────────┬────────────  
-//    │                ╰────────────── Unknown type `True`
+//    │                ╰────────────── unresolved type: False
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: Unknown type `False`
+// Error: unresolved type: True
 //    ╭─[ class_misspeled_boolean_literals.baml:3:4 ]
 //    │
 //  3 │   b "boolean" | True | False
 //    │    ────────────┬────────────  
-//    │                ╰────────────── Unknown type `False`
+//    │                ╰────────────── unresolved type: True
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯

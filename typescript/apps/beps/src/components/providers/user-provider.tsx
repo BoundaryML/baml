@@ -15,16 +15,29 @@ import { Id } from "../../../convex/_generated/dataModel";
 interface User {
   _id: Id<"users">;
   name: string;
-  role: "admin" | "shepherd" | "member";
+  // Includes both new roles and legacy roles (for backwards compatibility)
+  role: "bdfl" | "team" | "unset" | "admin" | "shepherd" | "member";
   avatarUrl?: string;
+  boundaryEmail?: string;
+  slackUserId?: string;
+  isSpecialAccount?: boolean;
   createdAt: number;
+}
+
+interface GitHubUserData {
+  githubId: string;
+  name: string;
+  avatarUrl?: string;
+  boundaryEmail?: string;
 }
 
 interface UserContextType {
   user: User | null;
   userId: Id<"users"> | null;
   isLoading: boolean;
+  hasManagementPermissions: boolean;
   login: (name: string, passkey: string) => Promise<void>;
+  loginWithGitHub: (userData: GitHubUserData) => Promise<void>;
   logout: () => void;
 }
 
@@ -86,6 +99,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const { userId: storedUserId, setUserId: setStoredUserId, isHydrated } = useLocalStorageUserId();
 
   const getOrCreate = useMutation(api.users.getOrCreate);
+  const getOrCreateFromGitHub = useMutation(api.users.getOrCreateFromGitHub);
   const user = useQuery(
     api.users.get,
     storedUserId ? { id: storedUserId } : "skip"
@@ -96,9 +110,25 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setStoredUserId(userId);
   };
 
+  const loginWithGitHub = async (userData: GitHubUserData) => {
+    const userId = await getOrCreateFromGitHub({
+      githubId: userData.githubId,
+      name: userData.name,
+      avatarUrl: userData.avatarUrl,
+      boundaryEmail: userData.boundaryEmail,
+    });
+    setStoredUserId(userId);
+  };
+
   const logout = () => {
     setStoredUserId(null);
   };
+
+  // Check if user has management permissions (BDFL or Team, including legacy roles)
+  const hasManagementPermissions = user ? (
+    user.role === "bdfl" || user.role === "team" ||
+    user.role === "admin" || user.role === "shepherd"
+  ) : false;
 
   return (
     <UserContext.Provider
@@ -106,7 +136,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         user: user ?? null,
         userId: storedUserId,
         isLoading: !isHydrated || (storedUserId !== null && user === undefined),
+        hasManagementPermissions,
         login,
+        loginWithGitHub,
         logout,
       }}
     >

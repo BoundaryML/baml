@@ -1,258 +1,917 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== TYPE INFERENCE ===
-  Function NestedLiteralUnions:
-    Return: Union([Literal(String("success"), TyAttr(None)), Literal(String("client error"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveEnumWithTypedPattern:
-    Return: Literal(String("any status"), TyAttr(None))
-  Function ParenthesizedSingleLiteral:
-    Return: Union([Literal(String("yes"), TyAttr(None)), Literal(String("no"), TyAttr(None))], TyAttr(None))
-  Function DuplicateEnumVariant:
-    Return: Union([Literal(String("first"), TyAttr(None)), Literal(String("second"), TyAttr(None)), Literal(String("inactive"), TyAttr(None)), Literal(String("pending"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function WrongLiteralTypeBoolWithInt:
-    Return: Literal(String("wrong type"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on bool: missing true, false
-  Function UnreachableMultiple:
-    Return: Union([Literal(String("catch all"), TyAttr(None)), Literal(String("unreachable 1"), TyAttr(None)), Literal(String("unreachable 2"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-      - Unreachable match arm
-  Function OverlappingWithBindings:
-    Return: Union([String { attr: TyAttr(None) }, Literal(String("remaining"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveNullableEnum:
-    Return: Union([Literal(String("active"), TyAttr(None)), Literal(String("inactive"), TyAttr(None)), Literal(String("pending"), TyAttr(None)), Literal(String("no status"), TyAttr(None))], TyAttr(None))
-  Function NonExhaustiveBoolMissingTrue:
-    Return: Literal(String("no"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on bool: missing true
-  Function ExhaustiveEnumAllVariants:
-    Return: Union([Literal(String("active"), TyAttr(None)), Literal(String("inactive"), TyAttr(None)), Literal(String("pending"), TyAttr(None))], TyAttr(None))
-  Function JumpTableEnumDiscriminant:
-    Return: Union([Literal(Int(10), TyAttr(None)), Literal(Int(20), TyAttr(None)), Literal(Int(30), TyAttr(None)), Literal(Int(40), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveTypeAlias:
-    Return: String { attr: TyAttr(None) }
-  Function EnumVariantAfterTypedEnum:
-    Return: Union([Literal(String("any status"), TyAttr(None)), Literal(String("unreachable"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function BoolLiteralAfterTypedBool:
-    Return: Union([Literal(String("any bool"), TyAttr(None)), Literal(String("unreachable"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function LiteralUnionWithCatchAll:
-    Return: Union([Literal(String("success"), TyAttr(None)), Literal(String("client error"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveIntLiterals:
-    Return: Union([Literal(String("OK"), TyAttr(None)), Literal(String("Created"), TyAttr(None)), Literal(String("No Content"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveStringLiterals:
-    Return: Union([Literal(String("User"), TyAttr(None)), Literal(String("Assistant"), TyAttr(None)), Literal(String("System"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveTypeAliasWithCatchAll:
-    Return: Union([String { attr: TyAttr(None) }, Literal(String("fallback"), TyAttr(None))], TyAttr(None))
-  Function DuplicateIntLiteral:
-    Return: Union([Literal(String("first one"), TyAttr(None)), Literal(String("second one"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function ExhaustiveClassPlusLiteral:
-    Return: Union([String { attr: TyAttr(None) }, Literal(String("http ok"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveLiteralWithBaseType:
-    Return: Union([Literal(String("ok"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
-  Function NonExhaustiveNullableEnumMissingNull:
-    Return: Union([Literal(String("active"), TyAttr(None)), Literal(String("inactive"), TyAttr(None)), Literal(String("pending"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Non-exhaustive match on Status?: missing null
-  Function NonExhaustiveTypeAliasMissingOne:
-    Return: String { attr: TyAttr(None) }
-    Errors:
-      - Non-exhaustive match on Result: missing Failure
-  Function BoolUnionPattern:
-    Return: Literal(String("covered"), TyAttr(None))
-  Function StringLiteralUnionPattern:
-    Return: Union([Literal(String("chat participant"), TyAttr(None)), Literal(String("system"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveBool:
-    Return: Union([Literal(String("yes"), TyAttr(None)), Literal(String("no"), TyAttr(None))], TyAttr(None))
-  Function NonExhaustiveDoubleMaybeMissingNull:
-    Return: String { attr: TyAttr(None) }
-    Errors:
-      - Non-exhaustive match on DoubleMaybe: missing null
-  Function ExhaustiveDoubleMaybe:
-    Return: Union([String { attr: TyAttr(None) }, Literal(String("nothing"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveOptionalSingleton:
-    Return: Union([Literal(String("OK"), TyAttr(None)), Literal(String("no code"), TyAttr(None))], TyAttr(None))
-  Function BoolWithCatchAll:
-    Return: Union([Literal(String("yes"), TyAttr(None)), Literal(String("no"), TyAttr(None))], TyAttr(None))
-  Function GuardedOnlyNonExhaustive:
-    Return: Int { attr: TyAttr(None) }
-    Errors:
-      - Non-exhaustive match on int: missing int
-  Function NonExhaustiveBoolMissingFalse:
-    Return: Literal(String("yes"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on bool: missing false
-  Function IntLiteralUnionPattern:
-    Return: Union([Literal(String("success with body"), TyAttr(None)), Literal(String("no content"), TyAttr(None))], TyAttr(None))
-  Function ThreeLevelNestedMatch:
-    Return: Union([Union([Union([Literal(String("all zero"), TyAttr(None)), Literal(String("z nonzero"), TyAttr(None))], TyAttr(None)), Literal(String("y nonzero"), TyAttr(None))], TyAttr(None)), Literal(String("x nonzero"), TyAttr(None))], TyAttr(None))
-  Function MultipleUnreachableSpans:
-    Return: Union([Literal(String("active"), TyAttr(None)), Literal(String("duplicate 1"), TyAttr(None)), Literal(String("inactive"), TyAttr(None)), Literal(String("duplicate 2"), TyAttr(None)), Literal(String("pending"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-      - Unreachable match arm
-  Function ExhaustiveCustomBool:
-    Return: Union([Literal(String("yes"), TyAttr(None)), Literal(String("no"), TyAttr(None))], TyAttr(None))
-  Function NestedEnumMatch:
-    Return: Union([Union([Literal(String("both active"), TyAttr(None)), Literal(String("first active, second inactive"), TyAttr(None)), Literal(String("first active, second pending"), TyAttr(None))], TyAttr(None)), Literal(String("first inactive"), TyAttr(None)), Literal(String("first pending"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveMixedLiterals:
-    Return: Union([Literal(String("http ok"), TyAttr(None)), Literal(String("string success"), TyAttr(None)), Literal(String("boolean true"), TyAttr(None))], TyAttr(None))
-  Function PartialUnionPlusCatchAll:
-    Return: Union([Literal(String("success or failure"), TyAttr(None)), Literal(String("pending"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveTrueType:
-    Return: Literal(String("always true"), TyAttr(None))
-  Function NestedMatchSpans:
-    Return: Union([Union([Literal(String("zero true"), TyAttr(None)), Literal(String("zero false"), TyAttr(None)), Literal(String("unreachable nested"), TyAttr(None))], TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function NonExhaustiveOptionalMissingValue:
-    Return: Literal(String("no code"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on MaybeOk: missing 200
-  Function GetStatus:
-    Return: Enum(QualifiedName { namespace: Local, name: "Status" }, TyAttr(None))
-  Function EnumVariantUnion:
-    Return: Union([Literal(String("actionable"), TyAttr(None)), Literal(String("inactive"), TyAttr(None))], TyAttr(None))
-  Function NestedTypeAlias:
-    Return: Union([String { attr: TyAttr(None) }, Literal(String("nothing"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveFalseType:
-    Return: Literal(String("always false"), TyAttr(None))
-  Function NonExhaustiveOptionalMissingNull:
-    Return: Literal(String("OK"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on MaybeOk: missing null
-  Function NonExhaustiveTrueTypeWrongLiteral:
-    Return: Literal(String("wrong!"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on AlwaysTrue: missing true
-  Function ExhaustiveWithNamedCatchAll:
-    Return: Union([Literal(Int(100), TyAttr(None)), Int { attr: TyAttr(None) }], TyAttr(None))
-  Function JumpTableTypeTag:
-    Return: Union([Literal(String("int"), TyAttr(None)), Literal(String("string"), TyAttr(None)), Literal(String("bool"), TyAttr(None)), Literal(String("float"), TyAttr(None))], TyAttr(None))
-  Function NestedTypeBindings:
-    Return: Union([Literal(Int(0), TyAttr(None)), Literal(Int(1), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function NonExhaustiveAliasOfLiterals:
-    Return: Literal(String("ok"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on OkOrCreated: missing 201
-  Function ExhaustiveAliasOfLiterals:
-    Return: Union([Literal(String("ok"), TyAttr(None)), Literal(String("created"), TyAttr(None))], TyAttr(None))
-  Function WrongLiteralTypeIntWithString:
-    Return: Literal(String("wrong type"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on int: missing int
-  Function ExhaustiveEnumWithCatchAll:
-    Return: Union([Literal(String("active"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
-  Function GuardedWithFallback:
-    Return: Union([Int { attr: TyAttr(None) }, Literal(Int(0), TyAttr(None))], TyAttr(None))
-  Function MatchArithmeticScrutinee:
-    Return: Union([Literal(String("zero"), TyAttr(None)), Literal(String("one"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
-  Function HighLineNumberNonExhaustive:
-    Return: Literal(String("active only"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on Status: missing Status.Inactive, Status.Pending
-  Function NonExhaustiveNullableEnumMissingVariant:
-    Return: Union([Literal(String("active"), TyAttr(None)), Literal(String("inactive"), TyAttr(None)), Literal(String("no status"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Non-exhaustive match on Status?: missing Status.Pending
-  Function DeeplyNestedLiterals:
-    Return: Literal(String("all success codes"), TyAttr(None))
-  Function NonExhaustiveFullResultMissingOne:
-    Return: String { attr: TyAttr(None) }
-    Errors:
-      - Non-exhaustive match on FullResult: missing Pending
-  Function ExhaustiveSingletonInt:
-    Return: Literal(String("OK"), TyAttr(None))
-  Function NonExhaustiveClassPlusLiteralMissingLiteral:
-    Return: String { attr: TyAttr(None) }
-    Errors:
-      - Non-exhaustive match on SuccessOr200: missing 200
-  Function ExhaustiveNullableEnumWithTypedPattern:
-    Return: Union([Literal(String("some status"), TyAttr(None)), Literal(String("no status"), TyAttr(None))], TyAttr(None))
-  Function DuplicateStringLiteral:
-    Return: Union([Literal(String("first user"), TyAttr(None)), Literal(String("second user"), TyAttr(None)), Literal(String("assistant"), TyAttr(None)), Literal(String("system"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function NonExhaustiveEnumMissingOne:
-    Return: Union([Literal(String("active"), TyAttr(None)), Literal(String("inactive"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Non-exhaustive match on Status: missing Status.Pending
-  Function MatchComplexScrutinee:
-    Return: Union([Literal(String("x was 0"), TyAttr(None)), Literal(String("x was 1"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
-  Function ExhaustiveOptional:
-    Return: Union([Literal(String("has value"), TyAttr(None)), Literal(String("no value"), TyAttr(None))], TyAttr(None))
-  Function NonExhaustiveCustomBoolMissing:
-    Return: Literal(String("yes"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on CustomBool: missing false
-  Function NonExhaustiveMixedLiterals:
-    Return: Union([Literal(String("http ok"), TyAttr(None)), Literal(String("string success"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Non-exhaustive match on MixedLiterals: missing true
-  Function NonExhaustiveClassPlusLiteralMissingClass:
-    Return: Literal(String("http ok"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on SuccessOr200: missing Success
-  Function UnreachableAfterCatchAll:
-    Return: Union([Literal(String("catch all"), TyAttr(None)), Literal(String("never reached"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function OptionalWithCatchAll:
-    Return: Union([Literal(String("no value"), TyAttr(None)), Literal(String("has value"), TyAttr(None))], TyAttr(None))
-  Function DuplicateBoolLiteral:
-    Return: Union([Literal(String("first true"), TyAttr(None)), Literal(String("second true"), TyAttr(None)), Literal(String("false"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function OverlappingTypedPatterns:
-    Return: Union([Literal(String("success"), TyAttr(None)), Literal(String("covers failure only (success already handled)"), TyAttr(None))], TyAttr(None))
-  Function StringLiteralAfterStringType:
-    Return: Union([Literal(String("any string"), TyAttr(None)), Literal(String("unreachable"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function NestedEnumVariantUnions:
-    Return: Literal(String("all statuses"), TyAttr(None))
-  Function UnionPatternCoversAll:
-    Return: Literal(String("covered"), TyAttr(None))
-  Function ExhaustiveWithUnderscore:
-    Return: Union([Literal(Int(100), TyAttr(None)), Literal(Int(200), TyAttr(None)), Literal(Int(0), TyAttr(None))], TyAttr(None))
-  Function PartialUnionPatternCoverage:
-    Return: Literal(String("not pending"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on FullResult: missing Pending
-  Function NonExhaustiveStringLiteral:
-    Return: Union([Literal(String("User"), TyAttr(None)), Literal(String("Assistant"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Non-exhaustive match on Role: missing "system"
-  Function MatchFunctionCallScrutinee:
-    Return: Union([Literal(String("active"), TyAttr(None)), Literal(String("inactive"), TyAttr(None)), Literal(String("pending"), TyAttr(None))], TyAttr(None))
-  Function StringLiteralWithCatchAll:
-    Return: Union([Literal(String("User message"), TyAttr(None)), Literal(String("Assistant message"), TyAttr(None)), Literal(String("Other"), TyAttr(None))], TyAttr(None))
-  Function JumpTableClassTypeTag:
-    Return: Union([Literal(String("cat"), TyAttr(None)), Literal(String("dog"), TyAttr(None)), Literal(String("bird"), TyAttr(None)), Literal(String("fish"), TyAttr(None))], TyAttr(None))
-  Function NonExhaustiveEnumMissingMultiple:
-    Return: Literal(String("active"), TyAttr(None))
-    Errors:
-      - Non-exhaustive match on Status: missing Status.Inactive, Status.Pending
-  Function MixedPatterns:
-    Return: Union([Literal(String("zero"), TyAttr(None)), Literal(String("one"), TyAttr(None)), Literal(String("positive"), TyAttr(None)), Literal(String("negative"), TyAttr(None))], TyAttr(None))
-  Function NonExhaustiveIntLiteral:
-    Return: Union([Literal(String("OK"), TyAttr(None)), Literal(String("Created"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Non-exhaustive match on SuccessCode: missing 204
-  Function LiteralAfterTypedPattern:
-    Return: Union([Literal(String("int"), TyAttr(None)), Literal(String("unreachable"), TyAttr(None))], TyAttr(None))
-    Errors:
-      - Unreachable match arm
-  Function EnumVariantUnionWithCatchAll:
-    Return: Union([Literal(String("actionable"), TyAttr(None)), Literal(String("other"), TyAttr(None))], TyAttr(None))
+=== TIR2 ===
+class user.Success {
+  data: string
+}
+class user.Failure {
+  reason: string
+}
+function user.UnreachableAfterCatchAll(x: int) -> string throws never {
+  { : "catch all" | "never reached"
+    match (x : int) : "catch all" | "never reached"
+      _ =>
+        "catch all" : "catch all"
+      n: int =>
+        "never reached" : "never reached"
+  }
+  !! 562..577: unreachable arm
+}
+function user.UnreachableMultiple(x: int) -> string throws never {
+  { : "catch all" | "unreachable 1" | "unreachable 2"
+    match (x : int) : "catch all" | "unreachable 1" | "unreachable 2"
+      _ =>
+        "catch all" : "catch all"
+      n: int =>
+        "unreachable 1" : "unreachable 1"
+      m: int =>
+        "unreachable 2" : "unreachable 2"
+  }
+  !! 746..761: unreachable arm
+  !! 781..796: unreachable arm
+}
+function user.ExhaustiveWithUnderscore(x: int) -> int throws never {
+  { : 100 | 200 | 0
+    match (x : int) : 100 | 200 | 0
+      1 =>
+        100 : 100
+      2 =>
+        200 : 200
+      _ =>
+        0 : 0
+  }
+}
+function user.ExhaustiveWithNamedCatchAll(x: int) -> int throws never {
+  { : 100 | int
+    match (x : int) : 100 | int
+      1 =>
+        100 : 100
+      other =>
+        other Add 1 : int
+  }
+}
+function user.GuardedOnlyNonExhaustive(x: int) -> int throws never {
+  { : int
+    match (x : int) : int
+      n: int if n Gt 0 =>
+        n Mul 2 : int
+      n: int if n Lt 0 =>
+        n Mul Neg 1 : int
+  }
+}
+function user.GuardedWithFallback(x: int) -> int throws never {
+  { : int | 0
+    match (x : int) : int | 0
+      n: int if n Gt 0 =>
+        n Mul 2 : int
+      _ =>
+        0 : 0
+  }
+}
+type user.Result = user.Success | user.Failure
+function user.ExhaustiveTypeAlias(r: user.Result) -> string throws never {
+  { : string
+    match (r : user.Result) : string
+      s: Success =>
+        s.data : string
+      f: Failure =>
+        f.reason : string
+  }
+}
+function user.ExhaustiveTypeAliasWithCatchAll(r: user.Result) -> string throws never {
+  { : string | "fallback"
+    match (r : user.Result) : string | "fallback"
+      s: Success =>
+        s.data : string
+      _ =>
+        "fallback" : "fallback"
+  }
+}
+enum user.Status
+function user.ExhaustiveEnumAllVariants(s: user.Status) -> string throws never {
+  { : "active" | "inactive" | "pending"
+    match (s : user.Status) : "active" | "inactive" | "pending"
+      Status.Active =>
+        "active" : "active"
+      Status.Inactive =>
+        "inactive" : "inactive"
+      Status.Pending =>
+        "pending" : "pending"
+  }
+}
+function user.ExhaustiveEnumWithCatchAll(s: user.Status) -> string throws never {
+  { : "active" | "other"
+    match (s : user.Status) : "active" | "other"
+      Status.Active =>
+        "active" : "active"
+      _ =>
+        "other" : "other"
+  }
+}
+function user.ExhaustiveLiteralWithBaseType(x: int) -> string throws never {
+  { : "ok" | "other"
+    match (x : int) : "ok" | "other"
+      200 =>
+        "ok" : "ok"
+      n: int =>
+        "other" : "other"
+  }
+}
+function user.OverlappingTypedPatterns(r: user.Result) -> string throws never {
+  { : "success" | "covers failure only (success already handled)"
+    match (r : user.Result) : "success" | "covers failure only (success already handled)"
+      _: Success =>
+        "success" : "success"
+      _: Success | Failure =>
+        "covers failure on..." : "covers failure only (success already handled)"
+  }
+}
+function user.OverlappingWithBindings(r: user.Result) -> string throws never {
+  { : string | "remaining"
+    match (r : user.Result) : string | "remaining"
+      s: Success =>
+        s.data : string
+      x: Success | Failure =>
+        "remaining" : "remaining"
+  }
+}
+function user.UnionPatternCoversAll(r: user.Result) -> string throws never {
+  { : "covered"
+    match (r : user.Result) : "covered"
+      x: Success | Failure =>
+        "covered" : "covered"
+  }
+}
+class user.Pending {
+  eta: int
+}
+type user.FullResult = user.Success | user.Failure | user.Pending
+function user.PartialUnionPlusCatchAll(r: user.FullResult) -> string throws never {
+  { : "success or failure" | "pending"
+    match (r : user.FullResult) : "success or failure" | "pending"
+      x: Success | Failure =>
+        "success or failure" : "success or failure"
+      _: Pending =>
+        "pending" : "pending"
+  }
+}
+function user.LiteralUnionWithCatchAll(code: int) -> string throws never {
+  { : "success" | "client error" | "other"
+    match (code : int) : "success" | "client error" | "other"
+      200 | 201 =>
+        "success" : "success"
+      400 | 404 =>
+        "client error" : "client error"
+      _ =>
+        "other" : "other"
+  }
+}
+function user.EnumVariantUnion(s: user.Status) -> string throws never {
+  { : "actionable" | "inactive"
+    match (s : user.Status) : "actionable" | "inactive"
+      Status.Active | Status.Pending =>
+        "actionable" : "actionable"
+      Status.Inactive =>
+        "inactive" : "inactive"
+  }
+}
+function user.EnumVariantUnionWithCatchAll(s: user.Status) -> string throws never {
+  { : "actionable" | "other"
+    match (s : user.Status) : "actionable" | "other"
+      Status.Active | Status.Pending =>
+        "actionable" : "actionable"
+      _ =>
+        "other" : "other"
+  }
+}
+function user.ExhaustiveBool(b: bool) -> string throws never {
+  { : "yes" | "no"
+    match (b : bool) : "yes" | "no"
+      true =>
+        "yes" : "yes"
+      false =>
+        "no" : "no"
+  }
+}
+function user.BoolWithCatchAll(b: bool) -> string throws never {
+  { : "yes" | "no"
+    match (b : bool) : "yes" | "no"
+      true =>
+        "yes" : "yes"
+      _ =>
+        "no" : "no"
+  }
+}
+function user.NonExhaustiveBoolMissingFalse(b: bool) -> string throws never {
+  { : "yes"
+    match (b : bool) : "yes"
+      true =>
+        "yes" : "yes"
+  }
+  !! 7236..7280: non-exhaustive match on `bool`; missing: false
+}
+function user.NonExhaustiveBoolMissingTrue(b: bool) -> string throws never {
+  { : "no"
+    match (b : bool) : "no"
+      false =>
+        "no" : "no"
+  }
+  !! 7395..7439: non-exhaustive match on `bool`; missing: true
+}
+function user.BoolUnionPattern(b: bool) -> string throws never {
+  { : "covered"
+    match (b : bool) : "covered"
+      true | false =>
+        "covered" : "covered"
+  }
+}
+type user.AlwaysTrue = true
+type user.AlwaysFalse = false
+type user.CustomBool = true | false
+function user.ExhaustiveTrueType(t: user.AlwaysTrue) -> string throws never {
+  { : "always true"
+    match (t : user.AlwaysTrue) : "always true"
+      true =>
+        "always true" : "always true"
+  }
+}
+function user.ExhaustiveFalseType(f: user.AlwaysFalse) -> string throws never {
+  { : "always false"
+    match (f : user.AlwaysFalse) : "always false"
+      false =>
+        "always false" : "always false"
+  }
+}
+function user.ExhaustiveCustomBool(b: user.CustomBool) -> string throws never {
+  { : "yes" | "no"
+    match (b : user.CustomBool) : "yes" | "no"
+      true =>
+        "yes" : "yes"
+      false =>
+        "no" : "no"
+  }
+}
+function user.NonExhaustiveTrueTypeWrongLiteral(t: user.AlwaysTrue) -> string throws never {
+  { : "wrong!"
+    match (t : user.AlwaysTrue) : "wrong!"
+      false =>
+        "wrong!" : "wrong!"
+  }
+}
+function user.NonExhaustiveCustomBoolMissing(b: user.CustomBool) -> string throws never {
+  { : "yes"
+    match (b : user.CustomBool) : "yes"
+      true =>
+        "yes" : "yes"
+  }
+}
+function user.ExhaustiveOptional(x: int?) -> string throws never {
+  { : "has value" | "no value"
+    match (x : int?) : "has value" | "no value"
+      n: int =>
+        "has value" : "has value"
+      null =>
+        "no value" : "no value"
+  }
+}
+function user.OptionalWithCatchAll(x: int?) -> string throws never {
+  { : "no value" | "has value"
+    match (x : int?) : "no value" | "has value"
+      null =>
+        "no value" : "no value"
+      _ =>
+        "has value" : "has value"
+  }
+}
+type user.Role = "user" | "assistant" | "system"
+function user.StringLiteralWithCatchAll(role: user.Role) -> string throws never {
+  { : "User message" | "Assistant message" | "Other"
+    match (role : user.Role) : "User message" | "Assistant message" | "Other"
+      "user" =>
+        "User message" : "User message"
+      "assistant" =>
+        "Assistant message" : "Assistant message"
+      _ =>
+        "Other" : "Other"
+  }
+}
+function user.ExhaustiveStringLiterals(role: user.Role) -> string throws never {
+  { : "User" | "Assistant" | "System"
+    match (role : user.Role) : "User" | "Assistant" | "System"
+      "user" =>
+        "User" : "User"
+      "assistant" =>
+        "Assistant" : "Assistant"
+      "system" =>
+        "System" : "System"
+  }
+}
+function user.NonExhaustiveStringLiteral(role: user.Role) -> string throws never {
+  { : "User" | "Assistant"
+    match (role : user.Role) : "User" | "Assistant"
+      "user" =>
+        "User" : "User"
+      "assistant" =>
+        "Assistant" : "Assistant"
+  }
+}
+function user.StringLiteralUnionPattern(role: user.Role) -> string throws never {
+  { : "chat participant" | "system"
+    match (role : user.Role) : "chat participant" | "system"
+      "user" | "assistant" =>
+        "chat participant" : "chat participant"
+      "system" =>
+        "system" : "system"
+  }
+}
+type user.HttpOk = 200
+type user.HttpCreated = 201
+type user.SuccessCode = 200 | 201 | 204
+function user.ExhaustiveSingletonInt(code: user.HttpOk) -> string throws never {
+  { : "OK"
+    match (code : user.HttpOk) : "OK"
+      200 =>
+        "OK" : "OK"
+  }
+}
+function user.ExhaustiveIntLiterals(code: user.SuccessCode) -> string throws never {
+  { : "OK" | "Created" | "No Content"
+    match (code : user.SuccessCode) : "OK" | "Created" | "No Content"
+      200 =>
+        "OK" : "OK"
+      201 =>
+        "Created" : "Created"
+      204 =>
+        "No Content" : "No Content"
+  }
+}
+function user.NonExhaustiveIntLiteral(code: user.SuccessCode) -> string throws never {
+  { : "OK" | "Created"
+    match (code : user.SuccessCode) : "OK" | "Created"
+      200 =>
+        "OK" : "OK"
+      201 =>
+        "Created" : "Created"
+  }
+}
+function user.IntLiteralUnionPattern(code: user.SuccessCode) -> string throws never {
+  { : "success with body" | "no content"
+    match (code : user.SuccessCode) : "success with body" | "no content"
+      200 | 201 =>
+        "success with body" : "success with body"
+      204 =>
+        "no content" : "no content"
+  }
+}
+type user.MaybeResult = user.Result?
+function user.NestedTypeAlias(mr: user.MaybeResult) -> string throws never {
+  { : string | "nothing"
+    match (mr : user.MaybeResult) : string | "nothing"
+      s: Success =>
+        s.data : string
+      f: Failure =>
+        f.reason : string
+      null =>
+        "nothing" : "nothing"
+  }
+}
+function user.MixedPatterns(x: int) -> string throws never {
+  { : "zero" | "one" | "positive" | "negative"
+    match (x : int) : "zero" | "one" | "positive" | "negative"
+      0 =>
+        "zero" : "zero"
+      1 =>
+        "one" : "one"
+      n: int if n Gt 0 =>
+        "positive" : "positive"
+      _ =>
+        "negative" : "negative"
+  }
+}
+function user.NonExhaustiveEnumMissingOne(s: user.Status) -> string throws never {
+  { : "active" | "inactive"
+    match (s : user.Status) : "active" | "inactive"
+      Status.Active =>
+        "active" : "active"
+      Status.Inactive =>
+        "inactive" : "inactive"
+  }
+  !! 13227..13322: non-exhaustive match on `user.Status`; missing: user.Status.Pending
+}
+function user.NonExhaustiveEnumMissingMultiple(s: user.Status) -> string throws never {
+  { : "active"
+    match (s : user.Status) : "active"
+      Status.Active =>
+        "active" : "active"
+  }
+  !! 13440..13496: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+}
+function user.DuplicateEnumVariant(s: user.Status) -> string throws never {
+  { : "first" | "second" | "inactive" | "pending"
+    match (s : user.Status) : "first" | "second" | "inactive" | "pending"
+      Status.Active =>
+        "first" : "first"
+      Status.Active =>
+        "second" : "second"
+      Status.Inactive =>
+        "inactive" : "inactive"
+      Status.Pending =>
+        "pending" : "pending"
+  }
+  !! 13912..13920: unreachable arm
+}
+function user.DuplicateIntLiteral(x: int) -> string throws never {
+  { : "first one" | "second one" | "other"
+    match (x : int) : "first one" | "second one" | "other"
+      1 =>
+        "first one" : "first one"
+      1 =>
+        "second one" : "second one"
+      _ =>
+        "other" : "other"
+  }
+}
+function user.DuplicateBoolLiteral(b: bool) -> string throws never {
+  { : "first true" | "second true" | "false"
+    match (b : bool) : "first true" | "second true" | "false"
+      true =>
+        "first true" : "first true"
+      true =>
+        "second true" : "second true"
+      false =>
+        "false" : "false"
+  }
+  !! 14347..14360: unreachable arm
+}
+function user.DuplicateStringLiteral(role: user.Role) -> string throws never {
+  { : "first user" | "second user" | "assistant" | "system"
+    match (role : user.Role) : "first user" | "second user" | "assistant" | "system"
+      "user" =>
+        "first user" : "first user"
+      "user" =>
+        "second user" : "second user"
+      "assistant" =>
+        "assistant" : "assistant"
+      "system" =>
+        "system" : "system"
+  }
+}
+type user.MaybeOk = 200?
+function user.ExhaustiveOptionalSingleton(code: user.MaybeOk) -> string throws never {
+  { : "OK" | "no code"
+    match (code : user.MaybeOk) : "OK" | "no code"
+      200 =>
+        "OK" : "OK"
+      null =>
+        "no code" : "no code"
+  }
+}
+function user.NonExhaustiveOptionalMissingNull(code: user.MaybeOk) -> string throws never {
+  { : "OK"
+    match (code : user.MaybeOk) : "OK"
+      200 =>
+        "OK" : "OK"
+  }
+}
+function user.NonExhaustiveOptionalMissingValue(code: user.MaybeOk) -> string throws never {
+  { : "no code"
+    match (code : user.MaybeOk) : "no code"
+      null =>
+        "no code" : "no code"
+  }
+}
+type user.MixedLiterals = 200 | "success" | true
+function user.ExhaustiveMixedLiterals(x: user.MixedLiterals) -> string throws never {
+  { : "http ok" | "string success" | "boolean true"
+    match (x : user.MixedLiterals) : "http ok" | "string success" | "boolean true"
+      200 =>
+        "http ok" : "http ok"
+      "success" =>
+        "string success" : "string success"
+      true =>
+        "boolean true" : "boolean true"
+  }
+}
+function user.NonExhaustiveMixedLiterals(x: user.MixedLiterals) -> string throws never {
+  { : "http ok" | "string success"
+    match (x : user.MixedLiterals) : "http ok" | "string success"
+      200 =>
+        "http ok" : "http ok"
+      "success" =>
+        "string success" : "string success"
+  }
+}
+type user.OkCode = 200
+type user.OkOrCreated = user.OkCode | 201
+function user.ExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string throws never {
+  { : "ok" | "created"
+    match (code : user.OkOrCreated) : "ok" | "created"
+      200 =>
+        "ok" : "ok"
+      201 =>
+        "created" : "created"
+  }
+}
+function user.NonExhaustiveAliasOfLiterals(code: user.OkOrCreated) -> string throws never {
+  { : "ok"
+    match (code : user.OkOrCreated) : "ok"
+      200 =>
+        "ok" : "ok"
+  }
+}
+type user.DoubleMaybe = user.MaybeResult?
+function user.ExhaustiveDoubleMaybe(dm: user.DoubleMaybe) -> string throws never {
+  { : string | "nothing"
+    match (dm : user.DoubleMaybe) : string | "nothing"
+      s: Success =>
+        s.data : string
+      f: Failure =>
+        f.reason : string
+      null =>
+        "nothing" : "nothing"
+  }
+}
+function user.NonExhaustiveDoubleMaybeMissingNull(dm: user.DoubleMaybe) -> string throws never {
+  { : string
+    match (dm : user.DoubleMaybe) : string
+      s: Success =>
+        s.data : string
+      f: Failure =>
+        f.reason : string
+  }
+}
+function user.NonExhaustiveTypeAliasMissingOne(r: user.Result) -> string throws never {
+  { : string
+    match (r : user.Result) : string
+      s: Success =>
+        s.data : string
+  }
+}
+function user.NonExhaustiveFullResultMissingOne(r: user.FullResult) -> string throws never {
+  { : string
+    match (r : user.FullResult) : string
+      s: Success =>
+        s.data : string
+      f: Failure =>
+        f.reason : string
+  }
+}
+function user.StringLiteralAfterStringType(s: string) -> string throws never {
+  { : "any string" | "unreachable"
+    match (s : string) : "any string" | "unreachable"
+      x: string =>
+        "any string" : "any string"
+      "hello" =>
+        "unreachable" : "unreachable"
+  }
+  !! 18678..18691: unreachable arm
+}
+function user.ExhaustiveNullableEnum(s: user.Status?) -> string throws never {
+  { : "active" | "inactive" | "pending" | "no status"
+    match (s : user.Status?) : "active" | "inactive" | "pending" | "no status"
+      Status.Active =>
+        "active" : "active"
+      Status.Inactive =>
+        "inactive" : "inactive"
+      Status.Pending =>
+        "pending" : "pending"
+      null =>
+        "no status" : "no status"
+  }
+  !! 19078..19086: unreachable arm
+  !! 19115..19125: unreachable arm
+  !! 19153..19162: unreachable arm
+  !! 19036..19197: non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
+}
+function user.ExhaustiveNullableEnumWithTypedPattern(s: user.Status?) -> string throws never {
+  { : "some status" | "no status"
+    match (s : user.Status?) : "some status" | "no status"
+      x: Status =>
+        "some status" : "some status"
+      null =>
+        "no status" : "no status"
+  }
+}
+function user.NonExhaustiveNullableEnumMissingNull(s: user.Status?) -> string throws never {
+  { : "active" | "inactive" | "pending"
+    match (s : user.Status?) : "active" | "inactive" | "pending"
+      Status.Active =>
+        "active" : "active"
+      Status.Inactive =>
+        "inactive" : "inactive"
+      Status.Pending =>
+        "pending" : "pending"
+  }
+  !! 19574..19582: unreachable arm
+  !! 19611..19621: unreachable arm
+  !! 19649..19658: unreachable arm
+  !! 19532..19664: non-exhaustive match on `user.Status?`; missing: null, user.Status.Active, user.Status.Inactive, user.Status.Pending
+}
+function user.NonExhaustiveNullableEnumMissingVariant(s: user.Status?) -> string throws never {
+  { : "active" | "inactive" | "no status"
+    match (s : user.Status?) : "active" | "inactive" | "no status"
+      Status.Active =>
+        "active" : "active"
+      Status.Inactive =>
+        "inactive" : "inactive"
+      null =>
+        "no status" : "no status"
+  }
+  !! 19831..19839: unreachable arm
+  !! 19868..19878: unreachable arm
+  !! 19789..19913: non-exhaustive match on `user.Status?`; missing: user.Status.Active, user.Status.Inactive, user.Status.Pending
+}
+type user.SuccessOr200 = user.Success | 200
+function user.ExhaustiveClassPlusLiteral(x: user.SuccessOr200) -> string throws never {
+  { : string | "http ok"
+    match (x : user.SuccessOr200) : string | "http ok"
+      s: Success =>
+        s.data : string
+      200 =>
+        "http ok" : "http ok"
+  }
+}
+function user.NonExhaustiveClassPlusLiteralMissingLiteral(x: user.SuccessOr200) -> string throws never {
+  { : string
+    match (x : user.SuccessOr200) : string
+      s: Success =>
+        s.data : string
+  }
+}
+function user.NonExhaustiveClassPlusLiteralMissingClass(x: user.SuccessOr200) -> string throws never {
+  { : "http ok"
+    match (x : user.SuccessOr200) : "http ok"
+      200 =>
+        "http ok" : "http ok"
+  }
+}
+function user.ExhaustiveEnumWithTypedPattern(s: user.Status) -> string throws never {
+  { : "any status"
+    match (s : user.Status) : "any status"
+      x: Status =>
+        "any status" : "any status"
+  }
+}
+function user.EnumVariantAfterTypedEnum(s: user.Status) -> string throws never {
+  { : "any status" | "unreachable"
+    match (s : user.Status) : "any status" | "unreachable"
+      x: Status =>
+        "any status" : "any status"
+      Status.Active =>
+        "unreachable" : "unreachable"
+  }
+  !! 21382..21395: unreachable arm
+}
+function user.WrongLiteralTypeBoolWithInt(b: bool) -> string throws never {
+  { : "wrong type"
+    match (b : bool) : "wrong type"
+      42 =>
+        "wrong type" : "wrong type"
+  }
+  !! 21872..21884: unreachable arm
+  !! 21841..21890: non-exhaustive match on `bool`; missing: false, true
+}
+function user.WrongLiteralTypeIntWithString(x: int) -> string throws never {
+  { : "wrong type"
+    match (x : int) : "wrong type"
+      "hello" =>
+        "wrong type" : "wrong type"
+  }
+}
+function user.PartialUnionPatternCoverage(r: user.FullResult) -> string throws never {
+  { : "not pending"
+    match (r : user.FullResult) : "not pending"
+      x: Success | Failure =>
+        "not pending" : "not pending"
+  }
+}
+function user.LiteralAfterTypedPattern(x: int) -> string throws never {
+  { : "int" | "unreachable"
+    match (x : int) : "int" | "unreachable"
+      n: int =>
+        "int" : "int"
+      42 =>
+        "unreachable" : "unreachable"
+  }
+  !! 23358..23371: unreachable arm
+}
+function user.BoolLiteralAfterTypedBool(b: bool) -> string throws never {
+  { : "any bool" | "unreachable"
+    match (b : bool) : "any bool" | "unreachable"
+      x: bool =>
+        "any bool" : "any bool"
+      true =>
+        "unreachable" : "unreachable"
+  }
+  !! 23554..23567: unreachable arm
+}
+function user.NestedTypeBindings(r: user.Result) -> int throws never {
+  { : 0 | 1
+    match (r : user.Result) : 0 | 1
+      s: Success | Failure =>
+        0 : 0
+      f: Failure =>
+        1 : 1
+  }
+  !! 24087..24088: unreachable arm
+}
+function user.NestedLiteralUnions(code: int) -> string throws never {
+  { : "success" | "client error" | "other"
+    match (code : int) : "success" | "client error" | "other"
+      200 | 201 | 202 | 204 =>
+        "success" : "success"
+      400 | 404 | 405 | 406 | 409 =>
+        "client error" : "client error"
+      _ =>
+        "other" : "other"
+  }
+}
+function user.DeeplyNestedLiterals(x: user.SuccessCode) -> string throws never {
+  { : "all success codes"
+    match (x : user.SuccessCode) : "all success codes"
+      200 | 201 | 204 =>
+        "all success codes" : "all success codes"
+  }
+}
+function user.ParenthesizedSingleLiteral(b: bool) -> string throws never {
+  { : "yes" | "no"
+    match (b : bool) : "yes" | "no"
+      true =>
+        "yes" : "yes"
+      false =>
+        "no" : "no"
+  }
+}
+function user.NestedEnumVariantUnions(s: user.Status) -> string throws never {
+  { : "all statuses"
+    match (s : user.Status) : "all statuses"
+      Status.Active | Status.Pending | Status.Inactive =>
+        "all statuses" : "all statuses"
+  }
+}
+function user.NestedMatchSpans(x: int, y: bool) -> string throws never {
+  { : "zero true" | "zero false" | "unreachable nested" | "other"
+    match (x : int) : "zero true" | "zero false" | "unreachable nested" | "other"
+      0 =>
+        match (y : bool) : "zero true" | "zero false" | "unreachable nested"
+          true =>
+            "zero true" : "zero true"
+          false =>
+            "zero false" : "zero false"
+          true =>
+            "unreachable nested" : "unreachable nested"
+      _ =>
+        "other" : "other"
+  }
+  !! 25648..25668: unreachable arm
+}
+function user.MultipleUnreachableSpans(s: user.Status) -> string throws never {
+  { : "active" | "duplicate 1" | "inactive" | "duplicate 2" | "pending"
+    match (s : user.Status) : "active" | "duplicate 1" | "inactive" | "duplicate 2" | "pending"
+      Status.Active =>
+        "active" : "active"
+      Status.Active =>
+        "duplicate 1" : "duplicate 1"
+      Status.Inactive =>
+        "inactive" : "inactive"
+      Status.Active =>
+        "duplicate 2" : "duplicate 2"
+      Status.Pending =>
+        "pending" : "pending"
+  }
+  !! 25968..25981: unreachable arm
+  !! 26047..26060: unreachable arm
+}
+function user.HighLineNumberNonExhaustive(s: user.Status) -> string throws never {
+  { : "active only"
+    match (s : user.Status) : "active only"
+      Status.Active =>
+        "active only" : "active only"
+  }
+  !! 26292..26353: non-exhaustive match on `user.Status`; missing: user.Status.Inactive, user.Status.Pending
+}
+function user.GetStatus() -> user.Status throws never {
+  { : user.Status.Active
+    Status.Active : user.Status.Active
+  }
+}
+function user.MatchFunctionCallScrutinee() -> string throws never {
+  { : "active" | "inactive" | "pending"
+    match (GetStatus() : user.Status) : "active" | "inactive" | "pending"
+      Status.Active =>
+        "active" : "active"
+      Status.Inactive =>
+        "inactive" : "inactive"
+      Status.Pending =>
+        "pending" : "pending"
+  }
+}
+function user.MatchArithmeticScrutinee(a: int, b: int) -> string throws never {
+  { : "zero" | "one" | "other"
+    match (a Add b : int) : "zero" | "one" | "other"
+      0 =>
+        "zero" : "zero"
+      1 =>
+        "one" : "one"
+      _ =>
+        "other" : "other"
+  }
+}
+function user.MatchComplexScrutinee(x: int) -> string throws never {
+  { : "x was 0" | "x was 1" | "other"
+    match (x Mul 2 Add 1 : int) : "x was 0" | "x was 1" | "other"
+      1 =>
+        "x was 0" : "x was 0"
+      3 =>
+        "x was 1" : "x was 1"
+      _ =>
+        "other" : "other"
+  }
+}
+function user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string throws never {
+  { : "all zero" | "z nonzero" | "y nonzero" | "x nonzero"
+    match (x : int) : "all zero" | "z nonzero" | "y nonzero" | "x nonzero"
+      0 =>
+        match (y : int) : "all zero" | "z nonzero" | "y nonzero"
+          0 =>
+            match (z : int) : "all zero" | "z nonzero"
+              0 =>
+                "all zero" : "all zero"
+              _ =>
+                "z nonzero" : "z nonzero"
+          _ =>
+            "y nonzero" : "y nonzero"
+      _ =>
+        "x nonzero" : "x nonzero"
+  }
+}
+function user.NestedEnumMatch(s1: user.Status, s2: user.Status) -> string throws never {
+  { : "both active" | "first active, second inactive" | "first active, second pending" | "first inactive" | "first pending"
+    match (s1 : user.Status) : "both active" | "first active, second inactive" | "first active, second pending" | "first inactive" | "first pending"
+      Status.Active =>
+        match (s2 : user.Status) : "both active" | "first active, second inactive" | "first active, second pending"
+          Status.Active =>
+            "both active" : "both active"
+          Status.Inactive =>
+            "first active, sec..." : "first active, second inactive"
+          Status.Pending =>
+            "first active, sec..." : "first active, second pending"
+      Status.Inactive =>
+        "first inactive" : "first inactive"
+      Status.Pending =>
+        "first pending" : "first pending"
+  }
+}
+enum user.DispatchState
+function user.JumpTableEnumDiscriminant(state: user.DispatchState) -> int throws never {
+  { : 10 | 20 | 30 | 40
+    match (state : user.DispatchState) : 10 | 20 | 30 | 40
+      DispatchState.Alpha =>
+        10 : 10
+      DispatchState.Beta =>
+        20 : 20
+      DispatchState.Gamma =>
+        30 : 30
+      DispatchState.Delta =>
+        40 : 40
+  }
+}
+function user.JumpTableTypeTag(value: int | string | bool | float) -> string throws never {
+  { : "int" | "string" | "bool" | "float"
+    match (value : int | string | bool | float) : "int" | "string" | "bool" | "float"
+      i: int =>
+        "int" : "int"
+      s: string =>
+        "string" : "string"
+      b: bool =>
+        "bool" : "bool"
+      f: float =>
+        "float" : "float"
+  }
+}
+class user.Cat {
+  name: string
+}
+class user.Dog {
+  name: string
+}
+class user.Bird {
+  name: string
+}
+class user.Fish {
+  name: string
+}
+function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.Fish) -> string throws never {
+  { : "cat" | "dog" | "bird" | "fish"
+    match (pet : user.Cat | user.Dog | user.Bird | user.Fish) : "cat" | "dog" | "bird" | "fish"
+      c: Cat =>
+        "cat" : "cat"
+      d: Dog =>
+        "dog" : "dog"
+      b: Bird =>
+        "bird" : "bird"
+      f: Fish =>
+        "fish" : "fish"
+  }
+}

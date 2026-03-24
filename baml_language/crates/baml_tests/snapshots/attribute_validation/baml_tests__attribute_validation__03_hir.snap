@@ -1,33 +1,18 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-class HasDuplicateField {
+=== HIR2 ===
+class user.HasDuplicateDescription {
+  name: string
+}
+class user.HasDuplicateField {
   name: string
   age: int
   name: int
 }
-
-class HasDuplicateDescription {
+class user.HasDuplicateFieldAttr {
   name: string
 }
-
-class HasDuplicateFieldAttr {
-  name: string
-}
-
-enum HasDuplicateVariant {
-  RED
-  BLUE
-  RED
-}
-
-enum HasDuplicateEnumAttr {
-  ONE
-  TWO
-}
-
-enum HasDuplicateVariantAttr {
-  ACTIVE
-  INACTIVE
-}
+enum user.HasDuplicateEnumAttr {ONE, TWO}
+enum user.HasDuplicateVariant {RED, BLUE, RED}
+enum user.HasDuplicateVariantAttr {ACTIVE, INACTIVE}

@@ -211,8 +211,10 @@ fn parse_rendered_output(
     // Check if this is a chat-style prompt (contains role delimiters)
     if rendered.contains(MAGIC_CHAT_ROLE_DELIMITER) {
         parse_chat_prompt(rendered, ctx, media_handles)
+    } else if rendered.contains(MAGIC_MEDIA_DELIMITER) {
+        let content = parse_message_content(rendered, media_handles);
+        PromptAst::Simple(std::sync::Arc::new(content))
     } else {
-        // Simple completion prompt
         rendered.to_string().into()
     }
 }

@@ -1,16 +1,49 @@
 ---
-source: target/debug/build/baml_tests-9a8b4d484ca600e9/out/generated_tests.rs
-expression: output
+source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
-  [parse] Error: Expected client name, found '<'
-    ╭─[ valid_generator.baml:21:11 ]
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:159:17 ]
+     │
+ 159 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:189:17 ]
+     │
+ 189 │ ╭─▶             _ => {
+     ┆ ┆   
+ 194 │ ├─▶             }
+     │ │                   
+     │ ╰─────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:208:17 ]
+     │
+ 208 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: type mismatch: expected baml.llm.Client, got null
+    ╭─[ valid_generator.baml:20:30 ]
     │
- 21 │     client<llm> MyClient
-    │           ┬  
-    │           ╰── Expected client name, found '<'
-    │ 
-    │ Note: Error code: E0010
+ 20 │ ╭─▶ function GetUser() -> MyClass {
+    ┆ ┆   
+ 23 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.llm.Client, got null
+    │     
+    │     Note: Error code: E0001
 ────╯
 
   [parse] Error: Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
@@ -19,6 +52,16 @@ expression: output
  21 │     client<llm> MyClient
     │           ┬  
     │           ╰── Expected Only 'client' and 'prompt' allowed in LLM function, found '<', found '<'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected client name, found '<'
+    ╭─[ valid_generator.baml:21:11 ]
+    │
+ 21 │     client<llm> MyClient
+    │           ┬  
+    │           ╰── Expected client name, found '<'
     │ 
     │ Note: Error code: E0010
 ────╯

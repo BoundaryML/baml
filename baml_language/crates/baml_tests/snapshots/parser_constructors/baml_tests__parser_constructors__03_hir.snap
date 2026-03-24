@@ -1,66 +1,52 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function floatArray() -> float[] {
-    [1.0, 2.0, 3.0]
-}
-
-function stringArray() -> string[] {
-    ["hello", "world", "test"]
-}
-
-function pointArray() -> Point[] {
-    [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }]
-}
-
-function boolArray() -> bool[] {
-    [true, false, true]
-}
-
-function mixedArray() -> (int | string)[] {
-    [1, "two", 3]
-}
-
-function intArray() -> int[] {
-    [1, 2, 3]
-}
-
-class Point {
+=== HIR2 ===
+class user.Point {
   x: int
   y: int
 }
-
-function point() -> Point {
-    Point { x: 1, y: 2 }
+function user.boolArray() -> bool[]  [expr] {
+  {  } [true, false, true]
 }
-
-function vec2d() -> Vec2D {
-    Vec2D { p: Point { x: 1, y: 2 }, q: Point { x: 3, y: 4 } }
+function user.floatArray() -> float[]  [expr] {
+  {  } [1.0, 2.0, 3.0]
 }
-
-class Vec2D {
-  p: Point
-  q: Point
+function user.intArray() -> int[]  [expr] {
+  {  } [1, 2, 3]
 }
-
-class Point {
+function user.mixedArray() -> int | string[]  [expr] {
+  {  } [1, "two", 3]
+}
+function user.pointArray() -> user.Point[]  [expr] {
+  {  } [user.Point { x: 1, y: 2 }, user.Point { x: 3, y: 4 }, user.Point { x: 5, y: 6 }]
+}
+function user.stringArray() -> string[]  [expr] {
+  {  } ["hello", "world", "test"]
+}
+class user.Point {
   x: int
   y: int
 }
-
-function boolValues() -> map<string, bool> {
-    { "hello": true, "test": false }
+class user.Vec2D {
+  p: user.Point
+  q: user.Point
 }
-
-function intValues() -> map<string, int> {
-    { "hello": 1, "test": 2 }
+function user.point() -> user.Point  [expr] {
+  {  } user.Point { x: 1, y: 2 }
 }
-
-function stringValues() -> map<string, string> {
-    { "hello": "world", "test": "test" }
+function user.vec2d() -> user.Vec2D  [expr] {
+  {  } user.Vec2D { p: user.Point { x: 1, y: 2 }, q: user.Point { x: 3, y: 4 } }
 }
-
-function floatValues() -> map<string, float> {
-    { "hello": 1.0, "test": 2.0 }
+function user.boolValues() -> map<string, bool>  [expr] {
+  {  } map { "hello": true, "test": false }
+}
+function user.floatValues() -> map<string, float>  [expr] {
+  {  } map { "hello": 1.0, "test": 2.0 }
+}
+function user.intValues() -> map<string, int>  [expr] {
+  {  } map { "hello": 1, "test": 2 }
+}
+function user.stringValues() -> map<string, string>  [expr] {
+  {  } map { "hello": "world", "test": "test" }
 }

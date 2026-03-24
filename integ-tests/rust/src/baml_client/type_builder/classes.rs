@@ -772,6 +772,12 @@ impl ClassWithoutDoneClassBuilder {
         self.inner.get_property("s_20_words")
             .expect("ClassWithoutDone.s_20_words is statically defined in .baml and should always be present")
     }
+
+    /// Access the `literal_status` field builder.
+    pub fn property_literal_status(&self) -> ::baml::ClassPropertyBuilder {
+        self.inner.get_property("literal_status")
+            .expect("ClassWithoutDone.literal_status is statically defined in .baml and should always be present")
+    }
 }
 
 /// Wrapper for the `ClientDetails1559` class builder.

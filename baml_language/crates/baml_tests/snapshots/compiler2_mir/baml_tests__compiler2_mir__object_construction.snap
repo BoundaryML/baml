@@ -1,9 +1,9 @@
 ---
 source: crates/baml_tests/src/compiler2_mir/mod.rs
 ---
-fn user.f() -> user.Point {
+fn user.f() -> Point {
     // Locals:
-    let _0: user.Point // _0 // return
+    let _0: Point // _0 // return
 
     bb0: {
         _0 = Point { const 1_i64, const 2_i64 };

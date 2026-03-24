@@ -3,11 +3,7 @@
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{
-    baml_compiler_diagnostics::Severity,
-    baml_compiler_emit,
-    baml_compiler_hir::{ItemId, file_item_tree, project_items},
-};
+use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, test_arg_to_external};
@@ -117,10 +113,10 @@ impl TestArgs {
         }
 
         // Compile to bytecode (with test cases included).
-        let compile_options = baml_compiler_emit::CompileOptions {
+        let compile_options = baml_compiler2_emit::CompileOptions {
             emit_test_cases: true,
         };
-        let bytecode = baml_compiler_emit::generate_project_bytecode(&db, &compile_options)
+        let bytecode = baml_compiler2_emit::generate_project_bytecode(&db, &compile_options)
             .map_err(|e| anyhow!("Compilation failed: {e:?}"))?;
 
         // Create the engine with native (tokio-based) sys ops.
@@ -211,22 +207,22 @@ fn build_ordered_args(
     Ok(ordered)
 }
 
-/// Walk the HIR to discover all (function_name, test_name) pairs.
+/// Walk the compiler2 HIR to discover all (function_name, test_name) pairs.
 ///
-/// Each test block references one or more functions via `function_refs`.
-/// We expand each test into one entry per referenced function, matching
-/// the old engine's `walk_function_test_pairs` behavior.
+/// NOTE: Stubbed — pending compiler2 `project_items` implementation.
+/// Returns empty until compiler2 has a cross-file test enumeration API.
+#[allow(unused_variables)]
 fn discover_tests(db: &ProjectDatabase, project: baml_workspace::Project) -> Vec<DiscoveredTest> {
-    let items = project_items(db, project);
+    use baml_db::{SourceFile, baml_compiler2_hir};
+
     let mut tests = Vec::new();
 
-    for item in items.items(db) {
-        if let ItemId::Test(test_loc) = item {
-            let file = test_loc.file(db);
-            let item_tree = file_item_tree(db, file);
-            let test = &item_tree[test_loc.id(db)];
-            let file_path = file.path(db);
+    // Walk all source files in the project.
+    for source_file in db.get_source_files() {
+        let item_tree = baml_compiler2_hir::file_item_tree(db, source_file);
+        let file_path = source_file.path(db);
 
+        for (id, test) in &item_tree.tests {
             for func_ref in &test.function_refs {
                 tests.push(DiscoveredTest {
                     function_name: func_ref.to_string(),

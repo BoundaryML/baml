@@ -69,6 +69,32 @@ impl std::error::Error for LoweringError {}
 
 pub use bex_vm_types::Program as ProgramAlias;
 
+/// Build a `TypeName` from a fully-qualified dotted path.
+///
+/// For user-defined types (package `"user"`), the display name omits the
+/// package prefix so that `class_name` and type signatures in tests/output
+/// show `"Point"` rather than `"user.Point"`.  For builtins (e.g. `"baml.*"`),
+/// the full FQ path is kept.
+fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
+    // Strip the "user." prefix from the display name for user-defined types.
+    let display = if fq.starts_with("user.") {
+        &fq["user.".len()..]
+    } else {
+        fq
+    };
+    let segments: Vec<&str> = fq.split('.').collect();
+    let name = baml_base::Name::new(*segments.last().expect("non-empty fq name"));
+    let module_path = segments[..segments.len() - 1]
+        .iter()
+        .map(|s| baml_base::Name::new(*s))
+        .collect();
+    baml_type::TypeName {
+        name,
+        module_path,
+        display_name: baml_base::Name::new(display),
+    }
+}
+
 /// Generate bytecode for the entire project.
 pub fn generate_project_bytecode(
     db: &dyn baml_compiler2_mir::Db,
@@ -126,6 +152,9 @@ pub fn generate_project_bytecode(
         let pkg_info = file_package(db, *file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let pkg_items = package_items(db, pkg_id);
+        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
+        let recursive_aliases =
+            baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
         for (_class_id, class_data) in item_tree.classes.iter() {
             // Build fully-qualified name: "user.MyClass" or "baml.ns.MyClass"
             let fq_name = if pkg_info.namespace_path.is_empty() {
@@ -151,7 +180,11 @@ pub fn generate_project_bytecode(
                             &[],
                             &mut diags,
                         );
-                        baml_compiler2_mir::convert_tir2_ty(&tir_ty)
+                        baml_compiler2_mir::convert_tir2_ty(
+                            &tir_ty,
+                            &type_aliases,
+                            &recursive_aliases,
+                        )
                     })
                     .unwrap_or_else(|| baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
@@ -161,6 +194,8 @@ pub fn generate_project_bytecode(
                     field_type,
                     description: None,
                     alias: None,
+                    skip: false,
+                    field_attr: Default::default(),
                 });
             }
 
@@ -168,7 +203,7 @@ pub fn generate_project_bytecode(
             class_type_tag_counter += 1;
 
             let class_obj_idx = program.add_object(Object::Class(Class {
-                name: fq_name.clone(),
+                name: fq_to_type_name(&fq_name),
                 fields,
                 description: None,
                 alias: None,
@@ -224,7 +259,7 @@ pub fn generate_project_bytecode(
             }
 
             let enum_obj_idx = program.add_object(Object::Enum(Enum {
-                name: fq_name.clone(),
+                name: fq_to_type_name(&fq_name),
                 variants,
                 description: None,
                 alias: None,
@@ -325,8 +360,9 @@ pub fn generate_project_bytecode(
 
             let fn_obj_idx = program.add_object(Object::Function(Box::new(compiled_fn)));
             program.function_indices.insert(fq_name.clone(), fn_obj_idx);
-            let gi = program.globals.len();
-            program.function_global_indices.insert(fq_name, gi);
+            program
+                .function_global_indices
+                .insert(fq_name, program.globals.len());
             program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
         }
     }
@@ -441,6 +477,37 @@ pub fn generate_project_bytecode(
     // Client values (including sub-clients, retry policies) flow through the $init pipeline.
     // Pass 7 is intentionally empty.
 
+    // --- Pass 7.5: Recursive type alias definitions (ctx.output_format bridge) ---
+    // Mirrors the legacy pipeline: only recursive aliases are stored in
+    // `Program.recursive_type_alias_defs`; non-recursive aliases are expanded inline
+    // by `convert_tir2_ty`. This is required for correct output_format rendering at runtime.
+    {
+        use std::collections::HashSet as _HashSet;
+        let mut seen_packages: _HashSet<String> = _HashSet::new();
+        for file in &all_files {
+            let pkg_info = file_package(db, *file);
+            if seen_packages.insert(pkg_info.package.to_string()) {
+                let pkg_id = PackageId::new(db, pkg_info.package.clone());
+                let pkg_items = package_items(db, pkg_id);
+                let type_aliases =
+                    baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
+                let recursive_aliases =
+                    baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+                for (qtn, tir_ty) in &type_aliases {
+                    if recursive_aliases.contains(qtn) {
+                        let mir_ty = baml_compiler2_mir::convert_tir2_ty(
+                            tir_ty,
+                            &type_aliases,
+                            &recursive_aliases,
+                        );
+                        let type_name = baml_compiler2_mir::qtn_to_type_name(qtn);
+                        program.recursive_type_alias_defs.insert(type_name, mir_ty);
+                    }
+                }
+            }
+        }
+    }
+
     // --- Pass 8: Test cases (only when requested) ---
     if options.emit_test_cases {
         for file in &all_files {
@@ -524,6 +591,8 @@ fn compute_function_metadata_from_item_tree(
     let pkg_info = file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
     let pkg_items = package_items(db, pkg_id);
+    let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
+    let recursive_aliases = baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
     let null_ty = || baml_type::Ty::Null {
         attr: baml_type::TyAttr::default(),
     };
@@ -537,7 +606,7 @@ fn compute_function_metadata_from_item_tree(
             &[],
             &mut diags,
         );
-        baml_compiler2_mir::convert_tir2_ty(&tir_ty)
+        baml_compiler2_mir::convert_tir2_ty(&tir_ty, &type_aliases, &recursive_aliases)
     };
 
     let param_types: Vec<baml_type::Ty> = func_data

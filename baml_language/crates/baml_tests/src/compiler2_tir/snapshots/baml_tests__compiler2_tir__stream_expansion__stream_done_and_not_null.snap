@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/compiler2_tir/stream_expansion.rs
+expression: "render_tir(&db, file)"
+---
+class user.Combined {
+  id: string
+  name: string
+  age: int
+  score: float
+}
+class user.stream_Combined {
+  id: string
+  name: null | string
+  age: int
+  score: null | float
+}

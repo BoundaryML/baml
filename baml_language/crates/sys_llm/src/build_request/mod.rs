@@ -91,10 +91,10 @@ pub(crate) trait LlmRequestBuilder {
         prompt: bex_vm_types::PromptAst,
     ) -> Result<String, BuildRequestError> {
         let mut body = serde_json::Map::new();
-        if let Some(model) = &client.options.model {
+        if let Some(model) = client.options.model.as_deref() {
             body.insert(
                 "model".to_string(),
-                serde_json::Value::String(model.clone()),
+                serde_json::Value::String(model.to_string()),
             );
         }
         body.extend(self.build_prompt_body(prompt));

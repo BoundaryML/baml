@@ -1277,7 +1277,6 @@ mod tests {
             "pub baml_sys_sleep: SysOpFn",
             "pub baml_sys_panic: SysOpFn",
             "pub baml_env_get: SysOpFn",
-            "pub baml_llm_get_client: SysOpFn",
         ];
 
         for f in &expected_fields {

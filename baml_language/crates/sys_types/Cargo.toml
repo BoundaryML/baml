@@ -18,6 +18,7 @@ bex_heap = { workspace = true }
 bex_vm_types = { workspace = true }
 sys_llm = { workspace = true }
 indexmap = { workspace = true }
+log = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync" ] }
 tokio-util = { workspace = true }

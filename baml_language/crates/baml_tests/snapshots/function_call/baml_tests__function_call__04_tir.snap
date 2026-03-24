@@ -1,16 +1,48 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== TYPE INFERENCE ===
-  Function array_length:
-    Return: Int { attr: TyAttr(None) }
-  Function param_in_if_statement:
-    Return: Union([Literal(Int(1), TyAttr(None)), Literal(Int(2), TyAttr(None))], TyAttr(None))
-  Function Bar:
-    Return: Int { attr: TyAttr(None) }
-  Function Foo:
-    Return: Int { attr: TyAttr(None) }
-  Function GreetBaz:
-    Return: String { attr: TyAttr(None) }
-  Function Baz.Greeting:
-    Return: String { attr: TyAttr(None) }
+=== TIR2 ===
+function user.array_length() -> int throws never {
+  { : never
+    let array = [1, 2, 3] : 1 | 2 | 3[]
+    return baml.Array.length(array) : int
+  }
+  !! 70..95: expected 0 argument(s), got 1
+}
+function user.Bar() -> int throws never {
+  { : int
+    let x = Foo(1) : int
+    x : int
+  }
+}
+function user.Foo(x: int) -> int throws never {
+  { : int
+    x Add 1 : int
+  }
+}
+function user.GreetBaz(n: string) -> string throws never {
+  { : string
+    let baz = Baz { name: n } : user.Baz
+    baz.Greeting() : string
+  }
+}
+class user.Baz {
+  name: string
+}
+function user.Baz.Greeting(self: user.Baz) -> string throws never {
+  { : string
+    "Hello, " Add self.name Add "!" : string
+  }
+}
+function user.param_in_if_statement(b: bool) -> int throws never {
+  { : 1 | 2
+    if (b : bool) : 1 | 2
+      { : 1
+        1 : 1
+      }
+    else
+      { : 2
+        2 : 2
+      }
+  }
+}

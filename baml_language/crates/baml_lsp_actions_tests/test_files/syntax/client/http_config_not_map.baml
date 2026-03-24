@@ -15,12 +15,32 @@ client<llm> HttpNotMap {
 
 //----
 //- diagnostics
-// Error: http must be a configuration block with timeout settings
-//    ╭─[ client_http_config_not_map.baml:5:5 ]
-//    │
-//  5 │     http "invalid"  // Should be a map
-//    │     ──┬─  
-//    │       ╰─── http must be a configuration block with timeout settings
-//    │ 
-//    │ Note: Error code: E0023
-// ───╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

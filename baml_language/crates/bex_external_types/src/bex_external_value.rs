@@ -87,6 +87,10 @@ impl UnionMetadata {
 pub enum BexExternalAdt {
     Collector(bex_vm_types::CollectorRef),
     Type(baml_type::Ty),
+    /// A rendered prompt AST (from `baml.llm.render_prompt`).
+    PromptAst(std::sync::Arc<baml_builtins::PromptAst>),
+    /// A media value (image, audio, etc.) passed as a function argument.
+    Media(std::sync::Arc<baml_builtins::MediaValue>),
 }
 
 /// A deep-copied value tree with no heap references.
@@ -314,6 +318,8 @@ impl BexExternalAdt {
         match self {
             BexExternalAdt::Collector(_) => "collector",
             BexExternalAdt::Type(_) => "type",
+            BexExternalAdt::PromptAst(_) => "prompt_ast",
+            BexExternalAdt::Media(_) => "media",
         }
     }
 }

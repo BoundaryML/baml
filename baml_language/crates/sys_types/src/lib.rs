@@ -370,35 +370,24 @@ pub struct SysOpContext {
     /// Prepended to templates by `get_jinja_template`.
     pub template_strings_macros: Arc<String>,
 
-    /// Client metadata for building full client trees, keyed by client name.
-    /// Used by `get_client` to recursively construct `LlmClient` with sub-clients and retry policies.
-    pub client_metadata: Arc<std::collections::HashMap<String, ClientBuildMeta>>,
-
-    /// Atomic round-robin counters, keyed by client name.
-    /// Used by `round_robin_next` to cycle through sub-clients.
-    pub round_robin_counters:
-        Arc<std::collections::HashMap<String, std::sync::Arc<std::sync::atomic::AtomicUsize>>>,
-
     /// Per-call cancellation token.
     ///
     /// Defaults to a never-cancelled token for the shared engine context.
     /// In `execute_sys_op`, a per-call clone is created with the real token.
     pub cancel: CancellationToken,
-}
 
-/// Pre-extracted metadata for building a Client tree at runtime.
-///
-/// Populated from HIR `Client` and `RetryPolicy` items during compilation.
-/// Used by `get_client` to recursively build `LlmClient` objects.
-pub struct ClientBuildMeta {
-    /// The client type (`Primitive`, `Fallback`, `RoundRobin`).
-    pub client_type: bex_vm_types::ClientBuildType,
-    /// Sub-client names (for composite clients: fallback/round-robin).
-    pub sub_client_names: Vec<String>,
-    /// Retry policy, if one was specified.
-    pub retry_policy: Option<io::owned::llm::RetryPolicy>,
-    /// Optional round-robin start index used to initialize the RR counter.
-    pub round_robin_start: Option<usize>,
+    /// Pre-extracted class definitions for output format rendering.
+    /// Keyed by class name.
+    pub class_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, ClassDefinition>>,
+
+    /// Pre-extracted enum definitions for output format rendering.
+    /// Keyed by enum name.
+    pub enum_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, EnumDefinition>>,
+
+    /// Recursive type alias definitions for output format rendering.
+    /// Only recursive aliases are stored (non-recursive ones are expanded inline).
+    /// Maps alias name → target type.
+    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>>,
 }
 
 /// Pre-extracted metadata for an LLM function.
@@ -414,6 +403,42 @@ pub struct LlmFunctionInfo {
     pub return_type: baml_type::Ty,
 }
 
+/// Pre-extracted class definition for output format rendering.
+#[derive(Clone, Debug)]
+pub struct ClassDefinition {
+    pub name: String,
+    pub description: Option<String>,
+    pub alias: Option<String>,
+    pub fields: Vec<ClassFieldDefinition>,
+}
+
+/// A field in a pre-extracted class definition.
+#[derive(Clone, Debug)]
+pub struct ClassFieldDefinition {
+    pub name: String,
+    pub field_type: baml_type::Ty,
+    pub description: Option<String>,
+    pub alias: Option<String>,
+    pub skip: bool,
+}
+
+/// Pre-extracted enum definition for output format rendering.
+#[derive(Clone, Debug)]
+pub struct EnumDefinition {
+    pub name: String,
+    pub description: Option<String>,
+    pub alias: Option<String>,
+    pub variants: Vec<EnumVariantDefinition>,
+}
+
+/// A variant in a pre-extracted enum definition.
+#[derive(Clone, Debug)]
+pub struct EnumVariantDefinition {
+    pub name: String,
+    pub description: Option<String>,
+    pub alias: Option<String>,
+}
+
 impl SysOpContext {
     /// Create an empty context (for testing or when no LLM functions exist).
     pub fn empty() -> Self {
@@ -421,9 +446,17 @@ impl SysOpContext {
             llm_functions: Arc::new(std::collections::HashMap::new()),
             function_global_indices: Arc::new(std::collections::HashMap::new()),
             template_strings_macros: Arc::new(String::new()),
-            client_metadata: Arc::new(std::collections::HashMap::new()),
-            round_robin_counters: Arc::new(std::collections::HashMap::new()),
             cancel: CancellationToken::new(),
+            class_definitions: Arc::new(
+                indexmap::IndexMap::<baml_type::TypeName, ClassDefinition>::new(),
+            ),
+            enum_definitions: Arc::new(
+                indexmap::IndexMap::<baml_type::TypeName, EnumDefinition>::new(),
+            ),
+            type_alias_definitions: Arc::new(indexmap::IndexMap::<
+                baml_type::TypeName,
+                baml_type::Ty,
+            >::new()),
         }
     }
 
@@ -513,7 +546,14 @@ impl<T> io::IoClassLlmClient for T {
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let resolve_fn_name = format!("{}$new", client.name);
-        let Some(global_index) = ctx.function_global_indices.get(&resolve_fn_name) else {
+        let global_index = ctx
+            .function_global_indices
+            .get(&resolve_fn_name)
+            .or_else(|| {
+                ctx.function_global_indices
+                    .get(&format!("user.{resolve_fn_name}"))
+            });
+        let Some(global_index) = global_index else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
                 "Client resolve function not found: {resolve_fn_name}"
             )));
@@ -609,6 +649,16 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
     }
 }
 
+/// Look up an LLM function by name, trying the bare name first then "user.{name}".
+fn lookup_llm_function<'a>(
+    function_name: &str,
+    llm_functions: &'a std::collections::HashMap<String, LlmFunctionInfo>,
+) -> Option<&'a LlmFunctionInfo> {
+    llm_functions
+        .get(function_name)
+        .or_else(|| llm_functions.get(&format!("user.{function_name}")))
+}
+
 impl<T> io::IoNamespaceLlm for T {
     fn get_jinja_template(
         &self,
@@ -617,7 +667,7 @@ impl<T> io::IoNamespaceLlm for T {
         function_name: String,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        let Some(info) = ctx.llm_functions.get(&function_name) else {
+        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
                 "LLM function not found: {function_name}"
             )));
@@ -631,58 +681,6 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(template)
     }
 
-    fn get_client(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::Client> {
-        let Some(info) = ctx.llm_functions.get(&function_name) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "LLM function not found: {function_name}"
-            )));
-        };
-        match build_io_client_tree(&info.client_name, &ctx.client_metadata) {
-            Ok(client) => SysOpOutput::ok(client),
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(e)),
-        }
-    }
-
-    fn round_robin_next(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        let Some(counter) = ctx.round_robin_counters.get(&client_name).cloned() else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "Round-robin counter not found for client: {client_name}"
-            )));
-        };
-        let val = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        #[allow(clippy::cast_possible_wrap)]
-        SysOpOutput::ok(val as i64)
-    }
-
-    fn round_robin_peek(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        let Some(counter) = ctx.round_robin_counters.get(&client_name).cloned() else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "Round-robin counter not found for client: {client_name}"
-            )));
-        };
-        let val = counter.load(std::sync::atomic::Ordering::SeqCst);
-        #[allow(clippy::cast_possible_wrap)]
-        SysOpOutput::ok(val as i64)
-    }
-
     fn get_return_type(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -690,7 +688,7 @@ impl<T> io::IoNamespaceLlm for T {
         function_name: String,
         ctx: &SysOpContext,
     ) -> SysOpOutput<baml_type::Ty> {
-        let Some(info) = ctx.llm_functions.get(&function_name) else {
+        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
                 "LLM function not found: {function_name}"
             )));
@@ -730,6 +728,7 @@ fn convert_io_primitive_client(
         name.clone(),
         provider.clone(),
         sys_llm::baml_std::PrimitiveClientOptions {
+            model: options.model.clone(),
             base_url: options.base_url.clone(),
             default_role: options.default_role.clone(),
             allowed_roles: options.allowed_roles.clone(),
@@ -741,51 +740,6 @@ fn convert_io_primitive_client(
             ..Default::default()
         },
     )
-}
-
-/// Convert a `ClientBuildType` to a `BexExternalValue` variant representation.
-fn client_type_to_external(ct: &bex_vm_types::ClientBuildType) -> BexExternalValue {
-    let variant_name = match ct {
-        bex_vm_types::ClientBuildType::Primitive => "Primitive",
-        bex_vm_types::ClientBuildType::Fallback => "Fallback",
-        bex_vm_types::ClientBuildType::RoundRobin => "RoundRobin",
-    };
-    BexExternalValue::Variant {
-        enum_name: "baml.llm.ClientType".to_string(),
-        variant_name: variant_name.to_string(),
-    }
-}
-
-/// Build new IO `Client` tree from local `ClientBuildMeta` (same logic as `build_client_tree`).
-fn build_io_client_tree(
-    client_name: &str,
-    metadata: &std::collections::HashMap<String, ClientBuildMeta>,
-) -> Result<io::owned::llm::Client, String> {
-    let Some(meta) = metadata.get(client_name) else {
-        return Err(format!("Client not found: {client_name}"));
-    };
-    let sub_clients: Vec<io::owned::llm::Client> = meta
-        .sub_client_names
-        .iter()
-        .map(|sub_name| build_io_client_tree(sub_name, metadata))
-        .collect::<Result<Vec<_>, _>>()?;
-    let retry = meta
-        .retry_policy
-        .as_ref()
-        .map(|r| io::owned::llm::RetryPolicy {
-            max_retries: r.max_retries,
-            initial_delay_ms: r.initial_delay_ms,
-            multiplier: r.multiplier,
-            max_delay_ms: r.max_delay_ms,
-        });
-    let counter = meta.round_robin_start.map(|s| s as i64).unwrap_or(0);
-    Ok(io::owned::llm::Client {
-        name: client_name.to_string(),
-        client_type: client_type_to_external(&meta.client_type),
-        sub_clients,
-        retry,
-        counter,
-    })
 }
 
 // ============================================================================

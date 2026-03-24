@@ -14,18 +14,45 @@ enum Test {
 
 //----
 //- diagnostics
-// Error: Duplicate variant `ONE` in enum `Test`
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: Duplicate variant `Test.ONE`
 //    ╭─[ enum_duplicate_value.baml:4:5 ]
-//    │
-//  4 │     ONE
-//    │     ─┬─  
-//    │      ╰─── duplicate definition
-//    │
-//    ├─[ enum_duplicate_value.baml:4:5 ]
 //    │
 //  2 │     ONE
 //    │     ─┬─  
-//    │      ╰─── first definition here
+//    │      ╰─── first defined as variant here
 //    │ 
-//    │ Note: Error code: E0013
+//  4 │     ONE
+//    │     ─┬─  
+//    │      ╰─── duplicate variant definition
+//    │ 
+//    │ Note: Error code: E0012
 // ───╯

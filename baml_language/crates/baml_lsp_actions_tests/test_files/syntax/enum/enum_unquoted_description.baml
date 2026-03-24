@@ -27,6 +27,35 @@ enum TestEnum {
 
 //----
 //- diagnostics
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 // Error: Expected ')', found identifier
 //     ╭─[ enum_enum_unquoted_description.baml:13:10 ]
 //     │
@@ -45,6 +74,19 @@ enum TestEnum {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: Duplicate variant `TestEnum.is`
+//     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
+//     │
+//  13 │     User is confused
+//     │          ─┬  
+//     │           ╰── first defined as variant here
+//     │ 
+//  16 │     User is excited
+//     │          ─┬  
+//     │           ╰── duplicate variant definition
+//     │ 
+//     │ Note: Error code: E0012
+// ────╯
 // Error: Expected ')', found identifier
 //     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
 //     │
@@ -62,19 +104,4 @@ enum TestEnum {
 //     │   ╰── Expected Unexpected token in enum body, found ')'
 //     │ 
 //     │ Note: Error code: E0010
-// ────╯
-// Error: Duplicate variant `is` in enum `TestEnum`
-//     ╭─[ enum_enum_unquoted_description.baml:16:10 ]
-//     │
-//  16 │     User is excited
-//     │          ─┬  
-//     │           ╰── duplicate definition
-//     │
-//     ├─[ enum_enum_unquoted_description.baml:16:10 ]
-//     │
-//  13 │     User is confused
-//     │          ─┬  
-//     │           ╰── first definition here
-//     │ 
-//     │ Note: Error code: E0013
 // ────╯

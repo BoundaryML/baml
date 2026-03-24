@@ -28,6 +28,35 @@ class Foo {
 
 //----
 //- diagnostics
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 // Error: Expected Unexpected token in class body, found if
 //     ╭─[ class_generator_keywords1.baml:12:5 ]
 //     │
@@ -45,13 +74,4 @@ class Foo {
 //     │           ╰──── field 'string' is missing a type annotation
 //     │ 
 //     │ Note: Error code: E0010
-// ────╯
-// Error: Field `ETA` in class `Foo` has the same name as its type `ETA`, which is not supported in generated Python code.
-//     ╭─[ class_generator_keywords1.baml:13:5 ]
-//     │
-//  13 │     ETA ETA?
-//     │     ─┬─  
-//     │      ╰─── Field `ETA` in class `Foo` has the same name as its type `ETA`, which is not supported in generated Python code.
-//     │ 
-//     │ Note: Error code: E0021
 // ────╯

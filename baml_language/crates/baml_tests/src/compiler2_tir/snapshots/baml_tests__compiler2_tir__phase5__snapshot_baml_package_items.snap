@@ -45,13 +45,9 @@ namespace baml.llm:
   class RetryPolicy { methods: [] }
   function build_request
   function call_llm_function<T>
-  function get_client
   function get_jinja_template
   function get_return_type
   function render_prompt
-  function resolve_primitive
-  function round_robin_next
-  function round_robin_peek
 namespace baml.math:
   function trunc
 namespace baml.media:

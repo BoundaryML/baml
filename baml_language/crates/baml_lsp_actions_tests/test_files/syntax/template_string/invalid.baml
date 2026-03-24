@@ -35,21 +35,32 @@ template_string FunctionWithBadParams(
 
 //----
 //- diagnostics
-// Error: Unknown type `Unknown`
-//    ╭─[ template_string_invalid.baml:2:11 ]
-//    │
-//  2 │     param: Unknown,
-//    │           ────┬───  
-//    │               ╰───── Unknown type `Unknown`
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: Unknown type `Unknown2`
-//    ╭─[ template_string_invalid.baml:3:12 ]
-//    │
-//  3 │     param2: Unknown2[],
-//    │            ─────┬─────  
-//    │                 ╰─────── Unknown type `Unknown2`
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

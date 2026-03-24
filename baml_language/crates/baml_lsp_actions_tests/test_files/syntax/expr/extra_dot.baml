@@ -58,6 +58,35 @@ function ModernFunction(x: int) -> int {
 
 //----
 //- diagnostics
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
 // Error: Expected expression, found '.'
 //     ╭─[ expr_extra_dot.baml:21:3 ]
 //     │
@@ -75,4 +104,17 @@ function ModernFunction(x: int) -> int {
 //     │   ╰── Expected expression, found '^'
 //     │ 
 //     │ Note: Error code: E0010
+// ────╯
+// Error: Duplicate binding `result` in `ModernFunction`
+//     ╭─[ expr_extra_dot.baml:34:7 ]
+//     │
+//  21 │   .let result = receipt.calculate();
+//     │        ───┬──  
+//     │           ╰──── first defined as binding here
+//     │ 
+//  34 │   let result = 100;
+//     │       ───┬──  
+//     │          ╰──── duplicate binding definition
+//     │ 
+//     │ Note: Error code: E0012
 // ────╯

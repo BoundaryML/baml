@@ -74,16 +74,7 @@ embed_crates = ["tools_onionskin", "bex_project"]
 [[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
 allowed_prefixes = ["compiler", "compiler2"]
-allowed_crates = [
-    "baml_db",
-    "baml_project",
-    "bridge_cffi",
-    "baml_type",
-    "baml_lsp2_actions",
-    # Build-time extractors parse stdlib .baml with the compiler2 front-end (lexer/parser/ast).
-    "baml_builtins_codegen",
-    "baml_builtins2_codegen",
-]
+allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions"]
 reason = "Use baml_db or baml_project to access compiler interfaces."
 
 [[namespaces.dependency_rules]]
@@ -94,13 +85,14 @@ reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_project", "baml_cli"]
+allowed_crates = ["baml_compiler_emit", "baml_project", "baml_cli"]
 reason = "Only compiler_emit and baml_project crates should depend on bex_vm_types (pure data layer)."
 
 
 # tools namespace configuration
 [[namespaces]]
 name = "tools"
+approved_prefixes = ["sap"]
 # Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
 name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size-gate" }
 

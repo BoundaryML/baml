@@ -75,8 +75,8 @@ pub fn function_throw_sets<'db>(
             })
             .collect();
 
-    let mut graph: baml_compiler_analysis::AnalysisGraph<Name, ThrowFact> =
-        baml_compiler_analysis::AnalysisGraph::new();
+    let mut graph: crate::analysis::AnalysisGraph<Name, ThrowFact> =
+        crate::analysis::AnalysisGraph::new();
 
     let mut call_edges: BTreeMap<Name, BTreeSet<Name>> = BTreeMap::new();
     let mut has_declared_contract: BTreeMap<Name, bool> = BTreeMap::new();

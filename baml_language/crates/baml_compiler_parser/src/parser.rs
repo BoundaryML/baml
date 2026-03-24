@@ -3462,7 +3462,14 @@ impl<'a> Parser<'a> {
             self.parse_throw_expr();
         } else if self.at(TokenKind::Word) {
             let text = self.current().map(|t| t.text.as_str()).unwrap_or("");
-            if text == "true" || text == "false" {
+            if text == "env"
+                && self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
+                && self.peek(2).map(|t| t.kind) == Some(TokenKind::Word)
+                && self.peek(3).map(|t| t.kind) != Some(TokenKind::LParen)
+            {
+                // env.FIELD sugar (not followed by `(`) — desugar to baml.env.get_or_panic("FIELD")
+                self.parse_env_access();
+            } else if text == "true" || text == "false" {
                 // Boolean literal
                 self.bump();
             } else if text == "null" {

@@ -37,21 +37,32 @@ client<llm> InvalidCompositeFields {
 
 //----
 //- diagnostics
-// Error: Unrecognized field `request_timeout_ms` in http configuration block. Did you mean `total_timeout_ms`? Composite clients (fallback/round-robin) only support: total_timeout_ms
-//     ╭─[ client_http_config_composite_wrong_field.baml:13:7 ]
-//     │
-//  13 │       request_timeout_ms 5000  // Not allowed for composite
-//     │       ─────────┬────────  
-//     │                ╰────────── Unrecognized field `request_timeout_ms` in http configuration block. Did you mean `total_timeout_ms`? Composite clients (fallback/round-robin) only support: total_timeout_ms
-//     │ 
-//     │ Note: Error code: E0024
-// ────╯
-// Error: Unrecognized field `connect_timeout_ms` in http configuration block. Did you mean `total_timeout_ms`? Composite clients (fallback/round-robin) only support: total_timeout_ms
-//     ╭─[ client_http_config_composite_wrong_field.baml:14:7 ]
-//     │
-//  14 │       connect_timeout_ms 3000  // Not allowed for composite
-//     │       ─────────┬────────  
-//     │                ╰────────── Unrecognized field `connect_timeout_ms` in http configuration block. Did you mean `total_timeout_ms`? Composite clients (fallback/round-robin) only support: total_timeout_ms
-//     │ 
-//     │ Note: Error code: E0024
-// ────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

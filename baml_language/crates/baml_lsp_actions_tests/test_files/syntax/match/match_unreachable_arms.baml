@@ -32,30 +32,50 @@ function DuplicateLiteral(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Unreachable match arm
-//     ╭─[ match_match_unreachable_arms.baml:28:5 ]
-//     │
-//  28 │     42 => "duplicate",
-//     │     ─┬  
-//     │      ╰── Unreachable match arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
-// Error: Unreachable match arm
-//     ╭─[ match_match_unreachable_arms.baml:11:5 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//     ╭─[ match_match_unreachable_arms.baml:11:15 ]
 //     │
 //  11 │     n: int => "unreachable"
-//     │     ───┬──  
-//     │        ╰──── Unreachable match arm
+//     │               ──────┬──────  
+//     │                     ╰──────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0063
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unreachable match arm
-//     ╭─[ match_match_unreachable_arms.baml:19:5 ]
+// Error: unreachable arm
+//     ╭─[ match_match_unreachable_arms.baml:19:22 ]
 //     │
 //  19 │     Status.Active => "duplicate",
-//     │     ──────┬──────  
-//     │           ╰──────── Unreachable match arm
+//     │                      ─────┬─────  
+//     │                           ╰─────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0063
+//     │ Note: Error code: E0001
 // ────╯

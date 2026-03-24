@@ -2044,7 +2044,7 @@ impl LoweringContext {
 
     /// Desugar a C-style for loop `for (let i = 0; cond; update) { body }`
     /// into:
-    ///   ```
+    ///   ```text
     ///   {
     ///     let i = 0;                // init_stmt  (Stmt::Let)
     ///     while cond {              // Stmt::While

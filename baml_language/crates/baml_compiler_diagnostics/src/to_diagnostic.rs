@@ -1090,6 +1090,19 @@ impl ToDiagnostic for HirDiagnostic {
                 format!("Syntax error in type builder block: {message}"),
             )
             .with_primary_span(*span),
+
+            HirDiagnostic::ReservedStreamPrefix {
+                item_kind,
+                item_name,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::ReservedStreamPrefix,
+                format!(
+                    "The `stream_` prefix is reserved for compiler-generated types. \
+                     Rename {item_kind} `{item_name}` to not start with `stream_`."
+                ),
+            )
+            .with_primary_span(*span),
         };
         diag.with_phase(DiagnosticPhase::Hir)
     }

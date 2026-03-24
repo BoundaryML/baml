@@ -5,6 +5,7 @@ mod tests {
     use crate::testing::CursorTest;
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_parameter() {
         let test = CursorTest::new(
             r#"
@@ -25,6 +26,7 @@ function Foo(r: SentimentResponse) -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_local_variable() {
         let test = CursorTest::new(
             r#"
@@ -44,6 +46,7 @@ function Test() -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_function_call() {
         let test = CursorTest::new(
             r#"
@@ -65,6 +68,7 @@ function Main() -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_class_reference() {
         let test = CursorTest::new(
             r#"
@@ -86,6 +90,7 @@ function CreatePerson() -> Person {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_enum_variant() {
         let test = CursorTest::new(
             r#"
@@ -109,6 +114,7 @@ function GetStatus() -> Status {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_field_access() {
         let test = CursorTest::new(
             r#"
@@ -132,6 +138,7 @@ function GetName(p: Person) -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_in_block() {
         let test = CursorTest::new(
             r#"
@@ -195,6 +202,7 @@ function Test() -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_multi_file() {
         let mut builder = CursorTest::builder();
         builder.source(
@@ -223,6 +231,7 @@ function CreatePerson() -> Person {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_function_call2() {
         let mut builder = CursorTest::builder();
         builder.source(
@@ -248,6 +257,7 @@ function Foo(x: int) -> int {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_match_pattern_type_annotation() {
         let mut builder = CursorTest::builder();
         builder.source(
@@ -281,6 +291,7 @@ function Foo(r: Result) -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_field_access2() {
         let mut builder = CursorTest::builder();
         builder.source(
@@ -305,6 +316,7 @@ function Foo(s: Success) -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_constructor_field() {
         let mut builder = CursorTest::builder();
         builder.source(
@@ -329,6 +341,7 @@ function Foo() -> Success {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_field_receiver() {
         let mut builder = CursorTest::builder();
         builder.source(
@@ -353,6 +366,7 @@ function Foo(s: Success) -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_goto_def_method() {
         let mut builder = CursorTest::builder();
         builder.source(

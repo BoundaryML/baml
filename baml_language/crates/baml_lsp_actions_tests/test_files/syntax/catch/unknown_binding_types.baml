@@ -12,48 +12,68 @@ function UnknownBindingTypes(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Type `any` is not allowed in catch bindings
-//    ╭─[ catch_unknown_binding_types.baml:6:21 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: invalid catch binding type `any`; use a concrete type instead
+//    ╭─[ catch_unknown_binding_types.baml:6:3 ]
 //    │
 //  6 │   MayFail(x) catch (e: any) {
-//    │                     ───┬──  
-//    │                        ╰──── Type `any` is not allowed in catch bindings
+//    │   ─────┬────  
+//    │        ╰────── invalid catch binding type `any`; use a concrete type instead
 //    │ 
-//    │ Note: Error code: E0093
+//    │ Note: Error code: E0001
 // ───╯
-// Error: Unknown type `any`
-//    ╭─[ catch_unknown_binding_types.baml:6:21 ]
+// Error: invalid catch binding type `unknown`; use a concrete type instead
+//    ╭─[ catch_unknown_binding_types.baml:6:3 ]
 //    │
 //  6 │   MayFail(x) catch (e: any) {
-//    │                     ───┬──  
-//    │                        ╰──── Unknown type `any`
+//    │   ─────┬────  
+//    │        ╰────── invalid catch binding type `unknown`; use a concrete type instead
 //    │ 
-//    │ Note: Error code: E0002
+//    │ Note: Error code: E0001
 // ───╯
-// Warning: Unreachable catch arm
-//    ╭─[ catch_unknown_binding_types.baml:7:5 ]
+// Error: unreachable arm
+//    ╭─[ catch_unknown_binding_types.baml:7:10 ]
 //    │
 //  7 │     _ => "caught any"
-//    │     ┬  
-//    │     ╰── Unreachable catch arm
+//    │          ──────┬─────  
+//    │                ╰─────── unreachable arm
 //    │ 
-//    │ Note: Error code: E0095
+//    │ Note: Error code: E0001
 // ───╯
-// Error: Type `unknown` is not allowed in catch bindings
-//    ╭─[ catch_unknown_binding_types.baml:8:12 ]
-//    │
-//  8 │   } catch (other: unknown) {
-//    │            ───────┬──────  
-//    │                   ╰──────── Type `unknown` is not allowed in catch bindings
-//    │ 
-//    │ Note: Error code: E0093
-// ───╯
-// Warning: Unreachable catch arm
-//    ╭─[ catch_unknown_binding_types.baml:9:5 ]
+// Error: unreachable arm
+//    ╭─[ catch_unknown_binding_types.baml:9:10 ]
 //    │
 //  9 │     _ => "caught unknown"
-//    │     ┬  
-//    │     ╰── Unreachable catch arm
+//    │          ────────┬───────  
+//    │                  ╰───────── unreachable arm
 //    │ 
-//    │ Note: Error code: E0095
+//    │ Note: Error code: E0001
 // ───╯

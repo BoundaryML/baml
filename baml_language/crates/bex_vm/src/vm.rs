@@ -337,6 +337,8 @@ pub struct BytecodeProgram {
     pub client_metadata: HashMap<String, bex_vm_types::ClientBuildMeta>,
     /// Compiled test cases.
     pub test_cases: Vec<bex_vm_types::TestCase>,
+    /// Recursive type alias definitions for output format rendering.
+    pub recursive_type_alias_defs: indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -364,10 +366,10 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
                 resolved_function_names.insert(func.name.clone(), (obj_idx, func.kind));
             }
             Object::Class(class) => {
-                resolved_class_names.insert(class.name.clone(), obj_idx);
+                resolved_class_names.insert(class.name.to_string(), obj_idx);
             }
             Object::Enum(enum_def) => {
-                resolved_enums_names.insert(enum_def.name.clone(), obj_idx);
+                resolved_enums_names.insert(enum_def.name.to_string(), obj_idx);
             }
             _ => {}
         }
@@ -383,6 +385,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
         template_strings_macros: program.template_strings_macros,
         client_metadata: program.client_metadata,
         test_cases: program.test_cases,
+        recursive_type_alias_defs: program.recursive_type_alias_defs,
     })
 }
 
@@ -1076,7 +1079,8 @@ impl BexVm {
     fn resolve_callable_target(&self, callee_value: Value) -> Result<(HeapPtr, usize), VmError> {
         let expected_type = FunctionType::Callable;
         let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
-        let Object::Function(callee_fn) = self.get_object(callee_ptr) else {
+        let obj = self.get_object(callee_ptr);
+        let Object::Function(callee_fn) = obj else {
             return Err(InternalError::TypeError {
                 expected: expected_type.into(),
                 got: ObjectType::of(self.get_object(callee_ptr)).into(),
@@ -2323,7 +2327,7 @@ impl BexVm {
                         let expected_type = FunctionType::SysOp;
                         let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
 
-                        // Can't dispatch if it's not a function ¯\_(ツ)_/¯
+                        // Can't dispatch if it's not a function
                         let Object::Function(callable_future) = self.get_object(callee_ptr) else {
                             return Err(InternalError::TypeError {
                                 expected: expected_type.into(),

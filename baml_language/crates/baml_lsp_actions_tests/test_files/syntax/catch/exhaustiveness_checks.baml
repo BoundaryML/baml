@@ -32,41 +32,54 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 
 //----
 //- diagnostics
-// Warning: Unreachable catch arm
-//     ╭─[ catch_exhaustiveness_checks.baml:27:5 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//     ╭─[ catch_exhaustiveness_checks.baml:17:9 ]
 //     │
-//  27 │     _ => match (pet) {
-//     │     ┬  
-//     │     ╰── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
+//  17 │ ╭─▶     _ => match (pet) {
+//     ┆ ┆   
+//  21 │ ├─▶     }
+//     │ │           
+//     │ ╰─────────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
 // ────╯
-// Error: Non-exhaustive match on `Pet`: missing cases Dog
+// Error: unreachable arm
 //     ╭─[ catch_exhaustiveness_checks.baml:27:9 ]
 //     │
 //  27 │ ╭─▶     _ => match (pet) {
 //     ┆ ┆   
 //  29 │ ├─▶     }
 //     │ │           
-//     │ ╰─────────── Non-exhaustive match on `Pet`: missing cases Dog
+//     │ ╰─────────── unreachable arm
 //     │     
-//     │     Note: Error code: E0062
-// ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_exhaustiveness_checks.baml:17:5 ]
-//     │
-//  17 │     _ => match (pet) {
-//     │     ┬  
-//     │     ╰── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
-// ────╯
-// Error: Unreachable match arm
-//     ╭─[ catch_exhaustiveness_checks.baml:20:7 ]
-//     │
-//  20 │       _ => "unreachable"
-//     │       ┬  
-//     │       ╰── Unreachable match arm
-//     │ 
-//     │ Note: Error code: E0063
+//     │     Note: Error code: E0001
 // ────╯

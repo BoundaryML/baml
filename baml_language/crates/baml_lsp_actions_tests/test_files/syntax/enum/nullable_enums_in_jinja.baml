@@ -241,138 +241,32 @@ function TestUnionTypesNoWarnings(input: MyInput) -> string {
 
 //----
 //- diagnostics
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//      ╭─[ enum_nullable_enums_in_jinja.baml:143:8 ]
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
 //      │
-//  143 │     {% if input.regular_status == "Active" %}
-//      │        ─────────────────┬─────────────────  
-//      │                         ╰─────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
 //      │ 
-//      │ Note: Error code: E0076
+//      │ Note: Error code: E0001
 // ─────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:89:8 ]
-//     │
-//  89 │     {% if input.nullable_status == input.nullable_priority %}
-//     │        ─────────────────────────┬─────────────────────────  
-//     │                                 ╰─────────────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:91:8 ]
-//     │
-//  91 │     {% elif input.nullable_status != input.nullable_priority %}
-//     │        ──────────────────────────┬──────────────────────────  
-//     │                                  ╰──────────────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:40:8 ]
-//     │
-//  40 │     {% if input.nullable_status == "Active" %}
-//     │        ──────────────────┬─────────────────  
-//     │                          ╰─────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:42:8 ]
-//     │
-//  42 │     {% elif input.nullable_status == "inactive" %}
-//     │        ────────────────────┬───────────────────  
-//     │                            ╰───────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:44:8 ]
-//     │
-//  44 │     {% elif "Pending" == input.nullable_status %}
-//     │        ───────────────────┬───────────────────  
-//     │                           ╰───────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:46:8 ]
-//     │
-//  46 │     {% elif input.nullable_status != "Inactive" %}
-//     │        ────────────────────┬───────────────────  
-//     │                            ╰───────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:51:8 ]
-//     │
-//  51 │     {% if input.nullable_status > "AAA" %}
-//     │        ────────────────┬───────────────  
-//     │                        ╰───────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:53:8 ]
-//     │
-//  53 │     {% elif input.nullable_status <= "Zzz" %}
-//     │        ─────────────────┬─────────────────  
-//     │                         ╰─────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:55:8 ]
-//     │
-//  55 │     {% elif input.nullable_status >= "Active" %}
-//     │        ───────────────────┬──────────────────  
-//     │                           ╰──────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:60:8 ]
-//     │
-//  60 │     {% if input.nullable_priority == "High" %}
-//     │        ──────────────────┬─────────────────  
-//     │                          ╰─────────────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:62:8 ]
-//     │
-//  62 │     {% elif input.nullable_priority != "Low" %}
-//     │        ──────────────────┬──────────────────  
-//     │                          ╰──────────────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:67:11 ]
-//     │
-//  67 │     {% if (input.nullable_status == "Active") and (input.nullable_priority != "Low") %}
-//     │           ─────────────────┬────────────────  
-//     │                            ╰────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:67:51 ]
-//     │
-//  67 │     {% if (input.nullable_status == "Active") and (input.nullable_priority != "Low") %}
-//     │                                                   ────────────────┬────────────────  
-//     │                                                                   ╰────────────────── Comparing enum Priority to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
-// Warning: Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     ╭─[ enum_nullable_enums_in_jinja.baml:72:33 ]
-//     │
-//  72 │     {% if input.nullable_status and input.nullable_status == "Pending" %}
-//     │                                 ───────────────────┬──────────────────  
-//     │                                                    ╰──────────────────── Comparing enum Status to string - enum-string comparisons will soon be deprecated. Please see https://github.com/BoundaryML/baml/issues/2339.
-//     │ 
-//     │ Note: Error code: E0076
-// ────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

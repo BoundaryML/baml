@@ -21,12 +21,32 @@ test MyTest {
 
 //----
 //- diagnostics
-// Error: @check is not allowed on test fields. Use @@check at the test block level instead.
-//     ╭─[ functions_v2_tests_field_level_check.baml:12:4 ]
-//     │
-//  12 │   } @check(args_check, {{ true }})
-//     │    ───────────────┬───────────────  
-//     │                   ╰───────────────── @check is not allowed on test fields. Use @@check at the test block level instead.
-//     │ 
-//     │ Note: Error code: E0036
-// ────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:159:17 ]
+//      │
+//  159 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:189:17 ]
+//      │
+//  189 │ ╭─▶             _ => {
+//      ┆ ┆   
+//  194 │ ├─▶             }
+//      │ │                   
+//      │ ╰─────────────────── unreachable arm
+//      │     
+//      │     Note: Error code: E0001
+// ─────╯
+// Error: unreachable arm
+//      ╭─[ llm_types.baml:208:17 ]
+//      │
+//  208 │             _ => { continue; }
+//      │                 ───────┬──────  
+//      │                        ╰──────── unreachable arm
+//      │ 
+//      │ Note: Error code: E0001
+// ─────╯

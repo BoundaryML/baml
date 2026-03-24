@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function BoolLiteralAfterTypedBool(b: bool) -> string {
+function user.BoolLiteralAfterTypedBool(b: bool) -> string {
     load_var b
     type_tag
     load_const 2
@@ -10,6 +10,10 @@ function BoolLiteralAfterTypedBool(b: bool) -> string {
     jump L1
 
   L0:
+    load_var b
+    load_const true
+    cmp_op ==
+    pop_jump_if_false L2
     load_const "unreachable"
     jump L2
 
@@ -20,19 +24,25 @@ function BoolLiteralAfterTypedBool(b: bool) -> string {
     return
 }
 
-function BoolUnionPattern(b: bool) -> string {
+function user.BoolUnionPattern(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
     pop_jump_if_false L0
-    jump L0
+    jump L1
 
   L0:
+    load_var b
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L1
+
+  L1:
     load_const "covered"
     return
 }
 
-function BoolWithCatchAll(b: bool) -> string {
+function user.BoolWithCatchAll(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
@@ -50,7 +60,7 @@ function BoolWithCatchAll(b: bool) -> string {
     return
 }
 
-function DeeplyNestedLiterals(x: 200 | 201 | 204) -> string {
+function user.DeeplyNestedLiterals(x: 200 | 201 | 204) -> string {
     load_var x
     copy 0
     load_const 200
@@ -74,15 +84,11 @@ function DeeplyNestedLiterals(x: 200 | 201 | 204) -> string {
 
   L2:
     pop 1
-    jump L3
     load_const "all success codes"
     return
-
-  L3:
-    unreachable
 }
 
-function DuplicateBoolLiteral(b: bool) -> string {
+function user.DuplicateBoolLiteral(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
@@ -97,6 +103,10 @@ function DuplicateBoolLiteral(b: bool) -> string {
     jump L2
 
   L1:
+    load_var b
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L4
     load_const "false"
     jump L4
 
@@ -111,7 +121,7 @@ function DuplicateBoolLiteral(b: bool) -> string {
     return
 }
 
-function DuplicateEnumVariant(s: Status) -> string {
+function user.DuplicateEnumVariant(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -145,7 +155,7 @@ function DuplicateEnumVariant(s: Status) -> string {
     return
 }
 
-function DuplicateIntLiteral(x: int) -> string {
+function user.DuplicateIntLiteral(x: int) -> string {
     load_var x
     copy 0
     load_const 1
@@ -166,7 +176,7 @@ function DuplicateIntLiteral(x: int) -> string {
     return
 }
 
-function DuplicateStringLiteral(role: "user" | "assistant" | "system") -> string {
+function user.DuplicateStringLiteral(role: "user" | "assistant" | "system") -> string {
     load_var role
     load_const "user"
     cmp_op ==
@@ -210,7 +220,7 @@ function DuplicateStringLiteral(role: "user" | "assistant" | "system") -> string
     return
 }
 
-function EnumVariantAfterTypedEnum(s: Status) -> string {
+function user.EnumVariantAfterTypedEnum(s: Status) -> string {
     load_var s
     type_tag
     load_const 5
@@ -219,6 +229,11 @@ function EnumVariantAfterTypedEnum(s: Status) -> string {
     jump L1
 
   L0:
+    load_var s
+    load_const user.Status.Active
+    alloc_variant user.Status
+    cmp_op ==
+    pop_jump_if_false L2
     load_const "unreachable"
     jump L2
 
@@ -229,7 +244,7 @@ function EnumVariantAfterTypedEnum(s: Status) -> string {
     return
 }
 
-function EnumVariantUnion(s: Status) -> string {
+function user.EnumVariantUnion(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -259,7 +274,7 @@ function EnumVariantUnion(s: Status) -> string {
     return
 }
 
-function EnumVariantUnionWithCatchAll(s: Status) -> string {
+function user.EnumVariantUnionWithCatchAll(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -289,7 +304,7 @@ function EnumVariantUnionWithCatchAll(s: Status) -> string {
     return
 }
 
-function ExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
+function user.ExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     load_var code
     copy 0
     load_const 200
@@ -307,7 +322,7 @@ function ExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
 
   L1:
     pop 1
-    jump L4
+    jump L3
     load_const "created"
     jump L3
 
@@ -316,12 +331,9 @@ function ExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
 
   L3:
     return
-
-  L4:
-    unreachable
 }
 
-function ExhaustiveBool(b: bool) -> string {
+function user.ExhaustiveBool(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
@@ -329,6 +341,10 @@ function ExhaustiveBool(b: bool) -> string {
     jump L1
 
   L0:
+    load_var b
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L2
     load_const "no"
     jump L2
 
@@ -339,7 +355,7 @@ function ExhaustiveBool(b: bool) -> string {
     return
 }
 
-function ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
+function user.ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
     load_var x
     load_const Success
     cmp_op instanceof
@@ -362,7 +378,7 @@ function ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
     return
 }
 
-function ExhaustiveCustomBool(b: true | false) -> string {
+function user.ExhaustiveCustomBool(b: true | false) -> string {
     load_var b
     load_const true
     cmp_op ==
@@ -384,7 +400,7 @@ function ExhaustiveCustomBool(b: true | false) -> string {
     return
 }
 
-function ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
+function user.ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
     load_var dm
     load_const Success
     cmp_op instanceof
@@ -419,7 +435,7 @@ function ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
     return
 }
 
-function ExhaustiveEnumAllVariants(s: Status) -> string {
+function user.ExhaustiveEnumAllVariants(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -453,7 +469,7 @@ function ExhaustiveEnumAllVariants(s: Status) -> string {
     return
 }
 
-function ExhaustiveEnumWithCatchAll(s: Status) -> string {
+function user.ExhaustiveEnumWithCatchAll(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -475,12 +491,19 @@ function ExhaustiveEnumWithCatchAll(s: Status) -> string {
     return
 }
 
-function ExhaustiveEnumWithTypedPattern(s: Status) -> string {
+function user.ExhaustiveEnumWithTypedPattern(s: Status) -> string {
+    load_var s
+    type_tag
+    load_const 5
+    cmp_op ==
+    pop_jump_if_false L0
+
+  L0:
     load_const "any status"
     return
 }
 
-function ExhaustiveFalseType(f: false) -> string {
+function user.ExhaustiveFalseType(f: false) -> string {
     load_var f
     load_const false
     cmp_op ==
@@ -491,7 +514,7 @@ function ExhaustiveFalseType(f: false) -> string {
     return
 }
 
-function ExhaustiveIntLiterals(code: 200 | 201 | 204) -> string {
+function user.ExhaustiveIntLiterals(code: 200 | 201 | 204) -> string {
     load_var code
     copy 0
     load_const 200
@@ -517,7 +540,7 @@ function ExhaustiveIntLiterals(code: 200 | 201 | 204) -> string {
 
   L2:
     pop 1
-    jump L6
+    jump L5
     load_const "No Content"
     jump L5
 
@@ -530,12 +553,9 @@ function ExhaustiveIntLiterals(code: 200 | 201 | 204) -> string {
 
   L5:
     return
-
-  L6:
-    unreachable
 }
 
-function ExhaustiveLiteralWithBaseType(x: int) -> string {
+function user.ExhaustiveLiteralWithBaseType(x: int) -> string {
     load_var x
     load_const 200
     cmp_op ==
@@ -543,6 +563,11 @@ function ExhaustiveLiteralWithBaseType(x: int) -> string {
     jump L1
 
   L0:
+    load_var x
+    type_tag
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L2
     load_const "other"
     jump L2
 
@@ -553,7 +578,7 @@ function ExhaustiveLiteralWithBaseType(x: int) -> string {
     return
 }
 
-function ExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
+function user.ExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
     load_var x
     load_const 200
     cmp_op ==
@@ -586,31 +611,35 @@ function ExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
     return
 }
 
-function ExhaustiveNullableEnum(s: Status?) -> string {
+function user.ExhaustiveNullableEnum(s: Status?) -> string {
     load_var s
-    load_const Status.Active
-    alloc_variant Status
+    load_const user.Status.Active
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L0
     jump L5
 
   L0:
     load_var s
-    load_const Status.Inactive
-    alloc_variant Status
+    load_const user.Status.Inactive
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L1
     jump L4
 
   L1:
     load_var s
-    load_const Status.Pending
-    alloc_variant Status
+    load_const user.Status.Pending
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L2
     jump L3
 
   L2:
+    load_var s
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L6
     load_const "no status"
     jump L6
 
@@ -629,7 +658,7 @@ function ExhaustiveNullableEnum(s: Status?) -> string {
     return
 }
 
-function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
+function user.ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     load_var s
     type_tag
     load_const 5
@@ -638,6 +667,10 @@ function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     jump L1
 
   L0:
+    load_var s
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
     load_const "no status"
     jump L2
 
@@ -648,7 +681,7 @@ function ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     return
 }
 
-function ExhaustiveOptional(x: int?) -> string {
+function user.ExhaustiveOptional(x: int?) -> string {
     load_var x
     type_tag
     load_const 0
@@ -657,6 +690,10 @@ function ExhaustiveOptional(x: int?) -> string {
     jump L1
 
   L0:
+    load_var x
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L2
     load_const "no value"
     jump L2
 
@@ -667,7 +704,7 @@ function ExhaustiveOptional(x: int?) -> string {
     return
 }
 
-function ExhaustiveOptionalSingleton(code: 200?) -> string {
+function user.ExhaustiveOptionalSingleton(code: 200?) -> string {
     load_var code
     load_const 200
     cmp_op ==
@@ -689,7 +726,7 @@ function ExhaustiveOptionalSingleton(code: 200?) -> string {
     return
 }
 
-function ExhaustiveSingletonInt(code: 200) -> string {
+function user.ExhaustiveSingletonInt(code: 200) -> string {
     load_var code
     copy 0
     load_const 200
@@ -699,15 +736,11 @@ function ExhaustiveSingletonInt(code: 200) -> string {
 
   L0:
     pop 1
-    jump L1
     load_const "OK"
     return
-
-  L1:
-    unreachable
 }
 
-function ExhaustiveStringLiterals(role: "user" | "assistant" | "system") -> string {
+function user.ExhaustiveStringLiterals(role: "user" | "assistant" | "system") -> string {
     load_var role
     load_const "user"
     cmp_op ==
@@ -740,7 +773,7 @@ function ExhaustiveStringLiterals(role: "user" | "assistant" | "system") -> stri
     return
 }
 
-function ExhaustiveTrueType(t: true) -> string {
+function user.ExhaustiveTrueType(t: true) -> string {
     load_var t
     load_const true
     cmp_op ==
@@ -751,7 +784,7 @@ function ExhaustiveTrueType(t: true) -> string {
     return
 }
 
-function ExhaustiveTypeAlias(r: Success | Failure) -> string {
+function user.ExhaustiveTypeAlias(r: Success | Failure) -> string {
     load_var r
     load_const Success
     cmp_op instanceof
@@ -775,7 +808,7 @@ function ExhaustiveTypeAlias(r: Success | Failure) -> string {
     return
 }
 
-function ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
+function user.ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
     load_var r
     load_const Success
     cmp_op instanceof
@@ -794,7 +827,7 @@ function ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
     return
 }
 
-function ExhaustiveWithNamedCatchAll(x: int) -> int {
+function user.ExhaustiveWithNamedCatchAll(x: int) -> int {
     load_var x
     copy 0
     load_const 1
@@ -817,7 +850,7 @@ function ExhaustiveWithNamedCatchAll(x: int) -> int {
     return
 }
 
-function ExhaustiveWithUnderscore(x: int) -> int {
+function user.ExhaustiveWithUnderscore(x: int) -> int {
     load_var x
     copy 0
     load_const 1
@@ -850,13 +883,13 @@ function ExhaustiveWithUnderscore(x: int) -> int {
     return
 }
 
-function GetStatus() -> Status {
-    load_const Status.Active
-    alloc_variant Status
+function user.GetStatus() -> Status {
+    load_const user.Status.Active
+    alloc_variant user.Status
     return
 }
 
-function GuardedOnlyNonExhaustive(x: int) -> int {
+function user.GuardedOnlyNonExhaustive(x: int) -> int {
     load_var x
     type_tag
     load_const 0
@@ -893,7 +926,7 @@ function GuardedOnlyNonExhaustive(x: int) -> int {
     return
 }
 
-function GuardedWithFallback(x: int) -> int {
+function user.GuardedWithFallback(x: int) -> int {
     load_var x
     type_tag
     load_const 0
@@ -918,7 +951,7 @@ function GuardedWithFallback(x: int) -> int {
     return
 }
 
-function HighLineNumberNonExhaustive(s: Status) -> string {
+function user.HighLineNumberNonExhaustive(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -929,15 +962,11 @@ function HighLineNumberNonExhaustive(s: Status) -> string {
 
   L0:
     pop 1
-    jump L1
     load_const "active only"
     return
-
-  L1:
-    unreachable
 }
 
-function IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
+function user.IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
     load_var code
     copy 0
     load_const 200
@@ -963,7 +992,7 @@ function IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
 
   L2:
     pop 1
-    jump L5
+    jump L4
     load_const "no content"
     jump L4
 
@@ -972,39 +1001,53 @@ function IntLiteralUnionPattern(code: 200 | 201 | 204) -> string {
 
   L4:
     return
-
-  L5:
-    unreachable
 }
 
-function JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
+function user.JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     load_var pet
-    type_tag
-    jump_table [L0, L1, L3, L2], default L5
+    load_const Cat
+    cmp_op instanceof
+    pop_jump_if_false L0
+    jump L5
 
-  L0: Fish
+  L0:
+    load_var pet
+    load_const Dog
+    cmp_op instanceof
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var pet
+    load_const Bird
+    cmp_op instanceof
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var pet
+    load_const Fish
+    cmp_op instanceof
+    pop_jump_if_false L6
     load_const "fish"
-    jump L4
+    jump L6
 
-  L1: Bird
+  L3:
     load_const "bird"
-    jump L4
-
-  L2: Dog
-    load_const "dog"
-    jump L4
-
-  L3: Cat
-    load_const "cat"
+    jump L6
 
   L4:
-    return
+    load_const "dog"
+    jump L6
 
   L5:
-    unreachable
+    load_const "cat"
+
+  L6:
+    return
 }
 
-function JumpTableEnumDiscriminant(state: DispatchState) -> int {
+function user.JumpTableEnumDiscriminant(state: DispatchState) -> int {
     load_var state
     discriminant
     jump_table [L3, L2, L1, L0], default L5
@@ -1031,34 +1074,55 @@ function JumpTableEnumDiscriminant(state: DispatchState) -> int {
     unreachable
 }
 
-function JumpTableTypeTag(value: int | string | bool | float) -> string {
+function user.JumpTableTypeTag(value: int | string | bool | float) -> string {
     load_var value
     type_tag
-    jump_table [L3, L2, L1, _, L0], default L5
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L5
 
-  L0: float
+  L0:
+    load_var value
+    type_tag
+    load_const 1
+    cmp_op ==
+    pop_jump_if_false L1
+    jump L4
+
+  L1:
+    load_var value
+    type_tag
+    load_const 2
+    cmp_op ==
+    pop_jump_if_false L2
+    jump L3
+
+  L2:
+    load_var value
+    type_tag
+    load_const 4
+    cmp_op ==
+    pop_jump_if_false L6
     load_const "float"
-    jump L4
+    jump L6
 
-  L1: bool
+  L3:
     load_const "bool"
-    jump L4
-
-  L2: string
-    load_const "string"
-    jump L4
-
-  L3: int
-    load_const "int"
+    jump L6
 
   L4:
-    return
+    load_const "string"
+    jump L6
 
   L5:
-    unreachable
+    load_const "int"
+
+  L6:
+    return
 }
 
-function LiteralAfterTypedPattern(x: int) -> string {
+function user.LiteralAfterTypedPattern(x: int) -> string {
     load_var x
     type_tag
     load_const 0
@@ -1067,6 +1131,10 @@ function LiteralAfterTypedPattern(x: int) -> string {
     jump L1
 
   L0:
+    load_var x
+    load_const 42
+    cmp_op ==
+    pop_jump_if_false L2
     load_const "unreachable"
     jump L2
 
@@ -1077,7 +1145,7 @@ function LiteralAfterTypedPattern(x: int) -> string {
     return
 }
 
-function LiteralUnionWithCatchAll(code: int) -> string {
+function user.LiteralUnionWithCatchAll(code: int) -> string {
     load_var code
     copy 0
     load_const 400
@@ -1130,7 +1198,7 @@ function LiteralUnionWithCatchAll(code: int) -> string {
     return
 }
 
-function MatchArithmeticScrutinee(a: int, b: int) -> string {
+function user.MatchArithmeticScrutinee(a: int, b: int) -> string {
     load_var a
     load_var b
     bin_op +
@@ -1165,7 +1233,7 @@ function MatchArithmeticScrutinee(a: int, b: int) -> string {
     return
 }
 
-function MatchComplexScrutinee(x: int) -> string {
+function user.MatchComplexScrutinee(x: int) -> string {
     load_var x
     load_const 2
     bin_op *
@@ -1202,8 +1270,8 @@ function MatchComplexScrutinee(x: int) -> string {
     return
 }
 
-function MatchFunctionCallScrutinee() -> string {
-    call GetStatus
+function user.MatchFunctionCallScrutinee() -> string {
+    call user.GetStatus
     discriminant
     copy 0
     load_const Status.Active
@@ -1236,7 +1304,7 @@ function MatchFunctionCallScrutinee() -> string {
     return
 }
 
-function MixedPatterns(x: int) -> string {
+function user.MixedPatterns(x: int) -> string {
     load_var x
     load_const 0
     cmp_op ==
@@ -1281,7 +1349,7 @@ function MixedPatterns(x: int) -> string {
     return
 }
 
-function MultipleUnreachableSpans(s: Status) -> string {
+function user.MultipleUnreachableSpans(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1315,7 +1383,7 @@ function MultipleUnreachableSpans(s: Status) -> string {
     return
 }
 
-function NestedEnumMatch(s1: Status, s2: Status) -> string {
+function user.NestedEnumMatch(s1: Status, s2: Status) -> string {
     load_var s1
     discriminant
     copy 0
@@ -1376,7 +1444,7 @@ function NestedEnumMatch(s1: Status, s2: Status) -> string {
     return
 }
 
-function NestedEnumVariantUnions(s: Status) -> string {
+function user.NestedEnumVariantUnions(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1398,7 +1466,7 @@ function NestedEnumVariantUnions(s: Status) -> string {
     return
 }
 
-function NestedLiteralUnions(code: int) -> string {
+function user.NestedLiteralUnions(code: int) -> string {
     load_var code
     copy 0
     load_const 400
@@ -1499,7 +1567,7 @@ function NestedLiteralUnions(code: int) -> string {
     return
 }
 
-function NestedMatchSpans(x: int, y: bool) -> string {
+function user.NestedMatchSpans(x: int, y: bool) -> string {
     load_var x
     copy 0
     load_const 0
@@ -1528,6 +1596,10 @@ function NestedMatchSpans(x: int, y: bool) -> string {
     jump L4
 
   L3:
+    load_var y
+    load_const true
+    cmp_op ==
+    pop_jump_if_false L6
     load_const "unreachable nested"
     jump L6
 
@@ -1542,7 +1614,7 @@ function NestedMatchSpans(x: int, y: bool) -> string {
     return
 }
 
-function NestedTypeAlias(mr: Success | Failure?) -> string {
+function user.NestedTypeAlias(mr: Success | Failure?) -> string {
     load_var mr
     load_const Success
     cmp_op instanceof
@@ -1577,7 +1649,7 @@ function NestedTypeAlias(mr: Success | Failure?) -> string {
     return
 }
 
-function NestedTypeBindings(r: Success | Failure) -> int {
+function user.NestedTypeBindings(r: Success | Failure) -> int {
     load_var r
     pop 1
     load_const false
@@ -1599,7 +1671,7 @@ function NestedTypeBindings(r: Success | Failure) -> int {
     return
 }
 
-function NonExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
+function user.NonExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
     load_var code
     copy 0
     load_const 200
@@ -1609,15 +1681,11 @@ function NonExhaustiveAliasOfLiterals(code: 200 | 201) -> string {
 
   L0:
     pop 1
-    jump L1
     load_const "ok"
     return
-
-  L1:
-    unreachable
 }
 
-function NonExhaustiveBoolMissingFalse(b: bool) -> string {
+function user.NonExhaustiveBoolMissingFalse(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
@@ -1628,7 +1696,7 @@ function NonExhaustiveBoolMissingFalse(b: bool) -> string {
     return
 }
 
-function NonExhaustiveBoolMissingTrue(b: bool) -> string {
+function user.NonExhaustiveBoolMissingTrue(b: bool) -> string {
     load_var b
     load_const false
     cmp_op ==
@@ -1639,7 +1707,7 @@ function NonExhaustiveBoolMissingTrue(b: bool) -> string {
     return
 }
 
-function NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> string {
+function user.NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> string {
     load_var x
     copy 0
     load_const 200
@@ -1649,15 +1717,11 @@ function NonExhaustiveClassPlusLiteralMissingClass(x: Success | 200) -> string {
 
   L0:
     pop 1
-    jump L1
     load_const "http ok"
     return
-
-  L1:
-    unreachable
 }
 
-function NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string {
+function user.NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string {
     load_var x
     load_const Success
     cmp_op instanceof
@@ -1669,7 +1733,7 @@ function NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string
     return
 }
 
-function NonExhaustiveCustomBoolMissing(b: true | false) -> string {
+function user.NonExhaustiveCustomBoolMissing(b: true | false) -> string {
     load_var b
     load_const true
     cmp_op ==
@@ -1680,7 +1744,7 @@ function NonExhaustiveCustomBoolMissing(b: true | false) -> string {
     return
 }
 
-function NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
+function user.NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
     load_var dm
     load_const Success
     cmp_op instanceof
@@ -1704,7 +1768,7 @@ function NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string 
     return
 }
 
-function NonExhaustiveEnumMissingMultiple(s: Status) -> string {
+function user.NonExhaustiveEnumMissingMultiple(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1715,15 +1779,11 @@ function NonExhaustiveEnumMissingMultiple(s: Status) -> string {
 
   L0:
     pop 1
-    jump L1
     load_const "active"
     return
-
-  L1:
-    unreachable
 }
 
-function NonExhaustiveEnumMissingOne(s: Status) -> string {
+function user.NonExhaustiveEnumMissingOne(s: Status) -> string {
     load_var s
     discriminant
     copy 0
@@ -1742,7 +1802,7 @@ function NonExhaustiveEnumMissingOne(s: Status) -> string {
 
   L1:
     pop 1
-    jump L4
+    jump L3
     load_const "inactive"
     jump L3
 
@@ -1751,12 +1811,9 @@ function NonExhaustiveEnumMissingOne(s: Status) -> string {
 
   L3:
     return
-
-  L4:
-    unreachable
 }
 
-function NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> string {
+function user.NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> string {
     load_var r
     load_const Success
     cmp_op instanceof
@@ -1780,7 +1837,7 @@ function NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> st
     return
 }
 
-function NonExhaustiveIntLiteral(code: 200 | 201 | 204) -> string {
+function user.NonExhaustiveIntLiteral(code: 200 | 201 | 204) -> string {
     load_var code
     copy 0
     load_const 200
@@ -1798,7 +1855,7 @@ function NonExhaustiveIntLiteral(code: 200 | 201 | 204) -> string {
 
   L1:
     pop 1
-    jump L4
+    jump L3
     load_const "Created"
     jump L3
 
@@ -1807,12 +1864,9 @@ function NonExhaustiveIntLiteral(code: 200 | 201 | 204) -> string {
 
   L3:
     return
-
-  L4:
-    unreachable
 }
 
-function NonExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
+function user.NonExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
     load_var x
     load_const 200
     cmp_op ==
@@ -1834,7 +1888,7 @@ function NonExhaustiveMixedLiterals(x: 200 | "success" | true) -> string {
     return
 }
 
-function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
+function user.NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
     load_var s
     discriminant
     copy 0
@@ -1861,7 +1915,7 @@ function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
 
   L2:
     pop 1
-    jump L6
+    jump L5
     load_const "pending"
     jump L5
 
@@ -1874,23 +1928,20 @@ function NonExhaustiveNullableEnumMissingNull(s: Status?) -> string {
 
   L5:
     return
-
-  L6:
-    unreachable
 }
 
-function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
+function user.NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
     load_var s
-    load_const Status.Active
-    alloc_variant Status
+    load_const user.Status.Active
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L0
     jump L3
 
   L0:
     load_var s
-    load_const Status.Inactive
-    alloc_variant Status
+    load_const user.Status.Inactive
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L1
     jump L2
@@ -1914,7 +1965,7 @@ function NonExhaustiveNullableEnumMissingVariant(s: Status?) -> string {
     return
 }
 
-function NonExhaustiveOptionalMissingNull(code: 200?) -> string {
+function user.NonExhaustiveOptionalMissingNull(code: 200?) -> string {
     load_var code
     copy 0
     load_const 200
@@ -1924,15 +1975,11 @@ function NonExhaustiveOptionalMissingNull(code: 200?) -> string {
 
   L0:
     pop 1
-    jump L1
     load_const "OK"
     return
-
-  L1:
-    unreachable
 }
 
-function NonExhaustiveOptionalMissingValue(code: 200?) -> string {
+function user.NonExhaustiveOptionalMissingValue(code: 200?) -> string {
     load_var code
     load_const null
     cmp_op ==
@@ -1943,7 +1990,7 @@ function NonExhaustiveOptionalMissingValue(code: 200?) -> string {
     return
 }
 
-function NonExhaustiveStringLiteral(role: "user" | "assistant" | "system") -> string {
+function user.NonExhaustiveStringLiteral(role: "user" | "assistant" | "system") -> string {
     load_var role
     load_const "user"
     cmp_op ==
@@ -1965,7 +2012,7 @@ function NonExhaustiveStringLiteral(role: "user" | "assistant" | "system") -> st
     return
 }
 
-function NonExhaustiveTrueTypeWrongLiteral(t: true) -> string {
+function user.NonExhaustiveTrueTypeWrongLiteral(t: true) -> string {
     load_var t
     load_const false
     cmp_op ==
@@ -1976,7 +2023,7 @@ function NonExhaustiveTrueTypeWrongLiteral(t: true) -> string {
     return
 }
 
-function NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
+function user.NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
     load_var r
     load_const Success
     cmp_op instanceof
@@ -1988,7 +2035,7 @@ function NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
     return
 }
 
-function OptionalWithCatchAll(x: int?) -> string {
+function user.OptionalWithCatchAll(x: int?) -> string {
     load_var x
     load_const null
     cmp_op ==
@@ -2006,7 +2053,7 @@ function OptionalWithCatchAll(x: int?) -> string {
     return
 }
 
-function OverlappingTypedPatterns(r: Success | Failure) -> string {
+function user.OverlappingTypedPatterns(r: Success | Failure) -> string {
     load_var r
     load_const Success
     cmp_op instanceof
@@ -2028,7 +2075,7 @@ function OverlappingTypedPatterns(r: Success | Failure) -> string {
     return
 }
 
-function OverlappingWithBindings(r: Success | Failure) -> string {
+function user.OverlappingWithBindings(r: Success | Failure) -> string {
     load_var r
     load_const Success
     cmp_op instanceof
@@ -2051,7 +2098,7 @@ function OverlappingWithBindings(r: Success | Failure) -> string {
     return
 }
 
-function ParenthesizedSingleLiteral(b: bool) -> string {
+function user.ParenthesizedSingleLiteral(b: bool) -> string {
     load_var b
     load_const true
     cmp_op ==
@@ -2059,6 +2106,10 @@ function ParenthesizedSingleLiteral(b: bool) -> string {
     jump L1
 
   L0:
+    load_var b
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L2
     load_const "no"
     jump L2
 
@@ -2069,7 +2120,7 @@ function ParenthesizedSingleLiteral(b: bool) -> string {
     return
 }
 
-function PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
+function user.PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
     load_var r
     pop 1
     load_const false
@@ -2080,7 +2131,7 @@ function PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
     return
 }
 
-function PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
+function user.PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     load_var r
     pop 1
     load_const false
@@ -2102,7 +2153,7 @@ function PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     return
 }
 
-function StringLiteralAfterStringType(s: string) -> string {
+function user.StringLiteralAfterStringType(s: string) -> string {
     load_var s
     type_tag
     load_const 1
@@ -2111,6 +2162,10 @@ function StringLiteralAfterStringType(s: string) -> string {
     jump L1
 
   L0:
+    load_var s
+    load_const "hello"
+    cmp_op ==
+    pop_jump_if_false L2
     load_const "unreachable"
     jump L2
 
@@ -2121,7 +2176,7 @@ function StringLiteralAfterStringType(s: string) -> string {
     return
 }
 
-function StringLiteralUnionPattern(role: "user" | "assistant" | "system") -> string {
+function user.StringLiteralUnionPattern(role: "user" | "assistant" | "system") -> string {
     load_var role
     load_const "user"
     cmp_op ==
@@ -2150,7 +2205,7 @@ function StringLiteralUnionPattern(role: "user" | "assistant" | "system") -> str
     return
 }
 
-function StringLiteralWithCatchAll(role: "user" | "assistant" | "system") -> string {
+function user.StringLiteralWithCatchAll(role: "user" | "assistant" | "system") -> string {
     load_var role
     load_const "user"
     cmp_op ==
@@ -2179,7 +2234,7 @@ function StringLiteralWithCatchAll(role: "user" | "assistant" | "system") -> str
     return
 }
 
-function ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
+function user.ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     load_var x
     copy 0
     load_const 0
@@ -2228,7 +2283,7 @@ function ThreeLevelNestedMatch(x: int, y: int, z: int) -> string {
     return
 }
 
-function UnionPatternCoversAll(r: Success | Failure) -> string {
+function user.UnionPatternCoversAll(r: Success | Failure) -> string {
     load_var r
     pop 1
     load_const false
@@ -2239,17 +2294,17 @@ function UnionPatternCoversAll(r: Success | Failure) -> string {
     return
 }
 
-function UnreachableAfterCatchAll(x: int) -> string {
+function user.UnreachableAfterCatchAll(x: int) -> string {
     load_const "catch all"
     return
 }
 
-function UnreachableMultiple(x: int) -> string {
+function user.UnreachableMultiple(x: int) -> string {
     load_const "catch all"
     return
 }
 
-function WrongLiteralTypeBoolWithInt(b: bool) -> string {
+function user.WrongLiteralTypeBoolWithInt(b: bool) -> string {
     load_var b
     copy 0
     load_const 42
@@ -2259,15 +2314,11 @@ function WrongLiteralTypeBoolWithInt(b: bool) -> string {
 
   L0:
     pop 1
-    jump L1
     load_const "wrong type"
     return
-
-  L1:
-    unreachable
 }
 
-function WrongLiteralTypeIntWithString(x: int) -> string {
+function user.WrongLiteralTypeIntWithString(x: int) -> string {
     load_var x
     load_const "hello"
     cmp_op ==

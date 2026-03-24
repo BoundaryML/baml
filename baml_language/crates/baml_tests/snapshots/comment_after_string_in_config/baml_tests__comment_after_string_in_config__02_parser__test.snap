@@ -43,7 +43,7 @@ SOURCE_FILE
           CONFIG_ITEM
             WORD "api_key"
             CONFIG_VALUE
-              PATH_EXPR "env.OPENROUTER_API_KEY"
+              ENV_ACCESS_EXPR "env.OPENROUTER_API_KEY"
                 WORD "env"
                 DOT "."
                 WORD "OPENROUTER_API_KEY"
