@@ -158,6 +158,127 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
 // ============================================================================
 
 /// Count uses of each Local across all blocks and unwind_error_locals.
+/// Collect all locals that appear inside a `Place` projection.
+///
+/// This includes locals used as `Place::Local` bases of field/index projections
+/// and locals used as the `index` field of `Place::Index`. These positions are
+/// typed as `Local` (not `Operand`), so they cannot be replaced by a `Constant`
+/// during copy propagation.
+fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
+    let mut set = HashSet::new();
+
+    fn scan_place(p: &Place, set: &mut HashSet<Local>) {
+        match p {
+            Place::Local(_) => {}
+            Place::Field { base, .. } => {
+                // The base local of a field projection can't be replaced with a constant.
+                if let Place::Local(l) = base.as_ref() {
+                    set.insert(*l);
+                }
+                scan_place(base, set);
+            }
+            Place::Index { base, index, .. } => {
+                set.insert(*index);
+                if let Place::Local(l) = base.as_ref() {
+                    set.insert(*l);
+                }
+                scan_place(base, set);
+            }
+        }
+    }
+
+    fn scan_operand(op: &Operand, set: &mut HashSet<Local>) {
+        match op {
+            Operand::Copy(p) | Operand::Move(p) => scan_place(p, set),
+            Operand::Constant(_) => {}
+        }
+    }
+
+    fn scan_rvalue(rv: &crate::Rvalue, set: &mut HashSet<Local>) {
+        match rv {
+            crate::Rvalue::Use(op) => scan_operand(op, set),
+            crate::Rvalue::BinaryOp { left, right, .. } => {
+                scan_operand(left, set);
+                scan_operand(right, set);
+            }
+            crate::Rvalue::UnaryOp { operand, .. } => scan_operand(operand, set),
+            crate::Rvalue::Array(elems) => {
+                for e in elems {
+                    scan_operand(e, set);
+                }
+            }
+            crate::Rvalue::Map(entries) => {
+                for (k, v) in entries {
+                    scan_operand(k, set);
+                    scan_operand(v, set);
+                }
+            }
+            crate::Rvalue::Aggregate { fields, .. } => {
+                for f in fields {
+                    scan_operand(f, set);
+                }
+            }
+            crate::Rvalue::Discriminant(p)
+            | crate::Rvalue::TypeTag(p)
+            | crate::Rvalue::Len(p) => scan_place(p, set),
+            crate::Rvalue::IsType { operand, .. } => scan_operand(operand, set),
+        }
+    }
+
+    for block in &body.blocks {
+        for stmt in &block.statements {
+            match &stmt.kind {
+                crate::StatementKind::Assign {
+                    destination, value, ..
+                } => {
+                    scan_place(destination, &mut set);
+                    scan_rvalue(value, &mut set);
+                }
+                _ => {}
+            }
+        }
+        if let Some(term) = &block.terminator {
+            match term {
+                Terminator::Call {
+                    callee,
+                    args,
+                    destination,
+                    ..
+                } => {
+                    scan_operand(callee, &mut set);
+                    for a in args {
+                        scan_operand(a, &mut set);
+                    }
+                    scan_place(destination, &mut set);
+                }
+                Terminator::DispatchFuture {
+                    callee,
+                    args,
+                    future,
+                    ..
+                } => {
+                    scan_operand(callee, &mut set);
+                    for a in args {
+                        scan_operand(a, &mut set);
+                    }
+                    scan_place(future, &mut set);
+                }
+                Terminator::Branch { condition, .. } => scan_operand(condition, &mut set),
+                Terminator::Switch { discriminant, .. } => {
+                    scan_operand(discriminant, &mut set)
+                }
+                Terminator::Throw { value } => scan_operand(value, &mut set),
+                Terminator::Await { destination, .. } => scan_place(destination, &mut set),
+                Terminator::Goto { .. }
+                | Terminator::Return
+                | Terminator::Unreachable => {}
+            }
+        }
+    }
+
+    set
+}
+
 fn count_local_uses(body: &MirFunctionBody) -> Vec<usize> {
     let mut uses = vec![0usize; body.locals.len()];
 
@@ -319,6 +440,10 @@ fn count_in_terminator(term: &Terminator, uses: &mut Vec<usize>) {
 fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
     // Build substitution map: Local -> replacement Operand
     let uses = count_local_uses(body);
+    // Locals used as the `index` field of a `Place::Index` cannot be replaced
+    // with constants — that field is typed `Local`, not `Operand`. Collect them
+    // so we can exclude them from constant inlining below.
+    let used_as_place_index = collect_place_index_locals(body);
     let mut subst: HashMap<Local, Operand> = HashMap::new();
 
     // Scan for copy-of-param: `_X = copy _Y` where Y is a param (1..=arity)
@@ -346,8 +471,12 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                         // Copy of param — substitute
                         subst.insert(*dest, Operand::Copy(Place::Local(*src)));
                     }
-                    Operand::Constant(c) if uses[dest.0] == 1 => {
-                        // Single-use constant — inline
+                    Operand::Constant(c)
+                        if uses[dest.0] == 1 && !used_as_place_index.contains(dest) =>
+                    {
+                        // Single-use constant — inline. Skip locals that appear
+                        // as a Place::Index index, since that position can only
+                        // hold a Local, not a Constant.
                         subst.insert(*dest, Operand::Constant(c.clone()));
                     }
                     _ => {}

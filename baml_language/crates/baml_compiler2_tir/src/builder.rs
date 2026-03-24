@@ -3175,6 +3175,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                 }
 
+                // Record a MethodResolution so MIR emits a proper method call
+                // instead of a dynamic map lookup.
+                let effective_elem = match &local_ty {
+                    Ty::EvolvingList(e) | Ty::List(e) => e.as_ref().clone(),
+                    _ => Ty::Unknown,
+                };
+                self.resolve_builtin_member(
+                    &["Array"],
+                    &[effective_elem],
+                    &method_name,
+                    callee_id,
+                );
+
                 self.record_expr_type(base_id, local_ty);
                 self.record_expr_type(callee_id, Ty::Unknown);
                 let result = Ty::Primitive(PrimitiveType::Null);

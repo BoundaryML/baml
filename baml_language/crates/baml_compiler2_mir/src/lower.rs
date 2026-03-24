@@ -1516,18 +1516,111 @@ impl<'db> LoweringContext<'db> {
                 },
             );
         } else {
-            // Handle spreads: lower base objects, then overlay named fields
-            // For now emit a simple aggregate from named fields only (spreads are secondary)
-            // TODO Phase 5: port full spread handling from old lower_expr lines 807-922
-            let field_operands: Vec<Operand> = fields
+            // Lower spread base(s) and explicit fields eagerly (in source
+            // order), then assemble the aggregate respecting override semantics:
+            // later source entries override earlier ones for the same class field.
+
+            let field_count = self
+                .class_fields
+                .get(&class_name)
+                .map(|f| f.len())
+                .unwrap_or(0);
+
+            // Lower all spread expressions into locals.
+            let spread_locals: Vec<(usize, Local)> = spreads
                 .iter()
-                .map(|(_, e)| self.lower_to_operand(*e))
+                .map(|s| {
+                    let op = self.lower_to_operand(s.expr);
+                    let ty = self.expr_ty(s.expr);
+                    (s.position, self.operand_to_local(op, ty))
+                })
                 .collect();
+
+            // Lower all explicit field expressions into operands.
+            // Named fields occupy source positions 0.. excluding spread positions.
+            // Assign each named field its source position by counting up and
+            // skipping positions occupied by spreads.
+            let spread_positions: HashSet<usize> =
+                spreads.iter().map(|s| s.position).collect();
+            let explicit_with_pos: Vec<(usize, String, Operand)> = {
+                let mut pos = 0usize;
+                fields
+                    .iter()
+                    .map(|(name, e)| {
+                        while spread_positions.contains(&pos) {
+                            pos += 1;
+                        }
+                        let cur = pos;
+                        pos += 1;
+                        (cur, name.to_string(), self.lower_to_operand(*e))
+                    })
+                    .collect()
+            };
+
+            // Build per-class-field operand array. Process all entries in source
+            // position order; later entries overwrite earlier ones.
+            let field_name_to_idx: &HashMap<String, usize> = match self.class_fields.get(&class_name) {
+                Some(m) => m,
+                None => {
+                    // Unknown class — just emit named fields in order.
+                    let field_operands: Vec<Operand> = fields
+                        .iter()
+                        .map(|(_, e)| self.lower_to_operand(*e))
+                        .collect();
+                    self.builder.assign(
+                        dest,
+                        Rvalue::Aggregate {
+                            kind: AggregateKind::Class(class_name),
+                            fields: field_operands,
+                        },
+                    );
+                    return;
+                }
+            };
+
+            // Merge all entries into a single sorted list by source position.
+            enum Entry {
+                Spread(Local),
+                Named(String, Operand),
+            }
+            let mut entries: Vec<(usize, Entry)> = Vec::new();
+            for (pos, local) in &spread_locals {
+                entries.push((*pos, Entry::Spread(*local)));
+            }
+            for (pos, name, op) in explicit_with_pos {
+                entries.push((pos, Entry::Named(name, op)));
+            }
+            entries.sort_by_key(|(pos, _)| *pos);
+
+            // Initialize all fields to null, then apply entries in order.
+            let mut result: Vec<Operand> = (0..field_count)
+                .map(|_| Operand::Constant(Constant::Null))
+                .collect();
+
+            for (_, entry) in &entries {
+                match entry {
+                    Entry::Spread(local) => {
+                        // A spread fills every field from the base object.
+                        for idx in 0..field_count {
+                            result[idx] = Operand::Copy(Place::Field {
+                                base: Box::new(Place::Local(*local)),
+                                field: idx,
+                            });
+                        }
+                    }
+                    Entry::Named(name, op) => {
+                        if let Some(&idx) = field_name_to_idx.get(name) {
+                            result[idx] = op.clone();
+                        }
+                    }
+                }
+            }
+
             self.builder.assign(
                 dest,
                 Rvalue::Aggregate {
                     kind: AggregateKind::Class(class_name),
-                    fields: field_operands,
+                    fields: result,
                 },
             );
         }
