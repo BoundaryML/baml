@@ -3,9 +3,9 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unreachable arm
-     ╭─[ llm_types.baml:159:17 ]
+     ╭─[ llm_types.baml:152:17 ]
      │
- 159 │             _ => { continue; }
+ 152 │             _ => { continue; }
      │                 ───────┬──────  
      │                        ╰──────── unreachable arm
      │ 

@@ -1,0 +1,837 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+assertion_line: 6267
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:152:17 ]
+     │
+ 152 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:189:17 ]
+     │
+ 189 │ ╭─▶             _ => {
+     ┆ ┆   
+ 194 │ ├─▶             }
+     │ │                   
+     │ ╰─────────────────── unreachable arm
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ llm_types.baml:208:17 ]
+     │
+ 208 │             _ => { continue; }
+     │                 ───────┬──────  
+     │                        ╰──────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: string.len
+    ╭─[ chain_expr.baml:83:6 ]
+    │
+ 83 │ ╭─▶     ;
+    ┆ ┆   
+ 86 │ ├─▶     user.name.len();
+    │ │                          
+    │ ╰────────────────────────── unresolved member: string.len
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved member: user.ChainItem[].len
+    ╭─[ chain_expr.baml:86:21 ]
+    │
+ 86 │ ╭─▶     user.name.len();
+ 87 │ ├─▶     items.len();
+    │ │                      
+    │ ╰────────────────────── unresolved member: user.ChainItem[].len
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved member: user.ChainItem[].get
+    ╭─[ chain_expr.baml:87:17 ]
+    │
+ 87 │ ╭─▶     items.len();
+    ┆ ┆   
+ 90 │ ├─▶     user.profile.items.get(0);
+    │ │                                    
+    │ ╰──────────────────────────────────── unresolved member: user.ChainItem[].get
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved member: user.ChainItem[].get
+    ╭─[ chain_expr.baml:90:31 ]
+    │
+ 90 │ ╭─▶     user.profile.items.get(0);
+    ┆ ┆   
+ 98 │ ├─▶     get // 6 method trailing
+    │ │                                  
+    │ ╰────────────────────────────────── unresolved member: user.ChainItem[].get
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved member: user.ChainItem[].get
+     ╭─[ chain_expr.baml:104:6 ]
+     │
+ 104 │ ╭─▶     ;
+     ┆ ┆   
+ 112 │ ├─▶     get /* 6 method trailing */
+     │ │                                     
+     │ ╰───────────────────────────────────── unresolved member: user.ChainItem[].get
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: string.len
+     ╭─[ chain_expr.baml:146:6 ]
+     │
+ 146 │ ╭─▶     ;
+     ┆ ┆   
+ 149 │ ├─▶     user.name.len().to_string();
+     │ │                                      
+     │ ╰────────────────────────────────────── unresolved member: string.len
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: string.len
+     ╭─[ chain_expr.baml:149:33 ]
+     │
+ 149 │ ╭─▶     user.name.len().to_string();
+     ┆ ┆   
+ 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │ │                                                                                                                          
+     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── unresolved member: string.len
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: string.len
+     ╭─[ chain_expr.baml:152:117 ]
+     │
+ 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     ┆ ┆   
+ 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │ │                                                                                                       
+     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── unresolved member: string.len
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].get
+     ╭─[ chain_expr.baml:155:98 ]
+     │
+ 155 │ ╭─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     ┆ ┆   
+ 158 │ ├─▶     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
+     │ │                                                                                                                                   
+     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── unresolved member: user.ChainItem[].get
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].len
+     ╭─[ chain_expr.baml:158:28 ]
+     │
+ 158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
+     │                            ───────────┬──────────  
+     │                                       ╰──────────── unresolved member: user.ChainItem[].len
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].len
+     ╭─[ chain_expr.baml:158:58 ]
+     │
+ 158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
+     │                                                          ───────────┬───────────  
+     │                                                                     ╰───────────── unresolved member: user.ChainItem[].len
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].len
+     ╭─[ chain_expr.baml:158:89 ]
+     │
+ 158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
+     │                                                                                         ───────────┬───────────  
+     │                                                                                                    ╰───────────── unresolved member: user.ChainItem[].len
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: expected 2 argument(s), got 3
+     ╭─[ chain_expr.baml:158:126 ]
+     │
+ 158 │ ╭─▶     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
+     ┆ ┆   
+ 161 │ ├─▶     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+     │ │                                                                                                            
+     │ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────── expected 2 argument(s), got 3
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].len
+     ╭─[ chain_expr.baml:161:32 ]
+     │
+ 161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+     │                                ───────────┬───────────  
+     │                                           ╰───────────── unresolved member: user.ChainItem[].len
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: string.len
+     ╭─[ chain_expr.baml:161:103 ]
+     │
+ 161 │ ╭─▶     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
+     ┆ ┆   
+ 180 │ ├─▶     len // 17 trailing
+     │ │                            
+     │ ╰──────────────────────────── unresolved member: string.len
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: string.len
+     ╭─[ chain_expr.baml:193:6 ]
+     │
+ 193 │ ╭─▶     ;
+     ┆ ┆   
+ 212 │ ├─▶     len /* 17 trailing */
+     │ │                               
+     │ ╰─────────────────────────────── unresolved member: string.len
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].get
+     ╭─[ chain_expr.baml:225:6 ]
+     │
+ 225 │ ╭─▶     ;
+     ┆ ┆   
+ 238 │ ├─▶     get // 11 trailing
+     │ │                            
+     │ ╰──────────────────────────── unresolved member: user.ChainItem[].get
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].len
+     ╭─[ chain_expr.baml:239:6 ]
+     │
+ 239 │ ╭─▶     ( // 12 trailing
+     ┆ ┆   
+ 241 │ ├─▶     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
+     │ │                                                                                    
+     │ ╰──────────────────────────────────────────────────────────────────────────────────── unresolved member: user.ChainItem[].len
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].len
+     ╭─[ chain_expr.baml:241:35 ]
+     │
+ 241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
+     │                                   ───────────┬───────────  
+     │                                              ╰───────────── unresolved member: user.ChainItem[].len
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: int[][].len
+     ╭─[ chain_expr.baml:251:17 ]
+     │
+ 251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
+     │                 ───────┬───────  
+     │                        ╰───────── unresolved member: int[][].len
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: int[].len
+     ╭─[ chain_expr.baml:251:40 ]
+     │
+ 251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
+     │                                        ─────────┬────────  
+     │                                                 ╰────────── unresolved member: int[].len
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].get
+     ╭─[ chain_expr.baml:255:20 ]
+     │
+ 255 │ ╭─▶     items  [  0  ];
+ 256 │ ├─▶     items  .  get  (  0  );
+     │ │                                 
+     │ ╰───────────────────────────────── unresolved member: user.ChainItem[].get
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: string.len
+     ╭─[ chain_expr.baml:256:28 ]
+     │
+ 256 │ ╭─▶     items  .  get  (  0  );
+     ┆ ┆   
+ 259 │ ├─▶     user.tags[0].len();
+     │ │                             
+     │ ╰───────────────────────────── unresolved member: string.len
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: string.len
+     ╭─[ chain_expr.baml:260:23 ]
+     │
+ 260 │ ╭─▶     user.scores[0][0];
+ 261 │ ├─▶     items[0].label.len();
+     │ │                               
+     │ ╰─────────────────────────────── unresolved member: string.len
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: MyRetryPolicy
+    ╭─[ config_decls.baml:10:2 ]
+    │
+ 10 │ ╭─▶ }
+    ┆ ┆   
+ 22 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: MyRetryPolicy
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>, got 1
+    ╭─[ function_decls.baml:73:5 ]
+    │
+ 73 │     1
+    │     ┬  
+    │     ╰── type mismatch: expected (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>, got 1
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: operator `Add` cannot be applied to `1 | int` and `int`
+     ╭─[ function_decls.baml:414:21 ]
+     │
+ 414 │         let inner = d + a;
+     │                     ──┬──  
+     │                       ╰──── operator `Add` cannot be applied to `1 | int` and `int`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: GPT4
+     ╭─[ function_decls.baml:457:2 ]
+     │
+ 457 │ ╭─▶ }
+     ┆ ┆   
+ 463 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: GPT4
+     ╭─[ function_decls.baml:463:2 ]
+     │
+ 463 │ ╭─▶ }
+     ┆ ┆   
+ 478 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: GPT4
+     ╭─[ function_decls.baml:484:2 ]
+     │
+ 484 │ ╭─▶ }
+     ┆ ┆   
+ 490 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: GPT4
+     ╭─[ function_decls.baml:495:130 ]
+     │
+ 495 │ ╭─▶ function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+     ┆ ┆   
+ 501 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [hir] Error: Duplicate binding `i` in `LoopStmts`
+     ╭─[ loop_stmts.baml:76:14 ]
+     │
+  71 │                 for (let i = 0; i < 10; i += 1) {
+     │                          ┬  
+     │                          ╰── first defined as binding here
+     │ 
+  76 │                 for (let i = 0; i < 100 && flag; i += 2) {
+     │                          ┬  
+     │                          ╰── duplicate binding definition
+     │ 
+  88 │         ╭─▶     };
+     ┆         ┆   
+  95 │         ├─▶     };
+     │         │            
+     │         ╰──────────── duplicate binding definition
+     │ 
+ 105 │                 i // 8 var name trailing
+     │                 ┬  
+     │                 ╰── duplicate binding definition
+     │ 
+ 134 │                 i /* 8 var name trailing */
+     │                 ┬  
+     │                 ╰── duplicate binding definition
+     │ 
+ 367 │       ╭───▶     ;
+     ┆       ┆     
+ 378 │       ├───▶     };
+     │       │              
+     │       ╰────────────── duplicate binding definition
+     │ 
+ 393 │ ╭─────────▶     };
+     ┆ ┆           
+ 414 │ ├─────────▶     };
+     │ │                    
+     │ ╰──────────────────── duplicate binding definition
+     │ 
+ 429 │     ╭─────▶     };
+     ┆     ┆       
+ 436 │     ├─────▶     };
+     │     │             ▲  
+     │     ╰──────────────── duplicate binding definition
+     │                   │  
+     │   ╭───────────────╯  
+     ┆   ┆         
+ 452 │   ├───────▶     };
+     │   │                  
+     │   ╰────────────────── duplicate binding definition
+     │ 
+ 459 │                 for    (  let  i  =  0  ;  i  <  10  ;  i  +=  1  )    {
+     │                                ┬  
+     │                                ╰── duplicate binding definition
+     │             
+     │             Note: Error code: E0012
+─────╯
+
+  [type] Error: operator `Add` cannot be applied to `int` and `1 | 2 | 3 | 4 | 5`
+    ╭─[ loop_stmts.baml:87:9 ]
+    │
+ 87 │         result += x;
+    │         ───┬──  
+    │            ╰──── operator `Add` cannot be applied to `int` and `1 | 2 | 3 | 4 | 5`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
+    ╭─[ loop_stmts.baml:93:23 ]
+    │
+ 93 │             result += i * j;
+    │                       ──┬──  
+    │                         ╰──── operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [hir] Error: Duplicate binding `item` in `LoopStmts`
+     ╭─[ loop_stmts.baml:151:6 ]
+     │
+  78 │       ╭───▶     };
+     ┆       ┆     
+  83 │       ├───▶     };
+     │       │              
+     │       ╰────────────── first defined as binding here
+     │ 
+ 151 │   ╭───────▶     ;
+     ┆   ┆         
+ 174 │   ├───────▶     } // 18 body close trailing
+     │   │                                           
+     │   ╰─────────────────────────────────────────── duplicate binding definition
+ 175 │ ╭─────────▶     ;
+     ┆ ┆           
+ 196 │ ├─────────▶     } /* 18 body close trailing */
+     │ │                                                
+     │ ╰──────────────────────────────────────────────── duplicate binding definition
+     │ 
+ 217 │     ╭─────▶     };
+     ┆     ┆       
+ 222 │     ├─────▶     };
+     │     │                
+     │     ╰──────────────── duplicate binding definition
+     │ 
+ 461 │         ╭─▶     };
+     ┆         ┆   
+ 465 │         ├─▶     };
+     │         │            
+     │         ╰──────────── duplicate binding definition
+     │             
+     │             Note: Error code: E0012
+─────╯
+
+  [hir] Error: Duplicate binding `extremely_long_loop_counter_variable` in `LoopStmts`
+     ╭─[ loop_stmts.baml:273:5 ]
+     │
+ 215 │     for (let extremely_long_loop_counter_variable = a * a + result * result; extremely_long_loop_counter_variable < 1000000 && flag && a > 0; extremely_long_loop_counter_variable += a + result) {
+     │              ──────────────────┬─────────────────  
+     │                                ╰─────────────────── first defined as binding here
+     │ 
+ 273 │     extremely_long_loop_counter_variable // 8 name trailing
+     │     ──────────────────┬─────────────────  
+     │                       ╰─────────────────── duplicate binding definition
+     │ 
+ 302 │     extremely_long_loop_counter_variable /* 8 name trailing */
+     │     ──────────────────┬─────────────────  
+     │                       ╰─────────────────── duplicate binding definition
+     │ 
+     │ Note: Error code: E0012
+─────╯
+
+  [hir] Error: Duplicate binding `extremely_long_item_variable_name` in `LoopStmts`
+     ╭─[ loop_stmts.baml:319:6 ]
+     │
+ 222 │     ╭─▶     };
+     ┆     ┆   
+ 227 │     ├─▶     };
+     │     │            
+     │     ╰──────────── first defined as binding here
+     │ 
+ 319 │   ╭───▶     ;
+     ┆   ┆     
+ 342 │   ├───▶     } // 18 close trailing
+     │   │                                  
+     │   ╰────────────────────────────────── duplicate binding definition
+ 343 │ ╭─────▶     ;
+     ┆ ┆       
+ 366 │ ├─────▶     } /* 18 close trailing */
+     │ │                                       
+     │ ╰─────────────────────────────────────── duplicate binding definition
+     │         
+     │         Note: Error code: E0012
+─────╯
+
+  [hir] Error: Duplicate binding `j` in `LoopStmts`
+     ╭─[ loop_stmts.baml:372:31 ]
+     │
+  91 │       ╭─▶     for (let i in [1, 2, 3]) {
+     ┆       ┆   
+  94 │       ├─▶         };
+     │       │                
+     │       ╰──────────────── first defined as binding here
+     │ 
+ 372 │     ╭───▶     for (let i in [1, 2, 3]) {
+     ┆     ┆     
+ 377 │     ├───▶         };
+     │     │                  
+     │     ╰────────────────── duplicate binding definition
+     │ 
+ 399 │   ╭─────▶         }
+     ┆   ┆       
+ 413 │   ├─────▶         };
+     │   │                    
+     │   ╰──────────────────── duplicate binding definition
+     │ 
+ 433 │                   for (let j = i * i + result * result; j < 1000000 && flag && i > 0 && result > 0 && j != 42; j += i + result + 1) {
+     │                            ┬  
+     │                            ╰── duplicate binding definition
+     │ 
+ 439 │ ╭───────▶     for (let i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
+     ┆ ┆         
+ 451 │ ├───────▶         };
+     │ │                      
+     │ ╰────────────────────── duplicate binding definition
+     │           
+     │           Note: Error code: E0012
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
+     ╭─[ loop_stmts.baml:375:27 ]
+     │
+ 375 │                 result += i * j * k;
+     │                           ──┬──  
+     │                             ╰──── operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `10 | 20 | 30 | 40 | 50`
+     ╭─[ loop_stmts.baml:401:30 ]
+     │
+ 401 │             let val = match (i * j) {
+     │                              ──┬──  
+     │                                ╰──── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `10 | 20 | 30 | 40 | 50`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable code: 1 statement(s) after diverging statement
+     ╭─[ loop_stmts.baml:402:23 ]
+     │
+ 402 │ ╭─▶                 0 => {
+ 403 │ ├─▶                     break;
+     │ │                                
+     │ ╰──────────────────────────────── unreachable code: 1 statement(s) after diverging statement
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable code: 1 statement(s) after diverging statement
+     ╭─[ loop_stmts.baml:406:39 ]
+     │
+ 406 │ ╭─▶                 n: int if n > 100 => {
+ 407 │ ├─▶                     continue;
+     │ │                                   
+     │ ╰─────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Add` cannot be applied to `int` and `1 | 2`
+     ╭─[ loop_stmts.baml:423:31 ]
+     │
+ 423 │                     result += lvl1 + lvl2 + lvl3 + lvl4;
+     │                               ─────┬─────  
+     │                                    ╰─────── operator `Add` cannot be applied to `int` and `1 | 2`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
+     ╭─[ loop_stmts.baml:441:35 ]
+     │
+ 441 │             let computation = if (i * j > 500 && i + j < 100) {
+     │                                   ──┬──  
+     │                                     ╰──── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Add` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
+     ╭─[ loop_stmts.baml:441:50 ]
+     │
+ 441 │             let computation = if (i * j > 500 && i + j < 100) {
+     │                                                  ──┬──  
+     │                                                    ╰──── operator `Add` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mod` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `3`
+     ╭─[ loop_stmts.baml:442:24 ]
+     │
+ 442 │                 match (i % 3) {
+     │                        ──┬──  
+     │                          ╰──── operator `Mod` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `3`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
+     ╭─[ loop_stmts.baml:443:26 ]
+     │
+ 443 │                     0 => i * j + result,
+     │                          ──┬──  
+     │                            ╰──── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
+     ╭─[ loop_stmts.baml:444:26 ]
+     │
+ 444 │                     1 => i * j - result,
+     │                          ──┬──  
+     │                            ╰──── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
+     ╭─[ loop_stmts.baml:445:26 ]
+     │
+ 445 │                     _ => i * j
+     │                          ──┬──  
+     │                            ╰──── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Add` cannot be applied to `int` and `unknown | 0`
+     ╭─[ loop_stmts.baml:450:13 ]
+     │
+ 450 │             result += computation;
+     │             ───┬──  
+     │                ╰──── operator `Add` cannot be applied to `int` and `unknown | 0`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [hir] Error: Duplicate binding `very_long_variable_name_for_testing_wrapping` in `LoopStmts`
+     ╭─[ loop_stmts.baml:515:5 ]
+     │
+ 473 │     let very_long_variable_name_for_testing_wrapping: map<string, int | string | bool | float | null> = {"key": 42};
+     │         ──────────────────────┬─────────────────────  
+     │                               ╰─────────────────────── first defined as binding here
+     │ 
+ 515 │     very_long_variable_name_for_testing_wrapping // 4 name trailing
+     │     ──────────────────────┬─────────────────────  
+     │                           ╰─────────────────────── duplicate binding definition
+     │ 
+ 532 │     very_long_variable_name_for_testing_wrapping /* 4 name trailing */
+     │     ──────────────────────┬─────────────────────  
+     │                           ╰─────────────────────── duplicate binding definition
+     │ 
+     │ Note: Error code: E0012
+─────╯
+
+  [hir] Error: Duplicate binding `another_extremely_long_variable_name` in `LoopStmts`
+     ╭─[ loop_stmts.baml:549:5 ]
+     │
+ 476 │     let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result;
+     │         ──────────────────┬─────────────────  
+     │                           ╰─────────────────── first defined as binding here
+     │ 
+ 549 │     another_extremely_long_variable_name // 4 name trailing
+     │     ──────────────────┬─────────────────  
+     │                       ╰─────────────────── duplicate binding definition
+     │ 
+ 562 │     another_extremely_long_variable_name /* 4 name trailing */
+     │     ──────────────────┬─────────────────  
+     │                       ╰─────────────────── duplicate binding definition
+     │ 
+     │ Note: Error code: E0012
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exprs.baml:157:18 ]
+     │
+ 157 │         "bye" => "farewell",
+     │                  ─────┬────  
+     │                       ╰────── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unreachable arm
+     ╭─[ match_exprs.baml:158:14 ]
+     │
+ 158 │         _ => "other"
+     │              ───┬───  
+     │                 ╰───── unreachable arm
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
+     ╭─[ match_exprs.baml:307:20 ]
+     │
+ 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+     │                    ──┬──  
+     │                      ╰──── operator `Mul` cannot be applied to `bool` and `bool`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `int` and `bool`
+     ╭─[ match_exprs.baml:307:28 ]
+     │
+ 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+     │                            ──┬──  
+     │                              ╰──── operator `Mul` cannot be applied to `int` and `bool`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `bool` and `bool`
+     ╭─[ match_exprs.baml:307:56 ]
+     │
+ 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+     │                                                        ──┬──  
+     │                                                          ╰──── operator `Mul` cannot be applied to `bool` and `bool`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `int` and `bool`
+     ╭─[ match_exprs.baml:307:68 ]
+     │
+ 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+     │                                                                    ──┬──  
+     │                                                                      ╰──── operator `Mul` cannot be applied to `int` and `bool`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: operator `Mul` cannot be applied to `bool` and `int`
+     ╭─[ match_exprs.baml:307:80 ]
+     │
+ 307 │     match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b) {
+     │                                                                                ──┬──  
+     │                                                                                  ╰──── operator `Mul` cannot be applied to `bool` and `int`
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [hir] Error: Duplicate binding `x` in `OtherExprs`
+     ╭─[ other_exprs.baml:313:13 ]
+     │
+ 308 │         let x = 1;
+     │             ┬  
+     │             ╰── first defined as binding here
+     │ 
+ 313 │         let x = a + b;
+     │             ┬  
+     │             ╰── duplicate binding definition
+     │ 
+ 320 │         let x = {
+     │             ┬  
+     │             ╰── duplicate binding definition
+     │ 
+ 332 │         let x = if (a > b) {
+     │             ┬  
+     │             ╰── duplicate binding definition
+     │ 
+     │ Note: Error code: E0012
+─────╯
+
+  [hir] Error: Duplicate binding `y` in `OtherExprs`
+     ╭─[ other_exprs.baml:321:17 ]
+     │
+ 314 │         let y = x * 2;
+     │             ┬  
+     │             ╰── first defined as binding here
+     │ 
+ 321 │             let y = {
+     │                 ┬  
+     │                 ╰── duplicate binding definition
+     │ 
+     │ Note: Error code: E0012
+─────╯

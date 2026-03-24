@@ -328,7 +328,7 @@ function user.FullClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "FullClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100, "temperature": 0.7, "top_p": 0.9 } } } : unknown
 }
 function user.StringProviderClient$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "StringProviderClient", provider: "openai-generic", options: baml.llm.PrimitiveClientOptions { model: 1, base_url: "https://openroute...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
+  baml.llm.PrimitiveClient { name: "StringProviderClient", provider: "openai-generic", options: baml.llm.PrimitiveClientOptions { model: "mistralai/mistral...", base_url: "https://openroute...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
 }
 function user.NestedConfigClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "NestedConfigClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map {  } } } : unknown
@@ -367,7 +367,7 @@ function user.DeeplyNestedClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "DeeplyNestedClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ { custom_config: _ { retry_on_failure: "true", timeout_ms: 30000, metadata: _ { team: "platform", environment: "production" } } }, query_params: map {  }, request_body: map {  } } } : unknown
 }
 function user.LongNestedValuesClient$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: 5, base_url: "https://some-extr...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map {  } } } : unknown
+  baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map {  } } } : unknown
 }
 function user.ManyOptionsClient$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "ManyOptionsClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: "https://api.opena...", default_role: null, allowed_roles: null, remap_roles: null, api_key: baml.env.get_or_panic("OPENAI_API_KEY"), provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 4096, "temperature": 0.7, "top_p": 0.95, "frequency_penalty": 0.5, "presence_penalty": 0.3, "stream": "true", "stop_sequences": ["END", "STOP", "DONE", "COMPLETE", "FINISHED"] } } } : unknown

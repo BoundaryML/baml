@@ -22,7 +22,7 @@ function user.OpenRouterMistralSmall3_1_24b$new() -> null {
     copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
     copy 0
-    load_const 1
+    load_const "mistralai/mistral-small-3.1-24b-instruct"
     store_field .model
     copy 0
     load_const "https://openrouter.ai/api/v1"

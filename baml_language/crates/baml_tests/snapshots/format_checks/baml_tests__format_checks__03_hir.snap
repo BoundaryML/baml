@@ -216,7 +216,7 @@ function user.LongArrayOfObjectsClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "LongArrayOfObject...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "tools": [] } } }
 }
 function user.LongNestedValuesClient$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: 5, base_url: "https://some-extr...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "LongNestedValuesC...", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "anthropic/claude-...", base_url: "https://some-extr...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: _ {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.LongOptionClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "LongOptionClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "some-extremely-lo...", base_url: "https://some-real...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
@@ -237,7 +237,7 @@ function user.SameLineClient$new() -> ?  [expr] {
   baml.llm.PrimitiveClient { name: "SameLineClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.StringProviderClient$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "StringProviderClient", provider: "openai-generic", options: baml.llm.PrimitiveClientOptions { model: 1, base_url: "https://openroute...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "StringProviderClient", provider: "openai-generic", options: baml.llm.PrimitiveClientOptions { model: "mistralai/mistral...", base_url: "https://openroute...", default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
 function user.TestTarget() -> string  [llm] {
   baml.llm.call_llm_function(BasicClient, "TestTarget", map {  })

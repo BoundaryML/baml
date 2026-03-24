@@ -642,6 +642,7 @@ fn emit_view_struct(
     out.push_str(&format!(
         "            pub fn into_owned(self, heap: &'a GcProtectedHeap<'a>) -> Result<{owned_path}, AccessError> {{\n"
     ));
+
     out.push_str(&format!("                Ok({owned_path} {{\n"));
     for field in &cd.fields {
         let expr = into_owned_expr(&field.name, &field.field_type, class_ns_map);
@@ -864,6 +865,7 @@ fn emit_glue_method(
     out.push_str(&format!(
         "            let __receiver = __arg_self.as_builtin_class::<view::{ns}::{class_name}>(&__p)?.into_owned(&__p)?;\n"
     ));
+
     for (i, p) in builtin.params.iter().enumerate() {
         let extract = glue_extract_expr(&format!("__arg{i}"), &p.ty, class_ns_map, false);
         out.push_str(&format!("            let __{} = {extract};\n", p.name));

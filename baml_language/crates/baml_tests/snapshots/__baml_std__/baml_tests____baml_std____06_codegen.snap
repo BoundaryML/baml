@@ -203,18 +203,18 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
   L2:
     load_var self
     load_field .0
-    store_var _34
+    store_var _32
     load_var self
     load_field .4
-    store_var _35
+    store_var _33
     load_var self
     load_field .2
     call baml.Array.length
-    store_var _36
+    store_var _34
     load_var planner_state
+    load_var _32
+    load_var _33
     load_var _34
-    load_var _35
-    load_var _36
     call baml.llm.PlannerState.rr_pick_index
     store_var idx
     load_var self
@@ -276,13 +276,11 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
     jump L5
 
   L10:
+    load_var steps
     load_var _18
     load_var __for_idx_1
     load_array_element
-    load_var steps
-    load_var _28
-    load_map_element
-    call_indirect
+    call baml.Array.push
     pop 1
     load_var __for_idx_1
     load_const 1
@@ -324,16 +322,22 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     load_field .3
     store_var _3
     load_var _3
-    load_const null
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L0
-    jump L10
+    jump L1
 
   L0:
     load_var _3
-    pop 1
-    load_const false
-    pop_jump_if_false L11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L4
+    load_var self
+    load_var planner_state
+    call baml.llm.Client.build_attempt_with_state
+    jump L4
+
+  L1:
     load_var _3
     store_var r
     alloc_array 0
@@ -346,25 +350,27 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     load_const 0
     store_var attempt
 
-  L1:
+  L2:
     load_var attempt
     load_var r
     load_field .max_retries
     cmp_op <=
-    pop_jump_if_false L2
-    jump L3
-
-  L2:
-    load_var result
-    jump L11
+    pop_jump_if_false L3
+    jump L5
 
   L3:
+    load_var result
+
+  L4:
+    return
+
+  L5:
     load_const 0
     store_var delay
     load_var attempt
     load_const 0
     cmp_op >
-    pop_jump_if_false L6
+    pop_jump_if_false L8
     load_var current_delay
     call baml.math.trunc
     store_var delay
@@ -379,48 +385,49 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     load_const 0
     bin_op +
     cmp_op >
-    pop_jump_if_false L4
-    jump L5
+    pop_jump_if_false L6
+    jump L7
 
-  L4:
+  L6:
     load_var next
     store_var current_delay
-    jump L6
+    jump L8
 
-  L5:
+  L7:
     load_var r
     load_field .max_delay_ms
     load_const 0
     bin_op +
     store_var current_delay
 
-  L6:
+  L8:
     load_var self
     load_var planner_state
     call baml.llm.Client.build_attempt_with_state
-    store_var _32
+    store_var _31
     load_const 0
     store_var __for_idx
 
-  L7:
+  L9:
     load_var __for_idx
-    load_var _32
+    load_var _31
     call baml.Array.length
     cmp_op <
-    pop_jump_if_false L8
-    jump L9
+    pop_jump_if_false L10
+    jump L11
 
-  L8:
+  L10:
     load_var attempt
     load_const 1
     bin_op +
     store_var attempt
-    jump L1
+    jump L2
 
-  L9:
+  L11:
+    load_var result
     alloc_instance OrchestrationStep
     copy 0
-    load_var _32
+    load_var _31
     load_var __for_idx
     load_array_element
     load_field .primitive_client
@@ -428,24 +435,13 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
     copy 0
     load_var delay
     store_field .delay_ms
-    load_var result
-    load_var _41
-    load_map_element
-    call_indirect
+    call baml.Array.push
     pop 1
     load_var __for_idx
     load_const 1
     bin_op +
     store_var __for_idx
-    jump L7
-
-  L10:
-    load_var self
-    load_var planner_state
-    call baml.llm.Client.build_attempt_with_state
-
-  L11:
-    return
+    jump L9
 }
 
 function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: int) -> void {
@@ -453,16 +449,23 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_field .3
     store_var _4
     load_var _4
-    load_const null
-    cmp_op ==
+    pop 1
+    load_const false
     pop_jump_if_false L0
-    jump L10
+    jump L1
 
   L0:
     load_var _4
-    pop 1
-    load_const false
-    pop_jump_if_false L11
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L10
+    load_var self
+    load_var context
+    load_var inherited_delay_ms
+    call baml.llm.Client.execute_once
+    jump L10
+
+  L1:
     load_var _4
     store_var r
     load_var r
@@ -473,28 +476,28 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_const 0
     store_var attempt
 
-  L1:
+  L2:
     load_var attempt
     load_var r
     load_field .max_retries
     cmp_op <=
-    pop_jump_if_false L2
-    jump L3
+    pop_jump_if_false L3
+    jump L4
 
-  L2:
+  L3:
     alloc_instance DevOther
     copy 0
     load_const "All orchestration steps failed"
     store_field .message
     throw
 
-  L3:
+  L4:
     load_var inherited_delay_ms
     store_var attempt_delay
     load_var attempt
     load_const 0
     cmp_op >
-    pop_jump_if_false L6
+    pop_jump_if_false L7
     load_var current_delay
     call baml.math.trunc
     store_var attempt_delay
@@ -509,56 +512,47 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
     load_const 0
     bin_op +
     cmp_op >
-    pop_jump_if_false L4
-    jump L5
-
-  L4:
-    load_var next
-    store_var current_delay
+    pop_jump_if_false L5
     jump L6
 
   L5:
+    load_var next
+    store_var current_delay
+    jump L7
+
+  L6:
     load_var r
     load_field .max_delay_ms
     load_const 0
     bin_op +
     store_var current_delay
 
-  L6:
+  L7:
     load_var attempt
     load_var r
     load_field .max_retries
     cmp_op ==
-    pop_jump_if_false L7
+    pop_jump_if_false L8
     load_var inherited_delay_ms
     store_var attempt_delay
 
-  L7:
-    push_unwind L8, slot 10
+  L8:
+    push_unwind L9, slot 10
     load_var self
     load_var context
     load_var attempt_delay
     call baml.llm.Client.execute_once
     pop_unwind
-    jump L9
+    jump L10
 
-  L8:
+  L9:
     load_var attempt
     load_const 1
     bin_op +
     store_var attempt
-    jump L1
-
-  L9:
-    jump L11
+    jump L2
 
   L10:
-    load_var self
-    load_var context
-    load_var inherited_delay_ms
-    call baml.llm.Client.execute_once
-
-  L11:
     return
 }
 

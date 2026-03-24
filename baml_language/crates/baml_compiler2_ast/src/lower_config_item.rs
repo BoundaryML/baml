@@ -34,19 +34,23 @@ pub(crate) fn lower_config_value(
         return alloc(Expr::Null);
     };
 
-    // Check for integer literal token
-    let has_int = cv_node
+    // Check whether *all* meaningful tokens are a single numeric literal.
+    // Using `.all()` ensures that mixed-token values like
+    // `"anthropic.claude-3-haiku-20240307-v1:0"` (which contains an
+    // INTEGER_LITERAL `0` among other tokens) are NOT misclassified as int.
+    let is_int = cv_node
         .descendants_with_tokens()
         .filter_map(rowan::NodeOrToken::into_token)
-        .any(|t| t.kind() == SyntaxKind::INTEGER_LITERAL);
+        .filter(|t| !matches!(t.kind(), SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE))
+        .all(|t| t.kind() == SyntaxKind::INTEGER_LITERAL);
 
-    let has_float = cv_node
+    let is_float = cv_node
         .descendants_with_tokens()
         .filter_map(rowan::NodeOrToken::into_token)
-        .any(|t| t.kind() == SyntaxKind::FLOAT_LITERAL);
+        .filter(|t| !matches!(t.kind(), SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE))
+        .all(|t| t.kind() == SyntaxKind::FLOAT_LITERAL);
 
-    if has_float {
-        // Float literal — use scalar_text() to get the text
+    if is_float {
         if let Some(cv) = item.config_value() {
             if let Some(text) = cv.scalar_text() {
                 return alloc(Expr::Literal(Literal::Float(text)));
@@ -54,7 +58,7 @@ pub(crate) fn lower_config_value(
         }
     }
 
-    if has_int {
+    if is_int {
         if let Some(v) = item.value_int() {
             return alloc(Expr::Literal(Literal::Int(v)));
         }

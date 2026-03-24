@@ -71,7 +71,6 @@ async fn http_fetch_and_text() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: HTTP response object field access fails (expected Map, got Instance)"]
 async fn http_response_status() {
     let (_server, uri) = mock(&[MockEndpoint {
         path: "/status",
@@ -94,12 +93,45 @@ async fn http_response_status() {
         load_const "{URI}/status"
         dispatch_future baml.http.fetch
         await
-        load_var _4
-        load_map_element
+        load_field .status_code
         return
     }
     "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(201)));
+}
+
+/// Regression test: field access on a foreign class instance must compile
+/// as `load_field`, NOT `load_map_element`.
+#[tokio::test]
+async fn foreign_class_field_access_compiles_correctly() {
+    let (_server, uri) = mock(&[MockEndpoint {
+        path: "/test",
+        status: 200,
+        body: Some("ok"),
+    }])
+    .await;
+
+    let output = baml_test!(&format!(
+        r#"
+            function main() -> int {{
+                let response = baml.http.fetch("{uri}/test");
+                response.status_code
+            }}
+        "#
+    ));
+
+    // The bytecode MUST use load_field, not load_map_element.
+    // If this shows load_map_element, the foreign class field access bug is present.
+    insta::assert_snapshot!(stabilize_bytecode(&output.bytecode, &uri), @r#"
+    function main() -> int {
+        load_const "{URI}/test"
+        dispatch_future baml.http.fetch
+        await
+        load_field .status_code
+        return
+    }
+    "#);
+    assert_eq!(output.result, Ok(BexExternalValue::Int(200)));
 }
 
 #[tokio::test]
@@ -163,7 +195,6 @@ async fn http_response_ok_false() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: HTTP response object field access fails (expected Map, got Instance)"]
 async fn http_response_url() {
     let (_server, uri) = mock(&[MockEndpoint {
         path: "/endpoint",
@@ -187,8 +218,7 @@ async fn http_response_url() {
         load_const "{URI}/endpoint"
         dispatch_future baml.http.fetch
         await
-        load_var _4
-        load_map_element
+        load_field .url
         return
     }
     "#);
@@ -212,8 +242,7 @@ async fn http_fetch_network_error() {
         load_const "http://localhost:1"
         dispatch_future baml.http.fetch
         await
-        load_var _4
-        load_map_element
+        load_field .status_code
         return
     }
     "#);
