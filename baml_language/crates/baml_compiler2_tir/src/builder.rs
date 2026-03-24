@@ -575,8 +575,13 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                         let mut bindings = FxHashMap::default();
 
-                        // Phase 0: reverse-infer from expected return type (low priority)
-                        if crate::generics::contains_typevar(ret) {
+                        // Phase 0: reverse-infer from expected return type (low priority).
+                        // Skip when expected is Unknown/Error — it provides no
+                        // information and would pollute forward-inferred bindings
+                        // via union_ty (e.g. T = unknown | Node instead of Node).
+                        if crate::generics::contains_typevar(ret)
+                            && !matches!(expected, Ty::Unknown | Ty::Error)
+                        {
                             crate::generics::infer_bindings(ret, expected, &mut bindings);
                         }
 
