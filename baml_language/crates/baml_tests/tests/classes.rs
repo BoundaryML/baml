@@ -433,6 +433,8 @@ async fn spread_before_named_fields() {
     }
 
     function main() -> Point {
+        call user.default_point
+        store_var _2
         alloc_instance Point
         copy 0
         load_const 1
@@ -440,6 +442,14 @@ async fn spread_before_named_fields() {
         copy 0
         load_const 2
         store_field .y
+        copy 0
+        load_var _2
+        load_field .2
+        store_field .z
+        copy 0
+        load_var _2
+        load_field .3
+        store_field .w
         return
     }
     ");
@@ -459,7 +469,6 @@ async fn spread_before_named_fields() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: optimizer eliminates spread field copies from source objects (dead-code elim bug)"]
 async fn spread_after_named_fields() {
     let output = baml_test!(
         r#"
@@ -500,24 +509,24 @@ async fn spread_after_named_fields() {
     }
 
     function main() -> Point {
-        call default_point
+        call user.default_point
         store_var _2
         alloc_instance Point
         copy 0
         load_var _2
-        load_field .x
+        load_field .0
         store_field .x
         copy 0
         load_var _2
-        load_field .y
+        load_field .1
         store_field .y
         copy 0
         load_var _2
-        load_field .z
+        load_field .2
         store_field .z
         copy 0
         load_var _2
-        load_field .w
+        load_field .3
         store_field .w
         return
     }
@@ -538,7 +547,6 @@ async fn spread_after_named_fields() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: optimizer eliminates spread field copies from source objects (dead-code elim bug)"]
 async fn multiple_spreads() {
     let output = baml_test!(
         r#"
@@ -566,26 +574,26 @@ async fn multiple_spreads() {
 
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> Point {
-        call x_one
+        call user.x_one
         pop 1
-        call xy_one
-        store_var _4
+        call user.xy_one
+        store_var _3
         alloc_instance Point
         copy 0
-        load_var _4
-        load_field .x
+        load_var _3
+        load_field .0
         store_field .x
         copy 0
-        load_var _4
-        load_field .y
+        load_var _3
+        load_field .1
         store_field .y
         copy 0
-        load_var _4
-        load_field .z
+        load_var _3
+        load_field .2
         store_field .z
         copy 0
-        load_var _4
-        load_field .w
+        load_var _3
+        load_field .3
         store_field .w
         return
     }
@@ -681,6 +689,8 @@ async fn spread_does_not_break_locals() {
     }
 
     function main() -> int {
+        call user.default_point
+        pop 1
         load_const 0
         return
     }
