@@ -319,7 +319,6 @@ async fn trace_captures_root_result() {
 
 /// Verify that LLM functions have `trace: true` and expression functions have `trace: false`.
 #[test]
-#[ignore = "compiler2: function names in program.function_indices are prefixed with 'user.' (e.g. 'user.ExtractInfo'), but this test looks up bare names"]
 fn llm_functions_have_trace_flag() {
     let source = r##"
         client<llm> MockClient {
@@ -356,7 +355,7 @@ fn llm_functions_have_trace_flag() {
     let program = compile_for_engine(source);
 
     // LLM functions should have trace: true
-    for name in ["ExtractInfo", "SummarizeInfo"] {
+    for name in ["user.ExtractInfo", "user.SummarizeInfo"] {
         let idx = program
             .function_indices
             .get(name)
@@ -369,7 +368,7 @@ fn llm_functions_have_trace_flag() {
     }
 
     // Expression functions should have trace: false
-    for name in ["InnerPipeline", "OuterPipeline"] {
+    for name in ["user.InnerPipeline", "user.OuterPipeline"] {
         let idx = program
             .function_indices
             .get(name)
