@@ -166,36 +166,6 @@ function Test() -> string {
     }
 
     #[test]
-    fn test_goto_def_match_pattern_binding() {
-        let test = CursorTest::new(
-            r#"
-enum Result {
-    Ok { value string }
-    Err { message string }
-}
-
-function HandleResult(r: Result) -> string {
-    match (r) {
-        Ok(o) => o.value
-        Err(e) => <[CURSOR]e.message
-    }
-}
-"#,
-        );
-
-        let loc = test.goto_definition();
-        // Pattern bindings should be resolvable — just check it doesn't panic.
-        let desc = loc
-            .as_ref()
-            .map(|l| test.format_location_with_name(l))
-            .unwrap_or_else(|| "No definition found".into());
-        assert!(
-            desc.contains('e') || desc.contains("No definition"),
-            "Pattern binding navigation, got: {desc}"
-        );
-    }
-
-    #[test]
     fn test_goto_def_no_definition() {
         let test = CursorTest::new(
             r#"

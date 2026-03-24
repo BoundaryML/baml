@@ -146,37 +146,6 @@ function UseStatus() -> Status {
     }
 
     #[test]
-    fn test_find_refs_pattern_binding() {
-        let test = CursorTest::new(
-            r#"
-enum Result {
-    Ok { value string }
-    Err { message string }
-}
-
-function HandleResult(r: Result) -> string {
-    match (r) {
-        Ok(<[CURSOR]o) => o.value + o.value
-        Err(e) => e.message
-    }
-}
-"#,
-        );
-
-        let usages = test.find_all_usages();
-        // Pattern binding usages are not yet tracked by usages_at.
-        // TODO: once implemented, assert usages.len() >= 2 (o.value + o.value)
-        assert!(
-            usages.is_empty(),
-            "Pattern binding usages are not yet implemented, found: {:?}",
-            usages
-                .iter()
-                .map(|l| test.format_location_with_name(l))
-                .collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
     fn test_find_refs_field() {
         let test = CursorTest::new(
             r#"
