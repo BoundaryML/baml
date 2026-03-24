@@ -666,11 +666,17 @@ fn synthesize_client_items(node: &SyntaxNode) -> Option<(Item, Option<FunctionDe
         is_fallback,
         is_round_robin,
         &config_block,
-    )?;
+    );
 
     // Build the $new companion for primitive clients only
     let companion = if !is_composite {
-        synthesize_client_new_companion(&client_name, span, &name_token, &config_block, &provider)
+        Some(synthesize_client_new_companion(
+            &client_name,
+            span,
+            &name_token,
+            &config_block,
+            provider.as_ref(),
+        ))
     } else {
         None
     };
@@ -694,7 +700,7 @@ fn synthesize_client_let(
     is_fallback: bool,
     is_round_robin: bool,
     config_block: &ast::ConfigBlock,
-) -> Option<Item> {
+) -> Item {
     use baml_base::Literal;
 
     let is_composite = is_fallback || is_round_robin;
@@ -827,13 +833,13 @@ fn synthesize_client_let(
         catch_arm_spans: la_arena::Arena::new(),
     };
 
-    Some(Item::Let(LetDef {
+    Item::Let(LetDef {
         name: Name::new(client_name),
         initializer: Some((body, source_map)),
         origin: LetOrigin::Client,
         span,
         name_span: name_token.text_range(),
-    }))
+    })
 }
 
 /// Build the `ClientName$new` companion function for primitive clients.
@@ -861,8 +867,8 @@ fn synthesize_client_new_companion(
     span: text_size::TextRange,
     name_token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>,
     config_block: &ast::ConfigBlock,
-    provider: &Option<String>,
-) -> Option<FunctionDef> {
+    provider: Option<&String>,
+) -> FunctionDef {
     use baml_base::Literal;
 
     let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
@@ -1012,7 +1018,7 @@ fn synthesize_client_new_companion(
     // PrimitiveClient { name, provider, options }
     let name_lit = alloc(Expr::Literal(Literal::String(client_name.to_string())));
     let provider_lit = alloc(Expr::Literal(Literal::String(
-        provider.as_deref().unwrap_or("unknown").to_string(),
+        provider.map_or("unknown", |s| s.as_str()).to_string(),
     )));
     let root = alloc(Expr::Object {
         type_name: Some(Name::new("baml.llm.PrimitiveClient")),
@@ -1043,7 +1049,7 @@ fn synthesize_client_new_companion(
     };
 
     let func_name = format!("{client_name}$new");
-    Some(FunctionDef {
+    FunctionDef {
         name: Name::new(&func_name),
         generic_params: vec![],
         params: vec![],
@@ -1054,7 +1060,7 @@ fn synthesize_client_new_companion(
         attributes: vec![],
         span,
         name_span: name_token.text_range(),
-    })
+    }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────

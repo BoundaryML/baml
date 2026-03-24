@@ -35,8 +35,8 @@ function user.GetStatus$build_request() -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "GetStatus", map {  }) : baml.http.Request
   !! 127..173: unresolved name: GPT4
 }
-function user.GetMixedList() -> int | string[] throws never {
-  baml.llm.call_llm_function<T>(GPT4, "GetMixedList", map {  }) : int | string[]
+function user.GetMixedList() -> (int | string)[] throws never {
+  baml.llm.call_llm_function<T>(GPT4, "GetMixedList", map {  }) : (int | string)[]
   !! 173..308: unresolved name: GPT4
 }
 function user.GetMixedList$render_prompt() -> baml.llm.PromptAst throws never {
@@ -71,7 +71,7 @@ type user.RoleList = "reader"[]
 type user.OptionalRoleList = "writer"[]?
 type user.OptionalCode = 200?
 type user.OptionalFlag = true?
-type user.MixedList = int | string[]
+type user.MixedList = (int | string)[]
 type user.MixedMap = map<string, int | string>
 type user.UnionOfArrays = int[] | string[]
 type user.ReallyLongMapType = map<string, "fieopwaiwjepfoiwajpoweijf" | int | string | bool | float | int[] | string[] | map<string, int | string> | map<string, map<string, int | string>> | map<string, map<string, map<string, int | string>>> | map<string, map<string, map<string, map<string, int | string>>>>>

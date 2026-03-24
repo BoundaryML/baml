@@ -141,7 +141,7 @@ class Array<T> {
         // Verify the param name is "T"
         let param_name = params[0]
             .children_with_tokens()
-            .filter_map(|e| e.into_token())
+            .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
             .find(|t| t.kind() == SyntaxKind::WORD)
             .expect("expected WORD token in GENERIC_PARAM")
             .text()
@@ -175,7 +175,7 @@ class Map<K, V> {
             .iter()
             .map(|p| {
                 p.children_with_tokens()
-                    .filter_map(|e| e.into_token())
+                    .filter_map(baml_compiler_syntax::NodeOrToken::into_token)
                     .find(|t| t.kind() == SyntaxKind::WORD)
                     .expect("expected WORD token")
                     .text()
@@ -643,9 +643,144 @@ function f() -> int {
 
     // ── Phase 1: retry_policy produces Item::Let with LetOrigin::RetryPolicy ──
 
+    // ── Postfix type expression tests ────────────────────────────────────────
+
+    fn first_type_alias(items: Vec<Item>) -> crate::ast::TypeAliasDef {
+        items
+            .into_iter()
+            .find_map(|item| {
+                if let Item::TypeAlias(ta) = item {
+                    Some(ta)
+                } else {
+                    None
+                }
+            })
+            .expect("expected a TypeAliasDef")
+    }
+
+    #[test]
+    fn type_expr_simple_optional() {
+        let ta = first_type_alias(parse_and_lower("type T = int?\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(te, TypeExpr::Optional(Box::new(TypeExpr::Int)));
+    }
+
+    #[test]
+    fn type_expr_simple_array() {
+        let ta = first_type_alias(parse_and_lower("type T = int[]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(te, TypeExpr::List(Box::new(TypeExpr::Int)));
+    }
+
+    #[test]
+    fn type_expr_array_optional() {
+        let ta = first_type_alias(parse_and_lower("type T = int[]?\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::Optional(Box::new(TypeExpr::List(Box::new(TypeExpr::Int))))
+        );
+    }
+
+    #[test]
+    fn type_expr_optional_in_array() {
+        let ta = first_type_alias(parse_and_lower("type T = string?[]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::Optional(Box::new(TypeExpr::String))))
+        );
+    }
+
+    #[test]
+    fn type_expr_optional_array_optional() {
+        let ta = first_type_alias(parse_and_lower("type T = string?[]?\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::Optional(Box::new(TypeExpr::List(Box::new(TypeExpr::Optional(
+                Box::new(TypeExpr::String)
+            )))))
+        );
+    }
+
+    #[test]
+    fn type_expr_nested_int_array() {
+        let ta = first_type_alias(parse_and_lower("type T = int[][]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::List(Box::new(TypeExpr::Int))))
+        );
+    }
+
+    #[test]
+    fn type_expr_triple_nested_array() {
+        let ta = first_type_alias(parse_and_lower("type T = int[][][]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::List(Box::new(TypeExpr::List(
+                Box::new(TypeExpr::Int)
+            )))))
+        );
+    }
+
+    #[test]
+    fn type_expr_paren_union_array() {
+        let ta = first_type_alias(parse_and_lower("type T = (int | string)[]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::Union(vec![
+                TypeExpr::Int,
+                TypeExpr::String
+            ])))
+        );
+    }
+
+    #[test]
+    fn type_expr_nested_union_array() {
+        let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::List(Box::new(TypeExpr::Union(vec![
+                TypeExpr::Int,
+                TypeExpr::Bool
+            ])))))
+        );
+    }
+
+    #[test]
+    fn type_expr_nested_union_array_opt() {
+        let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]?\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::Optional(Box::new(TypeExpr::List(Box::new(TypeExpr::List(
+                Box::new(TypeExpr::Union(vec![TypeExpr::Int, TypeExpr::Bool]))
+            )))))
+        );
+    }
+
+    #[test]
+    fn type_expr_opt_union_in_array() {
+        let ta = first_type_alias(parse_and_lower("type T = (int | bool)?[]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::Optional(Box::new(TypeExpr::Union(
+                vec![TypeExpr::Int, TypeExpr::Bool]
+            )))))
+        );
+    }
+
+    // ── Phase 1: retry_policy produces Item::Let with LetOrigin::RetryPolicy ──
+
     #[test]
     fn retry_policy_produces_let_item_with_retry_policy_origin() {
-        use crate::ast::{Expr, FunctionBodyDef, Item, LetOrigin, Literal};
+        use crate::ast::{Expr, Item, LetOrigin, Literal};
 
         let source = r#"
 retry_policy MyRetry {
@@ -681,7 +816,7 @@ retry_policy MyRetry {
         };
 
         assert_eq!(
-            type_name.as_ref().map(|n| n.as_str()),
+            type_name.as_ref().map(smol_str::SmolStr::as_str),
             Some("RetryPolicy"),
             "expected type_name to be RetryPolicy"
         );

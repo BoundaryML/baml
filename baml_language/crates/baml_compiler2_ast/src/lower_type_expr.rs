@@ -10,19 +10,36 @@ use rowan::ast::AstNode;
 use crate::ast::{FunctionTypeParam as AstFunctionTypeParam, TypeExpr};
 
 /// Convert a CST `TypeExpr` node to our `ast::TypeExpr` recursive enum.
+///
+/// Extracts the base type, then applies all postfix modifiers (`[]`, `?`)
+/// from the CST node in order.
 pub(crate) fn lower_type_expr_node(type_expr: &CstTypeExpr) -> TypeExpr {
-    // Handle optional modifier (outermost)
-    // For `int[]?`, optional wraps the array
-    if type_expr.is_optional() {
-        let inner = lower_without_optional(type_expr);
-        return TypeExpr::Optional(Box::new(inner));
-    }
-
-    lower_without_optional(type_expr)
+    let base = lower_base(type_expr);
+    apply_modifiers(base, &type_expr.postfix_modifiers())
 }
 
-/// Parse a `TypeExpr` assuming the optional modifier has been handled.
-fn lower_without_optional(type_expr: &CstTypeExpr) -> TypeExpr {
+/// Apply a sequence of postfix modifiers to a base type.
+fn apply_modifiers(
+    base: TypeExpr,
+    modifiers: &[baml_compiler_syntax::ast::TypePostFixModifier],
+) -> TypeExpr {
+    let mut result = base;
+    for modifier in modifiers {
+        match modifier {
+            baml_compiler_syntax::ast::TypePostFixModifier::Optional => {
+                result = TypeExpr::Optional(Box::new(result));
+            }
+            baml_compiler_syntax::ast::TypePostFixModifier::Array => {
+                result = TypeExpr::List(Box::new(result));
+            }
+        }
+    }
+    result
+}
+
+/// Extract the base type (unions, function types, parens, terminals).
+/// No modifier handling — that's done by `apply_modifiers`.
+fn lower_base(type_expr: &CstTypeExpr) -> TypeExpr {
     // Handle union FIRST (top-level PIPE separators)
     // For `int[] | string[]`, this is a union of arrays, not an array of unions
     if type_expr.is_union() {
@@ -31,39 +48,6 @@ fn lower_without_optional(type_expr: &CstTypeExpr) -> TypeExpr {
         return TypeExpr::Union(members);
     }
 
-    // Handle array modifier
-    if type_expr.is_array() {
-        let element = lower_array_element(type_expr);
-        return TypeExpr::List(Box::new(element));
-    }
-
-    lower_base(type_expr)
-}
-
-/// Get the element type for an array `TypeExpr`.
-fn lower_array_element(type_expr: &CstTypeExpr) -> TypeExpr {
-    // For parenthesized arrays like `(int | string)[]`, the element is the inner TypeExpr
-    if let Some(inner) = type_expr.inner_type_expr() {
-        return lower_type_expr_node(&inner);
-    }
-
-    // For non-parenthesized arrays like `int[]`, `string[][]`:
-    // Use array_depth() to count nesting levels and lower_base_type() for the base.
-    // For `int[][]`: depth=2, base=Int -> element is List(Int) i.e. `int[]`
-    // For `int[]`: depth=1, base=Int -> element is Int
-    let depth = type_expr.array_depth();
-    let base = lower_base_type(type_expr);
-
-    // Wrap base type in (depth-1) List layers to get the element type
-    let mut result = base;
-    for _ in 0..depth.saturating_sub(1) {
-        result = TypeExpr::List(Box::new(result));
-    }
-    result
-}
-
-/// Parse the base type (no optional, array, or union modifiers).
-fn lower_base(type_expr: &CstTypeExpr) -> TypeExpr {
     // Handle function types like `(x: int, y: int) -> bool`
     if type_expr.is_function_type() {
         let params = type_expr
@@ -224,19 +208,7 @@ fn apply_modifiers_from_parts(
     base: TypeExpr,
     parts: &baml_compiler_syntax::ast::UnionMemberParts,
 ) -> TypeExpr {
-    let mut result = base;
-    for modifier in parts.postfix_modifiers() {
-        match modifier {
-            baml_compiler_syntax::ast::TypePostFixModifier::Optional => {
-                result = TypeExpr::Optional(Box::new(result));
-            }
-            baml_compiler_syntax::ast::TypePostFixModifier::Array => {
-                result = TypeExpr::List(Box::new(result));
-            }
-        }
-    }
-
-    result
+    apply_modifiers(base, &parts.postfix_modifiers())
 }
 
 /// Create a `TypeExpr` from a type name string (primitive or user-defined).

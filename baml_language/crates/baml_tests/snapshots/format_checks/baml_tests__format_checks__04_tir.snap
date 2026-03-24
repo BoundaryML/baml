@@ -203,7 +203,7 @@ class user.LongFieldTypes {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
   another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
   callback_field: (first_param: int, second_param: string, third_param: bool) -> map<string, int>
-  deeply_nested: int | string | bool | float | null[]?
+  deeply_nested: (int | string | bool | float | null)[]?
 }
 class user.TypeVariety {
   simple: string
@@ -211,13 +211,13 @@ class user.TypeVariety {
   array: int[]
   nested_array: int[][]
   union_type: int | string
-  optional_union: int | string?
-  union_array: int | string[]
+  optional_union: (int | string)?
+  union_array: (int | string)[]
   generic: map<string, int>
   complex_generic: map<string, int | string | bool>
   deep_generic: map<string, map<string, int[]>>
   fn_type: (x: int, y: int) -> string
-  paren_union_array: int | string | bool[]
+  paren_union_array: (int | string | bool)[]
   triple_nested: map<string, map<string, map<string, int>>>
 }
 class user.DynamicClass {
@@ -300,7 +300,7 @@ function user.WithMethod.greet() -> string throws never {
 class user.WithLongMethod {
   name: string
 }
-function user.WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> throws never {
+function user.WithLongMethod.processData(first_input: map<string, int>, second_input: (int | string | bool)[], third_input: string) -> map<string, int | string | bool> throws never {
   { : map<string, int | string | bool>
     map { "result": 1 } : map<string, int | string | bool>
   }
@@ -458,7 +458,7 @@ function user.VeryLongParamList(extremely_long_parameter_name: int, another_very
     "result" : "result"
   }
 }
-function user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string throws never {
+function user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string throws never {
   { : "result"
     "result" : "result"
   }
@@ -478,7 +478,7 @@ function user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<stri
     map { "a": map { "b": 1 } } : map<string, map<string, int | string | bool | float | null>>
   }
 }
-function user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> throws never {
+function user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> throws never {
   { : map<string, int | string | bool | float | null>
     map { "a": 1 } : map<string, int | string | bool | float | null>
   }
@@ -549,12 +549,12 @@ function user.TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null th
     x : int
   }
 }
-function user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> throws never {
+function user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> throws never {
   { : map<string, int | string | bool | float | null>
     map { "a": 1 } : map<string, int | string | bool | float | null>
   }
 }
-function user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> throws never {
+function user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: (int | string | bool)[]) -> map<string, int | string | bool | float | null> throws never {
   { : map<string, int | string | bool | float | null>
     map { "a": 1 } : map<string, int | string | bool | float | null>
   }
@@ -1418,19 +1418,19 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
     Neg a : int
     [] : never[]
     [1] : 1[]
-    [1, 2, 3] : 1 | 2 | 3[]
-    [1, 2, 3, 4, 5] : 1 | 2 | 3 | 4 | 5[]
-    ["short", "array"] : "short" | "array"[]
-    ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"] : "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q"[]
-    ["this is a long st...", "another long stri...", "yet another one t...", "and one more stri..."] : "this is a long string element" | "another long string value here" | "yet another one that is quite long" | "and one more string element here too"[]
-    ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa"] : "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima" | "mike" | "november" | "oscar" | "papa"[]
-    [[1, 2], [3, 4]] : 1 | 2[] | 3 | 4[][]
-    [[1, 2, 3], [4, 5, 6], [7, 8, 9]] : 1 | 2 | 3[] | 4 | 5 | 6[] | 7 | 8 | 9[][]
-    [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]], [[13, 14], [15, 16]]] : 1 | 2[] | 3 | 4[][] | 5 | 6[] | 7 | 8[][] | 9 | 10[] | 11 | 12[][] | 13 | 14[] | 15 | 16[][][]
-    [1, 2] : 1 | 2[]
-    [1, 2] : 1 | 2[]
-    ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."] : "this is a long string" | "another long string value" | "yet another that is quite long" | "and one more string element"[]
-    ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."] : "this is a long string" | "another long string value" | "yet another that is quite long" | "and one more string element"[]
+    [1, 2, 3] : (1 | 2 | 3)[]
+    [1, 2, 3, 4, 5] : (1 | 2 | 3 | 4 | 5)[]
+    ["short", "array"] : ("short" | "array")[]
+    ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"] : ("a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q")[]
+    ["this is a long st...", "another long stri...", "yet another one t...", "and one more stri..."] : ("this is a long string element" | "another long string value here" | "yet another one that is quite long" | "and one more string element here too")[]
+    ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa"] : ("alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima" | "mike" | "november" | "oscar" | "papa")[]
+    [[1, 2], [3, 4]] : ((1 | 2)[] | (3 | 4)[])[]
+    [[1, 2, 3], [4, 5, 6], [7, 8, 9]] : ((1 | 2 | 3)[] | (4 | 5 | 6)[] | (7 | 8 | 9)[])[]
+    [[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]], [[13, 14], [15, 16]]] : (((1 | 2)[] | (3 | 4)[])[] | ((5 | 6)[] | (7 | 8)[])[] | ((9 | 10)[] | (11 | 12)[])[] | ((13 | 14)[] | (15 | 16)[])[])[]
+    [1, 2] : (1 | 2)[]
+    [1, 2] : (1 | 2)[]
+    ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."] : ("this is a long string" | "another long string value" | "yet another that is quite long" | "and one more string element")[]
+    ["this is a long st...", "another long stri...", "yet another that ...", "and one more stri..."] : ("this is a long string" | "another long string value" | "yet another that is quite long" | "and one more string element")[]
     map { "key": 1 } : map<"key", 1>
     map { "a": 1, "b": 2 } : map<"a" | "b", 1 | 2>
     map { "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 } : map<"a" | "b" | "c" | "d" | "e", 1 | 2 | 3 | 4 | 5>
@@ -1485,7 +1485,7 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
           }
       x : int
     }
-    [1, 2, 3] : 1 | 2 | 3[]
+    [1, 2, 3] : (1 | 2 | 3)[]
     map { "k": 1 } : map<"k", 1>
     OtherPoint { x: 1, y: 2 } : user.OtherPoint
     a Add b : int
@@ -1505,8 +1505,8 @@ type user.Matrix = int[][]
 type user.StringMap = map<string, int>
 type user.ComplexMap = map<string, int | string | bool>
 type user.NestedMap = map<string, map<string, int[]>>
-type user.ParenUnion = int | string[]
-type user.OptionalUnion = int | string?
+type user.ParenUnion = (int | string)[]
+type user.OptionalUnion = (int | string)?
 type user.Json = int | float | string | bool | null | user.Json[] | map<string, user.Json>
 type user.IntToInt = (x: int) -> int
 type user.BinaryOp = (a: int, b: int) -> int
@@ -1522,16 +1522,16 @@ type user.ThisIsAnExtremelyLongTypeAliasNameThatDefinitelyExceedsLimit = int | s
 type user.VeryLongNamePlusLongUnion = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
 type user.DeepGeneric = map<string, map<string, map<string, map<string, int | string | bool | float | null>>>>
 type user.DeepFnType = (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>
-type user.LongParamFn = (first_parameter: map<string, int>, second_parameter: int | string[], third_parameter: map<string, bool>) -> string
-type user.NestedParenUnion = int | string | bool | float[]
-type user.DeepParenUnion = int | string | bool | float | null | int[][]?
+type user.LongParamFn = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string
+type user.NestedParenUnion = (int | string | bool | float)[]
+type user.DeepParenUnion = (int | string | bool | float | null | int[])[]?
 type user.Tree = string | map<string, user.Tree> | user.Tree[] | map<string, map<string, user.Tree | string | int | null>>
-type user.OptionalArray = int[]
+type user.OptionalArray = int?[]
 type user.ArrayOptional = int[]?
-type user.DoubleOptional = int?
+type user.DoubleOptional = int??
 type user.DoubleArray = int[][]
-type user.ComplexPostfix = int | string[]
-type user.DeepPostfix = int | string | bool | float[][]?
+type user.ComplexPostfix = (int | string)?[][]
+type user.DeepPostfix = (int | string | bool | float)?[][]?
 type user.Constrained = int
 type user.ConstrainedLong = map<string, int | string | bool>
 class user.TypeAliasSuccess {
@@ -1553,9 +1553,9 @@ type user.TriviaGenericBlock = map<string, int>
 type user.TriviaDeepGeneric = map<string, map<string, map<string, int | string>>>
 type user.TriviaFnType = (x: int) -> string
 type user.TriviaFnTypeBlock = (x: int) -> string
-type user.TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: int | string[], third_parameter: map<string, bool>) -> string
+type user.TriviaLongFnType = (first_parameter: map<string, int>, second_parameter: (int | string)[], third_parameter: map<string, bool>) -> string
 type user.TriviaOptional = int?
 type user.TriviaArray = int[]
-type user.TriviaParen = int | string[]
+type user.TriviaParen = (int | string)[]
 type user.T = int
 type user.ExtraWhitespace = int | string | bool | float | null
