@@ -116,7 +116,10 @@ pub fn external_to_baml_value(
         //         bex_prompt_ast_to_proto_prompt_ast(prompt_ast),
         //     ))
         // }
-        BexExternalValue::RustData(_) => {
+        BexExternalValue::RustData(arc) => {
+            if let Some(converted) = bex_project::try_convert_rust_data(arc) {
+                return external_to_baml_value(&converted, options);
+            }
             return Err(CtypesError::InternalError(
                 "RustData cannot be serialized over FFI".to_string(),
             ));
