@@ -536,3 +536,42 @@ impl AsBexExternalValue for Vec<String> {
         .into_bex_external_value()
     }
 }
+
+/// Trait for opaque Rust data stored in `Object::RustData` that knows how to
+/// convert itself to a [`BexExternalValue`].
+///
+/// Implement this for any type that is stored as `RustData` on the VM heap and
+/// needs to survive the VM-to-external conversion boundary (e.g. `PromptAst`,
+/// `MediaValue`).
+pub trait ToBexExternalValue: std::any::Any + Send + Sync {
+    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue;
+}
+
+impl ToBexExternalValue for baml_builtins::PromptAst {
+    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
+    }
+}
+
+impl ToBexExternalValue for baml_builtins::MediaValue {
+    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::Media(self))
+    }
+}
+
+/// Try to convert an `Arc<dyn Any + Send + Sync>` from `Object::RustData` to a
+/// [`BexExternalValue`] by attempting downcast to known [`ToBexExternalValue`]
+/// implementors.
+///
+/// Returns `None` if the concrete type is not recognised.
+pub fn try_convert_rust_data(
+    arc: &std::sync::Arc<dyn std::any::Any + Send + Sync>,
+) -> Option<BexExternalValue> {
+    if let Ok(typed) = arc.clone().downcast::<baml_builtins::PromptAst>() {
+        return Some(typed.to_bex_external_value());
+    }
+    if let Ok(typed) = arc.clone().downcast::<baml_builtins::MediaValue>() {
+        return Some(typed.to_bex_external_value());
+    }
+    None
+}

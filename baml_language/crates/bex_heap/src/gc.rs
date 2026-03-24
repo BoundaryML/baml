@@ -473,8 +473,9 @@ mod tests {
     #[cfg(feature = "heap_debug")]
     #[test]
     fn test_full_verify_panics_on_bad_variant() {
-        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
         use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Enum(Enum {
             name: baml_type::TypeName::local(baml_type::Name::new("E")),
@@ -510,8 +511,9 @@ mod tests {
     #[cfg(feature = "heap_debug")]
     #[test]
     fn test_full_verify_panics_on_instance_field_mismatch() {
-        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
         use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Class(Class {
             name: baml_type::TypeName::local(baml_type::Name::new("C")),
