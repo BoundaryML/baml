@@ -31,9 +31,9 @@ function user.pointArray() -> user.Point[] throws never {
     [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }] : user.Point[]
   }
 }
-function user.mixedArray() -> int | string[] throws never {
-  { : int | string[]
-    [1, "two", 3] : int | string[]
+function user.mixedArray() -> (int | string)[] throws never {
+  { : (int | string)[]
+    [1, "two", 3] : (int | string)[]
   }
 }
 class user.Point {

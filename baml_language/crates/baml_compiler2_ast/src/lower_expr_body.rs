@@ -18,7 +18,7 @@ use crate::ast::{
 
 /// Returns true if `kind` can serve as an identifier token in expression position.
 ///
-/// The parser allows `KW_CLIENT` (and `WORD`) inside PATH_EXPR / FIELD_ACCESS_EXPR
+/// The parser allows `KW_CLIENT` (and `WORD`) inside `PATH_EXPR` / `FIELD_ACCESS_EXPR`
 /// nodes when `client` is used as a variable or field name. This must match
 /// exactly what `parse_path_or_ident` accepts; adding a new keyword there
 /// requires adding it here too.

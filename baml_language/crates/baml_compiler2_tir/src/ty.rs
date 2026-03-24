@@ -311,6 +311,23 @@ impl Ty {
 
 // ── Display impls ────────────────────────────────────────────────────────────
 
+impl Ty {
+    /// Whether this type needs parentheses when a postfix modifier (`[]`, `?`)
+    /// is applied. Unions must be grouped because postfix binds tighter than `|`.
+    fn needs_postfix_parens(&self) -> bool {
+        matches!(self, Ty::Union(_))
+    }
+
+    /// Format with parentheses if needed for postfix context.
+    fn fmt_as_postfix_base(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.needs_postfix_parens() {
+            write!(f, "({self})")
+        } else {
+            write!(f, "{self}")
+        }
+    }
+}
+
 impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -319,13 +336,17 @@ impl fmt::Display for Ty {
             Ty::EnumVariant(qn, v) => write!(f, "{qn}.{v}"),
             Ty::TypeAlias(qn) => write!(f, "{qn}"),
             Ty::Primitive(p) => write!(f, "{p}"),
-            Ty::List(inner) => write!(f, "{inner}[]"),
+            Ty::List(inner) => {
+                inner.fmt_as_postfix_base(f)?;
+                write!(f, "[]")
+            }
             Ty::Map(k, v) => write!(f, "map<{k}, {v}>"),
             Ty::EvolvingList(inner) => {
                 if matches!(**inner, Ty::Never) {
                     write!(f, "_[]")
                 } else {
-                    write!(f, "{inner}[] (evolving)")
+                    inner.fmt_as_postfix_base(f)?;
+                    write!(f, "[] (evolving)")
                 }
             }
             Ty::EvolvingMap(k, v) => {
@@ -339,7 +360,10 @@ impl fmt::Display for Ty {
                 let parts: Vec<_> = members.iter().map(|m| m.to_string()).collect();
                 write!(f, "{}", parts.join(" | "))
             }
-            Ty::Optional(inner) => write!(f, "{inner}?"),
+            Ty::Optional(inner) => {
+                inner.fmt_as_postfix_base(f)?;
+                write!(f, "?")
+            }
             Ty::Literal(lit, _freshness) => write!(f, "{lit}"),
             Ty::Function { params, ret } => {
                 let ps: Vec<String> = params

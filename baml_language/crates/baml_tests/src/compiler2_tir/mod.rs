@@ -58,8 +58,22 @@ pub(crate) mod support {
             TypeExpr::Null => "null".into(),
             TypeExpr::Never => "never".into(),
             TypeExpr::Media(k) => format!("{:?}", k).to_lowercase(),
-            TypeExpr::Optional(inner) => format!("{}?", type_expr_to_string(inner)),
-            TypeExpr::List(inner) => format!("{}[]", type_expr_to_string(inner)),
+            TypeExpr::Optional(inner) => {
+                let s = type_expr_to_string(inner);
+                if matches!(**inner, TypeExpr::Union(_)) {
+                    format!("({s})?")
+                } else {
+                    format!("{s}?")
+                }
+            }
+            TypeExpr::List(inner) => {
+                let s = type_expr_to_string(inner);
+                if matches!(**inner, TypeExpr::Union(_)) {
+                    format!("({s})[]")
+                } else {
+                    format!("{s}[]")
+                }
+            }
             TypeExpr::Map { key, value } => format!(
                 "map<{}, {}>",
                 type_expr_to_string(key),

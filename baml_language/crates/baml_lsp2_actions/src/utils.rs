@@ -192,8 +192,22 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         TypeExpr::Bool => "bool".to_string(),
         TypeExpr::Null => "null".to_string(),
         TypeExpr::Media(kind) => format!("{kind:?}").to_lowercase(),
-        TypeExpr::Optional(inner) => format!("{}?", display_type_expr(inner)),
-        TypeExpr::List(inner) => format!("{}[]", display_type_expr(inner)),
+        TypeExpr::Optional(inner) => {
+            let s = display_type_expr(inner);
+            if matches!(**inner, TypeExpr::Union(_)) {
+                format!("({s})?")
+            } else {
+                format!("{s}?")
+            }
+        }
+        TypeExpr::List(inner) => {
+            let s = display_type_expr(inner);
+            if matches!(**inner, TypeExpr::Union(_)) {
+                format!("({s})[]")
+            } else {
+                format!("{s}[]")
+            }
+        }
         TypeExpr::Map { key, value } => {
             format!(
                 "map<{}, {}>",
