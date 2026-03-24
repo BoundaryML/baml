@@ -2258,6 +2258,32 @@ impl<'db> TypeInferenceBuilder<'db> {
                         ),
                     }
                 }
+                Definition::Let(let_loc) => {
+                    // Determine type from the let-binding's origin.
+                    let db = self.context.db();
+                    let item_tree =
+                        baml_compiler2_hir::file_item_tree(db, let_loc.file(db));
+                    let let_data = &item_tree[let_loc.id(db)];
+                    match let_data.origin {
+                        baml_compiler2_ast::ast::LetOrigin::Client => {
+                            // client<llm> declarations produce Client instances.
+                            Ty::Class(crate::ty::QualifiedTypeName::new(
+                                baml_base::Name::new("baml"),
+                                vec![baml_base::Name::new("llm")],
+                                baml_base::Name::new("Client"),
+                            ))
+                        }
+                        baml_compiler2_ast::ast::LetOrigin::RetryPolicy => {
+                            // retry_policy declarations produce RetryPolicy instances.
+                            Ty::Class(crate::ty::QualifiedTypeName::new(
+                                baml_base::Name::new("baml"),
+                                vec![baml_base::Name::new("llm")],
+                                baml_base::Name::new("RetryPolicy"),
+                            ))
+                        }
+                        _ => Ty::Unknown,
+                    }
+                }
                 _ => Ty::Unknown,
             }
         } else if let Some(def) = self.package_items.lookup_type(&lookup_path) {

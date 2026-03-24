@@ -32,6 +32,20 @@ class Client {
     }
   }
 
+  function advance_round_robin(self) -> void {
+    match (self.client_type) {
+      ClientType.Primitive => {},
+      ClientType.Fallback => {
+        for (let sub in self.sub_clients) {
+          sub.advance_round_robin();
+        }
+      },
+      ClientType.RoundRobin => {
+        self.counter += 1;
+      },
+    }
+  }
+
   function get_constructor(
     self
   ) -> () -> PrimitiveClient throws root.errors.InvalidArgument {
@@ -120,109 +134,6 @@ class Client {
     }
   }
 
-  function execute<T>(
-    self,
-    context: ExecutionContext,
-    inherited_delay_ms: int,
-  ) -> T {
-    match (self.retry) {
-      r: RetryPolicy => {
-        let current_delay = r.initial_delay_ms + 0.0
-
-        for (let attempt = 0; attempt <= r.max_retries; attempt += 1) {
-          let attempt_delay = inherited_delay_ms
-          if (attempt > 0) {
-            attempt_delay = root.math.trunc(current_delay)
-            let next = current_delay * r.multiplier
-            if (next > r.max_delay_ms + 0.0) {
-              current_delay = r.max_delay_ms + 0.0
-            } else {
-              current_delay = next
-            }
-          }
-
-          if (attempt == r.max_retries) {
-            attempt_delay = inherited_delay_ms
-          }
-
-          let result2: T = self.execute_once(
-            context,
-            attempt_delay,
-          ) catch (e) {
-            _ => { continue; }
-          };
-
-          return result2;
-        }
-
-        throw root.errors.DevOther { message: "All orchestration steps failed" };
-      }
-      null => {
-        let result: T = self.execute_once(
-          context,
-          inherited_delay_ms,
-        );
-        return result;
-      },
-    }
-  }
-
-  function execute_once<T>(
-    self,
-    context: ExecutionContext,
-    active_delay_ms: int,
-  ) -> T {
-    match (self.client_type) {
-      ClientType.Primitive => {
-        let resolve_fn = self.get_constructor()
-        let primitive = resolve_fn()
-
-        let prompt = primitive.render_prompt(context.jinja_string, context.args)
-        let specialized = primitive.specialize_prompt(prompt)
-        let http_request = primitive.build_request(specialized)
-        let http_response = root.http.send(http_request)
-
-        if (http_response.ok()) {
-          let body = http_response.text()
-          let return_type = get_return_type(context.function_name)
-          let result: T = primitive.parse(body, return_type) catch (e) {
-            _ => {
-              if (active_delay_ms > 0) {
-                root.sys.sleep(active_delay_ms)
-              }
-              throw e;
-            }
-          };
-          result
-        } else {
-          throw root.errors.DevOther { message: "HTTP request failed" };
-        }
-      }
-
-      ClientType.Fallback => {
-        for (let sub in self.sub_clients) {
-          let result2: T = sub.execute(
-            context,
-            active_delay_ms,
-          ) catch (e) {
-            _ => { continue; }
-          };
-          return result2;
-        }
-        throw root.errors.DevOther { message: "All orchestration steps failed" };
-      }
-
-      ClientType.RoundRobin => {
-        let idx = self.counter % self.sub_clients.length()
-        self.counter += 1
-        let result3: T = self.sub_clients[idx].execute(
-          context,
-          active_delay_ms,
-        );
-        return result3;
-      }
-    }
-  }
 }
 
 class PrimitiveClientOptions {
@@ -282,6 +193,24 @@ class PrimitiveClient {
     type_def: type,
   ) -> T throws root.errors.LlmClient {
     $rust_io_function
+  }
+}
+
+function execute_step<T>(
+  step: OrchestrationStep,
+  context: ExecutionContext,
+) -> T {
+  let prompt = step.primitive_client.render_prompt(context.jinja_string, context.args);
+  let specialized = step.primitive_client.specialize_prompt(prompt);
+  let http_request = step.primitive_client.build_request(specialized);
+  let http_response = root.http.send(http_request);
+
+  if (http_response.ok()) {
+    let body = http_response.text();
+    let return_type = get_return_type(context.function_name);
+    step.primitive_client.parse(body, return_type)
+  } else {
+    throw root.errors.DevOther { message: "HTTP request failed" };
   }
 }
 

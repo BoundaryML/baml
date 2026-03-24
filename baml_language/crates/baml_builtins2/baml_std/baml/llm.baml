@@ -3,11 +3,6 @@ class OrchestrationStep {
   delay_ms int
 }
 
-class ExecutionResult {
-  ok bool
-  value unknown
-}
-
 class ExecutionContext {
   jinja_string string
   args map<string, unknown>
@@ -58,6 +53,19 @@ function call_llm_function<T>(client: Client, function_name: string, args: map<s
     function_name: function_name,
   };
 
-  let result: T = client.execute(context, 0);
-  result
+  let steps = client.build_plan();
+  client.advance_round_robin();
+
+  for (let step in steps) {
+    if (step.delay_ms > 0) {
+      root.sys.sleep(step.delay_ms);
+    }
+
+    let result: T = execute_step(step, context) catch (e) {
+      _ => { continue; }
+    };
+    return result;
+  }
+
+  throw root.errors.DevOther { message: "All orchestration steps failed" };
 }

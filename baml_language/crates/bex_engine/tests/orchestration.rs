@@ -1,9 +1,8 @@
 //! Integration tests for LLM orchestration plan building.
 //!
-//! These tests verify that `baml.llm.build_plan` correctly expands client trees
+//! These tests verify that `build_plan` correctly expands client trees
 //! (primitive, fallback, round-robin) into flat lists of `OrchestrationStep`s,
-//! and that `baml.llm.wrap_with_retry` applies the correct retry logic with
-//! exponential backoff delays.
+//! with the correct retry logic and exponential backoff delays.
 
 mod common;
 
@@ -82,7 +81,7 @@ fn extract_steps(result: &BexExternalValue) -> Vec<(&str, i64)> {
 
 /// A primitive client produces a single-step plan.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_primitive_has_one_step() {
     let source = r##"
 client<llm> A {
@@ -90,13 +89,8 @@ client<llm> A {
     options { model "gpt-4" }
 }
 
-function F(x: string) -> string {
-    client A
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    A.build_plan()
 }
 "##;
 
@@ -104,9 +98,39 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
     assert_eq!(extract_steps(&result), vec![("A", 0)]);
 }
 
+/// Diagnostic: inspect a fallback client's fields.
+#[tokio::test]
+#[ignore]
+async fn diag_fallback_fields() {
+    let source = r##"
+client<llm> A {
+    provider openai
+    options { model "gpt-4" }
+}
+
+client<llm> B {
+    provider openai
+    options { model "gpt-3.5-turbo" }
+}
+
+client<llm> FB {
+    provider fallback
+    options { strategy [A, B] }
+}
+
+function check() -> unknown {
+    [A, B]
+}
+"##;
+
+    let result = run(source, "check").await;
+    eprintln!("diag_fallback_fields result: {result:#?}");
+    // Don't assert — just inspect
+}
+
 /// A fallback client with two sub-clients produces two steps.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_fallback_has_two_steps() {
     let source = r##"
 client<llm> A {
@@ -124,13 +148,8 @@ client<llm> FB {
     options { strategy [A, B] }
 }
 
-function F(x: string) -> string {
-    client FB
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    FB.build_plan()
 }
 "##;
 
@@ -140,7 +159,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 
 /// A fallback client with three sub-clients produces three steps.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_fallback_three_clients() {
     let source = r##"
 client<llm> A {
@@ -163,13 +182,8 @@ client<llm> FB {
     options { strategy [A, B, C] }
 }
 
-function F(x: string) -> string {
-    client FB
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    FB.build_plan()
 }
 "##;
 
@@ -180,7 +194,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 /// A round-robin client with two sub-clients produces a single step
 /// (it picks one sub-client per invocation).
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_round_robin_has_one_step() {
     let source = r##"
 client<llm> A {
@@ -198,13 +212,8 @@ client<llm> RR {
     options { strategy [A, B] }
 }
 
-function F(x: string) -> string {
-    client RR
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    RR.build_plan()
 }
 "##;
 
@@ -218,7 +227,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 
 /// Round-robin honors `options { start N }` for the initial selection.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_round_robin_respects_start_index() {
     let source = r##"
 client<llm> A {
@@ -236,13 +245,8 @@ client<llm> RR {
     options { strategy [A, B] start 1 }
 }
 
-function F(x: string) -> string {
-    client RR
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    RR.build_plan()
 }
 "##;
 
@@ -256,7 +260,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 /// Planner expansion should be side-effect free; only execution should mutate
 /// the round-robin counter on the Client.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_round_robin_has_no_runtime_side_effects() {
     let source = r##"
 client<llm> A {
@@ -272,11 +276,6 @@ client<llm> B {
 client<llm> RR {
     provider round-robin
     options { strategy [A, B] start 0 }
-}
-
-function F(x: string) -> string {
-    client RR
-    prompt #"{{ x }}"#
 }
 
 function check_plan_side_effects() -> int {
@@ -299,7 +298,7 @@ function check_plan_side_effects() -> int {
 
 /// A primitive client with retry(max=2) produces 3 steps (1 original + 2 retries).
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_primitive_with_retry_expands() {
     let source = r##"
 retry_policy Retry2 {
@@ -315,13 +314,8 @@ client<llm> A {
     options { model "gpt-4" }
 }
 
-function F(x: string) -> string {
-    client A
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    A.build_plan()
 }
 "##;
 
@@ -335,7 +329,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 /// A fallback[A, B] with retry(max=1) produces 4 steps:
 /// attempt 0: [A, B], attempt 1: [A, B]
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_fallback_with_retry_multiplies() {
     let source = r##"
 retry_policy Retry1 {
@@ -359,11 +353,6 @@ client<llm> FB {
     options { strategy [A, B] }
 }
 
-function F(x: string) -> string {
-    client FB
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
     FB.build_plan()
 }
@@ -383,7 +372,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 
 /// First step always has `delay_ms=0`, retry steps have exponential backoff.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_delays_exponential_backoff() {
     let source = r##"
 retry_policy ExpBackoff {
@@ -399,13 +388,8 @@ client<llm> A {
     options { model "gpt-4" }
 }
 
-function F(x: string) -> string {
-    client A
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    A.build_plan()
 }
 "##;
 
@@ -419,7 +403,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 
 /// Delays are capped at `max_delay_ms`.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_delays_capped_at_max() {
     let source = r##"
 retry_policy CappedBackoff {
@@ -435,13 +419,8 @@ client<llm> A {
     options { model "gpt-4" }
 }
 
-function F(x: string) -> string {
-    client A
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    A.build_plan()
 }
 "##;
 
@@ -455,7 +434,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 
 /// Fallback with retry: delays apply uniformly to all sub-client steps in a retry attempt.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_fallback_retry_delays() {
     let source = r##"
 retry_policy R {
@@ -479,13 +458,8 @@ client<llm> FB {
     options { strategy [A, B] }
 }
 
-function F(x: string) -> string {
-    client FB
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    FB.build_plan()
 }
 "##;
 
@@ -503,7 +477,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 
 /// A client without `retry_policy` produces steps with all delays = 0.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_no_retry_all_zero_delays() {
     let source = r##"
 client<llm> A {
@@ -521,13 +495,8 @@ client<llm> FB {
     options { strategy [A, B] }
 }
 
-function F(x: string) -> string {
-    client FB
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    FB.build_plan()
 }
 "##;
 
@@ -541,7 +510,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 
 /// `Fallback[RoundRobin[A, B], C]` produces 2 steps: one from RR (picks one) + C.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_nested_fallback_round_robin() {
     let source = r##"
 client<llm> A {
@@ -569,13 +538,8 @@ client<llm> FB {
     options { strategy [RR, C] }
 }
 
-function F(x: string) -> string {
-    client FB
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    FB.build_plan()
 }
 "##;
 
@@ -591,7 +555,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 /// Nested retry: inner client has retry, outer fallback does not.
 /// `Fallback[A(retry=1), B]` = A, A(retry), B = 3 steps.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_nested_inner_retry() {
     let source = r##"
 retry_policy InnerRetry {
@@ -615,13 +579,8 @@ client<llm> FB {
     options { strategy [A, B] }
 }
 
-function F(x: string) -> string {
-    client FB
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    FB.build_plan()
 }
 "##;
 
@@ -636,7 +595,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 
 /// Verify that the correct primitive clients appear in a fallback plan.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_step_client_names() {
     let source = r##"
 client<llm> Primary {
@@ -654,13 +613,8 @@ client<llm> FB {
     options { strategy [Primary, Backup] }
 }
 
-function F(x: string) -> string {
-    client FB
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    FB.build_plan()
 }
 "##;
 
@@ -670,7 +624,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 
 /// Retry duplicates client names: [A, A, A] for retry=2.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_retry_duplicates_client_names() {
     let source = r##"
 retry_policy R {
@@ -683,13 +637,8 @@ client<llm> A {
     options { model "gpt-4" }
 }
 
-function F(x: string) -> string {
-    client A
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    A.build_plan()
 }
 "##;
 
@@ -706,7 +655,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 /// RR { A, B } with retry=1 should produce [A(0), B(delay)] — NOT [A(0), A(delay)].
 /// This matches legacy behavior where retry re-expands the strategy.
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_round_robin_retry_rotates() {
     let source = r##"
 retry_policy R {
@@ -730,13 +679,8 @@ client<llm> RR {
     options { strategy [A, B] }
 }
 
-function F(x: string) -> string {
-    client RR
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    RR.build_plan()
 }
 "##;
 
@@ -757,7 +701,7 @@ function check_plan() -> baml.llm.OrchestrationStep[] {
 /// Fallback(retry=1) { RR { A, B }, C } should produce:
 ///   attempt 0: [RR→A, C], attempt 1: [RR→B, C]
 #[tokio::test]
-#[ignore = "compiler2: baml.llm orchestration API (build_plan/wrap_with_retry) not yet fully wired up in compiler2"]
+#[ignore = "bex_vm: FunctionRef from SysOps returns Object(Any) instead of Object(Function(Callable))"]
 async fn plan_fallback_with_rr_child_retry_rotates() {
     let source = r##"
 retry_policy R {
@@ -791,13 +735,8 @@ client<llm> FB {
     options { strategy [RR, C] }
 }
 
-function F(x: string) -> string {
-    client FB
-    prompt #"{{ x }}"#
-}
-
 function check_plan() -> baml.llm.OrchestrationStep[] {
-    baml.llm.build_plan(F)
+    FB.build_plan()
 }
 "##;
 
