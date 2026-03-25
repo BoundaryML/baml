@@ -20,7 +20,7 @@ type WsOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'callFunctionResult'; id: number; result: string }
-  | { type: 'callFunctionError'; id: number; error: string }
+  | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
   | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string }
@@ -30,6 +30,7 @@ type WsOutMessage =
 /** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
 type WsInMessage =
   | { type: 'callFunction'; id: number; project: string; name: string; argsProto: string }
+  | { type: 'cancelCall'; id: number; project: string }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
   | { type: 'requestState' }
   | { type: 'requestControlFlowGraph'; project: string; functionName: string }
@@ -165,6 +166,8 @@ export class WebSocketRuntimePort implements RuntimePort {
           name: msg.name,
           argsProto: uint8ArrayToBase64(msg.argsProto),
         };
+      case 'cancelCall':
+        return { type: 'cancelCall', id: msg.id, project: msg.project };
       case 'envVarResponse':
         return {
           type: 'envVarResponse',
@@ -239,7 +242,7 @@ export class WebSocketRuntimePort implements RuntimePort {
         }
       }
       case 'callFunctionError':
-        return { type: 'callFunctionError', id: raw.id, error: raw.error };
+        return { type: 'callFunctionError', id: raw.id, error: raw.error, cancelled: raw.cancelled };
       case 'envVarRequest':
         return { type: 'envVarRequest', id: raw.id, variable: raw.variable };
       case 'fetchLogNew':

@@ -12,7 +12,8 @@
 import type { ChangeEvent, FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
-import { PanelLeft } from 'lucide-react';
+import { PanelLeft, Square } from 'lucide-react';
+import { ErrorDisplay } from './components/ErrorDisplay';
 import type { RuntimePort } from './runtime-port';
 import type {
   ControlFlowGraph,
@@ -264,7 +265,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           const pending = pendingCallsRef.current.get(data.id);
           if (pending) {
             pendingCallsRef.current.delete(data.id);
-            pending.reject(new Error(data.error));
+            const err = new Error(data.error);
+            (err as any).cancelled = data.cancelled ?? false;
+            pending.reject(err);
           }
           break;
         }
@@ -455,6 +458,11 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   const isRunning = runs.length > 0 && runs[runs.length - 1].status === 'running';
 
+  const onCancelRun = useCallback((runId: number) => {
+    if (!selectedProject) return;
+    port.postMessage({ type: 'cancelCall', id: runId, project: selectedProject });
+  }, [port, selectedProject]);
+
   const onRunFunction = useCallback(async () => {
     if (!selectedFn || !selectedProject || isRunning) return;
 
@@ -495,9 +503,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       const dur = Math.round(performance.now() - startTime);
       setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultStr, status: 'success', durationMs: dur } : r));
     } catch (e) {
+      const isCancelled = e instanceof Error && (e as any).cancelled === true;
       const errMsg = e instanceof Error ? e.message : String(e);
       const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, error: errMsg, status: 'error', durationMs: dur } : r));
+      setRuns((prev) => prev.map((r) => r.id === runId ? {
+        ...r,
+        error: isCancelled ? null : errMsg,
+        status: isCancelled ? 'cancelled' : 'error',
+        durationMs: dur,
+      } : r));
     }
   }, [selectedFn, selectedProject, argsJson, isRunning, port]);
 
@@ -553,9 +567,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       const dur = Math.round(performance.now() - startTime);
       setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, result: resultStr, status: 'success', durationMs: dur } : r));
     } catch (e) {
+      const isCancelled = e instanceof Error && (e as any).cancelled === true;
       const errMsg = e instanceof Error ? e.message : String(e);
       const dur = Math.round(performance.now() - startTime);
-      setRuns((prev) => prev.map((r) => r.id === runId ? { ...r, error: errMsg, status: 'error', durationMs: dur } : r));
+      setRuns((prev) => prev.map((r) => r.id === runId ? {
+        ...r,
+        error: isCancelled ? null : errMsg,
+        status: isCancelled ? 'cancelled' : 'error',
+        durationMs: dur,
+      } : r));
     }
   }, [selectedProject, isRunning, port]);
 
@@ -954,7 +974,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
                 {[...runs].reverse().map((run, runIdx) => {
                   const isLatest = runIdx === 0;
-                  const statusCls = run.status === 'error' ? 'bg-vsc-red' : run.status === 'success' ? 'bg-vsc-green' : 'bg-vsc-text-muted';
+                  const statusCls = run.status === 'error' ? 'bg-vsc-red' : run.status === 'success' ? 'bg-vsc-green' : run.status === 'cancelled' ? 'bg-vsc-yellow' : 'bg-vsc-text-muted';
 
                   return (
                     <div key={run.id} className={!isLatest ? 'border-b-2 border-vsc-border' : ''}>
@@ -968,7 +988,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                           {run.argsJson}
                         </span>
                         {run.status === 'running' && (
-                          <span className="text-vsc-text-muted text-[10px]">running...</span>
+                          <>
+                            <span className="text-vsc-text-muted text-[10px]">running...</span>
+                            <button
+                              onClick={() => onCancelRun(run.id)}
+                              className="p-0.5 rounded hover:bg-vsc-hover text-vsc-text-muted hover:text-vsc-error"
+                              title="Cancel execution"
+                            >
+                              <Square size={12} />
+                            </button>
+                          </>
                         )}
                         {run.durationMs != null && (
                           <span className="text-vsc-text-faint text-[10px] shrink-0">{run.durationMs}ms</span>
@@ -1018,11 +1047,16 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                         );
                       })}
 
-                      {/* Result / Error for this run */}
+                      {/* Result / Error / Cancelled for this run */}
+                      {run.status === 'cancelled' && (
+                        <div className="py-1.5 pr-2.5 pl-[22px]">
+                          <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
+                        </div>
+                      )}
                       {run.error && (
                         <div className="py-1.5 pr-2.5 pl-[22px]">
                           <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">Error</div>
-                          <pre className={`${codeBlockCls} border-vsc-red! text-vsc-red!`}>{run.error}</pre>
+                          <ErrorDisplay error={run.error} onRetry={onRunFunction} />
                         </div>
                       )}
                       {run.result != null && (

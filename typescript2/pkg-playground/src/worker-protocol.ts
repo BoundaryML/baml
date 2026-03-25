@@ -138,7 +138,7 @@ export interface RunEntry {
   fetchLogs: FetchLogEntry[];
   result: string | null;
   error: string | null;
-  status: 'running' | 'success' | 'error';
+  status: 'running' | 'success' | 'error' | 'cancelled';
   startTime: number;
   durationMs: number | null;
 }
@@ -152,7 +152,7 @@ export type WorkerOutMessage =
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'diagnostics'; entries: DiagnosticEntry[] }
   | { type: 'callFunctionResult'; id: number; result: string }
-  | { type: 'callFunctionError'; id: number; error: string }
+  | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'fetchLogNew'; entry: FetchLogEntry }
   | { type: 'fetchLogUpdate'; logId: number; patch: Partial<FetchLogEntry> }
   | { type: 'envVarRequest'; id: number; variable: string }
@@ -168,6 +168,7 @@ export type WorkerOutMessage =
 
 export type WorkerInMessage =
   | { type: 'callFunction'; id: number; name: string; argsProto: Uint8Array; project: string }
+  | { type: 'cancelCall'; id: number; project: string }
   | { type: 'clearHandles'; runIds: number[] }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
   | { type: 'setEnvVar'; key: string; value: string }

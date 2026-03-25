@@ -21,6 +21,8 @@ pub enum WsInMessage {
         #[serde(rename = "argsProto")]
         args_proto: String,
     },
+    #[serde(rename = "cancelCall")]
+    CancelCall { id: u64, project: String },
     #[serde(rename = "envVarResponse")]
     EnvVarResponse {
         id: u64,
@@ -61,7 +63,12 @@ pub enum WsOutMessage {
         result: String,
     },
     #[serde(rename = "callFunctionError")]
-    CallFunctionError { id: u64, error: String },
+    CallFunctionError {
+        id: u64,
+        error: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cancelled: Option<bool>,
+    },
     #[serde(rename = "envVarRequest")]
     EnvVarRequest { id: u64, variable: String },
     #[serde(rename = "fetchLogNew")]

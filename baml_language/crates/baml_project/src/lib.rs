@@ -30,7 +30,7 @@ pub mod symbols;
 pub use check::{CheckResult, collect_diagnostics};
 pub use db::{CursorContext, EventCallback, ProjectDatabase};
 pub use symbols::{
-    FunctionSymbol, TestSymbol, Symbol, SymbolKind, find_symbol, find_symbol_locations,
+    FunctionSymbol, Symbol, SymbolKind, TestSymbol, find_symbol, find_symbol_locations,
     list_classes, list_clients, list_enums, list_functions, list_functions_with_metadata,
     list_generators, list_tests, list_tests_with_metadata, list_type_aliases,
 };

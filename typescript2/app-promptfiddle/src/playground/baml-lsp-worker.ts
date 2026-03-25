@@ -503,11 +503,23 @@ self.onmessage = async (event: MessageEvent) => {
         const result = JSON.stringify(decoded, null, 2);
         postOut({ type: "callFunctionResult", id: msg.id, result });
       } catch (e) {
+        const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
         postOut({
           type: "callFunctionError",
           id: msg.id,
           error: e instanceof Error ? e.message : String(e),
+          cancelled: isCancelled || undefined,
         });
+      }
+      return;
+    }
+
+    case "cancelCall": {
+      if (!runtime) return;
+      try {
+        runtime.cancelCall(msg.project, msg.id);
+      } catch (e) {
+        console.warn("cancelCall failed:", e);
       }
       return;
     }
