@@ -1,6 +1,6 @@
 /// Type simplification for SAP attributes.
 /// Type simplification converts `baml_type::Ty` to another `baml_type::Ty`, for the purpose of cleaning the type to make it easier for SAP to process. It
-
+///
 /// - Inlines type aliases where possible
 /// - Moves the `null` type in a Union to the last-variant position
 /// - Factors out attributes from unions, or distributes attributes into the unions, as appropriate for the attribute.
@@ -449,11 +449,7 @@ pub fn simplify(
     simplify_impl(ty, aliases, recursive_aliases)
 }
 
-fn simplify_impl(
-    ty: Ty,
-    aliases: &HashMap<TypeName, Ty>,
-    recursive: &HashSet<TypeName>,
-) -> Ty {
+fn simplify_impl(ty: Ty, aliases: &HashMap<TypeName, Ty>, recursive: &HashSet<TypeName>) -> Ty {
     match ty {
         Ty::TypeAlias(ref name, ref outer_attr) => {
             if recursive.contains(name) {
@@ -543,7 +539,9 @@ fn merge_attr_nested(inner: &TyAttr, outer: &TyAttr) -> TyAttr {
     let mut asserts = inner.asserts.clone();
     asserts.extend(outer.asserts.iter().cloned());
     TyAttr {
-        sap_parse_without_null: inner.sap_parse_without_null.or(outer.sap_parse_without_null),
+        sap_parse_without_null: inner
+            .sap_parse_without_null
+            .or(outer.sap_parse_without_null),
         sap_pending_never: inner.sap_pending_never.or(outer.sap_pending_never),
         sap_in_progress_never: inner.sap_in_progress_never.or(outer.sap_in_progress_never),
         asserts,

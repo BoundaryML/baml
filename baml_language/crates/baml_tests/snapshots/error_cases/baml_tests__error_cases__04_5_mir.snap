@@ -10,7 +10,7 @@ fn user.Broken.BadUnionPattern(x: int | bool) -> string {
     let _3: null
 
     bb0: {
-        _2 = is_type(copy _1, Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Union([Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } }], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb5, bb1];
     }
 
@@ -67,7 +67,7 @@ fn user.Broken.MixedLiteralAndTyped(x: int) -> string {
     }
 
     bb1: {
-        _3 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _3 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _3 -> [bb3, bb2];
     }
 

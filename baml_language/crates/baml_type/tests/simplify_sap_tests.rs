@@ -8,7 +8,7 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_type::{
-    simplify_sap::simplify, Literal, Span, Ty, TyAssert, TyAttr, TyAttrValue, TypeName,
+    Literal, Span, Ty, TyAssert, TyAttr, TyAttrValue, TypeName, simplify_sap::simplify,
 };
 
 // =========================================================================
@@ -90,8 +90,7 @@ fn collect_section_body(
 ) {
     while let Some(&line) = lines.peek() {
         let t = line.trim();
-        if t.starts_with("### ") || t == "---" || (t.starts_with("## ") && !t.starts_with("### "))
-        {
+        if t.starts_with("### ") || t == "---" || (t.starts_with("## ") && !t.starts_with("### ")) {
             break;
         }
         lines.next();

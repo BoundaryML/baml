@@ -1,6 +1,9 @@
 //! Converting from [`baml_type`] types to SAP model types.
 
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+};
 
 use baml_type::{TyAttrValue, TypeName};
 
@@ -13,7 +16,7 @@ use crate::sap_model::{
 impl crate::sap_model::TypeIdent for TypeName {}
 
 #[derive(thiserror::Error, Debug)]
-pub enum ConvertError<'t> {
+pub enum ConvertError {
     #[error("Failed to parse float: {0}")]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error("Unknown media kind")]
@@ -21,10 +24,24 @@ pub enum ConvertError<'t> {
     #[error("Float literals cannot be parsed")]
     FloatLiteral,
     #[error("Non-parsable type: {0:?}")]
-    NonParsableType(&'t baml_type::Ty),
+    NonParsableType(Box<baml_type::Ty>),
 }
 
-pub fn convert(ty: &baml_type::Ty) -> Result<AnnotatedTy<'_, TypeName>, ConvertError<'_>> {
+/// Simplify a type for SAP and then convert it to the SAP model.
+///
+/// Runs [`baml_type::simplify_sap::simplify`] as a pre-pass (flattening
+/// unions, deduplicating variants, distributing attrs, expanding aliases)
+/// and then converts the simplified type.
+pub fn simplify_and_convert(
+    ty: &baml_type::Ty,
+    aliases: &HashMap<TypeName, baml_type::Ty>,
+    recursive_aliases: &HashSet<TypeName>,
+) -> Result<AnnotatedTy<'static, TypeName>, ConvertError> {
+    let simplified = baml_type::simplify_sap::simplify(ty.clone(), aliases, recursive_aliases);
+    convert(&simplified)
+}
+
+pub fn convert(ty: &baml_type::Ty) -> Result<AnnotatedTy<'static, TypeName>, ConvertError> {
     let ty = match ty {
         baml_type::Ty::Int { attr } => TyWithMeta::new(
             sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
@@ -67,7 +84,9 @@ pub fn convert(ty: &baml_type::Ty) -> Result<AnnotatedTy<'_, TypeName>, ConvertE
             return Err(ConvertError::FloatLiteral);
         }
         baml_type::Ty::Literal(baml_type::Literal::String(s), attr) => TyWithMeta::new(
-            sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Borrowed(s)))),
+            sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Owned(
+                s.clone(),
+            )))),
             convert_ty_attrs(attr)?,
         ),
         baml_type::Ty::Literal(baml_type::Literal::Bool(b), attr) => TyWithMeta::new(
@@ -136,7 +155,7 @@ pub fn convert(ty: &baml_type::Ty) -> Result<AnnotatedTy<'_, TypeName>, ConvertE
         | baml_type::Ty::BuiltinUnknown { .. }
         | baml_type::Ty::EnumVariant(_, _, _)
         | baml_type::Ty::Future(_, _)) => {
-            return Err(ConvertError::NonParsableType(unparsable));
+            return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
         }
     };
     Ok(ty)
@@ -144,7 +163,7 @@ pub fn convert(ty: &baml_type::Ty) -> Result<AnnotatedTy<'_, TypeName>, ConvertE
 
 pub fn convert_ty_attrs(
     attrs: &baml_type::TyAttr,
-) -> Result<TypeAnnotations<'_, TypeName>, ConvertError<'_>> {
+) -> Result<TypeAnnotations<'static, TypeName>, ConvertError> {
     let in_progress = match attrs.sap_in_progress_never {
         TyAttrValue::Set => Some(AttrLiteral::Never),
         TyAttrValue::Unset => None,

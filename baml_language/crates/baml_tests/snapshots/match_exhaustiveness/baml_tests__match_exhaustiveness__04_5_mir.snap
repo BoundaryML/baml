@@ -10,7 +10,7 @@ fn user.BoolLiteralAfterTypedBool(b: bool) -> string {
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _2 = is_type(copy _1, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _2 -> [bb4, bb1];
     }
 
@@ -326,7 +326,7 @@ fn user.EnumVariantAfterTypedEnum(s: Status) -> string {
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "Status" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "Status" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb4, bb1];
     }
 
@@ -504,7 +504,7 @@ fn user.ExhaustiveClassPlusLiteral(x: Success | 200) -> string {
     let _5: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb4, bb1];
     }
 
@@ -591,12 +591,12 @@ fn user.ExhaustiveDoubleMaybe(dm: Success | Failure??) -> string {
     let _8: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb6, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _5 -> [bb5, bb2];
     }
 
@@ -713,7 +713,7 @@ fn user.ExhaustiveEnumWithTypedPattern(s: Status) -> string {
     let _2: bool
 
     bb0: {
-        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "Status" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "Status" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb2, bb1];
     }
 
@@ -814,7 +814,7 @@ fn user.ExhaustiveLiteralWithBaseType(x: int) -> string {
     }
 
     bb1: {
-        _3 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _3 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _3 -> [bb3, bb2];
     }
 
@@ -962,7 +962,7 @@ fn user.ExhaustiveNullableEnumWithTypedPattern(s: Status?) -> string {
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "Status" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Enum(TypeName { name: "Status", module_path: ["user"], display_name: "Status" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb4, bb1];
     }
 
@@ -1002,7 +1002,7 @@ fn user.ExhaustiveOptional(x: int?) -> string {
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _2 -> [bb4, bb1];
     }
 
@@ -1193,12 +1193,12 @@ fn user.ExhaustiveTypeAlias(r: Success | Failure) -> string {
     let _7: Failure
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _5 -> [bb3, bb2];
     }
 
@@ -1238,7 +1238,7 @@ fn user.ExhaustiveTypeAliasWithCatchAll(r: Success | Failure) -> string {
     let _4: Success
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb3, bb1];
     }
 
@@ -1363,7 +1363,7 @@ fn user.GuardedOnlyNonExhaustive(x: int) -> int {
     let _12: -1
 
     bb0: {
-        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _2 -> [bb1, bb2];
     }
 
@@ -1375,7 +1375,7 @@ fn user.GuardedOnlyNonExhaustive(x: int) -> int {
     }
 
     bb2: {
-        _7 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _7 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _7 -> [bb3, bb4];
     }
 
@@ -1423,7 +1423,7 @@ fn user.GuardedWithFallback(x: int) -> int {
     let _6: int
 
     bb0: {
-        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _2 -> [bb1, bb2];
     }
 
@@ -1529,22 +1529,22 @@ fn user.JumpTableClassTypeTag(pet: Cat | Dog | Bird | Fish) -> string {
     let _5: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Cat", module_path: ["user"], display_name: "Cat" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Cat", module_path: ["user"], display_name: "Cat" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb8, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Class(TypeName { name: "Dog", module_path: ["user"], display_name: "Dog" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _3 = is_type(copy _1, Class(TypeName { name: "Dog", module_path: ["user"], display_name: "Dog" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _3 -> [bb7, bb2];
     }
 
     bb2: {
-        _4 = is_type(copy _1, Class(TypeName { name: "Bird", module_path: ["user"], display_name: "Bird" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _4 = is_type(copy _1, Class(TypeName { name: "Bird", module_path: ["user"], display_name: "Bird" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _4 -> [bb6, bb3];
     }
 
     bb3: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Fish", module_path: ["user"], display_name: "Fish" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Fish", module_path: ["user"], display_name: "Fish" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _5 -> [bb5, bb4];
     }
 
@@ -1635,22 +1635,22 @@ fn user.JumpTableTypeTag(value: int | string | bool | float) -> string {
     let _5: bool
 
     bb0: {
-        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _2 -> [bb8, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _3 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _3 -> [bb7, bb2];
     }
 
     bb2: {
-        _4 = is_type(copy _1, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _4 = is_type(copy _1, Bool { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _4 -> [bb6, bb3];
     }
 
     bb3: {
-        _5 = is_type(copy _1, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _5 = is_type(copy _1, Float { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _5 -> [bb5, bb4];
     }
 
@@ -1695,7 +1695,7 @@ fn user.LiteralAfterTypedPattern(x: int) -> string {
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _2 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _2 -> [bb4, bb1];
     }
 
@@ -1898,7 +1898,7 @@ fn user.MixedPatterns(x: int) -> string {
     }
 
     bb2: {
-        _4 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _4 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _4 -> [bb3, bb4];
     }
 
@@ -2185,12 +2185,12 @@ fn user.NestedTypeAlias(mr: Success | Failure?) -> string {
     let _8: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb6, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _5 -> [bb5, bb2];
     }
 
@@ -2239,12 +2239,12 @@ fn user.NestedTypeBindings(r: Success | Failure) -> int {
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _3 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _3 -> [bb3, bb2];
     }
 
@@ -2392,7 +2392,7 @@ fn user.NonExhaustiveClassPlusLiteralMissingLiteral(x: Success | 200) -> string 
     let _4: Success
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb2, bb1];
     }
 
@@ -2457,12 +2457,12 @@ fn user.NonExhaustiveDoubleMaybeMissingNull(dm: Success | Failure??) -> string {
     let _7: Failure
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _5 -> [bb3, bb2];
     }
 
@@ -2568,12 +2568,12 @@ fn user.NonExhaustiveFullResultMissingOne(r: Success | Failure | Pending) -> str
     let _7: Failure
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _5 = is_type(copy _1, Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _5 -> [bb3, bb2];
     }
 
@@ -2900,7 +2900,7 @@ fn user.NonExhaustiveTypeAliasMissingOne(r: Success | Failure) -> string {
     let _4: Success
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb2, bb1];
     }
 
@@ -2966,12 +2966,12 @@ fn user.OverlappingTypedPatterns(r: Success | Failure) -> string {
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _3 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _3 -> [bb3, bb2];
     }
 
@@ -3008,12 +3008,12 @@ fn user.OverlappingWithBindings(r: Success | Failure) -> string {
     let _5: bool
 
     bb0: {
-        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _5 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _5 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _5 -> [bb3, bb2];
     }
 
@@ -3089,7 +3089,7 @@ fn user.PartialUnionPatternCoverage(r: Success | Failure | Pending) -> string {
     let _2: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb2, bb1];
     }
 
@@ -3119,12 +3119,12 @@ fn user.PartialUnionPlusCatchAll(r: Success | Failure | Pending) -> string {
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb4, bb1];
     }
 
     bb1: {
-        _3 = is_type(copy _1, Class(TypeName { name: "Pending", module_path: ["user"], display_name: "Pending" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _3 = is_type(copy _1, Class(TypeName { name: "Pending", module_path: ["user"], display_name: "Pending" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _3 -> [bb3, bb2];
     }
 
@@ -3159,7 +3159,7 @@ fn user.StringLiteralAfterStringType(s: string) -> string {
     let _3: bool
 
     bb0: {
-        _2 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _2 = is_type(copy _1, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _2 -> [bb4, bb1];
     }
 
@@ -3345,7 +3345,7 @@ fn user.UnionPatternCoversAll(r: Success | Failure) -> string {
     let _2: bool
 
     bb0: {
-        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
+        _2 = is_type(copy _1, Union([Class(TypeName { name: "Success", module_path: ["user"], display_name: "Success" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "Failure", module_path: ["user"], display_name: "Failure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _2 -> [bb2, bb1];
     }
 
