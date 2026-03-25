@@ -51,28 +51,6 @@ where
             (CompletionState::Complete, _) => {}
         }
 
-        if let Some(parse_as_ty) = target.meta.parse_as.as_ref() {
-            let parse_as = ctx
-                .db
-                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
-                .map_err(|ident| ctx.error_type_resolution(ident))?;
-            debug_assert!(
-                parse_as
-                    .meta
-                    .parse_as
-                    .as_ref()
-                    .map(std::convert::AsRef::as_ref)
-                    != Some(parse_as_ty.as_ref()),
-                "If parse_as is the same, it should be `None`."
-            );
-            // recursed coercion should handle all the flags.
-            let Some(value) = TyResolvedRef::coerce(ctx, parse_as.clone(), value)? else {
-                return Ok(None);
-            };
-            target.meta.expect_asserts(&value.value, ctx)?; // already ran inner `parse_as`` asserts, need to run outer `target` asserts
-            return Ok(Some(value));
-        }
-
         // Optimization: If we have a hint from a previous array element, try that variant first.
         // This helps with arrays of unions where elements are typically homogeneous.
         if let Some(hint_idx) = ctx.union_variant_hint
@@ -102,7 +80,14 @@ where
                 .db
                 .resolve_with_meta(option.as_ref())
                 .map_err(|ident| ctx.error_type_resolution(ident))
-                .and_then(|ty| TyResolvedRef::coerce(ctx, ty, value));
+                .and_then(|ty| {
+                    // When parse_without_null is set, skip null variants entirely —
+                    // they should not be used as a fallback when other variants fail.
+                    if target.meta.parse_without_null && matches!(ty.ty, TyResolvedRef::Null(_)) {
+                        return Err(ctx.error_unexpected_null(&target));
+                    }
+                    TyResolvedRef::coerce(ctx, ty, value)
+                });
             match parsed {
                 Ok(None) => {
                     // Variant type with `in_progress = never` means we ignore this variant until it is complete.
@@ -141,6 +126,10 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<BamlValueWithFlags<'s, 'v, 't, N>> {
+        if target.meta.parse_without_null && matches!(value, crate::jsonish::Value::Null) {
+            return None;
+        }
+
         let flags = match (value.completion_state(), target.meta.in_progress.as_ref()) {
             (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
             (CompletionState::Incomplete, Some(lit)) => {
@@ -164,27 +153,6 @@ where
             }
             (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
-
-        if let Some(parse_as_ty) = &target.meta.parse_as {
-            let parse_as = ctx
-                .db
-                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
-                .ok()?;
-            debug_assert!(
-                parse_as
-                    .meta
-                    .parse_as
-                    .as_ref()
-                    .map(std::convert::AsRef::as_ref)
-                    != Some(parse_as_ty.as_ref()),
-                "If parse_as is the same, it should be `None`."
-            );
-            let value = TyResolvedRef::try_cast(ctx, parse_as.clone(), value)?;
-            let Ok(true) = target.meta.check_asserts(&value.value, ctx) else {
-                return None;
-            };
-            return Some(value);
-        }
 
         if matches!(value, crate::jsonish::Value::Null) && target.ty.is_optional(ctx.db) {
             return Some(BamlValueWithFlags::new(

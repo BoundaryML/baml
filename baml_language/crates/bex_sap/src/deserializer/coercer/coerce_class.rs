@@ -65,28 +65,6 @@ where
             (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
 
-        if let Some(parse_as_ty) = target.meta.parse_as.as_ref() {
-            let parse_as = ctx
-                .db
-                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
-                .ok()?;
-            let TyResolvedRef::Class(parse_as_cls) = parse_as.ty else {
-                // Only classes can be subtypes of classes
-                return None;
-            };
-            debug_assert!(
-                parse_as_cls != target.ty,
-                "If parse_as is the same, it should be `None`."
-            );
-            let obj = ClassTy::try_cast(ctx, TyWithMeta::new(parse_as_cls, parse_as.meta), value)?;
-            let value = BamlValue::Class(obj.value);
-            target.meta.expect_asserts(&value, ctx).ok()?;
-            let BamlValue::Class(ret) = value else {
-                unreachable!("we just wrapped it in a BamlValue::Class");
-            };
-            return Some(ValueWithFlags::new(ret, obj.meta));
-        }
-
         let ctx = {
             let cls_value_pair = (name.to_string(), value);
             let ptr_pair = (name.to_string(), ::core::ptr::from_ref(value));
@@ -196,37 +174,6 @@ where
                             .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
                     })
                     .map(Some)
-            }
-            (_, _) if target.meta.parse_as.is_some() => {
-                let parse_as_ty = target.meta.parse_as.as_ref().unwrap_or_else(|| {
-                    unreachable!(
-                        "We just checked it is Some.
-                        Once let guards are stabilized, we can remove this."
-                    )
-                });
-                let parse_as = ctx
-                    .db
-                    .resolve_with_meta(parse_as_ty.as_ref().as_ref())
-                    .map_err(|name| ctx.error_type_resolution(name))?;
-                let TyResolvedRef::Class(parse_as_cls) = parse_as.ty else {
-                    // Only classes can be subtypes of classes
-                    return Err(ctx.error_internal("parse_as should always be an class"));
-                };
-                debug_assert!(
-                    parse_as_cls != target.ty,
-                    "If parse_as is the same, it should be `None`."
-                );
-                let obj =
-                    ClassTy::coerce(ctx, TyWithMeta::new(parse_as_cls, parse_as.meta), value)?;
-                let Some(obj) = obj else {
-                    return Ok(None);
-                };
-                let value = BamlValue::Class(obj.value);
-                target.meta.expect_asserts(&value, ctx)?;
-                let BamlValue::Class(ret) = value else {
-                    unreachable!("we just wrapped it in a BamlValue::Class");
-                };
-                Ok(Some(ValueWithFlags::new(ret, obj.meta)))
             }
             (jsonish::Value::Object(obj, c), _) => {
                 let mut flags = DeserializerConditions::new();

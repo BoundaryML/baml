@@ -170,7 +170,7 @@ pub fn convert_ty_attrs(
     };
     Ok(TypeAnnotations {
         in_progress,
-        parse_as: None,      // TODO: parse_as
-        asserts: Vec::new(), // TODO: assertions
+        parse_without_null: false, // TODO: parse_without_null
+        asserts: Vec::new(),       // TODO: assertions
     })
 }

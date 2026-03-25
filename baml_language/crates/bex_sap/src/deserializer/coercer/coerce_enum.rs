@@ -51,11 +51,6 @@ where
             return None;
         };
 
-        if target.meta.parse_as.is_some() {
-            // `parse_as` should always be `None` for `EnumTy` because it has no subtypes
-            return None;
-        }
-
         let flags = match (completion, target.meta.in_progress.as_ref()) {
             (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
             (CompletionState::Incomplete, Some(lit)) => {
@@ -122,11 +117,6 @@ where
             return Err(ctx.error_unexpected_null(&target));
         }
 
-        if target.meta.parse_as.is_some() {
-            // `parse_as` should always be `None` for `EnumTy` because it has no subtypes
-            return Err(ctx.error_internal("parse_as should always be `None` for `EnumTy`"));
-        }
-
         let enum_ty = target.ty;
         let meta = target.meta;
         let mut add_flags = Vec::new();
@@ -166,11 +156,6 @@ impl<'s, 'v, 't, N: TypeIdent> EnumTy<'t, N> {
         Option<ValueWithFlags<'s, 'v, 't, <EnumTy<'t, N> as TypeValue<'s, 'v, 't>>::Value, N>>,
         ParsingError,
     > {
-        if target.meta.parse_as.is_some() {
-            // `parse_as` should always be `None` for `EnumTy` because it has no subtypes
-            return Err(ctx.error_internal("parse_as should always be `None` for `EnumTy`"));
-        }
-
         match_string(
             ctx,
             target.clone().map_ty(TyResolvedRef::Enum),

@@ -30,11 +30,6 @@ where
             return None;
         };
 
-        if target.meta.parse_as.is_some() {
-            // `parse_as` should always be `None` for `IntLiteralTy` because it has no subtypes
-            return None;
-        }
-
         let flags = match (completion_state, target.meta.in_progress.as_ref()) {
             (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
             (CompletionState::Incomplete, Some(lit)) => {
@@ -78,11 +73,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        if target.meta.parse_as.is_some() {
-            // `parse_as` should always be `None` for `IntLiteralTy` because it has no subtypes
-            return Err(ctx.error_internal("parse_as should always be `None` for `IntLiteralTy`"));
-        }
-
         let ret = match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
@@ -174,11 +164,6 @@ where
             return None;
         }
 
-        if target.meta.parse_as.is_some() {
-            // `parse_as` should always be `None` for `BoolLiteralTy` because it has no subtypes
-            return None;
-        }
-
         Some(ValueWithFlags::new(
             Self::Value { value: *b },
             DeserializerMeta {
@@ -193,11 +178,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        if target.meta.parse_as.is_some() {
-            // `parse_as` should always be `None` for `BoolLiteralTy` because it has no subtypes
-            return Err(ctx.error_internal("parse_as should always be `None` for `BoolLiteralTy`"));
-        }
-
         let ret = match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {
@@ -282,11 +262,6 @@ where
             return None;
         };
 
-        if target.meta.parse_as.is_some() {
-            // `parse_as` should always be `None` for `StringLiteralTy` because it has no subtypes
-            return None;
-        }
-
         let flags = match (completion_state, target.meta.in_progress.as_ref()) {
             (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
             (CompletionState::Incomplete, Some(lit)) => {
@@ -331,13 +306,6 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        if target.meta.parse_as.is_some() {
-            // `parse_as` should always be `None` for `StringLiteralTy` because it has no subtypes
-            return Err(
-                ctx.error_internal("parse_as should always be `None` for `StringLiteralTy`")
-            );
-        }
-
         let ret = match value {
             jsonish::Value::Null => Err(ctx.error_unexpected_null(target.ty)),
             jsonish::Value::Object(_, CompletionState::Incomplete) => {

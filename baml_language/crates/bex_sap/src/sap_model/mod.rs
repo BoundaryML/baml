@@ -675,22 +675,11 @@ pub struct TypeAnnotations<'t, N: TypeIdent> {
     /// If `Some("Loading...")`, then `"Loading..."` should be used until done.
     pub in_progress: Option<AttrLiteral<'t, N>>,
 
-    /// The "done" type to parse as ("done" to SAP, may still be partial if generated for streaming).
-    /// Must be a subtype of the annotated type.
-    /// The annotated type may or may not be a supertype, as it is the union of this type and all 'default' values
-    /// that could replace it during streaming.
+    /// If true, then `null` values should be rejected even if the annotated type is nullable.
     ///
-    /// Set to `None` if and only if the `parse_as` type is the same as the annotated type.
-    ///
-    /// ## Examples
-    /// ```baml,ignore
-    /// type A = int; // results in
-    /// type stream.A = int | null @parse_as(int) @in_progress(null);
-    ///
-    /// type B = string; // results in
-    /// type stream.B = string; // both `None` because `string` can be partial
-    /// ```
-    pub parse_as: Option<Box<AnnotatedTy<'t, N>>>,
+    /// This is used to indicate that while fill-in values may be `null`,
+    /// a value from the input stream may not be parsed as `null`.
+    pub parse_without_null: bool,
 
     /// The set of assertions that should be run on the value.
     /// Note that if the value is filled by some default (such as [`TypeAnnotations::in_progress`]),
@@ -701,7 +690,7 @@ impl<N: TypeIdent> Default for TypeAnnotations<'_, N> {
     fn default() -> Self {
         Self {
             in_progress: None,
-            parse_as: None,
+            parse_without_null: false,
             asserts: Vec::new(),
         }
     }

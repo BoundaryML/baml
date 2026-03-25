@@ -29,15 +29,15 @@ impl SapVisualizer {
 
             class Education {
                 school: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
-                degree: (Degree @in_progress(never) | string | null) @parse_as(Degree | string) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
+                degree: (Degree @in_progress(never) | string | null) @parse_without_null @class_in_progress_field_missing(null) @class_completed_field_missing(never),
                 // null if not completed yet
                 year: (int | null) @in_progress(never) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
             }
 
             class Resume {
-                name: (string | null) @parse_as(string) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
-                email: (string | null) @parse_as(string) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
-                phone: (string | null) @parse_as(string) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
+                name: (string | null) @parse_without_null @class_in_progress_field_missing(null) @class_completed_field_missing(never),
+                email: (string | null) @parse_without_null @class_in_progress_field_missing(null) @class_completed_field_missing(never),
+                phone: (string | null) @parse_without_null @class_in_progress_field_missing(null) @class_completed_field_missing(never),
                 experience: [int @in_progress(never)] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
                 education: [Education] @class_in_progress_field_missing([]) @class_completed_field_missing([]),
                 skills: [string] @class_in_progress_field_missing([]) @class_completed_field_missing([]),

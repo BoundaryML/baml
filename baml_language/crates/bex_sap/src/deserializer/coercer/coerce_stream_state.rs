@@ -29,10 +29,6 @@ where
             target.meta.in_progress.is_none(),
             "StreamState should not have attributes"
         );
-        debug_assert!(
-            target.meta.parse_as.is_none(),
-            "StreamState should not have attributes"
-        );
 
         let inner_ty = ctx
             .db
@@ -66,10 +62,6 @@ where
         );
         debug_assert!(
             target.meta.in_progress.is_none(),
-            "StreamState should not have attributes"
-        );
-        debug_assert!(
-            target.meta.parse_as.is_none(),
             "StreamState should not have attributes"
         );
 
