@@ -15,6 +15,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useUser } from "@/components/providers/user-provider";
 import { BepContent } from "@/components/bep/bep-content";
 import { BepNav } from "@/components/bep/bep-nav";
+import { BepTableOfContents } from "@/components/bep/bep-table-of-contents";
 import { BepStatusSelect } from "@/components/bep/bep-status-select";
 import { BepVersionSelect } from "@/components/bep/bep-version-select";
 import { BepExportDialog } from "@/components/bep/bep-export-dialog";
@@ -920,44 +921,47 @@ const [copied, setCopied] = useState(false);
                         />
                       </div>
                     ) : (
-                      <div className="relative">
-                        <BepContent
-                          content={currentContent}
-                          linkContext={{
-                            bepNumber,
-                            isHistorical: isViewingHistorical,
-                            versionNumber:
-                              isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
-                                ? routeInfo.versionNumber
-                                : null,
-                          }}
-                        />
-                        {effectiveVersionId && (
-                          <CommentSidebar
-                            contentSelector="[data-bep-content]"
-                            bepId={bep._id}
-                            versionId={effectiveVersionId}
-                            pageId={currentPageId}
-                            readOnly={isViewingHistorical}
-                            comments={(pageComments ?? [])
-                              .filter((c) => c.anchor)
-                              .map((c) => ({
-                                _id: c._id,
-                                parentId: c.parentId,
-                                anchor: c.anchor as {
-                                  nodeId: string;
-                                  nodeType: string;
-                                  nodeText: string;
-                                },
-                                authorName: c.authorName,
-                                content: c.content,
-                                type: c.type,
-                                createdAt: c.createdAt,
-                                resolved: c.resolved,
-                              }))}
+                      <>
+                        <BepTableOfContents content={currentContent} />
+                        <div className="relative">
+                          <BepContent
+                            content={currentContent}
+                            linkContext={{
+                              bepNumber,
+                              isHistorical: isViewingHistorical,
+                              versionNumber:
+                                isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
+                                  ? routeInfo.versionNumber
+                                  : null,
+                            }}
                           />
-                        )}
-                      </div>
+                          {effectiveVersionId && (
+                            <CommentSidebar
+                              contentSelector="[data-bep-content]"
+                              bepId={bep._id}
+                              versionId={effectiveVersionId}
+                              pageId={currentPageId}
+                              readOnly={isViewingHistorical}
+                              comments={(pageComments ?? [])
+                                .filter((c) => c.anchor)
+                                .map((c) => ({
+                                  _id: c._id,
+                                  parentId: c.parentId,
+                                  anchor: c.anchor as {
+                                    nodeId: string;
+                                    nodeType: string;
+                                    nodeText: string;
+                                  },
+                                  authorName: c.authorName,
+                                  content: c.content,
+                                  type: c.type,
+                                  createdAt: c.createdAt,
+                                  resolved: c.resolved,
+                                }))}
+                            />
+                          )}
+                        </div>
+                      </>
                     )}
                   </>
                 )}
