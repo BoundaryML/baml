@@ -98,7 +98,6 @@ client C {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "render_prompt returns empty messages for template string expansion"]
 async fn test_openai_template_string_expansion() {
     let source = [
         OPENAI_CLIENT,
@@ -135,7 +134,6 @@ function get_body() -> string {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "render_prompt returns empty messages for struct arg in prompt"]
 async fn test_openai_struct_arg_in_prompt() {
     let source = [
         OPENAI_CLIENT,
@@ -510,7 +508,7 @@ function get_body() -> string {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "render_prompt returns empty messages for multiple system messages"]
+#[ignore = "merge_adjacent_roles concatenates content instead of keeping separate parts"]
 async fn test_openai_multiple_system_messages() {
     let source = [
         OPENAI_CLIENT,
@@ -576,7 +574,7 @@ client C {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "render_prompt returns empty messages for template string expansion"]
+#[ignore = "anthropic build_request missing max_tokens"]
 async fn test_anthropic_template_string_expansion() {
     let source = [
         ANTHROPIC_CLIENT,
@@ -614,7 +612,7 @@ function get_body() -> string {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "render_prompt returns empty messages for struct arg in prompt"]
+#[ignore = "anthropic build_request missing max_tokens"]
 async fn test_anthropic_struct_arg_in_prompt() {
     let source = [
         ANTHROPIC_CLIENT,
