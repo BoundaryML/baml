@@ -2,14 +2,15 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.BadReturnType$render_prompt() -> baml.llm.PromptAst {
+fn user.BadParam(x: map<string, int>) -> string {
     // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: map<string, unknown>
+    let _0: string // _0 // return
+    let _1: map<string, int> // x // param
+    let _2: map<string, unknown>
 
     bb0: {
-        _1 = {  };
-        _0 = call const fn baml.llm.render_prompt(const null, const "BadReturnType", copy _1) -> [bb1];
+        _2 = { const "x": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const null, const "BadParam", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -21,14 +22,15 @@ fn user.BadReturnType$render_prompt() -> baml.llm.PromptAst {
     }
 }
 
-fn user.BadReturnType$build_request() -> baml.http.Request {
+fn user.BadParam$build_request(x: map<string, int>) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: map<string, unknown>
+    let _1: map<string, int> // x // param
+    let _2: map<string, unknown>
 
     bb0: {
-        _1 = {  };
-        _0 = call const fn baml.llm.build_request(const null, const "BadReturnType", copy _1) -> [bb1];
+        _2 = { const "x": copy _1 };
+        _0 = call const fn baml.llm.build_request(const null, const "BadParam", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -79,15 +81,14 @@ fn user.BadReturnType() -> map<string, int> {
     }
 }
 
-fn user.BadParam(x: map<string, int>) -> string {
+fn user.BadReturnType$build_request() -> baml.http.Request {
     // Locals:
-    let _0: string // _0 // return
-    let _1: map<string, int> // x // param
-    let _2: map<string, unknown>
+    let _0: baml.http.Request // _0 // return
+    let _1: map<string, unknown>
 
     bb0: {
-        _2 = { const "x": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const null, const "BadParam", copy _2) -> [bb1];
+        _1 = {  };
+        _0 = call const fn baml.llm.build_request(const null, const "BadReturnType", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -99,15 +100,14 @@ fn user.BadParam(x: map<string, int>) -> string {
     }
 }
 
-fn user.BadParam$build_request(x: map<string, int>) -> baml.http.Request {
+fn user.BadReturnType$render_prompt() -> baml.llm.PromptAst {
     // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: map<string, int> // x // param
-    let _2: map<string, unknown>
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: map<string, unknown>
 
     bb0: {
-        _2 = { const "x": copy _1 };
-        _0 = call const fn baml.llm.build_request(const null, const "BadParam", copy _2) -> [bb1];
+        _1 = {  };
+        _0 = call const fn baml.llm.render_prompt(const null, const "BadReturnType", copy _1) -> [bb1];
     }
 
     bb1: {

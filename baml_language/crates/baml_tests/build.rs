@@ -508,7 +508,9 @@ fn generate_mir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
             baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
             for sf in baml_files {
                 let item_tree = file_item_tree(&db, sf);
-                for (local_id, _func_data) in item_tree.functions.iter() {
+                let mut functions: Vec<_> = item_tree.functions.iter().collect();
+                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
+                for (local_id, _func_data) in functions {
                     let func_loc = FunctionLoc::new(&db, sf, *local_id);
                     let mir = lower_function(&db, func_loc);
                     writeln!(output, "{}", display_function(&mir)).unwrap();
@@ -536,7 +538,9 @@ fn generate_mir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
 
             for source_file in &source_files {
                 let item_tree = file_item_tree(&db, *source_file);
-                for (local_id, _func_data) in item_tree.functions.iter() {
+                let mut functions: Vec<_> = item_tree.functions.iter().collect();
+                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
+                for (local_id, _func_data) in functions {
                     let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
                     let mir = lower_function(&db, func_loc);
                     writeln!(output, "{}", display_function(&mir)).unwrap();

@@ -2,9 +2,10 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Foo() -> void {
+fn user.Bar(x: void) -> int {
     // Locals:
-    let _0: void // _0 // return
+    let _0: int // _0 // return
+    let _1: void // x // param
 
     bb0: {
         _0 = const 1_i64;
@@ -30,10 +31,9 @@ fn user.Baz() -> void? {
     }
 }
 
-fn user.Bar(x: void) -> int {
+fn user.Foo() -> void {
     // Locals:
-    let _0: int // _0 // return
-    let _1: void // x // param
+    let _0: void // _0 // return
 
     bb0: {
         _0 = const 1_i64;

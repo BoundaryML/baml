@@ -2,12 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.Foo() -> int {
+fn user.Bar() -> int {
     // Locals:
     let _0: int // _0 // return
 
     bb0: {
-        _0 = const 1_i64;
+        _0 = const true;
         goto -> bb1;
     }
 
@@ -30,12 +30,12 @@ fn user.Baz() -> Json {
     }
 }
 
-fn user.Bar() -> int {
+fn user.Foo() -> int {
     // Locals:
     let _0: int // _0 // return
 
     bb0: {
-        _0 = const true;
+        _0 = const 1_i64;
         goto -> bb1;
     }
 

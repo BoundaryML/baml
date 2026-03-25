@@ -2,20 +2,6 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.floatArray() -> float[] {
-    // Locals:
-    let _0: float[] // _0 // return
-
-    bb0: {
-        _0 = [const 1_f64, const 2_f64, const 3_f64];
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.boolArray() -> bool[] {
     // Locals:
     let _0: bool[] // _0 // return
@@ -30,12 +16,12 @@ fn user.boolArray() -> bool[] {
     }
 }
 
-fn user.mixedArray() -> int | string[] {
+fn user.floatArray() -> float[] {
     // Locals:
-    let _0: int | string[] // _0 // return
+    let _0: float[] // _0 // return
 
     bb0: {
-        _0 = [const 1_i64, const "two", const 3_i64];
+        _0 = [const 1_f64, const 2_f64, const 3_f64];
         goto -> bb1;
     }
 
@@ -58,12 +44,12 @@ fn user.intArray() -> int[] {
     }
 }
 
-fn user.stringArray() -> string[] {
+fn user.mixedArray() -> int | string[] {
     // Locals:
-    let _0: string[] // _0 // return
+    let _0: int | string[] // _0 // return
 
     bb0: {
-        _0 = [const "hello", const "world", const "test"];
+        _0 = [const 1_i64, const "two", const 3_i64];
         goto -> bb1;
     }
 
@@ -84,6 +70,20 @@ fn user.pointArray() -> Point[] {
         _2 = Point { const 3_i64, const 4_i64 };
         _3 = Point { const 5_i64, const 6_i64 };
         _0 = [copy _1, copy _2, copy _3];
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.stringArray() -> string[] {
+    // Locals:
+    let _0: string[] // _0 // return
+
+    bb0: {
+        _0 = [const "hello", const "world", const "test"];
         goto -> bb1;
     }
 
@@ -138,6 +138,20 @@ fn user.boolValues() -> map<string, bool> {
     }
 }
 
+fn user.floatValues() -> map<string, float> {
+    // Locals:
+    let _0: map<string, float> // _0 // return
+
+    bb0: {
+        _0 = { const "hello": const 1_f64, const "test": const 2_f64 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.intValues() -> map<string, int> {
     // Locals:
     let _0: map<string, int> // _0 // return
@@ -158,20 +172,6 @@ fn user.stringValues() -> map<string, string> {
 
     bb0: {
         _0 = { const "hello": const "world", const "test": const "test" };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.floatValues() -> map<string, float> {
-    // Locals:
-    let _0: map<string, float> // _0 // return
-
-    bb0: {
-        _0 = { const "hello": const 1_f64, const "test": const 2_f64 };
         goto -> bb1;
     }
 

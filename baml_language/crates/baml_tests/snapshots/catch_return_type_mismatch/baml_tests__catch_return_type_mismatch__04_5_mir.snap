@@ -2,6 +2,20 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.callee() -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+
+    bb0: {
+        _0 = const true;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.caller() -> bool {
     // Locals:
     let _0: bool // _0 // return
@@ -37,20 +51,6 @@ fn user.caller() -> bool {
     }
 
     bb6: {
-        return;
-    }
-}
-
-fn user.callee() -> bool {
-    // Locals:
-    let _0: bool // _0 // return
-
-    bb0: {
-        _0 = const true;
-        goto -> bb1;
-    }
-
-    bb1: {
         return;
     }
 }

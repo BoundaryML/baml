@@ -23,6 +23,25 @@ fn user.array_length() -> int {
     }
 }
 
+fn user.Bar() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x
+
+    bb0: {
+        _1 = call const fn user.Foo(const 1_i64) -> [bb1];
+    }
+
+    bb1: {
+        _0 = copy _1;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Foo(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -60,6 +79,25 @@ fn user.GreetBaz(n: string) -> string {
     }
 }
 
+fn user.Baz.Greeting(self: Baz) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: Baz // self // param
+    let _2: string
+    let _3: string
+
+    bb0: {
+        _3 = copy _1.0;
+        _2 = const "Hello, " + copy _3;
+        _0 = copy _2 + const "!";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.param_in_if_statement(b: bool) -> int {
     // Locals:
     let _0: int // _0 // return
@@ -84,44 +122,6 @@ fn user.param_in_if_statement(b: bool) -> int {
     }
 
     bb4: {
-        return;
-    }
-}
-
-fn user.Baz.Greeting(self: Baz) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: Baz // self // param
-    let _2: string
-    let _3: string
-
-    bb0: {
-        _3 = copy _1.0;
-        _2 = const "Hello, " + copy _3;
-        _0 = copy _2 + const "!";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.Bar() -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // x
-
-    bb0: {
-        _1 = call const fn user.Foo(const 1_i64) -> [bb1];
-    }
-
-    bb1: {
-        _0 = copy _1;
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

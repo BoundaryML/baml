@@ -22,6 +22,68 @@ fn user.ConsecutiveHeaders() -> string {
     }
 }
 
+fn user.HeaderLevels() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        notify_block(Level 1, level=1);
+        notify_block(Level 2, level=2);
+        notify_block(Level 3, level=3);
+        notify_block(Level 4, level=4);
+        notify_block(Level 5, level=5);
+        notify_block(Level 6, level=6);
+        notify_block(Level 7 - More than 6 levels, level=7);
+        notify_block(Level 8, level=8);
+        notify_block(Level 9, level=9);
+        _0 = const "deep nesting";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.HeaderOnlyFunction() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        notify_block(Just Headers, level=1);
+        notify_block(No Code, level=2);
+        notify_block(Only Documentation, level=3);
+        notify_block(Pure Annotation, level=4);
+        notify_block(No Expressions, level=5);
+        notify_block(Until The End, level=6);
+        _0 = const "default";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.HeadersAndComments() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // x
+
+    bb0: {
+        notify_block(Header Before Comment, level=1);
+        _1 = const "test";
+        notify_block(Header After Comment, level=2);
+        notify_block(Header After Doc Comment, level=3);
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.HeadersAroundExpressions() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -93,39 +155,6 @@ fn user.HeadersAroundExpressions() -> string {
     }
 }
 
-fn user.UnicodeHeaders() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        notify_block(你好世界, level=1);
-        notify_block(Émojis 🎉🎊, level=2);
-        notify_block(Special «Characters» ™, level=3);
-        _0 = const "test";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.VeryLongHeaderTitle() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        notify_block(This Is An Extremely Long Header Title That Goes On And On And On And Contains Many Words To Test How The Parser Handles Very Long Header Titles That Might Span Multiple Lines In Some Editors But Should Still Be Parsed As A Single Header, level=1);
-        notify_block(Another Long Title With Special Characters !@#$%^&*()_+-=[]{}|;':",./<>? And Numbers 1234567890, level=2);
-        _0 = const "long headers";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.HeadersInComplexNesting() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -167,25 +196,6 @@ fn user.HeadersInComplexNesting() -> string {
     }
 }
 
-fn user.HeadersAndComments() -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // x
-
-    bb0: {
-        notify_block(Header Before Comment, level=1);
-        _1 = const "test";
-        notify_block(Header After Comment, level=2);
-        notify_block(Header After Doc Comment, level=3);
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.HeadersWithSpecialChars() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -198,49 +208,6 @@ fn user.HeadersWithSpecialChars() -> string {
         notify_block(Header\With\Backslashes, level=5);
         notify_block(Header|With|Pipes, level=6);
         _0 = const "special chars";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.HeaderLevels() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        notify_block(Level 1, level=1);
-        notify_block(Level 2, level=2);
-        notify_block(Level 3, level=3);
-        notify_block(Level 4, level=4);
-        notify_block(Level 5, level=5);
-        notify_block(Level 6, level=6);
-        notify_block(Level 7 - More than 6 levels, level=7);
-        notify_block(Level 8, level=8);
-        notify_block(Level 9, level=9);
-        _0 = const "deep nesting";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.HeaderOnlyFunction() -> string {
-    // Locals:
-    let _0: string // _0 // return
-
-    bb0: {
-        notify_block(Just Headers, level=1);
-        notify_block(No Code, level=2);
-        notify_block(Only Documentation, level=3);
-        notify_block(Pure Annotation, level=4);
-        notify_block(No Expressions, level=5);
-        notify_block(Until The End, level=6);
-        _0 = const "default";
         goto -> bb1;
     }
 
@@ -262,6 +229,39 @@ fn user.HeadersWithWhitespace() -> string {
         notify_block(Trailing Spaces, level=1);
         notify_block(Multiple  Spaces  Between  Words, level=2);
         _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.UnicodeHeaders() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        notify_block(你好世界, level=1);
+        notify_block(Émojis 🎉🎊, level=2);
+        notify_block(Special «Characters» ™, level=3);
+        _0 = const "test";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.VeryLongHeaderTitle() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        notify_block(This Is An Extremely Long Header Title That Goes On And On And On And Contains Many Words To Test How The Parser Handles Very Long Header Titles That Might Span Multiple Lines In Some Editors But Should Still Be Parsed As A Single Header, level=1);
+        notify_block(Another Long Title With Special Characters !@#$%^&*()_+-=[]{}|;':",./<>? And Numbers 1234567890, level=2);
+        _0 = const "long headers";
         goto -> bb1;
     }
 

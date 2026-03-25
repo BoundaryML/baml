@@ -2,15 +2,15 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst {
+fn user.FetchDatax(user_id: string) -> Hi {
     // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
+    let _0: Hi // _0 // return
     let _1: string // user_id // param
     let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "user_id": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(const fn user.VertexGCP, const "FetchDatax", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.call_llm_function(const fn user.VertexGCP, const "FetchDatax", copy _2) -> [bb1];
     }
 
     bb1: {
@@ -42,15 +42,15 @@ fn user.FetchDatax$build_request(user_id: string) -> baml.http.Request {
     }
 }
 
-fn user.FetchDatax(user_id: string) -> Hi {
+fn user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst {
     // Locals:
-    let _0: Hi // _0 // return
+    let _0: baml.llm.PromptAst // _0 // return
     let _1: string // user_id // param
     let _2: map<string, unknown>
 
     bb0: {
         _2 = { const "user_id": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.VertexGCP, const "FetchDatax", copy _2) -> [bb1];
+        _0 = call const fn baml.llm.render_prompt(const fn user.VertexGCP, const "FetchDatax", copy _2) -> [bb1];
     }
 
     bb1: {

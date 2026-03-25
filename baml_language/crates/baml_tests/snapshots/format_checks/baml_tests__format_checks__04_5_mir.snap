@@ -1003,23 +1003,6 @@ fn user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> 
     }
 }
 
-fn user.WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
-    // Locals:
-    let _0: map<string, int | string | bool> // _0 // return
-    let _1: map<string, int> // first_input // param
-    let _2: int | string | bool[] // second_input // param
-    let _3: string // third_input // param
-
-    bb0: {
-        _0 = { const "result": const 1_i64 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
 fn user.WithMethod.greet() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -1034,215 +1017,15 @@ fn user.WithMethod.greet() -> string {
     }
 }
 
-fn user.RawStringConfigClient$new() -> null {
+fn user.WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
     // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<"system_prompt", "#Youareahelpfulassistant.Alwaysbeconcise.#">
+    let _0: map<string, int | string | bool> // _0 // return
+    let _1: map<string, int> // first_input // param
+    let _2: int | string | bool[] // second_input // param
+    let _3: string // third_input // param
 
     bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = { const "system_prompt": const "#Youareahelpfulassistant.Alwaysbeconcise.#" };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "RawStringConfigClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.CommaClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<"max_tokens", 100>
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = { const "max_tokens": const 100_i64 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "CommaClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ExtraWhitespaceClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "ExtraWhitespaceClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.TriviaLongValueClientBlock$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "TriviaLongValueClientBlock", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.TriviaClientBlock$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "TriviaClientBlock", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.SameLineClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "SameLineClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.TypedValuesClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<"temperature" | "max_tokens" | "stream", 0.5 | 2048 | "true">
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = { const "temperature": const 0.5_f64, const "max_tokens": const 2048_i64, const "stream": const "true" };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "TypedValuesClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.TestTarget() -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: map<string, unknown>
-
-    bb0: {
-        _1 = {  };
-        _0 = call const fn baml.llm.call_llm_function(const fn user.BasicClient, const "TestTarget", copy _1) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.TriviaClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "TriviaClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.C$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "C", const "openai", copy _1 };
+        _0 = { const "result": const 1_i64 };
         goto -> bb1;
     }
 
@@ -1275,51 +1058,7 @@ fn user.ArrayConfigClient$new() -> null {
     }
 }
 
-fn user.LongOptionClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "LongOptionClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.NestedConfigClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: void
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 =  {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "NestedConfigClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.LongArrayOfObjectsClient$new() -> null {
+fn user.ArrayOfObjectsClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
@@ -1334,7 +1073,7 @@ fn user.LongArrayOfObjectsClient$new() -> null {
         _5 = [];
         _4 = { const "tools": copy _5 };
         _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "LongArrayOfObjectsClient", const "openai", copy _1 };
+        _0 = baml.llm.PrimitiveClient { const "ArrayOfObjectsClient", const "openai", copy _1 };
         goto -> bb1;
     }
 
@@ -1365,29 +1104,7 @@ fn user.BasicClient$new() -> null {
     }
 }
 
-fn user.LongNestedValuesClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: void
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 =  {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily", const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "LongNestedValuesClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.StringProviderClient$new() -> null {
+fn user.C$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
@@ -1399,8 +1116,30 @@ fn user.StringProviderClient$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "mistralai/mistral-small-3.1-24b-instruct", const "https://openrouter.ai/api/v1", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "StringProviderClient", const "openai-generic", copy _1 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "C", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.CommaClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"max_tokens", 100>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "max_tokens": const 100_i64 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "CommaClient", const "openai", copy _1 };
         goto -> bb1;
     }
 
@@ -1427,204 +1166,6 @@ fn user.DeeplyNestedClient$new() -> null {
         _6 = {  };
         _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _5, copy _6 };
         _0 = baml.llm.PrimitiveClient { const "DeeplyNestedClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.TriviaDeeplyNestedClientBlock$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: void
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 =  {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "TriviaDeeplyNestedClientBlock", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.MixedValuesClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<"max_tokens" | "temperature" | "stream" | "stop" | "inline_string", 100 | 0.7 | "true" | "END"[] | "#inlineraw#">
-    let _5: "END"[]
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _5 = [const "END"];
-        _4 = { const "max_tokens": const 100_i64, const "temperature": const 0.7_f64, const "stream": const "true", const "stop": copy _5, const "inline_string": const "#inlineraw#" };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "MixedValuesClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.LongArrayClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<"stop_sequences", "STOP_GENERATION_NOW" | "END_OF_RESPONSE_MARKER" | "COMPLETION_FINISHED_SIGNAL" | "TERMINATE_OUTPUT_HERE" | "FINAL_ANSWER_DELIMITER"[]>
-    let _5: "STOP_GENERATION_NOW" | "END_OF_RESPONSE_MARKER" | "COMPLETION_FINISHED_SIGNAL" | "TERMINATE_OUTPUT_HERE" | "FINAL_ANSWER_DELIMITER"[]
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _5 = [const "STOP_GENERATION_NOW", const "END_OF_RESPONSE_MARKER", const "COMPLETION_FINISHED_SIGNAL", const "TERMINATE_OUTPUT_HERE", const "FINAL_ANSWER_DELIMITER"];
-        _4 = { const "stop_sequences": copy _5 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "LongArrayClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.TestTarget$render_prompt() -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: map<string, unknown>
-
-    bb0: {
-        _1 = {  };
-        _0 = call const fn baml.llm.render_prompt(const fn user.BasicClient, const "TestTarget", copy _1) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.TestTarget$build_request() -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: map<string, unknown>
-
-    bb0: {
-        _1 = {  };
-        _0 = call const fn baml.llm.build_request(const fn user.BasicClient, const "TestTarget", copy _1) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.TriviaLongValueClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "TriviaLongValueClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.FullClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<"max_tokens" | "temperature" | "top_p", 100 | 0.7 | 0.9>
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _4 = { const "max_tokens": const 100_i64, const "temperature": const 0.7_f64, const "top_p": const 0.9_f64 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "FullClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ArrayOfObjectsClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: map<void, void>
-    let _3: map<void, void>
-    let _4: map<"tools", void[]>
-    let _5: void[]
-
-    bb0: {
-        _2 = {  };
-        _3 = {  };
-        _5 = [];
-        _4 = { const "tools": copy _5 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "ArrayOfObjectsClient", const "openai", copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.TriviaDeeplyNestedClient$new() -> null {
-    // Locals:
-    let _0: null // _0 // return
-    let _1: void
-    let _2: void
-    let _3: map<void, void>
-    let _4: map<void, void>
-
-    bb0: {
-        _2 =  {  };
-        _3 = {  };
-        _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "TriviaDeeplyNestedClient", const "openai", copy _1 };
         goto -> bb1;
     }
 
@@ -1660,7 +1201,7 @@ fn user.EnvClient$new() -> null {
     }
 }
 
-fn user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns$new() -> null {
+fn user.ExtraWhitespaceClient$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
@@ -1673,7 +1214,121 @@ fn user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitO
         _3 = {  };
         _4 = {  };
         _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns", const "openai", copy _1 };
+        _0 = baml.llm.PrimitiveClient { const "ExtraWhitespaceClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.FullClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"max_tokens" | "temperature" | "top_p", 100 | 0.7 | 0.9>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "max_tokens": const 100_i64, const "temperature": const 0.7_f64, const "top_p": const 0.9_f64 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "FullClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LongArrayClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"stop_sequences", "STOP_GENERATION_NOW" | "END_OF_RESPONSE_MARKER" | "COMPLETION_FINISHED_SIGNAL" | "TERMINATE_OUTPUT_HERE" | "FINAL_ANSWER_DELIMITER"[]>
+    let _5: "STOP_GENERATION_NOW" | "END_OF_RESPONSE_MARKER" | "COMPLETION_FINISHED_SIGNAL" | "TERMINATE_OUTPUT_HERE" | "FINAL_ANSWER_DELIMITER"[]
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _5 = [const "STOP_GENERATION_NOW", const "END_OF_RESPONSE_MARKER", const "COMPLETION_FINISHED_SIGNAL", const "TERMINATE_OUTPUT_HERE", const "FINAL_ANSWER_DELIMITER"];
+        _4 = { const "stop_sequences": copy _5 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "LongArrayClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LongArrayOfObjectsClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"tools", void[]>
+    let _5: void[]
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _5 = [];
+        _4 = { const "tools": copy _5 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "LongArrayOfObjectsClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LongNestedValuesClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 =  {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily", const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "LongNestedValuesClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LongOptionClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "LongOptionClient", const "openai", copy _1 };
         goto -> bb1;
     }
 
@@ -1711,9 +1366,354 @@ fn user.ManyOptionsClient$new() -> null {
     }
 }
 
-fn user.TriviaFunc(x: int) -> int {
+fn user.MixedValuesClient$new() -> null {
     // Locals:
-    let _0: int // _0 // return
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"max_tokens" | "temperature" | "stream" | "stop" | "inline_string", 100 | 0.7 | "true" | "END"[] | "#inlineraw#">
+    let _5: "END"[]
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _5 = [const "END"];
+        _4 = { const "max_tokens": const 100_i64, const "temperature": const 0.7_f64, const "stream": const "true", const "stop": copy _5, const "inline_string": const "#inlineraw#" };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "MixedValuesClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.NestedConfigClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 =  {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "NestedConfigClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.RawStringConfigClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"system_prompt", "#Youareahelpfulassistant.Alwaysbeconcise.#">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "system_prompt": const "#Youareahelpfulassistant.Alwaysbeconcise.#" };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "RawStringConfigClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.SameLineClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "SameLineClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.StringProviderClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "mistralai/mistral-small-3.1-24b-instruct", const "https://openrouter.ai/api/v1", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "StringProviderClient", const "openai-generic", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TestTarget() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: map<string, unknown>
+
+    bb0: {
+        _1 = {  };
+        _0 = call const fn baml.llm.call_llm_function(const fn user.BasicClient, const "TestTarget", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.TestTarget$build_request() -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: map<string, unknown>
+
+    bb0: {
+        _1 = {  };
+        _0 = call const fn baml.llm.build_request(const fn user.BasicClient, const "TestTarget", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.TestTarget$render_prompt() -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: map<string, unknown>
+
+    bb0: {
+        _1 = {  };
+        _0 = call const fn baml.llm.render_prompt(const fn user.BasicClient, const "TestTarget", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "TriviaClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaClientBlock$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "TriviaClientBlock", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaDeeplyNestedClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 =  {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "TriviaDeeplyNestedClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaDeeplyNestedClientBlock$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 =  {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "TriviaDeeplyNestedClientBlock", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaLongValueClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "TriviaLongValueClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaLongValueClientBlock$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<void, void>
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "TriviaLongValueClientBlock", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TypedValuesClient$new() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"temperature" | "max_tokens" | "stream", 0.5 | 2048 | "true">
+
+    bb0: {
+        _2 = {  };
+        _3 = {  };
+        _4 = { const "temperature": const 0.5_f64, const "max_tokens": const 2048_i64, const "stream": const "true" };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "TypedValuesClient", const "openai", copy _1 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ComplexReturn(x: int) -> int | string | null {
+    // Locals:
+    let _0: int | string | null // _0 // return
     let _1: int // x // param
 
     bb0: {
@@ -1726,7 +1726,220 @@ fn user.TriviaFunc(x: int) -> int {
     }
 }
 
-fn user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+fn user.ConstrainedParams(name: string, score: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // name // param
+    let _2: int // score // param
+
+    bb0: {
+        _0 = const "done";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> {
+    // Locals:
+    let _0: (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a // param
+    let _2: int // b // param
+    let _3: int // c // param
+    let _4: int // d // param
+    let _5: bool
+    let _6: bool
+    let _7: bool
+    let _8: int
+    let _9: int
+    let _10: int
+    let _11: int
+    let _12: int
+    let _13: int
+    let _14: int
+    let _15: int
+    let _16: int
+    let _17: int
+    let _18: int
+    let _19: int
+    let _20: int
+    let _21: int
+    let _22: int
+    let _23: int
+    let _24: int
+    let _25: int
+
+    bb0: {
+        _5 = copy _1 > const 0_i64;
+        branch copy _5 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const 0_i64;
+        goto -> bb7;
+    }
+
+    bb2: {
+        _6 = copy _2 > const 0_i64;
+        branch copy _6 -> [bb4, bb3];
+    }
+
+    bb3: {
+        _0 = const 0_i64;
+        goto -> bb7;
+    }
+
+    bb4: {
+        _7 = copy _3 > const 0_i64;
+        branch copy _7 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _0 = const 0_i64;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _18 = copy _1 * copy _2;
+        _17 = copy _18 * copy _3;
+        _16 = copy _17 * copy _4;
+        _20 = copy _1 * copy _2;
+        _19 = copy _20 * copy _3;
+        _15 = copy _16 + copy _19;
+        _21 = copy _1 * copy _2;
+        _14 = copy _15 + copy _21;
+        _13 = copy _14 + copy _1;
+        _23 = copy _2 * copy _3;
+        _22 = copy _23 * copy _4;
+        _12 = copy _13 + copy _22;
+        _24 = copy _2 * copy _3;
+        _11 = copy _12 + copy _24;
+        _10 = copy _11 + copy _2;
+        _25 = copy _3 * copy _4;
+        _9 = copy _10 + copy _25;
+        _8 = copy _9 + copy _3;
+        _0 = copy _8 + copy _4;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (int) -> (int) -> (int) -> string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: map<string, map<string, map<string, int[]>>> // nested // param
+    let _2: (int) -> (int) -> (int) -> string // callback // param
+
+    bb0: {
+        _0 = const "done";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.DeeplyNestedBody(a: int, b: int, c: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a // param
+    let _2: int // b // param
+    let _3: int // c // param
+    let _4: bool
+    let _5: bool
+    let _6: bool
+    let _7: int // x
+    let _8: int
+    let _9: bool
+    let _10: int
+    let _11: int
+    let _12: bool
+
+    bb0: {
+        _4 = copy _1 > const 0_i64;
+        branch copy _4 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const 0_i64;
+        goto -> bb11;
+    }
+
+    bb2: {
+        _5 = copy _2 > const 0_i64;
+        branch copy _5 -> [bb6, bb3];
+    }
+
+    bb3: {
+        _12 = copy _3 > const 0_i64;
+        branch copy _12 -> [bb5, bb4];
+    }
+
+    bb4: {
+        _0 = copy _1;
+        goto -> bb11;
+    }
+
+    bb5: {
+        _0 = copy _1 + copy _3;
+        goto -> bb11;
+    }
+
+    bb6: {
+        _6 = copy _3 > const 0_i64;
+        branch copy _6 -> [bb8, bb7];
+    }
+
+    bb7: {
+        _0 = copy _1 + copy _2;
+        goto -> bb11;
+    }
+
+    bb8: {
+        _8 = copy _1 + copy _2;
+        _7 = copy _8 + copy _3;
+        _10 = copy _7;
+        _9 = copy _10 > const 100_i64;
+        branch copy _9 -> [bb10, bb9];
+    }
+
+    bb9: {
+        _0 = copy _7;
+        goto -> bb11;
+    }
+
+    bb10: {
+        _11 = copy _7;
+        _0 = copy _11 * const 2_i64;
+        goto -> bb11;
+    }
+
+    bb11: {
+        return;
+    }
+}
+
+fn user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
     // Locals:
     let _0: map<string, int | string | bool | float | null> // _0 // return
     let _1: map<string, int> // first_long_param // param
@@ -1742,7 +1955,497 @@ fn user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string
     }
 }
 
-fn user.TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+fn user.ExtraWhitespace(a: int, b: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a // param
+    let _2: int // b // param
+
+    bb0: {
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.F() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.FinalExpr(a: int, b: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a // param
+    let _2: int // b // param
+
+    bb0: {
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LlmBasic(name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "name": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmBasic", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmBasic$build_request(name: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "name": copy _1 };
+        _0 = call const fn baml.llm.build_request(const null, const "LlmBasic", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // name // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "name": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const null, const "LlmBasic", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmMultiLine(text: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmMultiLine", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.build_request(const null, const "LlmMultiLine", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const null, const "LlmMultiLine", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmReversedOrder(text: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmReversedOrder", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmReversedOrder$build_request(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.build_request(const null, const "LlmReversedOrder", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // text // param
+    let _2: map<string, unknown>
+
+    bb0: {
+        _2 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(const null, const "LlmReversedOrder", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmStringClient(text: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // text // param
+    let _2: baml.llm.Client
+    let _3: void[]
+    let _4: map<string, unknown>
+
+    bb0: {
+        _3 = [];
+        _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
+        _4 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.call_llm_function(copy _2, const "LlmStringClient", copy _4) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmStringClient$build_request(text: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // text // param
+    let _2: baml.llm.Client
+    let _3: void[]
+    let _4: map<string, unknown>
+
+    bb0: {
+        _3 = [];
+        _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
+        _4 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.build_request(copy _2, const "LlmStringClient", copy _4) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // text // param
+    let _2: baml.llm.Client
+    let _3: void[]
+    let _4: map<string, unknown>
+
+    bb0: {
+        _3 = [];
+        _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
+        _4 = { const "text": copy _1 };
+        _0 = call const fn baml.llm.render_prompt(copy _2, const "LlmStringClient", copy _4) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // first_context // param
+    let _2: string // second_context // param
+    let _3: string // third_context // param
+    let _4: string // user_query // param
+    let _5: map<string, unknown>
+
+    bb0: {
+        _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
+        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmWithLongSignature", copy _5) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request {
+    // Locals:
+    let _0: baml.http.Request // _0 // return
+    let _1: string // first_context // param
+    let _2: string // second_context // param
+    let _3: string // third_context // param
+    let _4: string // user_query // param
+    let _5: map<string, unknown>
+
+    bb0: {
+        _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
+        _0 = call const fn baml.llm.build_request(const null, const "LlmWithLongSignature", copy _5) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
+    // Locals:
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: string // first_context // param
+    let _2: string // second_context // param
+    let _3: string // third_context // param
+    let _4: string // user_query // param
+    let _5: map<string, unknown>
+
+    bb0: {
+        _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
+        _0 = call const fn baml.llm.render_prompt(const null, const "LlmWithLongSignature", copy _5) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>> {
+    // Locals:
+    let _0: map<string, map<string, int | string | bool | float | null>> // _0 // return
+    let _1: int // x // param
+    let _2: map<string, int | string | bool | float | null>
+
+    bb0: {
+        _2 = { const "b": const 1_i64 };
+        _0 = { const "a": copy _2 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, second_argument: int, third_argument: bool) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // first_argument // param
+    let _2: int // second_argument // param
+    let _3: bool // third_argument // param
+
+    bb0: {
+        _0 = const "result";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.ManyNestedExprs(items: int[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int[] // items // param
+    let _2: int // a
+    let _3: 0
+    let _4: int // b
+    let _5: 1
+    let _6: int // c
+    let _7: bool
+    let _8: int
+    let _9: int
+    let _10: 1 | int // d
+    let _11: int
+    let _12: void // e
+    let _13: void // inner
+    let _14: 1 | int
+    let _15: int
+    let _16: void
+    let _17: void
+    let _18: void
+    let _19: void
+    let _20: void
+    let _21: void
+    let _22: 1 | int
+    let _23: int
+    let _24: int
+    let _25: int
+
+    bb0: {
+        _3 = const 0_i64;
+        _2 = copy _1[_3];
+        _5 = const 1_i64;
+        _4 = copy _1[_5];
+        _8 = copy _2;
+        _9 = copy _4;
+        _7 = copy _8 > copy _9;
+        branch copy _7 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _6 = copy _4;
+        goto -> bb3;
+    }
+
+    bb2: {
+        _6 = copy _2;
+        goto -> bb3;
+    }
+
+    bb3: {
+        switch copy _6 [0: bb5, otherwise: bb4];
+    }
+
+    bb4: {
+        _11 = copy _6;
+        _10 = copy _11 * const 2_i64;
+        goto -> bb6;
+    }
+
+    bb5: {
+        _10 = const 1_i64;
+        goto -> bb6;
+    }
+
+    bb6: {
+        _14 = copy _10;
+        _15 = copy _2;
+        _13 = copy _14 + copy _15;
+        _16 = copy _13;
+        _17 = copy _13;
+        _12 = copy _16 * copy _17;
+        _21 = copy _12;
+        _22 = copy _10;
+        _20 = copy _21 + copy _22;
+        _23 = copy _6;
+        _19 = copy _20 + copy _23;
+        _24 = copy _4;
+        _18 = copy _19 + copy _24;
+        _25 = copy _2;
+        _0 = copy _18 + copy _25;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
+fn user.ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // first_parameter // param
@@ -1752,6 +2455,52 @@ fn user.TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, th
 
     bb0: {
         _0 = const "result";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.Minimal() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 1_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.MultiParamTrivia(a: int, b: string) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a // param
+    let _2: string // b // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.MultiParamTriviaBlock(a: int, b: string) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a // param
+    let _2: string // b // param
+
+    bb0: {
+        _0 = copy _1;
         goto -> bb1;
     }
 
@@ -1799,177 +2548,15 @@ fn user.MultiStatement(a: int, b: int) -> int {
     }
 }
 
-fn user.Minimal() -> int {
+fn user.MultipleParams(a: int, b: int, c: string) -> int {
     // Locals:
     let _0: int // _0 // return
+    let _1: int // a // param
+    let _2: int // b // param
+    let _3: string // c // param
 
     bb0: {
-        _0 = const 1_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>> {
-    // Locals:
-    let _0: map<string, map<string, int | string | bool | float | null>> // _0 // return
-    let _1: int // x // param
-    let _2: map<string, int | string | bool | float | null>
-
-    bb0: {
-        _2 = { const "b": const 1_i64 };
-        _0 = { const "a": copy _2 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // name // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = { const "name": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(const null, const "LlmBasic", copy _2) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // text // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(const null, const "LlmMultiLine", copy _2) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
-    // Locals:
-    let _0: map<string, int | string | bool | float | null> // _0 // return
-    let _1: map<string, int> // first_long_param // param
-    let _2: int | string | bool[] // second_long_param // param
-
-    bb0: {
-        _0 = { const "a": const 1_i64 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.SingleParam(x: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // x // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // extremely_long_parameter_name // param
-    let _2: string // another_very_long_parameter_name // param
-    let _3: bool // yet_another_long_one // param
-
-    bb0: {
-        _0 = const "result";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.TriviaFuncBlock(x: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // x // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        _0 = const 1_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ComplexReturn(x: int) -> int | string | null {
-    // Locals:
-    let _0: int | string | null // _0 // return
-    let _1: int // x // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
-    // Locals:
-    let _0: map<string, int | string | bool | float | null> // _0 // return
-    let _1: map<string, int> // first_long_param // param
-    let _2: int | string | bool[] // second_long_param // param
-
-    bb0: {
-        _0 = { const "a": const 1_i64 };
+        _0 = copy _1 + copy _2;
         goto -> bb1;
     }
 
@@ -1988,21 +2575,6 @@ fn user.NestedGenericReturn() -> map<string, map<string, map<string, int | strin
         _2 = { const "c": const 1_i64 };
         _1 = { const "b": copy _2 };
         _0 = { const "a": copy _1 };
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.TriviaWrapReturnType(x: int) -> int | string | bool | null {
-    // Locals:
-    let _0: int | string | bool | null // _0 // return
-    let _1: int // x // param
-
-    bb0: {
-        _0 = copy _1;
         goto -> bb1;
     }
 
@@ -2147,213 +2719,30 @@ fn user.NestedLoops(matrix: int[][]) -> int {
     }
 }
 
-fn user.ConstrainedParams(name: string, score: int) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // name // param
-    let _2: int // score // param
-
-    bb0: {
-        _0 = const "done";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
+fn user.SingleParam(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // a // param
-    let _2: int // b // param
-    let _3: int // c // param
-    let _4: int // d // param
-    let _5: bool
-    let _6: bool
-    let _7: bool
-    let _8: int
-    let _9: int
-    let _10: int
-    let _11: int
-    let _12: int
-    let _13: int
-    let _14: int
-    let _15: int
-    let _16: int
-    let _17: int
-    let _18: int
-    let _19: int
-    let _20: int
-    let _21: int
-    let _22: int
-    let _23: int
-    let _24: int
-    let _25: int
+    let _1: int // x // param
 
     bb0: {
-        _5 = copy _1 > const 0_i64;
-        branch copy _5 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _0 = const 0_i64;
-        goto -> bb7;
-    }
-
-    bb2: {
-        _6 = copy _2 > const 0_i64;
-        branch copy _6 -> [bb4, bb3];
-    }
-
-    bb3: {
-        _0 = const 0_i64;
-        goto -> bb7;
-    }
-
-    bb4: {
-        _7 = copy _3 > const 0_i64;
-        branch copy _7 -> [bb6, bb5];
-    }
-
-    bb5: {
-        _0 = const 0_i64;
-        goto -> bb7;
-    }
-
-    bb6: {
-        _18 = copy _1 * copy _2;
-        _17 = copy _18 * copy _3;
-        _16 = copy _17 * copy _4;
-        _20 = copy _1 * copy _2;
-        _19 = copy _20 * copy _3;
-        _15 = copy _16 + copy _19;
-        _21 = copy _1 * copy _2;
-        _14 = copy _15 + copy _21;
-        _13 = copy _14 + copy _1;
-        _23 = copy _2 * copy _3;
-        _22 = copy _23 * copy _4;
-        _12 = copy _13 + copy _22;
-        _24 = copy _2 * copy _3;
-        _11 = copy _12 + copy _24;
-        _10 = copy _11 + copy _2;
-        _25 = copy _3 * copy _4;
-        _9 = copy _10 + copy _25;
-        _8 = copy _9 + copy _3;
-        _0 = copy _8 + copy _4;
-        goto -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn user.ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: int // first_parameter // param
-    let _2: string // second_parameter // param
-    let _3: bool // third_parameter // param
-    let _4: float // fourth_parameter // param
-
-    bb0: {
-        _0 = const "result";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.DeeplyNestedBody(a: int, b: int, c: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // a // param
-    let _2: int // b // param
-    let _3: int // c // param
-    let _4: bool
-    let _5: bool
-    let _6: bool
-    let _7: int // x
-    let _8: int
-    let _9: bool
-    let _10: int
-    let _11: int
-    let _12: bool
-
-    bb0: {
-        _4 = copy _1 > const 0_i64;
-        branch copy _4 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _0 = const 0_i64;
-        goto -> bb11;
-    }
-
-    bb2: {
-        _5 = copy _2 > const 0_i64;
-        branch copy _5 -> [bb6, bb3];
-    }
-
-    bb3: {
-        _12 = copy _3 > const 0_i64;
-        branch copy _12 -> [bb5, bb4];
-    }
-
-    bb4: {
         _0 = copy _1;
-        goto -> bb11;
+        goto -> bb1;
     }
 
-    bb5: {
-        _0 = copy _1 + copy _3;
-        goto -> bb11;
-    }
-
-    bb6: {
-        _6 = copy _3 > const 0_i64;
-        branch copy _6 -> [bb8, bb7];
-    }
-
-    bb7: {
-        _0 = copy _1 + copy _2;
-        goto -> bb11;
-    }
-
-    bb8: {
-        _8 = copy _1 + copy _2;
-        _7 = copy _8 + copy _3;
-        _10 = copy _7;
-        _9 = copy _10 > const 100_i64;
-        branch copy _9 -> [bb10, bb9];
-    }
-
-    bb9: {
-        _0 = copy _7;
-        goto -> bb11;
-    }
-
-    bb10: {
-        _11 = copy _7;
-        _0 = copy _11 * const 2_i64;
-        goto -> bb11;
-    }
-
-    bb11: {
+    bb1: {
         return;
     }
 }
 
-fn user.LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, second_argument: int, third_argument: bool) -> string {
+fn user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: string // first_argument // param
-    let _2: int // second_argument // param
-    let _3: bool // third_argument // param
+    let _1: map<string, int> // first_parameter_name // param
+    let _2: int | string[] // second_parameter_name // param
+    let _3: map<string, bool> // third_parameter_name // param
+    let _4: int // fourth_parameter_name // param
+    let _5: string // fifth_parameter_name // param
+    let _6: float // sixth_parameter_name // param
 
     bb0: {
         _0 = const "result";
@@ -2365,178 +2754,9 @@ fn user.LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: stri
     }
 }
 
-fn user.ManyNestedExprs(items: int[]) -> int {
+fn user.ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int[] // items // param
-    let _2: int // a
-    let _3: 0
-    let _4: int // b
-    let _5: 1
-    let _6: int // c
-    let _7: bool
-    let _8: int
-    let _9: int
-    let _10: 1 | int // d
-    let _11: int
-    let _12: void // e
-    let _13: void // inner
-    let _14: 1 | int
-    let _15: int
-    let _16: void
-    let _17: void
-    let _18: void
-    let _19: void
-    let _20: void
-    let _21: void
-    let _22: 1 | int
-    let _23: int
-    let _24: int
-    let _25: int
-
-    bb0: {
-        _3 = const 0_i64;
-        _2 = copy _1[_3];
-        _5 = const 1_i64;
-        _4 = copy _1[_5];
-        _8 = copy _2;
-        _9 = copy _4;
-        _7 = copy _8 > copy _9;
-        branch copy _7 -> [bb2, bb1];
-    }
-
-    bb1: {
-        _6 = copy _4;
-        goto -> bb3;
-    }
-
-    bb2: {
-        _6 = copy _2;
-        goto -> bb3;
-    }
-
-    bb3: {
-        switch copy _6 [0: bb5, otherwise: bb4];
-    }
-
-    bb4: {
-        _11 = copy _6;
-        _10 = copy _11 * const 2_i64;
-        goto -> bb6;
-    }
-
-    bb5: {
-        _10 = const 1_i64;
-        goto -> bb6;
-    }
-
-    bb6: {
-        _14 = copy _10;
-        _15 = copy _2;
-        _13 = copy _14 + copy _15;
-        _16 = copy _13;
-        _17 = copy _13;
-        _12 = copy _16 * copy _17;
-        _21 = copy _12;
-        _22 = copy _10;
-        _20 = copy _21 + copy _22;
-        _23 = copy _6;
-        _19 = copy _20 + copy _23;
-        _24 = copy _4;
-        _18 = copy _19 + copy _24;
-        _25 = copy _2;
-        _0 = copy _18 + copy _25;
-        goto -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
-fn user.LlmBasic(name: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // name // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = { const "name": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmBasic", copy _2) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.LlmBasic$build_request(name: string) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // name // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = { const "name": copy _1 };
-        _0 = call const fn baml.llm.build_request(const null, const "LlmBasic", copy _2) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // text // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(const null, const "LlmReversedOrder", copy _2) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // text // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.build_request(const null, const "LlmMultiLine", copy _2) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> {
-    // Locals:
-    let _0: (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> // _0 // return
 
     bb0: {
         _0 = const 1_i64;
@@ -2548,11 +2768,57 @@ fn user.DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | 
     }
 }
 
-fn user.MultiParamTriviaBlock(a: int, b: string) -> int {
+fn user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+    // Locals:
+    let _0: map<string, int | string | bool | float | null> // _0 // return
+    let _1: map<string, int> // first_long_param // param
+    let _2: int | string | bool[] // second_long_param // param
+
+    bb0: {
+        _0 = { const "a": const 1_i64 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+    // Locals:
+    let _0: map<string, int | string | bool | float | null> // _0 // return
+    let _1: map<string, int> // first_long_param // param
+    let _2: int | string | bool[] // second_long_param // param
+
+    bb0: {
+        _0 = { const "a": const 1_i64 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaFunc(x: int) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // a // param
-    let _2: string // b // param
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaFuncBlock(x: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
 
     bb0: {
         _0 = copy _1;
@@ -2582,6 +2848,39 @@ fn user.TriviaWrapParams(first_parameter: int, second_parameter: string, third_p
     }
 }
 
+fn user.TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // first_parameter // param
+    let _2: string // second_parameter // param
+    let _3: bool // third_parameter // param
+    let _4: float // fourth_parameter // param
+
+    bb0: {
+        _0 = const "result";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.TriviaWrapReturnType(x: int) -> int | string | bool | null {
+    // Locals:
+    let _0: int | string | bool | null // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
 fn user.TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
     // Locals:
     let _0: int | string | bool | null // _0 // return
@@ -2597,95 +2896,12 @@ fn user.TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
     }
 }
 
-fn user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+fn user.VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: string // first_context // param
-    let _2: string // second_context // param
-    let _3: string // third_context // param
-    let _4: string // user_query // param
-    let _5: map<string, unknown>
-
-    bb0: {
-        _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
-        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmWithLongSignature", copy _5) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.MultipleParams(a: int, b: int, c: string) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // a // param
-    let _2: int // b // param
-    let _3: string // c // param
-
-    bb0: {
-        _0 = copy _1 + copy _2;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.LlmStringClient(text: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client
-    let _3: void[]
-    let _4: map<string, unknown>
-
-    bb0: {
-        _3 = [];
-        _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
-        _4 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(copy _2, const "LlmStringClient", copy _4) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (int) -> (int) -> (int) -> string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: map<string, map<string, map<string, int[]>>> // nested // param
-    let _2: (int) -> (int) -> (int) -> string // callback // param
-
-    bb0: {
-        _0 = const "done";
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: map<string, int> // first_parameter_name // param
-    let _2: int | string[] // second_parameter_name // param
-    let _3: map<string, bool> // third_parameter_name // param
-    let _4: int // fourth_parameter_name // param
-    let _5: string // fifth_parameter_name // param
-    let _6: float // sixth_parameter_name // param
+    let _1: int // extremely_long_parameter_name // param
+    let _2: string // another_very_long_parameter_name // param
+    let _3: bool // yet_another_long_one // param
 
     bb0: {
         _0 = const "result";
@@ -2693,222 +2909,6 @@ fn user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_n
     }
 
     bb1: {
-        return;
-    }
-}
-
-fn user.FinalExpr(a: int, b: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // a // param
-    let _2: int // b // param
-
-    bb0: {
-        _0 = copy _1 + copy _2;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.LlmMultiLine(text: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // text // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmMultiLine", copy _2) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.LlmStringClient$build_request(text: string) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client
-    let _3: void[]
-    let _4: map<string, unknown>
-
-    bb0: {
-        _3 = [];
-        _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
-        _4 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.build_request(copy _2, const "LlmStringClient", copy _4) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.MultiParamTrivia(a: int, b: string) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // a // param
-    let _2: string // b // param
-
-    bb0: {
-        _0 = copy _1;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.LlmReversedOrder(text: string) -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: string // text // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.call_llm_function(const null, const "LlmReversedOrder", copy _2) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // first_context // param
-    let _2: string // second_context // param
-    let _3: string // third_context // param
-    let _4: string // user_query // param
-    let _5: map<string, unknown>
-
-    bb0: {
-        _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
-        _0 = call const fn baml.llm.render_prompt(const null, const "LlmWithLongSignature", copy _5) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
-    // Locals:
-    let _0: baml.llm.PromptAst // _0 // return
-    let _1: string // text // param
-    let _2: baml.llm.Client
-    let _3: void[]
-    let _4: map<string, unknown>
-
-    bb0: {
-        _3 = [];
-        _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
-        _4 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.render_prompt(copy _2, const "LlmStringClient", copy _4) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // first_context // param
-    let _2: string // second_context // param
-    let _3: string // third_context // param
-    let _4: string // user_query // param
-    let _5: map<string, unknown>
-
-    bb0: {
-        _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
-        _0 = call const fn baml.llm.build_request(const null, const "LlmWithLongSignature", copy _5) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
-    }
-}
-
-fn user.F() -> int {
-    // Locals:
-    let _0: int // _0 // return
-
-    bb0: {
-        _0 = const 1_i64;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.ExtraWhitespace(a: int, b: int) -> int {
-    // Locals:
-    let _0: int // _0 // return
-    let _1: int // a // param
-    let _2: int // b // param
-
-    bb0: {
-        _0 = copy _1 + copy _2;
-        goto -> bb1;
-    }
-
-    bb1: {
-        return;
-    }
-}
-
-fn user.LlmReversedOrder$build_request(text: string) -> baml.http.Request {
-    // Locals:
-    let _0: baml.http.Request // _0 // return
-    let _1: string // text // param
-    let _2: map<string, unknown>
-
-    bb0: {
-        _2 = { const "text": copy _1 };
-        _0 = call const fn baml.llm.build_request(const null, const "LlmReversedOrder", copy _2) -> [bb1];
-    }
-
-    bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
         return;
     }
 }

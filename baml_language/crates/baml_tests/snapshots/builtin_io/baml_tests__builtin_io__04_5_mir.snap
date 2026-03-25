@@ -244,6 +244,54 @@ fn user.ConnectAndReadInline() -> string {
     }
 }
 
+fn user.ConnectReadAndClose() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: baml.net.Socket // sock
+    let _2: future<baml.net.Socket>
+    let _3: string // data
+    let _4: baml.net.Socket
+    let _5: future<string>
+    let _6: null
+    let _7: baml.net.Socket
+    let _8: future<null>
+
+    bb0: {
+        _2 = dispatch_future const fn baml.net.connect(const "127.0.0.1:8080") -> bb1;
+    }
+
+    bb1: {
+        _1 = await _2 -> [bb2];
+    }
+
+    bb2: {
+        _4 = copy _1;
+        _5 = dispatch_future const fn baml.net.Socket.read(copy _4) -> bb3;
+    }
+
+    bb3: {
+        _3 = await _5 -> [bb4];
+    }
+
+    bb4: {
+        _7 = copy _1;
+        _8 = dispatch_future const fn baml.net.Socket.close(copy _7) -> bb5;
+    }
+
+    bb5: {
+        _6 = await _8 -> [bb6];
+    }
+
+    bb6: {
+        _0 = copy _3;
+        goto -> bb7;
+    }
+
+    bb7: {
+        return;
+    }
+}
+
 fn user.MultipleConnections() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -306,54 +354,6 @@ fn user.MultipleConnections() -> string {
     }
 }
 
-fn user.ConnectReadAndClose() -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: baml.net.Socket // sock
-    let _2: future<baml.net.Socket>
-    let _3: string // data
-    let _4: baml.net.Socket
-    let _5: future<string>
-    let _6: null
-    let _7: baml.net.Socket
-    let _8: future<null>
-
-    bb0: {
-        _2 = dispatch_future const fn baml.net.connect(const "127.0.0.1:8080") -> bb1;
-    }
-
-    bb1: {
-        _1 = await _2 -> [bb2];
-    }
-
-    bb2: {
-        _4 = copy _1;
-        _5 = dispatch_future const fn baml.net.Socket.read(copy _4) -> bb3;
-    }
-
-    bb3: {
-        _3 = await _5 -> [bb4];
-    }
-
-    bb4: {
-        _7 = copy _1;
-        _8 = dispatch_future const fn baml.net.Socket.close(copy _7) -> bb5;
-    }
-
-    bb5: {
-        _6 = await _8 -> [bb6];
-    }
-
-    bb6: {
-        _0 = copy _3;
-        goto -> bb7;
-    }
-
-    bb7: {
-        return;
-    }
-}
-
 fn user.ChainCommands() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -394,6 +394,28 @@ fn user.ChainCommands() -> string {
     }
 }
 
+fn user.RunCommand() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: future<string>
+
+    bb0: {
+        _1 = dispatch_future const fn baml.sys.shell(const "echo hello") -> bb1;
+    }
+
+    bb1: {
+        _0 = await _1 -> [bb2];
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
 fn user.RunCommandWithVar() -> string {
     // Locals:
     let _0: string // _0 // return
@@ -409,28 +431,6 @@ fn user.RunCommandWithVar() -> string {
 
     bb1: {
         _0 = await _3 -> [bb2];
-    }
-
-    bb2: {
-        goto -> bb3;
-    }
-
-    bb3: {
-        return;
-    }
-}
-
-fn user.RunCommand() -> string {
-    // Locals:
-    let _0: string // _0 // return
-    let _1: future<string>
-
-    bb0: {
-        _1 = dispatch_future const fn baml.sys.shell(const "echo hello") -> bb1;
-    }
-
-    bb1: {
-        _0 = await _1 -> [bb2];
     }
 
     bb2: {
