@@ -33,35 +33,6 @@ function DuplicateLiteral(x: int) -> string {
 //----
 //- diagnostics
 // Error: unreachable arm
-//      ╭─[ llm_types.baml:159:17 ]
-//      │
-//  159 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:189:17 ]
-//      │
-//  189 │ ╭─▶             _ => {
-//      ┆ ┆   
-//  194 │ ├─▶             }
-//      │ │                   
-//      │ ╰─────────────────── unreachable arm
-//      │     
-//      │     Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:208:17 ]
-//      │
-//  208 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
 //     ╭─[ match_match_unreachable_arms.baml:11:15 ]
 //     │
 //  11 │     n: int => "unreachable"

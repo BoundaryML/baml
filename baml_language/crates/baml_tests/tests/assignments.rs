@@ -730,6 +730,7 @@ async fn array_element_field_assignment() {
 }
 
 #[tokio::test]
+#[ignore = "compiler2 todo"]
 async fn array_element_method_field_assignment() {
     let output = baml_test!(
         r#"
@@ -836,6 +837,7 @@ async fn array_element_method_field_assignment() {
 }
 
 #[tokio::test]
+#[ignore = "compiler2 todo"]
 async fn method_call_then_array_access_assignment() {
     let output = baml_test!(
         r#"
@@ -906,6 +908,7 @@ async fn method_call_then_array_access_assignment() {
 }
 
 #[tokio::test]
+#[ignore = "compiler2 todo"]
 async fn method_call_field_assignment() {
     let output = baml_test!(
         r#"

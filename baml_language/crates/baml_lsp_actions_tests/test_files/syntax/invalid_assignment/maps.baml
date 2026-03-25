@@ -48,62 +48,6 @@ function MapAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:159:17 ]
-//      │
-//  159 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:189:17 ]
-//      │
-//  189 │ ╭─▶             _ => {
-//      ┆ ┆   
-//  194 │ ├─▶             }
-//      │ │                   
-//      │ ╰─────────────────── unreachable arm
-//      │     
-//      │     Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:208:17 ]
-//      │
-//  208 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
-// Error: type mismatch: expected map<string, int>, got map<"y", 2>
-//     ╭─[ invalid_assignment_maps.baml:16:5 ]
-//     │
-//  16 │     a = {"y": 2};
-//     │        ────┬────  
-//     │            ╰────── type mismatch: expected map<string, int>, got map<"y", 2>
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: type mismatch: expected map<string, string>, got map<"c", "d">
-//     ╭─[ invalid_assignment_maps.baml:19:5 ]
-//     │
-//  19 │     b = {"c": "d"};
-//     │        ─────┬─────  
-//     │             ╰─────── type mismatch: expected map<string, string>, got map<"c", "d">
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: type mismatch: expected map<string, user.Person>, got map<"q", user.Person>
-//     ╭─[ invalid_assignment_maps.baml:22:5 ]
-//     │
-//  22 │     c = {"q": Person { name: "B", age: 2 }};
-//     │        ──────────────────┬─────────────────  
-//     │                          ╰─────────────────── type mismatch: expected map<string, user.Person>, got map<"q", user.Person>
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
 // Error: type mismatch: expected map<string, int>, got map<"y", "wrong">
 //     ╭─[ invalid_assignment_maps.baml:28:5 ]
 //     │

@@ -308,7 +308,6 @@ function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.Exe
           return result : T
         }
   }
-  ?? 4032..4046: unreachable arm
 }
 function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> T throws never {
   { : T
@@ -334,7 +333,7 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
                           { : null
                             root.sys.sleep(active_delay_ms) : null
                           }
-                        throw e : never
+                        throw e : baml.errors.LlmClient
                       }
               result : T
             }
@@ -366,8 +365,6 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
           return result3 : T
         }
   }
-  ?? 5102..5246: unreachable arm
-  ?? 5591..5605: unreachable arm
 }
 class baml.llm.PrimitiveClientOptions {
   model: string | null

@@ -435,11 +435,11 @@ fn baml.llm.Client.execute_once(self: null, context: void, active_delay_ms: int)
     let _37: string
     let _38: type
     let _39: future<void>
-    let _40: void // e
+    let _40: baml.errors.LlmClient // e
     let _41: void
     let _42: bool
     let _43: future<void>
-    let _44: void
+    let _44: baml.errors.LlmClient
     let _45: void
     let _46: baml.llm.Client[]
     let _47: int // __for_idx

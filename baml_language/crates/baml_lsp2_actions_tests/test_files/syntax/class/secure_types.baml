@@ -118,6 +118,51 @@ class ComplexTypes {
 //     │ 
 //     │ Note: Error code: E0002
 // ────╯
+// Error: unresolved type: apple
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── unresolved type: apple
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: banana
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── unresolved type: banana
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: cherry
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── unresolved type: cherry
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: date_fruit
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── unresolved type: date_fruit
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: eggplant_vegetable
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── unresolved type: eggplant_vegetable
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
 // Error: unresolved type: char
 //     ╭─[ class_secure_types.baml:12:4 ]
 //     │
@@ -169,6 +214,51 @@ class ComplexTypes {
 //  14 │   l AlphaNumeric_123_456_789 | (int, bool?) | char[]
 //     │    ────────────────────────┬────────────────────────  
 //     │                            ╰────────────────────────── unresolved type: char
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: tuple_1
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── unresolved type: tuple_1
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: tuple_2
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── unresolved type: tuple_2
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: tuple_3
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── unresolved type: tuple_3
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: tuple_4
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── unresolved type: tuple_4
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: tuple_5
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── unresolved type: tuple_5
 //     │ 
 //     │ Note: Error code: E0002
 // ────╯

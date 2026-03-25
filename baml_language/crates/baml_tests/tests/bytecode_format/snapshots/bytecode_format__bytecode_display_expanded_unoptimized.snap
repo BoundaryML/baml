@@ -208,13 +208,13 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
      101   alloc_array 3           
      102   store_var 11            (scores)
      103   load_var 11             (scores)
-     104   load_var 12             (_48)
+     104   load_const 7            (0)
      105   load_var 8              (total)
      106   store_array_element     
      107   alloc_instance 2        (Report)
      108   copy 0                  
      109   load_var 11             (scores)
-     110   load_var 13             (_51)
+     110   load_const 7            (0)
      111   load_array_element      
      112   store_field 0           (score)
      113   copy 0                  
@@ -225,8 +225,8 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
      118   copy 0                  
      119   load_var 6              (base)
      120   load_var 5              (role_mult)
-     121   load_const 7            ("base")
-     122   load_const 8            ("role")
+     121   load_const 8            ("base")
+     122   load_const 9            ("role")
      123   alloc_map 2             
      124   store_field 2           (breakdown)
      125   return                  

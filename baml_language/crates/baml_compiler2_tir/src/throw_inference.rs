@@ -126,6 +126,69 @@ pub fn function_throw_sets<'db>(
                 call_edges.insert(key, collect_call_targets(expr_body));
             }
         }
+
+        // Also process class methods, which are not in ns.values.
+        for (class_name, def) in &ns.types {
+            let Definition::Class(class_loc) = def else {
+                continue;
+            };
+            let file = class_loc.file(db);
+            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let class_data = &item_tree[class_loc.id(db)];
+
+            for &method_id in &class_data.methods {
+                let method_data = &item_tree[method_id];
+                let method_name = &method_data.name;
+                let func_loc =
+                    baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
+                // Key as "ClassName.method_name" (with namespace prefix if any).
+                let method_short = Name::new(format!("{}.{}", class_name, method_name));
+                let key = function_key(db, func_loc, &method_short);
+
+                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                let body = baml_compiler2_hir::body::function_body(db, func_loc);
+
+                let declared_throws = sig.throws.as_ref().map(|te| {
+                    let mut diags = Vec::new();
+                    let ns_path =
+                        baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
+                    let lowered = lower_type_expr_in_ns(
+                        db,
+                        te,
+                        pkg_items,
+                        &ns_path,
+                        &method_data.generic_params,
+                        &mut diags,
+                    );
+                    drop(diags);
+                    flatten_ty_to_facts(&lowered)
+                });
+
+                let direct = if let Some(declared) = declared_throws.clone() {
+                    declared
+                } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) =
+                    body.as_ref()
+                {
+                    collect_direct_throws(db, pkg_items, expr_body)
+                } else {
+                    BTreeSet::new()
+                };
+
+                direct_facts.insert(key.clone(), direct);
+                has_declared_contract.insert(key.clone(), declared_throws.is_some());
+
+                if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
+                    // Rewrite "self.X" call targets to "ClassName.X" so edges
+                    // connect to the correct graph nodes.
+                    let raw_targets = collect_call_targets(expr_body);
+                    let rewritten: BTreeSet<Name> = raw_targets
+                        .into_iter()
+                        .map(|t| rewrite_self_target(&t, class_name))
+                        .collect();
+                    call_edges.insert(key, rewritten);
+                }
+            }
+        }
     }
 
     // Process call edges: for cross-package targets, merge their throw facts
@@ -288,6 +351,17 @@ fn throw_fact_from_expr<'db>(
             }
         }
         _ => Ty::Unknown,
+    }
+}
+
+/// Rewrite a call target name from `self.X` to `ClassName.X`.
+/// Other targets are returned unchanged.
+fn rewrite_self_target(target: &Name, class_name: &Name) -> Name {
+    let s = target.as_str();
+    if let Some(rest) = s.strip_prefix("self.") {
+        Name::new(format!("{}.{}", class_name, rest))
+    } else {
+        target.clone()
     }
 }
 

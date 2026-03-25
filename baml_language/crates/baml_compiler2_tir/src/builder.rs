@@ -1956,16 +1956,33 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn call_target_name(&self, callee_expr_id: ExprId, body: &ExprBody) -> Option<Name> {
         let segments = self.expr_to_path_segments(callee_expr_id, body)?;
-        if segments.is_empty() {
-            return None;
+        if segments.len() < 2 {
+            // Single-segment path (free function) — return as-is.
+            return if segments.is_empty() {
+                None
+            } else {
+                Some(segments[0].clone())
+            };
         }
-        Some(Name::new(
-            segments
-                .iter()
-                .map(Name::as_str)
-                .collect::<Vec<_>>()
-                .join("."),
-        ))
+        // Multi-segment: receiver.method — resolve the receiver's type to get
+        // the class name so the target matches throw_inference's "Class.method" keys.
+        let receiver = &segments[0];
+        let method = &segments[1];
+        if let Some(Ty::Class(qn)) = self.locals.get(receiver) {
+            let ns = qn.namespace();
+            let key = if ns.is_empty() {
+                format!("{}.{}", qn.name(), method)
+            } else {
+                let ns_str = ns.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
+                format!("{}.{}.{}", ns_str, qn.name(), method)
+            };
+            Some(Name::new(key))
+        } else {
+            // Receiver not a known local or not a class — fall back to raw path
+            Some(Name::new(
+                segments.iter().map(Name::as_str).collect::<Vec<_>>().join("."),
+            ))
+        }
     }
 
     fn expr_to_path_segments(&self, expr_id: ExprId, body: &ExprBody) -> Option<Vec<Name>> {
