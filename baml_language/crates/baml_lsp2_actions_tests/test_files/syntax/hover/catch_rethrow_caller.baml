@@ -35,12 +35,12 @@ function getProfile(req: int) -> bool throws Errors {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: extraneous throws declaration: Errors
+// Error: extraneous throws declaration: user.Errors
 //     ╭─[ hover_catch_rethrow_caller.baml:23:45 ]
 //     │
 //  23 │ function getProfile(req: int) -> bool throws Errors {
 //     │                                             ───┬───  
-//     │                                                ╰───── extraneous throws declaration: Errors
+//     │                                                ╰───── extraneous throws declaration: user.Errors
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

@@ -9,7 +9,6 @@ use syn::parse_macro_input;
 mod codegen_accessors;
 mod codegen_builtins;
 mod codegen_native;
-mod codegen_sys_ops;
 mod collect;
 mod parse;
 mod util;
@@ -38,17 +37,6 @@ pub fn generate_native_trait(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as BuiltinsInput);
     let collected = CollectedBuiltins::from_modules(&input.modules);
     codegen_native::generate(&collected).into()
-}
-
-/// Generate per-module traits for `sys_op` implementations.
-///
-/// Generates one trait per DSL module (e.g., `SysOpFs`, `SysOpHttp`, `SysOpLlm`)
-/// with clean typed methods and glue wiring.
-#[proc_macro]
-pub fn generate_sys_op_traits(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as BuiltinsInput);
-    let collected = CollectedBuiltins::from_modules(&input.modules);
-    codegen_sys_ops::generate(&collected).into()
 }
 
 /// Generate the complete `builtin_types` module from `with_builtins!` DSL.

@@ -16,4 +16,21 @@ function ThrowsEnumExact(x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: extraneous throws declaration: user.Errors
+//    ╭─[ throw_throws_enum_exact_match.baml:9:52 ]
+//    │
+//  9 │ function ThrowsEnumExact(x: int) -> string throws Errors {
+//    │                                                    ───┬───  
+//    │                                                       ╰───── extraneous throws declaration: user.Errors
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.InternalError, user.Errors.NotFoundError
+//    ╭─[ throw_throws_enum_exact_match.baml:9:52 ]
+//    │
+//  9 │ function ThrowsEnumExact(x: int) -> string throws Errors {
+//    │                                                    ───┬───  
+//    │                                                       ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.InternalError, user.Errors.NotFoundError
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯

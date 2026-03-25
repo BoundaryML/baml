@@ -1,0 +1,16 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.f() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 42_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

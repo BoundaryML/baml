@@ -40,21 +40,6 @@
 //! - `fixes_at(db, file, range) -> Vec<Fix>` — quick-fixes at a range.
 //!   Initially minimal: "Open in Playground" unconditionally.
 
-// Rust 1.93 surfaces a large amount of style-only Clippy churn in the merged
-// compiler2/LSP2 path. Keep the canary integration branch buildable and pay
-// these lints down separately from the merge stabilization work.
-#![allow(
-    clippy::bind_instead_of_map,
-    clippy::doc_markdown,
-    clippy::manual_let_else,
-    clippy::needless_borrow,
-    clippy::redundant_clone,
-    clippy::redundant_closure,
-    clippy::unnecessary_wraps,
-    clippy::used_underscore_binding,
-    clippy::useless_conversion
-)]
-
 pub mod actions;
 pub mod annotations;
 pub mod check;
@@ -67,6 +52,13 @@ pub mod tokens;
 pub mod type_info;
 pub mod usages;
 pub mod utils;
+
+#[cfg(test)]
+mod definition_at_tests;
+#[cfg(test)]
+mod testing;
+#[cfg(test)]
+mod usages_at_tests;
 
 // ── Db trait ──────────────────────────────────────────────────────────────────
 

@@ -1,7 +1,8 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function Ambiguous(input: string) -> string {
+function user.Ambiguous(input: string) -> string {
+    load_const null
     load_const "Ambiguous"
     load_var input
     load_const "input"
@@ -10,7 +11,8 @@ function Ambiguous(input: string) -> string {
     return
 }
 
-function Ambiguous.build_request(input: string) -> baml.http.Request {
+function user.Ambiguous$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Ambiguous"
     load_var input
     load_const "input"
@@ -19,7 +21,8 @@ function Ambiguous.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Ambiguous.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Ambiguous"
     load_var input
     load_const "input"
@@ -28,7 +31,8 @@ function Ambiguous.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function AnotherLLM(input: string) -> string {
+function user.AnotherLLM(input: string) -> string {
+    load_const null
     load_const "AnotherLLM"
     load_var input
     load_const "input"
@@ -37,7 +41,8 @@ function AnotherLLM(input: string) -> string {
     return
 }
 
-function AnotherLLM.build_request(input: string) -> baml.http.Request {
+function user.AnotherLLM$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "AnotherLLM"
     load_var input
     load_const "input"
@@ -46,7 +51,8 @@ function AnotherLLM.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function AnotherLLM.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.AnotherLLM$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "AnotherLLM"
     load_var input
     load_const "input"
@@ -55,7 +61,8 @@ function AnotherLLM.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function ChainedProcess(input: string) -> string {
+function user.ChainedProcess(input: string) -> string {
+    load_const null
     load_const "ChainedProcess"
     load_var input
     load_const "input"
@@ -64,7 +71,8 @@ function ChainedProcess(input: string) -> string {
     return
 }
 
-function ChainedProcess.build_request(input: string) -> baml.http.Request {
+function user.ChainedProcess$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "ChainedProcess"
     load_var input
     load_const "input"
@@ -73,7 +81,8 @@ function ChainedProcess.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function ChainedProcess.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "ChainedProcess"
     load_var input
     load_const "input"
@@ -82,7 +91,8 @@ function ChainedProcess.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function ExtractData(text: string) -> JsonData {
+function user.ExtractData(text: string) -> JsonData {
+    load_const null
     load_const "ExtractData"
     load_var text
     load_const "text"
@@ -91,7 +101,8 @@ function ExtractData(text: string) -> JsonData {
     return
 }
 
-function ExtractData.build_request(text: string) -> baml.http.Request {
+function user.ExtractData$build_request(text: string) -> baml.http.Request {
+    load_const null
     load_const "ExtractData"
     load_var text
     load_const "text"
@@ -100,7 +111,8 @@ function ExtractData.build_request(text: string) -> baml.http.Request {
     return
 }
 
-function ExtractData.render_prompt(text: string) -> baml.llm.PromptAst {
+function user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "ExtractData"
     load_var text
     load_const "text"
@@ -109,7 +121,8 @@ function ExtractData.render_prompt(text: string) -> baml.llm.PromptAst {
     return
 }
 
-function LLMAnalyze(text: string) -> Analysis {
+function user.LLMAnalyze(text: string) -> Analysis {
+    load_const null
     load_const "LLMAnalyze"
     load_var text
     load_const "text"
@@ -118,7 +131,8 @@ function LLMAnalyze(text: string) -> Analysis {
     return
 }
 
-function LLMAnalyze.build_request(text: string) -> baml.http.Request {
+function user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
+    load_const null
     load_const "LLMAnalyze"
     load_var text
     load_const "text"
@@ -127,7 +141,8 @@ function LLMAnalyze.build_request(text: string) -> baml.http.Request {
     return
 }
 
-function LLMAnalyze.render_prompt(text: string) -> baml.llm.PromptAst {
+function user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "LLMAnalyze"
     load_var text
     load_const "text"
@@ -136,7 +151,7 @@ function LLMAnalyze.render_prompt(text: string) -> baml.llm.PromptAst {
     return
 }
 
-function ProcessAnalysis(analysis: Analysis) -> string {
+function user.ProcessAnalysis(analysis: Analysis) -> string {
     load_var analysis
     load_field .score
     store_var score
@@ -165,31 +180,33 @@ function ProcessAnalysis(analysis: Analysis) -> string {
     load_var analysis
     load_field .sentiment
     bin_op +
-    return
+    jump L6
 
   L3:
     load_const "Neutral: "
     load_var analysis
     load_field .sentiment
     bin_op +
-    return
+    jump L6
 
   L4:
     load_const "Positive: "
     load_var analysis
     load_field .sentiment
     bin_op +
-    return
+    jump L6
 
   L5:
     load_const "Very positive: "
     load_var analysis
     load_field .sentiment
     bin_op +
+
+  L6:
     return
 }
 
-function ProcessData(data: JsonData) -> string {
+function user.ProcessData(data: JsonData) -> string {
     load_var data
     load_field .field1
     load_var data
@@ -202,14 +219,16 @@ function ProcessData(data: JsonData) -> string {
 
   L0:
     load_const "low"
-    return
+    jump L2
 
   L1:
     load_const "high"
+
+  L2:
     return
 }
 
-function SimpleCalc(a: int, b: int) -> int {
+function user.SimpleCalc(a: int, b: int) -> int {
     load_var a
     load_var b
     load_const 2

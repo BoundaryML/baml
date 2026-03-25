@@ -1,47 +1,26 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function Bar() -> foo {
-    true
+=== HIR2 ===
+type user.Json = int | float | string | user.Json[] | map<string, user.Json>
+type user.bar = int
+type user.foo = user.bar
+function user.Bar() -> user.foo  [expr] {
+  {  } true
 }
-
-function Foo() -> foo {
-    1
+function user.Baz() -> user.Json  [expr] {
+  {  } "hello"
 }
-
-function Baz() -> Json {
-    "hello"
+function user.Foo() -> user.foo  [expr] {
+  {  } 1
 }
-
-type bar = int
-
-type Json = int | float | string | Json[] | map<string, Json>
-
-type foo = bar
-
-type stream_bar = int
-
-type stream_Json = int | float | string | stream_Json[] | map<string, stream_Json>
-
-type stream_foo = stream_bar
-
-function EchoJSON(i: JSON) -> JSON {
-    NotJSON { inner: "Whoops" }
+class user.NotJSON {
+  inner: user.name
 }
-
-function MakeJSON(i: NotJSON) -> JSON {
-    i.inner
+type user.JSON = int | float | string | bool | user.JSON[] | map<string, user.json>
+function user.EchoJSON(i: user.JSON) -> user.JSON  [expr] {
+  {  } user.NotJSON { inner: "Whoops" }
 }
-
-class NotJSON {
-  inner: name
+function user.MakeJSON(i: user.NotJSON) -> user.JSON  [expr] {
+  {  } i.inner
 }
-
-type JSON = int | float | string | bool | JSON[] | map<string, json>
-
-class stream_NotJSON {
-  inner: null | name
-}
-
-type stream_JSON = int | float | string | bool | stream_JSON[] | map<string, json>

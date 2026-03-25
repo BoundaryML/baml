@@ -1,11 +1,9 @@
 //! Completion providers for different contexts.
 //!
-//! Each provider generates completions appropriate for a specific context.
+//! NOTE: HIR-based symbol completions are stubbed — pending compiler2 LSP action reimplementation.
+//! Context-independent completions (keywords, attributes, prompt helpers) are fully functional.
 
-use baml_db::{
-    baml_compiler_hir::{self, Db, ItemId, file_item_tree, project_items, type_ref_to_str},
-    baml_workspace::Project,
-};
+use baml_db::{baml_compiler2_hir::Db, baml_workspace::Project};
 
 use super::{CompletionItem, CompletionKind, context::ConfigBlockType};
 
@@ -59,6 +57,9 @@ pub(super) fn complete_top_level() -> Vec<CompletionItem> {
 // ============================================================================
 
 /// Completions for type annotation context.
+///
+/// NOTE: User-defined type completions are stubbed pending compiler2 reimplementation.
+#[allow(unused_variables)]
 pub(super) fn complete_types(
     db: &dyn Db,
     project: Project,
@@ -77,47 +78,6 @@ pub(super) fn complete_types(
         type_item("video").with_detail("Video media type"),
     ];
 
-    // User-defined types from the project
-    let project_items = project_items(db, project);
-    for item in project_items.items(db) {
-        match item {
-            ItemId::Class(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let class = &item_tree[loc.id(db)];
-                let name = class.name.as_str();
-                items.push(
-                    CompletionItem::new(name, CompletionKind::Class)
-                        .with_detail("class")
-                        .with_sort_text(format!("2{name}")),
-                );
-            }
-            ItemId::Enum(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let enum_def = &item_tree[loc.id(db)];
-                let name = enum_def.name.as_str();
-                items.push(
-                    CompletionItem::new(name, CompletionKind::Enum)
-                        .with_detail("enum")
-                        .with_sort_text(format!("2{name}")),
-                );
-            }
-            ItemId::TypeAlias(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let alias = &item_tree[loc.id(db)];
-                let name = alias.name.as_str();
-                items.push(
-                    CompletionItem::new(name, CompletionKind::TypeAlias)
-                        .with_detail("type alias")
-                        .with_sort_text(format!("2{name}")),
-                );
-            }
-            _ => {}
-        }
-    }
-
     // Filter by partial if provided
     if let Some(partial) = partial {
         let partial_lower = partial.to_lowercase();
@@ -132,115 +92,11 @@ pub(super) fn complete_types(
 // ============================================================================
 
 /// Completions for symbols (functions, classes, enums, clients).
+///
+/// NOTE: Stubbed pending compiler2 reimplementation. Returns empty.
+#[allow(unused_variables)]
 pub(super) fn complete_symbols(db: &dyn Db, project: Project) -> Vec<CompletionItem> {
-    let mut items = vec![];
-    let project_items = project_items(db, project);
-
-    for item in project_items.items(db) {
-        match item {
-            ItemId::Function(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let func = &item_tree[loc.id(db)];
-                let name = func.name.as_str();
-                let sig = baml_compiler_hir::function_signature(db, *loc);
-                let detail = format_function_signature_short(&sig);
-                items.push(
-                    CompletionItem::new(name, CompletionKind::Function)
-                        .with_detail(detail)
-                        .with_sort_text(format!("1{name}")),
-                );
-            }
-            ItemId::Class(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let class = &item_tree[loc.id(db)];
-                let name = class.name.as_str();
-                items.push(
-                    CompletionItem::new(name, CompletionKind::Class)
-                        .with_detail("class")
-                        .with_sort_text(format!("2{name}")),
-                );
-            }
-            ItemId::Enum(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let enum_def = &item_tree[loc.id(db)];
-                let name = enum_def.name.as_str();
-                items.push(
-                    CompletionItem::new(name, CompletionKind::Enum)
-                        .with_detail("enum")
-                        .with_sort_text(format!("2{name}")),
-                );
-            }
-            ItemId::Client(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let client = &item_tree[loc.id(db)];
-                let name = client.name.as_str();
-                items.push(
-                    CompletionItem::new(name, CompletionKind::Client)
-                        .with_detail("client")
-                        .with_sort_text(format!("3{name}")),
-                );
-            }
-            ItemId::Generator(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let generator = &item_tree[loc.id(db)];
-                let name = generator.name.as_str();
-                items.push(
-                    CompletionItem::new(name, CompletionKind::Generator)
-                        .with_detail("generator")
-                        .with_sort_text(format!("4{name}")),
-                );
-            }
-            ItemId::Test(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let test = &item_tree[loc.id(db)];
-                let name = test.name.as_str();
-                items.push(
-                    CompletionItem::new(name, CompletionKind::Test)
-                        .with_detail("test")
-                        .with_sort_text(format!("5{name}")),
-                );
-            }
-            ItemId::TypeAlias(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let alias = &item_tree[loc.id(db)];
-                let name = alias.name.as_str();
-                items.push(
-                    CompletionItem::new(name, CompletionKind::TypeAlias)
-                        .with_detail("type alias")
-                        .with_sort_text(format!("2{name}")),
-                );
-            }
-            ItemId::TemplateString(loc) => {
-                let file = loc.file(db);
-                let item_tree = file_item_tree(db, file);
-                let ts = &item_tree[loc.id(db)];
-                let name = ts.name.as_str();
-                items.push(
-                    CompletionItem::new(name, CompletionKind::TemplateString)
-                        .with_detail("template_string")
-                        .with_sort_text(format!("1{name}")),
-                );
-            }
-            ItemId::RetryPolicy(_) => {
-                // Retry policies are not offered as symbol completions.
-            }
-        }
-    }
-
-    items
-}
-
-/// Format a short function signature for completion detail.
-fn format_function_signature_short(sig: &baml_compiler_hir::FunctionSignature) -> String {
-    let params: Vec<String> = sig.params.iter().map(|p| p.name.to_string()).collect();
-    format!("fn({})", params.join(", "))
+    Vec::new()
 }
 
 // ============================================================================
@@ -249,82 +105,14 @@ fn format_function_signature_short(sig: &baml_compiler_hir::FunctionSignature) -
 
 /// Completions after a dot (field access).
 ///
-/// Handles both user-defined items (`MyClass.`, `Status.`) and namespaced
-/// paths (`baml.`, `baml.llm.`) by querying the HIR scope tree.
+/// NOTE: Stubbed pending compiler2 reimplementation. Returns empty.
+#[allow(unused_variables)]
 pub(super) fn complete_field_access(
     db: &dyn Db,
     project: Project,
     base_text: &str,
 ) -> Vec<CompletionItem> {
-    use baml_db::{
-        Name,
-        baml_compiler_hir::path_resolve::{ScopeChild, scope_children},
-    };
-
-    // Split the base text into path segments and query the scope tree.
-    let segments: Vec<Name> = base_text.split('.').map(Name::new).collect();
-
-    let children = scope_children(db, project, &segments);
-
-    if !children.is_empty() {
-        return children
-            .into_iter()
-            .map(|child| match child {
-                ScopeChild::Namespace(name) => {
-                    CompletionItem::new(name.as_str(), CompletionKind::Property)
-                        .with_detail("namespace")
-                        .with_sort_text(format!("0{name}"))
-                }
-                ScopeChild::BuiltinFunction { name, .. } => {
-                    CompletionItem::new(name.as_str(), CompletionKind::Function)
-                        .with_detail("builtin function")
-                        .with_sort_text(format!("1{name}"))
-                }
-                ScopeChild::Function { name, .. } => {
-                    CompletionItem::new(name.as_str(), CompletionKind::Function)
-                        .with_detail("function")
-                        .with_sort_text(format!("1{name}"))
-                }
-                ScopeChild::Enum { name, .. } => {
-                    CompletionItem::new(name.as_str(), CompletionKind::Enum)
-                        .with_detail("enum")
-                        .with_sort_text(format!("1{name}"))
-                }
-                ScopeChild::Variant(name) => {
-                    CompletionItem::new(name.as_str(), CompletionKind::EnumVariant)
-                        .with_detail("variant")
-                        .with_sort_text(format!("0{name}"))
-                }
-            })
-            .collect();
-    }
-
-    // Fall back to class field completion for user-defined classes.
-    let mut items = vec![];
-    let project_items = project_items(db, project);
-
-    for item in project_items.items(db) {
-        if let ItemId::Class(loc) = item {
-            let file = loc.file(db);
-            let item_tree = file_item_tree(db, file);
-            let class = &item_tree[loc.id(db)];
-
-            if class.name.as_str() == base_text {
-                for field in &class.fields {
-                    let name = field.name.as_str();
-                    let type_str = type_ref_to_str(&field.type_ref);
-                    items.push(
-                        CompletionItem::new(name, CompletionKind::Field)
-                            .with_detail(type_str)
-                            .with_sort_text(format!("0{name}")),
-                    );
-                }
-                return items;
-            }
-        }
-    }
-
-    items
+    Vec::new()
 }
 
 // ============================================================================
@@ -344,14 +132,12 @@ pub(super) fn complete_prompt_underscore() -> Vec<CompletionItem> {
 pub(super) fn complete_prompt_ctx(partial_path: &[String]) -> Vec<CompletionItem> {
     match partial_path {
         [] => {
-            // ctx. - show top-level context properties
             vec![
                 property("output_format").with_detail("Output format specification"),
                 property("client").with_detail("Client configuration"),
             ]
         }
         [s] if s == "client" => {
-            // ctx.client. - show client properties
             vec![
                 property("name").with_detail("Client name"),
                 property("provider").with_detail("Client provider"),
@@ -386,7 +172,6 @@ pub(super) fn complete_field_attributes(partial: Option<&str>) -> Vec<Completion
         attr("@check").with_detail("Add a validation check"),
     ];
 
-    // Filter by partial if provided
     if let Some(partial) = partial {
         let partial_lower = partial.to_lowercase();
         items.retain(|item| item.label.to_lowercase().contains(&partial_lower));
@@ -399,7 +184,6 @@ pub(super) fn complete_field_attributes(partial: Option<&str>) -> Vec<Completion
 pub(super) fn complete_block_attributes(partial: Option<&str>) -> Vec<CompletionItem> {
     let mut items = vec![attr("@@dynamic").with_detail("Mark this type as dynamic")];
 
-    // Filter by partial if provided
     if let Some(partial) = partial {
         let partial_lower = partial.to_lowercase();
         items.retain(|item| item.label.to_lowercase().contains(&partial_lower));
@@ -447,9 +231,11 @@ pub(super) fn complete_config_block(block_type: &ConfigBlockType) -> Vec<Complet
 // ============================================================================
 
 /// Completions for general expression context.
+///
+/// NOTE: Symbol completions are stubbed pending compiler2 reimplementation.
+#[allow(unused_variables)]
 pub(super) fn complete_expression_context(db: &dyn Db, project: Project) -> Vec<CompletionItem> {
-    let mut items = vec![
-        // Common expression keywords
+    vec![
         keyword("if").with_detail("If expression"),
         keyword("match").with_detail("Match expression"),
         keyword("for").with_detail("For loop"),
@@ -457,10 +243,5 @@ pub(super) fn complete_expression_context(db: &dyn Db, project: Project) -> Vec<
         keyword("true").with_detail("Boolean true"),
         keyword("false").with_detail("Boolean false"),
         keyword("null").with_detail("Null value"),
-    ];
-
-    // Add symbols
-    items.extend(complete_symbols(db, project));
-
-    items
+    ]
 }

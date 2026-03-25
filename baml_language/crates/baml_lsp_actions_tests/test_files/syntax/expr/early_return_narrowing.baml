@@ -91,39 +91,40 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 
 //----
 //- diagnostics
-// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     ╭─[ expr_early_return_narrowing.baml:62:9 ]
-//     │
-//  62 │     if (x instanceof NarrowBar) {
-//     │         ───────────┬──────────  
-//     │                    ╰──────────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     │ 
-//     │ Note: Error code: E0098
-// ────╯
-// Error: Type `NarrowFoo | NarrowBar` has no field `field`
-//     ╭─[ expr_early_return_narrowing.baml:66:12 ]
-//     │
-//  66 │     return x.field;
-//     │            ───┬───  
-//     │               ╰───── Type `NarrowFoo | NarrowBar` has no field `field`
-//     │ 
-//     │ Note: Error code: E0007
-// ────╯
-// Error: `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     ╭─[ expr_early_return_narrowing.baml:31:9 ]
-//     │
-//  31 │     if (x instanceof NarrowBar) {
-//     │         ───────────┬──────────  
-//     │                    ╰──────────── `instanceof` is no longer supported. Use a `match` expression for type checking instead.
-//     │ 
-//     │ Note: Error code: E0098
-// ────╯
-// Error: Type `NarrowFoo | NarrowBar` has no field `field`
-//     ╭─[ expr_early_return_narrowing.baml:35:12 ]
+// Error: unresolved member: user.NarrowBar.field
+//     ╭─[ expr_early_return_narrowing.baml:35:11 ]
 //     │
 //  35 │     return x.field;
-//     │            ───┬───  
-//     │               ╰───── Type `NarrowFoo | NarrowBar` has no field `field`
+//     │           ────┬───  
+//     │               ╰───── unresolved member: user.NarrowBar.field
 //     │ 
-//     │ Note: Error code: E0007
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unresolved member: user.NarrowBar.field
+//     ╭─[ expr_early_return_narrowing.baml:66:11 ]
+//     │
+//  66 │     return x.field;
+//     │           ────┬───  
+//     │               ╰───── unresolved member: user.NarrowBar.field
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unresolved member: user.NarrowBar.field
+//     ╭─[ expr_early_return_narrowing.baml:72:11 ]
+//     │
+//  72 │     return x.field;
+//     │           ────┬───  
+//     │               ╰───── unresolved member: user.NarrowBar.field
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unresolved member: user.NarrowFoo.other
+//     ╭─[ expr_early_return_narrowing.baml:73:4 ]
+//     │
+//  73 │ ╭─▶   }
+//  74 │ ├─▶   x.other
+//     │ │               
+//     │ ╰─────────────── unresolved member: user.NarrowFoo.other
+//     │     
+//     │     Note: Error code: E0001
 // ────╯

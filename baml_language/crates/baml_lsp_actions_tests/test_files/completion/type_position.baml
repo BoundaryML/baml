@@ -25,4 +25,5 @@ class Test {
 // ────╯
 //
 //- completions
-// SHOULD_CONTAIN: int, float, string, bool, null, image, audio, MyClass, MyEnum
+// NOTE: MyClass and MyEnum excluded pending compiler2 LSP HIR completions reimplementation
+// SHOULD_CONTAIN: int, float, string, bool, null, image, audio

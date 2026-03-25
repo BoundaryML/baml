@@ -7,16 +7,13 @@ use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
 use super::ParsingContext;
 // use baml_types::TypeValue;
 use crate::{
-    deserializer::types::DeserializerMeta,
-    sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent},
-};
-use crate::{
     deserializer::{
         coercer::ParsingError,
         deserialize_flags::{DeserializerConditions, Flag},
-        types::ValueWithFlags,
+        types::{DeserializerMeta, ValueWithFlags},
     },
     jsonish,
+    sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent},
 };
 
 /// Checks if `raw_value` matches `parse_into` using the same heuristic

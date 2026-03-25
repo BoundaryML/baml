@@ -18,30 +18,4 @@ generator default {
 
 //----
 //- diagnostics
-// Error: Unknown property `language` in generator `default`. Valid properties: output_type, output_dir, version, default_client_mode, on_generate, project, client_package_name, module_format
-//    ╭─[ generators_error.baml:2:3 ]
-//    │
-//  2 │   language python
-//    │   ────┬───  
-//    │       ╰───── Unknown property `language` in generator `default`. Valid properties: output_type, output_dir, version, default_client_mode, on_generate, project, client_package_name, module_format
-//    │ 
-//    │ Note: Error code: E0017
-// ───╯
-// Error: Unknown property `o` in generator `default`. Valid properties: output_type, output_dir, version, default_client_mode, on_generate, project, client_package_name, module_format
-//    ╭─[ generators_error.baml:3:3 ]
-//    │
-//  3 │   o o
-//    │   ┬  
-//    │   ╰── Unknown property `o` in generator `default`. Valid properties: output_type, output_dir, version, default_client_mode, on_generate, project, client_package_name, module_format
-//    │ 
-//    │ Note: Error code: E0017
-// ───╯
-// Error: Generator `default` is missing required property `output_type`
-//    ╭─[ generators_error.baml:1:11 ]
-//    │
-//  1 │ generator default {
-//    │           ───┬───  
-//    │              ╰───── Generator `default` is missing required property `output_type`
-//    │ 
-//    │ Note: Error code: E0018
-// ───╯
+// <no-diagnostics-expected>

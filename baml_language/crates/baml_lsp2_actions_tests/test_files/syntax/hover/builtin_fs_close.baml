@@ -9,15 +9,7 @@ function TestFileClose() -> string {
 
 //----
 //- diagnostics
-// Error: unresolved name: baml
-//    ╭─[ hover_builtin_fs_close.baml:4:12 ]
-//    │
-//  4 │     let f = baml.fs.open("example.txt");
-//    │            ──────┬──────  
-//    │                  ╰──────── unresolved name: baml
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// <no-diagnostics-expected>
 //
 //- on_hover expressions
 // hover at hover_builtin_fs_close.baml:6:12

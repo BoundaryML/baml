@@ -1,7 +1,1207 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6599:2 ]
+      │
+ 6599 │ ╭─▶ }
+      ┆ ┆   
+ 6604 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6606:43 ]
+      │
+ 6606 │ ╭─▶ function Process2(input: string) -> string {
+      ┆ ┆   
+ 6609 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6609:2 ]
+      │
+ 6609 │ ╭─▶ }
+      ┆ ┆   
+ 6614 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6616:43 ]
+      │
+ 6616 │ ╭─▶ function Process4(input: string) -> string {
+      ┆ ┆   
+ 6619 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6619:2 ]
+      │
+ 6619 │ ╭─▶ }
+      ┆ ┆   
+ 6624 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6624:2 ]
+      │
+ 6624 │ ╭─▶ }
+      ┆ ┆   
+ 6629 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6629:2 ]
+      │
+ 6629 │ ╭─▶ }
+      ┆ ┆   
+ 6634 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6634:2 ]
+      │
+ 6634 │ ╭─▶ }
+      ┆ ┆   
+ 6639 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6639:2 ]
+      │
+ 6639 │ ╭─▶ }
+      ┆ ┆   
+ 6644 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6644:2 ]
+      │
+ 6644 │ ╭─▶ }
+      ┆ ┆   
+ 6649 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6649:2 ]
+      │
+ 6649 │ ╭─▶ }
+      ┆ ┆   
+ 6654 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6654:2 ]
+      │
+ 6654 │ ╭─▶ }
+      ┆ ┆   
+ 6659 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6661:44 ]
+      │
+ 6661 │ ╭─▶ function Process13(input: string) -> string {
+      ┆ ┆   
+ 6664 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6666:44 ]
+      │
+ 6666 │ ╭─▶ function Process14(input: string) -> string {
+      ┆ ┆   
+ 6669 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6669:2 ]
+      │
+ 6669 │ ╭─▶ }
+      ┆ ┆   
+ 6674 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6674:2 ]
+      │
+ 6674 │ ╭─▶ }
+      ┆ ┆   
+ 6679 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6679:2 ]
+      │
+ 6679 │ ╭─▶ }
+      ┆ ┆   
+ 6684 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6686:44 ]
+      │
+ 6686 │ ╭─▶ function Process18(input: string) -> string {
+      ┆ ┆   
+ 6689 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6689:2 ]
+      │
+ 6689 │ ╭─▶ }
+      ┆ ┆   
+ 6694 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6694:2 ]
+      │
+ 6694 │ ╭─▶ }
+      ┆ ┆   
+ 6699 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6699:2 ]
+      │
+ 6699 │ ╭─▶ }
+      ┆ ┆   
+ 6704 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6704:2 ]
+      │
+ 6704 │ ╭─▶ }
+      ┆ ┆   
+ 6709 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6711:44 ]
+      │
+ 6711 │ ╭─▶ function Process23(input: string) -> string {
+      ┆ ┆   
+ 6714 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6714:2 ]
+      │
+ 6714 │ ╭─▶ }
+      ┆ ┆   
+ 6719 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6721:44 ]
+      │
+ 6721 │ ╭─▶ function Process25(input: string) -> string {
+      ┆ ┆   
+ 6724 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6726:44 ]
+      │
+ 6726 │ ╭─▶ function Process26(input: string) -> string {
+      ┆ ┆   
+ 6729 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6731:44 ]
+      │
+ 6731 │ ╭─▶ function Process27(input: string) -> string {
+      ┆ ┆   
+ 6734 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6734:2 ]
+      │
+ 6734 │ ╭─▶ }
+      ┆ ┆   
+ 6739 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6739:2 ]
+      │
+ 6739 │ ╭─▶ }
+      ┆ ┆   
+ 6744 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6744:2 ]
+      │
+ 6744 │ ╭─▶ }
+      ┆ ┆   
+ 6749 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6749:2 ]
+      │
+ 6749 │ ╭─▶ }
+      ┆ ┆   
+ 6754 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6754:2 ]
+      │
+ 6754 │ ╭─▶ }
+      ┆ ┆   
+ 6759 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6761:44 ]
+      │
+ 6761 │ ╭─▶ function Process33(input: string) -> string {
+      ┆ ┆   
+ 6764 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6764:2 ]
+      │
+ 6764 │ ╭─▶ }
+      ┆ ┆   
+ 6769 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6769:2 ]
+      │
+ 6769 │ ╭─▶ }
+      ┆ ┆   
+ 6774 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6774:2 ]
+      │
+ 6774 │ ╭─▶ }
+      ┆ ┆   
+ 6779 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6781:44 ]
+      │
+ 6781 │ ╭─▶ function Process37(input: string) -> string {
+      ┆ ┆   
+ 6784 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6784:2 ]
+      │
+ 6784 │ ╭─▶ }
+      ┆ ┆   
+ 6789 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6791:44 ]
+      │
+ 6791 │ ╭─▶ function Process39(input: string) -> string {
+      ┆ ┆   
+ 6794 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6796:44 ]
+      │
+ 6796 │ ╭─▶ function Process40(input: string) -> string {
+      ┆ ┆   
+ 6799 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6799:2 ]
+      │
+ 6799 │ ╭─▶ }
+      ┆ ┆   
+ 6804 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6804:2 ]
+      │
+ 6804 │ ╭─▶ }
+      ┆ ┆   
+ 6809 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6811:44 ]
+      │
+ 6811 │ ╭─▶ function Process43(input: string) -> string {
+      ┆ ┆   
+ 6814 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6814:2 ]
+      │
+ 6814 │ ╭─▶ }
+      ┆ ┆   
+ 6819 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6819:2 ]
+      │
+ 6819 │ ╭─▶ }
+      ┆ ┆   
+ 6824 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6826:44 ]
+      │
+ 6826 │ ╭─▶ function Process46(input: string) -> string {
+      ┆ ┆   
+ 6829 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6829:2 ]
+      │
+ 6829 │ ╭─▶ }
+      ┆ ┆   
+ 6834 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6834:2 ]
+      │
+ 6834 │ ╭─▶ }
+      ┆ ┆   
+ 6839 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6841:44 ]
+      │
+ 6841 │ ╭─▶ function Process49(input: string) -> string {
+      ┆ ┆   
+ 6844 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6846:44 ]
+      │
+ 6846 │ ╭─▶ function Process50(input: string) -> string {
+      ┆ ┆   
+ 6849 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6849:2 ]
+      │
+ 6849 │ ╭─▶ }
+      ┆ ┆   
+ 6854 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6854:2 ]
+      │
+ 6854 │ ╭─▶ }
+      ┆ ┆   
+ 6859 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6859:2 ]
+      │
+ 6859 │ ╭─▶ }
+      ┆ ┆   
+ 6864 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6864:2 ]
+      │
+ 6864 │ ╭─▶ }
+      ┆ ┆   
+ 6869 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6869:2 ]
+      │
+ 6869 │ ╭─▶ }
+      ┆ ┆   
+ 6874 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6876:44 ]
+      │
+ 6876 │ ╭─▶ function Process56(input: string) -> string {
+      ┆ ┆   
+ 6879 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6881:44 ]
+      │
+ 6881 │ ╭─▶ function Process57(input: string) -> string {
+      ┆ ┆   
+ 6884 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6886:44 ]
+      │
+ 6886 │ ╭─▶ function Process58(input: string) -> string {
+      ┆ ┆   
+ 6889 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6889:2 ]
+      │
+ 6889 │ ╭─▶ }
+      ┆ ┆   
+ 6894 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6896:44 ]
+      │
+ 6896 │ ╭─▶ function Process60(input: string) -> string {
+      ┆ ┆   
+ 6899 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6901:44 ]
+      │
+ 6901 │ ╭─▶ function Process61(input: string) -> string {
+      ┆ ┆   
+ 6904 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6906:44 ]
+      │
+ 6906 │ ╭─▶ function Process62(input: string) -> string {
+      ┆ ┆   
+ 6909 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6911:44 ]
+      │
+ 6911 │ ╭─▶ function Process63(input: string) -> string {
+      ┆ ┆   
+ 6914 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6914:2 ]
+      │
+ 6914 │ ╭─▶ }
+      ┆ ┆   
+ 6919 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6919:2 ]
+      │
+ 6919 │ ╭─▶ }
+      ┆ ┆   
+ 6924 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6926:44 ]
+      │
+ 6926 │ ╭─▶ function Process66(input: string) -> string {
+      ┆ ┆   
+ 6929 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6931:44 ]
+      │
+ 6931 │ ╭─▶ function Process67(input: string) -> string {
+      ┆ ┆   
+ 6934 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6934:2 ]
+      │
+ 6934 │ ╭─▶ }
+      ┆ ┆   
+ 6939 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6941:44 ]
+      │
+ 6941 │ ╭─▶ function Process69(input: string) -> string {
+      ┆ ┆   
+ 6944 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6946:44 ]
+      │
+ 6946 │ ╭─▶ function Process70(input: string) -> string {
+      ┆ ┆   
+ 6949 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6949:2 ]
+      │
+ 6949 │ ╭─▶ }
+      ┆ ┆   
+ 6954 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6954:2 ]
+      │
+ 6954 │ ╭─▶ }
+      ┆ ┆   
+ 6959 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6959:2 ]
+      │
+ 6959 │ ╭─▶ }
+      ┆ ┆   
+ 6964 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6964:2 ]
+      │
+ 6964 │ ╭─▶ }
+      ┆ ┆   
+ 6969 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6969:2 ]
+      │
+ 6969 │ ╭─▶ }
+      ┆ ┆   
+ 6974 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6974:2 ]
+      │
+ 6974 │ ╭─▶ }
+      ┆ ┆   
+ 6979 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6979:2 ]
+      │
+ 6979 │ ╭─▶ }
+      ┆ ┆   
+ 6984 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6984:2 ]
+      │
+ 6984 │ ╭─▶ }
+      ┆ ┆   
+ 6989 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6989:2 ]
+      │
+ 6989 │ ╭─▶ }
+      ┆ ┆   
+ 6994 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6994:2 ]
+      │
+ 6994 │ ╭─▶ }
+      ┆ ┆   
+ 6999 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:6999:2 ]
+      │
+ 6999 │ ╭─▶ }
+      ┆ ┆   
+ 7004 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7006:44 ]
+      │
+ 7006 │ ╭─▶ function Process82(input: string) -> string {
+      ┆ ┆   
+ 7009 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7011:44 ]
+      │
+ 7011 │ ╭─▶ function Process83(input: string) -> string {
+      ┆ ┆   
+ 7014 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7014:2 ]
+      │
+ 7014 │ ╭─▶ }
+      ┆ ┆   
+ 7019 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7019:2 ]
+      │
+ 7019 │ ╭─▶ }
+      ┆ ┆   
+ 7024 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7024:2 ]
+      │
+ 7024 │ ╭─▶ }
+      ┆ ┆   
+ 7029 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7029:2 ]
+      │
+ 7029 │ ╭─▶ }
+      ┆ ┆   
+ 7034 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7034:2 ]
+      │
+ 7034 │ ╭─▶ }
+      ┆ ┆   
+ 7039 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7039:2 ]
+      │
+ 7039 │ ╭─▶ }
+      ┆ ┆   
+ 7044 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7044:2 ]
+      │
+ 7044 │ ╭─▶ }
+      ┆ ┆   
+ 7049 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7051:44 ]
+      │
+ 7051 │ ╭─▶ function Process91(input: string) -> string {
+      ┆ ┆   
+ 7054 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7054:2 ]
+      │
+ 7054 │ ╭─▶ }
+      ┆ ┆   
+ 7059 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7061:44 ]
+      │
+ 7061 │ ╭─▶ function Process93(input: string) -> string {
+      ┆ ┆   
+ 7064 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7064:2 ]
+      │
+ 7064 │ ╭─▶ }
+      ┆ ┆   
+ 7069 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7069:2 ]
+      │
+ 7069 │ ╭─▶ }
+      ┆ ┆   
+ 7074 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7076:44 ]
+      │
+ 7076 │ ╭─▶ function Process96(input: string) -> string {
+      ┆ ┆   
+ 7079 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7079:2 ]
+      │
+ 7079 │ ╭─▶ }
+      ┆ ┆   
+ 7084 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7086:44 ]
+      │
+ 7086 │ ╭─▶ function Process98(input: string) -> string {
+      ┆ ┆   
+ 7089 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7089:2 ]
+      │
+ 7089 │ ╭─▶ }
+      ┆ ┆   
+ 7094 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
+  [type] Error: unresolved name: GPT4
+      ╭─[ large_file.baml:7094:2 ]
+      │
+ 7094 │ ╭─▶ }
+      ┆ ┆   
+ 7099 │ ├─▶ }
+      │ │       
+      │ ╰─────── unresolved name: GPT4
+      │     
+      │     Note: Error code: E0001
+──────╯
+
   [parse] Error: Expected top-level declaration, found identifier
    ╭─[ rust.baml:7:1 ]
    │
@@ -940,6 +2140,16 @@ source: crates/baml_tests/src/generated_tests.rs
     │                                ╰── Expected top-level declaration, found '{'
     │ 
     │ Note: Error code: E0010
+────╯
+
+  [type] Error: unresolved type: crate
+    ╭─[ rust.baml:30:28 ]
+    │
+ 30 │             type Language = crate::BamlLanguage;
+    │                            ───┬──  
+    │                               ╰──── unresolved type: crate
+    │ 
+    │ Note: Error code: E0002
 ────╯
 
   [parse] Error: Expected top-level declaration, found '::'
@@ -4340,6 +5550,16 @@ source: crates/baml_tests/src/generated_tests.rs
      │                       ╰── Expected top-level declaration, found '{'
      │ 
      │ Note: Error code: E0010
+─────╯
+
+  [type] Error: unresolved type: crate
+     ╭─[ rust.baml:203:20 ]
+     │
+ 203 │     type Language = crate::BamlLanguage;
+     │                    ───┬──  
+     │                       ╰──── unresolved type: crate
+     │ 
+     │ Note: Error code: E0002
 ─────╯
 
   [parse] Error: Expected top-level declaration, found '::'
@@ -7782,6 +9002,15 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0010
 ─────╯
 
+  [type] Error: missing return: expected `int`
+    ╭─[ very_invalid.baml:5:30 ]
+    │
+  5 │ ╭─▶ function BodyTorture() -> int {
+    ┆ ┆   
+    │     
+    │     Note: Error code: E0001
+────╯
+
   [parse] Error: Expected expression, found error
    ╭─[ very_invalid.baml:6:11 ]
    │
@@ -7802,73 +9031,12 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [validation] Error: Duplicate type alias `Language`
-     ╭─[ rust.baml:30:18 ]
-     │
-  30 │             type Language = crate::BamlLanguage;
-     │                  ────┬───  
-     │                      ╰───── type alias `Language` redefined here
-     │ 
- 203 │     type Language = crate::BamlLanguage;
-     │          ────┬───  
-     │              ╰───── `Language` first defined in rust.baml
-     │ 
-     │ Note: Error code: E0011
-─────╯
-
-  [validation] Error: Duplicate type alias `Language`
-     ╭─[ rust.baml:203:10 ]
-     │
- 203 │     type Language = crate::BamlLanguage;
-     │          ────┬───  
-     │              ╰───── type alias `Language` redefined here
-     │
-     ├─[ rust.baml:203:10 ]
-     │
-  30 │             type Language = crate::BamlLanguage;
-     │                  ────┬───  
-     │                      ╰───── `Language` first defined in rust.baml
-     │ 
-     │ Note: Error code: E0011
-─────╯
-
-  [type] Error: Unknown type `crate`
-    ╭─[ rust.baml:30:28 ]
-    │
- 30 │             type Language = crate::BamlLanguage;
-    │                            ───┬──  
-    │                               ╰──── Unknown type `crate`
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [type] Error: Unknown type `crate`
-    ╭─[ rust.baml:30:28 ]
-    │
- 30 │             type Language = crate::BamlLanguage;
-    │                            ───┬──  
-    │                               ╰──── Unknown type `crate`
-    │ 
-    │ Note: Error code: E0002
-────╯
-
-  [hir] Error: Condition in `while` statement must be wrapped in parentheses.
-    ╭─[ very_invalid.baml:8:11 ]
-    │
-  8 │ ╭─▶   while \ {
-    ┆ ┆   
- 10 │ ├─▶   }
-    │ │         
-    │ ╰───────── Condition in `while` statement must be wrapped in parentheses.
-    │     
-    │     Note: Error code: E0030
-────╯
-
-  [type] Error: Missing return expression. Function expects `int` but body has no final expression.
-    ╭─[ very_invalid.baml:5:30 ]
-    │
-  5 │ ╭─▶ function BodyTorture() -> int {
-    ┆ ┆   
-    │     
-    │     Note: Error code: E0029
-────╯
+  [type] Error: unresolved name: x
+   ╭─[ very_invalid.baml:9:8 ]
+   │
+ 9 │       x += 1;
+   │        ┬  
+   │        ╰── unresolved name: x
+   │ 
+   │ Note: Error code: E0001
+───╯

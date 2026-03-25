@@ -130,10 +130,13 @@ pub(crate) struct NativeFnDef {
     /// Whether this is a `sys_op` function (runs async outside VM).
     pub is_sys_op: bool,
     /// Whether this `sys_op` needs engine context (marked with `#[uses(engine_ctx)]`).
+    #[allow(dead_code)]
     pub uses_engine_ctx: bool,
     /// Contract error categories from `#[throws(Io, Timeout)]`.
+    #[allow(dead_code)]
     pub throws: Vec<String>,
     /// Contract panic categories from `#[panics(HostPanic)]`.
+    #[allow(dead_code)]
     pub panics: Vec<String>,
 }
 
@@ -184,6 +187,7 @@ pub(crate) struct AccessorFieldDef {
 /// and then uses the subset of fields it needs.
 pub(crate) struct CollectedBuiltins {
     /// Map from struct name to full path (e.g., `"File"` → `"baml.fs.File"`).
+    #[allow(dead_code)]
     pub builtin_types: HashMap<String, String>,
     /// Builtin function definitions (for signature registration).
     pub defs: Vec<BuiltinDef>,

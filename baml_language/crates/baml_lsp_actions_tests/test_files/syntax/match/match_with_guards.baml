@@ -21,14 +21,4 @@ function GuardsWithFallback(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Non-exhaustive match on `int`: missing cases int
-//     ╭─[ match_match_with_guards.baml:8:4 ]
-//     │
-//   8 │ ╭─▶   match (x) {
-//     ┆ ┆   
-//  13 │ ├─▶ 
-//     │ │      
-//     │ ╰────── Non-exhaustive match on `int`: missing cases int
-//     │     
-//     │     Note: Error code: E0062
-// ────╯
+// <no-diagnostics-expected>

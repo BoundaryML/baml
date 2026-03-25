@@ -43,9 +43,8 @@ use crate::{Db, definition::Location, utils};
 /// and decide whether to include it.
 pub fn usages_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Location> {
     // ── Step 1: find and resolve the token at the cursor ─────────────────────
-    let token = match utils::find_token_at_offset(db, file, offset) {
-        Some(t) => t,
-        None => return Vec::new(),
+    let Some(token) = utils::find_token_at_offset(db, file, offset) else {
+        return Vec::new();
     };
 
     if token.kind() != SyntaxKind::WORD {
@@ -159,11 +158,11 @@ fn find_local_usages(
     name_text: &str,
     target_resolved: &ResolvedName<'_>,
 ) -> Vec<Location> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
 
     // Find the enclosing Function scope.
-    let scope_id = index.scope_at_offset(at_offset);
+    let scope_id = index.scope_at_offset(at_offset, None);
     let enclosing_func_scope = index
         .ancestor_scopes(scope_id)
         .into_iter()
@@ -287,11 +286,13 @@ fn same_local_definition(a: &ResolvedName<'_>, b: &ResolvedName<'_>) -> bool {
 /// We also always include `reference_file` itself, in case it contributes no
 /// top-level items (e.g. a file that is only a consumer, not a definer).
 fn collect_source_files(db: &dyn Db, reference_file: SourceFile) -> Vec<SourceFile> {
-    use baml_compiler2_hir::{file_package::file_package, package::PackageId};
-    use baml_compiler2_ppir::package_items;
+    use baml_compiler2_hir::{
+        file_package::file_package,
+        package::{PackageId, package_items},
+    };
 
     let pkg_info = file_package(db, reference_file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = PackageId::new(db, pkg_info.package);
     let items = package_items(db, pkg_id);
 
     // `PackageItems.namespaces` maps namespace path -> `NamespaceItems`.

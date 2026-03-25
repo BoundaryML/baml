@@ -85,8 +85,8 @@ pub struct InlineAnnotation {
 /// queries (`function_body`, `function_body_source_map`,
 /// `infer_scope_types`, `file_item_tree`, `file_semantic_index`).
 pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
 
     let mut out: Vec<InlineAnnotation> = Vec::new();
 
@@ -153,26 +153,23 @@ pub fn annotations(db: &dyn Db, file: SourceFile) -> Vec<InlineAnnotation> {
             }
 
             // Look up the inferred type.
-            let ty = match inference.binding_type(*pattern) {
-                Some(ty) => ty,
-                None => {
-                    // Try other scopes for nested blocks.
-                    let ty_str = find_binding_ty_any_scope(db, &index, *pattern);
-                    if let Some(ty_str) = ty_str {
-                        // Emit hint: position at end of pattern span.
-                        let pat_span = source_map.pattern_span(*pattern);
-                        if !pat_span.is_empty() {
-                            out.push(InlineAnnotation {
-                                offset: pat_span.end(),
-                                label: format!(": {ty_str}"),
-                                kind: AnnotationKind::Type,
-                                padding_left: false,
-                                padding_right: true,
-                            });
-                        }
+            let Some(ty) = inference.binding_type(*pattern) else {
+                // Try other scopes for nested blocks.
+                let ty_str = find_binding_ty_any_scope(db, index, *pattern);
+                if let Some(ty_str) = ty_str {
+                    // Emit hint: position at end of pattern span.
+                    let pat_span = source_map.pattern_span(*pattern);
+                    if !pat_span.is_empty() {
+                        out.push(InlineAnnotation {
+                            offset: pat_span.end(),
+                            label: format!(": {ty_str}"),
+                            kind: AnnotationKind::Type,
+                            padding_left: false,
+                            padding_right: true,
+                        });
                     }
-                    continue;
                 }
+                continue;
             };
 
             // Suppress noisy / unhelpful types.

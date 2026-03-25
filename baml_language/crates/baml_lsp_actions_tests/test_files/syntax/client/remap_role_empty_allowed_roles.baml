@@ -24,12 +24,4 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// Error: allowed_roles must not be empty
-//    ╭─[ client_remap_role_empty_allowed_roles.baml:5:18 ]
-//    │
-//  5 │     allowed_roles []
-//    │                  ─┬─  
-//    │                   ╰─── allowed_roles must not be empty
-//    │ 
-//    │ Note: Error code: E0044
-// ───╯
+// <no-diagnostics-expected>

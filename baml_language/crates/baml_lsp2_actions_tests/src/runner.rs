@@ -77,7 +77,7 @@ pub fn run_test(parsed: &ParsedTestFile) -> TestResult {
     let mut file_paths = HashMap::new();
     for source_file in file_map.values() {
         let file_id = source_file.file_id(&db);
-        sources.insert(file_id, source_file.text(&db).to_string());
+        sources.insert(file_id, source_file.text(&db).clone());
         file_paths.insert(file_id, source_file.path(&db));
     }
 
@@ -274,7 +274,7 @@ fn format_as_comment(text: &str) -> String {
             if line.is_empty() {
                 "//".to_string()
             } else {
-                format!("// {}", line)
+                format!("// {line}")
             }
         })
         .collect::<Vec<_>>()

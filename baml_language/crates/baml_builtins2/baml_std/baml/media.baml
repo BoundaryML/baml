@@ -1,18 +1,22 @@
 class Pdf {
   _data $rust_type
 
+  //baml:vm
   function url(self) -> string? {
     $rust_function
   }
 
+  //baml:vm
   function file(self) -> string? {
     $rust_function
   }
 
+  //baml:vm
   function base64(self) -> string {
     $rust_function
   }
 
+  //baml:vm
   function mime_type(self) -> string? {
     $rust_function
   }
@@ -33,18 +37,22 @@ class Pdf {
 class Audio {
   _data $rust_type
 
+  //baml:vm
   function url(self) -> string? {
     $rust_function
   }
 
+  //baml:vm
   function file(self) -> string? {
     $rust_function
   }
 
+  //baml:vm
   function base64(self) -> string {
     $rust_function
   }
 
+  //baml:vm
   function mime_type(self) -> string? {
     $rust_function
   }
@@ -65,18 +73,22 @@ class Audio {
 class Video {
   _data $rust_type
 
+  //baml:vm
   function url(self) -> string? {
     $rust_function
   }
 
+  //baml:vm
   function file(self) -> string? {
     $rust_function
   }
 
+  //baml:vm
   function base64(self) -> string {
     $rust_function
   }
 
+  //baml:vm
   function mime_type(self) -> string? {
     $rust_function
   }
@@ -97,18 +109,22 @@ class Video {
 class Image {
   _data $rust_type
 
+  //baml:vm
   function url(self) -> string? {
     $rust_function
   }
 
+  //baml:vm
   function file(self) -> string? {
     $rust_function
   }
 
+  //baml:vm
   function base64(self) -> string {
     $rust_function
   }
 
+  //baml:vm
   function mime_type(self) -> string? {
     $rust_function
   }

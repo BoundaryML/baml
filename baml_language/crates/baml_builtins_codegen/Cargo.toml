@@ -1,0 +1,29 @@
+[package]
+name = "baml_builtins_codegen"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Build-time code generation for BAML builtin metadata and runtime glue"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+[dependencies]
+baml_base = { workspace = true }
+baml_builtins2 = { workspace = true }
+baml_compiler2_ast = { workspace = true }
+baml_compiler_lexer = { workspace = true }
+baml_compiler_parser = { workspace = true }
+baml_compiler_syntax = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { workspace = true }

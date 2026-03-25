@@ -9,7 +9,4 @@ class Person<[CURSOR] {
 //
 //- on_hover expressions
 // hover at hover_class.baml:1:13
-// class Person {
-//   name string
-//   age int
-// }
+// No hover content

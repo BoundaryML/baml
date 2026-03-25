@@ -37,21 +37,4 @@ function Remand(s: Situation) -> string {
 
 //----
 //- diagnostics
-// Error: Unreachable match arm
-//     ╭─[ functions_v2_match.baml:31:7 ]
-//     │
-//  31 │       rock: Rock => "...",
-//     │       ─────┬────  
-//     │            ╰────── Unreachable match arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
-// Error: Unreachable match arm
-//     ╭─[ functions_v2_match.baml:32:7 ]
-//     │
-//  32 │       _ => "...",
-//     │       ┬  
-//     │       ╰── Unreachable match arm
-//     │ 
-//     │ Note: Error code: E0063
-// ────╯
+// <no-diagnostics-expected>

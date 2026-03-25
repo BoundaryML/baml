@@ -178,6 +178,16 @@ impl AstSourceMap {
             .unwrap_or_default()
     }
 
+    /// Look up the source span of a match arm by its `MatchArmId`.
+    pub fn match_arm_span(&self, id: MatchArmId) -> TextRange {
+        let raw: u32 = id.into_raw().into_u32();
+        self.match_arm_spans
+            .iter()
+            .nth(raw as usize)
+            .map(|(_, &span)| span)
+            .unwrap_or_default()
+    }
+
     /// Look up the source span of a type annotation by its `TypeAnnotId`.
     pub fn type_annotation_span(&self, id: TypeAnnotId) -> TextRange {
         let raw: u32 = id.into_raw().into_u32();
@@ -257,6 +267,9 @@ pub enum Expr {
         stmts: Vec<StmtId>,
         tail_expr: Option<ExprId>,
     },
+    // These nodes are constructed purely in the HIR layer AFTER
+    // name resolution as we can't know if it's a field access
+    // until we know how to resolve the path
     FieldAccess {
         base: ExprId,
         field: Name,
@@ -284,6 +297,22 @@ pub enum Stmt {
         body: ExprId,
         after: Option<StmtId>,
         origin: LoopOrigin,
+    },
+    /// For-in loop: `for let <binding> in <collection> { <body> }`.
+    ///
+    /// Kept as a first-class node (not desugared to While) so that:
+    /// - TIR can produce for-loop-specific diagnostics ("cannot iterate over X")
+    /// - Codegen can emit native for-loops in target languages (TS/Python/Rust)
+    /// - The user's intent is preserved through the pipeline
+    ///
+    /// Desugaring to index-based iteration happens at MIR lowering time.
+    For {
+        /// The loop variable binding pattern (e.g. `i` in `for let i in xs`).
+        binding: PatId,
+        /// The collection expression to iterate over.
+        collection: ExprId,
+        /// The loop body expression.
+        body: ExprId,
     },
     Return(Option<ExprId>),
     Throw {
@@ -361,6 +390,8 @@ pub type Literal = baml_base::Literal;
 pub enum LetOrigin {
     Source,
     Compiler,
+    Client,
+    RetryPolicy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -429,6 +460,16 @@ pub enum Item {
     Generator(GeneratorDef),
     TemplateString(TemplateStringDef),
     RetryPolicy(RetryPolicyDef),
+    Let(LetDef),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeclarativeMeta {
+    /// LLM function metadata (client name, prompt template).
+    /// Present only for functions declared with `{ client ...; prompt ... }` syntax.
+    /// The body is desugared to a synthetic `Expr` calling `baml.llm.call_llm_function`,
+    /// while this field preserves the original metadata for Jinja type-checking.
+    Llm(LlmBodyDef),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -440,6 +481,7 @@ pub struct FunctionDef {
     pub return_type: Option<SpannedTypeExpr>,
     pub throws: Option<SpannedTypeExpr>,
     pub body: Option<FunctionBodyDef>,
+    pub declarative_meta: Option<DeclarativeMeta>,
     pub attributes: Vec<RawAttribute>,
     pub span: TextRange,
     pub name_span: TextRange,
@@ -448,7 +490,6 @@ pub struct FunctionDef {
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FunctionBodyDef {
-    Llm(LlmBodyDef),
     Expr(ExprBody, AstSourceMap),
     /// Body is `$rust_function` or `$rust_io_function` — Rust-bound implementation.
     Builtin(BuiltinKind),
@@ -582,6 +623,17 @@ pub struct TemplateStringDef {
 pub struct RetryPolicyDef {
     pub name: Name,
     pub config_items: Vec<ConfigItemDef>,
+    pub span: TextRange,
+    pub name_span: TextRange,
+}
+
+/// A top-level let binding — compiler-generated, not user syntax.
+/// Carries an optional `ExprBody` initializer that flows through TIR type-checking.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LetDef {
+    pub name: Name,
+    pub initializer: Option<(ExprBody, AstSourceMap)>,
+    pub origin: LetOrigin,
     pub span: TextRange,
     pub name_span: TextRange,
 }

@@ -7,7 +7,7 @@ pub fn ffi_safe<T, F: FnOnce() -> Result<T, String>>(f: F) -> Option<T> {
     match catch_unwind(AssertUnwindSafe(f)) {
         Ok(Ok(result)) => Some(result),
         Ok(Err(e)) => {
-            eprintln!("FFI error: {}", e);
+            eprintln!("FFI error: {e}");
             None
         }
         Err(panic_info) => {
@@ -18,7 +18,7 @@ pub fn ffi_safe<T, F: FnOnce() -> Result<T, String>>(f: F) -> Option<T> {
             } else {
                 "Unknown panic".to_string()
             };
-            eprintln!("FFI panic: {}", msg);
+            eprintln!("FFI panic: {msg}");
             None
         }
     }

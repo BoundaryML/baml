@@ -30,12 +30,21 @@ function getProfile(req: Request) -> bool throws Errors {
 
 //----
 //- diagnostics
-// Warning: Unreachable catch arm
-//     ╭─[ throw_throws_type_alias_repro.baml:22:5 ]
+// Error: unreachable arm
+//     ╭─[ throw_throws_type_alias_repro.baml:22:34 ]
 //     │
 //  22 │     Errors.AuthenticationError => { throw e }
-//     │     ─────────────┬────────────  
-//     │                  ╰────────────── Unreachable catch arm
+//     │                                  ──────┬─────  
+//     │                                        ╰─────── unreachable arm
 //     │ 
-//     │ Note: Error code: E0095
+//     │ Note: Error code: E0001
+// ────╯
+// Error: extraneous throws declaration: user.Errors
+//     ╭─[ throw_throws_type_alias_repro.baml:27:49 ]
+//     │
+//  27 │ function getProfile(req: Request) -> bool throws Errors {
+//     │                                                 ───┬───  
+//     │                                                    ╰───── extraneous throws declaration: user.Errors
+//     │ 
+//     │ Note: Error code: E0001
 // ────╯

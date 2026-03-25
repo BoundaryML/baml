@@ -35,48 +35,21 @@ function CompoundAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `int`, found `string`
-//     ╭─[ invalid_assignment_compound_ops.baml:15:7 ]
-//     │
-//  15 │     c += "five";
-//     │          ───┬──  
-//     │             ╰──── Expected `int`, found `string`
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: Expected `string`, found `int`
-//     ╭─[ invalid_assignment_compound_ops.baml:19:7 ]
-//     │
-//  19 │     d += 100;
-//     │          ─┬─  
-//     │           ╰─── Expected `string`, found `int`
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: Expected `int`, found `bool`
-//     ╭─[ invalid_assignment_compound_ops.baml:23:7 ]
+// Error: operator `Add` cannot be applied to `int` and `true`
+//     ╭─[ invalid_assignment_compound_ops.baml:23:2 ]
 //     │
 //  23 │     e += true;
-//     │          ──┬─  
-//     │            ╰─── Expected `int`, found `bool`
+//     │     ┬  
+//     │     ╰── operator `Add` cannot be applied to `int` and `true`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `bool`, found `int`
-//     ╭─[ invalid_assignment_compound_ops.baml:27:7 ]
+// Error: operator `Add` cannot be applied to `bool` and `1`
+//     ╭─[ invalid_assignment_compound_ops.baml:27:2 ]
 //     │
 //  27 │     f += 1;
-//     │          ┬  
-//     │          ╰── Expected `bool`, found `int`
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: Expected `float`, found `string`
-//     ╭─[ invalid_assignment_compound_ops.baml:31:7 ]
-//     │
-//  31 │     g += "add";
-//     │          ──┬──  
-//     │            ╰──── Expected `float`, found `string`
+//     │     ┬  
+//     │     ╰── operator `Add` cannot be applied to `bool` and `1`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

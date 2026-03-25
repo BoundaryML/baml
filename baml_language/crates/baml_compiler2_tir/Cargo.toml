@@ -11,7 +11,6 @@ baml_base = { workspace = true }
 baml_compiler2_ast = { workspace = true }
 baml_compiler2_hir = { workspace = true }
 baml_compiler2_ppir = { workspace = true }
-baml_compiler_analysis = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_workspace = { workspace = true }
 indexmap = { workspace = true }

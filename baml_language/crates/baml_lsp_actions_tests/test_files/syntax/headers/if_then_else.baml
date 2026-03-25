@@ -49,12 +49,12 @@ function ComplexHeaderTest(x: int) -> int {
 
 //----
 //- diagnostics
-// Error: Unknown variable `y`
+// Error: unresolved name: y
 //     ╭─[ headers_if_then_else.baml:17:5 ]
 //     │
 //  17 │     y
 //     │     ┬  
-//     │     ╰── Unknown variable `y`
+//     │     ╰── unresolved name: y
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯

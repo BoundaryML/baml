@@ -15,21 +15,21 @@ function ThrowsVariantViolation(x: int) -> string throws Errors.AuthError {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.AuthError` is missing Errors.AuthError, Errors.NotFoundError
+// Error: throws contract violation: `user.AuthError` is missing user.Errors.AuthError, user.Errors.NotFoundError
 //    ╭─[ throw_throws_enum_variant_violation.baml:9:59 ]
 //    │
 //  9 │ function ThrowsVariantViolation(x: int) -> string throws Errors.AuthError {
 //    │                                                           ────────┬────────  
-//    │                                                                   ╰────────── throws contract violation: `user.AuthError` is missing Errors.AuthError, Errors.NotFoundError
+//    │                                                                   ╰────────── throws contract violation: `user.AuthError` is missing user.Errors.AuthError, user.Errors.NotFoundError
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: extraneous throws declaration: AuthError
+// Error: extraneous throws declaration: user.AuthError
 //    ╭─[ throw_throws_enum_variant_violation.baml:9:59 ]
 //    │
 //  9 │ function ThrowsVariantViolation(x: int) -> string throws Errors.AuthError {
 //    │                                                           ────────┬────────  
-//    │                                                                   ╰────────── extraneous throws declaration: AuthError
+//    │                                                                   ╰────────── extraneous throws declaration: user.AuthError
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

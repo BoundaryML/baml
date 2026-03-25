@@ -1,58 +1,175 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function ArrayConfigClient.resolve() -> baml.llm.PrimitiveClient {
+function $init() -> null {
+    call ?
+    store_global ?181
+    call ?
+    store_global ?182
+    call ?
+    store_global ?183
+    call ?
+    store_global ?184
+    call ?
+    store_global ?185
+    call ?
+    store_global ?186
+    call ?
+    store_global ?187
+    call ?
+    store_global ?188
+    call ?
+    store_global ?189
+    call ?
+    store_global ?190
+    call ?
+    store_global ?191
+    call ?
+    store_global ?192
+    call ?
+    store_global ?193
+    call ?
+    store_global ?194
+    call ?
+    store_global ?195
+    call ?
+    store_global ?196
+    call ?
+    store_global ?197
+    call ?
+    store_global ?198
+    call ?
+    store_global ?199
+    call ?
+    store_global ?200
+    call ?
+    store_global ?201
+    call ?
+    store_global ?202
+    call ?
+    store_global ?203
+    call ?
+    store_global ?204
+    call ?
+    store_global ?205
+    call ?
+    store_global ?206
+    call ?
+    store_global ?207
+    call ?
+    store_global ?208
+    call ?
+    store_global ?209
+    call ?
+    store_global ?210
+    call ?
+    store_global ?211
+    call ?
+    store_global ?212
+    call ?
+    store_global ?213
+    call ?
+    store_global ?214
+    load_const ?
+    return
+}
+
+function user.ArrayConfigClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "ArrayConfigClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
     load_const "END"
     load_const "STOP"
     load_const "DONE"
     alloc_array 3
-    load_const "model"
     load_const "stop_sequences"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    alloc_map 1
+    store_field .request_body
+    store_field .options
     return
 }
 
-function ArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
+function user.ArrayOfObjectsClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "ArrayOfObjectsClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const "web_search"
-    load_const "https://example.com"
-    load_const "mcp"
-    load_const "server_label"
-    load_const "server_url"
-    load_const "type"
-    alloc_map 3
-    load_const "calculator"
-    load_const "https://calc.example.com"
-    load_const "server_label"
-    load_const "server_url"
-    alloc_map 2
-    alloc_array 2
-    load_const "model"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_array 0
     load_const "tools"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    alloc_map 1
+    store_field .request_body
+    store_field .options
     return
 }
 
-function AssertStmts(x: int, y: int) -> int {
+function user.AssertStmts(x: int, y: int) -> int {
     load_var x
     load_const 0
     cmp_op >
@@ -72,257 +189,205 @@ function AssertStmts(x: int, y: int) -> int {
     load_var x
     load_const 0
     cmp_op >
+    store_var _15
+    load_var _15
+    store_var _14
+    load_var _15
     pop_jump_if_false L0
-    jump L1
+    load_var x
+    load_const 100
+    cmp_op <
+    store_var _14
 
   L0:
-    load_const false
-    jump L2
-
-  L1:
-    load_var x
-    load_const 100
-    cmp_op <
-
-  L2:
-    pop_jump_if_false L3
-    jump L4
-
-  L3:
-    load_const false
-    jump L5
-
-  L4:
+    load_var _14
+    store_var _13
+    load_var _14
+    pop_jump_if_false L1
     load_var y
     load_const 0
     cmp_op >
+    store_var _13
 
-  L5:
-    pop_jump_if_false L6
-    jump L7
-
-  L6:
-    load_const false
-    jump L8
-
-  L7:
+  L1:
+    load_var _13
+    store_var _12
+    load_var _13
+    pop_jump_if_false L2
     load_var y
     load_const 100
     cmp_op <
+    store_var _12
 
-  L8:
-    pop_jump_if_false L9
-    jump L10
-
-  L9:
-    load_const false
-    jump L11
-
-  L10:
+  L2:
+    load_var _12
+    store_var _11
+    load_var _12
+    pop_jump_if_false L3
     load_var x
     load_var y
     cmp_op !=
+    store_var _11
 
-  L11:
-    pop_jump_if_false L12
-    jump L13
-
-  L12:
-    load_const false
-    jump L14
-
-  L13:
+  L3:
+    load_var _11
+    store_var _10
+    load_var _11
+    pop_jump_if_false L4
     load_var x
     load_var y
     bin_op +
     load_const 150
     cmp_op <
+    store_var _10
 
-  L14:
-    pop_jump_if_false L15
-    jump L16
-
-  L15:
-    load_const false
-    jump L17
-
-  L16:
+  L4:
+    load_var _10
+    store_var _9
+    load_var _10
+    pop_jump_if_false L5
     load_var x
     load_var y
     bin_op *
     load_const 10
     cmp_op >
+    store_var _9
 
-  L17:
-    pop_jump_if_false L18
-    jump L19
-
-  L18:
-    load_const false
-    jump L20
-
-  L19:
+  L5:
+    load_var _9
+    store_var _8
+    load_var _9
+    pop_jump_if_false L6
     load_var x
     load_var y
     bin_op -
     load_const 42
     cmp_op !=
+    store_var _8
 
-  L20:
-    pop_jump_if_false L21
-    jump L22
-
-  L21:
-    load_const false
-    jump L23
-
-  L22:
+  L6:
+    load_var _8
+    store_var _7
+    load_var _8
+    pop_jump_if_false L7
     load_var x
     load_const 7
     bin_op %
     load_const 0
     cmp_op ==
+    store_var _7
 
-  L23:
+  L7:
+    load_var _7
     assert
     load_var x
     load_const 0
     cmp_op >
-    pop_jump_if_false L24
-    jump L25
-
-  L24:
-    load_const false
-    jump L26
-
-  L25:
+    store_var _31
+    load_var _31
+    store_var _30
+    load_var _31
+    pop_jump_if_false L8
     load_var x
     load_const 100
     cmp_op <
+    store_var _30
 
-  L26:
-    pop_jump_if_false L27
-    jump L28
-
-  L27:
-    load_const false
-    jump L29
-
-  L28:
+  L8:
+    load_var _30
+    store_var _29
+    load_var _30
+    pop_jump_if_false L9
     load_var y
     load_const 0
     cmp_op >
+    store_var _29
 
-  L29:
-    pop_jump_if_false L30
-    jump L31
-
-  L30:
-    load_const false
-    jump L32
-
-  L31:
+  L9:
+    load_var _29
+    store_var _28
+    load_var _29
+    pop_jump_if_false L10
     load_var y
     load_const 100
     cmp_op <
+    store_var _28
 
-  L32:
-    pop_jump_if_false L33
-    jump L34
-
-  L33:
-    load_const false
-    jump L35
-
-  L34:
+  L10:
+    load_var _28
+    store_var _27
+    load_var _28
+    pop_jump_if_false L11
     load_var x
     load_var y
     cmp_op !=
+    store_var _27
 
-  L35:
-    pop_jump_if_false L36
-    jump L37
-
-  L36:
-    load_const false
-    jump L38
-
-  L37:
+  L11:
+    load_var _27
+    store_var _26
+    load_var _27
+    pop_jump_if_false L12
     load_var x
     load_var y
     bin_op +
     load_const 150
     cmp_op <
+    store_var _26
 
-  L38:
-    pop_jump_if_false L39
-    jump L40
-
-  L39:
-    load_const false
-    jump L41
-
-  L40:
+  L12:
+    load_var _26
+    store_var _25
+    load_var _26
+    pop_jump_if_false L13
     load_var x
     load_var y
     bin_op *
     load_const 10
     cmp_op >
+    store_var _25
 
-  L41:
-    pop_jump_if_false L42
-    jump L43
-
-  L42:
-    load_const false
-    jump L44
-
-  L43:
+  L13:
+    load_var _25
+    store_var _24
+    load_var _25
+    pop_jump_if_false L14
     load_var x
     load_var y
     bin_op -
     load_const 42
     cmp_op !=
+    store_var _24
 
-  L44:
-    pop_jump_if_false L45
-    jump L46
-
-  L45:
-    load_const false
-    jump L47
-
-  L46:
+  L14:
+    load_var _24
+    store_var _23
+    load_var _24
+    pop_jump_if_false L15
     load_var x
     load_const 7
     bin_op %
     load_const 0
     cmp_op ==
+    store_var _23
 
-  L47:
-    pop_jump_if_false L48
-    jump L49
-
-  L48:
-    load_const false
-    jump L50
-
-  L49:
+  L15:
+    load_var _23
+    store_var _22
+    load_var _23
+    pop_jump_if_false L16
     load_var y
     load_const 3
     bin_op %
     load_const 0
     cmp_op ==
+    store_var _22
 
-  L50:
-    pop_jump_if_false L51
-    jump L52
-
-  L51:
-    load_const false
-    jump L53
-
-  L52:
+  L16:
+    load_var _22
+    store_var _21
+    load_var _22
+    pop_jump_if_false L17
     load_var x
     load_var y
     bin_op +
@@ -332,16 +397,13 @@ function AssertStmts(x: int, y: int) -> int {
     bin_op +
     load_const 100
     cmp_op >
+    store_var _21
 
-  L53:
-    pop_jump_if_false L54
-    jump L55
-
-  L54:
-    load_const false
-    jump L56
-
-  L55:
+  L17:
+    load_var _21
+    store_var _20
+    load_var _21
+    pop_jump_if_false L18
     load_var x
     load_var x
     bin_op *
@@ -351,262 +413,248 @@ function AssertStmts(x: int, y: int) -> int {
     bin_op +
     load_const 10000
     cmp_op <
+    store_var _20
 
-  L56:
+  L18:
+    load_var _20
     assert
     load_var x
     load_const 0
     cmp_op >
-    pop_jump_if_false L57
-    jump L58
-
-  L57:
-    load_const false
-    jump L59
-
-  L58:
+    store_var _51
+    load_var _51
+    store_var _50
+    load_var _51
+    pop_jump_if_false L19
     load_var x
     load_const 100
     cmp_op <
+    store_var _50
 
-  L59:
-    pop_jump_if_false L60
-    jump L61
-
-  L60:
-    load_const false
-    jump L62
-
-  L61:
+  L19:
+    load_var _50
+    store_var _49
+    load_var _50
+    pop_jump_if_false L20
     load_var y
     load_const 0
     cmp_op >
+    store_var _49
 
-  L62:
-    pop_jump_if_false L63
-    jump L64
-
-  L63:
-    load_const false
-    jump L65
-
-  L64:
+  L20:
+    load_var _49
+    store_var _48
+    load_var _49
+    pop_jump_if_false L21
     load_var y
     load_const 100
     cmp_op <
+    store_var _48
 
-  L65:
-    pop_jump_if_false L66
-    jump L67
-
-  L66:
-    load_const false
-    jump L68
-
-  L67:
+  L21:
+    load_var _48
+    store_var _47
+    load_var _48
+    pop_jump_if_false L22
     load_var x
     load_var y
     cmp_op !=
+    store_var _47
 
-  L68:
-    pop_jump_if_false L69
-    jump L70
-
-  L69:
-    load_const false
-    jump L71
-
-  L70:
+  L22:
+    load_var _47
+    store_var _46
+    load_var _47
+    pop_jump_if_false L23
     load_var x
     load_var y
     bin_op +
     load_const 150
     cmp_op <
+    store_var _46
 
-  L71:
-    pop_jump_if_false L72
-    jump L73
-
-  L72:
-    load_const false
-    jump L74
-
-  L73:
+  L23:
+    load_var _46
+    store_var _45
+    load_var _46
+    pop_jump_if_false L24
     load_var x
     load_var y
     bin_op *
     load_const 10
     cmp_op >
+    store_var _45
 
-  L74:
-    pop_jump_if_false L75
-    jump L76
-
-  L75:
-    load_const false
-    jump L77
-
-  L76:
+  L24:
+    load_var _45
+    store_var _44
+    load_var _45
+    pop_jump_if_false L25
     load_var x
     load_var y
     bin_op -
     load_const 42
     cmp_op !=
+    store_var _44
 
-  L77:
-    pop_jump_if_false L78
-    jump L79
-
-  L78:
-    load_const false
-    jump L80
-
-  L79:
+  L25:
+    load_var _44
+    store_var _43
+    load_var _44
+    pop_jump_if_false L26
     load_var x
     load_const 7
     bin_op %
     load_const 0
     cmp_op ==
+    store_var _43
 
-  L80:
+  L26:
+    load_var _43
     assert
     load_var x
     load_const 0
     cmp_op >
-    pop_jump_if_false L81
-    jump L82
-
-  L81:
-    load_const false
-    jump L83
-
-  L82:
+    store_var _64
+    load_var _64
+    store_var _63
+    load_var _64
+    pop_jump_if_false L27
     load_var x
     load_const 100
     cmp_op <
+    store_var _63
 
-  L83:
-    pop_jump_if_false L84
-    jump L85
-
-  L84:
-    load_const false
-    jump L86
-
-  L85:
+  L27:
+    load_var _63
+    store_var _62
+    load_var _63
+    pop_jump_if_false L28
     load_var y
     load_const 0
     cmp_op >
+    store_var _62
 
-  L86:
-    pop_jump_if_false L87
-    jump L88
-
-  L87:
-    load_const false
-    jump L89
-
-  L88:
+  L28:
+    load_var _62
+    store_var _61
+    load_var _62
+    pop_jump_if_false L29
     load_var y
     load_const 100
     cmp_op <
+    store_var _61
 
-  L89:
-    pop_jump_if_false L90
-    jump L91
-
-  L90:
-    load_const false
-    jump L92
-
-  L91:
+  L29:
+    load_var _61
+    store_var _60
+    load_var _61
+    pop_jump_if_false L30
     load_var x
     load_var y
     cmp_op !=
+    store_var _60
 
-  L92:
-    pop_jump_if_false L93
-    jump L94
-
-  L93:
-    load_const false
-    jump L95
-
-  L94:
+  L30:
+    load_var _60
+    store_var _59
+    load_var _60
+    pop_jump_if_false L31
     load_var x
     load_var y
     bin_op +
     load_const 150
     cmp_op <
+    store_var _59
 
-  L95:
-    pop_jump_if_false L96
-    jump L97
-
-  L96:
-    load_const false
-    jump L98
-
-  L97:
+  L31:
+    load_var _59
+    store_var _58
+    load_var _59
+    pop_jump_if_false L32
     load_var x
     load_var y
     bin_op *
     load_const 10
     cmp_op >
+    store_var _58
 
-  L98:
-    pop_jump_if_false L99
-    jump L100
-
-  L99:
-    load_const false
-    jump L101
-
-  L100:
+  L32:
+    load_var _58
+    store_var _57
+    load_var _58
+    pop_jump_if_false L33
     load_var x
     load_var y
     bin_op -
     load_const 42
     cmp_op !=
+    store_var _57
 
-  L101:
-    pop_jump_if_false L102
-    jump L103
-
-  L102:
-    load_const false
-    jump L104
-
-  L103:
+  L33:
+    load_var _57
+    store_var _56
+    load_var _57
+    pop_jump_if_false L34
     load_var x
     load_const 7
     bin_op %
     load_const 0
     cmp_op ==
+    store_var _56
 
-  L104:
+  L34:
+    load_var _56
     assert
     load_var x
     return
 }
 
-function BasicClient.resolve() -> baml.llm.PrimitiveClient {
+function user.BasicClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "BasicClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const "model"
-    alloc_map 1
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
+function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int {
     load_var flag
     pop_jump_if_false L0
 
@@ -672,149 +720,128 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     load_var a
     load_const 0
     cmp_op >
+    store_var _19
+    load_var _19
+    store_var _18
+    load_var _19
     pop_jump_if_false L4
-    jump L5
+    load_var b
+    load_const 0
+    cmp_op >
+    store_var _18
 
   L4:
-    load_const false
-    jump L6
+    load_var _18
+    pop_jump_if_false L5
 
   L5:
-    load_var b
+    load_var a
     load_const 0
     cmp_op >
+    store_var _21
+    load_var _21
+    store_var _20
+    load_var _21
+    pop_jump_if_false L6
+    jump L7
 
   L6:
-    pop_jump_if_false L7
+    load_var b
+    load_const 0
+    cmp_op >
+    store_var _20
 
   L7:
-    load_var a
-    load_const 0
-    cmp_op >
+    load_var _20
     pop_jump_if_false L8
-    jump L9
 
   L8:
+    load_var a
+    load_const 0
+    cmp_op >
+    store_var _23
+    load_var _23
+    store_var _22
+    load_var _23
+    pop_jump_if_false L9
     load_var b
     load_const 0
     cmp_op >
-    jump L10
+    store_var _22
 
   L9:
-    load_const true
+    load_var _22
+    pop_jump_if_false L10
 
   L10:
+    load_var a
+    load_const 0
+    cmp_op >
+    store_var _97
+    load_var _97
+    store_var _96
+    load_var _97
     pop_jump_if_false L11
+    load_var b
+    load_const 0
+    cmp_op >
+    store_var _96
 
   L11:
-    load_var a
+    load_var _96
+    store_var _95
+    load_var _96
+    pop_jump_if_false L12
+    load_var c
     load_const 0
     cmp_op >
-    pop_jump_if_false L12
-    jump L13
+    store_var _95
 
   L12:
-    load_const false
-    jump L14
+    load_var _95
+    store_var _94
+    load_var _95
+    pop_jump_if_false L13
+    load_var d
+    load_const 0
+    cmp_op >
+    store_var _94
 
   L13:
+    load_var _94
+    store_var _93
+    load_var _94
+    pop_jump_if_false L14
+    load_var a
     load_var b
-    load_const 0
-    cmp_op >
+    cmp_op !=
+    store_var _93
 
   L14:
+    load_var _93
+    store_var _92
+    load_var _93
     pop_jump_if_false L15
+    load_var b
+    load_var c
+    cmp_op !=
+    store_var _92
 
   L15:
-    load_var a
-    load_const 0
-    cmp_op >
+    load_var _92
+    store_var _91
+    load_var _92
     pop_jump_if_false L16
-    jump L17
+    load_var c
+    load_var d
+    cmp_op !=
+    store_var _91
 
   L16:
-    load_const false
-    jump L18
-
-  L17:
-    load_var b
-    load_const 0
-    cmp_op >
-
-  L18:
-    pop_jump_if_false L19
-    jump L20
-
-  L19:
-    load_const false
-    jump L21
-
-  L20:
-    load_var c
-    load_const 0
-    cmp_op >
-
-  L21:
-    pop_jump_if_false L22
-    jump L23
-
-  L22:
-    load_const false
-    jump L24
-
-  L23:
-    load_var d
-    load_const 0
-    cmp_op >
-
-  L24:
-    pop_jump_if_false L25
-    jump L26
-
-  L25:
-    load_const false
-    jump L27
-
-  L26:
-    load_var a
-    load_var b
-    cmp_op !=
-
-  L27:
-    pop_jump_if_false L28
-    jump L29
-
-  L28:
-    load_const false
-    jump L30
-
-  L29:
-    load_var b
-    load_var c
-    cmp_op !=
-
-  L30:
-    pop_jump_if_false L31
-    jump L32
-
-  L31:
-    load_const false
-    jump L33
-
-  L32:
-    load_var c
-    load_var d
-    cmp_op !=
-
-  L33:
-    pop_jump_if_false L34
-    jump L35
-
-  L34:
-    load_const false
-    jump L36
-
-  L35:
+    load_var _91
+    store_var _90
+    load_var _91
+    pop_jump_if_false L17
     load_var a
     load_const 1000
     load_const 8
@@ -824,37 +851,33 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     bin_op *
     bin_op +
     cmp_op <
+    store_var _90
 
-  L36:
-    pop_jump_if_false L37
-    jump L38
-
-  L37:
-    load_const false
-    jump L39
-
-  L38:
+  L17:
+    load_var _90
+    store_var _89
+    load_var _90
+    pop_jump_if_false L18
     load_var b
     load_const 1000
     cmp_op <
+    store_var _89
 
-  L39:
-    pop_jump_if_false L40
-    jump L41
-
-  L40:
-    load_const false
-    jump L42
-
-  L41:
+  L18:
+    load_var _89
+    store_var _88
+    load_var _89
+    pop_jump_if_false L19
     load_var c
     load_const 1000
     cmp_op <
+    store_var _88
 
-  L42:
-    pop_jump_if_false L43
+  L19:
+    load_var _88
+    pop_jump_if_false L20
 
-  L43:
+  L20:
     load_var a
     load_var b
     bin_op +
@@ -864,14 +887,11 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     bin_op +
     load_const 0
     cmp_op >
-    pop_jump_if_false L44
-    jump L45
-
-  L44:
-    load_const false
-    jump L46
-
-  L45:
+    store_var _144
+    load_var _144
+    store_var _143
+    load_var _144
+    pop_jump_if_false L21
     load_var a
     load_var b
     bin_op *
@@ -881,16 +901,13 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     bin_op *
     load_const 10000
     cmp_op <
+    store_var _143
 
-  L46:
-    pop_jump_if_false L47
-    jump L48
-
-  L47:
-    load_const false
-    jump L49
-
-  L48:
+  L21:
+    load_var _143
+    store_var _142
+    load_var _143
+    pop_jump_if_false L22
     load_var a
     load_var b
     bin_op -
@@ -900,16 +917,13 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     bin_op -
     load_const 0
     cmp_op !=
+    store_var _142
 
-  L49:
-    pop_jump_if_false L50
-    jump L51
-
-  L50:
-    load_const false
-    jump L52
-
-  L51:
+  L22:
+    load_var _142
+    store_var _141
+    load_var _142
+    pop_jump_if_false L23
     load_var a
     load_var b
     bin_op +
@@ -919,20 +933,22 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     bin_op *
     load_const 100
     cmp_op >=
+    store_var _141
 
-  L52:
-    pop_jump_if_false L53
-    jump L54
+  L23:
+    load_var _141
+    pop_jump_if_false L24
+    jump L25
 
-  L53:
+  L24:
     load_var a
     load_const 1
     bin_op *
     load_const 2
     cmp_op <
-    pop_jump_if_false L54
+    pop_jump_if_false L25
 
-  L54:
+  L25:
     load_var mut_a
     load_var a
     load_var b
@@ -980,269 +996,172 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
     load_var a
     load_const 0
     cmp_op >
-    pop_jump_if_false L55
-    jump L56
-
-  L55:
-    load_const false
-    jump L57
-
-  L56:
+    store_var _205
+    load_var _205
+    store_var _204
+    load_var _205
+    pop_jump_if_false L26
     load_var b
     load_const 0
     cmp_op >
+    store_var _204
 
-  L57:
-    pop_jump_if_false L58
-    jump L59
-
-  L58:
-    load_const false
-    jump L60
-
-  L59:
+  L26:
+    load_var _204
+    store_var _203
+    load_var _204
+    pop_jump_if_false L27
     load_var c
     load_const 0
     cmp_op >
+    store_var _203
 
-  L60:
-    pop_jump_if_false L61
-    jump L62
-
-  L61:
-    load_const false
-    jump L63
-
-  L62:
+  L27:
+    load_var _203
+    store_var _202
+    load_var _203
+    pop_jump_if_false L28
     load_var d
     load_const 0
     cmp_op >
+    store_var _202
 
-  L63:
-    pop_jump_if_false L64
-    jump L65
-
-  L64:
-    load_const false
-    jump L66
-
-  L65:
+  L28:
+    load_var _202
+    store_var _201
+    load_var _202
+    pop_jump_if_false L29
     load_var a
     load_var b
     cmp_op !=
+    store_var _201
 
-  L66:
-    pop_jump_if_false L67
-    jump L68
-
-  L67:
-    load_const false
-    jump L69
-
-  L68:
+  L29:
+    load_var _201
+    store_var _200
+    load_var _201
+    pop_jump_if_false L30
     load_var b
     load_var c
     cmp_op !=
+    store_var _200
 
-  L69:
-    pop_jump_if_false L70
+  L30:
+    load_var _200
+    pop_jump_if_false L31
 
-  L70:
+  L31:
     load_var a
     load_const 2
     cmp_op ==
-    pop_jump_if_false L71
+    pop_jump_if_false L32
 
-  L71:
+  L32:
     load_var a
     load_var b
     bin_op +
     return
 }
 
-function C.resolve() -> baml.llm.PrimitiveClient {
+function user.C$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "C"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const "model"
-    alloc_map 1
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> string {
+function user.ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) -> string {
     load_var user
     load_field .name
-    load_var user
-    load_field .name
-    load_field .0
+    load_const "len"
+    load_map_element
     call_indirect
     pop 1
     load_var items
-    load_var items
-    load_field .0
+    load_const "len"
+    load_map_element
     call_indirect
     pop 1
-    load_var user
-    load_field .profile
-    load_field .items
     load_const 0
     load_var user
     load_field .profile
     load_field .items
-    load_field .0
+    load_const "get"
+    load_map_element
     call_indirect
     pop 1
-    load_var items
     load_const 0
     load_var items
-    load_field .0
+    load_const "get"
+    load_map_element
     call_indirect
     pop 1
+    load_const 0
     load_var items
-    load_const 0
-    load_var items
-    load_field .0
+    load_const "get"
+    load_map_element
     call_indirect
     pop 1
-    load_var user
-    load_field .name
-    load_var user
-    load_field .name
-    load_field .0
-    call_indirect
-    load_field .0
+    load_const null
     call_indirect
     pop 1
-    load_var user
-    load_field .profile
-    load_field .settings
-    load_field .preferences
-    load_field .color
-    load_var user
-    load_field .profile
-    load_field .settings
-    load_field .preferences
-    load_field .color
-    load_field .0
+    load_const null
     call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
+    pop 1
+    load_const null
     call_indirect
     pop 1
     load_var user
     load_field .profile
     load_field .items
+    store_var _55
+    load_var user
+    load_field .profile
+    load_field .items
+    load_const "len"
+    load_map_element
+    call_indirect
+    store_var _58
+    load_var _55
     load_const 0
-    load_array_element
-    load_field .metadata
-    load_field .tags
-    load_const 0
-    load_array_element
-    load_var user
-    load_field .profile
-    load_field .items
-    load_const 0
-    load_array_element
-    load_field .metadata
-    load_field .tags
-    load_const 0
-    load_array_element
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    pop 1
-    load_var user
-    load_field .profile
-    load_field .items
-    store_var _159
-    load_var user
-    load_field .profile
-    load_field .items
-    load_var user
-    load_field .profile
-    load_field .items
-    load_field .0
-    call_indirect
-    store_var _167
-    load_var user
-    load_field .profile
-    load_field .items
-    load_var user
-    load_field .profile
-    load_field .items
-    load_field .0
-    call_indirect
-    store_var _176
-    load_var user
-    load_field .profile
-    load_field .items
-    load_var user
-    load_field .profile
-    load_field .items
-    load_field .0
-    call_indirect
-    store_var _185
-    load_var _159
-    load_var _167
-    load_const 1
-    bin_op -
-    load_var _176
-    bin_op +
-    load_const 2
-    bin_op -
-    load_var _185
-    bin_op +
-    load_const 3
-    bin_op -
-    load_var user
-    load_field .profile
-    load_field .items
-    load_field .0
-    call_indirect
-    store_var _158
-    load_var user
-    load_field .profile
-    load_field .items
-    store_var _199
-    load_var user
-    load_field .profile
-    load_field .items
-    load_var user
-    load_field .profile
-    load_field .items
-    load_field .0
-    call_indirect
-    store_var _204
-    load_var _199
-    load_const 0
-    load_var _204
+    load_var _58
     load_const 1
     bin_op -
     load_var user
@@ -1250,184 +1169,126 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     load_field .settings
     load_field .preferences
     load_field .size
-    load_var user
-    load_field .profile
-    load_field .items
-    load_field .0
+    call baml.Array.slice
+    pop 1
+    load_const null
+    call_indirect
+    pop 1
+    load_const null
     call_indirect
     pop 1
     load_var user
-    load_field .profile
-    load_field .settings
-    load_field .preferences
-    load_field .color
-    load_var user
-    load_field .profile
-    load_field .settings
-    load_field .preferences
-    load_field .color
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    pop 1
-    load_var user
-    load_field .profile
-    load_field .settings
-    load_field .preferences
-    load_field .color
-    load_var user
-    load_field .profile
-    load_field .settings
-    load_field .preferences
-    load_field .color
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    load_field .0
-    call_indirect
-    pop 1
-    load_var user
-    load_field .profile
-    load_field .items
-    store_var _256
-    load_var user
-    load_field .profile
-    load_field .items
-    load_var user
-    load_field .profile
-    load_field .items
-    load_field .0
-    call_indirect
-    store_var _262
-    load_var user
-    load_field .profile
-    load_field .items
-    load_var user
-    load_field .profile
-    load_field .items
-    load_field .0
-    call_indirect
-    store_var _271
-    load_var _256
-    load_var _262
-    load_const 1
-    bin_op -
-    load_var _271
-    bin_op +
-    load_const 2
-    bin_op -
-    load_var user
-    load_field .profile
-    load_field .items
-    load_field .0
-    call_indirect
-    store_var _255
+    load_field .scores
+    store_var _78
     load_var user
     load_field .scores
-    store_var _298
-    load_var user
-    load_field .scores
-    load_var user
-    load_field .scores
-    load_field .0
+    load_const "len"
+    load_map_element
     call_indirect
-    store_var _301
-    load_var _298
-    load_var _301
-    load_const 1
-    bin_op -
-    load_array_element
-    store_var _297
+    store_var _80
     load_var user
     load_field .scores
     load_const 0
     load_array_element
-    load_var user
-    load_field .scores
-    load_const 0
-    load_array_element
-    load_field .0
+    load_const "len"
+    load_map_element
     call_indirect
-    store_var _309
-    load_var items
+    store_var _85
     load_const 0
     load_var items
-    load_field .0
+    load_const "get"
+    load_map_element
     call_indirect
     pop 1
     load_var user
     load_field .tags
     load_const 0
     load_array_element
-    load_var user
-    load_field .tags
-    load_const 0
-    load_array_element
-    load_field .0
+    load_const "len"
+    load_map_element
     call_indirect
     pop 1
     load_var items
     load_const 0
     load_array_element
     load_field .label
-    load_var items
-    load_const 0
-    load_array_element
-    load_field .label
-    load_field .0
+    load_const "len"
+    load_map_element
     call_indirect
     pop 1
     load_const "API_KEY"
-    dispatch_future env.get_or_panic
-    await
+    call baml.env.get_or_panic
     pop 1
     load_const "DATABASE_URL"
-    dispatch_future env.get_or_panic
-    await
+    call baml.env.get_or_panic
     pop 1
     load_var user
     load_field .name
     return
 }
 
-function CommaClient.resolve() -> baml.llm.PrimitiveClient {
+function user.CommaClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "CommaClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
     load_const 100
-    load_const "model"
     load_const "max_tokens"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    alloc_map 1
+    store_field .request_body
+    store_field .options
     return
 }
 
-function ComplexReturn(x: int) -> int | string | null {
+function user.ComplexReturn(x: int) -> int | string | null {
     load_var x
     return
 }
 
-function ConstrainedParams(name: string, score: int) -> string {
+function user.ConstrainedParams(name: string, score: int) -> string {
     load_const "done"
     return
 }
 
-function DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> {
+function user.DeepFnReturn() -> (int) -> (int) -> (int) -> (int) -> map<string, int | string | bool> {
     load_const 1
     return
 }
 
-function DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
+function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
     load_var a
     load_const 0
     cmp_op >
@@ -1436,7 +1297,7 @@ function DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
 
   L0:
     load_const 0
-    return
+    jump L6
 
   L1:
     load_var b
@@ -1447,7 +1308,7 @@ function DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
 
   L2:
     load_const 0
-    return
+    jump L6
 
   L3:
     load_var c
@@ -1458,7 +1319,7 @@ function DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
 
   L4:
     load_const 0
-    return
+    jump L6
 
   L5:
     load_var a
@@ -1500,15 +1361,17 @@ function DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int {
     bin_op +
     load_var d
     bin_op +
+
+  L6:
     return
 }
 
-function DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (int) -> (int) -> (int) -> string) -> string {
+function user.DeepParamTypes(nested: map<string, map<string, map<string, int[]>>>, callback: (int) -> (int) -> (int) -> string) -> string {
     load_const "done"
     return
 }
 
-function DeeplyNestedBody(a: int, b: int, c: int) -> int {
+function user.DeeplyNestedBody(a: int, b: int, c: int) -> int {
     load_var a
     load_const 0
     cmp_op >
@@ -1517,7 +1380,7 @@ function DeeplyNestedBody(a: int, b: int, c: int) -> int {
 
   L0:
     load_const 0
-    return
+    jump L10
 
   L1:
     load_var b
@@ -1535,13 +1398,13 @@ function DeeplyNestedBody(a: int, b: int, c: int) -> int {
 
   L3:
     load_var a
-    return
+    jump L10
 
   L4:
     load_var a
     load_var c
     bin_op +
-    return
+    jump L10
 
   L5:
     load_var c
@@ -1554,7 +1417,7 @@ function DeeplyNestedBody(a: int, b: int, c: int) -> int {
     load_var a
     load_var b
     bin_op +
-    return
+    jump L10
 
   L7:
     load_var a
@@ -1571,132 +1434,248 @@ function DeeplyNestedBody(a: int, b: int, c: int) -> int {
 
   L8:
     load_var x
-    return
+    jump L10
 
   L9:
     load_var x
     load_const 2
     bin_op *
+
+  L10:
     return
 }
 
-function DeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
+function user.DeeplyNestedClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "DeeplyNestedClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const true
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    load_const null /* unknown class:  */
+    copy 0
+    load_const null /* unknown class:  */
+    copy 0
+    load_const "true"
+    store_field .0
+    copy 0
     load_const 30000
+    store_field .1
+    copy 0
+    load_const null /* unknown class:  */
+    copy 0
     load_const "platform"
+    store_field .0
+    copy 0
     load_const "production"
-    load_const "team"
-    load_const "environment"
-    alloc_map 2
-    load_const "retry_on_failure"
-    load_const "timeout_ms"
-    load_const "metadata"
-    alloc_map 3
-    load_const "custom_config"
-    alloc_map 1
-    load_const "model"
-    load_const "headers"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .1
+    store_field .2
+    store_field .0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function EnvClient.resolve() -> baml.llm.PrimitiveClient {
+function user.EnvClient$new() -> null {
     load_const "OPENAI_API_KEY"
-    dispatch_future env.get_or_panic
-    await
-    store_var _11
+    call baml.env.get_or_panic
+    store_var _2
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "EnvClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    load_var _11
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const "api_key"
-    load_const "model"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_var _2
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+function user.EverythingIsLong_NameParamsReturnType(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
     load_const 1
     load_const "a"
     alloc_map 1
     return
 }
 
-function ExtraWhitespace(a: int, b: int) -> int {
+function user.ExtraWhitespace(a: int, b: int) -> int {
     load_var a
     load_var b
     bin_op +
     return
 }
 
-function ExtraWhitespaceClient.resolve() -> baml.llm.PrimitiveClient {
+function user.ExtraWhitespaceClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "ExtraWhitespaceClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const "model"
-    alloc_map 1
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function F() -> int {
+function user.F() -> int {
     load_const 1
     return
 }
 
-function FinalExpr(a: int, b: int) -> int {
+function user.FinalExpr(a: int, b: int) -> int {
     load_var a
     load_var b
     bin_op +
     return
 }
 
-function FullClient.resolve() -> baml.llm.PrimitiveClient {
+function user.FullClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "FullClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
     load_const 100
     load_const 0.7
     load_const 0.9
-    load_const "model"
     load_const "max_tokens"
     load_const "temperature"
     load_const "top_p"
-    alloc_map 4
-    dispatch_future baml.llm.build_primitive_client
-    await
+    alloc_map 3
+    store_field .request_body
+    store_field .options
     return
 }
 
-function LlmBasic(name: string) -> string {
+function user.LlmBasic(name: string) -> string {
+    load_const null
     load_const "LlmBasic"
     load_var name
     load_const "name"
@@ -1705,7 +1684,8 @@ function LlmBasic(name: string) -> string {
     return
 }
 
-function LlmBasic.build_request(name: string) -> baml.http.Request {
+function user.LlmBasic$build_request(name: string) -> baml.http.Request {
+    load_const null
     load_const "LlmBasic"
     load_var name
     load_const "name"
@@ -1714,7 +1694,8 @@ function LlmBasic.build_request(name: string) -> baml.http.Request {
     return
 }
 
-function LlmBasic.render_prompt(name: string) -> baml.llm.PromptAst {
+function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "LlmBasic"
     load_var name
     load_const "name"
@@ -1723,7 +1704,8 @@ function LlmBasic.render_prompt(name: string) -> baml.llm.PromptAst {
     return
 }
 
-function LlmMultiLine(text: string) -> string {
+function user.LlmMultiLine(text: string) -> string {
+    load_const null
     load_const "LlmMultiLine"
     load_var text
     load_const "text"
@@ -1732,7 +1714,8 @@ function LlmMultiLine(text: string) -> string {
     return
 }
 
-function LlmMultiLine.build_request(text: string) -> baml.http.Request {
+function user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
+    load_const null
     load_const "LlmMultiLine"
     load_var text
     load_const "text"
@@ -1741,7 +1724,8 @@ function LlmMultiLine.build_request(text: string) -> baml.http.Request {
     return
 }
 
-function LlmMultiLine.render_prompt(text: string) -> baml.llm.PromptAst {
+function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "LlmMultiLine"
     load_var text
     load_const "text"
@@ -1750,7 +1734,8 @@ function LlmMultiLine.render_prompt(text: string) -> baml.llm.PromptAst {
     return
 }
 
-function LlmReversedOrder(text: string) -> string {
+function user.LlmReversedOrder(text: string) -> string {
+    load_const null
     load_const "LlmReversedOrder"
     load_var text
     load_const "text"
@@ -1759,7 +1744,8 @@ function LlmReversedOrder(text: string) -> string {
     return
 }
 
-function LlmReversedOrder.build_request(text: string) -> baml.http.Request {
+function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request {
+    load_const null
     load_const "LlmReversedOrder"
     load_var text
     load_const "text"
@@ -1768,7 +1754,8 @@ function LlmReversedOrder.build_request(text: string) -> baml.http.Request {
     return
 }
 
-function LlmReversedOrder.render_prompt(text: string) -> baml.llm.PromptAst {
+function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "LlmReversedOrder"
     load_var text
     load_const "text"
@@ -1777,7 +1764,24 @@ function LlmReversedOrder.render_prompt(text: string) -> baml.llm.PromptAst {
     return
 }
 
-function LlmStringClient(text: string) -> string {
+function user.LlmStringClient(text: string) -> string {
+    alloc_instance baml.llm.Client
+    copy 0
+    load_const "openai/gpt-4o"
+    store_field .name
+    copy 0
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    store_field .client_type
+    copy 0
+    alloc_array 0
+    store_field .sub_clients
+    copy 0
+    load_const null
+    store_field .retry
+    copy 0
+    load_const 0
+    store_field .counter
     load_const "LlmStringClient"
     load_var text
     load_const "text"
@@ -1786,7 +1790,24 @@ function LlmStringClient(text: string) -> string {
     return
 }
 
-function LlmStringClient.build_request(text: string) -> baml.http.Request {
+function user.LlmStringClient$build_request(text: string) -> baml.http.Request {
+    alloc_instance baml.llm.Client
+    copy 0
+    load_const "openai/gpt-4o"
+    store_field .name
+    copy 0
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    store_field .client_type
+    copy 0
+    alloc_array 0
+    store_field .sub_clients
+    copy 0
+    load_const null
+    store_field .retry
+    copy 0
+    load_const 0
+    store_field .counter
     load_const "LlmStringClient"
     load_var text
     load_const "text"
@@ -1795,7 +1816,24 @@ function LlmStringClient.build_request(text: string) -> baml.http.Request {
     return
 }
 
-function LlmStringClient.render_prompt(text: string) -> baml.llm.PromptAst {
+function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
+    alloc_instance baml.llm.Client
+    copy 0
+    load_const "openai/gpt-4o"
+    store_field .name
+    copy 0
+    load_const baml.llm.ClientType.Primitive
+    alloc_variant baml.llm.ClientType
+    store_field .client_type
+    copy 0
+    alloc_array 0
+    store_field .sub_clients
+    copy 0
+    load_const null
+    store_field .retry
+    copy 0
+    load_const 0
+    store_field .counter
     load_const "LlmStringClient"
     load_var text
     load_const "text"
@@ -1804,7 +1842,8 @@ function LlmStringClient.render_prompt(text: string) -> baml.llm.PromptAst {
     return
 }
 
-function LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string {
+    load_const null
     load_const "LlmWithLongSignature"
     load_var first_context
     load_var second_context
@@ -1819,7 +1858,8 @@ function LlmWithLongSignature(first_context: string, second_context: string, thi
     return
 }
 
-function LlmWithLongSignature.build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request {
+function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request {
+    load_const null
     load_const "LlmWithLongSignature"
     load_var first_context
     load_var second_context
@@ -1834,7 +1874,8 @@ function LlmWithLongSignature.build_request(first_context: string, second_contex
     return
 }
 
-function LlmWithLongSignature.render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
+function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "LlmWithLongSignature"
     load_var first_context
     load_var second_context
@@ -1849,62 +1890,104 @@ function LlmWithLongSignature.render_prompt(first_context: string, second_contex
     return
 }
 
-function LongArrayClient.resolve() -> baml.llm.PrimitiveClient {
+function user.LongArrayClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "LongArrayClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
     load_const "STOP_GENERATION_NOW"
     load_const "END_OF_RESPONSE_MARKER"
     load_const "COMPLETION_FINISHED_SIGNAL"
     load_const "TERMINATE_OUTPUT_HERE"
     load_const "FINAL_ANSWER_DELIMITER"
     alloc_array 5
-    load_const "model"
     load_const "stop_sequences"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    alloc_map 1
+    store_field .request_body
+    store_field .options
     return
 }
 
-function LongArrayOfObjectsClient.resolve() -> baml.llm.PrimitiveClient {
+function user.LongArrayOfObjectsClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "LongArrayOfObjectsClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const "this_is_a_very_long_server_label_that_exceeds_the_line_limit_when_combined_with_indentation"
-    load_const "https://some-extremely-long-domain-name-for-the-mcp-server.internal.production.example.com/api/v2"
-    load_const "mcp"
-    load_const "A very long description of the tool server that explains what it does and how it should be used by the model"
-    load_const "server_label"
-    load_const "server_url"
-    load_const "type"
-    load_const "description"
-    alloc_map 4
-    load_const "another_long_server_label_for_testing_line_wrapping_behavior_in_nested_array_objects"
-    load_const "https://another-long-domain.internal.staging.example.com/tools/v1"
-    load_const "server_label"
-    load_const "server_url"
-    alloc_map 2
-    alloc_array 2
-    load_const "model"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_array 0
     load_const "tools"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    alloc_map 1
+    store_field .request_body
+    store_field .options
     return
 }
 
-function LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>> {
+function user.LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, map<string, int | string | bool | float | null>> {
     load_const 1
     load_const "b"
     alloc_map 1
@@ -1913,50 +1996,100 @@ function LongNameWithLongReturnType_ExceedsTheLineLimit(x: int) -> map<string, m
     return
 }
 
-function LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, second_argument: int, third_argument: bool) -> string {
+function user.LongNameWithManyParameters_ThisFunctionExceedsLimit(first_argument: string, second_argument: int, third_argument: bool) -> string {
     load_const "result"
     return
 }
 
-function LongNestedValuesClient.resolve() -> baml.llm.PrimitiveClient {
+function user.LongNestedValuesClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "LongNestedValuesClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
+    store_field .model
+    copy 0
     load_const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    load_const null /* unknown class:  */
+    store_field .headers
+    copy 0
     alloc_map 0
-    load_const "model"
-    load_const "base_url"
-    load_const "headers"
-    alloc_map 3
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function LongOptionClient.resolve() -> baml.llm.PrimitiveClient {
+function user.LongOptionClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "LongOptionClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+    store_field .model
+    copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
-    load_const "model"
-    load_const "base_url"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function LoopStmts(items: int[], flag: bool) -> int {
+function user.LoopStmts(items: int[], flag: bool) -> int {
     load_const 0
     store_var a
 
@@ -1965,415 +2098,340 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const 10
     cmp_op <
     pop_jump_if_false L1
-    jump L249
+    jump L182
 
   L1:
     load_var a
     load_const 100
     cmp_op <
     pop_jump_if_false L2
-    jump L3
 
   L2:
-    load_const false
-    jump L4
+    load_var flag
+    pop_jump_if_false L3
+    jump L181
 
   L3:
-    load_var flag
-
-  L4:
-    pop_jump_if_false L5
-    jump L248
-
-  L5:
     load_const true
-    pop_jump_if_false L7
+    pop_jump_if_false L5
     load_var a
     load_const 50
     cmp_op >
-    pop_jump_if_false L6
-    jump L7
+    pop_jump_if_false L4
+    jump L5
 
-  L6:
+  L4:
     load_var a
     load_const 1
     bin_op +
     store_var a
-    jump L5
+    jump L3
 
-  L7:
+  L5:
     load_var a
     load_const 100
     cmp_op <
+    pop_jump_if_false L6
+    jump L180
+
+  L6:
+    load_var a
+    load_const 10
+    cmp_op <
+    pop_jump_if_false L7
+    jump L179
+
+  L7:
+    load_var a
+    load_const 10
+    cmp_op <
     pop_jump_if_false L8
-    jump L247
+    jump L178
 
   L8:
-    load_var a
-    load_const 10
-    cmp_op <
-    pop_jump_if_false L9
-    jump L246
-
-  L9:
-    load_var a
-    load_const 10
-    cmp_op <
-    pop_jump_if_false L10
-    jump L245
-
-  L10:
     load_const 0
     store_var result
     load_const 0
     store_var i
 
-  L11:
+  L9:
     load_var i
     load_const 10
     cmp_op <
-    pop_jump_if_false L12
-    jump L244
+    pop_jump_if_false L10
+    jump L177
 
-  L12:
+  L10:
     load_const 0
     store_var i
 
-  L13:
+  L11:
     load_var i
     load_const 100
     cmp_op <
-    pop_jump_if_false L14
-    jump L15
+    pop_jump_if_false L12
+
+  L12:
+    load_var flag
+    pop_jump_if_false L13
+    jump L176
+
+  L13:
+    load_const 0
+    store_var __for_idx
 
   L14:
-    load_const false
-    jump L16
-
-  L15:
-    load_var flag
-
-  L16:
-    pop_jump_if_false L17
-    jump L243
-
-  L17:
+    load_var __for_idx
     load_var items
     call baml.Array.length
-    store_var _len
-    load_const 0
-    store_var _i
-
-  L18:
-    load_var _i
-    load_var _len
     cmp_op <
-    pop_jump_if_false L19
-    jump L242
+    pop_jump_if_false L15
+    jump L175
 
-  L19:
+  L15:
     load_const 1
     load_const 2
     load_const 3
     load_const 4
     load_const 5
     alloc_array 5
-    store_var _iter1
-    load_var _iter1
-    call baml.Array.length
-    store_var _len1
+    store_var _34
     load_const 0
-    store_var _i1
+    store_var __for_idx_1
 
-  L20:
-    load_var _i1
-    load_var _len1
+  L16:
+    load_var __for_idx_1
+    load_var _34
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L21
-    jump L241
+    pop_jump_if_false L17
+    jump L174
 
-  L21:
+  L17:
     load_const 1
     load_const 2
     load_const 3
     alloc_array 3
-    store_var _iter2
-    load_var _iter2
-    call baml.Array.length
-    store_var _len2
+    store_var _41
     load_const 0
-    store_var _i2
+    store_var __for_idx_2
+
+  L18:
+    load_var __for_idx_2
+    load_var _41
+    call baml.Array.length
+    cmp_op <
+    pop_jump_if_false L19
+    jump L170
+
+  L19:
+    load_const 0
+    store_var i
+
+  L20:
+    load_var i
+    load_const 10
+    cmp_op <
+    pop_jump_if_false L21
+    jump L169
+
+  L21:
+    load_const 0
+    store_var i
 
   L22:
-    load_var _i2
-    load_var _len2
+    load_var i
+    load_const 10
     cmp_op <
     pop_jump_if_false L23
-    jump L239
+    jump L168
 
   L23:
     load_const 0
-    store_var i
+    store_var __for_idx_4
 
   L24:
-    load_var i
-    load_const 10
+    load_var __for_idx_4
+    load_var items
+    call baml.Array.length
     cmp_op <
     pop_jump_if_false L25
-    jump L238
+    jump L167
 
   L25:
     load_const 0
-    store_var i
+    store_var __for_idx_5
 
   L26:
-    load_var i
-    load_const 10
+    load_var __for_idx_5
+    load_var items
+    call baml.Array.length
     cmp_op <
     pop_jump_if_false L27
-    jump L237
+    jump L166
 
   L27:
-    load_var items
-    call baml.Array.length
-    store_var _len4
-    load_const 0
-    store_var _i4
-
-  L28:
-    load_var _i4
-    load_var _len4
-    cmp_op <
-    pop_jump_if_false L29
-    jump L236
-
-  L29:
-    load_var items
-    call baml.Array.length
-    store_var _len5
-    load_const 0
-    store_var _i5
-
-  L30:
-    load_var _i5
-    load_var _len5
-    cmp_op <
-    pop_jump_if_false L31
-    jump L235
-
-  L31:
     load_var a
     load_const 100
     cmp_op <
-    pop_jump_if_false L32
-    jump L33
-
-  L32:
-    load_const false
-    jump L34
-
-  L33:
+    store_var _81
+    load_var _81
+    store_var _80
+    load_var _81
+    pop_jump_if_false L28
     load_var result
     load_const 0
     cmp_op >
+    store_var _80
+
+  L28:
+    load_var _80
+    pop_jump_if_false L29
+
+  L29:
+    load_var flag
+    store_var _79
+    load_var flag
+    pop_jump_if_false L30
+    load_var a
+    load_var result
+    cmp_op !=
+    store_var _79
+
+  L30:
+    load_var _79
+    store_var _78
+    load_var _79
+    pop_jump_if_false L31
+    load_var a
+    load_var result
+    bin_op +
+    load_const 10000
+    cmp_op <
+    store_var _78
+
+  L31:
+    load_var _78
+    store_var _77
+    load_var _78
+    pop_jump_if_false L32
+    load_var a
+    load_var result
+    bin_op *
+    load_const 500
+    cmp_op >
+    store_var _77
+
+  L32:
+    load_var _77
+    store_var _76
+    load_var _77
+    pop_jump_if_false L33
+    load_var a
+    load_var result
+    bin_op -
+    load_const 42
+    cmp_op !=
+    store_var _76
+
+  L33:
+    load_var _76
+    pop_jump_if_false L34
+    jump L165
 
   L34:
+    load_var a
+    load_const 100
+    cmp_op <
+    store_var _103
+    load_var _103
+    store_var _102
+    load_var _103
     pop_jump_if_false L35
-    jump L36
+    load_var result
+    load_const 0
+    cmp_op >
+    store_var _102
 
   L35:
-    load_const false
-    jump L37
+    load_var _102
+    pop_jump_if_false L36
 
   L36:
     load_var flag
+    store_var _101
+    load_var flag
+    pop_jump_if_false L37
+    load_var a
+    load_var result
+    cmp_op !=
+    store_var _101
 
   L37:
+    load_var _101
+    store_var _100
+    load_var _101
     pop_jump_if_false L38
-    jump L39
+    load_var a
+    load_var result
+    bin_op +
+    load_const 10000
+    cmp_op <
+    store_var _100
 
   L38:
-    load_const false
-    jump L40
+    load_var _100
+    store_var _99
+    load_var _100
+    pop_jump_if_false L39
+    load_var a
+    load_var result
+    bin_op *
+    load_const 500
+    cmp_op >
+    store_var _99
 
   L39:
+    load_var _99
+    store_var _98
+    load_var _99
+    pop_jump_if_false L40
     load_var a
     load_var result
+    bin_op -
+    load_const 42
     cmp_op !=
+    store_var _98
 
   L40:
+    load_var _98
+    store_var _97
+    load_var _98
     pop_jump_if_false L41
-    jump L42
-
-  L41:
-    load_const false
-    jump L43
-
-  L42:
-    load_var a
-    load_var result
-    bin_op +
-    load_const 10000
-    cmp_op <
-
-  L43:
-    pop_jump_if_false L44
-    jump L45
-
-  L44:
-    load_const false
-    jump L46
-
-  L45:
-    load_var a
-    load_var result
-    bin_op *
-    load_const 500
-    cmp_op >
-
-  L46:
-    pop_jump_if_false L47
-    jump L48
-
-  L47:
-    load_const false
-    jump L49
-
-  L48:
-    load_var a
-    load_var result
-    bin_op -
-    load_const 42
-    cmp_op !=
-
-  L49:
-    pop_jump_if_false L50
-    jump L234
-
-  L50:
-    load_var a
-    load_const 100
-    cmp_op <
-    pop_jump_if_false L51
-    jump L52
-
-  L51:
-    load_const false
-    jump L53
-
-  L52:
-    load_var result
-    load_const 0
-    cmp_op >
-
-  L53:
-    pop_jump_if_false L54
-    jump L55
-
-  L54:
-    load_const false
-    jump L56
-
-  L55:
-    load_var flag
-
-  L56:
-    pop_jump_if_false L57
-    jump L58
-
-  L57:
-    load_const false
-    jump L59
-
-  L58:
-    load_var a
-    load_var result
-    cmp_op !=
-
-  L59:
-    pop_jump_if_false L60
-    jump L61
-
-  L60:
-    load_const false
-    jump L62
-
-  L61:
-    load_var a
-    load_var result
-    bin_op +
-    load_const 10000
-    cmp_op <
-
-  L62:
-    pop_jump_if_false L63
-    jump L64
-
-  L63:
-    load_const false
-    jump L65
-
-  L64:
-    load_var a
-    load_var result
-    bin_op *
-    load_const 500
-    cmp_op >
-
-  L65:
-    pop_jump_if_false L66
-    jump L67
-
-  L66:
-    load_const false
-    jump L68
-
-  L67:
-    load_var a
-    load_var result
-    bin_op -
-    load_const 42
-    cmp_op !=
-
-  L68:
-    pop_jump_if_false L69
-    jump L70
-
-  L69:
-    load_const false
-    jump L71
-
-  L70:
     load_var a
     load_const 7
     bin_op %
     load_const 0
     cmp_op ==
+    store_var _97
 
-  L71:
-    pop_jump_if_false L72
-    jump L73
-
-  L72:
-    load_const false
-    jump L74
-
-  L73:
+  L41:
+    load_var _97
+    store_var _96
+    load_var _97
+    pop_jump_if_false L42
     load_var result
     load_const 3
     bin_op %
     load_const 0
     cmp_op ==
+    store_var _96
 
-  L74:
-    pop_jump_if_false L75
-    jump L76
-
-  L75:
-    load_const false
-    jump L77
-
-  L76:
+  L42:
+    load_var _96
+    store_var _95
+    load_var _96
+    pop_jump_if_false L43
     load_var a
     load_var result
     bin_op +
@@ -2383,34 +2441,29 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     load_const 99999
     cmp_op >
+    store_var _95
 
-  L77:
-    pop_jump_if_false L78
-    jump L233
+  L43:
+    load_var _95
+    pop_jump_if_false L44
+    jump L164
 
-  L78:
+  L44:
     load_const 0
     store_var very_long_variable_name
 
-  L79:
+  L45:
     load_var very_long_variable_name
     load_const 1000
     cmp_op <
-    pop_jump_if_false L80
-    jump L81
+    pop_jump_if_false L46
 
-  L80:
-    load_const false
-    jump L82
-
-  L81:
+  L46:
     load_var flag
+    pop_jump_if_false L47
+    jump L163
 
-  L82:
-    pop_jump_if_false L83
-    jump L232
-
-  L83:
+  L47:
     load_var a
     load_var a
     bin_op *
@@ -2420,58 +2473,46 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     store_var extremely_long_loop_counter_variable
 
-  L84:
+  L48:
     load_var extremely_long_loop_counter_variable
     load_const 1000000
     cmp_op <
-    pop_jump_if_false L85
-    jump L86
+    pop_jump_if_false L49
 
-  L85:
-    load_const false
-    jump L87
-
-  L86:
+  L49:
     load_var flag
-
-  L87:
-    pop_jump_if_false L88
-    jump L89
-
-  L88:
-    load_const false
-    jump L90
-
-  L89:
+    store_var _139
+    load_var flag
+    pop_jump_if_false L50
     load_var a
     load_const 0
     cmp_op >
+    store_var _139
 
-  L90:
-    pop_jump_if_false L91
-    jump L231
+  L50:
+    load_var _139
+    pop_jump_if_false L51
+    jump L162
 
-  L91:
+  L51:
     load_const "very long string one"
     load_const "very long string two"
     load_const "very long string three"
     load_const "very long string four"
     alloc_array 4
-    store_var _iter6
-    load_var _iter6
-    call baml.Array.length
-    store_var _len6
+    store_var _147
     load_const 0
-    store_var _i6
+    store_var __for_idx_6
 
-  L92:
-    load_var _i6
-    load_var _len6
+  L52:
+    load_var __for_idx_6
+    load_var _147
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L93
-    jump L230
+    pop_jump_if_false L53
+    jump L161
 
-  L93:
+  L53:
     load_const "alpha bravo charlie"
     load_const "delta echo foxtrot"
     load_const "golf hotel india"
@@ -2479,199 +2520,157 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const "mike november oscar"
     load_const "papa quebec romeo"
     alloc_array 6
-    store_var _iter7
-    load_var _iter7
+    store_var _152
+    load_const 0
+    store_var __for_idx_7
+
+  L54:
+    load_var __for_idx_7
+    load_var _152
     call baml.Array.length
-    store_var _len7
-    load_const 0
-    store_var _i7
-
-  L94:
-    load_var _i7
-    load_var _len7
     cmp_op <
-    pop_jump_if_false L95
-    jump L229
+    pop_jump_if_false L55
+    jump L160
 
-  L95:
+  L55:
     load_var a
     load_const 100
     cmp_op <
-    pop_jump_if_false L96
-    jump L97
-
-  L96:
-    load_const false
-    jump L98
-
-  L97:
+    store_var _162
+    load_var _162
+    store_var _161
+    load_var _162
+    pop_jump_if_false L56
     load_var result
     load_const 0
     cmp_op >
+    store_var _161
 
-  L98:
-    pop_jump_if_false L99
-    jump L100
+  L56:
+    load_var _161
+    pop_jump_if_false L57
 
-  L99:
-    load_const false
-    jump L101
-
-  L100:
+  L57:
     load_var flag
-
-  L101:
-    pop_jump_if_false L102
-    jump L103
-
-  L102:
-    load_const false
-    jump L104
-
-  L103:
+    store_var _160
+    load_var flag
+    pop_jump_if_false L58
     load_var a
     load_var result
     cmp_op !=
+    store_var _160
 
-  L104:
-    pop_jump_if_false L105
-    jump L106
-
-  L105:
-    load_const false
-    jump L107
-
-  L106:
+  L58:
+    load_var _160
+    store_var _159
+    load_var _160
+    pop_jump_if_false L59
     load_var a
     load_var result
     bin_op +
     load_const 10000
     cmp_op <
+    store_var _159
 
-  L107:
-    pop_jump_if_false L108
-    jump L109
-
-  L108:
-    load_const false
-    jump L110
-
-  L109:
+  L59:
+    load_var _159
+    store_var _158
+    load_var _159
+    pop_jump_if_false L60
     load_var a
     load_var result
     bin_op *
     load_const 500
     cmp_op >
+    store_var _158
 
-  L110:
-    pop_jump_if_false L111
-    jump L112
-
-  L111:
-    load_const false
-    jump L113
-
-  L112:
+  L60:
+    load_var _158
+    store_var _157
+    load_var _158
+    pop_jump_if_false L61
     load_var a
     load_var result
     bin_op -
     load_const 42
     cmp_op !=
+    store_var _157
 
-  L113:
-    pop_jump_if_false L114
-    jump L228
+  L61:
+    load_var _157
+    pop_jump_if_false L62
+    jump L159
 
-  L114:
+  L62:
     load_var a
     load_const 100
     cmp_op <
-    pop_jump_if_false L115
-    jump L116
-
-  L115:
-    load_const false
-    jump L117
-
-  L116:
+    store_var _181
+    load_var _181
+    store_var _180
+    load_var _181
+    pop_jump_if_false L63
     load_var result
     load_const 0
     cmp_op >
+    store_var _180
 
-  L117:
-    pop_jump_if_false L118
-    jump L119
+  L63:
+    load_var _180
+    pop_jump_if_false L64
 
-  L118:
-    load_const false
-    jump L120
-
-  L119:
+  L64:
     load_var flag
-
-  L120:
-    pop_jump_if_false L121
-    jump L122
-
-  L121:
-    load_const false
-    jump L123
-
-  L122:
+    store_var _179
+    load_var flag
+    pop_jump_if_false L65
     load_var a
     load_var result
     cmp_op !=
+    store_var _179
 
-  L123:
-    pop_jump_if_false L124
-    jump L125
-
-  L124:
-    load_const false
-    jump L126
-
-  L125:
+  L65:
+    load_var _179
+    store_var _178
+    load_var _179
+    pop_jump_if_false L66
     load_var a
     load_var result
     bin_op +
     load_const 10000
     cmp_op <
+    store_var _178
 
-  L126:
-    pop_jump_if_false L127
-    jump L128
-
-  L127:
-    load_const false
-    jump L129
-
-  L128:
+  L66:
+    load_var _178
+    store_var _177
+    load_var _178
+    pop_jump_if_false L67
     load_var a
     load_var result
     bin_op *
     load_const 500
     cmp_op >
+    store_var _177
 
-  L129:
-    pop_jump_if_false L130
-    jump L131
-
-  L130:
-    load_const false
-    jump L132
-
-  L131:
+  L67:
+    load_var _177
+    store_var _176
+    load_var _177
+    pop_jump_if_false L68
     load_var a
     load_var result
     bin_op -
     load_const 42
     cmp_op !=
+    store_var _176
 
-  L132:
-    pop_jump_if_false L133
-    jump L227
+  L68:
+    load_var _176
+    pop_jump_if_false L69
+    jump L158
 
-  L133:
+  L69:
     load_var a
     load_var a
     bin_op *
@@ -2681,38 +2680,28 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     store_var extremely_long_loop_counter_variable
 
-  L134:
+  L70:
     load_var extremely_long_loop_counter_variable
     load_const 1000000
     cmp_op <
-    pop_jump_if_false L135
-    jump L136
+    pop_jump_if_false L71
 
-  L135:
-    load_const false
-    jump L137
-
-  L136:
+  L71:
     load_var flag
-
-  L137:
-    pop_jump_if_false L138
-    jump L139
-
-  L138:
-    load_const false
-    jump L140
-
-  L139:
+    store_var _202
+    load_var flag
+    pop_jump_if_false L72
     load_var a
     load_const 0
     cmp_op >
+    store_var _202
 
-  L140:
-    pop_jump_if_false L141
-    jump L226
+  L72:
+    load_var _202
+    pop_jump_if_false L73
+    jump L157
 
-  L141:
+  L73:
     load_var a
     load_var a
     bin_op *
@@ -2722,38 +2711,28 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     store_var extremely_long_loop_counter_variable
 
-  L142:
+  L74:
     load_var extremely_long_loop_counter_variable
     load_const 1000000
     cmp_op <
-    pop_jump_if_false L143
-    jump L144
+    pop_jump_if_false L75
 
-  L143:
-    load_const false
-    jump L145
-
-  L144:
+  L75:
     load_var flag
-
-  L145:
-    pop_jump_if_false L146
-    jump L147
-
-  L146:
-    load_const false
-    jump L148
-
-  L147:
+    store_var _217
+    load_var flag
+    pop_jump_if_false L76
     load_var a
     load_const 0
     cmp_op >
+    store_var _217
 
-  L148:
-    pop_jump_if_false L149
-    jump L225
+  L76:
+    load_var _217
+    pop_jump_if_false L77
+    jump L156
 
-  L149:
+  L77:
     load_const "alpha bravo charlie"
     load_const "delta echo foxtrot"
     load_const "golf hotel india"
@@ -2761,21 +2740,19 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const "mike november oscar"
     load_const "papa quebec romeo"
     alloc_array 6
-    store_var _iter8
-    load_var _iter8
-    call baml.Array.length
-    store_var _len8
+    store_var _225
     load_const 0
-    store_var _i8
+    store_var __for_idx_8
 
-  L150:
-    load_var _i8
-    load_var _len8
+  L78:
+    load_var __for_idx_8
+    load_var _225
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L151
-    jump L224
+    pop_jump_if_false L79
+    jump L155
 
-  L151:
+  L79:
     load_const "alpha bravo charlie"
     load_const "delta echo foxtrot"
     load_const "golf hotel india"
@@ -2783,97 +2760,89 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const "mike november oscar"
     load_const "papa quebec romeo"
     alloc_array 6
-    store_var _iter9
-    load_var _iter9
-    call baml.Array.length
-    store_var _len9
+    store_var _230
     load_const 0
-    store_var _i9
+    store_var __for_idx_9
 
-  L152:
-    load_var _i9
-    load_var _len9
+  L80:
+    load_var __for_idx_9
+    load_var _230
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L153
-    jump L223
+    pop_jump_if_false L81
+    jump L154
 
-  L153:
+  L81:
     load_const 1
     load_const 2
     load_const 3
     alloc_array 3
-    store_var _iter10
-    load_var _iter10
-    call baml.Array.length
-    store_var _len10
+    store_var _235
     load_const 0
-    store_var _i10
+    store_var __for_idx_10
 
-  L154:
-    load_var _i10
-    load_var _len10
+  L82:
+    load_var __for_idx_10
+    load_var _235
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L155
-    jump L220
+    pop_jump_if_false L83
+    jump L147
 
-  L155:
+  L83:
     load_const 0
     store_var outer
 
-  L156:
+  L84:
     load_var outer
     load_const 3
     cmp_op <
-    pop_jump_if_false L157
-    jump L213
+    pop_jump_if_false L85
+    jump L140
 
-  L157:
+  L85:
     load_const 1
     load_const 2
     load_const 3
     load_const 4
     load_const 5
     alloc_array 5
-    store_var _iter13
-    load_var _iter13
-    call baml.Array.length
-    store_var _len13
+    store_var _272
     load_const 0
-    store_var _i13
+    store_var __for_idx_13
 
-  L158:
-    load_var _i13
-    load_var _len13
+  L86:
+    load_var __for_idx_13
+    load_var _272
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L159
-    jump L208
+    pop_jump_if_false L87
+    jump L132
 
-  L159:
+  L87:
     load_const 0
     store_var lvl1
 
-  L160:
+  L88:
     load_var lvl1
     load_const 2
     cmp_op <
-    pop_jump_if_false L161
-    jump L200
+    pop_jump_if_false L89
+    jump L122
 
-  L161:
+  L89:
+    load_const 0
+    store_var __for_idx_16
+
+  L90:
+    load_var __for_idx_16
     load_var items
     call baml.Array.length
-    store_var _len16
-    load_const 0
-    store_var _i16
-
-  L162:
-    load_var _i16
-    load_var _len16
     cmp_op <
-    pop_jump_if_false L163
-    jump L186
+    pop_jump_if_false L91
+    jump L114
 
-  L163:
+  L91:
     load_const 1
     load_const 2
     load_const 3
@@ -2885,224 +2854,66 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const 9
     load_const 10
     alloc_array 10
-    store_var _iter17
-    load_var _iter17
-    call baml.Array.length
-    store_var _len17
+    store_var _345
     load_const 0
-    store_var _i17
+    store_var __for_idx_17
 
-  L164:
-    load_var _i17
-    load_var _len17
+  L92:
+    load_var __for_idx_17
+    load_var _345
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L165
-    jump L174
+    pop_jump_if_false L93
+    jump L102
 
-  L165:
+  L93:
     load_var a
     load_const 10
     cmp_op <
-    pop_jump_if_false L166
-    jump L173
+    pop_jump_if_false L94
+    jump L101
 
-  L166:
+  L94:
     load_const 0
     store_var i
 
-  L167:
+  L95:
     load_var i
     load_const 10
     cmp_op <
-    pop_jump_if_false L168
-    jump L172
+    pop_jump_if_false L96
+    jump L100
 
-  L168:
+  L96:
+    load_const 0
+    store_var __for_idx_19
+
+  L97:
+    load_var __for_idx_19
     load_var items
     call baml.Array.length
-    store_var _len19
-    load_const 0
-    store_var _i19
-
-  L169:
-    load_var _i19
-    load_var _len19
     cmp_op <
-    pop_jump_if_false L170
-    jump L171
+    pop_jump_if_false L98
+    jump L99
 
-  L170:
-    load_const 1
-    store_var plain
-    load_const 2
-    store_var typed
-    load_var a
-    load_var result
-    bin_op +
-    store_var complex_init
-    load_const 42
-    load_const "key"
-    alloc_map 1
-    store_var very_long_variable_name_for_testing_wrapping
-    load_var a
-    load_var a
-    bin_op *
-    load_var result
-    load_var result
-    bin_op *
-    bin_op +
-    load_var a
-    load_var result
-    bin_op *
-    bin_op +
-    load_var a
-    bin_op +
-    load_var result
-    bin_op +
-    load_var a
-    load_var a
-    bin_op *
-    load_var a
-    bin_op *
-    bin_op +
-    load_var result
-    load_var result
-    bin_op *
-    load_var result
-    bin_op *
-    bin_op +
-    load_var a
-    load_var result
-    bin_op *
-    load_var a
-    bin_op *
-    bin_op +
-    load_var result
-    load_var a
-    bin_op *
-    load_var result
-    bin_op *
-    bin_op +
-    store_var another_extremely_long_variable_name
-    load_const 42
-    load_const "deep"
-    alloc_map 1
-    load_const "inner"
-    alloc_map 1
-    load_const "outer"
-    alloc_map 1
-    store_var deeply_typed
-    load_const 42
-    store_var trivia_var
-    load_const 42
-    store_var trivia_var_block
-    load_const 42
-    load_const "key"
-    alloc_map 1
-    store_var very_long_variable_name_for_testing_wrapping
-    load_const 42
-    load_const "key"
-    alloc_map 1
-    store_var very_long_variable_name_for_testing_wrapping
-    load_var a
-    load_var a
-    bin_op *
-    load_var result
-    load_var result
-    bin_op *
-    bin_op +
-    load_var a
-    load_var result
-    bin_op *
-    bin_op +
-    load_var a
-    bin_op +
-    load_var result
-    bin_op +
-    load_var a
-    load_var a
-    bin_op *
-    load_var a
-    bin_op *
-    bin_op +
-    load_var result
-    load_var result
-    bin_op *
-    load_var result
-    bin_op *
-    bin_op +
-    load_var a
-    load_var result
-    bin_op *
-    load_var a
-    bin_op *
-    bin_op +
-    load_var result
-    load_var a
-    bin_op *
-    load_var result
-    bin_op *
-    bin_op +
-    store_var another_extremely_long_variable_name
-    load_var a
-    load_var a
-    bin_op *
-    load_var result
-    load_var result
-    bin_op *
-    bin_op +
-    load_var a
-    load_var result
-    bin_op *
-    bin_op +
-    load_var a
-    bin_op +
-    load_var result
-    bin_op +
-    load_var a
-    load_var a
-    bin_op *
-    load_var a
-    bin_op *
-    bin_op +
-    load_var result
-    load_var result
-    bin_op *
-    load_var result
-    bin_op *
-    bin_op +
-    load_var a
-    load_var result
-    bin_op *
-    load_var a
-    bin_op *
-    bin_op +
-    load_var result
-    load_var a
-    bin_op *
-    load_var result
-    bin_op *
-    bin_op +
-    store_var another_extremely_long_variable_name
+  L98:
     load_var result
     return
 
-  L171:
-    load_var items
-    load_var _i19
-    load_array_element
-    store_var item
-    load_var _i19
-    load_const 1
-    bin_op +
-    store_var _i19
+  L99:
     load_var result
-    load_var item
+    load_var items
+    load_var __for_idx_19
+    load_array_element
     bin_op +
     store_var result
-    jump L169
+    load_var __for_idx_19
+    load_const 1
+    bin_op +
+    store_var __for_idx_19
+    jump L97
 
-  L172:
+  L100:
     load_var result
     load_var i
     bin_op +
@@ -3111,24 +2922,20 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const 1
     bin_op +
     store_var i
-    jump L167
+    jump L95
 
-  L173:
+  L101:
     load_var a
     load_const 1
     bin_op +
     store_var a
-    jump L165
+    jump L93
 
-  L174:
-    load_var _iter17
-    load_var _i17
+  L102:
+    load_var _345
+    load_var __for_idx_17
     load_array_element
     store_var i
-    load_var _i17
-    load_const 1
-    bin_op +
-    store_var _i17
     load_const 10
     load_const 20
     load_const 30
@@ -3140,91 +2947,94 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const 90
     load_const 100
     alloc_array 10
-    store_var _iter18
-    load_var _iter18
-    call baml.Array.length
-    store_var _len18
+    store_var _351
     load_const 0
-    store_var _i18
+    store_var __for_idx_18
 
-  L175:
-    load_var _i18
-    load_var _len18
+  L103:
+    load_var __for_idx_18
+    load_var _351
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L164
-    load_var _iter18
-    load_var _i18
-    load_array_element
-    store_var j
-    load_var _i18
+    pop_jump_if_false L104
+    jump L105
+
+  L104:
+    load_var __for_idx_17
     load_const 1
     bin_op +
-    store_var _i18
+    store_var __for_idx_17
+    jump L92
+
+  L105:
+    load_var _351
+    load_var __for_idx_18
+    load_array_element
+    store_var j
     load_var i
     load_var j
     bin_op *
     load_const 500
     cmp_op >
-    pop_jump_if_false L176
-    jump L177
-
-  L176:
-    load_const false
-    jump L178
-
-  L177:
+    store_var _359
+    load_var _359
+    store_var _358
+    load_var _359
+    pop_jump_if_false L106
     load_var i
     load_var j
     bin_op +
     load_const 100
     cmp_op <
+    store_var _358
 
-  L178:
-    pop_jump_if_false L179
-    jump L180
+  L106:
+    load_var _358
+    pop_jump_if_false L107
+    jump L108
 
-  L179:
+  L107:
     load_const 0
     store_var computation
-    jump L185
+    jump L113
 
-  L180:
+  L108:
     load_var i
     load_const 3
     bin_op %
     copy 0
     load_const 0
     cmp_op ==
-    pop_jump_if_false L181
+    pop_jump_if_false L109
     pop 1
-    jump L184
+    jump L112
 
-  L181:
+  L109:
     copy 0
     load_const 1
     cmp_op ==
-    pop_jump_if_false L182
+    pop_jump_if_false L110
     pop 1
-    jump L183
+    jump L111
 
-  L182:
+  L110:
     pop 1
     load_var i
     load_var j
     bin_op *
     store_var computation
-    jump L185
+    jump L113
 
-  L183:
+  L111:
     load_var i
     load_var j
     bin_op *
     load_var result
     bin_op -
     store_var computation
-    jump L185
+    jump L113
 
-  L184:
+  L112:
     load_var i
     load_var j
     bin_op *
@@ -3232,22 +3042,22 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     store_var computation
 
-  L185:
+  L113:
     load_var result
     load_var computation
     bin_op +
     store_var result
-    jump L175
-
-  L186:
-    load_var items
-    load_var _i16
-    load_array_element
-    store_var i
-    load_var _i16
+    load_var __for_idx_18
     load_const 1
     bin_op +
-    store_var _i16
+    store_var __for_idx_18
+    jump L103
+
+  L114:
+    load_var items
+    load_var __for_idx_16
+    load_array_element
+    store_var i
     load_var i
     load_var i
     bin_op *
@@ -3257,61 +3067,55 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     store_var j
 
-  L187:
+  L115:
     load_var j
     load_const 1000000
     cmp_op <
-    pop_jump_if_false L188
-    jump L189
+    pop_jump_if_false L116
 
-  L188:
-    load_const false
-    jump L190
-
-  L189:
+  L116:
     load_var flag
-
-  L190:
-    pop_jump_if_false L191
-    jump L192
-
-  L191:
-    load_const false
-    jump L193
-
-  L192:
+    store_var _334
+    load_var flag
+    pop_jump_if_false L117
     load_var i
     load_const 0
     cmp_op >
+    store_var _334
 
-  L193:
-    pop_jump_if_false L194
-    jump L195
-
-  L194:
-    load_const false
-    jump L196
-
-  L195:
+  L117:
+    load_var _334
+    store_var _333
+    load_var _334
+    pop_jump_if_false L118
     load_var result
     load_const 0
     cmp_op >
+    store_var _333
 
-  L196:
-    pop_jump_if_false L197
-    jump L198
-
-  L197:
-    load_const false
-    jump L199
-
-  L198:
+  L118:
+    load_var _333
+    store_var _332
+    load_var _333
+    pop_jump_if_false L119
     load_var j
     load_const 42
     cmp_op !=
+    store_var _332
 
-  L199:
-    pop_jump_if_false L162
+  L119:
+    load_var _332
+    pop_jump_if_false L120
+    jump L121
+
+  L120:
+    load_var __for_idx_16
+    load_const 1
+    bin_op +
+    store_var __for_idx_16
+    jump L90
+
+  L121:
     load_var result
     load_var j
     bin_op +
@@ -3324,68 +3128,72 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     bin_op +
     store_var j
-    jump L187
+    jump L115
 
-  L200:
+  L122:
     load_const 1
     load_const 2
     alloc_array 2
-    store_var _iter15
-    load_var _iter15
-    call baml.Array.length
-    store_var _len15
+    store_var _301
     load_const 0
-    store_var _i15
+    store_var __for_idx_15
 
-  L201:
-    load_var _i15
-    load_var _len15
+  L123:
+    load_var __for_idx_15
+    load_var _301
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L202
-    jump L203
+    pop_jump_if_false L124
+    jump L125
 
-  L202:
+  L124:
     load_var lvl1
     load_const 1
     bin_op +
     store_var lvl1
-    jump L160
+    jump L88
 
-  L203:
-    load_var _iter15
-    load_var _i15
+  L125:
+    load_var _301
+    load_var __for_idx_15
     load_array_element
     store_var lvl2
-    load_var _i15
-    load_const 1
-    bin_op +
-    store_var _i15
     load_const 0
     store_var lvl3
 
-  L204:
+  L126:
     load_var lvl3
     load_const 2
     cmp_op <
-    pop_jump_if_false L201
+    pop_jump_if_false L127
+    jump L128
+
+  L127:
+    load_var __for_idx_15
+    load_const 1
+    bin_op +
+    store_var __for_idx_15
+    jump L123
+
+  L128:
     load_const 0
     store_var lvl4
 
-  L205:
+  L129:
     load_var lvl4
     load_const 2
     cmp_op <
-    pop_jump_if_false L206
-    jump L207
+    pop_jump_if_false L130
+    jump L131
 
-  L206:
+  L130:
     load_var lvl3
     load_const 1
     bin_op +
     store_var lvl3
-    jump L204
+    jump L126
 
-  L207:
+  L131:
     load_var result
     load_var lvl1
     load_var lvl2
@@ -3400,116 +3208,126 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const 1
     bin_op +
     store_var lvl4
-    jump L205
+    jump L129
 
-  L208:
-    load_var _iter13
-    load_var _i13
+  L132:
+    load_var _272
+    load_var __for_idx_13
     load_array_element
     store_var i
-    load_var _i13
-    load_const 1
-    bin_op +
-    store_var _i13
     load_var i
     load_const 3
     cmp_op ==
-    pop_jump_if_false L209
-    jump L158
+    pop_jump_if_false L133
+    jump L139
 
-  L209:
+  L133:
     load_const 10
     load_const 20
     load_const 30
     load_const 40
     load_const 50
     alloc_array 5
-    store_var _iter14
-    load_var _iter14
-    call baml.Array.length
-    store_var _len14
+    store_var _280
     load_const 0
-    store_var _i14
+    store_var __for_idx_14
 
-  L210:
-    load_var _i14
-    load_var _len14
+  L134:
+    load_var __for_idx_14
+    load_var _280
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L158
-    load_var _iter14
-    load_var _i14
-    load_array_element
-    store_var j
-    load_var _i14
-    load_const 1
-    bin_op +
-    store_var _i14
+    pop_jump_if_false L139
     load_var i
-    load_var j
+    load_var _280
+    load_var __for_idx_14
+    load_array_element
     bin_op *
-    store_var _782
-    load_var _782
+    store_var _287
+    load_var _287
     load_const 0
     cmp_op ==
-    pop_jump_if_false L211
-    jump L158
+    pop_jump_if_false L135
+    jump L139
 
-  L211:
-    load_var _782
+  L135:
+    load_var _287
     type_tag
     load_const 0
     cmp_op ==
-    pop_jump_if_false L212
-    load_var _782
+    pop_jump_if_false L136
+    load_var _287
     load_const 100
     cmp_op >
-    pop_jump_if_false L212
-    jump L210
+    pop_jump_if_false L136
+    jump L138
 
-  L212:
+  L136:
+    load_var _287
+    type_tag
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L137
+    load_var _287
+    store_var val
+
+  L137:
     load_var result
-    load_var _782
+    load_var val
     bin_op +
     store_var result
-    jump L210
 
-  L213:
+  L138:
+    load_var __for_idx_14
+    load_const 1
+    bin_op +
+    store_var __for_idx_14
+    jump L134
+
+  L139:
+    load_var __for_idx_13
+    load_const 1
+    bin_op +
+    store_var __for_idx_13
+    jump L86
+
+  L140:
     load_const 0
     store_var middle
 
-  L214:
+  L141:
     load_var middle
     load_const 3
     cmp_op <
-    pop_jump_if_false L215
-    jump L216
+    pop_jump_if_false L142
+    jump L143
 
-  L215:
+  L142:
     load_var outer
     load_const 1
     bin_op +
     store_var outer
-    jump L156
+    jump L84
 
-  L216:
+  L143:
     load_const 0
     store_var inner
 
-  L217:
+  L144:
     load_var inner
     load_const 3
     cmp_op <
-    pop_jump_if_false L218
-    jump L219
+    pop_jump_if_false L145
+    jump L146
 
-  L218:
+  L145:
     load_var middle
     load_const 1
     bin_op +
     store_var middle
-    jump L214
+    jump L141
 
-  L219:
+  L146:
     load_var result
     load_var outer
     load_var middle
@@ -3522,106 +3340,104 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const 1
     bin_op +
     store_var inner
-    jump L217
+    jump L144
 
-  L220:
-    load_var _iter10
-    load_var _i10
+  L147:
+    load_var _235
+    load_var __for_idx_10
     load_array_element
     store_var i
-    load_var _i10
-    load_const 1
-    bin_op +
-    store_var _i10
     load_const 4
     load_const 5
     load_const 6
     alloc_array 3
-    store_var _iter11
-    load_var _iter11
-    call baml.Array.length
-    store_var _len11
+    store_var _241
     load_const 0
-    store_var _i11
+    store_var __for_idx_11
 
-  L221:
-    load_var _i11
-    load_var _len11
+  L148:
+    load_var __for_idx_11
+    load_var _241
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L154
-    load_var _iter11
-    load_var _i11
-    load_array_element
-    store_var j
-    load_var _i11
+    pop_jump_if_false L149
+    jump L150
+
+  L149:
+    load_var __for_idx_10
     load_const 1
     bin_op +
-    store_var _i11
+    store_var __for_idx_10
+    jump L82
+
+  L150:
+    load_var _241
+    load_var __for_idx_11
+    load_array_element
+    store_var j
     load_const 7
     load_const 8
     load_const 9
     alloc_array 3
-    store_var _iter12
-    load_var _iter12
-    call baml.Array.length
-    store_var _len12
+    store_var _247
     load_const 0
-    store_var _i12
+    store_var __for_idx_12
 
-  L222:
-    load_var _i12
-    load_var _len12
+  L151:
+    load_var __for_idx_12
+    load_var _247
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L221
-    load_var _iter12
-    load_var _i12
-    load_array_element
-    store_var k
-    load_var _i12
+    pop_jump_if_false L152
+    jump L153
+
+  L152:
+    load_var __for_idx_11
     load_const 1
     bin_op +
-    store_var _i12
+    store_var __for_idx_11
+    jump L148
+
+  L153:
     load_var result
     load_var i
     load_var j
     bin_op *
-    load_var k
+    load_var _247
+    load_var __for_idx_12
+    load_array_element
     bin_op *
     bin_op +
     store_var result
-    jump L222
-
-  L223:
-    load_var _iter9
-    load_var _i9
-    load_array_element
-    store_var extremely_long_item_variable_name
-    load_var _i9
+    load_var __for_idx_12
     load_const 1
     bin_op +
-    store_var _i9
+    store_var __for_idx_12
+    jump L151
+
+  L154:
     load_var result
     load_const 1
     bin_op +
     store_var result
-    jump L152
-
-  L224:
-    load_var _iter8
-    load_var _i8
-    load_array_element
-    store_var extremely_long_item_variable_name
-    load_var _i8
+    load_var __for_idx_9
     load_const 1
     bin_op +
-    store_var _i8
+    store_var __for_idx_9
+    jump L80
+
+  L155:
     load_var result
     load_const 1
     bin_op +
     store_var result
-    jump L150
+    load_var __for_idx_8
+    load_const 1
+    bin_op +
+    store_var __for_idx_8
+    jump L78
 
-  L225:
+  L156:
     load_var result
     load_var extremely_long_loop_counter_variable
     bin_op +
@@ -3632,9 +3448,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     bin_op +
     store_var extremely_long_loop_counter_variable
-    jump L142
+    jump L74
 
-  L226:
+  L157:
     load_var result
     load_var extremely_long_loop_counter_variable
     bin_op +
@@ -3645,53 +3461,45 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     bin_op +
     store_var extremely_long_loop_counter_variable
-    jump L134
+    jump L70
 
-  L227:
+  L158:
     load_var a
     load_const 1
     bin_op +
     store_var a
-    jump L114
+    jump L62
 
-  L228:
+  L159:
     load_var a
     load_const 1
     bin_op +
     store_var a
-    jump L95
+    jump L55
 
-  L229:
-    load_var _iter7
-    load_var _i7
-    load_array_element
-    store_var extremely_long_item_variable_name
-    load_var _i7
-    load_const 1
-    bin_op +
-    store_var _i7
+  L160:
     load_var result
     load_const 1
     bin_op +
     store_var result
-    jump L94
-
-  L230:
-    load_var _iter6
-    load_var _i6
-    load_array_element
-    store_var item
-    load_var _i6
+    load_var __for_idx_7
     load_const 1
     bin_op +
-    store_var _i6
+    store_var __for_idx_7
+    jump L54
+
+  L161:
     load_var result
     load_const 1
     bin_op +
     store_var result
-    jump L92
+    load_var __for_idx_6
+    load_const 1
+    bin_op +
+    store_var __for_idx_6
+    jump L52
 
-  L231:
+  L162:
     load_var result
     load_var extremely_long_loop_counter_variable
     bin_op +
@@ -3702,9 +3510,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op +
     bin_op +
     store_var extremely_long_loop_counter_variable
-    jump L84
+    jump L48
 
-  L232:
+  L163:
     load_var result
     load_var very_long_variable_name
     bin_op +
@@ -3713,64 +3521,49 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const 1
     bin_op +
     store_var very_long_variable_name
-    jump L79
+    jump L45
 
-  L233:
+  L164:
     load_var a
     load_const 1
     bin_op +
     store_var a
-    jump L50
+    jump L34
 
-  L234:
+  L165:
     load_var a
     load_const 1
     bin_op +
     store_var a
-    jump L31
+    jump L27
 
-  L235:
+  L166:
+    load_var result
     load_var items
-    load_var _i5
+    load_var __for_idx_5
     load_array_element
-    store_var item
-    load_var _i5
-    load_const 1
-    bin_op +
-    store_var _i5
-    load_var result
-    load_var item
     bin_op +
     store_var result
-    jump L30
-
-  L236:
-    load_var items
-    load_var _i4
-    load_array_element
-    store_var item
-    load_var _i4
+    load_var __for_idx_5
     load_const 1
     bin_op +
-    store_var _i4
-    load_var result
-    load_var item
-    bin_op +
-    store_var result
-    jump L28
-
-  L237:
-    load_var result
-    load_var i
-    bin_op +
-    store_var result
-    load_var i
-    load_const 1
-    bin_op +
-    store_var i
+    store_var __for_idx_5
     jump L26
 
-  L238:
+  L167:
+    load_var result
+    load_var items
+    load_var __for_idx_4
+    load_array_element
+    bin_op +
+    store_var result
+    load_var __for_idx_4
+    load_const 1
+    bin_op +
+    store_var __for_idx_4
+    jump L24
+
+  L168:
     load_var result
     load_var i
     bin_op +
@@ -3779,80 +3572,89 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const 1
     bin_op +
     store_var i
-    jump L24
+    jump L22
 
-  L239:
-    load_var _iter2
-    load_var _i2
-    load_array_element
-    store_var i
-    load_var _i2
+  L169:
+    load_var result
+    load_var i
+    bin_op +
+    store_var result
+    load_var i
     load_const 1
     bin_op +
-    store_var _i2
+    store_var i
+    jump L20
+
+  L170:
+    load_var _41
+    load_var __for_idx_2
+    load_array_element
+    store_var i
     load_const 4
     load_const 5
     load_const 6
     alloc_array 3
-    store_var _iter3
-    load_var _iter3
-    call baml.Array.length
-    store_var _len3
+    store_var _47
     load_const 0
-    store_var _i3
+    store_var __for_idx_3
 
-  L240:
-    load_var _i3
-    load_var _len3
+  L171:
+    load_var __for_idx_3
+    load_var _47
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L22
-    load_var _iter3
-    load_var _i3
-    load_array_element
-    store_var j
-    load_var _i3
+    pop_jump_if_false L172
+    jump L173
+
+  L172:
+    load_var __for_idx_2
     load_const 1
     bin_op +
-    store_var _i3
+    store_var __for_idx_2
+    jump L18
+
+  L173:
     load_var result
     load_var i
-    load_var j
+    load_var _47
+    load_var __for_idx_3
+    load_array_element
     bin_op *
     bin_op +
     store_var result
-    jump L240
-
-  L241:
-    load_var _iter1
-    load_var _i1
-    load_array_element
-    store_var x
-    load_var _i1
+    load_var __for_idx_3
     load_const 1
     bin_op +
-    store_var _i1
+    store_var __for_idx_3
+    jump L171
+
+  L174:
     load_var result
-    load_var x
+    load_var _34
+    load_var __for_idx_1
+    load_array_element
     bin_op +
     store_var result
-    jump L20
+    load_var __for_idx_1
+    load_const 1
+    bin_op +
+    store_var __for_idx_1
+    jump L16
 
-  L242:
+  L175:
+    load_var result
     load_var items
-    load_var _i
+    load_var __for_idx
     load_array_element
-    store_var item
-    load_var _i
-    load_const 1
-    bin_op +
-    store_var _i
-    load_var result
-    load_var item
     bin_op +
     store_var result
-    jump L18
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L14
 
-  L243:
+  L176:
     load_var result
     load_var i
     bin_op +
@@ -3861,9 +3663,9 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const 2
     bin_op +
     store_var i
-    jump L13
+    jump L11
 
-  L244:
+  L177:
     load_var result
     load_var i
     bin_op +
@@ -3872,23 +3674,23 @@ function LoopStmts(items: int[], flag: bool) -> int {
     load_const 1
     bin_op +
     store_var i
-    jump L11
-
-  L245:
-    load_var a
-    load_const 1
-    bin_op +
-    store_var a
     jump L9
 
-  L246:
+  L178:
     load_var a
     load_const 1
     bin_op +
     store_var a
-    jump L8
+    jump L7
 
-  L247:
+  L179:
+    load_var a
+    load_const 1
+    bin_op +
+    store_var a
+    jump L6
+
+  L180:
     load_var a
     load_const 1
     bin_op +
@@ -3898,17 +3700,17 @@ function LoopStmts(items: int[], flag: bool) -> int {
     bin_op %
     load_const 0
     cmp_op ==
-    pop_jump_if_false L7
-    jump L7
+    pop_jump_if_false L5
+    jump L5
 
-  L248:
+  L181:
     load_var a
     load_const 1
     bin_op +
     store_var a
     jump L1
 
-  L249:
+  L182:
     load_var a
     load_const 1
     bin_op +
@@ -3916,7 +3718,7 @@ function LoopStmts(items: int[], flag: bool) -> int {
     jump L0
 }
 
-function ManyNestedExprs(items: int[]) -> int {
+function user.ManyNestedExprs(items: int[]) -> int {
     load_var items
     load_const 0
     load_array_element
@@ -3980,34 +3782,59 @@ function ManyNestedExprs(items: int[]) -> int {
     return
 }
 
-function ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
+function user.ManyOptionsClient$new() -> null {
     load_const "OPENAI_API_KEY"
-    dispatch_future env.get_or_panic
-    await
-    store_var _32
+    call baml.env.get_or_panic
+    store_var _2
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "ManyOptionsClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const "https://api.openai.com/v1"
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_var _2
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
     load_const 4096
     load_const 0.7
     load_const 0.95
     load_const 0.5
     load_const 0.3
-    load_const true
+    load_const "true"
     load_const "END"
     load_const "STOP"
     load_const "DONE"
     load_const "COMPLETE"
     load_const "FINISHED"
     alloc_array 5
-    load_var _32
-    load_const "https://api.openai.com/v1"
-    load_const "model"
     load_const "max_tokens"
     load_const "temperature"
     load_const "top_p"
@@ -4015,20 +3842,18 @@ function ManyOptionsClient.resolve() -> baml.llm.PrimitiveClient {
     load_const "presence_penalty"
     load_const "stream"
     load_const "stop_sequences"
-    load_const "api_key"
-    load_const "base_url"
-    alloc_map 10
-    dispatch_future baml.llm.build_primitive_client
-    await
+    alloc_map 7
+    store_field .request_body
+    store_field .options
     return
 }
 
-function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+function user.ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     load_const "result"
     return
 }
 
-function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -> string {
+function user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bool) -> string {
     load_var x
     copy 0
     load_const 0
@@ -4041,23 +3866,25 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
     load_var x
     jump_table [L1, L1, L1, L1, L1], default L1
 
-  L1:
+  L1: 4
     load_var x
     copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L2
     pop 1
-    jump L3
 
   L2:
     pop 1
     load_var x
-    load_const 1
-    bin_op +
-    store_var y
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L3
+    pop 1
 
   L3:
+    pop 1
     load_var x
     copy 0
     load_const 0
@@ -4068,14 +3895,16 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
   L4:
     pop 1
     load_var x
-    copy 0
+    type_tag
     load_const 0
     cmp_op ==
     pop_jump_if_false L5
-    pop 1
+    load_var x
+    load_const 0
+    cmp_op >
+    pop_jump_if_false L5
 
   L5:
-    pop 1
     load_var x
     type_tag
     load_const 0
@@ -4088,57 +3917,52 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
 
   L6:
     load_var x
-    type_tag
+    copy 0
     load_const 0
     cmp_op ==
     pop_jump_if_false L7
-    load_var x
-    load_const 0
-    cmp_op >
-    pop_jump_if_false L7
+    pop 1
 
   L7:
-    load_var x
     copy 0
-    load_const 0
+    load_const 1
     cmp_op ==
     pop_jump_if_false L8
     pop 1
 
   L8:
     copy 0
-    load_const 1
+    load_const 42
     cmp_op ==
     pop_jump_if_false L9
     pop 1
 
   L9:
-    copy 0
-    load_const 42
+    pop 1
+    load_const "hello"
+    load_const "hello"
     cmp_op ==
     pop_jump_if_false L10
-    pop 1
+    jump L11
 
   L10:
-    pop 1
-    load_const "hello"
-    load_const "hello"
-    cmp_op ==
-    pop_jump_if_false L11
-    jump L12
-
-  L11:
     load_const "hello"
     load_const "bye"
     cmp_op ==
-    pop_jump_if_false L12
+    pop_jump_if_false L11
 
-  L12:
+  L11:
     load_var b
     load_const true
     cmp_op ==
-    pop_jump_if_false L13
+    pop_jump_if_false L12
     jump L13
+
+  L12:
+    load_var b
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L13
 
   L13:
     load_var x
@@ -4150,642 +3974,658 @@ function MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: b
 
   L14:
     pop 1
+    load_var x
+    type_tag
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L15
+
+  L15:
     load_var s
     discriminant
     copy 0
     load_const MatchStatus.Active
     cmp_op ==
-    pop_jump_if_false L15
-    pop 1
-
-  L15:
-    copy 0
-    load_const MatchStatus.Inactive
-    cmp_op ==
     pop_jump_if_false L16
     pop 1
 
   L16:
+    copy 0
+    load_const MatchStatus.Inactive
+    cmp_op ==
+    pop_jump_if_false L17
     pop 1
-    load_var x
-    jump_table [L17, L17, L17, L17, L17], default L17
 
   L17:
+    pop 1
+    load_var x
+    jump_table [L18, L18, L18, L18, L18], default L18
+
+  L18: 4
     load_var x
     copy 0
     load_const 0
-    cmp_op ==
-    pop_jump_if_false L18
-    pop 1
-
-  L18:
-    copy 0
-    load_const 1
     cmp_op ==
     pop_jump_if_false L19
     pop 1
 
   L19:
     copy 0
-    load_const 2
+    load_const 1
     cmp_op ==
     pop_jump_if_false L20
     pop 1
 
   L20:
+    copy 0
+    load_const 2
+    cmp_op ==
+    pop_jump_if_false L21
+    pop 1
+
+  L21:
     pop 1
     load_var s
     discriminant
     copy 0
     load_const MatchStatus.Active
     cmp_op ==
-    pop_jump_if_false L21
-    pop 1
-
-  L21:
-    copy 0
-    load_const MatchStatus.Pending
-    cmp_op ==
     pop_jump_if_false L22
     pop 1
 
   L22:
+    copy 0
+    load_const MatchStatus.Pending
+    cmp_op ==
+    pop_jump_if_false L23
+    pop 1
+
+  L23:
     pop 1
     load_var r
     load_const MatchSuccess
     cmp_op instanceof
-    pop_jump_if_false L23
-    jump L24
-
-  L23:
-    load_var r
-    load_const MatchFailure
-    cmp_op instanceof
     pop_jump_if_false L24
+    jump L25
 
   L24:
     load_var r
-    pop 1
-    load_const false
+    load_const MatchFailure
+    cmp_op instanceof
     pop_jump_if_false L25
 
   L25:
     load_var r
-    jump_table [L26, L26, L26, L26, L26, L26], default L26
+    pop 1
+    load_const false
+    pop_jump_if_false L26
 
   L26:
     load_var r
+    jump_table [L27, L27, L27, L27, L27, L27], default L27
+
+  L27: 5
+    load_var r
     type_tag
     load_const 0
     cmp_op ==
-    pop_jump_if_false L27
+    pop_jump_if_false L28
     load_var r
     load_const 0
     cmp_op >
-    pop_jump_if_false L27
-    jump L28
-
-  L27:
-    load_var r
-    type_tag
-    load_const 0
-    cmp_op ==
     pop_jump_if_false L28
-    load_var r
-    load_const 0
-    cmp_op <
-    pop_jump_if_false L28
+    jump L29
 
   L28:
     load_var r
     type_tag
     load_const 0
     cmp_op ==
-    pop_jump_if_false L44
+    pop_jump_if_false L29
+    load_var r
+    load_const 0
+    cmp_op <
+    pop_jump_if_false L29
+
+  L29:
+    load_var r
+    type_tag
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L35
     load_var r
     store_var n
     load_var n
     load_const 0
     cmp_op >
-    pop_jump_if_false L29
-    jump L30
-
-  L29:
-    load_const false
-    jump L31
-
-  L30:
+    store_var _44
+    load_var _44
+    store_var _43
+    load_var _44
+    pop_jump_if_false L30
     load_var n
     load_const 100
     cmp_op <
+    store_var _43
 
-  L31:
-    pop_jump_if_false L32
-    jump L33
-
-  L32:
-    load_const false
-    jump L34
-
-  L33:
+  L30:
+    load_var _43
+    store_var _42
+    load_var _43
+    pop_jump_if_false L31
     load_var n
     load_const 42
     cmp_op !=
+    store_var _42
 
-  L34:
-    pop_jump_if_false L35
-    jump L36
-
-  L35:
-    load_const false
-    jump L37
-
-  L36:
+  L31:
+    load_var _42
+    store_var _41
+    load_var _42
+    pop_jump_if_false L32
     load_var n
     load_const 13
     cmp_op !=
+    store_var _41
 
-  L37:
-    pop_jump_if_false L38
-    jump L39
-
-  L38:
-    load_const false
-    jump L40
-
-  L39:
+  L32:
+    load_var _41
+    store_var _40
+    load_var _41
+    pop_jump_if_false L33
     load_var n
     load_const 7
     cmp_op !=
+    store_var _40
 
-  L40:
-    pop_jump_if_false L41
-    jump L42
-
-  L41:
-    load_const false
-    jump L43
-
-  L42:
+  L33:
+    load_var _40
+    store_var _39
+    load_var _40
+    pop_jump_if_false L34
     load_var n
     load_const 99
     cmp_op !=
+    store_var _39
 
-  L43:
-    pop_jump_if_false L44
+  L34:
+    load_var _39
+    pop_jump_if_false L35
 
-  L44:
+  L35:
     load_var r
     copy 0
     load_const 0
     cmp_op ==
-    pop_jump_if_false L45
+    pop_jump_if_false L36
     pop 1
 
-  L45:
+  L36:
     copy 0
     load_const 1
     cmp_op ==
-    pop_jump_if_false L46
+    pop_jump_if_false L37
     pop 1
 
-  L46:
+  L37:
     pop 1
     load_var r
-    jump_table [L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47, L47], default L47
+    jump_table [L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38, L38], default L38
 
-  L47:
+  L38: 24
     load_var r
     discriminant
     copy 0
     load_const MatchStatus.Active
     cmp_op ==
-    pop_jump_if_false L48
+    pop_jump_if_false L39
     pop 1
 
-  L48:
+  L39:
     copy 0
     load_const MatchStatus.Inactive
     cmp_op ==
-    pop_jump_if_false L49
+    pop_jump_if_false L40
     pop 1
 
-  L49:
+  L40:
     pop 1
     load_var r
     copy 0
     load_const 0
     cmp_op ==
-    pop_jump_if_false L50
+    pop_jump_if_false L41
     pop 1
 
-  L50:
+  L41:
     pop 1
-    jump L53
+    jump L44
     load_var b
-    pop_jump_if_false L51
-    jump L52
+    pop_jump_if_false L42
+    jump L43
 
-  L51:
+  L42:
     load_const "this is the false branch also very long"
     store_var result
-    jump L53
+    jump L44
 
-  L52:
+  L43:
     load_const "this is the true branch with a very long string"
     store_var result
 
-  L53:
+  L44:
     load_var r
     type_tag
     load_const 0
     cmp_op ==
-    pop_jump_if_false L66
+    pop_jump_if_false L49
     load_var r
     store_var n
     load_var n
     load_const 0
     cmp_op >
-    pop_jump_if_false L54
-    jump L55
-
-  L54:
-    load_const false
-    jump L56
-
-  L55:
+    store_var _59
+    load_var _59
+    store_var _58
+    load_var _59
+    pop_jump_if_false L45
     load_var n
     load_const 100
     cmp_op <
+    store_var _58
 
-  L56:
-    pop_jump_if_false L57
-    jump L58
-
-  L57:
-    load_const false
-    jump L59
-
-  L58:
+  L45:
+    load_var _58
+    store_var _57
+    load_var _58
+    pop_jump_if_false L46
     load_var n
     load_const 42
     cmp_op !=
+    store_var _57
+
+  L46:
+    load_var _57
+    store_var _56
+    load_var _57
+    pop_jump_if_false L47
+    load_var n
+    load_const 13
+    cmp_op !=
+    store_var _56
+
+  L47:
+    load_var _56
+    store_var _55
+    load_var _56
+    pop_jump_if_false L48
+    load_var n
+    load_const 7
+    cmp_op !=
+    store_var _55
+
+  L48:
+    load_var _55
+    pop_jump_if_false L49
+
+  L49:
+    load_var r
+    type_tag
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L54
+    load_var r
+    store_var n
+    load_var n
+    load_const 0
+    cmp_op >
+    store_var _71
+    load_var _71
+    store_var _70
+    load_var _71
+    pop_jump_if_false L50
+    load_var n
+    load_const 100
+    cmp_op <
+    store_var _70
+
+  L50:
+    load_var _70
+    store_var _69
+    load_var _70
+    pop_jump_if_false L51
+    load_var n
+    load_const 42
+    cmp_op !=
+    store_var _69
+
+  L51:
+    load_var _69
+    store_var _68
+    load_var _69
+    pop_jump_if_false L52
+    load_var n
+    load_const 13
+    cmp_op !=
+    store_var _68
+
+  L52:
+    load_var _68
+    store_var _67
+    load_var _68
+    pop_jump_if_false L53
+    load_var n
+    load_const 7
+    cmp_op !=
+    store_var _67
+
+  L53:
+    load_var _67
+    pop_jump_if_false L54
+
+  L54:
+    load_var r
+    load_const 1
+    bin_op +
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L55
+    pop 1
+
+  L55:
+    pop 1
+    load_var r
+    load_var r
+    bin_op *
+    load_var b
+    load_var b
+    bin_op *
+    bin_op +
+    load_var r
+    load_var b
+    bin_op *
+    bin_op +
+    load_var r
+    bin_op +
+    load_var b
+    bin_op +
+    load_var r
+    load_var r
+    bin_op *
+    load_var r
+    bin_op *
+    bin_op +
+    load_var b
+    load_var b
+    bin_op *
+    load_var b
+    bin_op *
+    bin_op +
+    load_var r
+    load_var b
+    bin_op *
+    load_var r
+    bin_op *
+    bin_op +
+    load_var b
+    load_var r
+    bin_op *
+    load_var b
+    bin_op *
+    bin_op +
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L56
+    pop 1
+
+  L56:
+    pop 1
+    load_var r
+    load_const 1
+    bin_op +
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L57
+    pop 1
+
+  L57:
+    pop 1
+    load_var r
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L58
+    pop 1
+
+  L58:
+    pop 1
+    load_var r
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L59
+    pop 1
 
   L59:
+    pop 1
+    jump L61
+    load_var b
+    load_const true
+    cmp_op ==
     pop_jump_if_false L60
     jump L61
 
   L60:
+    load_var b
     load_const false
-    jump L62
+    cmp_op ==
+    pop_jump_if_false L61
 
   L61:
-    load_var n
-    load_const 13
-    cmp_op !=
+    load_var r
+    copy 0
+    load_const 0
+    cmp_op ==
+    pop_jump_if_false L62
+    pop 1
+    jump L67
 
   L62:
+    copy 0
+    load_const 1
+    cmp_op ==
     pop_jump_if_false L63
-    jump L64
+    pop 1
 
   L63:
-    load_const false
-    jump L65
-
-  L64:
-    load_var n
-    load_const 7
-    cmp_op !=
-
-  L65:
-    pop_jump_if_false L66
-
-  L66:
-    load_var r
-    type_tag
-    load_const 0
-    cmp_op ==
-    pop_jump_if_false L79
-    load_var r
-    store_var n
-    load_var n
-    load_const 0
-    cmp_op >
-    pop_jump_if_false L67
-    jump L68
-
-  L67:
-    load_const false
-    jump L69
-
-  L68:
-    load_var n
-    load_const 100
-    cmp_op <
-
-  L69:
-    pop_jump_if_false L70
-    jump L71
-
-  L70:
-    load_const false
+    pop 1
     jump L72
-
-  L71:
-    load_var n
-    load_const 42
-    cmp_op !=
-
-  L72:
-    pop_jump_if_false L73
-    jump L74
-
-  L73:
-    load_const false
-    jump L75
-
-  L74:
-    load_var n
-    load_const 13
-    cmp_op !=
-
-  L75:
-    pop_jump_if_false L76
-    jump L77
-
-  L76:
-    load_const false
-    jump L78
-
-  L77:
-    load_var n
-    load_const 7
-    cmp_op !=
-
-  L78:
-    pop_jump_if_false L79
-
-  L79:
-    load_var r
-    load_const 1
-    bin_op +
-    copy 0
-    load_const 0
-    cmp_op ==
-    pop_jump_if_false L80
-    pop 1
-
-  L80:
-    pop 1
-    load_var r
-    load_var r
-    bin_op *
-    load_var b
-    load_var b
-    bin_op *
-    bin_op +
-    load_var r
-    load_var b
-    bin_op *
-    bin_op +
-    load_var r
-    bin_op +
-    load_var b
-    bin_op +
-    load_var r
-    load_var r
-    bin_op *
-    load_var r
-    bin_op *
-    bin_op +
-    load_var b
-    load_var b
-    bin_op *
-    load_var b
-    bin_op *
-    bin_op +
-    load_var r
-    load_var b
-    bin_op *
-    load_var r
-    bin_op *
-    bin_op +
-    load_var b
-    load_var r
-    bin_op *
-    load_var b
-    bin_op *
-    bin_op +
-    copy 0
-    load_const 0
-    cmp_op ==
-    pop_jump_if_false L81
-    pop 1
-
-  L81:
-    pop 1
-    load_var r
-    load_const 1
-    bin_op +
-    copy 0
-    load_const 0
-    cmp_op ==
-    pop_jump_if_false L82
-    pop 1
-
-  L82:
-    pop 1
-    load_var r
-    copy 0
-    load_const 0
-    cmp_op ==
-    pop_jump_if_false L83
-    pop 1
-
-  L83:
-    pop 1
-    load_var r
-    copy 0
-    load_const 0
-    cmp_op ==
-    pop_jump_if_false L84
-    pop 1
-
-  L84:
-    pop 1
-    jump L85
-    load_var b
-    load_const true
-    cmp_op ==
-    pop_jump_if_false L85
-    jump L85
-
-  L85:
-    load_var r
-    copy 0
-    load_const 0
-    cmp_op ==
-    pop_jump_if_false L86
-    pop 1
-    jump L91
-
-  L86:
-    copy 0
-    load_const 1
-    cmp_op ==
-    pop_jump_if_false L87
-    pop 1
-
-  L87:
-    pop 1
-    jump L96
     load_var r
     load_const MatchSuccess
     cmp_op instanceof
-    pop_jump_if_false L88
-    jump L89
+    pop_jump_if_false L64
+    jump L65
 
-  L88:
+  L64:
     load_var r
     load_const MatchFailure
     cmp_op instanceof
-    pop_jump_if_false L96
-    jump L96
+    pop_jump_if_false L72
+    jump L72
 
-  L89:
+  L65:
     load_var b
     load_const true
     cmp_op ==
-    pop_jump_if_false L90
-    jump L96
+    pop_jump_if_false L66
+    jump L72
 
-  L90:
-    jump L96
+  L66:
+    load_var b
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L72
+    jump L72
 
-  L91:
+  L67:
     load_var b
     load_const true
     cmp_op ==
-    pop_jump_if_false L92
-    jump L93
+    pop_jump_if_false L68
+    jump L69
 
-  L92:
-    jump L96
+  L68:
+    load_var b
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L72
+    jump L72
 
-  L93:
+  L69:
     load_var r
     discriminant
     copy 0
     load_const MatchStatus.Active
     cmp_op ==
-    pop_jump_if_false L94
+    pop_jump_if_false L70
     pop 1
 
-  L94:
+  L70:
     copy 0
     load_const MatchStatus.Inactive
     cmp_op ==
-    pop_jump_if_false L95
+    pop_jump_if_false L71
     pop 1
 
-  L95:
+  L71:
     pop 1
 
-  L96:
+  L72:
     load_var r
     copy 0
     load_const 0
     cmp_op ==
-    pop_jump_if_false L97
+    pop_jump_if_false L73
     pop 1
 
-  L97:
+  L73:
     pop 1
-    jump L100
+    jump L76
     load_var b
-    pop_jump_if_false L100
+    pop_jump_if_false L76
     load_var r
     discriminant
     copy 0
     load_const MatchStatus.Active
     cmp_op ==
-    pop_jump_if_false L98
+    pop_jump_if_false L74
     pop 1
 
-  L98:
+  L74:
     copy 0
     load_const MatchStatus.Inactive
     cmp_op ==
-    pop_jump_if_false L99
+    pop_jump_if_false L75
     pop 1
 
-  L99:
+  L75:
     pop 1
 
-  L100:
+  L76:
     load_var r
     copy 0
     load_const 0
     cmp_op ==
-    pop_jump_if_false L101
+    pop_jump_if_false L77
     pop 1
-    jump L102
+    jump L78
 
-  L101:
+  L77:
     pop 1
     load_const "other"
-    jump L103
+    jump L79
 
-  L102:
+  L78:
     load_const "zero"
 
-  L103:
+  L79:
     return
 }
 
-function Minimal() -> int {
+function user.Minimal() -> int {
     load_const 1
     return
 }
 
-function MixedValuesClient.resolve() -> baml.llm.PrimitiveClient {
+function user.MixedValuesClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "MixedValuesClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
     load_const 100
     load_const 0.7
-    load_const true
+    load_const "true"
     load_const "END"
     alloc_array 1
-    load_const "inline raw"
-    load_const "model"
+    load_const "#inlineraw#"
     load_const "max_tokens"
     load_const "temperature"
     load_const "stream"
     load_const "stop"
     load_const "inline_string"
-    alloc_map 6
-    dispatch_future baml.llm.build_primitive_client
-    await
+    alloc_map 5
+    store_field .request_body
+    store_field .options
     return
 }
 
-function MultiParamTrivia(a: int, b: string) -> int {
+function user.MultiParamTrivia(a: int, b: string) -> int {
     load_var a
     return
 }
 
-function MultiParamTriviaBlock(a: int, b: string) -> int {
+function user.MultiParamTriviaBlock(a: int, b: string) -> int {
     load_var a
     return
 }
 
-function MultiStatement(a: int, b: int) -> int {
+function user.MultiStatement(a: int, b: int) -> int {
     load_var a
     load_var b
     bin_op +
@@ -4802,21 +4642,23 @@ function MultiStatement(a: int, b: int) -> int {
 
   L0:
     load_var x
-    return
+    jump L2
 
   L1:
     load_var y
+
+  L2:
     return
 }
 
-function MultipleParams(a: int, b: int, c: string) -> int {
+function user.MultipleParams(a: int, b: int, c: string) -> int {
     load_var a
     load_var b
     bin_op +
     return
 }
 
-function MyFunction(a: int, b: int) -> int {
+function user.MyFunction(a: int, b: int) -> int {
     load_var a
     load_var b
     cmp_op >
@@ -4839,25 +4681,51 @@ function MyFunction(a: int, b: int) -> int {
     return
 }
 
-function NestedConfigClient.resolve() -> baml.llm.PrimitiveClient {
+function user.NestedConfigClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "NestedConfigClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    load_const null /* unknown class:  */
+    store_field .headers
+    copy 0
     alloc_map 0
-    load_const "model"
-    load_const "headers"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function NestedGenericReturn() -> map<string, map<string, map<string, int | string | bool | null | float>>> {
+function user.NestedGenericReturn() -> map<string, map<string, map<string, int | string | bool | null | float>>> {
     load_const 1
     load_const "c"
     alloc_map 1
@@ -4868,18 +4736,16 @@ function NestedGenericReturn() -> map<string, map<string, map<string, int | stri
     return
 }
 
-function NestedLoops(matrix: int[][]) -> int {
+function user.NestedLoops(matrix: int[][]) -> int {
     load_const 0
     store_var total
-    load_var matrix
-    call baml.Array.length
-    store_var _len
     load_const 0
-    store_var _i
+    store_var __for_idx
 
   L0:
-    load_var _i
-    load_var _len
+    load_var __for_idx
+    load_var matrix
+    call baml.Array.length
     cmp_op <
     pop_jump_if_false L1
     jump L2
@@ -4890,46 +4756,34 @@ function NestedLoops(matrix: int[][]) -> int {
 
   L2:
     load_var matrix
-    load_var _i
+    load_var __for_idx
     load_array_element
-    store_var row
-    load_var _i
-    load_const 1
-    bin_op +
-    store_var _i
-    load_var row
-    store_var _iter1
-    load_var _iter1
-    call baml.Array.length
-    store_var _len1
+    store_var _8
     load_const 0
-    store_var _i1
+    store_var __for_idx_1
 
   L3:
-    load_var _i1
-    load_var _len1
+    load_var __for_idx_1
+    load_var _8
+    call baml.Array.length
     cmp_op <
-    pop_jump_if_false L0
-    load_var _iter1
-    load_var _i1
+    pop_jump_if_false L11
+    load_var _8
+    load_var __for_idx_1
     load_array_element
     store_var val
-    load_var _i1
-    load_const 1
-    bin_op +
-    store_var _i1
     load_var val
     load_const 0
     cmp_op <
     pop_jump_if_false L4
-    jump L3
+    jump L12
 
   L4:
     load_var val
     load_const 1000
     cmp_op >
     pop_jump_if_false L5
-    jump L0
+    jump L11
 
   L5:
     load_var val
@@ -4974,10 +4828,30 @@ function NestedLoops(matrix: int[][]) -> int {
     load_var processed
     bin_op +
     store_var total
+    jump L12
+
+  L11:
+    load_var __for_idx
+    load_const 1
+    bin_op +
+    store_var __for_idx
+    jump L0
+
+  L12:
+    load_var __for_idx_1
+    load_const 1
+    bin_op +
+    store_var __for_idx_1
     jump L3
 }
 
-function OtherExprs(a: int, b: int) -> int {
+function user.OtherExprs(a: int, b: int) -> int {
+    load_var a
+    load_var b
+    bin_op +
+    load_const 2
+    bin_op *
+    store_var y
     load_var a
     load_var b
     bin_op +
@@ -5031,305 +4905,594 @@ function OtherExprs(a: int, b: int) -> int {
     return
 }
 
-function RawStringConfigClient.resolve() -> baml.llm.PrimitiveClient {
+function user.RawStringConfigClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "RawStringConfigClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const "\n            You are a helpful assistant.\n            Always be concise.\n        "
-    load_const "model"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    load_const "#Youareahelpfulassistant.Alwaysbeconcise.#"
     load_const "system_prompt"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
-    return
-}
-
-function SameLineClient.resolve() -> baml.llm.PrimitiveClient {
-    load_const "SameLineClient"
-    load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    load_const "gpt-4"
-    load_const "model"
     alloc_map 1
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .request_body
+    store_field .options
     return
 }
 
-function SingleParam(x: int) -> int {
+function user.SameLineClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
+    load_const "SameLineClient"
+    store_field .name
+    copy 0
+    load_const "openai"
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
+    load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
+    return
+}
+
+function user.SingleParam(x: int) -> int {
     load_var x
     return
 }
 
-function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+function user.SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: int | string[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
     load_const "result"
     return
 }
 
-function StringProviderClient.resolve() -> baml.llm.PrimitiveClient {
+function user.StringProviderClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "StringProviderClient"
-    load_const "unknown"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    load_const "https://openrouter.ai/api/v1"
+    store_field .name
+    copy 0
+    load_const "openai-generic"
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "mistralai/mistral-small-3.1-24b-instruct"
-    load_const "base_url"
-    load_const "model"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .model
+    copy 0
+    load_const "https://openrouter.ai/api/v1"
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function TestTarget() -> string {
+function user.TestTarget() -> string {
+    load_global user.BasicClient
     load_const "TestTarget"
     alloc_map 0
     call baml.llm.call_llm_function
     return
 }
 
-function TestTarget.build_request() -> baml.http.Request {
+function user.TestTarget$build_request() -> baml.http.Request {
+    load_global user.BasicClient
     load_const "TestTarget"
     alloc_map 0
     call baml.llm.build_request
     return
 }
 
-function TestTarget.render_prompt() -> baml.llm.PromptAst {
+function user.TestTarget$render_prompt() -> baml.llm.PromptAst {
+    load_global user.BasicClient
     load_const "TestTarget"
     alloc_map 0
     call baml.llm.render_prompt
     return
 }
 
-function ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns.resolve() -> baml.llm.PrimitiveClient {
+function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const "model"
-    alloc_map 1
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int {
+function user.ThisIsAnExtremelyLongFunctionNameThatDefinitelyCausesWrappingAllByItselfWithNoParamsNeeded() -> int {
     load_const 1
     return
 }
 
-function TriviaClient.resolve() -> baml.llm.PrimitiveClient {
+function user.TriviaClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const "model"
-    alloc_map 1
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function TriviaClientBlock.resolve() -> baml.llm.PrimitiveClient {
+function user.TriviaClientBlock$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaClientBlock"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
-    load_const "model"
-    alloc_map 1
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function TriviaDeeplyNestedClient.resolve() -> baml.llm.PrimitiveClient {
+function user.TriviaDeeplyNestedClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaDeeplyNestedClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    load_const null /* unknown class:  */
+    store_field .headers
+    copy 0
     alloc_map 0
-    load_const "model"
-    load_const "headers"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function TriviaDeeplyNestedClientBlock.resolve() -> baml.llm.PrimitiveClient {
+function user.TriviaDeeplyNestedClientBlock$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaDeeplyNestedClientBlock"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    load_const null /* unknown class:  */
+    store_field .headers
+    copy 0
     alloc_map 0
-    load_const "model"
-    load_const "headers"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+function user.TriviaEverythingLong_NameAndParamsAndReturn(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
     load_const 1
     load_const "a"
     alloc_map 1
     return
 }
 
-function TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
+function user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param: map<string, int>, second_long_param: int | string | bool[]) -> map<string, int | string | bool | float | null> {
     load_const 1
     load_const "a"
     alloc_map 1
     return
 }
 
-function TriviaFunc(x: int) -> int {
+function user.TriviaFunc(x: int) -> int {
     load_var x
     return
 }
 
-function TriviaFuncBlock(x: int) -> int {
+function user.TriviaFuncBlock(x: int) -> int {
     load_var x
     return
 }
 
-function TriviaLongValueClient.resolve() -> baml.llm.PrimitiveClient {
+function user.TriviaLongValueClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaLongValueClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+    store_field .model
+    copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
-    load_const "model"
-    load_const "base_url"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function TriviaLongValueClientBlock.resolve() -> baml.llm.PrimitiveClient {
+function user.TriviaLongValueClientBlock$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TriviaLongValueClientBlock"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
+    store_field .model
+    copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
-    load_const "model"
-    load_const "base_url"
-    alloc_map 2
-    dispatch_future baml.llm.build_primitive_client
-    await
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
+    alloc_map 0
+    store_field .request_body
+    store_field .options
     return
 }
 
-function TriviaWrapParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+function user.TriviaWrapParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     load_const "result"
     return
 }
 
-function TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+function user.TriviaWrapParamsBlock(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
     load_const "result"
     return
 }
 
-function TriviaWrapReturnType(x: int) -> int | string | bool | null {
+function user.TriviaWrapReturnType(x: int) -> int | string | bool | null {
     load_var x
     return
 }
 
-function TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
+function user.TriviaWrapReturnTypeBlock(x: int) -> int | string | bool | null {
     load_var x
     return
 }
 
-function TypedValuesClient.resolve() -> baml.llm.PrimitiveClient {
+function user.TypedValuesClient$new() -> null {
+    alloc_instance baml.llm.PrimitiveClient
+    copy 0
     load_const "TypedValuesClient"
+    store_field .name
+    copy 0
     load_const "openai"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
+    store_field .provider
+    copy 0
+    alloc_instance baml.llm.PrimitiveClientOptions
+    copy 0
     load_const "gpt-4"
+    store_field .model
+    copy 0
+    load_const null
+    store_field .base_url
+    copy 0
+    load_const null
+    store_field .default_role
+    copy 0
+    load_const null
+    store_field .allowed_roles
+    copy 0
+    load_const null
+    store_field .remap_roles
+    copy 0
+    load_const null
+    store_field .api_key
+    copy 0
+    load_const null
+    store_field .provider_options
+    copy 0
+    alloc_map 0
+    store_field .headers
+    copy 0
+    alloc_map 0
+    store_field .query_params
+    copy 0
     load_const 0.5
     load_const 2048
-    load_const true
-    load_const "model"
+    load_const "true"
     load_const "temperature"
     load_const "max_tokens"
     load_const "stream"
-    alloc_map 4
-    dispatch_future baml.llm.build_primitive_client
-    await
+    alloc_map 3
+    store_field .request_body
+    store_field .options
     return
 }
 
-function VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string {
+function user.VeryLongParamList(extremely_long_parameter_name: int, another_very_long_parameter_name: string, yet_another_long_one: bool) -> string {
     load_const "result"
     return
 }
 
-function WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
+function user.WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
     load_const 1
     load_const "result"
     alloc_map 1
     return
 }
 
-function WithMethod.greet() -> string {
-    load_const "hello"
-    return
-}
-
-function stream_WithLongMethod.processData(first_input: map<string, int>, second_input: int | string | bool[], third_input: string) -> map<string, int | string | bool> {
-    load_const 1
-    load_const "result"
-    alloc_map 1
-    return
-}
-
-function stream_WithMethod.greet() -> string {
+function user.WithMethod.greet() -> string {
     load_const "hello"
     return
 }

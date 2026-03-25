@@ -101,4 +101,31 @@ function BreakContinue() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unresolved name: i
+//     ╭─[ loops_c_for.baml:21:9 ]
+//     │
+//  21 │     for (; i <= 10; i += 1) {
+//     │            ┬  
+//     │            ╰── unresolved name: i
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unresolved name: i
+//     ╭─[ loops_c_for.baml:22:8 ]
+//     │
+//  22 │        s += i;
+//     │             ┬  
+//     │             ╰── unresolved name: i
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unreachable code: 1 statement(s) after diverging statement
+//     ╭─[ loops_c_for.baml:51:12 ]
+//     │
+//  51 │ ╭─▶     for (;;) {
+//  52 │ ├─▶        break;
+//     │ │                   
+//     │ ╰─────────────────── unreachable code: 1 statement(s) after diverging statement
+//     │     
+//     │     Note: Error code: E0001
+// ────╯

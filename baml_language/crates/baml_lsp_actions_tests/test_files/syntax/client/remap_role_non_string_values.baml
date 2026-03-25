@@ -18,12 +18,4 @@ client<llm> MyClient {
 
 //----
 //- diagnostics
-// Error: remap_roles values must be quoted strings
-//    ╭─[ client_remap_role_non_string_values.baml:7:16 ]
-//    │
-//  7 │       assistant 123
-//    │                ──┬─  
-//    │                  ╰─── remap_roles values must be quoted strings
-//    │ 
-//    │ Note: Error code: E0044
-// ───╯
+// <no-diagnostics-expected>

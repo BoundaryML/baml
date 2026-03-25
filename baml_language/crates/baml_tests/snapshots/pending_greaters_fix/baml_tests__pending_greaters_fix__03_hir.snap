@@ -1,53 +1,32 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function BadParam.build_request(x: map<string, int>) -> baml.http.Request {
-    baml.llm.build_request("BadParam", { "x": x })
-}
-
-function BadParam.render_prompt(x: map<string, int>) -> baml.llm.PromptAst {
-    baml.llm.render_prompt("BadParam", { "x": x })
-}
-
-function BadReturnType.build_request() -> baml.http.Request {
-    baml.llm.build_request("BadReturnType", {  })
-}
-
-function BadReturnType() -> map<string, int> {
-    baml.llm.call_llm_function("BadReturnType", {  })
-}
-
-function BadReturnType.render_prompt() -> baml.llm.PromptAst {
-    baml.llm.render_prompt("BadReturnType", {  })
-}
-
-function BadParam(x: map<string, int>) -> string {
-    baml.llm.call_llm_function("BadParam", { "x": x })
-}
-
-class MalformedClass {
+=== HIR2 ===
+class user.MalformedClass {
   bad_field: map<string, int>
   good_field: map<string, int>
   another_field: string
 }
-
-class NestedGenerics {
+class user.NestedGenerics {
   nested: map<string, map<string, int>>
   simple: map<string, int>
 }
-
-type BadAlias = map<string, int>
-
-class stream_NestedGenerics {
-  nested: map<string, never> | map<string, map<string, int>>
-  simple: map<string, never> | map<string, int>
+type user.BadAlias = map<string, int>
+function user.BadParam(x: map<string, int>) -> string  [llm] {
+  baml.llm.call_llm_function(GPT4, "BadParam", map { "x": x })
 }
-
-class stream_MalformedClass {
-  bad_field: map<string, never> | map<string, int>
-  good_field: map<string, never> | map<string, int>
-  another_field: null | string
+function user.BadParam$build_request(x: map<string, int>) -> baml.http.Request  [expr] {
+  baml.llm.build_request(GPT4, "BadParam", map { "x": x })
 }
-
-type stream_BadAlias = map<string, int>
+function user.BadParam$render_prompt(x: map<string, int>) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(GPT4, "BadParam", map { "x": x })
+}
+function user.BadReturnType() -> map<string, int>  [llm] {
+  baml.llm.call_llm_function(GPT4, "BadReturnType", map {  })
+}
+function user.BadReturnType$build_request() -> baml.http.Request  [expr] {
+  baml.llm.build_request(GPT4, "BadReturnType", map {  })
+}
+function user.BadReturnType$render_prompt() -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(GPT4, "BadReturnType", map {  })
+}

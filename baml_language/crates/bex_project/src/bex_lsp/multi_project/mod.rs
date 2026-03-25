@@ -470,12 +470,43 @@ impl BexMulitProject {
             *prev = current_paths;
         }
 
+        let flat_diags = Self::flatten_diagnostics(&diagnostics);
+
         self.send_list_projects();
-        self.send_update_project(project_root, &project);
+        self.send_update_project(project_root, &project, flat_diags);
         tracing::debug!("refresh_project done");
     }
 
-    fn build_project_update(project: &LiveProject) -> crate::bex_lsp::ProjectUpdate {
+    fn flatten_diagnostics(
+        diagnostics: &std::collections::HashMap<std::path::PathBuf, Vec<lsp_types::Diagnostic>>,
+    ) -> Vec<crate::bex_lsp::ProjectDiagnostic> {
+        let mut out = Vec::new();
+        for (path, diags) in diagnostics {
+            let filename = path
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            for d in diags {
+                let severity = match d.severity {
+                    Some(lsp_types::DiagnosticSeverity::ERROR) => "error",
+                    Some(lsp_types::DiagnosticSeverity::WARNING) => "warning",
+                    _ => "info",
+                };
+                let line = d.range.start.line + 1;
+                out.push(crate::bex_lsp::ProjectDiagnostic {
+                    severity,
+                    message: format!("{filename}:{line}: {}", d.message),
+                });
+            }
+        }
+        out.sort_by(|a, b| a.message.cmp(&b.message));
+        out
+    }
+
+    fn build_project_update(
+        project: &LiveProject,
+        diagnostics: Vec<crate::bex_lsp::ProjectDiagnostic>,
+    ) -> crate::bex_lsp::ProjectUpdate {
         let is_bex_current = project.project.is_bex_current();
 
         let db_guard = project.project.db.lock().unwrap();
@@ -491,6 +522,7 @@ impl BexMulitProject {
         crate::bex_lsp::ProjectUpdate {
             is_bex_current,
             functions,
+            diagnostics,
         }
     }
 
@@ -505,8 +537,13 @@ impl BexMulitProject {
         );
     }
 
-    fn send_update_project(&self, project_root: &vfs::VfsPath, project: &LiveProject) {
-        let update = Self::build_project_update(project);
+    fn send_update_project(
+        &self,
+        project_root: &vfs::VfsPath,
+        project: &LiveProject,
+        diagnostics: Vec<crate::bex_lsp::ProjectDiagnostic>,
+    ) {
+        let update = Self::build_project_update(project, diagnostics);
         self.playground_sender.send_playground_notification(
             crate::bex_lsp::PlaygroundNotification::UpdateProject {
                 project: project_root.as_str().to_string(),
@@ -529,7 +566,9 @@ impl super::BexLsp for BexMulitProject {
         let projects = self.projects.lock().unwrap();
         for (fs_path, project) in projects.iter() {
             let root_str = fs_path.as_path().to_string_lossy().into_owned();
-            let update = Self::build_project_update(project);
+            let diags_by_file = project.project.diagnostics_by_file(self.position_encoding);
+            let flat_diags = Self::flatten_diagnostics(&diags_by_file);
+            let update = Self::build_project_update(project, flat_diags);
             self.playground_sender.send_playground_notification(
                 crate::bex_lsp::PlaygroundNotification::UpdateProject {
                     project: root_str,

@@ -63,20 +63,11 @@ pub const FUNCTION: i64 = 8;
 /// Future type tag.
 pub const FUTURE: i64 = 9;
 
-/// Media type tag.
-pub const MEDIA: i64 = 10;
-
-/// Resource type tag (file handle, socket, etc.).
-pub const RESOURCE: i64 = 11;
-
-/// `PromptAst` type tag.
-pub const PROMPT_AST: i64 = 12;
+/// `Type` meta-type tag.
+pub const TYPE: i64 = 10;
 
 /// `Collector` type tag.
-pub const COLLECTOR: i64 = 13;
-
-/// `Type` meta-type tag.
-pub const TYPE: i64 = 14;
+pub const COLLECTOR: i64 = 11;
 
 /// Base value for class type tags (classes start at 100).
 pub const CLASS_BASE: i64 = 100;

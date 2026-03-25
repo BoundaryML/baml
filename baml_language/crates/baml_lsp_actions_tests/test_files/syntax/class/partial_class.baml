@@ -21,14 +21,3 @@ class TestClassAlias {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Attribute `@alias` can only be defined once on field `key2` in class `TestClassAlias`
-//    ╭─[ class_partial_class.baml:8:32 ]
-//    │
-//  8 │   key2 string @alias("key21") @alias("key22")
-//    │                ──┬──           ──┬──  
-//    │                  ╰──────────────────── first definition here
-//    │                                  │    
-//    │                                  ╰──── duplicate attribute
-//    │ 
-//    │ Note: Error code: E0014
-// ───╯

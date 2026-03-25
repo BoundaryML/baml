@@ -349,9 +349,7 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::String(_)
-            | Object::Media(_)
-            | Object::PromptAst(_)
-            | Object::Resource(_)
+            | Object::RustData(_)
             | Object::Collector(_)
             | Object::Type(_) => {}
             #[cfg(feature = "heap_debug")]

@@ -95,12 +95,3 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 //     │ 
 //     │ Note: Error code: E0002
 // ────╯
-// Error: unresolved type: map
-//    ╭─[ class_map_types2.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating map types
-//    │ │ 
-//    │ ╰─ unresolved type: map
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯

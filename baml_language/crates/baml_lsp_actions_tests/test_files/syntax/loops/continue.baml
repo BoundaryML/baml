@@ -44,14 +44,25 @@ function ContinueNested() -> int {
 
 //----
 //- diagnostics
-// Error: Missing return expression. Function expects `int` but body has no final expression.
+// Error: unreachable code: 1 statement(s) after diverging statement
+//     ╭─[ loops_continue.baml:23:40 ]
+//     │
+//  23 │ ╭─▶ function ContinueOutsideLoop() -> int {
+//     ┆ ┆   
+//  25 │ ├─▶     continue;
+//     │ │                   
+//     │ ╰─────────────────── unreachable code: 1 statement(s) after diverging statement
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Error: missing return: expected `int`
 //     ╭─[ loops_continue.baml:30:33 ]
 //     │
 //  30 │ ╭─▶ function ContinueNested() -> int {
 //     ┆ ┆   
 //  36 │ ├─▶ }
 //     │ │       
-//     │ ╰─────── Missing return expression. Function expects `int` but body has no final expression.
+//     │ ╰─────── missing return: expected `int`
 //     │     
-//     │     Note: Error code: E0029
+//     │     Note: Error code: E0001
 // ────╯

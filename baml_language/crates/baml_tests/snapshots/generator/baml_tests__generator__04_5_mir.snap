@@ -1,72 +1,60 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== MIR ===
-fn GetUser.build_request() -> baml.http.Request {
+=== MIR2 ===
+fn user.GetUser() -> MyClass {
     // Locals:
-    let _0: baml.http.Request // return
-    let _1: (string, map<string, unknown>) -> baml.http.Request
-    let _2: "GetUser"
-    let _3: map<string, unknown>
+    let _0: MyClass // _0 // return
+    let _1: map<string, unknown>
 
     bb0: {
-        _1 = const fn baml.llm.build_request;
-        _2 = const "GetUser";
-        _3 = {  };
-        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+        _1 = {  };
+        _0 = call const fn baml.llm.call_llm_function(const null, const "GetUser", copy _1) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
-fn GetUser() -> MyClass {
+fn user.GetUser$build_request() -> baml.http.Request {
     // Locals:
-    let _0: MyClass // return
-    let _1: (string, map<string, unknown>) -> unknown
-    let _2: "GetUser"
-    let _3: map<string, unknown>
+    let _0: baml.http.Request // _0 // return
+    let _1: map<string, unknown>
 
     bb0: {
-        _1 = const fn baml.llm.call_llm_function;
-        _2 = const "GetUser";
-        _3 = {  };
-        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+        _1 = {  };
+        _0 = call const fn baml.llm.build_request(const null, const "GetUser", copy _1) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }
 
-fn GetUser.render_prompt() -> baml.llm.PromptAst {
+fn user.GetUser$render_prompt() -> baml.llm.PromptAst {
     // Locals:
-    let _0: baml.llm.PromptAst // return
-    let _1: (string, map<string, unknown>) -> baml.llm.PromptAst
-    let _2: "GetUser"
-    let _3: map<string, unknown>
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: map<string, unknown>
 
     bb0: {
-        _1 = const fn baml.llm.render_prompt;
-        _2 = const "GetUser";
-        _3 = {  };
-        _0 = call copy _1(copy _2, copy _3) -> [bb2];
+        _1 = {  };
+        _0 = call const fn baml.llm.render_prompt(const null, const "GetUser", copy _1) -> [bb1];
     }
 
     bb1: {
-        return;
+        goto -> bb2;
     }
 
     bb2: {
-        goto -> bb1;
+        return;
     }
 }

@@ -74,6 +74,15 @@ function MissingLetAfter() -> int {
 
 //----
 //- diagnostics
+// Error: unresolved name: i
+//    ╭─[ loops_header_requires_let_negative.baml:4:7 ]
+//    │
+//  4 │     for (i = 0; i < 3; i += 1) {
+//    │          ┬  
+//    │          ╰── unresolved name: i
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
 // Error: Expected ')', found ';'
 //    ╭─[ loops_header_requires_let_negative.baml:4:19 ]
 //    │
@@ -92,6 +101,15 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
+// Error: unresolved name: i
+//    ╭─[ loops_header_requires_let_negative.baml:4:21 ]
+//    │
+//  4 │     for (i = 0; i < 3; i += 1) {
+//    │                        ┬  
+//    │                        ╰── unresolved name: i
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
 // Error: Expected expression, found ')'
 //    ╭─[ loops_header_requires_let_negative.baml:4:27 ]
 //    │
@@ -101,39 +119,12 @@ function MissingLetAfter() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Unknown variable `i`
-//    ╭─[ loops_header_requires_let_negative.baml:4:14 ]
-//    │
-//  4 │     for (i = 0; i < 3; i += 1) {
-//    │                 ┬  
-//    │                 ╰── Unknown variable `i`
-//    │ 
-//    │ Note: Error code: E0003
-// ───╯
-// Error: Unknown variable `i`
-//    ╭─[ loops_header_requires_let_negative.baml:4:21 ]
-//    │
-//  4 │     for (i = 0; i < 3; i += 1) {
-//    │                        ┬  
-//    │                        ╰── Unknown variable `i`
-//    │ 
-//    │ Note: Error code: E0003
-// ───╯
-// Error: Unknown variable `i`
+// Error: unresolved name: i
 //    ╭─[ loops_header_requires_let_negative.baml:5:8 ]
 //    │
 //  5 │        s += i;
 //    │             ┬  
-//    │             ╰── Unknown variable `i`
+//    │             ╰── unresolved name: i
 //    │ 
-//    │ Note: Error code: E0003
+//    │ Note: Error code: E0001
 // ───╯
-// Error: Unknown variable `i`
-//     ╭─[ loops_header_requires_let_negative.baml:14:16 ]
-//     │
-//  14 │     for (; s < 2; i += 1) {
-//     │                   ┬  
-//     │                   ╰── Unknown variable `i`
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯

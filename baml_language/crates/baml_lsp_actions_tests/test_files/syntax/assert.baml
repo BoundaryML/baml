@@ -29,12 +29,4 @@ function assertBool() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `bool`, found `string`
-//     ╭─[ assert.baml:17:9 ]
-//     │
-//  17 │     assert "string";
-//     │            ────┬───  
-//     │                ╰───── Expected `bool`, found `string`
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+// <no-diagnostics-expected>

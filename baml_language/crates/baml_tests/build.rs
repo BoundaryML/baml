@@ -30,13 +30,13 @@ fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
 
     // Generate tests
-    generate_tests(&out_dir, &manifest_dir);
+    generate_tests(&manifest_dir);
 
     // Generate benchmarks
     generate_benchmarks(&out_dir, &manifest_dir);
 }
 
-fn generate_tests(_out_dir: &str, manifest_dir: &str) {
+fn generate_tests(manifest_dir: &str) {
     let projects_dir = Path::new(&manifest_dir).join("projects");
 
     // Discover all projects
@@ -47,19 +47,13 @@ fn generate_tests(_out_dir: &str, manifest_dir: &str) {
     // diffs in insta snapshot metadata).
     let dest_path = Path::new(&manifest_dir).join("src/generated_tests.rs");
 
-    let exclude_builtins = quote!(|name: &&String| !name.starts_with(BAML_STD_PREFIX));
     let project_modules: TokenStream = projects
         .iter()
-        .map(|project| {
-            generate_project_tests(project, manifest_dir, exclude_builtins.clone(), false)
-        })
+        .map(|project| generate_project_tests(project, manifest_dir))
         .collect();
-
-    let baml_std_module = generate_baml_std_test(manifest_dir);
 
     let test_modules: TokenStream = quote! {
         #project_modules
-        #baml_std_module
     };
 
     let header = "\
@@ -188,12 +182,7 @@ fn discover_baml_files(dir: &Path) -> Vec<BamlFile> {
     files
 }
 
-fn generate_project_tests(
-    project: &TestProject,
-    manifest_dir: &str,
-    codegen_filter: TokenStream,
-    require_codegen_functions: bool,
-) -> TokenStream {
+fn generate_project_tests(project: &TestProject, manifest_dir: &str) -> TokenStream {
     let module_name = format_ident!("{}", project.name.replace("-", "_"));
     let snapshot_path = format!(
         "{}/snapshots/{}",
@@ -201,21 +190,17 @@ fn generate_project_tests(
         project.name
     );
 
+    let is_stdlib = project.name == "__baml_std__";
+
     let lexer_tests: TokenStream = project.files.iter().map(generate_lexer_test).collect();
 
     let parser_tests: TokenStream = project.files.iter().map(generate_parser_test).collect();
 
-    let hir_test = generate_hir_test(project);
-    let tir_test = generate_tir_test(project);
-    let mir_test = generate_mir_test(project);
-    let control_flow_test =
-        if project.name == "control_flow" || project.name == "headers_edge_cases" {
-            generate_control_flow_test(project)
-        } else {
-            quote! {}
-        };
+    let hir_test = generate_hir_test(project, is_stdlib);
+    let tir_test = generate_tir_test(project, is_stdlib);
+    let mir_test = generate_mir_test(project, is_stdlib);
     let diagnostics_test = generate_diagnostics_test(project);
-    let codegen_test = generate_codegen_test(project, codegen_filter, require_codegen_functions);
+    let codegen_test = generate_codegen_test(project, is_stdlib);
 
     let formatter_tests: TokenStream = project.files.iter().map(generate_formatter_test).collect();
 
@@ -244,9 +229,6 @@ fn generate_project_tests(
         #[cfg(test)]
         mod #module_name {
             use baml_db::*;
-            use baml_compiler_hir::{function_body, function_signature, function_signature_source_map};
-            use baml_compiler_tir::{class_field_types, enum_variants, type_aliases, typing_context};
-            use baml_compiler_tir::pretty::short_display;
             use baml_compiler_diagnostics::{RenderConfig, ToDiagnostic, render_diagnostic};
             use baml_project::ProjectDatabase;
             use std::collections::HashMap;
@@ -262,7 +244,6 @@ fn generate_project_tests(
             #hir_test
             #tir_test
             #mir_test
-            #control_flow_test
             #diagnostics_test
             #codegen_test
             #formatter_tests
@@ -354,7 +335,7 @@ fn generate_parser_test(baml_file: &BamlFile) -> TokenStream {
     }
 }
 
-fn generate_hir_test(project: &TestProject) -> TokenStream {
+fn generate_hir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -367,34 +348,54 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
                 {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
-                    let source_file = db.add_file(
+                    let sf = db.add_file(
                         #relative_path,
                         &content,
                     );
-                    let items_struct = baml_compiler_hir::file_items(&db, source_file);
-                    let items = items_struct.items(&db);
-                    if !items.is_empty() {
-                        let formatted = crate::format_hir_items(&db, items);
-                        output.push_str(&formatted);
-                    }
+                    source_files.push(sf);
                 }
             }
         })
         .collect();
 
+    let stdlib_section = if is_stdlib {
+        quote! {
+            writeln!(output, "\n=== HIR2 (package baml) ===").unwrap();
+            use baml_base::Name;
+            use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
+            let mut baml_files: Vec<_> = compiler2_all_files(&db)
+                .into_iter()
+                .filter(|f| file_package(&db, *f).package == Name::new("baml"))
+                .collect();
+            baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
+            for sf in baml_files {
+                writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
+                output.push_str(&render_hir2(&db, sf));
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #[test]
         fn test_03_hir() {
+            use crate::compiler2_tir::support::render_hir2;
+
             let mut db = ProjectDatabase::new();
-            db.set_project_root(std::path::Path::new("."));
-            let mut output = String::new();
-            writeln!(output, "=== HIR ITEMS ===").unwrap();
+            let _root = db.set_project_root(std::path::Path::new("."));
+            let mut source_files = Vec::new();
 
             #file_loaders
 
-            if output.trim() == "=== HIR ITEMS ===" {
-                writeln!(output, "No items found.").unwrap();
+            let mut output = String::new();
+            writeln!(output, "=== HIR2 ===").unwrap();
+
+            for source_file in &source_files {
+                output.push_str(&render_hir2(&db, *source_file));
             }
+
+            #stdlib_section
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("03_hir", output);
@@ -403,7 +404,7 @@ fn generate_hir_test(project: &TestProject) -> TokenStream {
     }
 }
 
-fn generate_tir_test(project: &TestProject) -> TokenStream {
+fn generate_tir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -426,58 +427,44 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
         })
         .collect();
 
+    let stdlib_section = if is_stdlib {
+        quote! {
+            writeln!(output, "\n=== TIR2 (package baml) ===").unwrap();
+            use baml_base::Name;
+            use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
+            let mut baml_files: Vec<_> = compiler2_all_files(&db)
+                .into_iter()
+                .filter(|f| file_package(&db, *f).package == Name::new("baml"))
+                .collect();
+            baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
+            for sf in baml_files {
+                writeln!(output, "\n--- {} ---", sf.path(&db).display()).unwrap();
+                output.push_str(&render_tir(&db, sf));
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #[test]
         fn test_04_tir() {
+            use crate::compiler2_tir::support::render_tir;
+
             let mut db = ProjectDatabase::new();
-            let root = db.set_project_root(std::path::Path::new("."));
+            let _root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
 
-            // db.add_file already adds each file to root.files() via add_or_update_file,
-            // so no need to call set_files - builtins + source_files are already there.
-
             let mut output = String::new();
-            writeln!(output, "=== TYPE INFERENCE ===").unwrap();
+            writeln!(output, "=== TIR2 ===").unwrap();
 
-            // Build initial typing context with all function types
-            let globals = typing_context(&db, root).functions(&db).clone();
-            let class_fields = class_field_types(&db, root).classes(&db).clone();
-            let type_aliases_map = type_aliases(&db, root).aliases(&db).clone();
-            let enum_variants_map = enum_variants(&db, root);
-            let enum_variants_data = enum_variants_map.enums(&db).clone();
-
-            // Iterate over files and their functions
             for source_file in &source_files {
-                let items_struct = baml_compiler_hir::file_items(&db, *source_file);
-                let items = items_struct.items(&db);
-                for item in items.iter() {
-                    if let baml_compiler_hir::ItemId::Function(func_id) = item {
-                        let signature = function_signature(&db, *func_id);
-                        let sig_source_map = function_signature_source_map(&db, *func_id);
-                        // For LLM functions, use FunctionBody::Llm for type inference
-                        // (Jinja validation + declared return type).
-                        let body = if let Some(llm_meta) = baml_compiler_hir::llm_function_meta(&db, *func_id) {
-                            std::sync::Arc::new(baml_compiler_hir::FunctionBody::Llm((*llm_meta).clone()))
-                        } else if baml_compiler_hir::is_llm_function(&db, *func_id) {
-                            std::sync::Arc::new(baml_compiler_hir::FunctionBody::Missing)
-                        } else {
-                            function_body(&db, *func_id)
-                        };
-                        let result = baml_compiler_tir::infer_function(&db, &signature, Some(&sig_source_map), &body, Some(globals.clone()), Some(class_fields.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
-
-                        writeln!(output, "  Function {}:", signature.name).unwrap();
-                        writeln!(output, "    Return: {:?}", result.return_type).unwrap();
-                        if !result.errors.is_empty() {
-                            writeln!(output, "    Errors:").unwrap();
-                            for error in &result.errors {
-                                writeln!(output, "      - {}", short_display(error)).unwrap();
-                            }
-                        }
-                    }
-                }
+                output.push_str(&render_tir(&db, *source_file));
             }
+
+            #stdlib_section
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_tir", output);
@@ -486,7 +473,7 @@ fn generate_tir_test(project: &TestProject) -> TokenStream {
     }
 }
 
-fn generate_mir_test(project: &TestProject) -> TokenStream {
+fn generate_mir_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -509,97 +496,58 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
         })
         .collect();
 
+    let stdlib_section = if is_stdlib {
+        quote! {
+            writeln!(output, "\n=== MIR2 (package baml) ===").unwrap();
+            use baml_base::Name;
+            use baml_compiler2_hir::{compiler2_all_files, file_package::file_package};
+            let mut baml_files: Vec<_> = compiler2_all_files(&db)
+                .into_iter()
+                .filter(|f| file_package(&db, *f).package == Name::new("baml"))
+                .collect();
+            baml_files.sort_by_key(|f| f.path(&db).to_string_lossy().to_string());
+            for sf in baml_files {
+                let item_tree = file_item_tree(&db, sf);
+                let mut functions: Vec<_> = item_tree.functions.iter().collect();
+                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
+                for (local_id, _func_data) in functions {
+                    let func_loc = FunctionLoc::new(&db, sf, *local_id);
+                    let mir = lower_function(&db, func_loc);
+                    writeln!(output, "{}", display_function(&mir)).unwrap();
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #[test]
         fn test_04_5_mir() {
+            use baml_compiler2_hir::{file_item_tree, loc::FunctionLoc};
+            use baml_compiler2_mir::{lower_function, pretty::display_function};
+
             let mut db = ProjectDatabase::new();
-            let root = db.set_project_root(std::path::Path::new("."));
+            let _root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
 
-            // db.add_file already adds each file to root.files() via add_or_update_file,
-            // so no need to call set_files - builtins + source_files are already there.
-
             let mut output = String::new();
-            writeln!(output, "=== MIR ===").unwrap();
+            writeln!(output, "=== MIR2 ===").unwrap();
 
-            // Build initial typing context with all function types
-            let globals = typing_context(&db, root).functions(&db).clone();
-            let class_field_types_map = class_field_types(&db, root).classes(&db).clone();
-            let type_aliases_map = type_aliases(&db, root).aliases(&db).clone();
-            let recursive_aliases = baml_compiler_tir::find_recursive_aliases(&type_aliases_map);
-            let enum_variants_map = enum_variants(&db, root);
-            let enum_variants_data = enum_variants_map.enums(&db).clone();
-
-            let resolution_ctx = baml_compiler_tir::TypeResolutionContext::new(&db, root);
-
-            // Build class field indices map (class name -> field name -> field index)
-            // Also build class type tags for TypeTag switch optimization
-            let mut classes: HashMap<String, HashMap<String, usize>> = HashMap::new();
-            let mut class_type_tags: HashMap<String, i64> = HashMap::new();
-            let mut class_type_tag_counter = 0i64;
-            // Build enum variant indices map (enum name -> variant name -> variant index)
-            let mut enums: HashMap<String, HashMap<String, usize>> = HashMap::new();
             for source_file in &source_files {
-                let items_struct = baml_compiler_hir::file_items(&db, *source_file);
-                for item in items_struct.items(&db) {
-                    if let baml_compiler_hir::ItemId::Class(class_loc) = item {
-                        let item_tree = baml_compiler_hir::file_item_tree(&db, class_loc.file(&db));
-                        let class = &item_tree[class_loc.id(&db)];
-                        let class_name = class.name.to_string();
-                        let mut field_indices = HashMap::new();
-                        for (idx, field) in class.fields.iter().enumerate() {
-                            field_indices.insert(field.name.to_string(), idx);
-                        }
-                        // Compute type tag for this class (CLASS_BASE + counter)
-                        let type_tag = baml_type::typetag::CLASS_BASE + class_type_tag_counter;
-                        class_type_tag_counter += 1;
-                        class_type_tags.insert(class_name.clone(), type_tag);
-                        classes.insert(class_name, field_indices);
-                    }
-                    if let baml_compiler_hir::ItemId::Enum(enum_loc) = item {
-                        let item_tree = baml_compiler_hir::file_item_tree(&db, enum_loc.file(&db));
-                        let enum_def = &item_tree[enum_loc.id(&db)];
-                        let enum_name = enum_def.name.to_string();
-                        let mut variant_indices = HashMap::new();
-                        for (idx, variant) in enum_def.variants.iter().enumerate() {
-                            variant_indices.insert(variant.name.to_string(), idx);
-                        }
-                        enums.insert(enum_name, variant_indices);
-                    }
+                let item_tree = file_item_tree(&db, *source_file);
+                let mut functions: Vec<_> = item_tree.functions.iter().collect();
+                functions.sort_by_key(|(_, f)| f.name.as_str().to_string());
+                for (local_id, _func_data) in functions {
+                    let func_loc = FunctionLoc::new(&db, *source_file, *local_id);
+                    let mir = lower_function(&db, func_loc);
+                    writeln!(output, "{}", display_function(&mir)).unwrap();
                 }
             }
 
-            // Iterate over files and their functions
-            for source_file in &source_files {
-                let items_struct = baml_compiler_hir::file_items(&db, *source_file);
-                let items = items_struct.items(&db);
-                for item in items.iter() {
-                    if let baml_compiler_hir::ItemId::Function(func_id) = item {
-                        let signature = function_signature(&db, *func_id);
-                        let sig_source_map = function_signature_source_map(&db, *func_id);
-                        let body = function_body(&db, *func_id);
-                        let inference = baml_compiler_tir::infer_function(&db, &signature, Some(&sig_source_map), &body, Some(globals.clone()), Some(class_field_types_map.clone()), Some(type_aliases_map.clone()), Some(enum_variants_data.clone()), *func_id);
-
-                        // Lower HIR → VIR → MIR
-                        let mir_output = match baml_compiler_vir::lower_from_hir(&body, &inference, &resolution_ctx, &type_aliases_map, &recursive_aliases) {
-                            Ok(vir) => {
-                                let mir = baml_compiler_mir::lower(&signature, &vir, &db, &classes, &enums, &class_type_tags, &resolution_ctx, &type_aliases_map, &recursive_aliases);
-                                baml_compiler_mir::pretty::display_function(&mir)
-                            }
-                            Err(baml_compiler_vir::LoweringError::LlmFunction) => {
-                                format!("fn {}:\n  (LLM function - no MIR)\n", signature.name)
-                            }
-                            Err(err) => {
-                                format!("fn {}:\n  (no MIR due to errors: {})\n", signature.name, err)
-                            }
-                        };
-
-                        writeln!(output, "{}", mir_output).unwrap();
-                    }
-                }
-            }
+            #stdlib_section
 
             with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
                 assert_snapshot!("04_5_mir", output);
@@ -608,94 +556,7 @@ fn generate_mir_test(project: &TestProject) -> TokenStream {
     }
 }
 
-fn generate_control_flow_test(project: &TestProject) -> TokenStream {
-    let file_loaders: TokenStream = project
-        .files
-        .iter()
-        .map(|baml_file| {
-            let full_path = baml_file.full_path.display().to_string();
-            let relative_path = baml_file.relative_path.display().to_string();
-            let include_content = make_include_str(&full_path);
-
-            quote! {
-                {
-                    let content = #include_content;
-                    let content = content.replace("\r\n", "\n");
-                    db.add_file(
-                        #relative_path,
-                        &content,
-                    );
-                }
-            }
-        })
-        .collect();
-
-    quote! {
-        #[test]
-        fn test_04_6_control_flow() {
-            use baml_compiler_vir::control_flow::flatten_control_flow_graph;
-            #[allow(unused_imports)]
-            use baml_compiler_hir::{
-                FunctionBody, file_item_tree, file_items, function_body, ItemId,
-                CompilerGenerated,
-            };
-
-            let mut db = ProjectDatabase::new();
-            let root = db.set_project_root(std::path::Path::new("."));
-
-            #file_loaders
-
-            let mut output = String::new();
-            writeln!(output, "=== CONTROL FLOW GRAPHS ===").unwrap();
-
-            // Iterate over non-builtin files and their functions
-            let all_files = root.files(&db).clone();
-            for source_file in &all_files {
-                // Skip builtin files
-                if source_file.path(&db).to_string_lossy().contains("<builtin>") {
-                    continue;
-                }
-                let items_struct = file_items(&db, *source_file);
-                for item in items_struct.items(&db).iter() {
-                    let ItemId::Function(func_loc) = item else {
-                        continue;
-                    };
-                    let item_tree = file_item_tree(&db, func_loc.file(&db));
-                    let func = &item_tree[func_loc.id(&db)];
-
-                    // Skip compiler-generated functions
-                    if let Some(ref cg) = func.compiler_generated {
-                        match cg {
-                            CompilerGenerated::ClientResolve { .. }
-                            | CompilerGenerated::LlmRenderPrompt { .. }
-                            | CompilerGenerated::LlmBuildRequest { .. }
-                            | CompilerGenerated::LlmCall { .. } => continue,
-                        }
-                    }
-
-                    let func_name = func.name.to_string();
-                    // Use the convenience method on ProjectDatabase
-                    if let Some(graph) = db.control_flow_graph(&func_name) {
-                        writeln!(output, "--- {} (raw) ---", func_name).unwrap();
-                        write!(output, "{}", graph).unwrap();
-
-                        let flattened = flatten_control_flow_graph(&graph);
-                        writeln!(output, "--- {} (flattened) ---", func_name).unwrap();
-                        write!(output, "{}", flattened).unwrap();
-                        writeln!(output).unwrap();
-                    }
-                }
-            }
-
-            with_settings!({snapshot_path => SNAPSHOT_PATH, omit_expression => true}, {
-                assert_snapshot!("04_6_control_flow", output);
-            });
-        }
-    }
-}
-
 fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
-    // File loaders just load files, don't collect errors yet
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -722,24 +583,19 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
         #[test]
         fn test_05_diagnostics() {
             use baml_compiler_diagnostics::{DiagnosticPhase, RenderConfig, render_diagnostic};
-            use baml_project::collect_diagnostics;
+            use baml_compiler2_hir::compiler2_all_files;
+            use baml_project::collect_compiler2_diagnostics;
             use std::path::PathBuf;
 
             let mut db = ProjectDatabase::new();
-            let root = db.set_project_root(std::path::Path::new("."));
+            let _root = db.set_project_root(std::path::Path::new("."));
             let mut source_files = Vec::new();
 
             #file_loaders
 
-            // Collect diagnostics for ALL files (user + builtins) so that type
-            // errors inside builtin function bodies are caught.  We use
-            // db.get_source_files() which returns a Vec (deterministic order
-            // within a given run) instead of db.check() which iterates a HashMap.
-            let all_files = db.get_source_files();
-            let diagnostics = collect_diagnostics(&db, root, &all_files);
+            let all_files = compiler2_all_files(&db);
+            let diagnostics = collect_compiler2_diagnostics(&db);
 
-            // Build sources and file_paths maps for rendering (all files including
-            // builtins, so diagnostics from builtin files render properly).
             let mut sources: HashMap<baml_db::FileId, String> = HashMap::new();
             let mut file_paths: HashMap<baml_db::FileId, PathBuf> = HashMap::new();
             for source_file in &all_files {
@@ -751,7 +607,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
             let config = RenderConfig::test();
 
             let mut output = String::new();
-            writeln!(output, "=== DIAGNOSTICS ===").unwrap();
+            writeln!(output, "=== COMPILER2 DIAGNOSTICS ===").unwrap();
             if diagnostics.is_empty() {
                 writeln!(output, "No errors found.").unwrap();
             } else {
@@ -774,78 +630,7 @@ fn generate_diagnostics_test(project: &TestProject) -> TokenStream {
     }
 }
 
-/// Generate a standalone test module for the BAML standard library (builtins).
-///
-/// Uses the same `generate_project_tests` as regular projects, just with
-/// the codegen filter flipped to include only `baml.*` functions.
-fn generate_baml_std_test(manifest_dir: &str) -> TokenStream {
-    let builtins_dir = Path::new(manifest_dir).join("../baml_builtins/baml");
-    let files = discover_baml_files(&builtins_dir);
-
-    if files.is_empty() {
-        return quote! {};
-    }
-
-    let project = TestProject {
-        name: "__baml_std__".to_string(),
-        path: builtins_dir,
-        files,
-    };
-
-    let include_builtins = quote!(|name: &&String| name.starts_with(BAML_STD_PREFIX));
-    generate_project_tests(&project, manifest_dir, include_builtins, true)
-}
-
-/// Emits a `quote!` fragment that collects sorted functions from a compiled program,
-/// filtered by a predicate on the function name. The `filter_expr` should be a quoted
-/// expression of type `impl Fn(&&String) -> bool`.
-fn emit_collect_functions(filter_expr: TokenStream) -> TokenStream {
-    quote! {
-        let mut func_names: Vec<_> = program.function_indices.keys()
-            .filter(#filter_expr)
-            .collect();
-        func_names.sort();
-
-        let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
-            .iter()
-            .map(|name| {
-                let idx = *program.function_indices.get(*name).unwrap();
-                match program.objects.get(idx) {
-                    Some(baml_compiler_emit::Object::Function(func)) => {
-                        ((*name).clone(), func.as_ref())
-                    }
-                    other => {
-                        panic!(
-                            "function_indices entry '{}' (idx={}) is not a Function: {:?}",
-                            name, idx, other.map(std::mem::discriminant)
-                        );
-                    }
-                }
-            })
-            .collect();
-    }
-}
-
-fn generate_codegen_test(
-    project: &TestProject,
-    codegen_filter: TokenStream,
-    require_non_empty: bool,
-) -> TokenStream {
-    let collect_functions = emit_collect_functions(codegen_filter);
-    let project_name = project.name.clone();
-    let require_functions_guard = if require_non_empty {
-        quote! {
-            if functions.is_empty() {
-                panic!(
-                    "No functions matched codegen filter in project '{}'",
-                    #project_name
-                );
-            }
-        }
-    } else {
-        quote! {}
-    };
-
+fn generate_codegen_test(project: &TestProject, is_stdlib: bool) -> TokenStream {
     let file_loaders: TokenStream = project
         .files
         .iter()
@@ -858,43 +643,53 @@ fn generate_codegen_test(
                 {
                     let content = #include_content;
                     let content = content.replace("\r\n", "\n");
-                    let sf = db.add_file(
-                        #relative_path,
-                        &content,
-                    );
-                    source_files.push(sf);
+                    db.add_file(#relative_path, &content);
                 }
             }
         })
         .collect();
 
+    let filter_expr = if is_stdlib {
+        quote! { |_name: &&String| true }
+    } else {
+        quote! { |name: &&String| !name.starts_with(BAML_STD_PREFIX) && !name.starts_with("env.") }
+    };
+
     quote! {
         #[test]
         fn test_06_codegen() {
             let mut db = ProjectDatabase::new();
-            let root = db.set_project_root(std::path::Path::new("."));
+            db.set_project_root(std::path::Path::new("."));
 
-            // Declare source_files Vec for file_loaders to populate
-            let mut source_files = Vec::new();
-
-            // Add user source files
-            // db.add_file already adds each file to root.files() via add_or_update_file
             #file_loaders
-
-            // All files (builtins + user) are already in root.files()
-            let all_files: Vec<_> = root.files(&db).clone();
 
             let mut output = String::new();
 
-            // Pass all files (builtins + user) to compile_files
-            let options = baml_compiler_emit::CompileOptions { emit_test_cases: false };
-            match baml_compiler_emit::compile_files(&db, &all_files, baml_compiler_emit::OptLevel::One, &options) {
+            let options = baml_compiler2_emit::CompileOptions { emit_test_cases: false };
+            match baml_compiler2_emit::generate_project_bytecode(&db, &options) {
                 Ok(program) => {
-                    // Collect sorted functions, excluding builtins (baml.*)
-                    // which are snapshotted separately in baml_std.
-                    #collect_functions
+                    let mut func_names: Vec<_> = program.function_indices.keys()
+                        .filter(#filter_expr)
+                        .collect();
+                    func_names.sort();
 
-                    #require_functions_guard
+                    let functions: Vec<(String, &bex_vm_types::types::Function)> = func_names
+                        .iter()
+                        .map(|name| {
+                            let idx = *program.function_indices.get(*name).unwrap();
+                            match program.objects.get(idx) {
+                                Some(bex_vm_types::Object::Function(func)) => {
+                                    ((*name).clone(), func.as_ref())
+                                }
+                                other => {
+                                    panic!(
+                                        "function_indices entry '{}' (idx={}) is not a Function: {:?}",
+                                        name, idx, other.map(std::mem::discriminant)
+                                    );
+                                }
+                            }
+                        })
+                        .collect();
 
                     output = bex_vm::debug::display_program(
                         &functions,
@@ -1250,15 +1045,16 @@ fn generate_incremental_benchmark(
 
             bencher.bench_local(|| {
                 let mut db = ProjectDatabase::new();
-                let root = db.set_project_root(std::path::Path::new("."));
+                let _ = db.set_project_root(std::path::Path::new("."));
 
                 // Initial compilation
                 #initial_loads
-                let _ = baml_compiler_hir::project_items(&db, root);  // Full compilation
+                let opts = baml_compiler2_emit::CompileOptions { emit_test_cases: false };
+                let _ = baml_compiler2_emit::generate_project_bytecode(&db, &opts);  // Full compilation
 
                 // Apply incremental changes (re-add files with new content)
                 #incremental_updates
-                let _ = black_box(baml_compiler_hir::project_items(&db, root));  // Incremental compilation
+                let _ = black_box(baml_compiler2_emit::generate_project_bytecode(&db, &opts));  // Incremental compilation
             });
         }
     }
@@ -1267,7 +1063,7 @@ fn generate_incremental_benchmark(
 fn generate_scale_benchmark(name: &str, path: &Path) -> TokenStream {
     let fn_name = format_ident!("bench_scale_{}", name.replace("-", "_"));
     let path_str = path.display().to_string();
-    let file_name = format!("{}.baml", name);
+    let file_name = format!("{name}.baml");
     let include_content = make_include_str(&path_str);
 
     quote! {
@@ -1278,9 +1074,10 @@ fn generate_scale_benchmark(name: &str, path: &Path) -> TokenStream {
 
             bencher.bench_local(|| {
                 let mut db = ProjectDatabase::new();
-                let root = db.set_project_root(std::path::Path::new("."));
+                let _ = db.set_project_root(std::path::Path::new("."));
                 db.add_file(#file_name, &content);
-                let _ = black_box(baml_compiler_hir::project_items(&db, root));
+                let opts = baml_compiler2_emit::CompileOptions { emit_test_cases: false };
+                let _ = black_box(baml_compiler2_emit::generate_project_bytecode(&db, &opts));
             });
         }
     }

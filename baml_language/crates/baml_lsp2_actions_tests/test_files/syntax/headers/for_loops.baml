@@ -27,12 +27,12 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// Error: unresolved name: item
+// Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `2`
 //    ╭─[ headers_for_loops.baml:9:25 ]
 //    │
 //  9 │         let processed = item * 2;
-//    │                         ──┬─  
-//    │                           ╰─── unresolved name: item
+//    │                         ────┬───  
+//    │                             ╰───── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `2`
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

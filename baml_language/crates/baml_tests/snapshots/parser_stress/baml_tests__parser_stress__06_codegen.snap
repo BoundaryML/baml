@@ -1,37 +1,37 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function BodyTorture() -> int {
+function user.BodyTorture() -> int {
     load_const null
     store_var x
-
-  L0:
     load_var x
     load_const 1
     bin_op +
     store_var x
     load_const null
-    pop_jump_if_false L1
-    jump L2
+    pop_jump_if_false L0
+    jump L1
 
-  L1:
+  L0:
     load_const null
     return
 
+  L1:
+    load_const "parse error"
+    call baml.sys.panic
+    pop 1
+    jump L2
+
   L2:
-    load_var x
-    load_const 1
-    bin_op +
-    store_var x
-    jump L0
+    unreachable
 }
 
-function ComplexType() -> map<string, map<string, map<string, int[]?>>> {
+function user.ComplexType() -> map<string, map<string, map<string, int[]?>>> {
     alloc_map 0
     return
 }
 
-function DeepExpression() -> int {
+function user.DeepExpression() -> int {
     load_const 1
     load_const 2
     bin_op +
@@ -54,7 +54,8 @@ function DeepExpression() -> int {
     return
 }
 
-function Process1(input: string) -> string {
+function user.Process1(input: string) -> string {
+    load_const null
     load_const "Process1"
     load_var input
     load_const "input"
@@ -63,7 +64,8 @@ function Process1(input: string) -> string {
     return
 }
 
-function Process1.build_request(input: string) -> baml.http.Request {
+function user.Process1$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process1"
     load_var input
     load_const "input"
@@ -72,7 +74,8 @@ function Process1.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process1.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process1$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process1"
     load_var input
     load_const "input"
@@ -81,7 +84,8 @@ function Process1.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process10(input: string) -> string {
+function user.Process10(input: string) -> string {
+    load_const null
     load_const "Process10"
     load_var input
     load_const "input"
@@ -90,7 +94,8 @@ function Process10(input: string) -> string {
     return
 }
 
-function Process10.build_request(input: string) -> baml.http.Request {
+function user.Process10$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process10"
     load_var input
     load_const "input"
@@ -99,7 +104,8 @@ function Process10.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process10.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process10$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process10"
     load_var input
     load_const "input"
@@ -108,7 +114,8 @@ function Process10.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process100(input: string) -> string {
+function user.Process100(input: string) -> string {
+    load_const null
     load_const "Process100"
     load_var input
     load_const "input"
@@ -117,7 +124,8 @@ function Process100(input: string) -> string {
     return
 }
 
-function Process100.build_request(input: string) -> baml.http.Request {
+function user.Process100$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process100"
     load_var input
     load_const "input"
@@ -126,7 +134,8 @@ function Process100.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process100.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process100$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process100"
     load_var input
     load_const "input"
@@ -135,7 +144,8 @@ function Process100.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process11(input: string) -> string {
+function user.Process11(input: string) -> string {
+    load_const null
     load_const "Process11"
     load_var input
     load_const "input"
@@ -144,7 +154,8 @@ function Process11(input: string) -> string {
     return
 }
 
-function Process11.build_request(input: string) -> baml.http.Request {
+function user.Process11$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process11"
     load_var input
     load_const "input"
@@ -153,7 +164,8 @@ function Process11.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process11.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process11$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process11"
     load_var input
     load_const "input"
@@ -162,7 +174,8 @@ function Process11.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process12(input: string) -> string {
+function user.Process12(input: string) -> string {
+    load_const null
     load_const "Process12"
     load_var input
     load_const "input"
@@ -171,7 +184,8 @@ function Process12(input: string) -> string {
     return
 }
 
-function Process12.build_request(input: string) -> baml.http.Request {
+function user.Process12$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process12"
     load_var input
     load_const "input"
@@ -180,7 +194,8 @@ function Process12.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process12.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process12$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process12"
     load_var input
     load_const "input"
@@ -189,7 +204,8 @@ function Process12.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process13(input: string) -> string {
+function user.Process13(input: string) -> string {
+    load_const null
     load_const "Process13"
     load_var input
     load_const "input"
@@ -198,7 +214,8 @@ function Process13(input: string) -> string {
     return
 }
 
-function Process13.build_request(input: string) -> baml.http.Request {
+function user.Process13$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process13"
     load_var input
     load_const "input"
@@ -207,7 +224,8 @@ function Process13.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process13.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process13$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process13"
     load_var input
     load_const "input"
@@ -216,7 +234,8 @@ function Process13.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process14(input: string) -> string {
+function user.Process14(input: string) -> string {
+    load_const null
     load_const "Process14"
     load_var input
     load_const "input"
@@ -225,7 +244,8 @@ function Process14(input: string) -> string {
     return
 }
 
-function Process14.build_request(input: string) -> baml.http.Request {
+function user.Process14$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process14"
     load_var input
     load_const "input"
@@ -234,7 +254,8 @@ function Process14.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process14.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process14$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process14"
     load_var input
     load_const "input"
@@ -243,7 +264,8 @@ function Process14.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process15(input: string) -> string {
+function user.Process15(input: string) -> string {
+    load_const null
     load_const "Process15"
     load_var input
     load_const "input"
@@ -252,7 +274,8 @@ function Process15(input: string) -> string {
     return
 }
 
-function Process15.build_request(input: string) -> baml.http.Request {
+function user.Process15$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process15"
     load_var input
     load_const "input"
@@ -261,7 +284,8 @@ function Process15.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process15.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process15$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process15"
     load_var input
     load_const "input"
@@ -270,7 +294,8 @@ function Process15.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process16(input: string) -> string {
+function user.Process16(input: string) -> string {
+    load_const null
     load_const "Process16"
     load_var input
     load_const "input"
@@ -279,7 +304,8 @@ function Process16(input: string) -> string {
     return
 }
 
-function Process16.build_request(input: string) -> baml.http.Request {
+function user.Process16$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process16"
     load_var input
     load_const "input"
@@ -288,7 +314,8 @@ function Process16.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process16.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process16$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process16"
     load_var input
     load_const "input"
@@ -297,7 +324,8 @@ function Process16.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process17(input: string) -> string {
+function user.Process17(input: string) -> string {
+    load_const null
     load_const "Process17"
     load_var input
     load_const "input"
@@ -306,7 +334,8 @@ function Process17(input: string) -> string {
     return
 }
 
-function Process17.build_request(input: string) -> baml.http.Request {
+function user.Process17$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process17"
     load_var input
     load_const "input"
@@ -315,7 +344,8 @@ function Process17.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process17.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process17$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process17"
     load_var input
     load_const "input"
@@ -324,7 +354,8 @@ function Process17.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process18(input: string) -> string {
+function user.Process18(input: string) -> string {
+    load_const null
     load_const "Process18"
     load_var input
     load_const "input"
@@ -333,7 +364,8 @@ function Process18(input: string) -> string {
     return
 }
 
-function Process18.build_request(input: string) -> baml.http.Request {
+function user.Process18$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process18"
     load_var input
     load_const "input"
@@ -342,7 +374,8 @@ function Process18.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process18.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process18$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process18"
     load_var input
     load_const "input"
@@ -351,7 +384,8 @@ function Process18.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process19(input: string) -> string {
+function user.Process19(input: string) -> string {
+    load_const null
     load_const "Process19"
     load_var input
     load_const "input"
@@ -360,7 +394,8 @@ function Process19(input: string) -> string {
     return
 }
 
-function Process19.build_request(input: string) -> baml.http.Request {
+function user.Process19$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process19"
     load_var input
     load_const "input"
@@ -369,7 +404,8 @@ function Process19.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process19.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process19$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process19"
     load_var input
     load_const "input"
@@ -378,7 +414,8 @@ function Process19.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process2(input: string) -> string {
+function user.Process2(input: string) -> string {
+    load_const null
     load_const "Process2"
     load_var input
     load_const "input"
@@ -387,7 +424,8 @@ function Process2(input: string) -> string {
     return
 }
 
-function Process2.build_request(input: string) -> baml.http.Request {
+function user.Process2$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process2"
     load_var input
     load_const "input"
@@ -396,7 +434,8 @@ function Process2.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process2.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process2$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process2"
     load_var input
     load_const "input"
@@ -405,7 +444,8 @@ function Process2.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process20(input: string) -> string {
+function user.Process20(input: string) -> string {
+    load_const null
     load_const "Process20"
     load_var input
     load_const "input"
@@ -414,7 +454,8 @@ function Process20(input: string) -> string {
     return
 }
 
-function Process20.build_request(input: string) -> baml.http.Request {
+function user.Process20$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process20"
     load_var input
     load_const "input"
@@ -423,7 +464,8 @@ function Process20.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process20.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process20$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process20"
     load_var input
     load_const "input"
@@ -432,7 +474,8 @@ function Process20.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process21(input: string) -> string {
+function user.Process21(input: string) -> string {
+    load_const null
     load_const "Process21"
     load_var input
     load_const "input"
@@ -441,7 +484,8 @@ function Process21(input: string) -> string {
     return
 }
 
-function Process21.build_request(input: string) -> baml.http.Request {
+function user.Process21$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process21"
     load_var input
     load_const "input"
@@ -450,7 +494,8 @@ function Process21.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process21.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process21$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process21"
     load_var input
     load_const "input"
@@ -459,7 +504,8 @@ function Process21.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process22(input: string) -> string {
+function user.Process22(input: string) -> string {
+    load_const null
     load_const "Process22"
     load_var input
     load_const "input"
@@ -468,7 +514,8 @@ function Process22(input: string) -> string {
     return
 }
 
-function Process22.build_request(input: string) -> baml.http.Request {
+function user.Process22$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process22"
     load_var input
     load_const "input"
@@ -477,7 +524,8 @@ function Process22.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process22.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process22$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process22"
     load_var input
     load_const "input"
@@ -486,7 +534,8 @@ function Process22.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process23(input: string) -> string {
+function user.Process23(input: string) -> string {
+    load_const null
     load_const "Process23"
     load_var input
     load_const "input"
@@ -495,7 +544,8 @@ function Process23(input: string) -> string {
     return
 }
 
-function Process23.build_request(input: string) -> baml.http.Request {
+function user.Process23$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process23"
     load_var input
     load_const "input"
@@ -504,7 +554,8 @@ function Process23.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process23.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process23$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process23"
     load_var input
     load_const "input"
@@ -513,7 +564,8 @@ function Process23.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process24(input: string) -> string {
+function user.Process24(input: string) -> string {
+    load_const null
     load_const "Process24"
     load_var input
     load_const "input"
@@ -522,7 +574,8 @@ function Process24(input: string) -> string {
     return
 }
 
-function Process24.build_request(input: string) -> baml.http.Request {
+function user.Process24$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process24"
     load_var input
     load_const "input"
@@ -531,7 +584,8 @@ function Process24.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process24.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process24$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process24"
     load_var input
     load_const "input"
@@ -540,7 +594,8 @@ function Process24.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process25(input: string) -> string {
+function user.Process25(input: string) -> string {
+    load_const null
     load_const "Process25"
     load_var input
     load_const "input"
@@ -549,7 +604,8 @@ function Process25(input: string) -> string {
     return
 }
 
-function Process25.build_request(input: string) -> baml.http.Request {
+function user.Process25$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process25"
     load_var input
     load_const "input"
@@ -558,7 +614,8 @@ function Process25.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process25.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process25$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process25"
     load_var input
     load_const "input"
@@ -567,7 +624,8 @@ function Process25.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process26(input: string) -> string {
+function user.Process26(input: string) -> string {
+    load_const null
     load_const "Process26"
     load_var input
     load_const "input"
@@ -576,7 +634,8 @@ function Process26(input: string) -> string {
     return
 }
 
-function Process26.build_request(input: string) -> baml.http.Request {
+function user.Process26$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process26"
     load_var input
     load_const "input"
@@ -585,7 +644,8 @@ function Process26.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process26.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process26$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process26"
     load_var input
     load_const "input"
@@ -594,7 +654,8 @@ function Process26.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process27(input: string) -> string {
+function user.Process27(input: string) -> string {
+    load_const null
     load_const "Process27"
     load_var input
     load_const "input"
@@ -603,7 +664,8 @@ function Process27(input: string) -> string {
     return
 }
 
-function Process27.build_request(input: string) -> baml.http.Request {
+function user.Process27$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process27"
     load_var input
     load_const "input"
@@ -612,7 +674,8 @@ function Process27.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process27.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process27$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process27"
     load_var input
     load_const "input"
@@ -621,7 +684,8 @@ function Process27.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process28(input: string) -> string {
+function user.Process28(input: string) -> string {
+    load_const null
     load_const "Process28"
     load_var input
     load_const "input"
@@ -630,7 +694,8 @@ function Process28(input: string) -> string {
     return
 }
 
-function Process28.build_request(input: string) -> baml.http.Request {
+function user.Process28$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process28"
     load_var input
     load_const "input"
@@ -639,7 +704,8 @@ function Process28.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process28.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process28$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process28"
     load_var input
     load_const "input"
@@ -648,7 +714,8 @@ function Process28.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process29(input: string) -> string {
+function user.Process29(input: string) -> string {
+    load_const null
     load_const "Process29"
     load_var input
     load_const "input"
@@ -657,7 +724,8 @@ function Process29(input: string) -> string {
     return
 }
 
-function Process29.build_request(input: string) -> baml.http.Request {
+function user.Process29$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process29"
     load_var input
     load_const "input"
@@ -666,7 +734,8 @@ function Process29.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process29.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process29$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process29"
     load_var input
     load_const "input"
@@ -675,7 +744,8 @@ function Process29.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process3(input: string) -> string {
+function user.Process3(input: string) -> string {
+    load_const null
     load_const "Process3"
     load_var input
     load_const "input"
@@ -684,7 +754,8 @@ function Process3(input: string) -> string {
     return
 }
 
-function Process3.build_request(input: string) -> baml.http.Request {
+function user.Process3$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process3"
     load_var input
     load_const "input"
@@ -693,7 +764,8 @@ function Process3.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process3.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process3$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process3"
     load_var input
     load_const "input"
@@ -702,7 +774,8 @@ function Process3.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process30(input: string) -> string {
+function user.Process30(input: string) -> string {
+    load_const null
     load_const "Process30"
     load_var input
     load_const "input"
@@ -711,7 +784,8 @@ function Process30(input: string) -> string {
     return
 }
 
-function Process30.build_request(input: string) -> baml.http.Request {
+function user.Process30$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process30"
     load_var input
     load_const "input"
@@ -720,7 +794,8 @@ function Process30.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process30.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process30$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process30"
     load_var input
     load_const "input"
@@ -729,7 +804,8 @@ function Process30.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process31(input: string) -> string {
+function user.Process31(input: string) -> string {
+    load_const null
     load_const "Process31"
     load_var input
     load_const "input"
@@ -738,7 +814,8 @@ function Process31(input: string) -> string {
     return
 }
 
-function Process31.build_request(input: string) -> baml.http.Request {
+function user.Process31$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process31"
     load_var input
     load_const "input"
@@ -747,7 +824,8 @@ function Process31.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process31.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process31$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process31"
     load_var input
     load_const "input"
@@ -756,7 +834,8 @@ function Process31.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process32(input: string) -> string {
+function user.Process32(input: string) -> string {
+    load_const null
     load_const "Process32"
     load_var input
     load_const "input"
@@ -765,7 +844,8 @@ function Process32(input: string) -> string {
     return
 }
 
-function Process32.build_request(input: string) -> baml.http.Request {
+function user.Process32$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process32"
     load_var input
     load_const "input"
@@ -774,7 +854,8 @@ function Process32.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process32.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process32$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process32"
     load_var input
     load_const "input"
@@ -783,7 +864,8 @@ function Process32.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process33(input: string) -> string {
+function user.Process33(input: string) -> string {
+    load_const null
     load_const "Process33"
     load_var input
     load_const "input"
@@ -792,7 +874,8 @@ function Process33(input: string) -> string {
     return
 }
 
-function Process33.build_request(input: string) -> baml.http.Request {
+function user.Process33$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process33"
     load_var input
     load_const "input"
@@ -801,7 +884,8 @@ function Process33.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process33.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process33$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process33"
     load_var input
     load_const "input"
@@ -810,7 +894,8 @@ function Process33.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process34(input: string) -> string {
+function user.Process34(input: string) -> string {
+    load_const null
     load_const "Process34"
     load_var input
     load_const "input"
@@ -819,7 +904,8 @@ function Process34(input: string) -> string {
     return
 }
 
-function Process34.build_request(input: string) -> baml.http.Request {
+function user.Process34$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process34"
     load_var input
     load_const "input"
@@ -828,7 +914,8 @@ function Process34.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process34.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process34$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process34"
     load_var input
     load_const "input"
@@ -837,7 +924,8 @@ function Process34.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process35(input: string) -> string {
+function user.Process35(input: string) -> string {
+    load_const null
     load_const "Process35"
     load_var input
     load_const "input"
@@ -846,7 +934,8 @@ function Process35(input: string) -> string {
     return
 }
 
-function Process35.build_request(input: string) -> baml.http.Request {
+function user.Process35$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process35"
     load_var input
     load_const "input"
@@ -855,7 +944,8 @@ function Process35.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process35.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process35$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process35"
     load_var input
     load_const "input"
@@ -864,7 +954,8 @@ function Process35.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process36(input: string) -> string {
+function user.Process36(input: string) -> string {
+    load_const null
     load_const "Process36"
     load_var input
     load_const "input"
@@ -873,7 +964,8 @@ function Process36(input: string) -> string {
     return
 }
 
-function Process36.build_request(input: string) -> baml.http.Request {
+function user.Process36$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process36"
     load_var input
     load_const "input"
@@ -882,7 +974,8 @@ function Process36.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process36.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process36$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process36"
     load_var input
     load_const "input"
@@ -891,7 +984,8 @@ function Process36.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process37(input: string) -> string {
+function user.Process37(input: string) -> string {
+    load_const null
     load_const "Process37"
     load_var input
     load_const "input"
@@ -900,7 +994,8 @@ function Process37(input: string) -> string {
     return
 }
 
-function Process37.build_request(input: string) -> baml.http.Request {
+function user.Process37$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process37"
     load_var input
     load_const "input"
@@ -909,7 +1004,8 @@ function Process37.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process37.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process37$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process37"
     load_var input
     load_const "input"
@@ -918,7 +1014,8 @@ function Process37.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process38(input: string) -> string {
+function user.Process38(input: string) -> string {
+    load_const null
     load_const "Process38"
     load_var input
     load_const "input"
@@ -927,7 +1024,8 @@ function Process38(input: string) -> string {
     return
 }
 
-function Process38.build_request(input: string) -> baml.http.Request {
+function user.Process38$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process38"
     load_var input
     load_const "input"
@@ -936,7 +1034,8 @@ function Process38.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process38.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process38$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process38"
     load_var input
     load_const "input"
@@ -945,7 +1044,8 @@ function Process38.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process39(input: string) -> string {
+function user.Process39(input: string) -> string {
+    load_const null
     load_const "Process39"
     load_var input
     load_const "input"
@@ -954,7 +1054,8 @@ function Process39(input: string) -> string {
     return
 }
 
-function Process39.build_request(input: string) -> baml.http.Request {
+function user.Process39$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process39"
     load_var input
     load_const "input"
@@ -963,7 +1064,8 @@ function Process39.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process39.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process39$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process39"
     load_var input
     load_const "input"
@@ -972,7 +1074,8 @@ function Process39.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process4(input: string) -> string {
+function user.Process4(input: string) -> string {
+    load_const null
     load_const "Process4"
     load_var input
     load_const "input"
@@ -981,7 +1084,8 @@ function Process4(input: string) -> string {
     return
 }
 
-function Process4.build_request(input: string) -> baml.http.Request {
+function user.Process4$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process4"
     load_var input
     load_const "input"
@@ -990,7 +1094,8 @@ function Process4.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process4.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process4$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process4"
     load_var input
     load_const "input"
@@ -999,7 +1104,8 @@ function Process4.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process40(input: string) -> string {
+function user.Process40(input: string) -> string {
+    load_const null
     load_const "Process40"
     load_var input
     load_const "input"
@@ -1008,7 +1114,8 @@ function Process40(input: string) -> string {
     return
 }
 
-function Process40.build_request(input: string) -> baml.http.Request {
+function user.Process40$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process40"
     load_var input
     load_const "input"
@@ -1017,7 +1124,8 @@ function Process40.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process40.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process40$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process40"
     load_var input
     load_const "input"
@@ -1026,7 +1134,8 @@ function Process40.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process41(input: string) -> string {
+function user.Process41(input: string) -> string {
+    load_const null
     load_const "Process41"
     load_var input
     load_const "input"
@@ -1035,7 +1144,8 @@ function Process41(input: string) -> string {
     return
 }
 
-function Process41.build_request(input: string) -> baml.http.Request {
+function user.Process41$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process41"
     load_var input
     load_const "input"
@@ -1044,7 +1154,8 @@ function Process41.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process41.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process41$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process41"
     load_var input
     load_const "input"
@@ -1053,7 +1164,8 @@ function Process41.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process42(input: string) -> string {
+function user.Process42(input: string) -> string {
+    load_const null
     load_const "Process42"
     load_var input
     load_const "input"
@@ -1062,7 +1174,8 @@ function Process42(input: string) -> string {
     return
 }
 
-function Process42.build_request(input: string) -> baml.http.Request {
+function user.Process42$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process42"
     load_var input
     load_const "input"
@@ -1071,7 +1184,8 @@ function Process42.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process42.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process42$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process42"
     load_var input
     load_const "input"
@@ -1080,7 +1194,8 @@ function Process42.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process43(input: string) -> string {
+function user.Process43(input: string) -> string {
+    load_const null
     load_const "Process43"
     load_var input
     load_const "input"
@@ -1089,7 +1204,8 @@ function Process43(input: string) -> string {
     return
 }
 
-function Process43.build_request(input: string) -> baml.http.Request {
+function user.Process43$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process43"
     load_var input
     load_const "input"
@@ -1098,7 +1214,8 @@ function Process43.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process43.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process43$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process43"
     load_var input
     load_const "input"
@@ -1107,7 +1224,8 @@ function Process43.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process44(input: string) -> string {
+function user.Process44(input: string) -> string {
+    load_const null
     load_const "Process44"
     load_var input
     load_const "input"
@@ -1116,7 +1234,8 @@ function Process44(input: string) -> string {
     return
 }
 
-function Process44.build_request(input: string) -> baml.http.Request {
+function user.Process44$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process44"
     load_var input
     load_const "input"
@@ -1125,7 +1244,8 @@ function Process44.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process44.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process44$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process44"
     load_var input
     load_const "input"
@@ -1134,7 +1254,8 @@ function Process44.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process45(input: string) -> string {
+function user.Process45(input: string) -> string {
+    load_const null
     load_const "Process45"
     load_var input
     load_const "input"
@@ -1143,7 +1264,8 @@ function Process45(input: string) -> string {
     return
 }
 
-function Process45.build_request(input: string) -> baml.http.Request {
+function user.Process45$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process45"
     load_var input
     load_const "input"
@@ -1152,7 +1274,8 @@ function Process45.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process45.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process45$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process45"
     load_var input
     load_const "input"
@@ -1161,7 +1284,8 @@ function Process45.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process46(input: string) -> string {
+function user.Process46(input: string) -> string {
+    load_const null
     load_const "Process46"
     load_var input
     load_const "input"
@@ -1170,7 +1294,8 @@ function Process46(input: string) -> string {
     return
 }
 
-function Process46.build_request(input: string) -> baml.http.Request {
+function user.Process46$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process46"
     load_var input
     load_const "input"
@@ -1179,7 +1304,8 @@ function Process46.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process46.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process46$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process46"
     load_var input
     load_const "input"
@@ -1188,7 +1314,8 @@ function Process46.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process47(input: string) -> string {
+function user.Process47(input: string) -> string {
+    load_const null
     load_const "Process47"
     load_var input
     load_const "input"
@@ -1197,7 +1324,8 @@ function Process47(input: string) -> string {
     return
 }
 
-function Process47.build_request(input: string) -> baml.http.Request {
+function user.Process47$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process47"
     load_var input
     load_const "input"
@@ -1206,7 +1334,8 @@ function Process47.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process47.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process47$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process47"
     load_var input
     load_const "input"
@@ -1215,7 +1344,8 @@ function Process47.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process48(input: string) -> string {
+function user.Process48(input: string) -> string {
+    load_const null
     load_const "Process48"
     load_var input
     load_const "input"
@@ -1224,7 +1354,8 @@ function Process48(input: string) -> string {
     return
 }
 
-function Process48.build_request(input: string) -> baml.http.Request {
+function user.Process48$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process48"
     load_var input
     load_const "input"
@@ -1233,7 +1364,8 @@ function Process48.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process48.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process48$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process48"
     load_var input
     load_const "input"
@@ -1242,7 +1374,8 @@ function Process48.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process49(input: string) -> string {
+function user.Process49(input: string) -> string {
+    load_const null
     load_const "Process49"
     load_var input
     load_const "input"
@@ -1251,7 +1384,8 @@ function Process49(input: string) -> string {
     return
 }
 
-function Process49.build_request(input: string) -> baml.http.Request {
+function user.Process49$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process49"
     load_var input
     load_const "input"
@@ -1260,7 +1394,8 @@ function Process49.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process49.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process49$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process49"
     load_var input
     load_const "input"
@@ -1269,7 +1404,8 @@ function Process49.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process5(input: string) -> string {
+function user.Process5(input: string) -> string {
+    load_const null
     load_const "Process5"
     load_var input
     load_const "input"
@@ -1278,7 +1414,8 @@ function Process5(input: string) -> string {
     return
 }
 
-function Process5.build_request(input: string) -> baml.http.Request {
+function user.Process5$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process5"
     load_var input
     load_const "input"
@@ -1287,7 +1424,8 @@ function Process5.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process5.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process5$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process5"
     load_var input
     load_const "input"
@@ -1296,7 +1434,8 @@ function Process5.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process50(input: string) -> string {
+function user.Process50(input: string) -> string {
+    load_const null
     load_const "Process50"
     load_var input
     load_const "input"
@@ -1305,7 +1444,8 @@ function Process50(input: string) -> string {
     return
 }
 
-function Process50.build_request(input: string) -> baml.http.Request {
+function user.Process50$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process50"
     load_var input
     load_const "input"
@@ -1314,7 +1454,8 @@ function Process50.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process50.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process50$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process50"
     load_var input
     load_const "input"
@@ -1323,7 +1464,8 @@ function Process50.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process51(input: string) -> string {
+function user.Process51(input: string) -> string {
+    load_const null
     load_const "Process51"
     load_var input
     load_const "input"
@@ -1332,7 +1474,8 @@ function Process51(input: string) -> string {
     return
 }
 
-function Process51.build_request(input: string) -> baml.http.Request {
+function user.Process51$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process51"
     load_var input
     load_const "input"
@@ -1341,7 +1484,8 @@ function Process51.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process51.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process51$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process51"
     load_var input
     load_const "input"
@@ -1350,7 +1494,8 @@ function Process51.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process52(input: string) -> string {
+function user.Process52(input: string) -> string {
+    load_const null
     load_const "Process52"
     load_var input
     load_const "input"
@@ -1359,7 +1504,8 @@ function Process52(input: string) -> string {
     return
 }
 
-function Process52.build_request(input: string) -> baml.http.Request {
+function user.Process52$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process52"
     load_var input
     load_const "input"
@@ -1368,7 +1514,8 @@ function Process52.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process52.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process52$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process52"
     load_var input
     load_const "input"
@@ -1377,7 +1524,8 @@ function Process52.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process53(input: string) -> string {
+function user.Process53(input: string) -> string {
+    load_const null
     load_const "Process53"
     load_var input
     load_const "input"
@@ -1386,7 +1534,8 @@ function Process53(input: string) -> string {
     return
 }
 
-function Process53.build_request(input: string) -> baml.http.Request {
+function user.Process53$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process53"
     load_var input
     load_const "input"
@@ -1395,7 +1544,8 @@ function Process53.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process53.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process53$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process53"
     load_var input
     load_const "input"
@@ -1404,7 +1554,8 @@ function Process53.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process54(input: string) -> string {
+function user.Process54(input: string) -> string {
+    load_const null
     load_const "Process54"
     load_var input
     load_const "input"
@@ -1413,7 +1564,8 @@ function Process54(input: string) -> string {
     return
 }
 
-function Process54.build_request(input: string) -> baml.http.Request {
+function user.Process54$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process54"
     load_var input
     load_const "input"
@@ -1422,7 +1574,8 @@ function Process54.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process54.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process54$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process54"
     load_var input
     load_const "input"
@@ -1431,7 +1584,8 @@ function Process54.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process55(input: string) -> string {
+function user.Process55(input: string) -> string {
+    load_const null
     load_const "Process55"
     load_var input
     load_const "input"
@@ -1440,7 +1594,8 @@ function Process55(input: string) -> string {
     return
 }
 
-function Process55.build_request(input: string) -> baml.http.Request {
+function user.Process55$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process55"
     load_var input
     load_const "input"
@@ -1449,7 +1604,8 @@ function Process55.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process55.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process55$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process55"
     load_var input
     load_const "input"
@@ -1458,7 +1614,8 @@ function Process55.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process56(input: string) -> string {
+function user.Process56(input: string) -> string {
+    load_const null
     load_const "Process56"
     load_var input
     load_const "input"
@@ -1467,7 +1624,8 @@ function Process56(input: string) -> string {
     return
 }
 
-function Process56.build_request(input: string) -> baml.http.Request {
+function user.Process56$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process56"
     load_var input
     load_const "input"
@@ -1476,7 +1634,8 @@ function Process56.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process56.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process56$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process56"
     load_var input
     load_const "input"
@@ -1485,7 +1644,8 @@ function Process56.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process57(input: string) -> string {
+function user.Process57(input: string) -> string {
+    load_const null
     load_const "Process57"
     load_var input
     load_const "input"
@@ -1494,7 +1654,8 @@ function Process57(input: string) -> string {
     return
 }
 
-function Process57.build_request(input: string) -> baml.http.Request {
+function user.Process57$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process57"
     load_var input
     load_const "input"
@@ -1503,7 +1664,8 @@ function Process57.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process57.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process57$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process57"
     load_var input
     load_const "input"
@@ -1512,7 +1674,8 @@ function Process57.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process58(input: string) -> string {
+function user.Process58(input: string) -> string {
+    load_const null
     load_const "Process58"
     load_var input
     load_const "input"
@@ -1521,7 +1684,8 @@ function Process58(input: string) -> string {
     return
 }
 
-function Process58.build_request(input: string) -> baml.http.Request {
+function user.Process58$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process58"
     load_var input
     load_const "input"
@@ -1530,7 +1694,8 @@ function Process58.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process58.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process58$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process58"
     load_var input
     load_const "input"
@@ -1539,7 +1704,8 @@ function Process58.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process59(input: string) -> string {
+function user.Process59(input: string) -> string {
+    load_const null
     load_const "Process59"
     load_var input
     load_const "input"
@@ -1548,7 +1714,8 @@ function Process59(input: string) -> string {
     return
 }
 
-function Process59.build_request(input: string) -> baml.http.Request {
+function user.Process59$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process59"
     load_var input
     load_const "input"
@@ -1557,7 +1724,8 @@ function Process59.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process59.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process59$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process59"
     load_var input
     load_const "input"
@@ -1566,7 +1734,8 @@ function Process59.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process6(input: string) -> string {
+function user.Process6(input: string) -> string {
+    load_const null
     load_const "Process6"
     load_var input
     load_const "input"
@@ -1575,7 +1744,8 @@ function Process6(input: string) -> string {
     return
 }
 
-function Process6.build_request(input: string) -> baml.http.Request {
+function user.Process6$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process6"
     load_var input
     load_const "input"
@@ -1584,7 +1754,8 @@ function Process6.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process6.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process6$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process6"
     load_var input
     load_const "input"
@@ -1593,7 +1764,8 @@ function Process6.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process60(input: string) -> string {
+function user.Process60(input: string) -> string {
+    load_const null
     load_const "Process60"
     load_var input
     load_const "input"
@@ -1602,7 +1774,8 @@ function Process60(input: string) -> string {
     return
 }
 
-function Process60.build_request(input: string) -> baml.http.Request {
+function user.Process60$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process60"
     load_var input
     load_const "input"
@@ -1611,7 +1784,8 @@ function Process60.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process60.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process60$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process60"
     load_var input
     load_const "input"
@@ -1620,7 +1794,8 @@ function Process60.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process61(input: string) -> string {
+function user.Process61(input: string) -> string {
+    load_const null
     load_const "Process61"
     load_var input
     load_const "input"
@@ -1629,7 +1804,8 @@ function Process61(input: string) -> string {
     return
 }
 
-function Process61.build_request(input: string) -> baml.http.Request {
+function user.Process61$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process61"
     load_var input
     load_const "input"
@@ -1638,7 +1814,8 @@ function Process61.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process61.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process61$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process61"
     load_var input
     load_const "input"
@@ -1647,7 +1824,8 @@ function Process61.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process62(input: string) -> string {
+function user.Process62(input: string) -> string {
+    load_const null
     load_const "Process62"
     load_var input
     load_const "input"
@@ -1656,7 +1834,8 @@ function Process62(input: string) -> string {
     return
 }
 
-function Process62.build_request(input: string) -> baml.http.Request {
+function user.Process62$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process62"
     load_var input
     load_const "input"
@@ -1665,7 +1844,8 @@ function Process62.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process62.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process62$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process62"
     load_var input
     load_const "input"
@@ -1674,7 +1854,8 @@ function Process62.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process63(input: string) -> string {
+function user.Process63(input: string) -> string {
+    load_const null
     load_const "Process63"
     load_var input
     load_const "input"
@@ -1683,7 +1864,8 @@ function Process63(input: string) -> string {
     return
 }
 
-function Process63.build_request(input: string) -> baml.http.Request {
+function user.Process63$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process63"
     load_var input
     load_const "input"
@@ -1692,7 +1874,8 @@ function Process63.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process63.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process63$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process63"
     load_var input
     load_const "input"
@@ -1701,7 +1884,8 @@ function Process63.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process64(input: string) -> string {
+function user.Process64(input: string) -> string {
+    load_const null
     load_const "Process64"
     load_var input
     load_const "input"
@@ -1710,7 +1894,8 @@ function Process64(input: string) -> string {
     return
 }
 
-function Process64.build_request(input: string) -> baml.http.Request {
+function user.Process64$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process64"
     load_var input
     load_const "input"
@@ -1719,7 +1904,8 @@ function Process64.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process64.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process64$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process64"
     load_var input
     load_const "input"
@@ -1728,7 +1914,8 @@ function Process64.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process65(input: string) -> string {
+function user.Process65(input: string) -> string {
+    load_const null
     load_const "Process65"
     load_var input
     load_const "input"
@@ -1737,7 +1924,8 @@ function Process65(input: string) -> string {
     return
 }
 
-function Process65.build_request(input: string) -> baml.http.Request {
+function user.Process65$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process65"
     load_var input
     load_const "input"
@@ -1746,7 +1934,8 @@ function Process65.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process65.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process65$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process65"
     load_var input
     load_const "input"
@@ -1755,7 +1944,8 @@ function Process65.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process66(input: string) -> string {
+function user.Process66(input: string) -> string {
+    load_const null
     load_const "Process66"
     load_var input
     load_const "input"
@@ -1764,7 +1954,8 @@ function Process66(input: string) -> string {
     return
 }
 
-function Process66.build_request(input: string) -> baml.http.Request {
+function user.Process66$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process66"
     load_var input
     load_const "input"
@@ -1773,7 +1964,8 @@ function Process66.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process66.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process66$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process66"
     load_var input
     load_const "input"
@@ -1782,7 +1974,8 @@ function Process66.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process67(input: string) -> string {
+function user.Process67(input: string) -> string {
+    load_const null
     load_const "Process67"
     load_var input
     load_const "input"
@@ -1791,7 +1984,8 @@ function Process67(input: string) -> string {
     return
 }
 
-function Process67.build_request(input: string) -> baml.http.Request {
+function user.Process67$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process67"
     load_var input
     load_const "input"
@@ -1800,7 +1994,8 @@ function Process67.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process67.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process67$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process67"
     load_var input
     load_const "input"
@@ -1809,7 +2004,8 @@ function Process67.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process68(input: string) -> string {
+function user.Process68(input: string) -> string {
+    load_const null
     load_const "Process68"
     load_var input
     load_const "input"
@@ -1818,7 +2014,8 @@ function Process68(input: string) -> string {
     return
 }
 
-function Process68.build_request(input: string) -> baml.http.Request {
+function user.Process68$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process68"
     load_var input
     load_const "input"
@@ -1827,7 +2024,8 @@ function Process68.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process68.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process68$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process68"
     load_var input
     load_const "input"
@@ -1836,7 +2034,8 @@ function Process68.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process69(input: string) -> string {
+function user.Process69(input: string) -> string {
+    load_const null
     load_const "Process69"
     load_var input
     load_const "input"
@@ -1845,7 +2044,8 @@ function Process69(input: string) -> string {
     return
 }
 
-function Process69.build_request(input: string) -> baml.http.Request {
+function user.Process69$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process69"
     load_var input
     load_const "input"
@@ -1854,7 +2054,8 @@ function Process69.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process69.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process69$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process69"
     load_var input
     load_const "input"
@@ -1863,7 +2064,8 @@ function Process69.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process7(input: string) -> string {
+function user.Process7(input: string) -> string {
+    load_const null
     load_const "Process7"
     load_var input
     load_const "input"
@@ -1872,7 +2074,8 @@ function Process7(input: string) -> string {
     return
 }
 
-function Process7.build_request(input: string) -> baml.http.Request {
+function user.Process7$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process7"
     load_var input
     load_const "input"
@@ -1881,7 +2084,8 @@ function Process7.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process7.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process7$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process7"
     load_var input
     load_const "input"
@@ -1890,7 +2094,8 @@ function Process7.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process70(input: string) -> string {
+function user.Process70(input: string) -> string {
+    load_const null
     load_const "Process70"
     load_var input
     load_const "input"
@@ -1899,7 +2104,8 @@ function Process70(input: string) -> string {
     return
 }
 
-function Process70.build_request(input: string) -> baml.http.Request {
+function user.Process70$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process70"
     load_var input
     load_const "input"
@@ -1908,7 +2114,8 @@ function Process70.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process70.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process70$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process70"
     load_var input
     load_const "input"
@@ -1917,7 +2124,8 @@ function Process70.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process71(input: string) -> string {
+function user.Process71(input: string) -> string {
+    load_const null
     load_const "Process71"
     load_var input
     load_const "input"
@@ -1926,7 +2134,8 @@ function Process71(input: string) -> string {
     return
 }
 
-function Process71.build_request(input: string) -> baml.http.Request {
+function user.Process71$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process71"
     load_var input
     load_const "input"
@@ -1935,7 +2144,8 @@ function Process71.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process71.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process71$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process71"
     load_var input
     load_const "input"
@@ -1944,7 +2154,8 @@ function Process71.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process72(input: string) -> string {
+function user.Process72(input: string) -> string {
+    load_const null
     load_const "Process72"
     load_var input
     load_const "input"
@@ -1953,7 +2164,8 @@ function Process72(input: string) -> string {
     return
 }
 
-function Process72.build_request(input: string) -> baml.http.Request {
+function user.Process72$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process72"
     load_var input
     load_const "input"
@@ -1962,7 +2174,8 @@ function Process72.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process72.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process72$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process72"
     load_var input
     load_const "input"
@@ -1971,7 +2184,8 @@ function Process72.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process73(input: string) -> string {
+function user.Process73(input: string) -> string {
+    load_const null
     load_const "Process73"
     load_var input
     load_const "input"
@@ -1980,7 +2194,8 @@ function Process73(input: string) -> string {
     return
 }
 
-function Process73.build_request(input: string) -> baml.http.Request {
+function user.Process73$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process73"
     load_var input
     load_const "input"
@@ -1989,7 +2204,8 @@ function Process73.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process73.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process73$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process73"
     load_var input
     load_const "input"
@@ -1998,7 +2214,8 @@ function Process73.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process74(input: string) -> string {
+function user.Process74(input: string) -> string {
+    load_const null
     load_const "Process74"
     load_var input
     load_const "input"
@@ -2007,7 +2224,8 @@ function Process74(input: string) -> string {
     return
 }
 
-function Process74.build_request(input: string) -> baml.http.Request {
+function user.Process74$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process74"
     load_var input
     load_const "input"
@@ -2016,7 +2234,8 @@ function Process74.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process74.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process74$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process74"
     load_var input
     load_const "input"
@@ -2025,7 +2244,8 @@ function Process74.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process75(input: string) -> string {
+function user.Process75(input: string) -> string {
+    load_const null
     load_const "Process75"
     load_var input
     load_const "input"
@@ -2034,7 +2254,8 @@ function Process75(input: string) -> string {
     return
 }
 
-function Process75.build_request(input: string) -> baml.http.Request {
+function user.Process75$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process75"
     load_var input
     load_const "input"
@@ -2043,7 +2264,8 @@ function Process75.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process75.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process75$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process75"
     load_var input
     load_const "input"
@@ -2052,7 +2274,8 @@ function Process75.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process76(input: string) -> string {
+function user.Process76(input: string) -> string {
+    load_const null
     load_const "Process76"
     load_var input
     load_const "input"
@@ -2061,7 +2284,8 @@ function Process76(input: string) -> string {
     return
 }
 
-function Process76.build_request(input: string) -> baml.http.Request {
+function user.Process76$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process76"
     load_var input
     load_const "input"
@@ -2070,7 +2294,8 @@ function Process76.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process76.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process76$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process76"
     load_var input
     load_const "input"
@@ -2079,7 +2304,8 @@ function Process76.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process77(input: string) -> string {
+function user.Process77(input: string) -> string {
+    load_const null
     load_const "Process77"
     load_var input
     load_const "input"
@@ -2088,7 +2314,8 @@ function Process77(input: string) -> string {
     return
 }
 
-function Process77.build_request(input: string) -> baml.http.Request {
+function user.Process77$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process77"
     load_var input
     load_const "input"
@@ -2097,7 +2324,8 @@ function Process77.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process77.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process77$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process77"
     load_var input
     load_const "input"
@@ -2106,7 +2334,8 @@ function Process77.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process78(input: string) -> string {
+function user.Process78(input: string) -> string {
+    load_const null
     load_const "Process78"
     load_var input
     load_const "input"
@@ -2115,7 +2344,8 @@ function Process78(input: string) -> string {
     return
 }
 
-function Process78.build_request(input: string) -> baml.http.Request {
+function user.Process78$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process78"
     load_var input
     load_const "input"
@@ -2124,7 +2354,8 @@ function Process78.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process78.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process78$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process78"
     load_var input
     load_const "input"
@@ -2133,7 +2364,8 @@ function Process78.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process79(input: string) -> string {
+function user.Process79(input: string) -> string {
+    load_const null
     load_const "Process79"
     load_var input
     load_const "input"
@@ -2142,7 +2374,8 @@ function Process79(input: string) -> string {
     return
 }
 
-function Process79.build_request(input: string) -> baml.http.Request {
+function user.Process79$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process79"
     load_var input
     load_const "input"
@@ -2151,7 +2384,8 @@ function Process79.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process79.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process79$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process79"
     load_var input
     load_const "input"
@@ -2160,7 +2394,8 @@ function Process79.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process8(input: string) -> string {
+function user.Process8(input: string) -> string {
+    load_const null
     load_const "Process8"
     load_var input
     load_const "input"
@@ -2169,7 +2404,8 @@ function Process8(input: string) -> string {
     return
 }
 
-function Process8.build_request(input: string) -> baml.http.Request {
+function user.Process8$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process8"
     load_var input
     load_const "input"
@@ -2178,7 +2414,8 @@ function Process8.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process8.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process8$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process8"
     load_var input
     load_const "input"
@@ -2187,7 +2424,8 @@ function Process8.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process80(input: string) -> string {
+function user.Process80(input: string) -> string {
+    load_const null
     load_const "Process80"
     load_var input
     load_const "input"
@@ -2196,7 +2434,8 @@ function Process80(input: string) -> string {
     return
 }
 
-function Process80.build_request(input: string) -> baml.http.Request {
+function user.Process80$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process80"
     load_var input
     load_const "input"
@@ -2205,7 +2444,8 @@ function Process80.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process80.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process80$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process80"
     load_var input
     load_const "input"
@@ -2214,7 +2454,8 @@ function Process80.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process81(input: string) -> string {
+function user.Process81(input: string) -> string {
+    load_const null
     load_const "Process81"
     load_var input
     load_const "input"
@@ -2223,7 +2464,8 @@ function Process81(input: string) -> string {
     return
 }
 
-function Process81.build_request(input: string) -> baml.http.Request {
+function user.Process81$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process81"
     load_var input
     load_const "input"
@@ -2232,7 +2474,8 @@ function Process81.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process81.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process81$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process81"
     load_var input
     load_const "input"
@@ -2241,7 +2484,8 @@ function Process81.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process82(input: string) -> string {
+function user.Process82(input: string) -> string {
+    load_const null
     load_const "Process82"
     load_var input
     load_const "input"
@@ -2250,7 +2494,8 @@ function Process82(input: string) -> string {
     return
 }
 
-function Process82.build_request(input: string) -> baml.http.Request {
+function user.Process82$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process82"
     load_var input
     load_const "input"
@@ -2259,7 +2504,8 @@ function Process82.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process82.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process82$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process82"
     load_var input
     load_const "input"
@@ -2268,7 +2514,8 @@ function Process82.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process83(input: string) -> string {
+function user.Process83(input: string) -> string {
+    load_const null
     load_const "Process83"
     load_var input
     load_const "input"
@@ -2277,7 +2524,8 @@ function Process83(input: string) -> string {
     return
 }
 
-function Process83.build_request(input: string) -> baml.http.Request {
+function user.Process83$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process83"
     load_var input
     load_const "input"
@@ -2286,7 +2534,8 @@ function Process83.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process83.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process83$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process83"
     load_var input
     load_const "input"
@@ -2295,7 +2544,8 @@ function Process83.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process84(input: string) -> string {
+function user.Process84(input: string) -> string {
+    load_const null
     load_const "Process84"
     load_var input
     load_const "input"
@@ -2304,7 +2554,8 @@ function Process84(input: string) -> string {
     return
 }
 
-function Process84.build_request(input: string) -> baml.http.Request {
+function user.Process84$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process84"
     load_var input
     load_const "input"
@@ -2313,7 +2564,8 @@ function Process84.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process84.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process84$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process84"
     load_var input
     load_const "input"
@@ -2322,7 +2574,8 @@ function Process84.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process85(input: string) -> string {
+function user.Process85(input: string) -> string {
+    load_const null
     load_const "Process85"
     load_var input
     load_const "input"
@@ -2331,7 +2584,8 @@ function Process85(input: string) -> string {
     return
 }
 
-function Process85.build_request(input: string) -> baml.http.Request {
+function user.Process85$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process85"
     load_var input
     load_const "input"
@@ -2340,7 +2594,8 @@ function Process85.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process85.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process85$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process85"
     load_var input
     load_const "input"
@@ -2349,7 +2604,8 @@ function Process85.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process86(input: string) -> string {
+function user.Process86(input: string) -> string {
+    load_const null
     load_const "Process86"
     load_var input
     load_const "input"
@@ -2358,7 +2614,8 @@ function Process86(input: string) -> string {
     return
 }
 
-function Process86.build_request(input: string) -> baml.http.Request {
+function user.Process86$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process86"
     load_var input
     load_const "input"
@@ -2367,7 +2624,8 @@ function Process86.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process86.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process86$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process86"
     load_var input
     load_const "input"
@@ -2376,7 +2634,8 @@ function Process86.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process87(input: string) -> string {
+function user.Process87(input: string) -> string {
+    load_const null
     load_const "Process87"
     load_var input
     load_const "input"
@@ -2385,7 +2644,8 @@ function Process87(input: string) -> string {
     return
 }
 
-function Process87.build_request(input: string) -> baml.http.Request {
+function user.Process87$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process87"
     load_var input
     load_const "input"
@@ -2394,7 +2654,8 @@ function Process87.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process87.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process87$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process87"
     load_var input
     load_const "input"
@@ -2403,7 +2664,8 @@ function Process87.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process88(input: string) -> string {
+function user.Process88(input: string) -> string {
+    load_const null
     load_const "Process88"
     load_var input
     load_const "input"
@@ -2412,7 +2674,8 @@ function Process88(input: string) -> string {
     return
 }
 
-function Process88.build_request(input: string) -> baml.http.Request {
+function user.Process88$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process88"
     load_var input
     load_const "input"
@@ -2421,7 +2684,8 @@ function Process88.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process88.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process88$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process88"
     load_var input
     load_const "input"
@@ -2430,7 +2694,8 @@ function Process88.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process89(input: string) -> string {
+function user.Process89(input: string) -> string {
+    load_const null
     load_const "Process89"
     load_var input
     load_const "input"
@@ -2439,7 +2704,8 @@ function Process89(input: string) -> string {
     return
 }
 
-function Process89.build_request(input: string) -> baml.http.Request {
+function user.Process89$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process89"
     load_var input
     load_const "input"
@@ -2448,7 +2714,8 @@ function Process89.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process89.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process89$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process89"
     load_var input
     load_const "input"
@@ -2457,7 +2724,8 @@ function Process89.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process9(input: string) -> string {
+function user.Process9(input: string) -> string {
+    load_const null
     load_const "Process9"
     load_var input
     load_const "input"
@@ -2466,7 +2734,8 @@ function Process9(input: string) -> string {
     return
 }
 
-function Process9.build_request(input: string) -> baml.http.Request {
+function user.Process9$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process9"
     load_var input
     load_const "input"
@@ -2475,7 +2744,8 @@ function Process9.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process9.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process9$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process9"
     load_var input
     load_const "input"
@@ -2484,7 +2754,8 @@ function Process9.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process90(input: string) -> string {
+function user.Process90(input: string) -> string {
+    load_const null
     load_const "Process90"
     load_var input
     load_const "input"
@@ -2493,7 +2764,8 @@ function Process90(input: string) -> string {
     return
 }
 
-function Process90.build_request(input: string) -> baml.http.Request {
+function user.Process90$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process90"
     load_var input
     load_const "input"
@@ -2502,7 +2774,8 @@ function Process90.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process90.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process90$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process90"
     load_var input
     load_const "input"
@@ -2511,7 +2784,8 @@ function Process90.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process91(input: string) -> string {
+function user.Process91(input: string) -> string {
+    load_const null
     load_const "Process91"
     load_var input
     load_const "input"
@@ -2520,7 +2794,8 @@ function Process91(input: string) -> string {
     return
 }
 
-function Process91.build_request(input: string) -> baml.http.Request {
+function user.Process91$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process91"
     load_var input
     load_const "input"
@@ -2529,7 +2804,8 @@ function Process91.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process91.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process91$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process91"
     load_var input
     load_const "input"
@@ -2538,7 +2814,8 @@ function Process91.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process92(input: string) -> string {
+function user.Process92(input: string) -> string {
+    load_const null
     load_const "Process92"
     load_var input
     load_const "input"
@@ -2547,7 +2824,8 @@ function Process92(input: string) -> string {
     return
 }
 
-function Process92.build_request(input: string) -> baml.http.Request {
+function user.Process92$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process92"
     load_var input
     load_const "input"
@@ -2556,7 +2834,8 @@ function Process92.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process92.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process92$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process92"
     load_var input
     load_const "input"
@@ -2565,7 +2844,8 @@ function Process92.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process93(input: string) -> string {
+function user.Process93(input: string) -> string {
+    load_const null
     load_const "Process93"
     load_var input
     load_const "input"
@@ -2574,7 +2854,8 @@ function Process93(input: string) -> string {
     return
 }
 
-function Process93.build_request(input: string) -> baml.http.Request {
+function user.Process93$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process93"
     load_var input
     load_const "input"
@@ -2583,7 +2864,8 @@ function Process93.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process93.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process93$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process93"
     load_var input
     load_const "input"
@@ -2592,7 +2874,8 @@ function Process93.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process94(input: string) -> string {
+function user.Process94(input: string) -> string {
+    load_const null
     load_const "Process94"
     load_var input
     load_const "input"
@@ -2601,7 +2884,8 @@ function Process94(input: string) -> string {
     return
 }
 
-function Process94.build_request(input: string) -> baml.http.Request {
+function user.Process94$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process94"
     load_var input
     load_const "input"
@@ -2610,7 +2894,8 @@ function Process94.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process94.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process94$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process94"
     load_var input
     load_const "input"
@@ -2619,7 +2904,8 @@ function Process94.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process95(input: string) -> string {
+function user.Process95(input: string) -> string {
+    load_const null
     load_const "Process95"
     load_var input
     load_const "input"
@@ -2628,7 +2914,8 @@ function Process95(input: string) -> string {
     return
 }
 
-function Process95.build_request(input: string) -> baml.http.Request {
+function user.Process95$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process95"
     load_var input
     load_const "input"
@@ -2637,7 +2924,8 @@ function Process95.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process95.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process95$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process95"
     load_var input
     load_const "input"
@@ -2646,7 +2934,8 @@ function Process95.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process96(input: string) -> string {
+function user.Process96(input: string) -> string {
+    load_const null
     load_const "Process96"
     load_var input
     load_const "input"
@@ -2655,7 +2944,8 @@ function Process96(input: string) -> string {
     return
 }
 
-function Process96.build_request(input: string) -> baml.http.Request {
+function user.Process96$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process96"
     load_var input
     load_const "input"
@@ -2664,7 +2954,8 @@ function Process96.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process96.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process96$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process96"
     load_var input
     load_const "input"
@@ -2673,7 +2964,8 @@ function Process96.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process97(input: string) -> string {
+function user.Process97(input: string) -> string {
+    load_const null
     load_const "Process97"
     load_var input
     load_const "input"
@@ -2682,7 +2974,8 @@ function Process97(input: string) -> string {
     return
 }
 
-function Process97.build_request(input: string) -> baml.http.Request {
+function user.Process97$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process97"
     load_var input
     load_const "input"
@@ -2691,7 +2984,8 @@ function Process97.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process97.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process97$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process97"
     load_var input
     load_const "input"
@@ -2700,7 +2994,8 @@ function Process97.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process98(input: string) -> string {
+function user.Process98(input: string) -> string {
+    load_const null
     load_const "Process98"
     load_var input
     load_const "input"
@@ -2709,7 +3004,8 @@ function Process98(input: string) -> string {
     return
 }
 
-function Process98.build_request(input: string) -> baml.http.Request {
+function user.Process98$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process98"
     load_var input
     load_const "input"
@@ -2718,7 +3014,8 @@ function Process98.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process98.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process98$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process98"
     load_var input
     load_const "input"
@@ -2727,7 +3024,8 @@ function Process98.render_prompt(input: string) -> baml.llm.PromptAst {
     return
 }
 
-function Process99(input: string) -> string {
+function user.Process99(input: string) -> string {
+    load_const null
     load_const "Process99"
     load_var input
     load_const "input"
@@ -2736,7 +3034,8 @@ function Process99(input: string) -> string {
     return
 }
 
-function Process99.build_request(input: string) -> baml.http.Request {
+function user.Process99$build_request(input: string) -> baml.http.Request {
+    load_const null
     load_const "Process99"
     load_var input
     load_const "input"
@@ -2745,7 +3044,8 @@ function Process99.build_request(input: string) -> baml.http.Request {
     return
 }
 
-function Process99.render_prompt(input: string) -> baml.llm.PromptAst {
+function user.Process99$render_prompt(input: string) -> baml.llm.PromptAst {
+    load_const null
     load_const "Process99"
     load_var input
     load_const "input"

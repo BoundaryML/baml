@@ -20,7 +20,7 @@ use baml_base::Name;
 use baml_compiler2_ast::TypeExpr;
 use rustc_hash::FxHashMap;
 
-use crate::{infer_context::TirTypeError, lower_type_expr::lower_type_expr, ty::Ty};
+use crate::{infer_context::TirTypeError, lower_type_expr::lower_type_expr_in_ns, ty::Ty};
 
 // ── Type variable binding ─────────────────────────────────────────────────────
 
@@ -55,6 +55,7 @@ pub fn substitute_ty(ty: &Ty, bindings: &FxHashMap<Name, Ty>) -> Ty {
         return ty.clone();
     }
     match ty {
+        Ty::TypeVar(name) => bindings.get(name).cloned().unwrap_or_else(|| ty.clone()),
         Ty::List(inner) => Ty::List(Box::new(substitute_ty(inner, bindings))),
         Ty::Map(k, v) => Ty::Map(
             Box::new(substitute_ty(k, bindings)),
@@ -104,16 +105,20 @@ fn substitute_type_expr(expr: &TypeExpr, bindings: &FxHashMap<Name, Ty>) -> Opti
 ///
 /// Diagnostics from the lowering step (for non-variable paths that genuinely
 /// don't exist) are collected into `diagnostics`.
+///
+/// `ns_context` is the defining file's namespace within its package (e.g. `["llm"]`
+/// for `<builtin>/baml/llm/llm.baml`); unqualified type paths resolve there first.
 pub fn lower_type_expr_with_generics(
     db: &dyn crate::Db,
     expr: &TypeExpr,
     package_items: &baml_compiler2_hir::package::PackageItems<'_>,
+    ns_context: &[Name],
     bindings: &FxHashMap<Name, Ty>,
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     // Fast path: empty bindings — no substitution needed.
     if bindings.is_empty() {
-        return lower_type_expr(db, expr, package_items, diagnostics);
+        return lower_type_expr_in_ns(db, expr, package_items, ns_context, &[], diagnostics);
     }
 
     // Intercept single-segment paths that are type variables.
@@ -129,6 +134,7 @@ pub fn lower_type_expr_with_generics(
             db,
             inner,
             package_items,
+            ns_context,
             bindings,
             diagnostics,
         ))),
@@ -136,6 +142,7 @@ pub fn lower_type_expr_with_generics(
             db,
             inner,
             package_items,
+            ns_context,
             bindings,
             diagnostics,
         ))),
@@ -144,6 +151,7 @@ pub fn lower_type_expr_with_generics(
                 db,
                 key,
                 package_items,
+                ns_context,
                 bindings,
                 diagnostics,
             )),
@@ -151,6 +159,7 @@ pub fn lower_type_expr_with_generics(
                 db,
                 value,
                 package_items,
+                ns_context,
                 bindings,
                 diagnostics,
             )),
@@ -158,7 +167,16 @@ pub fn lower_type_expr_with_generics(
         TypeExpr::Union(members) => Ty::Union(
             members
                 .iter()
-                .map(|m| lower_type_expr_with_generics(db, m, package_items, bindings, diagnostics))
+                .map(|m| {
+                    lower_type_expr_with_generics(
+                        db,
+                        m,
+                        package_items,
+                        ns_context,
+                        bindings,
+                        diagnostics,
+                    )
+                })
                 .collect(),
         ),
         TypeExpr::Function { params, ret } => Ty::Function {
@@ -171,6 +189,7 @@ pub fn lower_type_expr_with_generics(
                             db,
                             &p.ty,
                             package_items,
+                            ns_context,
                             bindings,
                             diagnostics,
                         ),
@@ -181,6 +200,7 @@ pub fn lower_type_expr_with_generics(
                 db,
                 ret,
                 package_items,
+                ns_context,
                 bindings,
                 diagnostics,
             )),
@@ -188,7 +208,7 @@ pub fn lower_type_expr_with_generics(
         // For all other type expressions (primitives, multi-segment paths, etc.),
         // lower normally and then substitute in the result.
         other => {
-            let ty = lower_type_expr(db, other, package_items, diagnostics);
+            let ty = lower_type_expr_in_ns(db, other, package_items, ns_context, &[], diagnostics);
             substitute_ty(&ty, bindings)
         }
     }
@@ -209,5 +229,139 @@ pub fn skip_self_param(params: &[(Option<Name>, Ty)]) -> &[(Option<Name>, Ty)] {
     match params.first() {
         Some((Some(name), _)) if name.as_str() == "self" => &params[1..],
         _ => params,
+    }
+}
+
+// ── Type variable utilities ────────────────────────────────────────────────
+
+/// Check if a type contains any `Ty::TypeVar` anywhere in its structure.
+pub fn contains_typevar(ty: &Ty) -> bool {
+    match ty {
+        Ty::TypeVar(_) => true,
+        Ty::List(inner) | Ty::Optional(inner) | Ty::EvolvingList(inner) => contains_typevar(inner),
+        Ty::Map(k, v) | Ty::EvolvingMap(k, v) => contains_typevar(k) || contains_typevar(v),
+        Ty::Union(tys) => tys.iter().any(contains_typevar),
+        Ty::Function { params, ret } => {
+            params.iter().any(|(_, t)| contains_typevar(t)) || contains_typevar(ret)
+        }
+        _ => false,
+    }
+}
+
+/// Infer type variable bindings by walking formal and actual types in parallel.
+///
+/// When `formal` is `Ty::TypeVar("T")` and `actual` is `Ty::Primitive(Int)`,
+/// records `T → int` in `bindings`. For structural types, recurses into
+/// matching structures. Conflicting inferences are merged via `union_ty`.
+pub fn infer_bindings(formal: &Ty, actual: &Ty, bindings: &mut FxHashMap<Name, Ty>) {
+    match (formal, actual) {
+        (Ty::TypeVar(name), actual_ty) => {
+            // Skip TypeVar-to-TypeVar bindings — they provide no information.
+            // e.g. when execute<T> calls execute_once<T>, the expected type is
+            // TypeVar("T") from the caller, which doesn't help resolve the callee's T.
+            if matches!(actual_ty, Ty::TypeVar(_)) {
+                return;
+            }
+            bindings
+                .entry(name.clone())
+                .and_modify(|existing| *existing = union_ty(existing, actual_ty))
+                .or_insert_with(|| actual_ty.clone());
+        }
+        (Ty::List(f), Ty::List(a)) => infer_bindings(f, a, bindings),
+        (Ty::Map(fk, fv), Ty::Map(ak, av)) => {
+            infer_bindings(fk, ak, bindings);
+            infer_bindings(fv, av, bindings);
+        }
+        (Ty::Optional(f), Ty::Optional(a)) => infer_bindings(f, a, bindings),
+        (
+            Ty::Function {
+                params: fp,
+                ret: fr,
+            },
+            Ty::Function {
+                params: ap,
+                ret: ar,
+            },
+        ) => {
+            for ((_, ft), (_, at)) in fp.iter().zip(ap.iter()) {
+                infer_bindings(ft, at, bindings);
+            }
+            infer_bindings(fr, ar, bindings);
+        }
+        _ => {} // Concrete types: nothing to infer
+    }
+}
+
+/// Combine two types into a union, deduplicating members.
+///
+/// Used when the same type variable is inferred from multiple arguments
+/// (e.g., `deep_equals(myInt, myString)` → `T` gets `int` then `string`).
+pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
+    if a == b {
+        return a.clone();
+    }
+    let mut members = Vec::new();
+    match a {
+        Ty::Union(tys) => members.extend(tys.iter().cloned()),
+        other => members.push(other.clone()),
+    }
+    match b {
+        Ty::Union(tys) => {
+            for t in tys {
+                if !members.contains(t) {
+                    members.push(t.clone());
+                }
+            }
+        }
+        other => {
+            if !members.contains(other) {
+                members.push(other.clone());
+            }
+        }
+    }
+    if members.len() == 1 {
+        members.pop().unwrap()
+    } else {
+        Ty::Union(members)
+    }
+}
+
+/// Replace any remaining `Ty::TypeVar` with `Ty::Unknown` and emit diagnostics.
+///
+/// Called after call-site inference to ensure no type variables escape to
+/// VIR/runtime. Each erased `TypeVar` produces a `CannotInferTypeParameter`
+/// diagnostic.
+#[allow(clippy::only_used_in_recursion)] // diagnostics param kept for future use
+pub fn erase_unresolved_typevars(
+    ty: &Ty,
+    diagnostics: &mut Vec<crate::infer_context::TirTypeError>,
+) -> Ty {
+    match ty {
+        Ty::TypeVar(_) => {
+            // Preserve TypeVars — they represent the enclosing function's generic
+            // parameter and will be resolved at the outer call site.
+            ty.clone()
+        }
+        Ty::List(inner) => Ty::List(Box::new(erase_unresolved_typevars(inner, diagnostics))),
+        Ty::Map(k, v) => Ty::Map(
+            Box::new(erase_unresolved_typevars(k, diagnostics)),
+            Box::new(erase_unresolved_typevars(v, diagnostics)),
+        ),
+        Ty::Optional(inner) => {
+            Ty::Optional(Box::new(erase_unresolved_typevars(inner, diagnostics)))
+        }
+        Ty::Function { params, ret } => Ty::Function {
+            params: params
+                .iter()
+                .map(|(n, t)| (n.clone(), erase_unresolved_typevars(t, diagnostics)))
+                .collect(),
+            ret: Box::new(erase_unresolved_typevars(ret, diagnostics)),
+        },
+        Ty::Union(tys) => Ty::Union(
+            tys.iter()
+                .map(|t| erase_unresolved_typevars(t, diagnostics))
+                .collect(),
+        ),
+        other => other.clone(),
     }
 }

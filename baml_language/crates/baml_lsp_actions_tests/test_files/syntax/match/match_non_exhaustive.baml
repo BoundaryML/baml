@@ -20,25 +20,25 @@ function MissingMultipleVariants(c: Color) -> string {
 
 //----
 //- diagnostics
-// Error: Non-exhaustive match on `Color`: missing cases Color.Blue
+// Error: non-exhaustive match on `user.Color`; missing: user.Color.Blue
 //     ╭─[ match_match_non_exhaustive.baml:8:49 ]
 //     │
 //   8 │ ╭─▶ function MissingOneVariant(c: Color) -> string {
 //     ┆ ┆   
 //  12 │ ├─▶   }
 //     │ │         
-//     │ ╰───────── Non-exhaustive match on `Color`: missing cases Color.Blue
+//     │ ╰───────── non-exhaustive match on `user.Color`; missing: user.Color.Blue
 //     │     
-//     │     Note: Error code: E0062
+//     │     Note: Error code: E0001
 // ────╯
-// Error: Non-exhaustive match on `Color`: missing cases Color.Green, Color.Blue
+// Error: non-exhaustive match on `user.Color`; missing: user.Color.Blue, user.Color.Green
 //     ╭─[ match_match_non_exhaustive.baml:15:55 ]
 //     │
 //  15 │ ╭─▶ function MissingMultipleVariants(c: Color) -> string {
 //     ┆ ┆   
 //  18 │ ├─▶   }
 //     │ │         
-//     │ ╰───────── Non-exhaustive match on `Color`: missing cases Color.Green, Color.Blue
+//     │ ╰───────── non-exhaustive match on `user.Color`; missing: user.Color.Blue, user.Color.Green
 //     │     
-//     │     Note: Error code: E0062
+//     │     Note: Error code: E0001
 // ────╯

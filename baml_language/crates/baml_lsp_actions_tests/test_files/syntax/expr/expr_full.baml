@@ -71,6 +71,24 @@ test TestMakePoem() {
 
 //----
 //- diagnostics
+// Error: unresolved name: poem
+//     ╭─[ expr_expr_full.baml:41:16 ]
+//     │
+//  41 │   CombinePoems(poem, another)
+//     │                ──┬─  
+//     │                  ╰─── unresolved name: poem
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unresolved name: another
+//     ╭─[ expr_expr_full.baml:41:22 ]
+//     │
+//  41 │   CombinePoems(poem, another)
+//     │                      ───┬───  
+//     │                         ╰───── unresolved name: another
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
 // Error: remove parentheses from test name: `test TestPipeline`
 //     ╭─[ expr_expr_full.baml:44:18 ]
 //     │
@@ -106,22 +124,4 @@ test TestMakePoem() {
 //     │                   ╰── remove parentheses from test name: `test TestMakePoem`
 //     │ 
 //     │ Note: Error code: E0010
-// ────╯
-// Error: Unknown variable `poem`
-//     ╭─[ expr_expr_full.baml:41:16 ]
-//     │
-//  41 │   CombinePoems(poem, another)
-//     │                ──┬─  
-//     │                  ╰─── Unknown variable `poem`
-//     │ 
-//     │ Note: Error code: E0003
-// ────╯
-// Error: Unknown variable `another`
-//     ╭─[ expr_expr_full.baml:41:22 ]
-//     │
-//  41 │   CombinePoems(poem, another)
-//     │                      ───┬───  
-//     │                         ╰───── Unknown variable `another`
-//     │ 
-//     │ Note: Error code: E0003
 // ────╯

@@ -1,49 +1,17 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function Fn.build_request() -> baml.http.Request {
-    baml.llm.build_request("Fn", {  })
-}
-
-function Fn.render_prompt() -> baml.llm.PromptAst {
-    baml.llm.render_prompt("Fn", {  })
-}
-
-function Fn() -> string {
-    baml.llm.call_llm_function("Fn", {  })
-}
-
-class TopLevelClass {
+=== HIR2 ===
+class user.TopLevelClass {
   a: string
 }
-
-enum TopLevelEnum {
-  A
-  B
+enum user.TopLevelEnum {A, B}
+function user.Fn() -> string  [llm] {
+  baml.llm.call_llm_function(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  })
 }
-
-test MyTest {
-  functions: ["Fn"]
-  type_builder {
-    class InnerClass {
-      b: int
-    }
-    enum InnerEnum {
-      X
-      Y
-    }
-    dynamic class DynamicInner {
-      c: string
-    }
-    dynamic enum DynamicEnum {
-      P
-      Q
-    }
-    type MyAlias = string | int
-  }
+function user.Fn$build_request() -> baml.http.Request  [expr] {
+  baml.llm.build_request(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  })
 }
-
-class stream_TopLevelClass {
-  a: null | string
+function user.Fn$render_prompt() -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  })
 }

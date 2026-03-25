@@ -36,21 +36,3 @@ class TestLiterals {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: unresolved type: True
-//    ╭─[ class_misspeled_boolean_literals.baml:1:1 ]
-//    │
-//  1 │ class TestLiterals {
-//    │ │ 
-//    │ ╰─ unresolved type: True
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: False
-//    ╭─[ class_misspeled_boolean_literals.baml:1:1 ]
-//    │
-//  1 │ class TestLiterals {
-//    │ │ 
-//    │ ╰─ unresolved type: False
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯

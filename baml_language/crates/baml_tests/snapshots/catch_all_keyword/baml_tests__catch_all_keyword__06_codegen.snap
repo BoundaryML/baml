@@ -1,16 +1,14 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function CatchAllTyped(x: int) -> string {
+function user.CatchAllTyped(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFailIntOrString
+    call user.MayFailIntOrString
     pop_unwind
     jump L5
 
   L0:
-    load_var _2
-    store_var e
     load_var _2
     type_tag
     load_const 1
@@ -41,32 +39,28 @@ function CatchAllTyped(x: int) -> string {
     return
 }
 
-function CatchAllWildcard(x: int) -> string {
+function user.CatchAllWildcard(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFailIntOrString
+    call user.MayFailIntOrString
     pop_unwind
     jump L1
 
   L0:
-    load_var _2
-    store_var e
     load_const "caught all"
 
   L1:
     return
 }
 
-function CatchThenCatchAll(x: int) -> string {
+function user.CatchThenCatchAll(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFailIntOrString
+    call user.MayFailIntOrString
     pop_unwind
     jump L3
 
   L0:
-    load_var _2
-    store_var e
     load_var _2
     type_tag
     load_const 1
@@ -75,10 +69,6 @@ function CatchThenCatchAll(x: int) -> string {
     jump L2
 
   L1:
-    load_var _2
-    store_var _3
-    load_var _3
-    store_var e2
     load_const "caught rest"
     jump L3
 
@@ -89,7 +79,7 @@ function CatchThenCatchAll(x: int) -> string {
     return
 }
 
-function MayFailIntOrString(x: int) -> string {
+function user.MayFailIntOrString(x: int) -> string {
     load_var x
     copy 0
     load_const 0
@@ -120,16 +110,14 @@ function MayFailIntOrString(x: int) -> string {
     throw
 }
 
-function PartialCatch(x: int) -> string {
+function user.PartialCatch(x: int) -> string {
     push_unwind L0, slot 2
     load_var x
-    call MayFailIntOrString
+    call user.MayFailIntOrString
     pop_unwind
     jump L3
 
   L0:
-    load_var _2
-    store_var e
     load_var _2
     type_tag
     load_const 1

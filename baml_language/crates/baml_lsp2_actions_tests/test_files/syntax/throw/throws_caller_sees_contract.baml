@@ -20,21 +20,21 @@ function Caller(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.Errors` is missing Errors.AuthError
+// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
 //    ╭─[ throw_throws_caller_sees_contract.baml:9:42 ]
 //    │
 //  9 │ function MayFail(x: int) -> string throws Errors {
 //    │                                          ───┬───  
-//    │                                             ╰───── throws contract violation: `user.Errors` is missing Errors.AuthError
+//    │                                             ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: extraneous throws declaration: Errors
+// Error: extraneous throws declaration: user.Errors
 //    ╭─[ throw_throws_caller_sees_contract.baml:9:42 ]
 //    │
 //  9 │ function MayFail(x: int) -> string throws Errors {
 //    │                                          ───┬───  
-//    │                                             ╰───── extraneous throws declaration: Errors
+//    │                                             ╰───── extraneous throws declaration: user.Errors
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

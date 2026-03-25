@@ -11,12 +11,4 @@ function MixedChildrenNotFlattened() -> string {
 
 //----
 //- diagnostics
-// Error: unresolved name: item
-//    ╭─[ headers_mixed_children_not_flattened.baml:7:9 ]
-//    │
-//  7 │         item
-//    │         ──┬─  
-//    │           ╰─── unresolved name: item
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// <no-diagnostics-expected>

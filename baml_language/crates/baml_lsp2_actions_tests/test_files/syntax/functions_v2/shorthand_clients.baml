@@ -69,4 +69,14 @@ function ExtractName(text: string) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unresolved name: openai
+//     ╭─[ functions_v2_shorthand_clients.baml:59:2 ]
+//     │
+//  59 │ ╭─▶ }
+//     ┆ ┆   
+//  68 │ ├─▶ }
+//     │ │      
+//     │ ╰────── unresolved name: openai
+//     │     
+//     │     Note: Error code: E0001
+// ────╯

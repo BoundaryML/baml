@@ -116,10 +116,17 @@ pub fn external_to_baml_value(
                 bex_prompt_ast_to_proto_prompt_ast(prompt_ast),
             ))
         }
+        BexExternalValue::RustData(arc) => {
+            if let Some(converted) = bex_project::try_convert_rust_data(arc) {
+                return external_to_baml_value(&converted, options);
+            }
+            return Err(CtypesError::InternalError(
+                "RustData cannot be serialized over FFI".to_string(),
+            ));
+        }
 
         // All opaque types → insert into handle table, encode as BamlHandle.
         BexExternalValue::Handle(_)
-        | BexExternalValue::Resource(_)
         | BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Adt(_) => {
             let table_value = HandleTableValue::try_from(value.clone()).map_err(|e| {
@@ -274,9 +281,11 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
                 }),
             },
         )),
-        Ty::Enum(tn, _) => Some(FieldType::EnumType(crate::baml::cffi::BamlFieldTypeEnum {
-            name: tn.display_name.to_string(),
-        })),
+        Ty::EnumVariant(tn, ..) | Ty::Enum(tn, _) => {
+            Some(FieldType::EnumType(crate::baml::cffi::BamlFieldTypeEnum {
+                name: tn.display_name.to_string(),
+            }))
+        }
         Ty::Union(_, _) => Some(FieldType::UnionVariantType(BamlFieldTypeUnionVariant {
             name: None,
         })),
@@ -291,6 +300,7 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
             unreachable!("runtime-only {tn} should not reach FFI type encoding")
         }
         Ty::TypeAlias(_, _)
+        | Ty::Future(..)
         | Ty::Function { .. }
         | Ty::Void { .. }
         | Ty::WatchAccessor(_, _)
@@ -298,4 +308,58 @@ fn ty_to_field_type(ty: &Ty) -> BamlFieldType {
     };
 
     BamlFieldType { r#type: field_type }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use bex_project::{BexExternalValue, MediaContent, MediaValue, PromptAst, PromptAstSimple};
+
+    use super::*;
+    use crate::baml::cffi::baml_outbound_value::Value as BamlValueVariant;
+
+    #[test]
+    fn rust_data_prompt_ast_converts_to_handle() {
+        let prompt = Arc::new(PromptAst::Simple(Arc::new(PromptAstSimple::String(
+            "hello".to_string(),
+        ))));
+        let value = BexExternalValue::RustData(prompt);
+        let options = HandleTableOptions::for_in_process();
+        let result = external_to_baml_value(&value, &options);
+        assert!(result.is_ok());
+        assert!(matches!(
+            result.unwrap().value,
+            Some(BamlValueVariant::HandleValue(_))
+        ));
+    }
+
+    #[test]
+    fn rust_data_media_value_converts_to_handle() {
+        let media = Arc::new(MediaValue::new(
+            bex_project::MediaKind::Image,
+            MediaContent::Url {
+                url: "https://example.com/img.png".to_string(),
+                base64_data: None,
+            },
+            Some("image/png".to_string()),
+        ));
+        let value = BexExternalValue::RustData(media);
+        let options = HandleTableOptions::for_in_process();
+        let result = external_to_baml_value(&value, &options);
+        assert!(result.is_ok());
+        assert!(matches!(
+            result.unwrap().value,
+            Some(BamlValueVariant::HandleValue(_))
+        ));
+    }
+
+    #[test]
+    fn rust_data_unknown_type_returns_error() {
+        let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
+        let value = BexExternalValue::RustData(unknown);
+        let options = HandleTableOptions::for_in_process();
+        let result = external_to_baml_value(&value, &options);
+        assert!(result.is_err());
+    }
 }

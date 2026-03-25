@@ -76,7 +76,7 @@ async fn array_push() {
     let output = baml_test!(
         "
         function main() -> int[] {
-            let a = [1, 2, 3];
+            let a: int[] = [1, 2, 3];
             a.push(4);
             a
         }

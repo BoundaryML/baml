@@ -11,11 +11,19 @@ class Response {
   url string
   _body $rust_type
 
-  function text(self) -> string {
+  function text(self) -> string throws root.errors.Io {
     $rust_io_function
   }
 
   function ok(self) -> bool {
     self.status_code >= 200 && self.status_code < 300
   }
+}
+
+function fetch(url: string) -> Response throws root.errors.Io | root.errors.Timeout {
+  $rust_io_function
+}
+
+function send(request: Request) -> Response throws root.errors.Io | root.errors.Timeout {
+  $rust_io_function
 }

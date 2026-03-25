@@ -16,7 +16,15 @@ function ForInLoop() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: operator `Add` cannot be applied to `int` and `1 | 2 | 3`
+//     ╭─[ for_loops.baml:12:11 ]
+//     │
+//  12 │     sum = sum + x;
+//     │           ───┬───  
+//     │              ╰───── operator `Add` cannot be applied to `int` and `1 | 2 | 3`
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
 //
 //- semantic_tokens
 // for_loops.baml:1:1 (keyword) len=8 "function"
@@ -31,18 +39,12 @@ function ForInLoop() -> int {
 // for_loops.baml:3:12 (variable) len=1 "i"
 // for_loops.baml:3:14 (operator) len=1 "="
 // for_loops.baml:3:16 (number) len=1 "0"
-// for_loops.baml:3:19 (variable) len=1 "i"
 // for_loops.baml:3:21 (operator) len=1 "<"
 // for_loops.baml:3:23 (number) len=2 "10"
-// for_loops.baml:3:27 (variable) len=1 "i"
 // for_loops.baml:3:29 (operator) len=2 "+="
 // for_loops.baml:3:32 (number) len=1 "1"
-// for_loops.baml:4:5 (variable) len=3 "sum"
 // for_loops.baml:4:9 (operator) len=1 "="
-// for_loops.baml:4:11 (variable) len=3 "sum"
 // for_loops.baml:4:15 (operator) len=1 "+"
-// for_loops.baml:4:17 (variable) len=1 "i"
-// for_loops.baml:6:3 (variable) len=3 "sum"
 // for_loops.baml:9:1 (keyword) len=8 "function"
 // for_loops.baml:9:10 (function) len=9 "ForInLoop"
 // for_loops.baml:9:25 (type) len=3 "int"
@@ -57,9 +59,5 @@ function ForInLoop() -> int {
 // for_loops.baml:11:18 (number) len=1 "1"
 // for_loops.baml:11:21 (number) len=1 "2"
 // for_loops.baml:11:24 (number) len=1 "3"
-// for_loops.baml:12:5 (variable) len=3 "sum"
 // for_loops.baml:12:9 (operator) len=1 "="
-// for_loops.baml:12:11 (variable) len=3 "sum"
 // for_loops.baml:12:15 (operator) len=1 "+"
-// for_loops.baml:12:17 (variable) len=1 "x"
-// for_loops.baml:14:3 (variable) len=3 "sum"

@@ -1,36 +1,17 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function GetUser.build_request() -> baml.http.Request {
-    baml.llm.build_request("GetUser", {  })
-}
-
-function GetUser() -> MyClass {
-    baml.llm.call_llm_function("GetUser", {  })
-}
-
-function GetUser.render_prompt() -> baml.llm.PromptAst {
-    baml.llm.render_prompt("GetUser", {  })
-}
-
-class MyClass {
+=== HIR2 ===
+class user.MyClass {
   name: string
   age: int
 }
-
-generator lang_typescript {
-  output_type: typescript
-  output_dir: ../typescript
+function user.GetUser() -> user.MyClass  [llm] {
+  baml.llm.call_llm_function(null, "GetUser", map {  })
 }
-
-generator lang_python {
-  output_type: python/pydantic
-  output_dir: ../python
-  version: 0.68.0
+function user.GetUser$build_request() -> baml.http.Request  [expr] {
+  baml.llm.build_request(null, "GetUser", map {  })
 }
-
-class stream_MyClass {
-  name: null | string
-  age: null | int
+function user.GetUser$render_prompt() -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(null, "GetUser", map {  })
 }

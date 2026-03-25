@@ -12,7 +12,7 @@
 use baml_base::SourceFile;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, LocalItemId,
+    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, GeneratorMarker, LetMarker, LocalItemId,
     RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
 };
 
@@ -68,6 +68,12 @@ pub struct TemplateStringLoc<'db> {
 pub struct RetryPolicyLoc<'db> {
     pub file: SourceFile,
     pub id: LocalItemId<RetryPolicyMarker>,
+}
+
+#[salsa::interned]
+pub struct LetLoc<'db> {
+    pub file: SourceFile,
+    pub id: LocalItemId<LetMarker>,
 }
 
 // ── Manual Debug impls ───────────────────────────────────────────────────────
@@ -128,6 +134,12 @@ impl std::fmt::Debug for RetryPolicyLoc<'_> {
     }
 }
 
+impl std::fmt::Debug for LetLoc<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "LetLoc(..)")
+    }
+}
+
 // ── ItemId ───────────────────────────────────────────────────────────────────
 
 /// Sum type for any top-level item location.
@@ -142,6 +154,7 @@ pub enum ItemId<'db> {
     Generator(GeneratorLoc<'db>),
     TemplateString(TemplateStringLoc<'db>),
     RetryPolicy(RetryPolicyLoc<'db>),
+    Let(LetLoc<'db>),
 }
 
 impl std::fmt::Debug for ItemId<'_> {
@@ -156,6 +169,7 @@ impl std::fmt::Debug for ItemId<'_> {
             ItemId::Generator(_) => write!(f, "ItemId::Generator(..)"),
             ItemId::TemplateString(_) => write!(f, "ItemId::TemplateString(..)"),
             ItemId::RetryPolicy(_) => write!(f, "ItemId::RetryPolicy(..)"),
+            ItemId::Let(_) => write!(f, "ItemId::Let(..)"),
         }
     }
 }

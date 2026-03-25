@@ -134,7 +134,9 @@ pub fn convert(ty: &baml_type::Ty) -> Result<AnnotatedTy<'_, TypeName>, ConvertE
         | baml_type::Ty::Function { .. }
         | baml_type::Ty::Void { .. }
         | baml_type::Ty::WatchAccessor(_, _)
-        | baml_type::Ty::BuiltinUnknown { .. }) => {
+        | baml_type::Ty::BuiltinUnknown { .. }
+        | baml_type::Ty::EnumVariant(_, _, _)
+        | baml_type::Ty::Future(_, _)) => {
             return Err(ConvertError::NonParsableType(unparsable));
         }
     };

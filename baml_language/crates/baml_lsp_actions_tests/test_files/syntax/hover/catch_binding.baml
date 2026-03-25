@@ -24,4 +24,4 @@ function Handler(x: int) -> string {
 //
 //- on_hover expressions
 // hover at hover_catch_binding.baml:15:21
-// let e: Errors.AuthError | Errors.NotFoundError
+// No hover content

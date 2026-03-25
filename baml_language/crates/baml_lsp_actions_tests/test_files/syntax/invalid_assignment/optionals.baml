@@ -43,30 +43,30 @@ function OptionalAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: Expected `int?`, found `string`
+// Error: type mismatch: expected int?, got "not an int"
 //     ╭─[ invalid_assignment_optionals.baml:31:6 ]
 //     │
 //  31 │     c = "not an int";
 //     │         ──────┬─────  
-//     │               ╰─────── Expected `int?`, found `string`
+//     │               ╰─────── type mismatch: expected int?, got "not an int"
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `string?`, found `int`
+// Error: type mismatch: expected string?, got 42
 //     ╭─[ invalid_assignment_optionals.baml:35:6 ]
 //     │
 //  35 │     d = 42;
 //     │         ─┬  
-//     │          ╰── Expected `string?`, found `int`
+//     │          ╰── type mismatch: expected string?, got 42
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: Expected `Person?`, found `Animal`
+// Error: type mismatch: expected user.Person?, got user.Animal
 //     ╭─[ invalid_assignment_optionals.baml:39:6 ]
 //     │
 //  39 │     e = Animal { species: "Cat", legs: 4 };
 //     │         ─────────────────┬────────────────  
-//     │                          ╰────────────────── Expected `Person?`, found `Animal`
+//     │                          ╰────────────────── type mismatch: expected user.Person?, got user.Animal
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

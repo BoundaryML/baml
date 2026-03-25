@@ -1,0 +1,17 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.f(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: null
+
+    bb0: {
+        _2 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}

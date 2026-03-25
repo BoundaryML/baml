@@ -96,7 +96,7 @@ fn call_function_inner(
                 send_result_to_callback(id, true, &value);
             }
             Ok(Err(e)) => {
-                send_error_to_callback(id, &format!("{}", e));
+                send_error_to_callback(id, &format!("{e}"));
             }
             Err(panic_info) => {
                 // Extract panic message
@@ -107,7 +107,7 @@ fn call_function_inner(
                 } else {
                     "Unknown panic in async task".to_string()
                 };
-                send_error_to_callback(id, &format!("Panic: {}", msg));
+                send_error_to_callback(id, &format!("Panic: {msg}"));
             }
         }
     });

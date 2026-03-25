@@ -1,6 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== TYPE INFERENCE ===
-  Function Foo:
-    Return: Literal(Int(1), TyAttr(None))
+=== TIR2 ===
+function user.Foo() -> int throws never {
+  { : 1
+    1 : 1
+  }
+}

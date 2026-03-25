@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function AlwaysThrowsStatus(n: int) -> Status {
+function user.AlwaysThrowsStatus(n: int) -> Status {
     load_var n
     copy 0
     load_const 0
@@ -20,61 +20,47 @@ function AlwaysThrowsStatus(n: int) -> Status {
     throw
 }
 
-function CatchAllStatusVariants(n: int) -> string {
+function user.CatchAllStatusVariants(n: int) -> string {
     push_unwind L0, slot 2
     load_var n
-    call ThrowsAllStatusVariants
+    call user.ThrowsAllStatusVariants
     pop_unwind
     jump L9
 
   L0:
     load_var _2
-    store_var e
-    load_var _2
-    load_const Status.HttpError
-    alloc_variant Status
+    load_const user.Status.HttpError
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L1
     jump L8
 
   L1:
     load_var _2
-    store_var _3
-    load_var _3
-    store_var e
-    load_var _3
-    load_const Status.IndexError
-    alloc_variant Status
+    load_const user.Status.IndexError
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L2
     jump L7
 
   L2:
-    load_var _3
-    store_var _4
-    load_var _4
-    store_var e
-    load_var _4
-    load_const Status.AuthError
-    alloc_variant Status
+    load_var _2
+    load_const user.Status.AuthError
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L3
     jump L6
 
   L3:
-    load_var _4
-    store_var _5
-    load_var _5
-    store_var e
-    load_var _5
-    load_const Status.SomeOtherError
-    alloc_variant Status
+    load_var _2
+    load_const user.Status.SomeOtherError
+    alloc_variant user.Status
     cmp_op ==
     pop_jump_if_false L4
     jump L5
 
   L4:
-    load_var _5
+    load_var _2
     throw
 
   L5:
@@ -96,16 +82,14 @@ function CatchAllStatusVariants(n: int) -> string {
     return
 }
 
-function CatchAlwaysThrows(n: int) -> string {
+function user.CatchAlwaysThrows(n: int) -> string {
     push_unwind L0, slot 2
     load_var n
-    call WrapperAlwaysThrows
+    call user.WrapperAlwaysThrows
     pop_unwind
     jump L5
 
   L0:
-    load_var _2
-    store_var e
     load_var _2
     type_tag
     load_const 1
@@ -115,10 +99,6 @@ function CatchAlwaysThrows(n: int) -> string {
 
   L1:
     load_var _2
-    store_var _3
-    load_var _3
-    store_var e2
-    load_var _3
     type_tag
     load_const 0
     cmp_op ==
@@ -126,7 +106,7 @@ function CatchAlwaysThrows(n: int) -> string {
     jump L3
 
   L2:
-    load_var _3
+    load_var _2
     throw
 
   L3:
@@ -140,16 +120,14 @@ function CatchAlwaysThrows(n: int) -> string {
     return
 }
 
-function CatchRecursiveThrow(n: int) -> string {
+function user.CatchRecursiveThrow(n: int) -> string {
     push_unwind L0, slot 2
     load_var n
-    call RecB
+    call user.RecB
     pop_unwind
     jump L3
 
   L0:
-    load_var _2
-    store_var e
     load_var _2
     type_tag
     load_const 1
@@ -168,7 +146,7 @@ function CatchRecursiveThrow(n: int) -> string {
     return
 }
 
-function RecA(n: int) -> string {
+function user.RecA(n: int) -> string {
     load_var n
     copy 0
     load_const 0
@@ -180,7 +158,7 @@ function RecA(n: int) -> string {
   L0:
     pop 1
     load_var n
-    call RecB
+    call user.RecB
     return
 
   L1:
@@ -188,13 +166,13 @@ function RecA(n: int) -> string {
     throw
 }
 
-function RecB(n: int) -> string {
+function user.RecB(n: int) -> string {
     load_var n
-    call RecA
+    call user.RecA
     return
 }
 
-function ThrowsAllStatusVariants(n: int) -> Status {
+function user.ThrowsAllStatusVariants(n: int) -> Status {
     load_var n
     copy 0
     load_const 1
@@ -221,33 +199,33 @@ function ThrowsAllStatusVariants(n: int) -> Status {
 
   L2:
     pop 1
-    load_const Status.SomeOtherError
-    alloc_variant Status
+    load_const user.Status.SomeOtherError
+    alloc_variant user.Status
     throw
 
   L3:
-    load_const Status.AuthError
-    alloc_variant Status
+    load_const user.Status.AuthError
+    alloc_variant user.Status
     throw
 
   L4:
-    load_const Status.IndexError
-    alloc_variant Status
+    load_const user.Status.IndexError
+    alloc_variant user.Status
     throw
 
   L5:
-    load_const Status.HttpError
-    alloc_variant Status
+    load_const user.Status.HttpError
+    alloc_variant user.Status
     throw
 }
 
-function UnreachableTailStillChecked() -> string {
+function user.UnreachableTailStillChecked() -> string {
     load_const "error"
     throw
 }
 
-function WrapperAlwaysThrows(n: int) -> Status {
+function user.WrapperAlwaysThrows(n: int) -> Status {
     load_var n
-    call AlwaysThrowsStatus
+    call user.AlwaysThrowsStatus
     return
 }

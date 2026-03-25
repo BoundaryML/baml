@@ -60,30 +60,12 @@ function SumUnknownType(xs: int, b: string) -> int {
 
 //----
 //- diagnostics
-// Error: unresolved name: x
-//    ╭─[ loops_for.baml:5:13 ]
-//    │
-//  5 │        result += x;
-//    │                  ┬  
-//    │                  ╰── unresolved name: x
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: unresolved name: x
-//     ╭─[ loops_for.baml:16:12 ]
+// Error: cannot iterate over type `int`
+//     ╭─[ loops_for.baml:28:16 ]
 //     │
-//  16 │        result = x;
-//     │                 ┬  
-//     │                 ╰── unresolved name: x
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: x
-//     ╭─[ loops_for.baml:31:7 ]
-//     │
-//  31 │        b = x;
-//     │            ┬  
-//     │            ╰── unresolved name: x
+//  28 │     for (let x in xs) {
+//     │                   ─┬  
+//     │                    ╰── cannot iterate over type `int`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

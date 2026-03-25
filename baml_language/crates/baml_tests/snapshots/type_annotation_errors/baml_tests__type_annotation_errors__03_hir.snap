@@ -1,9 +1,6 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-type type = Foo
-
-type Bar = <unknown>
-
-type stream_typeFoo = type
+=== HIR2 ===
+type user.Bar = ?
+type user.type = user.Foo

@@ -54,48 +54,21 @@ function UseMapTypecheck() -> int {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
-// Error: Invalid type int for map key. Only strings, string literals and enums are valid map keys.
-//    ╭─[ maps_key_and_value_typecheck.baml:2:28 ]
-//    │
-//  2 │ function CreateMapExpr() -> map<int, string> {
-//    │                            ────────┬────────  
-//    │                                    ╰────────── Invalid type int for map key. Only strings, string literals and enums are valid map keys.
-//    │ 
-//    │ Note: Error code: E0067
-// ───╯
-// Error: Expected `map<int, string>`, found `string`
+// Error: type mismatch: expected map<int, string>, got "2"
 //    ╭─[ maps_key_and_value_typecheck.baml:3:16 ]
 //    │
 //  3 │     { (1 + 1): "2" }
 //    │                ─┬─  
-//    │                 ╰─── Expected `map<int, string>`, found `string`
+//    │                 ╰─── type mismatch: expected map<int, string>, got "2"
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: Type `map<int, string>` has no field `has`
-//    ╭─[ maps_key_and_value_typecheck.baml:8:9 ]
-//    │
-//  8 │     if (map.has(1)) {
-//    │         ───┬───  
-//    │            ╰───── Type `map<int, string>` has no field `has`
-//    │ 
-//    │ Note: Error code: E0007
-// ───╯
-// Error: Expected `int`, found `"string"`
+// Error: type mismatch: expected int, got string
 //     ╭─[ maps_key_and_value_typecheck.baml:18:5 ]
 //     │
 //  18 │     map["string"]
 //     │     ──────┬──────  
-//     │           ╰──────── Expected `int`, found `"string"`
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: Expected `int`, found `string`
-//     ╭─[ maps_key_and_value_typecheck.baml:18:5 ]
-//     │
-//  18 │     map["string"]
-//     │     ──────┬──────  
-//     │           ╰──────── Expected `int`, found `string`
+//     │           ╰──────── type mismatch: expected int, got string
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

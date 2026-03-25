@@ -13,6 +13,7 @@ rustls = [ "reqwest/rustls" ]
 bundle-http = [ "dep:reqwest" ]
 
 [dependencies]
+baml_type = { workspace = true }
 bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
 sys_types = { workspace = true }

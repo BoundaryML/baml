@@ -73,21 +73,21 @@ function Go3(x:int) -> int {
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯
-// Error: unresolved name: b
-//    ╭─[ expr_unknown_name.baml:9:12 ]
-//    │
-//  9 │     Go(z,a,b)
-//    │            ┬  
-//    │            ╰── unresolved name: b
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
 // Error: expected 1 argument(s), got 3
 //    ╭─[ expr_unknown_name.baml:9:5 ]
 //    │
 //  9 │     Go(z,a,b)
 //    │     ────┬────  
 //    │         ╰────── expected 1 argument(s), got 3
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: unresolved name: b
+//    ╭─[ expr_unknown_name.baml:9:12 ]
+//    │
+//  9 │     Go(z,a,b)
+//    │            ┬  
+//    │            ╰── unresolved name: b
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

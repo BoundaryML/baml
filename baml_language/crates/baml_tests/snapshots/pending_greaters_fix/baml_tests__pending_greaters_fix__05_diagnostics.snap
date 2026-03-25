@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
+=== COMPILER2 DIAGNOSTICS ===
   [parse] Error: Unmatched '>' in type expression (found 1 extra)
    ╭─[ extra_greater.baml:7:29 ]
    │
@@ -12,6 +12,18 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
+  [type] Error: unresolved name: GPT4
+    ╭─[ extra_greater.baml:20:2 ]
+    │
+ 20 │ ╭─▶ }
+    ┆ ┆   
+ 26 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0001
+────╯
+
   [parse] Error: Unmatched '>' in type expression (found 1 extra)
     ╭─[ extra_greater.baml:23:38 ]
     │
@@ -20,6 +32,18 @@ source: crates/baml_tests/src/generated_tests.rs
     │                                      ╰── Unmatched '>' in type expression (found 1 extra)
     │ 
     │ Note: Error code: E0010
+────╯
+
+  [type] Error: unresolved name: GPT4
+    ╭─[ extra_greater.baml:26:2 ]
+    │
+ 26 │ ╭─▶ }
+    ┆ ┆   
+ 32 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0001
 ────╯
 
   [parse] Error: Unmatched '>' in type expression (found 1 extra)

@@ -66,7 +66,7 @@ mod heap_debugger;
 mod tlab;
 
 // Re-export types from bex_external_types for convenience
-pub use accessor::{AccessError, BexValue, GcProtectedHeap, builtin_types};
+pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
 pub use bex_external_types::{BexExternalValue, Handle};
 pub use gc::GcStats;
 pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, HeapStats};

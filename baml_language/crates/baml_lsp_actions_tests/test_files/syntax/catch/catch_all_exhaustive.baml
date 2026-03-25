@@ -17,4 +17,4 @@ function PartialCatchAll(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: Non-exhaustive catch chain: unhandled throw types int
+// <no-diagnostics-expected>

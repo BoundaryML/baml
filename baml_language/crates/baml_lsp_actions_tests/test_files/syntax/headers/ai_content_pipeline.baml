@@ -62,111 +62,111 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 
 //----
 //- diagnostics
-// Error: Unknown variable `GetEmails`
+// Error: unresolved name: GetEmails
 //    ╭─[ headers_ai_content_pipeline.baml:6:18 ]
 //    │
 //  6 │     let emails = GetEmails();
 //    │                  ────┬────  
-//    │                      ╰────── Unknown variable `GetEmails`
+//    │                      ╰────── unresolved name: GetEmails
 //    │ 
-//    │ Note: Error code: E0003
+//    │ Note: Error code: E0001
 // ───╯
-// Error: Unknown variable `GetPosts`
+// Error: unresolved name: GetPosts
 //    ╭─[ headers_ai_content_pipeline.baml:7:17 ]
 //    │
 //  7 │     let posts = GetPosts();
 //    │                 ────┬───  
-//    │                     ╰───── Unknown variable `GetPosts`
+//    │                     ╰───── unresolved name: GetPosts
 //    │ 
-//    │ Note: Error code: E0003
+//    │ Note: Error code: E0001
 // ───╯
-// Error: Unknown variable `ProcessVideo`
+// Error: unresolved name: ProcessVideo
 //     ╭─[ headers_ai_content_pipeline.baml:10:21 ]
 //     │
 //  10 │     let processed = ProcessVideo(video_id, zoom_meeting_id);
 //     │                     ──────┬─────  
-//     │                           ╰─────── Unknown variable `ProcessVideo`
+//     │                           ╰─────── unresolved name: ProcessVideo
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `GetVideo`
+// Error: unresolved name: GetVideo
 //     ╭─[ headers_ai_content_pipeline.baml:11:17 ]
 //     │
 //  11 │     let video = GetVideo(video_id);
 //     │                 ────┬───  
-//     │                     ╰───── Unknown variable `GetVideo`
+//     │                     ╰───── unresolved name: GetVideo
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `SummarizeVideo`
+// Error: unresolved name: SummarizeVideo
 //     ╭─[ headers_ai_content_pipeline.baml:21:17 ]
 //     │
 //  21 │         let s = SummarizeVideo(transcript, title);
 //     │                 ───────┬──────  
-//     │                        ╰──────── Unknown variable `SummarizeVideo`
+//     │                        ╰──────── unresolved name: SummarizeVideo
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `LabelSummaryCategory`
+// Error: unresolved name: LabelSummaryCategory
 //     ╭─[ headers_ai_content_pipeline.baml:24:24 ]
 //     │
 //  24 │         let category = LabelSummaryCategory(s);
 //     │                        ──────────┬─────────  
-//     │                                  ╰─────────── Unknown variable `LabelSummaryCategory`
+//     │                                  ╰─────────── unresolved name: LabelSummaryCategory
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `SaveSummary`
+// Error: unresolved name: SaveSummary
 //     ╭─[ headers_ai_content_pipeline.baml:27:29 ]
 //     │
 //  27 │         let saved_summary = SaveSummary(video_id, s);
 //     │                             ─────┬─────  
-//     │                                  ╰─────── Unknown variable `SaveSummary`
+//     │                                  ╰─────── unresolved name: SaveSummary
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `GetStructure`
+// Error: unresolved name: GetStructure
 //     ╭─[ headers_ai_content_pipeline.baml:40:25 ]
 //     │
 //  40 │         let structure = GetStructure(kind);
 //     │                         ──────┬─────  
-//     │                               ╰─────── Unknown variable `GetStructure`
+//     │                               ╰─────── unresolved name: GetStructure
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `GenerateContent`
+// Error: unresolved name: GenerateContent
 //     ╭─[ headers_ai_content_pipeline.baml:41:21 ]
 //     │
 //  41 │         let draft = GenerateContent(kind, video_id, summary);
 //     │                     ───────┬───────  
-//     │                            ╰───────── Unknown variable `GenerateContent`
+//     │                            ╰───────── unresolved name: GenerateContent
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `SaveDraft`
+// Error: unresolved name: SaveDraft
 //     ╭─[ headers_ai_content_pipeline.baml:44:27 ]
 //     │
 //  44 │         let saved_draft = SaveDraft(video_id, draft);
 //     │                           ────┬────  
-//     │                               ╰────── Unknown variable `SaveDraft`
+//     │                               ╰────── unresolved name: SaveDraft
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `CreatePR`
+// Error: unresolved name: CreatePR
 //     ╭─[ headers_ai_content_pipeline.baml:52:18 ]
 //     │
 //  52 │         let pr = CreatePR(video_id, summary);
 //     │                  ────┬───  
-//     │                      ╰───── Unknown variable `CreatePR`
+//     │                      ╰───── unresolved name: CreatePR
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯
-// Error: Unknown variable `pr_status`
+// Error: unresolved name: pr_status
 //     ╭─[ headers_ai_content_pipeline.baml:53:9 ]
 //     │
 //  53 │         pr_status
 //     │         ────┬────  
-//     │             ╰────── Unknown variable `pr_status`
+//     │             ╰────── unresolved name: pr_status
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯

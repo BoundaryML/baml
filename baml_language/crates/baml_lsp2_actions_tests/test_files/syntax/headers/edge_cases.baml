@@ -214,12 +214,4 @@ function HeaderOnlyFunction() -> string {
 
 //----
 //- diagnostics
-// Error: unresolved name: i
-//      ╭─[ headers_edge_cases.baml:129:11 ]
-//      │
-//  129 │     //## After For
-//      │           ┬  
-//      │           ╰── unresolved name: i
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
+// <no-diagnostics-expected>

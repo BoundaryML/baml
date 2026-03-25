@@ -8,8 +8,11 @@
 use std::fmt::Write;
 
 use baml_base::Name;
-use baml_compiler2_hir::{contributions::Definition, package::PackageId};
-use baml_compiler2_ppir::{file_item_tree, package_items};
+use baml_compiler2_hir::{
+    contributions::Definition,
+    file_item_tree,
+    package::{PackageId, package_items},
+};
 use baml_project::ProjectDatabase;
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
@@ -201,22 +204,9 @@ fn baml_package_contains_env_functions() {
         env_ns.values.contains_key(&Name::new("get")),
         "baml.env.get (low-level) should be in baml.env namespace"
     );
-
-    // Package "env" has get and get_or_panic (they call baml.env.get / baml.sys.panic)
-    let env_pkg = PackageId::new(&db, Name::new("env"));
-    let env_items = package_items(&db, env_pkg);
-    let empty_ns: Vec<Name> = vec![];
-    let env_root = env_items
-        .namespaces
-        .get(&empty_ns)
-        .expect("env package should have root namespace");
     assert!(
-        env_root.values.contains_key(&Name::new("get")),
-        "env.get should be in env package"
-    );
-    assert!(
-        env_root.values.contains_key(&Name::new("get_or_panic")),
-        "env.get_or_panic should be in env package"
+        env_ns.values.contains_key(&Name::new("get_or_panic")),
+        "baml.env.get_or_panic should be in baml.env namespace"
     );
 }
 
@@ -491,8 +481,7 @@ fn file_package_derives_correct_namespaces() {
 #[test]
 fn rust_type_field_lowers_to_rust_type() {
     use baml_compiler2_ast::TypeExpr;
-    use baml_compiler2_hir::package::PackageId;
-    use baml_compiler2_ppir::package_items;
+    use baml_compiler2_hir::package::{PackageId, package_items};
     use baml_compiler2_tir::lower_type_expr::lower_type_expr;
 
     let db = make_db();
@@ -501,7 +490,7 @@ fn rust_type_field_lowers_to_rust_type() {
 
     // Lower $rust_type — should produce Ty::RustType
     let mut diags = Vec::new();
-    let ty = lower_type_expr(&db, &TypeExpr::Rust, items, &mut diags);
+    let ty = lower_type_expr(&db, &TypeExpr::Rust, items, &[], &mut diags);
 
     assert_eq!(ty, baml_compiler2_tir::ty::Ty::RustType);
     assert!(diags.is_empty(), "No diagnostics expected for $rust_type");

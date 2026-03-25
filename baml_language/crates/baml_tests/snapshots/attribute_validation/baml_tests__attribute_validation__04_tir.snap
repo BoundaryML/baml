@@ -1,4 +1,18 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== TYPE INFERENCE ===
+=== TIR2 ===
+class user.HasDuplicateDescription {
+  name: string
+}
+class user.HasDuplicateField {
+  name: string
+  age: int
+  name: int
+}
+class user.HasDuplicateFieldAttr {
+  name: string
+}
+enum user.HasDuplicateVariant
+enum user.HasDuplicateEnumAttr
+enum user.HasDuplicateVariantAttr

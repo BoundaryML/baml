@@ -25,30 +25,34 @@ function CatchInLet(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: Unreachable catch arm
-//     ╭─[ catch_nested_catch.baml:21:7 ]
+// Error: unreachable arm
+//     ╭─[ catch_nested_catch.baml:12:11 ]
 //     │
-//  21 │     _ => "fallback"
-//     │       ┬  
-//     │       ╰── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
+//  12 │ ╭─▶     _ => AlsoMayFail(x) catch (e2) {
+//     ┆ ┆   
+//  15 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
 // ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_nested_catch.baml:12:7 ]
+// Error: unreachable arm
+//     ╭─[ catch_nested_catch.baml:13:14 ]
 //     │
-//  12 │     _ => AlsoMayFail(x) catch (e2) {
-//     │       ┬  
-//     │       ╰── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
+//  13 │ ╭─▶       _ => "double caught"
+//  14 │ ├─▶     }
+//     │ │           
+//     │ ╰─────────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
 // ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_nested_catch.baml:13:9 ]
+// Error: unreachable arm
+//     ╭─[ catch_nested_catch.baml:21:12 ]
 //     │
-//  13 │       _ => "double caught"
-//     │         ┬  
-//     │         ╰── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
+//  21 │ ╭─▶     _ => "fallback"
+//  22 │ ├─▶   };
+//     │ │          
+//     │ ╰────────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
 // ────╯

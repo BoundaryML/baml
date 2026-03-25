@@ -8,9 +8,18 @@ use crate::send_wrapper::SendWrapper;
 #[derive(Tsify, Serialize)]
 #[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
+pub struct ProjectDiagnostic {
+    pub severity: String,
+    pub message: String,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<String>,
+    pub diagnostics: Vec<ProjectDiagnostic>,
 }
 
 #[derive(Tsify, Serialize)]
@@ -43,6 +52,14 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                     update: ProjectUpdate {
                         is_bex_current: update.is_bex_current,
                         functions: update.functions,
+                        diagnostics: update
+                            .diagnostics
+                            .into_iter()
+                            .map(|d| ProjectDiagnostic {
+                                severity: d.severity.to_string(),
+                                message: d.message,
+                            })
+                            .collect(),
                     },
                 }
             }

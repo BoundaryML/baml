@@ -34,6 +34,7 @@ pub(crate) fn to_snake_case(s: &str) -> String {
 /// Convert a `snake_case` identifier to `PascalCase`.
 ///
 /// E.g., `"baml_fs_open"` → `"BamlFsOpen"`.
+#[allow(dead_code)]
 pub(crate) fn to_pascal_case(s: &str) -> String {
     s.split('_')
         .map(|part| {

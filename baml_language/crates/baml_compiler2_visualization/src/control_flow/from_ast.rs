@@ -5,7 +5,7 @@
 //! the compiler2 AST uses `Expr::Missing` / `Stmt::Missing` sentinels for error
 //! recovery, so the CFG survives parse and type errors.
 
-use std::fmt::Write as _;
+use std::fmt::Write;
 
 use baml_compiler2_ast as ast;
 
@@ -200,6 +200,8 @@ impl<'a> AstGraphBuilder<'a> {
                     self.visit_expr(*init);
                 }
             }
+
+            ast::Stmt::Let { .. } => {}
 
             ast::Stmt::Expr(expr_id) => {
                 self.visit_expr(*expr_id);
@@ -631,7 +633,7 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                     ast::CatchClauseKind::CatchAll => "catch_all",
                     ast::CatchClauseKind::CatchAllPanics => "catch_all_panics",
                 };
-                write!(&mut out, " {kind}(...)").expect("writing to String should not fail");
+                write!(out, " {kind}(...)").unwrap();
             }
             out
         }

@@ -1039,7 +1039,10 @@ impl Parameter {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| token.kind() == SyntaxKind::WORD)
+            .find(|token| {
+                // `client` is KW_CLIENT in the CST, not WORD.
+                token.kind() == SyntaxKind::WORD || token.kind() == SyntaxKind::KW_CLIENT
+            })
     }
 
     /// Get the parameter type.
@@ -1571,7 +1574,15 @@ impl BlockAttribute {
         self.syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .find(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC))
+            .find(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_DYNAMIC
+                        | SyntaxKind::KW_ASSERT
+                        | SyntaxKind::KW_THROWS
+                )
+            })
     }
 
     /// Get the full attribute name including dot-separated modifiers.
@@ -1581,7 +1592,15 @@ impl BlockAttribute {
             .syntax
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|token| matches!(token.kind(), SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC))
+            .filter(|token| {
+                matches!(
+                    token.kind(),
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_DYNAMIC
+                        | SyntaxKind::KW_ASSERT
+                        | SyntaxKind::KW_THROWS
+                )
+            })
             .map(|token| token.text().to_string())
             .collect();
 
@@ -1601,7 +1620,11 @@ impl BlockAttribute {
             .filter(|token| {
                 matches!(
                     token.kind(),
-                    SyntaxKind::WORD | SyntaxKind::KW_DYNAMIC | SyntaxKind::DOT
+                    SyntaxKind::WORD
+                        | SyntaxKind::KW_DYNAMIC
+                        | SyntaxKind::KW_ASSERT
+                        | SyntaxKind::KW_THROWS
+                        | SyntaxKind::DOT
                 )
             })
             .collect();
@@ -2511,11 +2534,19 @@ impl FieldAccessExpr {
 
 impl EnvAccessExpr {
     /// Get the field name (the env var name or method name after `env.`).
+    /// Skips the leading `"env"` WORD and finds the WORD after the DOT.
     pub fn field(&self) -> Option<SyntaxToken> {
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .find(|t| t.kind() == SyntaxKind::WORD)
+        let mut seen_dot = false;
+        for elem in self.syntax.children_with_tokens() {
+            if let rowan::NodeOrToken::Token(t) = elem {
+                if t.kind() == SyntaxKind::DOT {
+                    seen_dot = true;
+                } else if seen_dot && t.kind() == SyntaxKind::WORD {
+                    return Some(t);
+                }
+            }
+        }
+        None
     }
 }
 

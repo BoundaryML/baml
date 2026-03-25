@@ -47,21 +47,3 @@ test Foo {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
-//     ╭─[ misc_bad_syntax.baml:12:3 ]
-//     │
-//  12 │   input [
-//     │   ──┬──  
-//     │     ╰──── Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
-//     │ 
-//     │ Note: Error code: E0034
-// ────╯
-// Error: Missing `args` property
-//     ╭─[ misc_bad_syntax.baml:10:6 ]
-//     │
-//  10 │ test Foo {
-//     │      ─┬─  
-//     │       ╰─── Missing `args` property
-//     │ 
-//     │ Note: Error code: E0035
-// ────╯

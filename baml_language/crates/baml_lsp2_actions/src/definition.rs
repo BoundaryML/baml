@@ -97,7 +97,7 @@ pub fn definition_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<
 
 /// Resolve a local variable's definition site to a `Location`.
 ///
-/// Finds the enclosing function by matching the scope range against item_tree
+/// Finds the enclosing function by matching the scope range against `item_tree`
 /// functions, then uses the appropriate source map to get the span.
 fn local_definition_location(
     db: &dyn Db,
@@ -105,11 +105,11 @@ fn local_definition_location(
     at_offset: TextSize,
     site: DefinitionSite,
 ) -> Option<Location> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
 
     // Find the enclosing Function scope to locate the function in the item tree.
-    let scope_id = index.scope_at_offset(at_offset);
+    let scope_id = index.scope_at_offset(at_offset, None);
     let enclosing_func_scope = index
         .ancestor_scopes(scope_id)
         .into_iter()
@@ -142,6 +142,12 @@ fn local_definition_location(
             let sig_map =
                 baml_compiler2_hir::signature::function_signature_source_map(db, func_loc);
             let range = sig_map.param_spans.get(param_idx).copied()?;
+            Some(Location { file, range })
+        }
+        DefinitionSite::PatternBinding(pat_id) => {
+            // Navigate to the pattern binding.
+            let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
+            let range = source_map.pattern_span(pat_id);
             Some(Location { file, range })
         }
     }

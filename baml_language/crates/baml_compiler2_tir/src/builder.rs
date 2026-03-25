@@ -22,11 +22,12 @@ use baml_compiler2_hir::{
     package::{PackageId, PackageItems},
     scope::ScopeId,
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use text_size::TextRange;
 
 use crate::{
     infer_context::{InferContext, RelatedLocation, TirTypeError, TypeCheckDiagnostics},
+    package_interface::PackageResolutionContext,
     ty::{Freshness, PrimitiveType, Ty},
 };
 
@@ -46,6 +47,7 @@ fn format_float(v: f64) -> Option<String> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 enum PatternMatchStrength {
     NoMatch,
     MayMatch,
@@ -54,8 +56,28 @@ enum PatternMatchStrength {
 
 #[derive(Debug, Default, Clone)]
 struct ThrowPatternMatches {
-    may_match: BTreeSet<String>,
-    definitely_handled: BTreeSet<String>,
+    may_match: BTreeSet<Ty>,
+    definitely_handled: BTreeSet<Ty>,
+}
+
+/// Result of resolving a member on a builtin class (Array, Map, String, media types).
+/// Distinguishes methods (which have locs) from fields (which are just types).
+enum BuiltinResolution<'db> {
+    Method {
+        ty: Ty,
+        class_loc: baml_compiler2_hir::loc::ClassLoc<'db>,
+        func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+    },
+    Field(Ty),
+}
+
+impl BuiltinResolution<'_> {
+    fn into_ty(self) -> Ty {
+        match self {
+            BuiltinResolution::Method { ty, .. } => ty,
+            BuiltinResolution::Field(ty) => ty,
+        }
+    }
 }
 
 /// Per-scope inference builder.
@@ -70,7 +92,13 @@ pub struct TypeInferenceBuilder<'db> {
     /// Binding types: the type a variable is bound to (may differ from the
     /// initializer expression type due to widening or annotation).
     bindings: FxHashMap<PatId, Ty>,
-    /// Package items for cross-file name resolution.
+    /// Method resolutions: for field-access expressions that resolved to a
+    /// method or free function, records the structural path so MIR can emit
+    /// the correct `QualifiedName` without re-doing resolution.
+    resolutions: FxHashMap<ExprId, crate::inference::MethodResolution<'db>>,
+    /// Resolution context: own `PackageItems` + dependency `PackageInterfaces`.
+    res_ctx: &'db PackageResolutionContext<'db>,
+    /// Convenience: own package items (from `res_ctx`).
     package_items: &'db PackageItems<'db>,
     /// Current package ID (for throw-set queries).
     package_id: PackageId<'db>,
@@ -95,22 +123,37 @@ pub struct TypeInferenceBuilder<'db> {
     /// Resolved type alias map: alias qualified name → expanded Ty.
     /// Used by the normalizer for structural subtype checking.
     aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
+    /// Namespace path for the file being analyzed (e.g. `["env"]` for `baml/env.baml`).
+    ns_context: Vec<Name>,
     /// Residual throw facts for each catch expression after applying all clauses.
-    catch_residual_throws: FxHashMap<ExprId, BTreeSet<String>>,
+    catch_residual_throws: FxHashMap<ExprId, BTreeSet<Ty>>,
+    /// Match expressions that the exhaustiveness checker determined cover all cases.
+    exhaustive_matches: FxHashSet<ExprId>,
+    /// Generic type parameters in scope for this function (e.g. `["T"]` for
+    /// `function foo<T>(...)`). Used when lowering type annotations inside the
+    /// function body so that `T` resolves to `Ty::TypeVar("T")` rather than
+    /// `Ty::Unknown`.
+    pub generic_params: Vec<Name>,
 }
 
 impl<'db> TypeInferenceBuilder<'db> {
     pub fn new(
         context: InferContext<'db>,
-        package_items: &'db PackageItems<'db>,
+        res_ctx: &'db PackageResolutionContext<'db>,
         package_id: PackageId<'db>,
         scope: ScopeId<'db>,
         aliases: HashMap<crate::ty::QualifiedTypeName, Ty>,
     ) -> Self {
+        let db = context.db();
+        let package_items = res_ctx.own_items;
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, scope.file(db));
+        let ns_context = pkg_info.namespace_path;
         Self {
             context,
             expressions: FxHashMap::default(),
             bindings: FxHashMap::default(),
+            resolutions: FxHashMap::default(),
+            res_ctx,
             package_items,
             package_id,
             scope,
@@ -118,20 +161,37 @@ impl<'db> TypeInferenceBuilder<'db> {
             locals: FxHashMap::default(),
             declared_types: FxHashMap::default(),
             aliases,
+            ns_context,
             catch_residual_throws: FxHashMap::default(),
+            exhaustive_matches: FxHashSet::default(),
+            generic_params: Vec::new(),
         }
     }
 
+    /// Set the generic type parameters for this function scope.
+    pub fn set_generic_params(&mut self, params: Vec<Name>) {
+        self.generic_params = params;
+    }
+
     /// Finish building and return the accumulated results.
+    #[allow(clippy::type_complexity)]
     pub fn finish(
         self,
     ) -> (
         FxHashMap<ExprId, Ty>,
         FxHashMap<PatId, Ty>,
+        FxHashMap<ExprId, crate::inference::MethodResolution<'db>>,
+        FxHashSet<ExprId>,
         TypeCheckDiagnostics<'db>,
     ) {
         let diagnostics = self.context.finish();
-        (self.expressions, self.bindings, diagnostics)
+        (
+            self.expressions,
+            self.bindings,
+            self.resolutions,
+            self.exhaustive_matches,
+            diagnostics,
+        )
     }
 
     /// Set the declared return type (for return statement checking).
@@ -167,7 +227,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     pub fn infer_expr(&mut self, expr_id: ExprId, body: &ExprBody) -> Ty {
         let expr = &body.exprs[expr_id];
         let ty = match expr {
-            Expr::Literal(lit) => self.infer_literal(lit),
+            Expr::Literal(lit) => Self::infer_literal(lit),
             Expr::Null => Ty::Primitive(PrimitiveType::Null),
             Expr::Path(segments) => self.infer_path(segments.as_slice(), body, expr_id),
             Expr::If {
@@ -192,7 +252,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 let result_ty = if let Some(else_id) = else_branch {
                     let else_ty = self.infer_expr(*else_id, body);
-                    self.join_types(&then_ty, &else_ty)
+                    Self::join_types(&then_ty, &else_ty)
                 } else {
                     Ty::Void
                 };
@@ -202,56 +262,10 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 result_ty
             }
-            Expr::Call { callee, args } => {
-                // Check for container mutation method (e.g. x.push(val))
-                // before general callee inference, since resolve_member
-                // doesn't know about built-in List/Map methods.
-                if let Some(result_ty) =
-                    self.try_container_method_call(expr_id, *callee, args, body)
-                {
-                    result_ty
-                } else {
-                    // Determine whether this is a method call (callee is a FieldAccess).
-                    // Method calls have a `self` parameter in the resolved function type
-                    // that must be skipped when checking the explicit argument count.
-                    let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
-
-                    let callee_ty = self.infer_expr(*callee, body);
-                    for arg in args {
-                        self.infer_expr(*arg, body);
-                    }
-                    match &callee_ty {
-                        Ty::Function { params, ret } => {
-                            // For method calls, skip the `self` parameter when
-                            // comparing against the number of explicit arguments.
-                            let effective_params = if is_method_call {
-                                crate::generics::skip_self_param(params)
-                            } else {
-                                params.as_slice()
-                            };
-                            if effective_params.len() != args.len() {
-                                self.context.report_simple(
-                                    TirTypeError::ArgumentCountMismatch {
-                                        expected: effective_params.len(),
-                                        got: args.len(),
-                                    },
-                                    expr_id,
-                                );
-                            }
-                            *ret.clone()
-                        }
-                        Ty::Unknown | Ty::Error => Ty::Unknown,
-                        _ => {
-                            self.context.report_simple(
-                                TirTypeError::NotCallable {
-                                    ty: callee_ty.clone(),
-                                },
-                                expr_id,
-                            );
-                            Ty::Unknown
-                        }
-                    }
-                }
+            Expr::Call { .. } => {
+                // Delegate to check_expr with Ty::Unknown so the generic
+                // inference logic in check_expr handles all call expressions.
+                self.check_expr(expr_id, body, &Ty::Unknown)
             }
             Expr::Block { stmts, tail_expr } => {
                 let mut diverged_at: Option<(usize, StmtId)> = None;
@@ -262,8 +276,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
                 if let Some((div_idx, div_stmt)) = diverged_at {
-                    let remaining =
-                        stmts.len() - div_idx - 1 + if tail_expr.is_some() { 1 } else { 0 };
+                    let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
                         self.context.report_at_stmt(
                             crate::infer_context::TirTypeError::DeadCode {
@@ -283,7 +296,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::FieldAccess { base, field } => {
                 // Check for primitive-type static method access first:
                 // `image.from_url(...)` where `image` is a type name, not a value.
-                if let Some(ty) = self.try_primitive_static_access(*base, field, body) {
+                if let Some(ty) = self.try_primitive_static_access(expr_id, *base, field, body) {
+                    ty
+                // Check for package access: `baml.Array.length`, `env.get`, etc.
+                } else if let Some(ty) = self.try_package_access(expr_id, *base, field, body) {
                     ty
                 } else {
                     let base_ty = self.infer_expr(*base, body);
@@ -293,7 +309,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Array { elements } => {
                 let elem_types: Vec<Ty> =
                     elements.iter().map(|e| self.infer_expr(*e, body)).collect();
-                let elem_ty = self.join_all(&elem_types);
+                let elem_ty = Self::join_all(&elem_types);
                 Ty::List(Box::new(elem_ty))
             }
             Expr::Map { entries } => {
@@ -303,23 +319,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                     key_types.push(self.infer_expr(*k, body));
                     val_types.push(self.infer_expr(*v, body));
                 }
-                let key_ty = self.join_all(&key_types);
-                let val_ty = self.join_all(&val_types);
+                let key_ty = Self::join_all(&key_types);
+                let val_ty = Self::join_all(&val_types);
                 Ty::Map(Box::new(key_ty), Box::new(val_ty))
             }
             Expr::Binary { op, lhs, rhs } => {
                 let lhs_ty = self.infer_expr(*lhs, body);
                 let rhs_ty = self.infer_expr(*rhs, body);
-                self.infer_binary_op(op, &lhs_ty, &rhs_ty, expr_id)
+                self.infer_binary_op(*op, &lhs_ty, &rhs_ty, expr_id)
             }
             Expr::Unary { op, expr } => {
                 let operand_ty = self.infer_expr(*expr, body);
-                self.infer_unary_op(op, &operand_ty, expr_id)
+                self.infer_unary_op(*op, &operand_ty, expr_id)
             }
             Expr::Match {
                 scrutinee, arms, ..
             } => self.infer_match_expr(expr_id, *scrutinee, arms, body),
-            Expr::Catch { base, clauses } => self.infer_catch_expr(expr_id, *base, clauses, body),
+            Expr::Catch { base, clauses } => {
+                self.infer_catch_expr(expr_id, *base, clauses, body, None)
+            }
             Expr::Throw { value } => {
                 self.infer_expr(*value, body);
                 Ty::Never
@@ -333,13 +351,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_name
                     .as_ref()
                     .and_then(|n| {
-                        self.package_items.lookup_type(&[n.clone()]).map(|def| {
-                            Ty::Class(crate::lower_type_expr::qualify_def(
-                                self.context.db(),
-                                def,
-                                n,
-                            ))
-                        })
+                        self.package_items
+                            .lookup_type(std::slice::from_ref(n))
+                            .map(|def| {
+                                Ty::Class(crate::lower_type_expr::qualify_def(
+                                    self.context.db(),
+                                    def,
+                                    n,
+                                ))
+                            })
                     })
                     .unwrap_or(Ty::Unknown)
             }
@@ -381,8 +401,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
                 let ty = if let Some((div_idx, div_stmt)) = diverged_at {
-                    let remaining =
-                        stmts.len() - div_idx - 1 + if tail_expr.is_some() { 1 } else { 0 };
+                    let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
                         self.context.report_at_stmt(
                             crate::infer_context::TirTypeError::DeadCode {
@@ -434,7 +453,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 let ty = if let Some(else_id) = else_branch {
                     let else_ty = self.check_expr(*else_id, body, expected);
-                    self.join_types(&then_ty, &else_ty)
+                    Self::join_types(&then_ty, &else_ty)
                 } else {
                     if !matches!(expected, Ty::Void | Ty::Unknown) {
                         self.context
@@ -500,9 +519,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             // to the default infer-then-check path which will report the error.
             Expr::Literal(lit) if matches!(expected, Ty::Literal(..)) => {
                 use crate::ty::Freshness;
-                let expected_lit = match expected {
-                    Ty::Literal(v, _) => v,
-                    _ => unreachable!(),
+                let Ty::Literal(expected_lit, _) = expected else {
+                    unreachable!()
                 };
                 if lit == expected_lit {
                     let ty = Ty::Literal(expected_lit.clone(), Freshness::Regular);
@@ -524,6 +542,125 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                     inferred
                 }
+            }
+            // Call expressions: generic type inference + argument checking.
+            Expr::Call { callee, args } => {
+                // Container mutation fast path (e.g. x.push(val) on EvolvingList)
+                if let Some(result_ty) =
+                    self.try_container_method_call(expr_id, *callee, args, body)
+                {
+                    self.record_expr_type(expr_id, result_ty.clone());
+                    return result_ty;
+                }
+
+                let is_method_call = matches!(&body.exprs[*callee], Expr::FieldAccess { .. });
+                let callee_ty = self.infer_expr(*callee, body);
+
+                match &callee_ty {
+                    Ty::Function { params, ret } => {
+                        let effective_params = if is_method_call {
+                            crate::generics::skip_self_param(params)
+                        } else {
+                            params.as_slice()
+                        };
+
+                        if effective_params.len() != args.len() {
+                            self.context.report_simple(
+                                TirTypeError::ArgumentCountMismatch {
+                                    expected: effective_params.len(),
+                                    got: args.len(),
+                                },
+                                expr_id,
+                            );
+                        }
+
+                        let mut bindings = FxHashMap::default();
+
+                        // Phase 0: reverse-infer from expected return type (low priority).
+                        // Skip when expected is Unknown/Error — it provides no
+                        // information and would pollute forward-inferred bindings
+                        // via union_ty (e.g. T = unknown | Node instead of Node).
+                        if crate::generics::contains_typevar(ret)
+                            && !matches!(expected, Ty::Unknown | Ty::Error)
+                        {
+                            crate::generics::infer_bindings(ret, expected, &mut bindings);
+                        }
+
+                        // Phase 1: forward-infer from arguments (high priority, overrides)
+                        for ((_, param_ty), arg) in effective_params.iter().zip(args.iter()) {
+                            let substituted = crate::generics::substitute_ty(param_ty, &bindings);
+                            let arg_ty = if crate::generics::contains_typevar(&substituted) {
+                                // TypeVar not yet resolved — just infer, don't check against it
+                                self.infer_expr(*arg, body)
+                            } else {
+                                // Fully concrete — use contextual typing
+                                self.check_expr(*arg, body, &substituted)
+                            };
+                            crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                        }
+
+                        // Infer any extra args beyond param count (error recovery)
+                        for arg in args.iter().skip(effective_params.len()) {
+                            self.infer_expr(*arg, body);
+                        }
+
+                        // Phase 2: substitute return type and erase unresolved typevars
+                        let substituted_ret = crate::generics::substitute_ty(ret, &bindings);
+                        let mut erase_diags = Vec::new();
+                        let result = crate::generics::erase_unresolved_typevars(
+                            &substituted_ret,
+                            &mut erase_diags,
+                        );
+                        for d in erase_diags {
+                            self.context.report_simple(d, expr_id);
+                        }
+
+                        // Subtype check against expected type (skip if we did generic
+                        // inference — the inference already accounts for expected)
+                        if bindings.is_empty()
+                            && !matches!(expected, Ty::Unknown | Ty::Error)
+                            && !self.is_subtype(&result, expected)
+                        {
+                            self.context.report(
+                                TirTypeError::TypeMismatch {
+                                    expected: expected.clone(),
+                                    got: result.clone(),
+                                },
+                                expr_id,
+                                Vec::new(),
+                            );
+                        }
+
+                        self.record_expr_type(expr_id, result.clone());
+                        result
+                    }
+                    Ty::Unknown | Ty::Error => {
+                        for arg in args {
+                            self.infer_expr(*arg, body);
+                        }
+                        let ty = Ty::Unknown;
+                        self.record_expr_type(expr_id, ty.clone());
+                        ty
+                    }
+                    _ => {
+                        self.context.report_simple(
+                            TirTypeError::NotCallable {
+                                ty: callee_ty.clone(),
+                            },
+                            expr_id,
+                        );
+                        for arg in args {
+                            self.infer_expr(*arg, body);
+                        }
+                        let ty = Ty::Unknown;
+                        self.record_expr_type(expr_id, ty.clone());
+                        ty
+                    }
+                }
+            }
+            // Catch: propagate expected type to the base expression
+            Expr::Catch { base, clauses } => {
+                self.infer_catch_expr(expr_id, *base, clauses, body, Some(expected))
             }
             // All other expressions: infer then subtype-check
             _ => {
@@ -566,10 +703,12 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let init_ty = if let Some(init) = initializer {
                     if let Some(ann_idx) = type_annotation {
                         let mut diags = Vec::new();
-                        let ann_ty = crate::lower_type_expr::lower_type_expr(
+                        let ann_ty = crate::lower_type_expr::lower_type_expr_in_ns(
                             self.context.db(),
                             &body.type_annotations[*ann_idx],
                             self.package_items,
+                            &self.ns_context,
+                            &self.generic_params,
                             &mut diags,
                         );
                         for diag in diags {
@@ -638,6 +777,45 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.infer_expr(*while_body, body);
                 false
             }
+            // Design note: Stmt::For is kept as a first-class construct (not desugared
+            // to While) so we can produce for-loop-specific diagnostics ("cannot iterate
+            // over type X") and preserve iteration semantics for downstream codegen.
+            // Desugaring to index-based basic blocks happens at MIR lowering time.
+            Stmt::For {
+                binding,
+                collection,
+                body: for_body,
+            } => {
+                // 1. Infer the collection type
+                let coll_ty = self.infer_expr(*collection, body);
+
+                // 2. Derive the element type from the collection
+                let elem_ty = match &coll_ty {
+                    Ty::List(elem) => *elem.clone(),
+                    Ty::EvolvingList(elem) => *elem.clone(),
+                    _ => {
+                        self.context
+                            .report_simple(TirTypeError::NotIterable { ty: coll_ty }, *collection);
+                        Ty::Unknown
+                    }
+                };
+
+                // 3. Bind the loop variable to the element type
+                let pat = &body.patterns[*binding];
+                let name = match pat {
+                    baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
+                    baml_compiler2_ast::Pattern::TypedBinding { name, .. } => Some(name.clone()),
+                    _ => None,
+                };
+                self.bindings.insert(*binding, elem_ty.clone());
+                if let Some(name) = name {
+                    self.locals.insert(name, elem_ty);
+                }
+
+                // 4. Check the body
+                self.infer_expr(*for_body, body);
+                false
+            }
             Stmt::Assign { target, value } => {
                 // Check for container index mutation: x[i] = val
                 if self.try_index_assign_mutation(*target, *value, body) {
@@ -678,8 +856,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             Stmt::AssignOp { target, op, value } => {
                 let target_ty = self.infer_expr(*target, body);
                 let value_ty = self.infer_expr(*value, body);
-                let binary_op = Self::assign_op_to_binary_op(op);
-                let result_ty = self.infer_binary_op(&binary_op, &target_ty, &value_ty, *target);
+                let binary_op = Self::assign_op_to_binary_op(*op);
+                let result_ty = self.infer_binary_op(binary_op, &target_ty, &value_ty, *target);
                 // Re-record the value expression with the result type so the
                 // display shows the operation result, not the raw RHS literal.
                 self.record_expr_type(*value, result_ty);
@@ -878,7 +1056,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if self.pattern_covers_all_match(pattern_id, &scrutinee_ty, body, arm.body) {
                     catch_all_seen = true;
                     if let Some(required) = &required_cases {
-                        covered_cases = required.clone();
+                        covered_cases.clone_from(required);
                     }
                 } else if let Some(required) = &required_cases {
                     covered_cases.extend(arm_cases.into_iter().filter(|c| required.contains(c)));
@@ -887,12 +1065,18 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         if let Some(required) = required_cases {
-            if !catch_all_seen {
+            if catch_all_seen {
+                // Catch-all covers everything — exhaustive.
+                self.exhaustive_matches.insert(match_expr_id);
+            } else {
                 let missing: Vec<String> = required
                     .difference(&covered_cases)
                     .map(std::string::ToString::to_string)
                     .collect();
-                if !missing.is_empty() {
+                if missing.is_empty() {
+                    // All required cases covered explicitly — exhaustive.
+                    self.exhaustive_matches.insert(match_expr_id);
+                } else {
                     self.context.report_simple(
                         TirTypeError::NonExhaustiveMatch {
                             scrutinee_type: scrutinee_ty.clone(),
@@ -904,7 +1088,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         }
 
-        self.join_all(&arm_types)
+        Self::join_all(&arm_types)
     }
 
     fn infer_catch_expr(
@@ -913,12 +1097,27 @@ impl<'db> TypeInferenceBuilder<'db> {
         base_expr_id: ExprId,
         clauses: &[baml_compiler2_ast::CatchClause],
         body: &ExprBody,
+        expected: Option<&Ty>,
     ) -> Ty {
-        let base_ty = self.infer_expr(base_expr_id, body);
-        let mut result_members = vec![base_ty.clone()];
+        let base_ty = if let Some(expected) = expected {
+            self.check_expr(base_expr_id, body, expected)
+        } else {
+            self.infer_expr(base_expr_id, body)
+        };
+        let mut result_members = vec![base_ty];
         let mut residual = self.catch_base_throw_types(base_expr_id, body);
 
         for clause in clauses {
+            // Compute the clause-level binding type from the current residual throw set.
+            // This is the type of the error variable (e.g. `e` in `catch (e)`).
+            let clause_binding_ty = if residual.is_empty() {
+                Ty::Unknown
+            } else {
+                Self::facts_to_ty(&residual)
+            };
+            // Record the clause binding type in the bindings map so MIR can read it.
+            self.bindings.insert(clause.binding, clause_binding_ty);
+
             let binding_name = match &body.patterns[clause.binding] {
                 baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
                 baml_compiler2_ast::Pattern::TypedBinding { name, ty } => {
@@ -944,7 +1143,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }
 
-                let narrowed_binding_ty = self.throw_facts_to_ty(&matches.may_match);
+                let narrowed_binding_ty = Self::facts_to_ty(&matches.may_match);
                 let mut saved = Vec::new();
                 if let Some(name) = &binding_name {
                     saved.push((name.clone(), self.locals.get(name).cloned()));
@@ -991,7 +1190,7 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         self.catch_residual_throws
             .insert(catch_expr_id, residual.clone());
-        self.join_all(&result_members)
+        Self::join_all(&result_members)
     }
 
     /// Validate declared `throws` against effective escaping throws from the body.
@@ -1007,10 +1206,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
 
         let mut diags = Vec::new();
-        let declared_ty = crate::lower_type_expr::lower_type_expr(
+        let declared_ty = crate::lower_type_expr::lower_type_expr_in_ns(
             self.context.db(),
             declared_expr,
             self.package_items,
+            &self.ns_context,
+            &self.generic_params,
             &mut diags,
         );
         let span = throws_span.unwrap_or(fallback_span);
@@ -1018,18 +1219,24 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.context.report_at_span(diag, span);
         }
 
-        let declared = crate::throw_inference::throw_facts_from_ty(&declared_ty);
+        let declared = crate::throw_inference::flatten_ty_to_facts(&declared_ty);
         let effective = self.collect_effective_throws(body);
 
-        let mut extra: Vec<String> = effective.difference(&declared).cloned().collect();
-        let mut extraneous: Vec<String> = declared.difference(&effective).cloned().collect();
+        let mut extra: Vec<String> = effective
+            .difference(&declared)
+            .map(std::string::ToString::to_string)
+            .collect();
+        let mut extraneous: Vec<String> = declared
+            .difference(&effective)
+            .map(std::string::ToString::to_string)
+            .collect();
         extra.sort();
         extraneous.sort();
 
         if !extra.is_empty() {
             self.context.report_at_span(
                 TirTypeError::ThrowsContractViolation {
-                    declared: declared_ty.clone(),
+                    declared: declared_ty,
                     extra_types: extra,
                 },
                 span,
@@ -1051,11 +1258,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Some(BTreeSet::from(["true".to_string(), "false".to_string()]))
             }
             Ty::Primitive(PrimitiveType::Null) => Some(BTreeSet::from(["null".to_string()])),
-            Ty::Literal(lit, _) => Some(BTreeSet::from([self.literal_case_name(lit)])),
+            Ty::Literal(lit, _) => Some(BTreeSet::from([Self::literal_case_name(lit)])),
             Ty::Enum(enum_name) => Some(
                 self.lookup_enum_variants(enum_name)
                     .into_iter()
-                    .map(|variant| format!("{}.{}", enum_name.name, variant))
+                    .map(|variant| format!("{enum_name}.{variant}"))
                     .collect(),
             ),
             Ty::Optional(inner) => {
@@ -1066,9 +1273,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Union(members) => {
                 let mut out = BTreeSet::new();
                 for member in members {
-                    let Some(member_cases) = self.required_match_cases(member) else {
-                        return None;
-                    };
+                    let member_cases = self.required_match_cases(member)?;
                     out.extend(member_cases);
                 }
                 Some(out)
@@ -1107,11 +1312,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             baml_compiler2_ast::Pattern::Literal(lit) => {
-                BTreeSet::from([self.literal_case_name(lit)])
+                BTreeSet::from([Self::literal_case_name(lit)])
             }
             baml_compiler2_ast::Pattern::Null => BTreeSet::from(["null".to_string()]),
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
-                BTreeSet::from([format!("{}.{}", enum_name, variant)])
+                // Use the qualified name from scrutinee_ty when available,
+                // so the case string matches required_match_cases output.
+                let qualified_enum = match scrutinee_ty {
+                    Ty::Enum(qtn) if qtn.name() == enum_name => qtn.to_string(),
+                    _ => enum_name.to_string(),
+                };
+                BTreeSet::from([format!("{qualified_enum}.{variant}")])
             }
             baml_compiler2_ast::Pattern::Union(parts) => {
                 let mut out = BTreeSet::new();
@@ -1211,11 +1422,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             baml_compiler2_ast::Pattern::Null => Ty::Primitive(PrimitiveType::Null),
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
                 if let Ty::Enum(qn) = scrutinee_ty {
-                    if qn.name == *enum_name {
+                    if qn.name() == enum_name {
                         return Ty::EnumVariant(qn.clone(), variant.clone());
                     }
                 }
-                if let Some(def) = self.package_items.lookup_type(&[enum_name.clone()]) {
+                if let Some(def) = self
+                    .package_items
+                    .lookup_type(std::slice::from_ref(enum_name))
+                {
                     if matches!(def, Definition::Enum(_)) {
                         return Ty::EnumVariant(
                             crate::lower_type_expr::qualify_def(self.context.db(), def, enum_name),
@@ -1230,17 +1444,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 for part in parts {
                     tys.push(self.pattern_narrowed_type(*part, scrutinee_ty, body, at_expr));
                 }
-                self.join_all(&tys)
+                Self::join_all(&tys)
             }
         }
     }
 
     fn lower_pattern_type_expr(&mut self, expr: &TypeExpr, at_expr: ExprId) -> Ty {
         let mut diags = Vec::new();
-        let ty = crate::lower_type_expr::lower_type_expr(
+        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
             self.context.db(),
             expr,
             self.package_items,
+            &self.ns_context,
+            &self.generic_params,
             &mut diags,
         );
         for diag in diags {
@@ -1249,7 +1465,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         ty
     }
 
-    fn literal_case_name(&self, lit: &baml_base::Literal) -> String {
+    fn literal_case_name(lit: &baml_base::Literal) -> String {
         match lit {
             baml_base::Literal::Int(v) => v.to_string(),
             baml_base::Literal::Float(v) => v.clone(),
@@ -1262,61 +1478,31 @@ impl<'db> TypeInferenceBuilder<'db> {
         matches!(
             name.as_str(),
             "int" | "float" | "string" | "bool" | "null" | "image" | "audio" | "video" | "pdf"
-        ) || self.package_items.lookup_type(&[name.clone()]).is_some()
+        ) || self
+            .package_items
+            .lookup_type(std::slice::from_ref(name))
+            .is_some()
     }
 
-    fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<String> {
+    fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
         let mut out = BTreeSet::new();
         self.collect_throw_facts_from_expr(base_expr_id, body, &mut out);
         out
     }
 
-    fn throw_facts_to_ty(&self, facts: &BTreeSet<String>) -> Ty {
+    /// Join a set of throw fact types into a single type.
+    fn facts_to_ty(facts: &BTreeSet<Ty>) -> Ty {
         if facts.is_empty() {
             return Ty::Never;
         }
-        let tys: Vec<Ty> = facts.iter().map(|f| self.throw_fact_to_ty(f)).collect();
-        self.join_all(&tys)
-    }
-
-    fn throw_fact_to_ty(&self, fact: &str) -> Ty {
-        match fact {
-            "int" => Ty::Primitive(PrimitiveType::Int),
-            "float" => Ty::Primitive(PrimitiveType::Float),
-            "string" => Ty::Primitive(PrimitiveType::String),
-            "bool" => Ty::Primitive(PrimitiveType::Bool),
-            "null" => Ty::Primitive(PrimitiveType::Null),
-            "unknown" => Ty::Unknown,
-            _ => {
-                let name = Name::new(fact);
-                if let Some(def) = self.package_items.lookup_type(&[name.clone()]) {
-                    match def {
-                        Definition::Class(_) => Ty::Class(crate::lower_type_expr::qualify_def(
-                            self.context.db(),
-                            def,
-                            &name,
-                        )),
-                        Definition::Enum(_) => Ty::Enum(crate::lower_type_expr::qualify_def(
-                            self.context.db(),
-                            def,
-                            &name,
-                        )),
-                        Definition::TypeAlias(_) => Ty::TypeAlias(
-                            crate::lower_type_expr::qualify_def(self.context.db(), def, &name),
-                        ),
-                        _ => Ty::Unknown,
-                    }
-                } else {
-                    Ty::Unknown
-                }
-            }
-        }
+        let tys: Vec<Ty> = facts.iter().cloned().collect();
+        Self::join_all(&tys)
     }
 
     fn match_throw_types_for_pattern(
         &mut self,
         pattern_id: PatId,
-        throw_types: &BTreeSet<String>,
+        throw_types: &BTreeSet<Ty>,
         body: &ExprBody,
         at_expr: ExprId,
     ) -> ThrowPatternMatches {
@@ -1339,19 +1525,20 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn pattern_match_strength(
         &mut self,
         pattern_id: PatId,
-        throw_fact: &str,
+        throw_fact: &Ty,
         body: &ExprBody,
         at_expr: ExprId,
     ) -> PatternMatchStrength {
+        let is_unknown = matches!(throw_fact, Ty::Unknown | Ty::BuiltinUnknown | Ty::Error);
         let pattern = &body.patterns[pattern_id];
         match pattern {
             baml_compiler2_ast::Pattern::Binding(name) => {
                 if self.is_bare_type_sugar_binding(name) {
                     let lowered =
                         self.lower_pattern_type_expr(&TypeExpr::Path(vec![name.clone()]), at_expr);
-                    if self.ty_matches_throw_fact(&lowered, throw_fact) {
+                    if Self::ty_covers_fact(&lowered, throw_fact) {
                         PatternMatchStrength::DefiniteMatch
-                    } else if throw_fact == "unknown" {
+                    } else if is_unknown {
                         PatternMatchStrength::MayMatch
                     } else {
                         PatternMatchStrength::NoMatch
@@ -1362,33 +1549,38 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
                 let lowered = self.lower_pattern_type_expr(ty, at_expr);
-                if self.ty_matches_throw_fact(&lowered, throw_fact) {
+                if Self::ty_covers_fact(&lowered, throw_fact) {
                     PatternMatchStrength::DefiniteMatch
-                } else if throw_fact == "unknown" {
+                } else if is_unknown {
                     PatternMatchStrength::MayMatch
                 } else {
                     PatternMatchStrength::NoMatch
                 }
             }
             baml_compiler2_ast::Pattern::Literal(lit) => {
-                if self.literal_throw_fact(lit) == throw_fact || throw_fact == "unknown" {
+                let lit_ty = Ty::Primitive(PrimitiveType::from_literal(lit));
+                if &lit_ty == throw_fact || is_unknown {
                     PatternMatchStrength::DefiniteMatch
                 } else {
                     PatternMatchStrength::NoMatch
                 }
             }
             baml_compiler2_ast::Pattern::Null => {
-                if throw_fact == "null" || throw_fact == "unknown" {
+                if matches!(throw_fact, Ty::Primitive(PrimitiveType::Null)) || is_unknown {
                     PatternMatchStrength::DefiniteMatch
                 } else {
                     PatternMatchStrength::NoMatch
                 }
             }
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
-                let exact = format!("{enum_name}.{variant}");
-                if throw_fact == exact || throw_fact == enum_name.as_str() {
+                let matches_variant = match throw_fact {
+                    Ty::EnumVariant(qn, v) => qn.name() == enum_name && v == variant,
+                    Ty::Enum(qn) => qn.name() == enum_name,
+                    _ => false,
+                };
+                if matches_variant {
                     PatternMatchStrength::DefiniteMatch
-                } else if throw_fact == "unknown" {
+                } else if is_unknown {
                     PatternMatchStrength::MayMatch
                 } else {
                     PatternMatchStrength::NoMatch
@@ -1414,43 +1606,40 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn ty_matches_throw_fact(&self, ty: &Ty, throw_fact: &str) -> bool {
-        match ty {
-            Ty::Primitive(p) => p.to_string() == throw_fact,
-            Ty::Literal(lit, _) => self.literal_throw_fact(lit) == throw_fact,
+    /// Check if a pattern type covers a throw fact type.
+    fn ty_covers_fact(pattern_ty: &Ty, fact: &Ty) -> bool {
+        match pattern_ty {
+            Ty::Primitive(p) => match fact {
+                Ty::Primitive(fp) => p == fp,
+                Ty::Literal(lit, _) => *p == PrimitiveType::from_literal(lit),
+                _ => false,
+            },
+            Ty::Literal(lit, _) => {
+                let widened = Ty::Primitive(PrimitiveType::from_literal(lit));
+                &widened == fact
+            }
             Ty::Optional(inner) => {
-                throw_fact == "null" || self.ty_matches_throw_fact(inner, throw_fact)
+                matches!(fact, Ty::Primitive(PrimitiveType::Null))
+                    || Self::ty_covers_fact(inner, fact)
             }
-            Ty::Union(parts) => parts
-                .iter()
-                .any(|part| self.ty_matches_throw_fact(part, throw_fact)),
-            Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => {
-                throw_fact == qn.name.as_str() || throw_fact == qn.to_string()
-            }
+            Ty::Union(parts) => parts.iter().any(|part| Self::ty_covers_fact(part, fact)),
+            Ty::Class(qn) => matches!(fact, Ty::Class(fqn) if fqn == qn),
+            Ty::Enum(qn) => match fact {
+                Ty::Enum(fqn) => fqn == qn,
+                Ty::EnumVariant(fqn, _) => fqn == qn,
+                _ => false,
+            },
+            Ty::TypeAlias(qn) => matches!(fact, Ty::TypeAlias(fqn) if fqn == qn),
             Ty::EnumVariant(qn, variant) => {
-                throw_fact == format!("{}.{}", qn.name, variant) || throw_fact == qn.name.as_str()
+                matches!(fact, Ty::EnumVariant(fqn, fv) if fqn == qn && fv == variant)
+                    || matches!(fact, Ty::Enum(fqn) if fqn == qn)
             }
             Ty::BuiltinUnknown | Ty::Unknown | Ty::Error => true,
-            Ty::Never | Ty::Void => false,
-            Ty::List(_)
-            | Ty::Map(_, _)
-            | Ty::EvolvingList(_)
-            | Ty::EvolvingMap(_, _)
-            | Ty::Function { .. }
-            | Ty::RustType => false,
+            _ => false,
         }
     }
 
-    fn literal_throw_fact(&self, lit: &baml_base::Literal) -> &'static str {
-        match lit {
-            baml_base::Literal::Int(_) => "int",
-            baml_base::Literal::Float(_) => "float",
-            baml_base::Literal::String(_) => "string",
-            baml_base::Literal::Bool(_) => "bool",
-        }
-    }
-
-    fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<String> {
+    fn collect_effective_throws(&self, body: &ExprBody) -> BTreeSet<Ty> {
         let mut out = BTreeSet::new();
         if let Some(root) = body.root_expr {
             self.collect_effective_throws_from_expr(root, body, &mut out);
@@ -1462,7 +1651,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         expr_id: ExprId,
         body: &ExprBody,
-        out: &mut BTreeSet<String>,
+        out: &mut BTreeSet<Ty>,
     ) {
         match &body.exprs[expr_id] {
             Expr::Throw { value } => {
@@ -1569,7 +1758,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         stmt_id: StmtId,
         body: &ExprBody,
-        out: &mut BTreeSet<String>,
+        out: &mut BTreeSet<Ty>,
     ) {
         match &body.stmts[stmt_id] {
             Stmt::Expr(expr) => self.collect_effective_throws_from_expr(*expr, body, out),
@@ -1589,6 +1778,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(after_stmt) = after {
                     self.collect_effective_throws_from_stmt(*after_stmt, body, out);
                 }
+            }
+            Stmt::For {
+                collection,
+                body: for_body,
+                ..
+            } => {
+                self.collect_effective_throws_from_expr(*collection, body, out);
+                self.collect_effective_throws_from_expr(*for_body, body, out);
             }
             Stmt::Return(expr) => {
                 if let Some(expr) = expr {
@@ -1614,7 +1811,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         expr_id: ExprId,
         body: &ExprBody,
-        out: &mut BTreeSet<String>,
+        out: &mut BTreeSet<Ty>,
     ) {
         match &body.exprs[expr_id] {
             Expr::Throw { value } => {
@@ -1709,7 +1906,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         stmt_id: StmtId,
         body: &ExprBody,
-        out: &mut BTreeSet<String>,
+        out: &mut BTreeSet<Ty>,
     ) {
         match &body.stmts[stmt_id] {
             Stmt::Expr(expr_id) => self.collect_throw_facts_from_expr(*expr_id, body, out),
@@ -1730,6 +1927,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.collect_throw_facts_from_stmt(*after_stmt, body, out);
                 }
             }
+            Stmt::For {
+                collection,
+                body: for_body,
+                ..
+            } => {
+                self.collect_throw_facts_from_expr(*collection, body, out);
+                self.collect_throw_facts_from_expr(*for_body, body, out);
+            }
             Stmt::Return(expr) => {
                 if let Some(expr) = expr {
                     self.collect_throw_facts_from_expr(*expr, body, out);
@@ -1748,31 +1953,52 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn collect_throw_facts_from_value(&self, value_expr_id: ExprId, out: &mut BTreeSet<String>) {
+    fn collect_throw_facts_from_value(&self, value_expr_id: ExprId, out: &mut BTreeSet<Ty>) {
         let unknown_ty = Ty::Unknown;
         let thrown_ty = self.expressions.get(&value_expr_id).unwrap_or(&unknown_ty);
-        out.extend(crate::throw_inference::throw_facts_from_ty(thrown_ty));
+        out.extend(crate::throw_inference::flatten_ty_to_facts(thrown_ty));
     }
 
     fn call_target_name(&self, callee_expr_id: ExprId, body: &ExprBody) -> Option<Name> {
-        let segments = self.expr_to_path_segments(callee_expr_id, body)?;
-        if segments.is_empty() {
-            return None;
+        let segments = Self::expr_to_path_segments(callee_expr_id, body)?;
+        if segments.len() < 2 {
+            // Single-segment path (free function) — return as-is.
+            return if segments.is_empty() {
+                None
+            } else {
+                Some(segments[0].clone())
+            };
         }
-        Some(Name::new(
-            segments
-                .iter()
-                .map(Name::as_str)
-                .collect::<Vec<_>>()
-                .join("."),
-        ))
+        // Multi-segment: receiver.method — resolve the receiver's type to get
+        // the class name so the target matches throw_inference's "Class.method" keys.
+        let receiver = &segments[0];
+        let method = &segments[1];
+        if let Some(Ty::Class(qn)) = self.locals.get(receiver) {
+            let ns = qn.namespace();
+            let key = if ns.is_empty() {
+                format!("{}.{}", qn.name(), method)
+            } else {
+                let ns_str = ns.iter().map(Name::as_str).collect::<Vec<_>>().join(".");
+                format!("{}.{}.{}", ns_str, qn.name(), method)
+            };
+            Some(Name::new(key))
+        } else {
+            // Receiver not a known local or not a class — fall back to raw path
+            Some(Name::new(
+                segments
+                    .iter()
+                    .map(Name::as_str)
+                    .collect::<Vec<_>>()
+                    .join("."),
+            ))
+        }
     }
 
-    fn expr_to_path_segments(&self, expr_id: ExprId, body: &ExprBody) -> Option<Vec<Name>> {
+    fn expr_to_path_segments(expr_id: ExprId, body: &ExprBody) -> Option<Vec<Name>> {
         match &body.exprs[expr_id] {
             Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
             Expr::FieldAccess { base, field } => {
-                let mut base_segments = self.expr_to_path_segments(*base, body)?;
+                let mut base_segments = Self::expr_to_path_segments(*base, body)?;
                 base_segments.push(field.clone());
                 Some(base_segments)
             }
@@ -1782,36 +2008,184 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Extract the short name from a qualified type name for package item lookups.
     fn unqualify(qn: &crate::ty::QualifiedTypeName) -> Name {
-        qn.name.clone()
+        qn.name().clone()
     }
 
-    fn infer_literal(&self, lit: &baml_base::Literal) -> Ty {
+    fn infer_literal(lit: &baml_base::Literal) -> Ty {
         Ty::Literal(lit.clone(), Freshness::Fresh)
     }
 
     fn infer_path(&mut self, segments: &[Name], _body: &ExprBody, expr_id: ExprId) -> Ty {
-        // After AST lowering, Path is always single-segment (a bare identifier).
-        // Multi-segment paths like Color.Red or x.field are desugared to FieldAccess chains.
-        debug_assert!(
-            segments.len() == 1,
-            "multi-segment Path should have been desugared to FieldAccess: {:?}",
-            segments
-        );
         if segments.len() == 1 {
             let name = &segments[0];
             let ty = self.infer_single_name(name);
+            let ns_name: Vec<Name> = self
+                .ns_context
+                .iter()
+                .chain(std::iter::once(name))
+                .cloned()
+                .collect();
+            // Namespace shorthands like `env`, `sys`, `http` etc. can appear as
+            // the base of a FieldAccess expression (e.g. `env.get("KEY")`), where
+            // the parent will route them to the `"baml"` package.  Don't emit
+            // `UnresolvedName` for these bare identifiers — the parent expression
+            // is responsible for resolution and will emit an error if the member
+            // doesn't exist.
+            let is_baml_ns_shorthand = matches!(
+                name.as_str(),
+                "env"
+                    | "sys"
+                    | "http"
+                    | "math"
+                    | "fs"
+                    | "net"
+                    | "media"
+                    | "llm"
+                    | "errors"
+                    | "unstable"
+            );
             if matches!(ty, Ty::Unknown)
                 && !self.locals.contains_key(name)
-                && self.package_items.lookup_value(&[name.clone()]).is_none()
-                && self.package_items.lookup_type(&[name.clone()]).is_none()
+                && self.package_items.lookup_value(&ns_name).is_none()
+                && self.package_items.lookup_type(&ns_name).is_none()
+                && !is_baml_ns_shorthand
             {
                 self.context
                     .report_simple(TirTypeError::UnresolvedName { name: name.clone() }, expr_id);
             }
             ty
+        } else if segments.len() >= 2 {
+            self.infer_multi_segment_path(segments, expr_id)
         } else {
             Ty::Unknown
         }
+    }
+
+    /// Resolve a multi-segment path like `baml.llm.render_prompt` or `root.sys.panic`.
+    ///
+    /// The first segment is either a literal package name or `root`
+    /// (which maps to the current file's package).
+    fn infer_multi_segment_path(&mut self, segments: &[Name], expr_id: ExprId) -> Ty {
+        let first = &segments[0];
+        if self.locals.contains_key(first) {
+            return Ty::Unknown;
+        }
+
+        let db = self.context.db();
+        let pkg_name = if first.as_str() == "root" {
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, self.scope.file(db));
+            pkg_info.package
+        } else {
+            first.clone()
+        };
+        let Some(pkg_items) = self.res_ctx.items_for_package(db, &pkg_name) else {
+            return Ty::Unknown;
+        };
+
+        if pkg_items.namespaces.is_empty() {
+            return Ty::Unknown;
+        }
+
+        let after_pkg = &segments[1..];
+        self.resolve_package_item(pkg_items, after_pkg, expr_id)
+            .unwrap_or(Ty::Unknown)
+    }
+
+    /// Shared helper: resolve a value or type within a package's namespace.
+    ///
+    /// `path` contains all segments after the package name. The last segment
+    /// is the item name; preceding segments are the namespace path.
+    ///
+    /// Used by both `infer_multi_segment_path` (for `Expr::Path`) and
+    /// `try_package_access` (for `Expr::FieldAccess` chains).
+    fn resolve_package_item(
+        &mut self,
+        pkg_items: &baml_compiler2_hir::package::PackageItems<'db>,
+        path: &[Name],
+        expr_id: ExprId,
+    ) -> Option<Ty> {
+        use baml_compiler2_hir::contributions::Definition;
+
+        if path.is_empty() {
+            return None;
+        }
+
+        // Try as a value (function) in a nested namespace
+        let lookup_val = pkg_items.lookup_value(path);
+        if let Some(Definition::Function(func_loc)) = lookup_val {
+            let db = self.context.db();
+            let item_tree_for_func = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+            let func_data_for_sig = &item_tree_for_func[func_loc.id(db)];
+            let generic_params = &func_data_for_sig.generic_params;
+            let member = path.last().unwrap();
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
+            let ns_context = pkg_info.namespace_path.clone();
+            self.resolutions.insert(
+                expr_id,
+                crate::inference::MethodResolution::Free {
+                    package: pkg_info.package,
+                    namespace: pkg_info.namespace_path,
+                    name: member.clone(),
+                    func_loc,
+                },
+            );
+            let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+            let mut diags = Vec::new();
+            let ty = Ty::Function {
+                params: sig
+                    .params
+                    .iter()
+                    .map(|(n, te)| {
+                        (
+                            Some(n.clone()),
+                            crate::lower_type_expr::lower_type_expr_in_ns(
+                                db,
+                                te,
+                                pkg_items,
+                                &ns_context,
+                                generic_params,
+                                &mut diags,
+                            ),
+                        )
+                    })
+                    .collect(),
+                ret: Box::new(
+                    sig.return_type
+                        .as_ref()
+                        .map(|te| {
+                            crate::lower_type_expr::lower_type_expr_in_ns(
+                                db,
+                                te,
+                                pkg_items,
+                                &ns_context,
+                                generic_params,
+                                &mut diags,
+                            )
+                        })
+                        .unwrap_or(Ty::Unknown),
+                ),
+            };
+            return Some(ty);
+        }
+
+        // Try as a type (class/enum)
+        if let Some(def) = pkg_items.lookup_type(path) {
+            let db = self.context.db();
+            let name = path.last().unwrap();
+            match def {
+                Definition::Class(_) => {
+                    let class_qtn = crate::lower_type_expr::qualify_def(db, def, name);
+                    return Some(Ty::Class(class_qtn));
+                }
+                Definition::Enum(_) => {
+                    let enum_qtn = crate::lower_type_expr::qualify_def(db, def, name);
+                    return Some(Ty::Enum(enum_qtn));
+                }
+                _ => {}
+            }
+        }
+
+        None
     }
 
     /// Resolve a single name to its type.
@@ -1826,25 +2200,42 @@ impl<'db> TypeInferenceBuilder<'db> {
                 other => other.clone(),
             };
         }
-        // Check value namespace (functions, template strings)
-        if let Some(def) = self.package_items.lookup_value(&[name.clone()]) {
+        // Build namespace-qualified lookup path.
+        let lookup_path: Vec<Name> = self
+            .ns_context
+            .iter()
+            .chain(std::iter::once(name))
+            .cloned()
+            .collect();
+        if let Some(def) = self.package_items.lookup_value(&lookup_path) {
             match def {
                 Definition::Function(func_loc) => {
                     // Get function signature to build the function type
                     let db = self.context.db();
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                    let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+                    let func_data = &item_tree[func_loc.id(db)];
+                    let generic_params = &func_data.generic_params;
+                    let sig_ns =
+                        baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
+                            .namespace_path;
                     let mut diags = Vec::new();
-                    let ty = Ty::Function {
+
+                    // Note: diags from referenced function signatures are not
+                    // reported here — they'll be reported at the definition site.
+                    Ty::Function {
                         params: sig
                             .params
                             .iter()
                             .map(|(n, te)| {
                                 (
                                     Some(n.clone()),
-                                    crate::lower_type_expr::lower_type_expr(
+                                    crate::lower_type_expr::lower_type_expr_in_ns(
                                         db,
                                         te,
                                         self.package_items,
+                                        &sig_ns,
+                                        generic_params,
                                         &mut diags,
                                     ),
                                 )
@@ -1854,23 +2245,22 @@ impl<'db> TypeInferenceBuilder<'db> {
                             sig.return_type
                                 .as_ref()
                                 .map(|te| {
-                                    crate::lower_type_expr::lower_type_expr(
+                                    crate::lower_type_expr::lower_type_expr_in_ns(
                                         db,
                                         te,
                                         self.package_items,
+                                        &sig_ns,
+                                        generic_params,
                                         &mut diags,
                                     )
                                 })
                                 .unwrap_or(Ty::Unknown),
                         ),
-                    };
-                    // Note: diags from referenced function signatures are not
-                    // reported here — they'll be reported at the definition site.
-                    ty
+                    }
                 }
                 _ => Ty::Unknown,
             }
-        } else if let Some(def) = self.package_items.lookup_type(&[name.clone()]) {
+        } else if let Some(def) = self.package_items.lookup_type(&lookup_path) {
             let db = self.context.db();
             match def {
                 Definition::Class(_) => {
@@ -1905,7 +2295,25 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 // Check class methods via the item tree (methods are stored
                 // directly on the Class entry, not in the package namespace).
-                if let Some(ty) = self.lookup_class_method(class_name, member) {
+                if let Some((ty, class_loc, func_loc)) =
+                    self.lookup_class_method(class_name, member)
+                {
+                    let db = self.context.db();
+                    let pkg_info =
+                        baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+                    let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+                    let class_data = &item_tree[class_loc.id(db)];
+                    self.resolutions.insert(
+                        at,
+                        crate::inference::MethodResolution::Method {
+                            package: pkg_info.package,
+                            namespace: pkg_info.namespace_path,
+                            class: class_data.name.clone(),
+                            name: member.clone(),
+                            class_loc,
+                            func_loc,
+                        },
+                    );
                     return ty;
                 }
 
@@ -1952,7 +2360,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Ty::List(element_ty) => {
                 // Bridge: int[] → Array<int> — resolve via builtin Array class.
-                self.resolve_builtin_method(&["Array"], &[element_ty.as_ref().clone()], member)
+                self.resolve_builtin_member(&["Array"], &[element_ty.as_ref().clone()], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_simple(
                             TirTypeError::UnresolvedMember {
@@ -1966,10 +2374,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             Ty::Map(key_ty, val_ty) => {
                 // Bridge: map<string, int> → Map<string, int>
-                self.resolve_builtin_method(
+                self.resolve_builtin_member(
                     &["Map"],
                     &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
                     member,
+                    at,
                 )
                 .unwrap_or_else(|| {
                     self.context.report_simple(
@@ -1985,7 +2394,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Ty::Primitive(PrimitiveType::String)
             | Ty::Literal(baml_base::Literal::String(_), _) => {
                 // Bridge: string / "literal" → String class
-                self.resolve_builtin_method(&["String"], &[], member)
+                self.resolve_builtin_member(&["String"], &[], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_simple(
                             TirTypeError::UnresolvedMember {
@@ -2004,7 +2413,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 | PrimitiveType::Pdf),
             ) => {
                 // Bridge: each media primitive → its own builtin class in baml.media
-                self.resolve_builtin_method(p.builtin_class_path(), &[], member)
+                self.resolve_builtin_member(p.builtin_class_path(), &[], member, at)
                     .unwrap_or_else(|| {
                         self.context.report_simple(
                             TirTypeError::UnresolvedMember {
@@ -2047,6 +2456,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Ty::Unknown
                 }
             }
+            Ty::TypeAlias(qtn) => {
+                // Expand the alias to its concrete type, then recurse.
+                if let Some(expanded) = self.aliases.get(qtn) {
+                    let expanded = expanded.clone();
+                    return self.resolve_member(&expanded, member, at);
+                }
+                // Alias not in map (cyclic or unresolved) — treat as Unknown
+                Ty::Unknown
+            }
             Ty::Unknown => {
                 // Base type unknown — can't resolve member, but don't emit error
                 // (the base type error was already reported upstream)
@@ -2077,32 +2495,44 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some(field_ty) = fields.get(member) {
                     return Some(field_ty.clone());
                 }
-                if let Some(method_ty) = self.lookup_class_method(class_name, member) {
+                if let Some((method_ty, _, _)) = self.lookup_class_method(class_name, member) {
                     return Some(method_ty);
                 }
                 None
             }
-            Ty::List(element_ty) => {
-                self.resolve_builtin_method(&["Array"], &[element_ty.as_ref().clone()], member)
-            }
-            Ty::Map(key_ty, val_ty) => self.resolve_builtin_method(
-                &["Map"],
-                &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
-                member,
-            ),
+            Ty::List(element_ty) => self
+                .resolve_builtin_method(&["Array"], &[element_ty.as_ref().clone()], member)
+                .map(BuiltinResolution::into_ty),
+            Ty::Map(key_ty, val_ty) => self
+                .resolve_builtin_method(
+                    &["Map"],
+                    &[key_ty.as_ref().clone(), val_ty.as_ref().clone()],
+                    member,
+                )
+                .map(BuiltinResolution::into_ty),
             Ty::Primitive(PrimitiveType::String)
-            | Ty::Literal(baml_base::Literal::String(_), _) => {
-                self.resolve_builtin_method(&["String"], &[], member)
-            }
+            | Ty::Literal(baml_base::Literal::String(_), _) => self
+                .resolve_builtin_method(&["String"], &[], member)
+                .map(BuiltinResolution::into_ty),
             Ty::Primitive(
                 p @ (PrimitiveType::Image
                 | PrimitiveType::Audio
                 | PrimitiveType::Video
                 | PrimitiveType::Pdf),
-            ) => self.resolve_builtin_method(p.builtin_class_path(), &[], member),
+            ) => self
+                .resolve_builtin_method(p.builtin_class_path(), &[], member)
+                .map(BuiltinResolution::into_ty),
             Ty::Optional(inner) => {
                 // Drill through Optional to resolve the member on the inner type
                 self.try_resolve_member_on_ty(inner, member)
+            }
+            Ty::TypeAlias(qtn) => {
+                if let Some(expanded) = self.aliases.get(qtn) {
+                    let expanded = expanded.clone();
+                    self.try_resolve_member_on_ty(&expanded, member)
+                } else {
+                    None
+                }
             }
             Ty::Unknown => {
                 // Unknown propagates — treat as if the field exists with Unknown type
@@ -2121,86 +2551,124 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> FxHashMap<Name, Ty> {
         let mut result = FxHashMap::default();
         let short = Self::unqualify(class_name);
-        if let Some(def) = self.package_items.lookup_type(&[short]) {
-            if let Definition::Class(class_loc) = def {
-                let file = class_loc.file(self.context.db());
-                let item_tree = baml_compiler2_ppir::file_item_tree(self.context.db(), file);
-                let class_data = &item_tree[class_loc.id(self.context.db())];
-                for field in &class_data.fields {
-                    let mut diags = Vec::new();
-                    let field_ty = field
-                        .type_expr
-                        .as_ref()
-                        .map(|te| {
-                            let ty = crate::lower_type_expr::lower_type_expr(
-                                self.context.db(),
-                                &te.expr,
-                                self.package_items,
-                                &mut diags,
-                            );
-                            for diag in diags.drain(..) {
-                                self.context.report_at_span(diag, te.span);
-                            }
-                            ty
-                        })
-                        .unwrap_or(Ty::Unknown);
-                    result.insert(field.name.clone(), field_ty);
-                }
+        let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
+            return result;
+        };
+        if let Some(Definition::Class(class_loc)) = pkg_items_for_class.lookup_type_any_ns(&short) {
+            let file = class_loc.file(self.context.db());
+            let ns_context =
+                baml_compiler2_hir::file_package::file_package(self.context.db(), file)
+                    .namespace_path;
+            let item_tree = baml_compiler2_ppir::file_item_tree(self.context.db(), file);
+            let class_data = &item_tree[class_loc.id(self.context.db())];
+            for field in &class_data.fields {
+                let mut diags = Vec::new();
+                let field_ty = field
+                    .type_expr
+                    .as_ref()
+                    .map(|te| {
+                        let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                            self.context.db(),
+                            &te.expr,
+                            pkg_items_for_class,
+                            &ns_context,
+                            &class_data.generic_params,
+                            &mut diags,
+                        );
+                        for diag in diags.drain(..) {
+                            self.context.report_at_span(diag, te.span);
+                        }
+                        ty
+                    })
+                    .unwrap_or(Ty::Unknown);
+                result.insert(field.name.clone(), field_ty);
             }
         }
         result
+    }
+
+    /// Fetch `PackageItems` for the package that owns a class type.
+    ///
+    /// Returns `self.package_items` when the class is in the current package,
+    /// or loads the correct foreign package's items when the class lives in a
+    /// declared dependency package.
+    fn resolve_class_pkg_items(
+        &self,
+        class_pkg: &baml_base::Name,
+    ) -> Option<&'db baml_compiler2_hir::package::PackageItems<'db>> {
+        let db = self.context.db();
+        self.res_ctx.items_for_package(db, class_pkg)
     }
 
     /// Look up a class method by name from the item tree.
     ///
     /// Methods are stored on the `Class` entry directly (not in the package
     /// namespace), so we resolve the class, iterate its method IDs, and match
-    /// by name.
+    /// by name. Returns the method type along with the class and function locs
+    /// so callers can record a `MethodResolution`.
     fn lookup_class_method(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
         method_name: &Name,
-    ) -> Option<Ty> {
+    ) -> Option<(
+        Ty,
+        baml_compiler2_hir::loc::ClassLoc<'db>,
+        baml_compiler2_hir::loc::FunctionLoc<'db>,
+    )> {
         let short = Self::unqualify(class_name);
-        let def = self.package_items.lookup_type(&[short])?;
+        let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package())?;
+        let def = pkg_items_for_class.lookup_type_any_ns(&short)?;
         let Definition::Class(class_loc) = def else {
             return None;
         };
         let db = self.context.db();
         let file = class_loc.file(db);
+        let ns_context = baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
         let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
         let class_data = &item_tree[class_loc.id(db)];
 
         for &method_id in &class_data.methods {
             let method_data = &item_tree[method_id];
             if method_data.name == *method_name {
+                let mut all_generic_params = class_data.generic_params.clone();
+                all_generic_params.extend(method_data.generic_params.iter().cloned());
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                 let mut diags = Vec::new();
+                let class_ty = Ty::Class(class_name.clone());
                 let ty = Ty::Function {
                     params: sig
                         .params
                         .iter()
                         .map(|(n, te)| {
-                            (
-                                Some(n.clone()),
-                                crate::lower_type_expr::lower_type_expr(
+                            let param_ty = if n.as_str() == "self"
+                                && matches!(te, baml_compiler2_ast::TypeExpr::Unknown)
+                            {
+                                // self with no annotation → use the enclosing class type
+                                class_ty.clone()
+                            } else {
+                                crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
                                     te,
-                                    self.package_items,
+                                    pkg_items_for_class,
+                                    &ns_context,
+                                    &all_generic_params,
                                     &mut diags,
-                                ),
-                            )
+                                )
+                            };
+                            (Some(n.clone()), param_ty)
                         })
                         .collect(),
                     ret: Box::new(
                         sig.return_type
                             .as_ref()
                             .map(|te| {
-                                crate::lower_type_expr::lower_type_expr(
+                                crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
                                     te,
-                                    self.package_items,
+                                    pkg_items_for_class,
+                                    &ns_context,
+                                    &all_generic_params,
                                     &mut diags,
                                 )
                             })
@@ -2208,20 +2676,181 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ),
                 };
                 // Note: diags from method signatures are reported at definition site.
-                return Some(ty);
+                return Some((ty, class_loc, func_loc));
             }
         }
         None
     }
 
-    /// Check if a FieldAccess base is a primitive type name used for static
+    /// Check if a `FieldAccess` base is a primitive type name used for static
     /// method access (e.g. `image.from_url(...)`, `pdf.from_base64(...)`).
     ///
     /// Returns `Some(method_ty)` if the base is a recognized primitive type name
     /// and the field is a valid static method on the corresponding builtin class.
-    /// Returns `None` to fall through to normal FieldAccess resolution.
+    /// Returns `None` to fall through to normal `FieldAccess` resolution.
+    /// Try to resolve a `FieldAccess` chain rooted at `Path(["baml"])` as a
+    /// builtin package access: `baml.Array.length`, `baml.media.Image.from_url`.
+    ///
+    /// Walks the `FieldAccess` chain to extract the class path and member name,
+    /// then delegates to `resolve_builtin_member`.
+    /// Try to resolve a `FieldAccess` chain as a package access path.
+    ///
+    /// Walks the `FieldAccess` chain to find a root `Path([pkg_name])` where
+    /// `pkg_name` is a known package. Then resolves intermediate segments
+    /// through the package's namespace to find a type (class/enum), and
+    /// finally uses `resolve_member` on that type for the final field.
+    ///
+    /// Handles patterns like:
+    /// - `baml.Array.length` -- package=`baml`, path=`["Array"]`, member=`length`
+    /// - `baml.media.Image.from_url` -- package=`baml`, path=`["media","Image"]`, member=`from_url`
+    /// - `env.get` → package="env", path=[], member="get" (free function)
+    fn try_package_access(
+        &mut self,
+        at: ExprId,
+        base_id: ExprId,
+        member: &Name,
+        body: &ExprBody,
+    ) -> Option<Ty> {
+        // Walk the chain to collect segments before this member access.
+        let mut segments: Vec<Name> = Vec::new();
+        let mut current = base_id;
+        loop {
+            match &body.exprs[current] {
+                Expr::Path(path_segments) if path_segments.len() == 1 => {
+                    segments.push(path_segments[0].clone());
+                    break;
+                }
+                Expr::FieldAccess { base, field } => {
+                    segments.push(field.clone());
+                    current = *base;
+                }
+                _ => return None,
+            }
+        }
+
+        // Reverse so we have root-to-leaf order: ["baml", "Array"] or ["env"]
+        segments.reverse();
+
+        if segments.is_empty() {
+            return None;
+        }
+
+        // Check if the root segment is a known package (not a local variable)
+        let first = &segments[0];
+        if self.locals.contains_key(first) {
+            return None;
+        }
+
+        let db = self.context.db();
+        let resolved_pkg_name = if first.as_str() == "root" {
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, self.scope.file(db));
+            pkg_info.package
+        } else {
+            first.clone()
+        };
+
+        // Try to resolve the package. If not found, check if the first segment
+        // is a known namespace shorthand for the `"baml"` package (e.g. `env.get`
+        // → `baml.env.get`, `sys.panic` → `baml.sys.panic`).
+        let baml_ns_shorthands: &[&str] = &[
+            "env", "sys", "http", "math", "fs", "net", "media", "llm", "errors", "unstable",
+        ];
+        let (pkg_items, item_path_owned): (
+            &baml_compiler2_hir::package::PackageItems<'db>,
+            Vec<Name>,
+        ) = if let Some(items) = self.res_ctx.items_for_package(db, &resolved_pkg_name) {
+            // Found the package directly.
+            if items.namespaces.is_empty() {
+                return None;
+            }
+            let ip = segments[1..].to_vec();
+            (items, ip)
+        } else if baml_ns_shorthands.contains(&first.as_str()) {
+            // `env.X` → treat as `baml.env.X`: look up in the `"baml"` package
+            // with the namespace prefix prepended to the item path.
+            let baml_name = Name::new("baml");
+            let baml_items = self.res_ctx.items_for_package(db, &baml_name)?;
+            // Prepend the namespace segment (`first`) to the item path.
+            let mut ip = vec![first.clone()];
+            ip.extend_from_slice(&segments[1..]);
+            (baml_items, ip)
+        } else {
+            return None;
+        };
+
+        let item_path: &[Name] = &item_path_owned;
+
+        // Record types for intermediate expressions (so MIR doesn't panic on them).
+        let mut cur = base_id;
+        loop {
+            match &body.exprs[cur] {
+                Expr::Path(_) => {
+                    self.record_expr_type(cur, Ty::Unknown);
+                    break;
+                }
+                Expr::FieldAccess { base, .. } => {
+                    self.record_expr_type(cur, Ty::Unknown);
+                    cur = *base;
+                }
+                _ => break,
+            }
+        }
+
+        // When there is a non-empty item_path, try class/enum member resolution
+        // first (e.g. `baml.Array.length` → Array class, then method "length").
+        if !item_path.is_empty() {
+            if let Some(def) = pkg_items.lookup_type(item_path) {
+                match def {
+                    Definition::Class(_class_loc) => {
+                        if first.as_str() == "root"
+                            || first.as_str() == self.package_id.name(db).as_str()
+                        {
+                            let class_qtn = crate::lower_type_expr::qualify_def(
+                                db,
+                                def,
+                                item_path.last().unwrap(),
+                            );
+                            let base_ty = Ty::Class(class_qtn);
+                            return Some(self.resolve_member(&base_ty, member, at));
+                        }
+                        let class_path: Vec<&str> =
+                            item_path.iter().map(smol_str::SmolStr::as_str).collect();
+                        return self
+                            .resolve_builtin_member(&class_path, &[], member, at)
+                            .or_else(|| {
+                                let class_qtn = crate::lower_type_expr::qualify_def(
+                                    db,
+                                    def,
+                                    item_path.last().unwrap(),
+                                );
+                                let base_ty = Ty::Class(class_qtn);
+                                Some(self.resolve_member(&base_ty, member, at))
+                            });
+                    }
+                    Definition::Enum(_) => {
+                        let enum_qtn =
+                            crate::lower_type_expr::qualify_def(db, def, item_path.last().unwrap());
+                        let base_ty = Ty::Enum(enum_qtn);
+                        return Some(self.resolve_member(&base_ty, member, at));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // Fall back to the shared value/type resolution for free functions
+        // in nested namespaces (e.g. `env.get`, `baml.llm.render_prompt`).
+        let full_path: Vec<Name> = item_path
+            .iter()
+            .chain(std::iter::once(member))
+            .cloned()
+            .collect();
+        self.resolve_package_item(pkg_items, &full_path, at)
+    }
+
     fn try_primitive_static_access(
-        &self,
+        &mut self,
+        at: ExprId,
         base_id: ExprId,
         field: &Name,
         body: &ExprBody,
@@ -2245,7 +2874,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             _ => return None,
         };
 
-        self.resolve_builtin_method(class_path, &[], field)
+        self.resolve_builtin_member(class_path, &[], field, at)
     }
 
     /// Resolve a method or field on a builtin class declared in the `"baml"` package.
@@ -2258,25 +2887,65 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// 5. Falls back to checking class fields.
     ///
     /// Returns `None` if the class or member is not found.
+    /// Wrapper around `resolve_builtin_method` that also stores a `MethodResolution`
+    /// when the result is a method (not a field).
+    fn resolve_builtin_member(
+        &mut self,
+        class_path: &[&str],
+        type_args: &[Ty],
+        member_name: &Name,
+        at: ExprId,
+    ) -> Option<Ty> {
+        let result = self.resolve_builtin_method(class_path, type_args, member_name)?;
+        match result {
+            BuiltinResolution::Method {
+                ty,
+                class_loc,
+                func_loc,
+            } => {
+                let db = self.context.db();
+                let pkg_info =
+                    baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
+                let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+                let class_data = &item_tree[class_loc.id(db)];
+                self.resolutions.insert(
+                    at,
+                    crate::inference::MethodResolution::Method {
+                        package: pkg_info.package,
+                        namespace: pkg_info.namespace_path,
+                        class: class_data.name.clone(),
+                        name: member_name.clone(),
+                        class_loc,
+                        func_loc,
+                    },
+                );
+                Some(ty)
+            }
+            BuiltinResolution::Field(ty) => Some(ty),
+        }
+    }
+
     fn resolve_builtin_method(
         &self,
         class_path: &[&str],
         type_args: &[Ty],
         member_name: &Name,
-    ) -> Option<Ty> {
+    ) -> Option<BuiltinResolution<'db>> {
         let db = self.context.db();
-        let baml_pkg_id =
-            baml_compiler2_hir::package::PackageId::new(db, baml_base::Name::new("baml"));
-        let baml_items = baml_compiler2_ppir::package_items(db, baml_pkg_id);
+        let baml_items = self
+            .res_ctx
+            .items_for_package(db, &baml_base::Name::new("baml"))?;
 
         // Look up the class by path (e.g. &["Array"] or &["media", "Image"]).
-        let path: Vec<Name> = class_path.iter().map(|s| baml_base::Name::new(s)).collect();
+        let path: Vec<Name> = class_path.iter().map(baml_base::Name::new).collect();
         let def = baml_items.lookup_type(&path)?;
         let baml_compiler2_hir::contributions::Definition::Class(class_loc) = def else {
             return None;
         };
 
         let file = class_loc.file(db);
+        let stub_pkg = baml_compiler2_hir::file_package::file_package(db, file);
+        let stub_ns: &[Name] = &stub_pkg.namespace_path;
         let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
         let class_data = &item_tree[class_loc.id(db)];
 
@@ -2290,17 +2959,71 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                 let mut diags = Vec::new();
+                // Build the class type for self parameter resolution.
+                // For generics, apply type_args (e.g. Array<int>).
+                let builtin_class_ty = if type_args.is_empty() {
+                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+                    Ty::Class(crate::ty::QualifiedTypeName::new_with_generic_params(
+                        pkg_info.package,
+                        pkg_info.namespace_path,
+                        class_data.name.clone(),
+                        class_data.generic_params.clone(),
+                    ))
+                } else if type_args.len() == 1 {
+                    // Single type arg: Array<T> → List(T), special-case common containers
+                    match class_data.name.as_str() {
+                        "Array" => Ty::List(Box::new(type_args[0].clone())),
+                        _ => {
+                            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+                            Ty::Class(crate::ty::QualifiedTypeName::new(
+                                pkg_info.package,
+                                pkg_info.namespace_path,
+                                class_data.name.clone(),
+                            ))
+                        }
+                    }
+                } else if type_args.len() == 2 {
+                    match class_data.name.as_str() {
+                        "Map" => Ty::Map(
+                            Box::new(type_args[0].clone()),
+                            Box::new(type_args[1].clone()),
+                        ),
+                        _ => {
+                            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+                            Ty::Class(crate::ty::QualifiedTypeName::new(
+                                pkg_info.package,
+                                pkg_info.namespace_path,
+                                class_data.name.clone(),
+                            ))
+                        }
+                    }
+                } else {
+                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+                    Ty::Class(crate::ty::QualifiedTypeName::new(
+                        pkg_info.package,
+                        pkg_info.namespace_path,
+                        class_data.name.clone(),
+                    ))
+                };
+
                 let params: Vec<(Option<Name>, Ty)> = sig
                     .params
                     .iter()
                     .map(|(n, te)| {
-                        let ty = crate::generics::lower_type_expr_with_generics(
-                            db,
-                            te,
-                            self.package_items,
-                            &bindings,
-                            &mut diags,
-                        );
+                        let ty = if n.as_str() == "self"
+                            && matches!(te, baml_compiler2_ast::TypeExpr::Unknown)
+                        {
+                            builtin_class_ty.clone()
+                        } else {
+                            crate::generics::lower_type_expr_with_generics(
+                                db,
+                                te,
+                                self.package_items,
+                                stub_ns,
+                                &bindings,
+                                &mut diags,
+                            )
+                        };
                         (Some(n.clone()), ty)
                     })
                     .collect();
@@ -2312,6 +3035,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             db,
                             te,
                             self.package_items,
+                            stub_ns,
                             &bindings,
                             &mut diags,
                         )
@@ -2321,9 +3045,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // (the builtin .baml stub). We don't want to spam user code
                 // with unresolved-type errors from builtin signatures.
                 drop(diags);
-                return Some(Ty::Function {
-                    params,
-                    ret: Box::new(ret),
+                return Some(BuiltinResolution::Method {
+                    ty: Ty::Function {
+                        params,
+                        ret: Box::new(ret),
+                    },
+                    class_loc,
+                    func_loc,
                 });
             }
         }
@@ -2340,13 +3068,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                             db,
                             &te.expr,
                             self.package_items,
+                            stub_ns,
                             &bindings,
                             &mut diags,
                         )
                     })
                     .unwrap_or(Ty::Unknown);
                 drop(diags);
-                return Some(field_ty);
+                return Some(BuiltinResolution::Field(field_ty));
             }
         }
 
@@ -2354,15 +3083,31 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Look up enum variants from the package items (via item tree).
+    ///
+    /// Uses the enum's qualified package to find it in the correct package,
+    /// not just the current file's package.
     fn lookup_enum_variants(&self, enum_name: &crate::ty::QualifiedTypeName) -> Vec<Name> {
+        let db = self.context.db();
         let short = Self::unqualify(enum_name);
-        if let Some(def) = self.package_items.lookup_type(&[short]) {
-            if let Definition::Enum(enum_loc) = def {
-                let file = enum_loc.file(self.context.db());
-                let item_tree = baml_compiler2_ppir::file_item_tree(self.context.db(), file);
-                let enum_data = &item_tree[enum_loc.id(self.context.db())];
-                return enum_data.variants.iter().map(|v| v.name.clone()).collect();
+
+        // Resolve the package that owns the enum via res_ctx.
+        let items = if *enum_name.package() == self.package_id.name(db) {
+            self.package_items
+        } else {
+            match self.res_ctx.items_for_package(db, enum_name.package()) {
+                Some(items) => items,
+                None => return Vec::new(),
             }
+        };
+
+        // Build the lookup path: namespace segments + enum name.
+        let mut lookup_path: Vec<Name> = enum_name.namespace().clone();
+        lookup_path.push(short);
+        if let Some(Definition::Enum(enum_loc)) = items.lookup_type(&lookup_path) {
+            let file = enum_loc.file(db);
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            let enum_data = &item_tree[enum_loc.id(db)];
+            return enum_data.variants.iter().map(|v| v.name.clone()).collect();
         }
         Vec::new()
     }
@@ -2428,7 +3173,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 };
 
                 let arg_ty = self.infer_expr(args[0], body);
-                let widened_arg = arg_ty.clone().widen_fresh();
+                let widened_arg = arg_ty.widen_fresh();
 
                 if matches!(**elem_ty, Ty::Never) {
                     let new_ty = if is_evolving {
@@ -2447,6 +3192,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                         Vec::new(),
                     );
                 }
+
+                // Record a MethodResolution so MIR emits a proper method call
+                // instead of a dynamic map lookup.
+                let effective_elem = match &local_ty {
+                    Ty::EvolvingList(e) | Ty::List(e) => e.as_ref().clone(),
+                    _ => Ty::Unknown,
+                };
+                self.resolve_builtin_member(&["Array"], &[effective_elem], &method_name, callee_id);
 
                 self.record_expr_type(base_id, local_ty);
                 self.record_expr_type(callee_id, Ty::Unknown);
@@ -2475,9 +3228,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             _ => return false,
         };
 
-        let local_name = match self.expr_local_name(base_id, body) {
-            Some(n) => n,
-            None => return false,
+        let Some(local_name) = self.expr_local_name(base_id, body) else {
+            return false;
         };
         let local_ty = match self.locals.get(&local_name) {
             Some(ty) => ty.clone(),
@@ -2524,12 +3276,9 @@ impl<'db> TypeInferenceBuilder<'db> {
 
                 if matches!(**key_ty, Ty::Never) && matches!(**val_ty, Ty::Never) {
                     let new_ty = if is_evolving {
-                        Ty::EvolvingMap(
-                            Box::new(widened_key.clone()),
-                            Box::new(widened_val.clone()),
-                        )
+                        Ty::EvolvingMap(Box::new(widened_key), Box::new(widened_val.clone()))
                     } else {
-                        Ty::Map(Box::new(widened_key.clone()), Box::new(widened_val.clone()))
+                        Ty::Map(Box::new(widened_key), Box::new(widened_val.clone()))
                     };
                     self.locals.insert(local_name, new_ty);
                 } else {
@@ -2537,7 +3286,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         self.context.report(
                             TirTypeError::TypeMismatch {
                                 expected: *key_ty.clone(),
-                                got: widened_key.clone(),
+                                got: widened_key,
                             },
                             index_id,
                             Vec::new(),
@@ -2565,7 +3314,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn join_types(&self, a: &Ty, b: &Ty) -> Ty {
+    fn join_types(a: &Ty, b: &Ty) -> Ty {
         if matches!(a, Ty::Never) {
             return b.clone();
         }
@@ -2606,14 +3355,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn join_all(&self, types: &[Ty]) -> Ty {
+    fn join_all(types: &[Ty]) -> Ty {
         if types.is_empty() {
             return Ty::Never;
         }
         types
             .iter()
             .skip(1)
-            .fold(types[0].clone(), |acc, t| self.join_types(&acc, t))
+            .fold(types[0].clone(), |acc, t| Self::join_types(&acc, t))
     }
 
     /// Subtype check — delegates to the normalizer which resolves type aliases
@@ -2624,16 +3373,16 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     fn infer_binary_op(
         &mut self,
-        op: &baml_compiler2_ast::BinaryOp,
+        op: baml_compiler2_ast::BinaryOp,
         lhs: &Ty,
         rhs: &Ty,
         at: ExprId,
     ) -> Ty {
+        use baml_compiler2_ast::BinaryOp;
         // Try constant folding on two literals first.
         if let Some(folded) = Self::try_fold_binary(op, lhs, rhs) {
             return folded;
         }
-        use baml_compiler2_ast::BinaryOp;
         match op {
             // Comparison / equality → bool
             BinaryOp::Eq
@@ -2656,7 +3405,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 {
                     self.context.report_simple(
                         TirTypeError::InvalidBinaryOp {
-                            op: op.clone(),
+                            op,
                             lhs: lhs.clone(),
                             rhs: rhs.clone(),
                         },
@@ -2679,7 +3428,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// String concatenation is only valid for `Add`; other arithmetic ops on
     /// strings are invalid and return `Unknown` (triggering an error upstream).
-    fn infer_arithmetic(op: &baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Ty {
+    fn infer_arithmetic(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Ty {
         let base_ty = |ty: &Ty| -> Option<PrimitiveType> {
             match ty {
                 Ty::Primitive(p) => Some(p.clone()),
@@ -2706,7 +3455,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    fn infer_unary_op(&mut self, op: &baml_compiler2_ast::UnaryOp, operand: &Ty, at: ExprId) -> Ty {
+    fn infer_unary_op(&mut self, op: baml_compiler2_ast::UnaryOp, operand: &Ty, at: ExprId) -> Ty {
         // Try constant folding on a literal first.
         if let Some(folded) = Self::try_fold_unary(op, operand) {
             return folded;
@@ -2720,7 +3469,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 _ => {
                     self.context.report_simple(
                         TirTypeError::InvalidUnaryOp {
-                            op: op.clone(),
+                            op,
                             operand: operand.clone(),
                         },
                         at,
@@ -2742,7 +3491,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Try to fold a unary operation on a literal into a new literal.
-    fn try_fold_unary(op: &baml_compiler2_ast::UnaryOp, operand: &Ty) -> Option<Ty> {
+    fn try_fold_unary(op: baml_compiler2_ast::UnaryOp, operand: &Ty) -> Option<Ty> {
         use crate::ty::LiteralValue;
         let (lit, f) = match operand {
             Ty::Literal(lit, f) => (lit, *f),
@@ -2765,7 +3514,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Try to fold a binary operation on two literals into a new literal.
-    fn try_fold_binary(op: &baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Option<Ty> {
+    fn try_fold_binary(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Option<Ty> {
         use baml_compiler2_ast::BinaryOp;
 
         use crate::ty::LiteralValue;
@@ -2824,7 +3573,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 BinaryOp::Mod if b != 0.0 => {
                     Some(Ty::Literal(LiteralValue::Float(format_float(a % b)?), f))
                 }
+                #[allow(clippy::float_cmp)] // Intentional: folding literal float equality
                 BinaryOp::Eq => Some(Ty::Literal(LiteralValue::Bool(a == b), f)),
+                #[allow(clippy::float_cmp)] // Intentional: folding literal float inequality
                 BinaryOp::Ne => Some(Ty::Literal(LiteralValue::Bool(a != b), f)),
                 BinaryOp::Lt => Some(Ty::Literal(LiteralValue::Bool(a < b), f)),
                 BinaryOp::Le => Some(Ty::Literal(LiteralValue::Bool(a <= b), f)),
@@ -2863,7 +3614,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         None
     }
 
-    fn assign_op_to_binary_op(op: &baml_compiler2_ast::AssignOp) -> baml_compiler2_ast::BinaryOp {
+    fn assign_op_to_binary_op(op: baml_compiler2_ast::AssignOp) -> baml_compiler2_ast::BinaryOp {
         use baml_compiler2_ast::{AssignOp, BinaryOp};
         match op {
             AssignOp::Add => BinaryOp::Add,

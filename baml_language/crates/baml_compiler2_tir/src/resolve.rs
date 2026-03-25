@@ -12,7 +12,6 @@ use baml_base::{Name, SourceFile};
 use baml_compiler2_hir::{
     contributions::Definition, package::PackageId, scope::ScopeKind, semantic_index::DefinitionSite,
 };
-use baml_compiler2_ppir::package_items;
 use text_size::TextSize;
 
 /// What a name resolves to — produced on demand, NOT stored in a map.
@@ -21,8 +20,8 @@ use text_size::TextSize;
 /// 1. Let-bindings in the current scope (`ScopeBindings::bindings`)
 /// 2. Parameters of the enclosing Function/Lambda scope (`ScopeBindings::params`)
 /// 3. Walk ancestor scopes repeating 1-2
-/// 4. Package-level names via `package_items` (functions, classes, enums, type aliases)
-/// 5. Builtin package names (`baml`, `env`)
+/// 4. Package-level names in the file's own namespace via `package_items`
+/// 5. Builtin package names (`baml`)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedName<'db> {
     /// Local variable (let binding or parameter).
@@ -32,7 +31,7 @@ pub enum ResolvedName<'db> {
     },
     /// A top-level item from `package_items`.
     Item(Definition<'db>),
-    /// A builtin function/type from the `baml` or `env` packages.
+    /// A builtin function/type from the `baml` package.
     Builtin(Definition<'db>),
     /// Could not resolve.
     Unknown,
@@ -50,7 +49,7 @@ pub fn resolve_name_at<'db>(
     name: &Name,
 ) -> ResolvedName<'db> {
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let scope_id = index.scope_at_offset(at_offset);
+    let scope_id = index.scope_at_offset(at_offset, None);
 
     // Walk ancestor scopes from innermost to outermost
     for ancestor_id in index.ancestor_scopes(scope_id) {
@@ -88,30 +87,37 @@ pub fn resolve_name_at<'db>(
             }
         }
 
-        // At File/Package scope, check package_items
+        // At File/Package scope, check package_items via PackageResolutionContext
         if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
             let pkg_id = PackageId::new(db, pkg_info.package.clone());
-            let pkg_items = package_items(db, pkg_id);
+            let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
+            let pkg_items = res_ctx.own_items;
 
-            // Check value namespace first (functions, template strings)
-            if let Some(def) = pkg_items.lookup_value(&[name.clone()]) {
+            // Build the lookup path: [namespace_path..., name].
+            // For files with non-empty namespace_path (e.g. ["llm"]),
+            // this resolves bare names only within that namespace.
+            // For root namespace files (namespace_path == []), this is
+            // equivalent to the previous [name] lookup.
+            let mut full_path: Vec<Name> = pkg_info.namespace_path.clone();
+            full_path.push(name.clone());
+
+            if let Some(def) = pkg_items.lookup_value(&full_path) {
                 return ResolvedName::Item(def);
             }
-            // Check type namespace (classes, enums, type aliases)
-            if let Some(def) = pkg_items.lookup_type(&[name.clone()]) {
+            if let Some(def) = pkg_items.lookup_type(&full_path) {
                 return ResolvedName::Item(def);
             }
 
-            // Check builtin packages (baml, env)
-            for builtin_pkg_name in &["baml", "env"] {
-                let builtin_pkg_id = PackageId::new(db, Name::new(*builtin_pkg_name));
-                let builtin_items = package_items(db, builtin_pkg_id);
-                if let Some(def) = builtin_items.lookup_value(&[name.clone()]) {
-                    return ResolvedName::Builtin(def);
-                }
-                if let Some(def) = builtin_items.lookup_type(&[name.clone()]) {
-                    return ResolvedName::Builtin(def);
+            // Check declared dependencies (e.g. `baml` builtins) via res_ctx.
+            for (dep_name, _) in &res_ctx.dep_interfaces {
+                if let Some(dep_items) = res_ctx.items_for_package(db, dep_name) {
+                    if let Some(def) = dep_items.lookup_value(std::slice::from_ref(name)) {
+                        return ResolvedName::Builtin(def);
+                    }
+                    if let Some(def) = dep_items.lookup_type(std::slice::from_ref(name)) {
+                        return ResolvedName::Builtin(def);
+                    }
                 }
             }
         }
@@ -122,8 +128,11 @@ pub fn resolve_name_at<'db>(
 
 /// Resolve a path expression at a given position.
 ///
-/// After AST lowering, paths are always single-segment (bare identifiers).
-/// Multi-segment paths like `Color.Red` are desugared to FieldAccess chains.
+/// Single-segment paths are resolved via `resolve_name_at`.
+/// Multi-segment paths are resolved by treating the first segment as either:
+/// - `root` — substituted with the current file's package
+/// - a literal package name (e.g. `baml`)
+///   The remaining segments are looked up inside that package.
 pub fn resolve_path_at<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -134,11 +143,35 @@ pub fn resolve_path_at<'db>(
         return ResolvedName::Unknown;
     }
 
-    debug_assert!(
-        segments.len() == 1,
-        "multi-segment Path should have been desugared to FieldAccess: {:?}",
-        segments
-    );
+    if segments.len() == 1 {
+        return resolve_name_at(db, file, at_offset, &segments[0]);
+    }
 
-    resolve_name_at(db, file, at_offset, &segments[0])
+    // First segment: `root` maps to the current file's package,
+    // anything else is a literal package name.
+    let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+    let pkg_name = if segments[0].as_str() == "root" {
+        pkg_info.package.clone()
+    } else {
+        segments[0].clone()
+    };
+
+    // Use PackageResolutionContext to validate access to the target package.
+    let own_pkg_id = PackageId::new(db, pkg_info.package);
+    let res_ctx = crate::package_interface::package_resolution_context(db, own_pkg_id);
+
+    let Some(pkg_items) = res_ctx.items_for_package(db, &pkg_name) else {
+        return ResolvedName::Unknown;
+    };
+
+    let after_pkg = &segments[1..];
+
+    if let Some(def) = pkg_items.lookup_value(after_pkg) {
+        return ResolvedName::Builtin(def);
+    }
+    if let Some(def) = pkg_items.lookup_type(after_pkg) {
+        return ResolvedName::Builtin(def);
+    }
+
+    ResolvedName::Unknown
 }

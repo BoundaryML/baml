@@ -1,13 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
-  [type] Error: Unknown variable `baml`
-    ╭─[ fetch_as.baml:10:17 ]
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unresolved name: baml
+    ╭─[ fetch_as.baml:10:16 ]
     │
  10 │         method: baml.HttpMethod.Get,
-    │                 ─────────┬─────────  
-    │                          ╰─────────── Unknown variable `baml`
+    │                ──────────┬─────────  
+    │                          ╰─────────── unresolved name: baml
     │ 
-    │ Note: Error code: E0003
+    │ Note: Error code: E0001
 ────╯

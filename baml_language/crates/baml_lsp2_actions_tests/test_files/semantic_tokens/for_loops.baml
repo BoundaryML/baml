@@ -16,12 +16,12 @@ function ForInLoop() -> int {
 
 //----
 //- diagnostics
-// Error: unresolved name: x
-//     ╭─[ for_loops.baml:12:17 ]
+// Error: operator `Add` cannot be applied to `int` and `1 | 2 | 3`
+//     ╭─[ for_loops.baml:12:11 ]
 //     │
 //  12 │     sum = sum + x;
-//     │                 ┬  
-//     │                 ╰── unresolved name: x
+//     │           ───┬───  
+//     │              ╰───── operator `Add` cannot be applied to `int` and `1 | 2 | 3`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

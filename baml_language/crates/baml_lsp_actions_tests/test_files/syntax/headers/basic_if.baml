@@ -17,12 +17,12 @@ function BasicIf() -> string {
 
 //----
 //- diagnostics
-// Error: Expected `string`, found `int`
+// Error: type mismatch: expected string, got 12 | 13
 //     ╭─[ headers_basic_if.baml:14:5 ]
 //     │
 //  14 │     z
 //     │     ┬  
-//     │     ╰── Expected `string`, found `int`
+//     │     ╰── type mismatch: expected string, got 12 | 13
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

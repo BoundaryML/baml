@@ -46,12 +46,3 @@ class Foo {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
-// Error: Field `ETA` in class `Foo` has the same name as its type `ETA`, which is not supported in generated Python code.
-//     ╭─[ class_generator_keywords1.baml:13:5 ]
-//     │
-//  13 │     ETA ETA?
-//     │     ─┬─  
-//     │      ╰─── Field `ETA` in class `Foo` has the same name as its type `ETA`, which is not supported in generated Python code.
-//     │ 
-//     │ Note: Error code: E0021
-// ────╯

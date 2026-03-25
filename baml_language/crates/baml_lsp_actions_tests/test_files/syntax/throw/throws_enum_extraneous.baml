@@ -12,12 +12,21 @@ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
 
 //----
 //- diagnostics
-// Warning: `throws` declaration includes types the function never throws: Errors.InternalError, Errors.NotFoundError
-//    ╭─[ throw_throws_enum_extraneous.baml:9:43 ]
+// Error: extraneous throws declaration: user.Errors
+//    ╭─[ throw_throws_enum_extraneous.baml:9:57 ]
 //    │
 //  9 │ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
-//    │                                           ───┬───  
-//    │                                              ╰───── `throws` declaration includes types the function never throws: Errors.InternalError, Errors.NotFoundError
+//    │                                                         ───┬───  
+//    │                                                            ╰───── extraneous throws declaration: user.Errors
 //    │ 
-//    │ Note: Error code: E0097
+//    │ Note: Error code: E0001
+// ───╯
+// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
+//    ╭─[ throw_throws_enum_extraneous.baml:9:57 ]
+//    │
+//  9 │ function ThrowsEnumExtraneous(x: int) -> string throws Errors {
+//    │                                                         ───┬───  
+//    │                                                            ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError
+//    │ 
+//    │ Note: Error code: E0001
 // ───╯

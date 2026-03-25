@@ -12,4 +12,12 @@ function TestLiteralMismatch() -> int {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: type mismatch: expected 4, got 3
+//    ╭─[ expr_fn_arg_type_error.baml:9:18 ]
+//    │
+//  9 │   let y = Takes4(3);
+//    │                  ┬  
+//    │                  ╰── type mismatch: expected 4, got 3
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯

@@ -1,137 +1,54 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function FormatMessage(name: string) -> string {
-    baml.llm.call_llm_function("FormatMessage", { "name": name })
-}
-
-function FormatMessage.render_prompt(name: string) -> baml.llm.PromptAst {
-    baml.llm.render_prompt("FormatMessage", { "name": name })
-}
-
-function FormatMessage.build_request(name: string) -> baml.http.Request {
-    baml.llm.build_request("FormatMessage", { "name": name })
-}
-
-class NestedQuotes {
+=== HIR2 ===
+class user.NestedQuotes {
   single_in_double: string
   double_in_single: string
-  She: said
+  She: user.said
   hello: "')
   escaped_in_escaped string @alias("
-  The: <unknown>
-  quote: <unknown>
-  is: here
+  The: ?
+  quote: ?
+  is: user.here
   complex_nesting: string
   json_like: string
 }
-
-class stream_NestedQuotes {
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  single_in_double: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  double_in_single: null | string
-
-  She: null | said
-  hello: never | "')
-  escaped_in_escaped string @alias("
-  The: <unknown>
-  sap: <unknown>
-  class_completed_field_missing: null
-  quote: <unknown>
-  sap: <unknown>
-  class_completed_field_missing: null
-  is: null | here
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  complex_nesting: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  json_like: null | string
+function user.FormatMessage(name: string) -> string  [llm] {
+  baml.llm.call_llm_function(GPT4, "FormatMessage", map { "name": name })
 }
-
-function ProcessText.build_request(input: string) -> baml.http.Request {
-    baml.llm.build_request("ProcessText", { "input": input })
+function user.FormatMessage$build_request(name: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request(GPT4, "FormatMessage", map { "name": name })
 }
-
-function ProcessText.render_prompt(input: string) -> baml.llm.PromptAst {
-    baml.llm.render_prompt("ProcessText", { "input": input })
+function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(GPT4, "FormatMessage", map { "name": name })
 }
-
-function ProcessText(input: string) -> string {
-    baml.llm.call_llm_function("ProcessText", { "input": input })
-}
-
-class RawStrings {
+class user.RawStrings {
   simple: string
   with_quotes: string
   multi_hash: string
   multiline: string
 }
-
-class stream_RawStrings {
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  simple: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  with_quotes: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  multi_hash: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  multiline: null | string
+function user.ProcessText(input: string) -> string  [llm] {
+  baml.llm.call_llm_function(GPT4, "ProcessText", map { "input": input })
 }
-
-function GetRole() -> "admin" | "user" | "guest" {
-    return "user";
+function user.ProcessText$build_request(input: string) -> baml.http.Request  [expr] {
+  baml.llm.build_request(GPT4, "ProcessText", map { "input": input })
 }
-
-class Messages {
+function user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(GPT4, "ProcessText", map { "input": input })
+}
+class user.Messages {
   greeting: string
   empty: string
   with_spaces: string
   with_escapes: string
   with_quotes: string
 }
-
-class stream_Messages {
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  greeting: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  empty: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  with_spaces: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  with_escapes: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  with_quotes: null | string
+function user.GetRole() -> "admin" | "user" | "guest"  [expr] {
+  { return "user" }
 }
-
-function GPT4.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("GPT4", "unknown", "system", ["system", "user", "assistant"], {  })
-}
-
-class UnicodeStrings {
+class user.UnicodeStrings {
   emoji_basic: string
   emoji_multiple: string
   emoji_in_text: string
@@ -144,58 +61,4 @@ class UnicodeStrings {
   arrows: string
   zero_width: string
   rtl_override: string
-}
-
-client GPT4 {
-  provider: unknown
-}
-
-class stream_UnicodeStrings {
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  emoji_basic: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  emoji_multiple: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  emoji_in_text: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  chinese: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  arabic: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  japanese: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  russian: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  math_symbols: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  currency: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  arrows: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  zero_width: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  rtl_override: null | string
 }

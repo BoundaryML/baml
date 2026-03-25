@@ -18,6 +18,7 @@ export interface DiagnosticEntry {
 export interface ProjectUpdate {
   isBexCurrent: boolean;
   functions: string[];
+  diagnostics: DiagnosticEntry[];
 }
 
 export type PlaygroundNotification =

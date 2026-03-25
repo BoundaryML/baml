@@ -31,4 +31,4 @@ function qux() -> () {
 // <no-diagnostics-expected>
 //
 //- inlay_hints
-// <no-inlay-hints>
+// for_loops.baml:12:15 (Type) ": int"

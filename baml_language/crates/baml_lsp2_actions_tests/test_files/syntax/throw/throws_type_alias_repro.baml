@@ -31,20 +31,20 @@ function getProfile(req: Request) -> bool throws Errors {
 //----
 //- diagnostics
 // Error: unreachable arm
-//     ╭─[ throw_throws_type_alias_repro.baml:23:9 ]
+//     ╭─[ throw_throws_type_alias_repro.baml:22:34 ]
 //     │
-//  23 │     _ => { false }
-//     │         ─────┬────  
-//     │              ╰────── unreachable arm
+//  22 │     Errors.AuthenticationError => { throw e }
+//     │                                  ──────┬─────  
+//     │                                        ╰─────── unreachable arm
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: extraneous throws declaration: Errors
+// Error: extraneous throws declaration: user.Errors
 //     ╭─[ throw_throws_type_alias_repro.baml:27:49 ]
 //     │
 //  27 │ function getProfile(req: Request) -> bool throws Errors {
 //     │                                                 ───┬───  
-//     │                                                    ╰───── extraneous throws declaration: Errors
+//     │                                                    ╰───── extraneous throws declaration: user.Errors
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

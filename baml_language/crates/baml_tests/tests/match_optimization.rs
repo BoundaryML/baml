@@ -36,19 +36,19 @@ async fn match_jump_table_first_arm() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 3
         load_const 103
         jump L5
 
-      L2:
+      L2: 2
         load_const 102
         jump L5
 
-      L3:
+      L3: 1
         load_const 101
         jump L5
 
-      L4:
+      L4: 0
         load_const 100
 
       L5:
@@ -85,19 +85,19 @@ async fn match_jump_table_middle_arm() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 3
         load_const 103
         jump L5
 
-      L2:
+      L2: 2
         load_const 102
         jump L5
 
-      L3:
+      L3: 1
         load_const 101
         jump L5
 
-      L4:
+      L4: 0
         load_const 100
 
       L5:
@@ -134,19 +134,19 @@ async fn match_jump_table_last_arm() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 3
         load_const 103
         jump L5
 
-      L2:
+      L2: 2
         load_const 102
         jump L5
 
-      L3:
+      L3: 1
         load_const 101
         jump L5
 
-      L4:
+      L4: 0
         load_const 100
 
       L5:
@@ -183,19 +183,19 @@ async fn match_jump_table_fallback() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 3
         load_const 103
         jump L5
 
-      L2:
+      L2: 2
         load_const 102
         jump L5
 
-      L3:
+      L3: 1
         load_const 101
         jump L5
 
-      L4:
+      L4: 0
         load_const 100
 
       L5:
@@ -233,19 +233,19 @@ async fn match_jump_table_negative_fallback() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 3
         load_const 103
         jump L5
 
-      L2:
+      L2: 2
         load_const 102
         jump L5
 
-      L3:
+      L3: 1
         load_const 101
         jump L5
 
-      L4:
+      L4: 0
         load_const 100
 
       L5:
@@ -284,19 +284,19 @@ async fn match_jump_table_with_holes_miss() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 6
         load_const 106
         jump L5
 
-      L2:
+      L2: 4
         load_const 104
         jump L5
 
-      L3:
+      L3: 2
         load_const 102
         jump L5
 
-      L4:
+      L4: 0
         load_const 100
 
       L5:
@@ -333,19 +333,19 @@ async fn match_jump_table_with_holes_hit() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 6
         load_const 106
         jump L5
 
-      L2:
+      L2: 4
         load_const 104
         jump L5
 
-      L3:
+      L3: 2
         load_const 102
         jump L5
 
-      L4:
+      L4: 0
         load_const 100
 
       L5:
@@ -383,19 +383,19 @@ async fn match_jump_table_offset_values() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 13
         load_const 113
         jump L5
 
-      L2:
+      L2: 12
         load_const 112
         jump L5
 
-      L3:
+      L3: 11
         load_const 111
         jump L5
 
-      L4:
+      L4: 10
         load_const 110
 
       L5:
@@ -437,35 +437,35 @@ async fn match_jump_table_large() {
         load_const 9999
         jump L9
 
-      L1:
+      L1: 7
         load_const 1007
         jump L9
 
-      L2:
+      L2: 6
         load_const 1006
         jump L9
 
-      L3:
+      L3: 5
         load_const 1005
         jump L9
 
-      L4:
+      L4: 4
         load_const 1004
         jump L9
 
-      L5:
+      L5: 3
         load_const 1003
         jump L9
 
-      L6:
+      L6: 2
         load_const 1002
         jump L9
 
-      L7:
+      L7: 1
         load_const 1001
         jump L9
 
-      L8:
+      L8: 0
         load_const 1000
 
       L9:
@@ -505,19 +505,19 @@ async fn match_jump_table_dense_four_arms_param() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 3
         load_const 103
         jump L5
 
-      L2:
+      L2: 2
         load_const 102
         jump L5
 
-      L3:
+      L3: 1
         load_const 101
         jump L5
 
-      L4:
+      L4: 0
         load_const 100
 
       L5:
@@ -1248,19 +1248,19 @@ async fn match_density_exactly_50_percent() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 6
         load_const 106
         jump L5
 
-      L2:
+      L2: 4
         load_const 104
         jump L5
 
-      L3:
+      L3: 2
         load_const 102
         jump L5
 
-      L4:
+      L4: 0
         load_const 100
 
       L5:
@@ -1383,23 +1383,23 @@ async fn match_density_above_50_percent() {
         load_const 999
         jump L6
 
-      L1:
+      L1: 5
         load_const 105
         jump L6
 
-      L2:
+      L2: 4
         load_const 104
         jump L6
 
-      L3:
+      L3: 2
         load_const 102
         jump L6
 
-      L4:
+      L4: 1
         load_const 101
         jump L6
 
-      L5:
+      L5: 0
         load_const 100
 
       L6:
@@ -1441,19 +1441,19 @@ async fn match_large_range_dense() {
         load_const 9999
         jump L5
 
-      L1:
+      L1: 103
         load_const 1003
         jump L5
 
-      L2:
+      L2: 102
         load_const 1002
         jump L5
 
-      L3:
+      L3: 101
         load_const 1001
         jump L5
 
-      L4:
+      L4: 100
         load_const 1000
 
       L5:
@@ -1574,19 +1574,19 @@ async fn match_zero_in_range() {
         load_const 999
         jump L5
 
-      L1:
+      L1: 3
         load_const 103
         jump L5
 
-      L2:
+      L2: 2
         load_const 102
         jump L5
 
-      L3:
+      L3: 1
         load_const 101
         jump L5
 
-      L4:
+      L4: 0
         load_const 100
 
       L5:
@@ -1630,19 +1630,19 @@ async fn match_negative_jump_table() {
         load_const "other"
         jump L5
 
-      L1:
+      L1: 0
         load_const "zero"
         jump L5
 
-      L2:
+      L2: -1
         load_const "neg one"
         jump L5
 
-      L3:
+      L3: -2
         load_const "neg two"
         jump L5
 
-      L4:
+      L4: -3
         load_const "neg three"
 
       L5:
@@ -1652,7 +1652,7 @@ async fn match_negative_jump_table() {
     function main() -> string {
         load_const 2
         unary_op -
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -1691,19 +1691,19 @@ async fn match_negative_jump_table_fallback() {
         load_const "other"
         jump L5
 
-      L1:
+      L1: 0
         load_const "zero"
         jump L5
 
-      L2:
+      L2: -1
         load_const "neg one"
         jump L5
 
-      L3:
+      L3: -2
         load_const "neg two"
         jump L5
 
-      L4:
+      L4: -3
         load_const "neg three"
 
       L5:
@@ -1712,7 +1712,7 @@ async fn match_negative_jump_table_fallback() {
 
     function main() -> string {
         load_const 5
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -1756,23 +1756,23 @@ async fn match_spanning_zero_jump_table() {
         load_const "other"
         jump L6
 
-      L1:
+      L1: 2
         load_const "two"
         jump L6
 
-      L2:
+      L2: 1
         load_const "one"
         jump L6
 
-      L3:
+      L3: 0
         load_const "zero"
         jump L6
 
-      L4:
+      L4: -1
         load_const "neg one"
         jump L6
 
-      L5:
+      L5: -2
         load_const "neg two"
 
       L6:
@@ -1781,7 +1781,7 @@ async fn match_spanning_zero_jump_table() {
 
     function main() -> string {
         load_const 1
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -1821,23 +1821,23 @@ async fn match_spanning_zero_negative_hit() {
         load_const "other"
         jump L6
 
-      L1:
+      L1: 2
         load_const "two"
         jump L6
 
-      L2:
+      L2: 1
         load_const "one"
         jump L6
 
-      L3:
+      L3: 0
         load_const "zero"
         jump L6
 
-      L4:
+      L4: -1
         load_const "neg one"
         jump L6
 
-      L5:
+      L5: -2
         load_const "neg two"
 
       L6:
@@ -1847,7 +1847,7 @@ async fn match_spanning_zero_negative_hit() {
     function main() -> string {
         load_const 1
         unary_op -
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -1946,7 +1946,7 @@ async fn match_binary_search_negative_sparse() {
     function main() -> string {
         load_const 50
         unary_op -
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -2037,7 +2037,7 @@ async fn match_binary_search_spanning_zero_sparse() {
 
     function main() -> string {
         load_const 1
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -2080,19 +2080,19 @@ async fn match_union_aggregated_jump_table() {
         load_const "other"
         jump L5
 
-      L1:
+      L1: 7
         load_const "d"
         jump L5
 
-      L2:
+      L2: 5
         load_const "c"
         jump L5
 
-      L3:
+      L3: 3
         load_const "b"
         jump L5
 
-      L4:
+      L4: 1
         load_const "a"
 
       L5:
@@ -2135,19 +2135,19 @@ async fn match_range_at_limit_uses_jump_table() {
         load_const 0
         jump L5
 
-      L1:
+      L1: 255
         load_const 4
         jump L5
 
-      L2:
+      L2: 254
         load_const 3
         jump L5
 
-      L3:
+      L3: 253
         load_const 2
         jump L5
 
-      L4:
+      L4: 252
         load_const 1
 
       L5:
@@ -2281,43 +2281,43 @@ async fn match_large_jump_table() {
         load_const 999
         jump L11
 
-      L1:
+      L1: 9
         load_const 109
         jump L11
 
-      L2:
+      L2: 8
         load_const 108
         jump L11
 
-      L3:
+      L3: 7
         load_const 107
         jump L11
 
-      L4:
+      L4: 6
         load_const 106
         jump L11
 
-      L5:
+      L5: 5
         load_const 105
         jump L11
 
-      L6:
+      L6: 4
         load_const 104
         jump L11
 
-      L7:
+      L7: 3
         load_const 103
         jump L11
 
-      L8:
+      L8: 2
         load_const 102
         jump L11
 
-      L9:
+      L9: 1
         load_const 101
         jump L11
 
-      L10:
+      L10: 0
         load_const 100
 
       L11:

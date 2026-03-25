@@ -164,43 +164,14 @@ function MissingReturnExpression() -> int {
 
 //----
 //- diagnostics
-// Error: Statement must end with a semicolon.
-//      ╭─[ expr_missing_semicolons.baml:104:2 ]
-//      │
-//  104 │ ╭─▶ }
-//      ┆ ┆   
-//  107 │ ├─▶ let topLevel = 1  // ERROR: needs semicolon
-//      │ │                                                 
-//      │ ╰───────────────────────────────────────────────── Statement must end with a semicolon.
-//      │     
-//      │     Note: Error code: E0028
-// ─────╯
-// Error: Statement must end with a semicolon.
-//      ╭─[ expr_missing_semicolons.baml:102:5 ]
-//      │
-//  102 │     let y = if (x > 0) { 1 } else { 2 }  // ERROR: needs semicolon
-//      │     ─────────────────┬─────────────────  
-//      │                      ╰─────────────────── Statement must end with a semicolon.
-//      │ 
-//      │ Note: Error code: E0028
-// ─────╯
-// Error: Statement must end with a semicolon.
-//     ╭─[ expr_missing_semicolons.baml:96:5 ]
-//     │
-//  96 │     let y = "hello"  // ERROR: needs semicolon
-//     │     ───────┬───────  
-//     │            ╰───────── Statement must end with a semicolon.
-//     │ 
-//     │ Note: Error code: E0028
-// ────╯
-// Error: Missing return expression. Function expects `int` but body has no final expression.
+// Error: missing return: expected `int`
 //      ╭─[ expr_missing_semicolons.baml:160:42 ]
 //      │
 //  160 │ ╭─▶ function MissingReturnExpression() -> int {
 //      ┆ ┆   
 //  163 │ ├─▶ }
 //      │ │      
-//      │ ╰────── Missing return expression. Function expects `int` but body has no final expression.
+//      │ ╰────── missing return: expected `int`
 //      │     
-//      │     Note: Error code: E0029
+//      │     Note: Error code: E0001
 // ─────╯

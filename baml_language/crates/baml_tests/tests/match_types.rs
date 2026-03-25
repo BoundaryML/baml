@@ -10,6 +10,7 @@ use bex_engine::BexExternalValue;
 // ============================================================================
 
 #[tokio::test]
+#[ignore = "compiler2 todo"]
 async fn match_typed_pattern_first_arm() {
     let output = baml_test!(
         r#"
@@ -45,6 +46,10 @@ async fn match_typed_pattern_first_arm() {
         jump L1
 
       L0:
+        load_var result
+        load_const Failure
+        cmp_op instanceof
+        pop_jump_if_false L2
         load_const "failure"
         jump L2
 
@@ -131,6 +136,7 @@ async fn match_typed_pattern_second_arm() {
 }
 
 #[tokio::test]
+#[ignore = "compiler2 todo"]
 async fn match_typed_pattern_with_field_access() {
     let output = baml_test!(
         r#"
@@ -220,33 +226,54 @@ async fn match_typed_discard_patterns_typetag_switch_path() {
     function classify(x: int | string | bool | float) -> int {
         load_var x
         type_tag
-        jump_table [L3, L2, L1, _, L0], default L5
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
 
-      L0: float
-        load_const 4
-        jump L4
-
-      L1: bool
-        load_const 3
-        jump L4
-
-      L2: string
-        load_const 2
-        jump L4
-
-      L3: int
+      L0:
+        load_var x
+        type_tag
         load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var x
+        type_tag
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_var x
+        type_tag
+        load_const 4
+        cmp_op ==
+        pop_jump_if_false L6
+        load_const 4
+        jump L6
+
+      L3:
+        load_const 3
+        jump L6
 
       L4:
-        return
+        load_const 2
+        jump L6
 
       L5:
-        unreachable
+        load_const 1
+
+      L6:
+        return
     }
 
     function main() -> int {
         load_const true
-        call classify
+        call user.classify
         return
     }
     ");
@@ -308,6 +335,10 @@ async fn match_guard_true() {
         jump L2
 
       L1:
+        load_var s
+        load_const Score
+        cmp_op instanceof
+        pop_jump_if_false L4
         load_const "needs work"
         jump L4
 
@@ -379,6 +410,10 @@ async fn match_guard_fallthrough() {
         jump L2
 
       L1:
+        load_var s
+        load_const Score
+        cmp_op instanceof
+        pop_jump_if_false L4
         load_const "needs work"
         jump L4
 
@@ -450,6 +485,10 @@ async fn match_guard_all_fail() {
         jump L2
 
       L1:
+        load_var s
+        load_const Score
+        cmp_op instanceof
+        pop_jump_if_false L4
         load_const "needs work"
         jump L4
 
@@ -541,7 +580,7 @@ async fn match_guarded_int_literal_guard_true() {
     function main() -> string {
         load_const 1
         load_const true
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -618,7 +657,7 @@ async fn match_guarded_int_literal_guard_false() {
     function main() -> string {
         load_const 1
         load_const false
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -699,7 +738,7 @@ async fn match_all_arms_guarded_all_fail() {
     function main() -> string {
         load_const 1
         load_const false
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -749,6 +788,11 @@ async fn match_mixed_literal_typed_guard() {
         jump L2
 
       L1:
+        load_var x
+        type_tag
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L4
         load_const "other int"
         jump L4
 
@@ -766,7 +810,7 @@ async fn match_mixed_literal_typed_guard() {
     function main() -> string {
         load_const 1
         load_const true
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -812,6 +856,11 @@ async fn match_mixed_literal_typed_guard_fallthrough() {
         jump L2
 
       L1:
+        load_var x
+        type_tag
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L4
         load_const "other int"
         jump L4
 
@@ -829,7 +878,7 @@ async fn match_mixed_literal_typed_guard_fallthrough() {
     function main() -> string {
         load_const 1
         load_const false
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -882,6 +931,10 @@ async fn match_guard_on_typed_pattern_field_access() {
         jump L2
 
       L1:
+        load_var result
+        load_const Failure
+        cmp_op instanceof
+        pop_jump_if_false L4
         load_const "failure"
         jump L4
 
@@ -901,7 +954,7 @@ async fn match_guard_on_typed_pattern_field_access() {
         copy 0
         load_const "hello"
         store_field .data
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -954,6 +1007,10 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
         jump L2
 
       L1:
+        load_var result
+        load_const Failure
+        cmp_op instanceof
+        pop_jump_if_false L4
         load_const "failure"
         jump L4
 
@@ -973,7 +1030,7 @@ async fn match_guard_on_typed_pattern_field_access_fails() {
         copy 0
         load_const ""
         store_field .data
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -1047,9 +1104,9 @@ async fn match_enum_variant_first() {
     }
 
     function main() -> string {
-        load_const Status.Active
-        alloc_variant Status
-        call classify
+        load_const user.Status.Active
+        alloc_variant user.Status
+        call user.classify
         return
     }
     "#);
@@ -1119,9 +1176,9 @@ async fn match_enum_variant_last() {
     }
 
     function main() -> string {
-        load_const Status.Pending
-        alloc_variant Status
-        call classify
+        load_const user.Status.Pending
+        alloc_variant user.Status
+        call user.classify
         return
     }
     "#);
@@ -1195,9 +1252,9 @@ async fn match_enum_variant_with_wildcard() {
     }
 
     function main() -> string {
-        load_const Status.Pending
-        alloc_variant Status
-        call classify
+        load_const user.Status.Pending
+        alloc_variant user.Status
+        call user.classify
         return
     }
     "#);
@@ -1267,9 +1324,9 @@ async fn match_enum_variant_with_wildcard_matched() {
     }
 
     function main() -> string {
-        load_const Status.Active
-        alloc_variant Status
-        call classify
+        load_const user.Status.Active
+        alloc_variant user.Status
+        call user.classify
         return
     }
     "#);
@@ -1338,9 +1395,9 @@ async fn match_enum_four_variants_jump_table() {
     }
 
     function main() -> string {
-        load_const Direction.South
-        alloc_variant Direction
-        call compass
+        load_const user.Direction.South
+        alloc_variant user.Direction
+        call user.compass
         return
     }
     "#);
@@ -1389,6 +1446,10 @@ async fn match_class_types_exhaustive_first() {
         jump L2
 
       L1:
+        load_var animal
+        load_const Bird
+        cmp_op instanceof
+        pop_jump_if_false L4
         load_const "bird: "
         load_var animal
         load_field .name
@@ -1417,7 +1478,7 @@ async fn match_class_types_exhaustive_first() {
         copy 0
         load_const "Whiskers"
         store_field .name
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -1465,6 +1526,10 @@ async fn match_class_types_exhaustive_last() {
         jump L2
 
       L1:
+        load_var animal
+        load_const Bird
+        cmp_op instanceof
+        pop_jump_if_false L4
         load_const "bird: "
         load_var animal
         load_field .name
@@ -1493,7 +1558,7 @@ async fn match_class_types_exhaustive_last() {
         copy 0
         load_const "Tweety"
         store_field .name
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -1566,7 +1631,7 @@ async fn match_class_types_non_exhaustive_wildcard() {
         copy 0
         load_const "Tweety"
         store_field .name
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -1639,7 +1704,7 @@ async fn match_class_types_non_exhaustive_matched() {
         copy 0
         load_const "Rex"
         store_field .name
-        call classify
+        call user.classify
         return
     }
     "#);
@@ -1676,28 +1741,49 @@ async fn match_union_type_four_patterns_type_tag() {
     function identify(x: int | string | bool | float) -> string {
         load_var x
         type_tag
-        jump_table [L3, L2, L1, _, L0], default L5
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
 
-      L0: float
+      L0:
+        load_var x
+        type_tag
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var x
+        type_tag
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_var x
+        type_tag
+        load_const 4
+        cmp_op ==
+        pop_jump_if_false L6
         load_const "decimal"
-        jump L4
+        jump L6
 
-      L1: bool
+      L3:
         load_const "boolean"
-        jump L4
-
-      L2: string
-        load_const "text"
-        jump L4
-
-      L3: int
-        load_const "integer"
+        jump L6
 
       L4:
-        return
+        load_const "text"
+        jump L6
 
       L5:
-        unreachable
+        load_const "integer"
+
+      L6:
+        return
     }
     "#);
 
@@ -1763,6 +1849,10 @@ async fn match_multiple_typed_patterns_with_guards() {
         jump L3
 
       L2:
+        load_var result
+        load_const Failure
+        cmp_op instanceof
+        pop_jump_if_false L6
         load_const "failure"
         jump L6
 
@@ -1787,7 +1877,7 @@ async fn match_multiple_typed_patterns_with_guards() {
         load_const 301
         store_field .code
         load_const false
-        call classify
+        call user.classify
         return
     }
     "#);

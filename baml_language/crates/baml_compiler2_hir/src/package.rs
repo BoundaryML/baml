@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     contributions::Definition,
-    namespace::{NameConflict, NamespaceId, NamespaceItems, raw_namespace_items},
+    namespace::{NameConflict, NamespaceId, NamespaceItems, namespace_items},
 };
 
 /// Interned package identity.
@@ -93,6 +93,19 @@ impl<'db> PackageItems<'db> {
         None
     }
 
+    /// Look up a type by short name, searching across ALL namespaces.
+    ///
+    /// Use when the caller only has a short name (e.g. `"File"`) without
+    /// knowing which namespace it lives in. Returns the first match found.
+    pub fn lookup_type_any_ns(&self, name: &Name) -> Option<Definition<'db>> {
+        for ns in self.namespaces.values() {
+            if let Some(def) = ns.types.get(name) {
+                return Some(*def);
+            }
+        }
+        None
+    }
+
     /// Look up a value by path segments.
     pub fn lookup_value(&self, path: &[Name]) -> Option<Definition<'db>> {
         if path.is_empty() {
@@ -111,17 +124,13 @@ impl<'db> PackageItems<'db> {
     }
 }
 
-/// Merges all raw `namespace_items` within a package.
-/// Raw = original AST items only, no PPIR expansion.
+/// Merges all `namespace_items` within a package.
 ///
 /// Discovers all unique namespace paths for the package by scanning project
-/// files, then calls `raw_namespace_items` for each — allowing Salsa to cache
+/// files, then calls `namespace_items` for each — allowing Salsa to cache
 /// each namespace's contribution independently.
 #[salsa::tracked(returns(ref))]
-pub fn raw_package_items<'db>(
-    db: &'db dyn crate::Db,
-    package_id: PackageId<'db>,
-) -> PackageItems<'db> {
+pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) -> PackageItems<'db> {
     let package_name = package_id.name(db);
 
     // Discover all unique namespace paths for this package.
@@ -140,7 +149,7 @@ pub fn raw_package_items<'db>(
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
     for ns_path in ns_paths {
         let ns_id = NamespaceId::new(db, package_name.clone(), ns_path.clone());
-        let items = raw_namespace_items(db, ns_id);
+        let items = namespace_items(db, ns_id);
         all_conflicts.extend(items.conflicts().iter().cloned());
         namespaces.insert(ns_path, items.clone());
     }
@@ -156,4 +165,19 @@ pub fn raw_package_items<'db>(
     };
 
     PackageItems { namespaces, extra }
+}
+
+/// Declares the packages that `package_id` depends on.
+/// Currently hardcoded: "user" depends on "baml", everything else depends on nothing.
+#[salsa::tracked(returns(ref))]
+pub fn package_dependencies<'db>(
+    db: &'db dyn crate::Db,
+    package_id: PackageId<'db>,
+) -> Vec<PackageId<'db>> {
+    match package_id.name(db).as_str() {
+        // The "baml" package provides core builtins; every other package
+        // implicitly depends on it.
+        "baml" => vec![],
+        _ => vec![PackageId::new(db, Name::new("baml"))],
+    }
 }

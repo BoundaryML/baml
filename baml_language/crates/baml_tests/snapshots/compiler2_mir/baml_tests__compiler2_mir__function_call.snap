@@ -1,0 +1,36 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.add(a: int, b: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // a // param
+    let _2: int // b // param
+
+    bb0: {
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.f(x: int) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = call const fn user.add(copy _1, const 1_i64) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}

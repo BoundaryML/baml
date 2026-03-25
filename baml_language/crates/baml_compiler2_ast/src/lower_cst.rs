@@ -14,12 +14,14 @@ use baml_compiler_syntax::{SyntaxNode, ast};
 use rowan::ast::AstNode;
 
 use crate::{
+    DeclarativeMeta,
     ast::{
-        BuiltinKind, ClientDef, ConfigItemDef, EnumDef, FieldDef, FunctionBodyDef, FunctionDef,
-        GeneratorDef, Interpolation, Item, LlmBodyDef, Param, RawAttribute, RawAttributeArg,
-        RawPrompt, RetryPolicyDef, SpannedTypeExpr, TemplateStringDef, TestDef, TypeAliasDef,
-        VariantDef,
+        AstSourceMap, BuiltinKind, ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef,
+        FunctionBodyDef, FunctionDef, GeneratorDef, Interpolation, Item, LetDef, LetOrigin,
+        LlmBodyDef, Param, RawAttribute, RawAttributeArg, RawPrompt, SpannedTypeExpr,
+        TemplateStringDef, TestDef, TypeAliasDef, VariantDef,
     },
+    companions::expand_companions,
     lower_expr_body, lower_type_expr,
 };
 
@@ -37,7 +39,9 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<HirDiagnostic>) {
         match child.kind() {
             baml_compiler_syntax::SyntaxKind::FUNCTION_DEF => {
                 if let Some(func) = lower_function(&child) {
+                    let companions = expand_companions(&func);
                     items.push(Item::Function(func));
+                    items.extend(companions.into_iter().map(Item::Function));
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLASS_DEF => {
@@ -56,8 +60,11 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<HirDiagnostic>) {
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLIENT_DEF => {
-                if let Some(c) = lower_client(&child) {
-                    items.push(Item::Client(c));
+                if let Some((let_item, companion)) = synthesize_client_items(&child) {
+                    items.push(let_item);
+                    if let Some(func) = companion {
+                        items.push(Item::Function(func));
+                    }
                 }
             }
             baml_compiler_syntax::SyntaxKind::TEST_DEF => {
@@ -76,8 +83,8 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<HirDiagnostic>) {
                 }
             }
             baml_compiler_syntax::SyntaxKind::RETRY_POLICY_DEF => {
-                if let Some(rp) = lower_retry_policy(&child) {
-                    items.push(Item::RetryPolicy(rp));
+                if let Some(let_item) = synthesize_retry_policy_let(&child) {
+                    items.push(let_item);
                 }
             }
             _ => {} // skip comments, whitespace, errors
@@ -115,19 +122,32 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
             span: te.syntax().text_range(),
         });
 
-    let body = if let Some(llm) = func.llm_body() {
-        Some(FunctionBodyDef::Llm(lower_llm_body(&llm)))
+    let (body, declarative_meta) = if let Some(llm) = func.llm_body() {
+        let llm_body_def = lower_llm_body(&llm);
+        let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
+        let client_name = llm_body_def.client.as_ref().map(|n| n.as_str().to_string());
+        let (expr_body, source_map) = synthesize_llm_builtin_call(
+            "call_llm_function",
+            name.as_str(),
+            &param_names,
+            client_name.as_deref(),
+            llm_body_def.span,
+        );
+        (
+            Some(FunctionBodyDef::Expr(expr_body, source_map)),
+            Some(DeclarativeMeta::Llm(llm_body_def)),
+        )
     } else if let Some(expr) = func.expr_body() {
         // Check if the body is `$rust_function` or `$rust_io_function` before lowering
         if let Some(builtin_kind) = check_builtin_body(expr.syntax()) {
-            Some(FunctionBodyDef::Builtin(builtin_kind))
+            (Some(FunctionBodyDef::Builtin(builtin_kind)), None)
         } else {
             let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
             let (expr_body, source_map) = lower_expr_body::lower(&expr, &param_names);
-            Some(FunctionBodyDef::Expr(expr_body, source_map))
+            (Some(FunctionBodyDef::Expr(expr_body, source_map)), None)
         }
     } else {
-        None
+        (None, None)
     };
 
     let attributes = lower_attributes_from_node(node);
@@ -139,6 +159,7 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
         return_type,
         throws,
         body,
+        declarative_meta,
         attributes,
         span: node.text_range(),
         name_span,
@@ -211,6 +232,127 @@ fn lower_llm_body(llm_body: &ast::LlmFunctionBody) -> LlmBodyDef {
     }
 }
 
+/// Build a synthetic expression body equivalent to:
+/// `baml.llm.<builtin_name>(client, "FunctionName", { "param1": param1, "param2": param2 })`
+///
+/// When `client_name` is `Some("MyClient")`, the first argument is `Expr::Path(["MyClient"])`.
+/// When `client_name` is `Some("openai/gpt-4o")` (a shorthand with `/`), the first argument is
+/// an inline `Client { name, client_type: ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }`.
+/// When `client_name` is `None`, `Expr::Null` is used as a fallback.
+///
+/// Only `call_llm_function` passes a client; companion builtins (`render_prompt`, `build_request`)
+/// use `client_name = None` and keep their existing 2-argument signature.
+///
+/// All synthetic spans point to `span`.
+pub(crate) fn synthesize_llm_builtin_call(
+    builtin_name: &str,
+    function_name: &str,
+    param_names: &[Name],
+    client_name: Option<&str>,
+    span: text_size::TextRange,
+) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
+    use la_arena::Arena;
+
+    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
+
+    let mut exprs = Arena::new();
+    let mut expr_spans = Arena::new();
+
+    // Helper: allocate an expr + its span
+    let mut alloc = |expr: Expr| -> crate::ast::ExprId {
+        let id = exprs.alloc(expr);
+        expr_spans.alloc(span);
+        id
+    };
+
+    // 1. Function name literal: "FunctionName"
+    let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
+
+    // 2. Map entries: { "param1": param1, "param2": param2 }
+    let entries: Vec<(crate::ast::ExprId, crate::ast::ExprId)> = param_names
+        .iter()
+        .map(|name| {
+            let key = alloc(Expr::Literal(Literal::String(name.as_str().to_string())));
+            let value = alloc(Expr::Path(vec![name.clone()]));
+            (key, value)
+        })
+        .collect();
+    let args_map = alloc(Expr::Map { entries });
+
+    // Callee: baml.llm.<builtin_name> as a multi-segment Path
+    let callee = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new(builtin_name),
+    ]));
+
+    // Build the client expression from the client name.
+    // All LLM builtins (call_llm_function, render_prompt, build_request) take
+    // a Client as the first argument.
+    let client_arg = match client_name {
+        Some(name) if name.contains('/') => {
+            // Shorthand client (e.g. "openai/gpt-4o"): build an inline Client object.
+            let name_lit = alloc(Expr::Literal(Literal::String(name.to_string())));
+            let ct_path = alloc(Expr::Path(vec![
+                Name::new("baml"),
+                Name::new("llm"),
+                Name::new("ClientType"),
+            ]));
+            let ct_variant = alloc(Expr::FieldAccess {
+                base: ct_path,
+                field: Name::new("Primitive"),
+            });
+            let sub = alloc(Expr::Array { elements: vec![] });
+            let retry = alloc(Expr::Null);
+            let counter = alloc(Expr::Literal(Literal::Int(0)));
+            alloc(Expr::Object {
+                type_name: Some(Name::new("baml.llm.Client")),
+                fields: vec![
+                    (Name::new("name"), name_lit),
+                    (Name::new("client_type"), ct_variant),
+                    (Name::new("sub_clients"), sub),
+                    (Name::new("retry"), retry),
+                    (Name::new("counter"), counter),
+                ],
+                spreads: vec![],
+            })
+        }
+        Some(name) => {
+            // Named client: Expr::Path(["MyClient"]) — TIR resolves to the let binding.
+            alloc(Expr::Path(vec![Name::new(name)]))
+        }
+        None => {
+            // No client specified (e.g. missing `client` field) — use null as fallback.
+            alloc(Expr::Null)
+        }
+    };
+    let call = alloc(Expr::Call {
+        callee,
+        args: vec![client_arg, fn_name_expr, args_map],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        catch_arms: Arena::new(),
+        type_annotations: Arena::new(),
+        root_expr: Some(call),
+    };
+
+    let source_map = AstSourceMap {
+        expr_spans,
+        stmt_spans: Arena::new(),
+        pattern_spans: Arena::new(),
+        match_arm_spans: Arena::new(),
+        type_annotation_spans: Arena::new(),
+        catch_arm_spans: Arena::new(),
+    };
+
+    (body, source_map)
+}
+
 fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
     use baml_compiler_syntax::{
         SyntaxKind,
@@ -279,10 +421,13 @@ fn lower_class(node: &SyntaxNode) -> Option<crate::ast::ClassDef> {
         })
         .collect();
 
-    // Class methods (functions defined inside the class body)
     let methods = class
         .methods()
         .filter_map(|f| lower_function(f.syntax()))
+        .flat_map(|func| {
+            let companions = expand_companions(&func);
+            std::iter::once(func).chain(companions)
+        })
         .collect();
 
     Some(crate::ast::ClassDef {
@@ -366,23 +511,6 @@ fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAliasDef> {
     })
 }
 
-fn lower_client(node: &SyntaxNode) -> Option<ClientDef> {
-    let client = ast::ClientDef::cast(node.clone())?;
-    let name_token = client.name()?;
-
-    let config_items = client
-        .config_block()
-        .map(|cb| lower_config_block(&cb))
-        .unwrap_or_default();
-
-    Some(ClientDef {
-        name: Name::new(name_token.text()),
-        config_items,
-        span: node.text_range(),
-        name_span: name_token.text_range(),
-    })
-}
-
 fn lower_test(node: &SyntaxNode) -> Option<TestDef> {
     let test = ast::TestDef::cast(node.clone())?;
     let name_token = test.name()?;
@@ -437,21 +565,502 @@ fn lower_template_string(node: &SyntaxNode) -> Option<TemplateStringDef> {
     })
 }
 
-fn lower_retry_policy(node: &SyntaxNode) -> Option<RetryPolicyDef> {
+/// Synthesize an `Item::Let` for a `retry_policy` declaration.
+///
+/// Produces: `RetryPolicy { max_retries: N, initial_delay_ms: N, multiplier: F, max_delay_ms: N }`
+///
+/// Each config field is lowered generically via `lower_config_item::lower_config_value`,
+/// then wrapped in a typed `Expr::Object`.
+fn synthesize_retry_policy_let(node: &SyntaxNode) -> Option<Item> {
     let rp = ast::RetryPolicyDef::cast(node.clone())?;
     let name_token = rp.name()?;
+    let span = node.text_range();
+    let config_block = rp.config_block()?;
 
-    let config_items = rp
-        .config_block()
-        .map(|cb| lower_config_block(&cb))
-        .unwrap_or_default();
+    let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
+    let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
+    let mut alloc = |expr: Expr| -> ExprId {
+        let id = exprs.alloc(expr);
+        expr_spans.alloc(span);
+        id
+    };
 
-    Some(RetryPolicyDef {
+    // Lower each config item generically
+    let fields: Vec<(Name, ExprId)> = config_block
+        .items()
+        .filter_map(|item| {
+            let key = item.key()?;
+            let value = crate::lower_config_item::lower_config_value(&item, &mut alloc);
+            Some((Name::new(key.text()), value))
+        })
+        .collect();
+
+    let root = alloc(Expr::Object {
+        type_name: Some(Name::new("RetryPolicy")),
+        fields,
+        spreads: vec![],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: la_arena::Arena::new(),
+        patterns: la_arena::Arena::new(),
+        match_arms: la_arena::Arena::new(),
+        catch_arms: la_arena::Arena::new(),
+        type_annotations: la_arena::Arena::new(),
+        root_expr: Some(root),
+    };
+    let source_map = AstSourceMap {
+        expr_spans,
+        stmt_spans: la_arena::Arena::new(),
+        pattern_spans: la_arena::Arena::new(),
+        match_arm_spans: la_arena::Arena::new(),
+        type_annotation_spans: la_arena::Arena::new(),
+        catch_arm_spans: la_arena::Arena::new(),
+    };
+
+    Some(Item::Let(LetDef {
         name: Name::new(name_token.text()),
-        config_items,
-        span: node.text_range(),
+        initializer: Some((body, source_map)),
+        origin: LetOrigin::RetryPolicy,
+        span,
+        name_span: name_token.text_range(),
+    }))
+}
+
+/// Synthesize `Item::Let` + optional `Item::Function` from a `CLIENT_DEF` CST node.
+///
+/// - Every client produces an `Item::Let("ClientName", LetOrigin::Client)` whose initializer
+///   constructs `Client { name, client_type, sub_clients: [], retry: null }`.
+/// - Primitive clients also produce an `Item::Function("ClientName$new")` whose body
+///   constructs `PrimitiveClient { name, provider, options }`.
+fn synthesize_client_items(node: &SyntaxNode) -> Option<(Item, Option<FunctionDef>)> {
+    let client = ast::ClientDef::cast(node.clone())?;
+    let name_token = client.name()?;
+    let client_name = name_token.text().to_string();
+    let span = node.text_range();
+    let config_block = client.config_block()?;
+
+    // Determine provider
+    let provider: Option<String> = config_block.items().find_map(|item| {
+        let key = item.key()?;
+        if key.text() != "provider" {
+            return None;
+        }
+        item.value_word().map(|w| w.text().to_string()).or_else(|| {
+            item.config_value()
+                .and_then(|cv| cv.scalar_text())
+                .map(|t| t.trim().trim_matches('"').to_string())
+        })
+    });
+
+    let is_fallback = provider.as_deref() == Some("fallback");
+    let is_round_robin = provider.as_deref() == Some("round-robin");
+    let is_composite = is_fallback || is_round_robin;
+
+    // Build the Client let binding
+    let let_item = synthesize_client_let(
+        &client_name,
+        span,
+        &name_token,
+        is_fallback,
+        is_round_robin,
+        &config_block,
+    );
+
+    // Build the $new companion for primitive clients only
+    let companion = if !is_composite {
+        Some(synthesize_client_new_companion(
+            &client_name,
+            span,
+            &name_token,
+            &config_block,
+            provider.as_ref(),
+        ))
+    } else {
+        None
+    };
+
+    Some((let_item, companion))
+}
+
+/// Build the `Client` identity let binding.
+///
+/// Produces: `Client { name, client_type, sub_clients, retry, counter }`
+///
+/// - Composite clients (fallback/round-robin) get sub-client `Expr::Path` references
+///   from `options { strategy [A, B] }`, enabling TIR name validation and
+///   `topological_sort_lets` dependency ordering.
+/// - All clients get `retry` wired as `Expr::Path("RetryPolicyName")` or `null`.
+/// - Round-robin clients get `counter` from `options { start N }`, others get 0.
+fn synthesize_client_let(
+    client_name: &str,
+    span: text_size::TextRange,
+    name_token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>,
+    is_fallback: bool,
+    is_round_robin: bool,
+    config_block: &ast::ConfigBlock,
+) -> Item {
+    use baml_base::Literal;
+
+    let is_composite = is_fallback || is_round_robin;
+
+    let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
+    let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
+    let mut alloc = |expr: Expr| -> ExprId {
+        let id = exprs.alloc(expr);
+        expr_spans.alloc(span);
+        id
+    };
+
+    // Extract retry_policy reference and composite sub-client/start from config block
+    let mut retry_policy_name: Option<String> = None;
+    let mut sub_client_exprs: Vec<ExprId> = vec![];
+    let mut round_robin_start: i64 = 0;
+
+    for item in config_block.items() {
+        let Some(key) = item.key() else { continue };
+        match key.text() {
+            "retry_policy" => {
+                // retry_policy MyRetry → Expr::Path(["MyRetry"])
+                if let Some(word) = item.value_word() {
+                    retry_policy_name = Some(word.text().to_string());
+                } else if let Some(cv) = item.config_value() {
+                    if let Some(text) = cv.scalar_text() {
+                        let cleaned = text.trim().trim_matches('"');
+                        if !cleaned.is_empty() {
+                            retry_policy_name = Some(cleaned.to_string());
+                        }
+                    }
+                }
+            }
+            "options" if is_composite => {
+                if let Some(nested) = item.nested_block() {
+                    for opt_item in nested.items() {
+                        let Some(opt_key) = opt_item.key() else {
+                            continue;
+                        };
+                        match opt_key.text() {
+                            "strategy" => {
+                                if let Some(elements) = opt_item.array_string_elements() {
+                                    for (maybe_name, _range) in &elements {
+                                        if let Some(name) = maybe_name {
+                                            let expr = alloc(Expr::Path(vec![Name::new(name)]));
+                                            sub_client_exprs.push(expr);
+                                        }
+                                    }
+                                }
+                            }
+                            "start" => {
+                                if let Some(v) = opt_item.value_int() {
+                                    round_robin_start = v;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // name: "MyClient"
+    let name_expr = alloc(Expr::Literal(Literal::String(client_name.to_string())));
+
+    // client_type: baml.llm.ClientType.Primitive (or Fallback / RoundRobin)
+    let client_type_path = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("ClientType"),
+    ]));
+    let variant_name = if is_fallback {
+        "Fallback"
+    } else if is_round_robin {
+        "RoundRobin"
+    } else {
+        "Primitive"
+    };
+    let client_type_expr = alloc(Expr::FieldAccess {
+        base: client_type_path,
+        field: Name::new(variant_name),
+    });
+
+    // sub_clients: [A, B, ...] for composites, [] for primitive
+    let sub_clients_expr = alloc(Expr::Array {
+        elements: sub_client_exprs,
+    });
+
+    // retry: MyRetry (path reference) or null
+    let retry_expr = if let Some(rp_name) = retry_policy_name {
+        alloc(Expr::Path(vec![Name::new(&rp_name)]))
+    } else {
+        alloc(Expr::Null)
+    };
+
+    // counter: round_robin_start for RR clients, 0 otherwise
+    let counter_val = if is_round_robin { round_robin_start } else { 0 };
+    let counter_expr = alloc(Expr::Literal(Literal::Int(counter_val)));
+
+    // Client { name, client_type, sub_clients, retry, counter }
+    let root = alloc(Expr::Object {
+        type_name: Some(Name::new("Client")),
+        fields: vec![
+            (Name::new("name"), name_expr),
+            (Name::new("client_type"), client_type_expr),
+            (Name::new("sub_clients"), sub_clients_expr),
+            (Name::new("retry"), retry_expr),
+            (Name::new("counter"), counter_expr),
+        ],
+        spreads: vec![],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: la_arena::Arena::new(),
+        patterns: la_arena::Arena::new(),
+        match_arms: la_arena::Arena::new(),
+        catch_arms: la_arena::Arena::new(),
+        type_annotations: la_arena::Arena::new(),
+        root_expr: Some(root),
+    };
+    let source_map = AstSourceMap {
+        expr_spans,
+        stmt_spans: la_arena::Arena::new(),
+        pattern_spans: la_arena::Arena::new(),
+        match_arm_spans: la_arena::Arena::new(),
+        type_annotation_spans: la_arena::Arena::new(),
+        catch_arm_spans: la_arena::Arena::new(),
+    };
+
+    Item::Let(LetDef {
+        name: Name::new(client_name),
+        initializer: Some((body, source_map)),
+        origin: LetOrigin::Client,
+        span,
         name_span: name_token.text_range(),
     })
+}
+
+/// Build the `ClientName$new` companion function for primitive clients.
+///
+/// Body constructs:
+/// ```text
+/// PrimitiveClient {
+///   name: "X", provider: "openai",
+///   options: PrimitiveClientOptions {
+///     base_url, default_role, api_key, allowed_roles, remap_roles,
+///     provider_options, headers, query_params, request_body
+///   }
+/// }
+/// ```
+///
+/// Option keys are routed to match `PrimitiveClientOptions`:
+/// - Known scalar fields (`base_url`, `default_role`, `api_key`, `allowed_roles`, `remap_roles`)
+///   → named fields, default null
+/// - `headers`, `query_params` → `Expr::Map`, default empty
+/// - Provider-specific (`anthropic_version` → `AnthropicOptions`,
+///   `resource_name`+`api_version` → `AzureOpenAiOptions`) → `provider_options`
+/// - Unknown keys → `request_body` map entries
+fn synthesize_client_new_companion(
+    client_name: &str,
+    span: text_size::TextRange,
+    name_token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>,
+    config_block: &ast::ConfigBlock,
+    provider: Option<&String>,
+) -> FunctionDef {
+    use baml_base::Literal;
+
+    let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
+    let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
+    let mut alloc = |expr: Expr| -> ExprId {
+        let id = exprs.alloc(expr);
+        expr_spans.alloc(span);
+        id
+    };
+
+    // Named PrimitiveClientOptions fields — default null
+    let mut model = alloc(Expr::Null);
+    let mut base_url = alloc(Expr::Null);
+    let mut default_role = alloc(Expr::Null);
+    let mut api_key = alloc(Expr::Null);
+    let mut allowed_roles = alloc(Expr::Null);
+    let mut remap_roles = alloc(Expr::Null);
+
+    // Map fields — default empty
+    let mut headers_expr = alloc(Expr::Map { entries: vec![] });
+    let mut query_params_expr = alloc(Expr::Map { entries: vec![] });
+
+    // Provider-specific accumulators
+    let mut anthropic_version: Option<ExprId> = None;
+    let mut resource_name: Option<ExprId> = None;
+    let mut api_version: Option<ExprId> = None;
+
+    // Unknown keys → request_body
+    let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
+
+    // Walk the options nested block
+    if let Some(options_item) = config_block
+        .items()
+        .find(|item| item.matches_key("options"))
+    {
+        if let Some(nested) = options_item.nested_block() {
+            for opt_item in nested.items() {
+                let Some(opt_key) = opt_item.key() else {
+                    continue;
+                };
+                match opt_key.text() {
+                    // Named scalar fields
+                    "model" => {
+                        model = crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                    }
+                    "base_url" => {
+                        base_url =
+                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                    }
+                    "default_role" => {
+                        default_role =
+                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                    }
+                    "api_key" => {
+                        api_key =
+                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                    }
+                    "allowed_roles" => {
+                        allowed_roles =
+                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                    }
+                    "remap_roles" => {
+                        remap_roles =
+                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                    }
+                    // Map fields (nested blocks)
+                    "headers" => {
+                        headers_expr =
+                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                    }
+                    "query_params" => {
+                        query_params_expr =
+                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                    }
+                    // Provider-specific keys
+                    "anthropic_version" => {
+                        anthropic_version = Some(crate::lower_config_item::lower_config_value(
+                            &opt_item, &mut alloc,
+                        ));
+                    }
+                    "resource_name" => {
+                        resource_name = Some(crate::lower_config_item::lower_config_value(
+                            &opt_item, &mut alloc,
+                        ));
+                    }
+                    "api_version" => {
+                        api_version = Some(crate::lower_config_item::lower_config_value(
+                            &opt_item, &mut alloc,
+                        ));
+                    }
+                    // Unknown → request_body
+                    other => {
+                        let key_expr = alloc(Expr::Literal(Literal::String(other.to_string())));
+                        let val_expr =
+                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                        request_body_entries.push((key_expr, val_expr));
+                    }
+                }
+            }
+        }
+    }
+
+    // Build provider_options from accumulated provider-specific keys
+    let provider_options = if let Some(av) = anthropic_version {
+        alloc(Expr::Object {
+            type_name: Some(Name::new("baml.llm.AnthropicOptions")),
+            fields: vec![(Name::new("anthropic_version"), av)],
+            spreads: vec![],
+        })
+    } else if resource_name.is_some() || api_version.is_some() {
+        let rn = resource_name.unwrap_or_else(|| alloc(Expr::Null));
+        let av = api_version.unwrap_or_else(|| alloc(Expr::Null));
+        alloc(Expr::Object {
+            type_name: Some(Name::new("baml.llm.AzureOpenAiOptions")),
+            fields: vec![
+                (Name::new("resource_name"), rn),
+                (Name::new("api_version"), av),
+            ],
+            spreads: vec![],
+        })
+    } else {
+        alloc(Expr::Null)
+    };
+
+    let request_body_expr = alloc(Expr::Map {
+        entries: request_body_entries,
+    });
+
+    // PrimitiveClientOptions { ... }
+    let options_expr = alloc(Expr::Object {
+        type_name: Some(Name::new("baml.llm.PrimitiveClientOptions")),
+        fields: vec![
+            (Name::new("model"), model),
+            (Name::new("base_url"), base_url),
+            (Name::new("default_role"), default_role),
+            (Name::new("allowed_roles"), allowed_roles),
+            (Name::new("remap_roles"), remap_roles),
+            (Name::new("api_key"), api_key),
+            (Name::new("provider_options"), provider_options),
+            (Name::new("headers"), headers_expr),
+            (Name::new("query_params"), query_params_expr),
+            (Name::new("request_body"), request_body_expr),
+        ],
+        spreads: vec![],
+    });
+
+    // PrimitiveClient { name, provider, options }
+    let name_lit = alloc(Expr::Literal(Literal::String(client_name.to_string())));
+    let provider_lit = alloc(Expr::Literal(Literal::String(
+        provider.map_or("unknown", |s| s.as_str()).to_string(),
+    )));
+    let root = alloc(Expr::Object {
+        type_name: Some(Name::new("baml.llm.PrimitiveClient")),
+        fields: vec![
+            (Name::new("name"), name_lit),
+            (Name::new("provider"), provider_lit),
+            (Name::new("options"), options_expr),
+        ],
+        spreads: vec![],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: la_arena::Arena::new(),
+        patterns: la_arena::Arena::new(),
+        match_arms: la_arena::Arena::new(),
+        catch_arms: la_arena::Arena::new(),
+        type_annotations: la_arena::Arena::new(),
+        root_expr: Some(root),
+    };
+    let source_map = AstSourceMap {
+        expr_spans,
+        stmt_spans: la_arena::Arena::new(),
+        pattern_spans: la_arena::Arena::new(),
+        match_arm_spans: la_arena::Arena::new(),
+        type_annotation_spans: la_arena::Arena::new(),
+        catch_arm_spans: la_arena::Arena::new(),
+    };
+
+    let func_name = format!("{client_name}$new");
+    FunctionDef {
+        name: Name::new(&func_name),
+        generic_params: vec![],
+        params: vec![],
+        return_type: None,
+        throws: None,
+        body: Some(FunctionBodyDef::Expr(body, source_map)),
+        declarative_meta: None,
+        attributes: vec![],
+        span,
+        name_span: name_token.text_range(),
+    }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────

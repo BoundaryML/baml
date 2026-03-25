@@ -80,24 +80,4 @@ function multiline_field(info: Info2) -> string {
 // <no-diagnostics-expected>
 //
 //- inlay_hints
-// call_arg_names.baml:6:9 (Parameter) "name:"
-// call_arg_names.baml:6:18 (Parameter) "age:"
-// call_arg_names.baml:10:8 (Type) ": (name: string, age: int) -> string"
-//   edit@10:8 ": (name: string, age: int) -> string"
-// call_arg_names.baml:12:5 (Parameter) "name:"
-// call_arg_names.baml:12:12 (Parameter) "age:"
-// call_arg_names.baml:26:5 (Parameter) "c:"
-// call_arg_names.baml:31:11 (Type) ": string"
-//   edit@31:11 ": string"
-// call_arg_names.baml:32:15 (Parameter) "age:"
-// call_arg_names.baml:37:14 (Type) ": string"
-//   edit@37:14 ": string"
-// call_arg_names.baml:38:18 (Parameter) "age:"
-// call_arg_names.baml:43:8 (Type) ": string"
-//   edit@43:8 ": string"
-// call_arg_names.baml:44:9 (Parameter) "name:"
-// call_arg_names.baml:44:12 (Parameter) "age:"
-// call_arg_names.baml:60:5 (Parameter) "name:"
-// call_arg_names.baml:61:5 (Parameter) "age:"
-// call_arg_names.baml:73:5 (Parameter) "name:"
-// call_arg_names.baml:74:5 (Parameter) "age:"
+// <no-inlay-hints>

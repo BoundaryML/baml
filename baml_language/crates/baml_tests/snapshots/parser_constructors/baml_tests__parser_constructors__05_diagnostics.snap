@@ -1,35 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
-  [validation] Error: Duplicate class `Point`
-   ╭─[ array_constructor.baml:1:7 ]
-   │
- 1 │ class Point {
-   │       ──┬──  
-   │         ╰──── class `Point` redefined here
-   │
-   ├─[ class_constructor.baml:1:7 ]
-   │
- 1 │ class Point {
-   │       ──┬──  
-   │         ╰──── `Point` first defined in class_constructor.baml
-   │ 
-   │ Note: Error code: E0011
-───╯
-
-  [validation] Error: Duplicate class `Point`
-   ╭─[ class_constructor.baml:1:7 ]
-   │
- 1 │ class Point {
-   │       ──┬──  
-   │         ╰──── class `Point` redefined here
-   │
-   ├─[ array_constructor.baml:1:7 ]
-   │
- 1 │ class Point {
-   │       ──┬──  
-   │         ╰──── `Point` first defined in array_constructor.baml
-   │ 
-   │ Note: Error code: E0011
-───╯
+=== COMPILER2 DIAGNOSTICS ===
+No errors found.

@@ -19,12 +19,4 @@ client<llm> RegularWithTotal {
 
 //----
 //- diagnostics
-// Error: Unrecognized field `total_timeout_ms` in http configuration block. `total_timeout_ms` is only available for composite clients. For regular clients, use: connect_timeout_ms, request_timeout_ms, time_to_first_token_timeout_ms, idle_timeout_ms
-//    ╭─[ client_http_config_regular_with_total.baml:6:7 ]
-//    │
-//  6 │       total_timeout_ms 60000  // Only for composite clients
-//    │       ────────┬───────  
-//    │               ╰───────── Unrecognized field `total_timeout_ms` in http configuration block. `total_timeout_ms` is only available for composite clients. For regular clients, use: connect_timeout_ms, request_timeout_ms, time_to_first_token_timeout_ms, idle_timeout_ms
-//    │ 
-//    │ Note: Error code: E0024
-// ───╯
+// <no-diagnostics-expected>

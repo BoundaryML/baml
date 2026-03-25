@@ -15,12 +15,21 @@ function ThrowsVariantViolation(x: int) -> string throws Errors.AuthError {
 
 //----
 //- diagnostics
-// Error: Function throws types not covered by `throws` declaration: Errors.NotFoundError
-//    ╭─[ throw_throws_enum_variant_violation.baml:9:45 ]
+// Error: extraneous throws declaration: user.AuthError
+//    ╭─[ throw_throws_enum_variant_violation.baml:9:59 ]
 //    │
 //  9 │ function ThrowsVariantViolation(x: int) -> string throws Errors.AuthError {
-//    │                                             ───┬───  
-//    │                                                ╰───── Function throws types not covered by `throws` declaration: Errors.NotFoundError
+//    │                                                           ────────┬────────  
+//    │                                                                   ╰────────── extraneous throws declaration: user.AuthError
 //    │ 
-//    │ Note: Error code: E0096
+//    │ Note: Error code: E0001
+// ───╯
+// Error: throws contract violation: `user.AuthError` is missing user.Errors.AuthError, user.Errors.NotFoundError
+//    ╭─[ throw_throws_enum_variant_violation.baml:9:59 ]
+//    │
+//  9 │ function ThrowsVariantViolation(x: int) -> string throws Errors.AuthError {
+//    │                                                           ────────┬────────  
+//    │                                                                   ╰────────── throws contract violation: `user.AuthError` is missing user.Errors.AuthError, user.Errors.NotFoundError
+//    │ 
+//    │ Note: Error code: E0001
 // ───╯

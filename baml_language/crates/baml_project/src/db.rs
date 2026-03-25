@@ -12,13 +12,12 @@ use std::{
     sync::{Arc, atomic::AtomicU32},
 };
 
-use baml_compiler_emit::CompileOptions;
 use baml_db::{FileId, SourceFile};
 use baml_workspace::{Compiler2ExtraFiles, Project};
 use salsa::Setter;
 
 // Note: Builtin BAML files (like llm.baml) are loaded in set_project_root().
-// The paths are defined in `baml_builtins::baml_sources::ALL`.
+// The paths are defined in `baml_builtins2`.
 
 /// Type alias for Salsa event callbacks
 pub type EventCallback = Box<dyn Fn(salsa::Event) + Send + Sync + 'static>;
@@ -53,15 +52,11 @@ pub struct ProjectDatabase {
     /// The current project. Set via `set_project_root()`.
     project: Option<Project>,
     /// Compiler2-only extra files (`baml_builtins2` stubs). Held separately so
-    /// they are NOT added to `project.files()` — the v1 compiler must not see
-    /// them because it cannot parse compiler2-specific syntax.
+    /// they are NOT added to `project.files()`.
     compiler2_extra_files: Option<Compiler2ExtraFiles>,
-    /// Maps file paths to their `SourceFile` handles (user files + v1 builtins only).
-    /// v2 builtin stubs are stored in `compiler2_file_map` instead to prevent them
-    /// from appearing in `get_source_files()` which feeds the v1 compiler pipeline.
+    /// Maps file paths to their `SourceFile` handles (user files only).
     file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps file paths to compiler2-only `SourceFile` handles.
-    /// These files are NOT returned by `get_source_files()`.
     compiler2_file_map: HashMap<std::path::PathBuf, SourceFile>,
     /// Maps `FileId` to file path for reverse lookup (all files including v2 stubs).
     file_id_to_path: HashMap<FileId, std::path::PathBuf>,
@@ -92,25 +87,13 @@ impl baml_compiler2_ppir::Db for ProjectDatabase {}
 impl baml_compiler2_tir::Db for ProjectDatabase {}
 
 #[salsa::db]
+impl baml_compiler2_mir::Db for ProjectDatabase {}
+
+#[salsa::db]
+impl baml_compiler2_emit::Db for ProjectDatabase {}
+
+#[salsa::db]
 impl baml_lsp2_actions::Db for ProjectDatabase {}
-
-#[salsa::db]
-impl baml_compiler_ppir::Db for ProjectDatabase {}
-
-#[salsa::db]
-impl baml_compiler_hir::Db for ProjectDatabase {}
-
-#[salsa::db]
-impl baml_compiler_tir::Db for ProjectDatabase {}
-
-#[salsa::db]
-impl baml_compiler_vir::Db for ProjectDatabase {}
-
-#[salsa::db]
-impl baml_compiler_mir::Db for ProjectDatabase {}
-
-#[salsa::db]
-impl baml_compiler_emit::Db for ProjectDatabase {}
 
 impl ProjectDatabase {
     /// Create a new empty database.
@@ -262,8 +245,7 @@ impl ProjectDatabase {
     /// This creates a new Project in the database with an empty file list.
     /// Files should be added using `add_file` or `add_or_update_file`.
     ///
-    /// This also loads builtin BAML files (like `llm.baml`) into the project.
-    /// Builtin files are available from the start of the compilation pipeline.
+    /// This also loads compiler2 builtin BAML files into the compiler2 extra files slot.
     ///
     /// Returns the created `Project`.
     pub fn set_project_root(&mut self, root: &std::path::Path) -> Project {
@@ -277,16 +259,11 @@ impl ProjectDatabase {
             .map(|(_, f)| *f)
             .collect();
 
-        // Load v1 builtin BAML files (for the shared project.files() list).
-        // v2 builtin stubs are loaded separately into compiler2_extra_files.
-        let (v1_builtin_files, v2_builtin_files) = self.load_builtin_baml_files();
+        // Load compiler2 builtin stub files.
+        let v2_builtin_files = self.load_builtin_baml_files();
 
-        // Combine user files with v1 builtin files (user first, then builtins)
-        let mut all_files = user_files;
-        all_files.extend(v1_builtin_files);
-
-        // Create and set the project (v1 compiler only sees this)
-        let project = Project::new(self, canonical_root, all_files);
+        // Create and set the project (user files only, no builtins in project.files())
+        let project = Project::new(self, canonical_root, user_files);
         self.project = Some(project);
 
         // Create the compiler2 extra files Salsa input (separate from project.files)
@@ -296,69 +273,30 @@ impl ProjectDatabase {
         project
     }
 
-    /// Load builtin BAML source files into the database.
+    /// Load compiler2 builtin BAML source files into the database.
     ///
-    /// Returns two lists:
-    /// - `(v1_files, v2_files)` where `v1_files` are for the shared `project.files()`
-    ///   (visible to both compilers) and `v2_files` are compiler2-only stubs that must
-    ///   NOT be added to `project.files()` because the v1 parser cannot handle
-    ///   compiler2-specific syntax (generic type parameters, `$rust_type`, etc.).
+    /// Returns the list of compiler2 builtin stub files (Array<T>, Map<K,V>, String,
+    /// Media, baml.env, baml.http, baml.math, baml.sys namespaces, etc.).
     ///
-    /// ## Note on goto-definition
-    ///
-    /// Builtin files use virtual paths like `<builtin>/baml/llm.baml`. These paths
-    /// are embedded in the compiler binary, not present on the user's filesystem.
-    /// As a result, goto-definition to builtins won't work in editors.
-    fn load_builtin_baml_files(&mut self) -> (Vec<SourceFile>, Vec<SourceFile>) {
-        let mut v1_builtin_files = Vec::new();
-
-        // Load all v1 builtin BAML sources (disk read on native, embedded on WASM)
-        for builtin_source in baml_builtins::baml_sources() {
-            let path = PathBuf::from(builtin_source.path);
-            let file = self.add_file_internal(&path, builtin_source.source());
-            let file_id = file.file_id(self);
-
-            // Register in file_id_to_path for diagnostic filename display
-            // and in file_map so builtins are included in check() diagnostics.
-            self.file_id_to_path.insert(file_id, path.clone());
-            self.file_map.insert(path, file);
-
-            v1_builtin_files.push(file);
-        }
-
-        // Load compiler2-only builtin stub files (Array<T>, Map<K,V>, String, Media, etc.)
-        // These flow through the compiler2 HIR pipeline: package_items(db, "baml")
-        // will contain Array, Map, String, Media, and the baml.env / baml.http /
-        // baml.math / baml.sys namespaces.
-        //
-        // IMPORTANT: These are stored in `compiler2_file_map` (NOT `file_map`) so
-        // that `get_source_files()` does NOT return them and they are never passed
-        // to the v1 parser. The v1 parser cannot handle compiler2-specific syntax:
-        // generic type parameters, `$rust_type`, void functions without explicit
-        // return types, `root.sys.xxx` qualified calls, etc.
+    /// These are stored in `compiler2_file_map` (NOT `file_map`) so that
+    /// `get_source_files()` does NOT return them.
+    fn load_builtin_baml_files(&mut self) -> Vec<SourceFile> {
         let mut v2_builtin_files = Vec::new();
         for builtin in baml_builtins2::ALL {
-            // Use the BuiltinFile's virtual_path() to get the correct path.
-            // Root files: "<builtin>/baml/containers.baml"
-            // Namespaced files: "<builtin>/baml/env/env.baml"
             let virtual_path = builtin.virtual_path();
             let path = PathBuf::from(&virtual_path);
             let file = self.add_file_internal(&path, builtin.contents);
             let file_id = file.file_id(self);
 
-            // Register in file_id_to_path for diagnostic filename display
-            // but in compiler2_file_map (not file_map!) so the v1 compiler
-            // never sees these files.
             self.file_id_to_path.insert(file_id, path.clone());
             self.compiler2_file_map.insert(path, file);
 
             v2_builtin_files.push(file);
         }
 
-        (v1_builtin_files, v2_builtin_files)
+        v2_builtin_files
     }
 
-    /// Register synthetic stream-expansion files in the reverse-lookup maps.
     /// Add a file to the database.
     ///
     /// This is an alias for `add_or_update_file` for API compatibility.
@@ -375,7 +313,7 @@ impl ProjectDatabase {
     pub fn non_builtin_file_paths(&self) -> impl Iterator<Item = std::path::PathBuf> {
         self.file_map
             .keys()
-            .filter(|path| !path.starts_with(baml_builtins::BUILTIN_PATH_PREFIX))
+            .filter(|path| !path.starts_with("<builtin>"))
             .cloned()
     }
 
@@ -407,133 +345,14 @@ impl ProjectDatabase {
         })
     }
 
-    /// Build the control flow visualization graph for a function.
-    ///
-    /// Returns `None` if the function is not found, is compiler-generated
-    /// (`render_prompt`, `build_request`, `client_resolve`), or has errors that
-    /// prevent VIR lowering.
-    pub fn control_flow_graph(
+    /// Get the compiled bytecode for the project using the compiler2 pipeline.
+    pub fn get_bytecode(
         &self,
-        function_name: &str,
-    ) -> Option<baml_compiler_vir::control_flow::ControlFlowGraph> {
-        use baml_compiler_hir::{
-            FunctionBody, ItemId, file_item_tree, file_items, function_body, function_signature,
-            function_signature_source_map,
-        };
-        use baml_compiler_tir::{
-            class_field_types, enum_variants, infer_function, type_aliases, typing_context,
-        };
-        use baml_compiler_vir::control_flow::{
-            build_control_flow_graph, build_llm_control_flow_graph,
-        };
-
-        let project = self.project?;
-        let files = project.files(self);
-
-        // Build typing context lazily (only if we find an expr function)
-        let mut typing_ctx = None;
-
-        for source_file in files {
-            let items_struct = file_items(self, *source_file);
-            for item in items_struct.items(self) {
-                let ItemId::Function(func_loc) = item else {
-                    continue;
-                };
-                let item_tree = file_item_tree(self, func_loc.file(self));
-                let func = &item_tree[func_loc.id(self)];
-
-                // Skip compiler-generated functions
-                if let Some(ref cg) = func.compiler_generated {
-                    use baml_compiler_hir::CompilerGenerated;
-                    match cg {
-                        CompilerGenerated::ClientResolve { .. }
-                        | CompilerGenerated::LlmRenderPrompt { .. }
-                        | CompilerGenerated::LlmBuildRequest { .. } => continue,
-                        CompilerGenerated::LlmCall { .. } => {
-                            // LlmCall functions have an expr body that wraps the LLM call.
-                            // We can still build a control flow graph for them.
-                        }
-                    }
-                }
-
-                let sig = function_signature(self, *func_loc);
-                if sig.name != function_name {
-                    continue;
-                }
-
-                // Found the function — check body type
-                let body = function_body(self, *func_loc);
-                match body.as_ref() {
-                    FunctionBody::Llm(llm_body) => {
-                        return Some(build_llm_control_flow_graph(
-                            function_name,
-                            llm_body.client.as_ref(),
-                        ));
-                    }
-                    FunctionBody::Expr(_, _) => {
-                        // Lazy-init typing context
-                        let ctx = typing_ctx.get_or_insert_with(|| {
-                            let globals = typing_context(self, project).functions(self).clone();
-                            let class_fields =
-                                class_field_types(self, project).classes(self).clone();
-                            let ta = type_aliases(self, project).aliases(self).clone();
-                            let recursive = baml_compiler_tir::find_recursive_aliases(&ta);
-                            let ev = enum_variants(self, project).enums(self).clone();
-                            let resolution_ctx =
-                                baml_compiler_tir::TypeResolutionContext::new(self, project);
-                            (globals, class_fields, ta, recursive, ev, resolution_ctx)
-                        });
-
-                        let sig_source_map = function_signature_source_map(self, *func_loc);
-                        let inference = infer_function(
-                            self,
-                            &sig,
-                            Some(&sig_source_map),
-                            &body,
-                            Some(ctx.0.clone()),
-                            Some(ctx.1.clone()),
-                            Some(ctx.2.clone()),
-                            Some(ctx.4.clone()),
-                            *func_loc,
-                        );
-
-                        match baml_compiler_vir::lower_from_hir(
-                            &body, &inference, &ctx.5, &ctx.2, &ctx.3,
-                        ) {
-                            Ok(vir_body) => {
-                                return Some(build_control_flow_graph(function_name, &vir_body));
-                            }
-                            Err(baml_compiler_vir::LoweringError::LlmFunction) => {
-                                // Shouldn't happen since we check FunctionBody first,
-                                // but handle gracefully
-                                return None;
-                            }
-                            Err(_) => return None,
-                        }
-                    }
-                    FunctionBody::Missing => return None,
-                }
-            }
-        }
-
-        None
-    }
-
-    /// Get the compiled bytecode for the project.
-    pub fn get_bytecode(&self) -> Result<bex_vm_types::Program, baml_compiler_emit::LoweringError> {
-        // First ensure no diagnostics errors are present
-        let diagnostics = self.check();
-        if diagnostics
-            .diagnostics
-            .iter()
-            .any(|diag| diag.severity == baml_compiler_diagnostics::Severity::Error)
-        {
-            return Err(baml_compiler_emit::LoweringError::HasDiagnosticsErrors);
-        }
-        let opts = CompileOptions {
+    ) -> Result<bex_vm_types::Program, baml_compiler2_emit::LoweringError> {
+        let opts = baml_compiler2_emit::CompileOptions {
             emit_test_cases: false,
         };
-        baml_compiler_emit::generate_project_bytecode(self, &opts)
+        baml_compiler2_emit::generate_project_bytecode(self, &opts)
     }
 }
 

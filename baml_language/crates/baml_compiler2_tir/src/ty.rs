@@ -9,28 +9,86 @@ use baml_base::Name;
 /// Used in `Ty::Class`, `Ty::Enum`, and `Ty::TypeAlias` to unambiguously
 /// identify a type by its definition's package (e.g. `"user"`, `"baml"`)
 /// and its short name (e.g. `"Foo"`, `"PrimitiveClient"`).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct QualifiedTypeName {
     /// The package this type is defined in (e.g. `"user"`, `"baml"`).
-    pub pkg: Name,
+    pkg: Name,
+    /// The namespace this type is defined in (e.g. `["llm"]`).
+    namespace: Vec<Name>,
     /// The short/local name of the type (e.g. `"Foo"`).
-    pub name: Name,
+    name: Name,
+    /// Unresolved generic type parameter names (e.g. `["T"]` for `Array<T>`).
+    /// Empty for non-generic types or when concrete type args are substituted.
+    pub generic_params: Vec<Name>,
 }
 
 impl QualifiedTypeName {
-    pub fn new(pkg: Name, name: Name) -> Self {
-        Self { pkg, name }
+    pub fn new(pkg: Name, namespace: Vec<Name>, name: Name) -> Self {
+        Self::new_with_generic_params(pkg, namespace, name, Vec::new())
+    }
+
+    pub fn new_with_generic_params(
+        pkg: Name,
+        namespace: Vec<Name>,
+        name: Name,
+        generic_params: Vec<Name>,
+    ) -> Self {
+        Self {
+            pkg,
+            namespace,
+            name,
+            generic_params,
+        }
+    }
+
+    pub fn package(&self) -> &Name {
+        &self.pkg
+    }
+
+    pub fn namespace(&self) -> &Vec<Name> {
+        &self.namespace
+    }
+
+    pub fn name(&self) -> &Name {
+        &self.name
+    }
+
+    pub fn to_path_in_package(&self) -> Vec<Name> {
+        self.namespace
+            .iter()
+            .chain(std::iter::once(&self.name))
+            .cloned()
+            .collect::<Vec<_>>()
     }
 }
 
 impl fmt::Display for QualifiedTypeName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}", self.pkg, self.name)
+        let namespace = self
+            .namespace
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>()
+            .join(".");
+        if !namespace.is_empty() {
+            write!(f, "{}.{}.{}", self.pkg, namespace, self.name)?;
+        } else {
+            write!(f, "{}.{}", self.pkg, self.name)?;
+        }
+        if !self.generic_params.is_empty() {
+            let params: Vec<_> = self
+                .generic_params
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect();
+            write!(f, "<{}>", params.join(", "))?;
+        }
+        Ok(())
     }
 }
 
 /// Resolved type — the output of type resolution (Pass 2).
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Ty {
     /// A class type — just the name, no expansion.
     Class(QualifiedTypeName),
@@ -99,6 +157,14 @@ pub enum Ty {
         params: Vec<(Option<Name>, Ty)>,
         ret: Box<Ty>,
     },
+    /// A type variable (generic parameter) — e.g. `T` in `Array<T>`.
+    ///
+    /// First-class in the resolved type system. At definition sites, `T` is
+    /// represented as `TypeVar("T")` rather than `Ty::Unknown`. At call sites,
+    /// the inference algorithm in `check_expr` substitutes concrete types.
+    /// Any `TypeVar` remaining after inference is erased to `Ty::Unknown` with
+    /// a `CannotInferTypeParameter` diagnostic before reaching VIR/runtime.
+    TypeVar(Name),
     /// The bottom type — expression never produces a value.
     /// Assigned to `return`, `break`, `continue`, and blocks that always diverge.
     /// `Never` is a subtype of every type: `join(Never, T) = T`.
@@ -137,13 +203,24 @@ pub enum Ty {
     /// This is distinct from `Ty::Unknown` (which means "type inference failed") —
     /// `RustType` is intentional and well-formed in the builtin stubs.
     RustType,
+    /// The `type` metatype keyword — represents a BAML type value at runtime.
+    ///
+    /// Modeled as a dedicated variant (like `RustType`) rather than collapsing to
+    /// `BuiltinUnknown`, because:
+    /// - `type` is semantically distinct from `unknown` (a string is not a type value)
+    /// - Future methods (`.name()`, `.fields()`) need a concrete type to dispatch on
+    /// - Maps to `Ty::Opaque("baml.reflect.Type")` at the MIR level
+    ///
+    /// Follows the same pattern as `RustType`: opaque builtin, leaf type, no inner
+    /// structure. Group with `RustType` in match arms.
+    Type,
     /// Error recovery — the type is structurally unknown (e.g., name unresolved).
     Unknown,
     /// Error sentinel — a hard error was emitted for this expression.
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PrimitiveType {
     Int,
     Float,
@@ -194,7 +271,7 @@ impl PrimitiveType {
 ///
 /// Freshness is **ignored** by the subtype checker — `Literal(1, Fresh)` and
 /// `Literal(1, Regular)` are structurally identical for assignability.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Freshness {
     Fresh,
     Regular,
@@ -208,6 +285,7 @@ impl Ty {
     ///
     /// Called at mutable binding sites (`let` without annotation).
     /// Regular (non-fresh) literals pass through unchanged.
+    #[must_use]
     pub fn widen_fresh(self) -> Ty {
         match self {
             Ty::Literal(lit, Freshness::Fresh) => Ty::Primitive(PrimitiveType::from_literal(&lit)),
@@ -225,6 +303,7 @@ impl Ty {
     /// Only converts `List(Never)` and `Map(Never, Never)` — non-empty
     /// container literals already have a known element type and don't need
     /// evolving semantics.
+    #[must_use]
     pub fn make_evolving(self) -> Ty {
         match self {
             Ty::List(inner) if matches!(*inner, Ty::Never) => Ty::EvolvingList(inner),
@@ -238,6 +317,23 @@ impl Ty {
 
 // ── Display impls ────────────────────────────────────────────────────────────
 
+impl Ty {
+    /// Whether this type needs parentheses when a postfix modifier (`[]`, `?`)
+    /// is applied. Unions must be grouped because postfix binds tighter than `|`.
+    fn needs_postfix_parens(&self) -> bool {
+        matches!(self, Ty::Union(_))
+    }
+
+    /// Format with parentheses if needed for postfix context.
+    fn fmt_as_postfix_base(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.needs_postfix_parens() {
+            write!(f, "({self})")
+        } else {
+            write!(f, "{self}")
+        }
+    }
+}
+
 impl fmt::Display for Ty {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -246,13 +342,17 @@ impl fmt::Display for Ty {
             Ty::EnumVariant(qn, v) => write!(f, "{qn}.{v}"),
             Ty::TypeAlias(qn) => write!(f, "{qn}"),
             Ty::Primitive(p) => write!(f, "{p}"),
-            Ty::List(inner) => write!(f, "{inner}[]"),
+            Ty::List(inner) => {
+                inner.fmt_as_postfix_base(f)?;
+                write!(f, "[]")
+            }
             Ty::Map(k, v) => write!(f, "map<{k}, {v}>"),
             Ty::EvolvingList(inner) => {
                 if matches!(**inner, Ty::Never) {
                     write!(f, "_[]")
                 } else {
-                    write!(f, "{inner}[] (evolving)")
+                    inner.fmt_as_postfix_base(f)?;
+                    write!(f, "[] (evolving)")
                 }
             }
             Ty::EvolvingMap(k, v) => {
@@ -263,10 +363,16 @@ impl fmt::Display for Ty {
                 }
             }
             Ty::Union(members) => {
-                let parts: Vec<_> = members.iter().map(|m| m.to_string()).collect();
+                let parts: Vec<_> = members
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect();
                 write!(f, "{}", parts.join(" | "))
             }
-            Ty::Optional(inner) => write!(f, "{inner}?"),
+            Ty::Optional(inner) => {
+                inner.fmt_as_postfix_base(f)?;
+                write!(f, "?")
+            }
             Ty::Literal(lit, _freshness) => write!(f, "{lit}"),
             Ty::Function { params, ret } => {
                 let ps: Vec<String> = params
@@ -279,10 +385,12 @@ impl fmt::Display for Ty {
                     .collect();
                 write!(f, "({}) -> {ret}", ps.join(", "))
             }
+            Ty::TypeVar(name) => write!(f, "{name}"),
             Ty::Never => write!(f, "never"),
             Ty::Void => write!(f, "void"),
             Ty::BuiltinUnknown => write!(f, "unknown"),
             Ty::RustType => write!(f, "$rust_type"),
+            Ty::Type => write!(f, "type"),
             Ty::Unknown => write!(f, "unknown"),
             Ty::Error => write!(f, "!error"),
         }

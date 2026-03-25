@@ -1,11 +1,11 @@
-function shell(command: string) -> string {
+function shell(command: string) -> string throws root.errors.Io {
   $rust_io_function
 }
 
-function sleep(ms: int) {
+function sleep(ms: int) -> null throws root.errors.Io {
   $rust_io_function
 }
 
-function panic(message: string) {
-  $rust_function
+function panic(message: string) -> null {
+  $rust_io_function
 }

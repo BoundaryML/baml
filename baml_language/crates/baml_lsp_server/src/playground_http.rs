@@ -11,6 +11,11 @@ use std::{
     },
 };
 
+use bex_heap::BexHeap;
+use sys_types::{
+    CallId, SysOpContext, SysOpOutput,
+    io::{self, owned},
+};
 use tokio::sync::broadcast;
 
 use crate::playground_ws::WsOutMessage;
@@ -19,7 +24,7 @@ use crate::playground_ws::WsOutMessage;
 pub struct PlaygroundHttpState {
     broadcast_tx: broadcast::Sender<WsOutMessage>,
     next_fetch_id: AtomicU64,
-    /// Maps response handle key -> (call_id, fetch_id) for response_text tracking.
+    /// Maps response body pointer → (call_id, fetch_id) for response_text tracking.
     response_to_fetch: std::sync::Mutex<HashMap<usize, (u64, u64)>>,
 }
 
@@ -35,12 +40,68 @@ impl PlaygroundHttpState {
 
 pub struct PlaygroundHttp(pub Arc<PlaygroundHttpState>);
 
-impl sys_types::SysOpHttp for PlaygroundHttp {
-    fn baml_http_send(
+fn response_body_key(resp: &owned::http::Response) -> usize {
+    Arc::as_ptr(&resp._body) as *const () as usize
+}
+
+fn extract_headers_as_hashmap(
+    headers: &indexmap::IndexMap<String, String>,
+) -> HashMap<String, String> {
+    headers
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
+}
+
+impl io::IoClassHttpResponse for PlaygroundHttp {
+    fn text(
         &self,
-        call_id: sys_types::CallId,
-        request: bex_heap::builtin_types::owned::HttpRequest,
-    ) -> sys_types::SysOpOutput<bex_heap::builtin_types::owned::HttpResponse> {
+        heap: &Arc<BexHeap>,
+        call_id: CallId,
+        response: owned::http::Response,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let state = self.0.clone();
+        let key = response_body_key(&response);
+        let fetch_info = state.response_to_fetch.lock().unwrap().remove(&key);
+
+        let native_result = <sys_native::NativeSysOps as io::IoClassHttpResponse>::text(
+            &sys_native::NativeSysOps,
+            heap,
+            call_id,
+            response,
+            ctx,
+        );
+
+        match fetch_info {
+            Some((cid, fetch_id)) => match native_result {
+                SysOpOutput::Async(fut) => SysOpOutput::async_op(async move {
+                    let text = fut.await?;
+                    let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
+                        call_id: cid,
+                        log_id: fetch_id,
+                        status: None,
+                        duration_ms: None,
+                        response_body: Some(text.clone()),
+                        error: None,
+                    });
+                    Ok(text)
+                }),
+                other => other,
+            },
+            None => native_result,
+        }
+    }
+}
+
+impl io::IoNamespaceHttp for PlaygroundHttp {
+    fn send(
+        &self,
+        heap: &Arc<BexHeap>,
+        call_id: CallId,
+        request: owned::http::Request,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
         let state = self.0.clone();
         let cid = call_id.0;
         let fetch_id = state.next_fetch_id.fetch_add(1, Ordering::Relaxed);
@@ -51,18 +112,20 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
             id: fetch_id,
             method: request.method.clone(),
             url: request.url.clone(),
-            request_headers: request
-                .headers
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
+            request_headers: extract_headers_as_hashmap(&request.headers),
             request_body: request.body.clone(),
         });
 
-        let native_result = sys_native::NativeSysOps.baml_http_send(call_id, request);
+        let native_result = <sys_native::NativeSysOps as io::IoNamespaceHttp>::send(
+            &sys_native::NativeSysOps,
+            heap,
+            call_id,
+            request,
+            ctx,
+        );
 
         match native_result {
-            sys_types::SysOpOutput::Async(fut) => sys_types::SysOpOutput::async_op(async move {
+            SysOpOutput::Async(fut) => SysOpOutput::async_op(async move {
                 let result = fut.await;
                 let elapsed = start.elapsed().as_millis() as u64;
                 match &result {
@@ -71,7 +134,7 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             .response_to_fetch
                             .lock()
                             .unwrap()
-                            .insert(resp._handle.key(), (cid, fetch_id));
+                            .insert(response_body_key(resp), (cid, fetch_id));
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
                             call_id: cid,
                             log_id: fetch_id,
@@ -94,7 +157,7 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                 }
                 result
             }),
-            sys_types::SysOpOutput::Ready(result) => {
+            SysOpOutput::Ready(result) => {
                 let elapsed = start.elapsed().as_millis() as u64;
                 match &result {
                     Ok(resp) => {
@@ -102,7 +165,7 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             .response_to_fetch
                             .lock()
                             .unwrap()
-                            .insert(resp._handle.key(), (cid, fetch_id));
+                            .insert(response_body_key(resp), (cid, fetch_id));
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
                             call_id: cid,
                             log_id: fetch_id,
@@ -123,63 +186,24 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                         });
                     }
                 }
-                sys_types::SysOpOutput::Ready(result)
+                SysOpOutput::Ready(result)
             }
         }
     }
 
-    fn baml_http_fetch(
+    fn fetch(
         &self,
-        call_id: sys_types::CallId,
+        heap: &Arc<BexHeap>,
+        call_id: CallId,
         url: String,
-    ) -> sys_types::SysOpOutput<bex_heap::builtin_types::owned::HttpResponse> {
-        let req = bex_heap::builtin_types::owned::HttpRequest {
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::http::Response> {
+        let req = owned::http::Request {
             method: "GET".to_string(),
             url,
             headers: indexmap::IndexMap::new(),
             body: String::new(),
         };
-        self.baml_http_send(call_id, req)
-    }
-
-    fn baml_http_response_text(
-        &self,
-        call_id: sys_types::CallId,
-        response: bex_heap::builtin_types::owned::HttpResponse,
-    ) -> sys_types::SysOpOutput<String> {
-        let state = self.0.clone();
-        let key = response._handle.key();
-        let fetch_info = state.response_to_fetch.lock().unwrap().remove(&key);
-
-        let native_result = sys_native::NativeSysOps.baml_http_response_text(call_id, response);
-
-        match fetch_info {
-            Some((cid, fetch_id)) => match native_result {
-                sys_types::SysOpOutput::Async(fut) => {
-                    sys_types::SysOpOutput::async_op(async move {
-                        let text = fut.await?;
-                        let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
-                            call_id: cid,
-                            log_id: fetch_id,
-                            status: None,
-                            duration_ms: None,
-                            response_body: Some(text.clone()),
-                            error: None,
-                        });
-                        Ok(text)
-                    })
-                }
-                other => other,
-            },
-            None => native_result,
-        }
-    }
-
-    fn baml_http_response_ok(
-        &self,
-        call_id: sys_types::CallId,
-        response: bex_heap::builtin_types::owned::HttpResponse,
-    ) -> sys_types::SysOpOutput<bool> {
-        sys_native::NativeSysOps.baml_http_response_ok(call_id, response)
+        self.send(heap, call_id, req, ctx)
     }
 }

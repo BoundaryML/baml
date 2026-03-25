@@ -14,30 +14,30 @@ function CallsDedup() -> string {
 
 //----
 //- diagnostics
-// Error: Unknown variable `Foo`
+// Error: unresolved name: Foo
 //    ╭─[ headers_duplicate_function_calls.baml:4:13 ]
 //    │
 //  4 │     let a = Foo();
 //    │             ─┬─  
-//    │              ╰─── Unknown variable `Foo`
+//    │              ╰─── unresolved name: Foo
 //    │ 
-//    │ Note: Error code: E0003
+//    │ Note: Error code: E0001
 // ───╯
-// Error: Unknown variable `Foo`
+// Error: unresolved name: Foo
 //    ╭─[ headers_duplicate_function_calls.baml:7:13 ]
 //    │
 //  7 │     let b = Foo();
 //    │             ─┬─  
-//    │              ╰─── Unknown variable `Foo`
+//    │              ╰─── unresolved name: Foo
 //    │ 
-//    │ Note: Error code: E0003
+//    │ Note: Error code: E0001
 // ───╯
-// Error: Unknown variable `Foo`
+// Error: unresolved name: Foo
 //     ╭─[ headers_duplicate_function_calls.baml:10:13 ]
 //     │
 //  10 │     let c = Foo();
 //     │             ─┬─  
-//     │              ╰─── Unknown variable `Foo`
+//     │              ╰─── unresolved name: Foo
 //     │ 
-//     │ Note: Error code: E0003
+//     │ Note: Error code: E0001
 // ────╯

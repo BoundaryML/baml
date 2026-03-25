@@ -118,6 +118,51 @@ class ComplexTypes {
 //     │ 
 //     │ Note: Error code: E0002
 // ────╯
+// Error: unresolved type: apple
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── unresolved type: apple
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: banana
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── unresolved type: banana
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: cherry
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── unresolved type: cherry
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: date_fruit
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── unresolved type: date_fruit
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: eggplant_vegetable
+//     ╭─[ class_secure_types.baml:11:4 ]
+//     │
+//  11 │   i (apple, banana | cherry | date_fruit | eggplant_vegetable)[]
+//     │    ──────────────────────────────┬──────────────────────────────  
+//     │                                  ╰──────────────────────────────── unresolved type: eggplant_vegetable
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
 // Error: unresolved type: char
 //     ╭─[ class_secure_types.baml:12:4 ]
 //     │
@@ -172,6 +217,51 @@ class ComplexTypes {
 //     │ 
 //     │ Note: Error code: E0002
 // ────╯
+// Error: unresolved type: tuple_1
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── unresolved type: tuple_1
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: tuple_2
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── unresolved type: tuple_2
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: tuple_3
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── unresolved type: tuple_3
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: tuple_4
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── unresolved type: tuple_4
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
+// Error: unresolved type: tuple_5
+//     ╭─[ class_secure_types.baml:15:4 ]
+//     │
+//  15 │   m (tuple_1, tuple_2 | tuple_3, (tuple_4, tuple_5))[]
+//     │    ─────────────────────────┬─────────────────────────  
+//     │                             ╰─────────────────────────── unresolved type: tuple_5
+//     │ 
+//     │ Note: Error code: E0002
+// ────╯
 // Error: unresolved type: complex_key_type
 //     ╭─[ class_secure_types.baml:16:4 ]
 //     │
@@ -199,165 +289,3 @@ class ComplexTypes {
 //     │ 
 //     │ Note: Error code: E0002
 // ────╯
-// Error: unresolved type: apple_pie
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: apple_pie
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: char
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: char
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: long_word_123.foobar
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: long_word_123.foobar
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: apple123_456_pie
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: apple123_456_pie
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: stringer
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: stringer
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: char
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: char
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: long
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: long
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: VeryLongWord_With_123_Numbers
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: VeryLongWord_With_123_Numbers
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: tuple_inside_tuple
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: tuple_inside_tuple
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: char
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: char
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: double
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: double
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: long
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: long
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: double
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: double
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: AlphaNumeric_123_456_789
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: AlphaNumeric_123_456_789
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: char
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: char
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: complex_key_type
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: complex_key_type
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: another_key
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: another_key
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: long_long_identifier_123
-//    ╭─[ class_secure_types.baml:1:1 ]
-//    │
-//  1 │ // Tests for validating complex types
-//    │ │ 
-//    │ ╰─ unresolved type: long_long_identifier_123
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯

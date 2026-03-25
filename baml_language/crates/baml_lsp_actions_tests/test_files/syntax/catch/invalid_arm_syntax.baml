@@ -11,6 +11,25 @@ function InvalidArmSyntax(x: int) -> string {
 
 //----
 //- diagnostics
+// Error: unreachable arm
+//    ╭─[ catch_invalid_arm_syntax.baml:7:18 ]
+//    │
+//  7 │     _: string => "ok",
+//    │                  ──┬─  
+//    │                    ╰─── unreachable arm
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: unreachable arm
+//    ╭─[ catch_invalid_arm_syntax.baml:7:23 ]
+//    │
+//  7 │ ╭─▶     _: string => "ok",
+//  8 │ ├─▶     let y = "hi";
+//    │ │                       
+//    │ ╰─────────────────────── unreachable arm
+//    │     
+//    │     Note: Error code: E0001
+// ───╯
 // Error: Expected pattern, found let
 //    ╭─[ catch_invalid_arm_syntax.baml:8:5 ]
 //    │
@@ -28,22 +47,4 @@ function InvalidArmSyntax(x: int) -> string {
 //    │         ╰── Expected '=>' after catch pattern, found identifier
 //    │ 
 //    │ Note: Error code: E0010
-// ───╯
-// Warning: Unreachable catch arm
-//    ╭─[ catch_invalid_arm_syntax.baml:7:5 ]
-//    │
-//  7 │     _: string => "ok",
-//    │     ────┬────  
-//    │         ╰────── Unreachable catch arm
-//    │ 
-//    │ Note: Error code: E0095
-// ───╯
-// Warning: Unreachable catch arm
-//    ╭─[ 4294967295:1:1 ]
-//    │
-//  1 │ 
-//    │ │ 
-//    │ ╰─ Unreachable catch arm
-//    │ 
-//    │ Note: Error code: E0095
 // ───╯

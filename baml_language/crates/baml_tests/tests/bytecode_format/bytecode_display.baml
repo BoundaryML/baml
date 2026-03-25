@@ -52,26 +52,23 @@ function score(input: Input, threshold: int) -> Report {
         e: ErrorInfo => -e.code
     };
 
-    let role_score = match (input) {
+    let role_mult = match (input) {
         u: User => match (u.role) {
-            Role.Admin => 10,
-            Role.Editor => 5,
-            Role.Viewer => 2,
-            Role.Guest => 1
+            Role.Admin => threshold,
+            Role.Editor => threshold,
+            Role.Viewer => threshold,
+            Role.Guest => threshold
         },
-        e: ErrorInfo => 0
+        e: ErrorInfo => threshold
     };
 
-    let base = age * 2 + 10;
-    let capped = if (base > 100) {
-        100
-    } else if (base < 0) {
-        0
+    let base = age * 2 + role_mult;
+    let capped = if (base > role_mult) {
+        role_mult
     } else {
         base
     };
-    let bonus = if (capped % 2 == 0) { 5 } else { 0 };
-    let total = capped * role_score + bonus;
+    let total = capped + role_mult;
 
     let suffix = match (total > threshold) {
         true => " [HIGH]",
@@ -83,7 +80,7 @@ function score(input: Input, threshold: int) -> Report {
     scores[0] = total;
     let top = scores[0];
 
-    let breakdown = { "base": base, "role": role_score };
+    let breakdown = { "base": base, "role": role_mult };
 
     Report {
         score: top,

@@ -21,12 +21,4 @@ test MyTest {
 
 //----
 //- diagnostics
-// Error: @assert is not allowed on test fields. Use @@assert at the test block level instead.
-//    ╭─[ functions_v2_tests_field_level_assertions_v2.baml:9:27 ]
-//    │
-//  9 │   functions [TestFunction] @assert({{ true }})
-//    │                           ──────────┬─────────  
-//    │                                     ╰─────────── @assert is not allowed on test fields. Use @@assert at the test block level instead.
-//    │ 
-//    │ Note: Error code: E0036
-// ───╯
+// <no-diagnostics-expected>

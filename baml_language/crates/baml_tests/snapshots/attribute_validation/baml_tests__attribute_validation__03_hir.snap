@@ -1,49 +1,18 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-class HasDuplicateField {
+=== HIR2 ===
+class user.HasDuplicateDescription {
+  name: string
+}
+class user.HasDuplicateField {
   name: string
   age: int
   name: int
 }
-
-class HasDuplicateDescription {
+class user.HasDuplicateFieldAttr {
   name: string
 }
-
-class HasDuplicateFieldAttr {
-  name: string
-}
-
-enum HasDuplicateVariant {
-  RED
-  BLUE
-  RED
-}
-
-enum HasDuplicateEnumAttr {
-  ONE
-  TWO
-}
-
-enum HasDuplicateVariantAttr {
-  ACTIVE
-  INACTIVE
-}
-
-class stream_HasDuplicateDescription {
-  name: null | string
-}
-
-class stream_HasDuplicateFieldAttr {
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  name: null | string
-}
-
-class stream_HasDuplicateField {
-  name: null | int
-  age: null | int
-  name: null | int
-}
+enum user.HasDuplicateEnumAttr {ONE, TWO}
+enum user.HasDuplicateVariant {RED, BLUE, RED}
+enum user.HasDuplicateVariantAttr {ACTIVE, INACTIVE}

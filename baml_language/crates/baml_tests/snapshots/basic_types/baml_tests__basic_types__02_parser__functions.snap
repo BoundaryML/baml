@@ -19,9 +19,14 @@ SOURCE_FILE
       WORD "User"
     LLM_FUNCTION_BODY
       L_BRACE "{"
-      CLIENT_FIELD "client GPT4"
+      CLIENT_FIELD
         KW_CLIENT "client"
-        WORD "GPT4"
+        STRING_LITERAL "openai/gpt-4o"
+          QUOTE """
+          WORD "openai"
+          SLASH "/"
+          WORD "gpt-4o"
+          QUOTE """
       PROMPT_FIELD
         WORD "prompt"
         RAW_STRING_LITERAL

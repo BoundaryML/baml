@@ -5,12 +5,28 @@ use serde_json::Value;
 
 use crate::{AllowedMetadata, ModelFeatures};
 
+/// Wrap a top-level `PromptAst::Simple` in a `Message` with the client's default role.
+///
+/// Prompts without explicit `{{ _.role() }}` directives produce `Simple` nodes.
+/// Downstream code (merge, consolidate, builders) expects `Message` nodes.
+pub(super) fn wrap_simple_as_message(
+    prompt: bex_vm_types::PromptAst,
+    default_role: &str,
+) -> bex_vm_types::PromptAst {
+    match prompt.as_ref() {
+        PromptAst::Simple(content) => Arc::new(PromptAst::Message {
+            role: default_role.to_string(),
+            content: content.clone(),
+            metadata: Value::default(),
+        }),
+        _ => prompt,
+    }
+}
+
 /// Merge adjacent messages with the same role.
 ///
 /// Walks the top-level `PromptAst::Vec` and merges consecutive `Message` nodes
 /// that share the same role by combining their contents into a `Vec` node.
-/// Adjacent system messages are never merged — they are kept separate so that
-/// each one becomes its own content entry in the final request body.
 ///
 /// Ported from: engine/baml-runtime/src/internal/llm_client/traits/mod.rs:89-102
 pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_types::PromptAst {
@@ -41,10 +57,7 @@ pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_ty
                             content: curr_content,
                             metadata: curr_metadata,
                         },
-                    ) if last_role == curr_role
-                        && last_role != "system"
-                        && (last_metadata == curr_metadata) =>
-                    {
+                    ) if last_role == curr_role && (last_metadata == curr_metadata) => {
                         let merged = Arc::new(PromptAst::Message {
                             role: last_role.clone(),
                             content: last_content.clone().join(curr_content.clone()),
@@ -73,10 +86,6 @@ pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_ty
 
 /// Consolidate system prompts based on provider capabilities.
 ///
-/// When `system_role_allowed` is false (e.g. o1 models, or clients whose
-/// `allowed_roles` excludes "system"):
-/// - ALL system messages are converted to "user"
-///
 /// When `max_one_system_prompt` is true:
 /// - If the entire prompt is a single system message, convert it to "user"
 /// - Otherwise, keep the first system message, convert all subsequent
@@ -86,13 +95,7 @@ pub(super) fn merge_adjacent_roles(prompt: bex_vm_types::PromptAst) -> bex_vm_ty
 pub(super) fn consolidate_system_prompts(
     prompt: bex_vm_types::PromptAst,
     features: &ModelFeatures,
-    system_role_allowed: bool,
 ) -> bex_vm_types::PromptAst {
-    if !system_role_allowed {
-        // System role not in allowed_roles: convert ALL system messages to user
-        return convert_all_system_to_user(prompt);
-    }
-
     if !features.max_one_system_prompt {
         return prompt;
     }
@@ -137,40 +140,6 @@ pub(super) fn consolidate_system_prompts(
                 })
                 .collect();
 
-            Arc::new(PromptAst::Vec(transformed))
-        }
-        PromptAst::Message {
-            role,
-            content,
-            metadata,
-        } if role == "system" => Arc::new(PromptAst::Message {
-            role: "user".to_string(),
-            content: content.clone(),
-            metadata: metadata.clone(),
-        }),
-        _ => prompt,
-    }
-}
-
-/// Convert all system messages to user messages.
-fn convert_all_system_to_user(prompt: bex_vm_types::PromptAst) -> bex_vm_types::PromptAst {
-    match prompt.as_ref() {
-        PromptAst::Vec(messages) => {
-            let transformed: Vec<_> = messages
-                .iter()
-                .map(|msg| match msg.as_ref() {
-                    PromptAst::Message {
-                        role,
-                        content,
-                        metadata,
-                    } if role == "system" => Arc::new(PromptAst::Message {
-                        role: "user".to_string(),
-                        content: content.clone(),
-                        metadata: metadata.clone(),
-                    }),
-                    _ => msg.clone(),
-                })
-                .collect();
             Arc::new(PromptAst::Vec(transformed))
         }
         PromptAst::Message {
@@ -258,8 +227,6 @@ fn filter_metadata_value(metadata: &Value, features: &ModelFeatures) -> Value {
 mod tests {
     use std::sync::Arc;
 
-    use indexmap::IndexMap;
-
     use super::*;
     use crate::{AllowedMetadata, LlmProvider, ModelFeatures};
 
@@ -275,30 +242,40 @@ mod tests {
 
     #[test]
     fn test_openai_defaults() {
-        let features = ModelFeatures::for_provider(LlmProvider::OpenAi, &IndexMap::new());
+        let features = ModelFeatures::for_provider(
+            LlmProvider::OpenAi,
+            &crate::baml_std::PrimitiveClientOptions::default(),
+        );
         assert!(!features.max_one_system_prompt);
     }
 
     #[test]
     fn test_anthropic_defaults() {
-        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &IndexMap::new());
-        assert!(!features.max_one_system_prompt);
+        let features = ModelFeatures::for_provider(
+            LlmProvider::Anthropic,
+            &crate::baml_std::PrimitiveClientOptions::default(),
+        );
+        assert!(features.max_one_system_prompt);
     }
 
     #[test]
     fn test_strategy_provider_defaults() {
-        let features = ModelFeatures::for_provider(LlmProvider::BamlFallback, &IndexMap::new());
+        let features = ModelFeatures::for_provider(
+            LlmProvider::BamlFallback,
+            &crate::baml_std::PrimitiveClientOptions::default(),
+        );
         assert!(features.max_one_system_prompt);
     }
 
     #[test]
     fn test_override_max_one_system_prompt() {
-        let mut options = IndexMap::new();
-        options.insert(
-            "max_one_system_prompt".to_string(),
-            bex_external_types::BexExternalValue::Bool(false),
+        let features = ModelFeatures::for_provider(
+            LlmProvider::Anthropic,
+            &crate::baml_std::PrimitiveClientOptions {
+                max_one_system_prompt: Some(false),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
-        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &options);
         assert!(!features.max_one_system_prompt);
     }
 
@@ -356,38 +333,16 @@ mod tests {
         assert_eq!(result, msg("user", "Hello"));
     }
 
-    #[test]
-    fn test_no_merge_adjacent_system_messages() {
-        let prompt = Arc::new(PromptAst::Vec(vec![
-            msg("system", "First"),
-            msg("system", "Second"),
-            msg("user", "Hello"),
-            msg("user", "World"),
-        ]));
-        let result = merge_adjacent_roles(prompt);
-        let expected = Arc::new(PromptAst::Vec(vec![
-            msg("system", "First"),
-            msg("system", "Second"),
-            Arc::new(PromptAst::Message {
-                role: "user".to_string(),
-                content: Arc::new("HelloWorld".to_string().into()),
-                metadata: Value::Null,
-            }),
-        ]));
-        assert_eq!(result, expected);
-    }
-
     // ---- consolidate_system_prompts tests ----
 
     #[test]
     fn test_consolidate_single_system_to_user() {
         let features = ModelFeatures {
             max_one_system_prompt: true,
-
             allowed_metadata: AllowedMetadata::All,
         };
         let prompt = msg("system", "You are helpful");
-        let result = consolidate_system_prompts(prompt, &features, true);
+        let result = consolidate_system_prompts(prompt, &features);
         assert_eq!(result, msg("user", "You are helpful"));
     }
 
@@ -395,7 +350,6 @@ mod tests {
     fn test_consolidate_keeps_first_system() {
         let features = ModelFeatures {
             max_one_system_prompt: true,
-
             allowed_metadata: AllowedMetadata::All,
         };
         let prompt = Arc::new(PromptAst::Vec(vec![
@@ -403,7 +357,7 @@ mod tests {
             msg("user", "Hello"),
             msg("system", "Second system"),
         ]));
-        let result = consolidate_system_prompts(prompt, &features, true);
+        let result = consolidate_system_prompts(prompt, &features);
         let expected = Arc::new(PromptAst::Vec(vec![
             msg("system", "First system"),
             msg("user", "Hello"),
@@ -416,14 +370,13 @@ mod tests {
     fn test_consolidate_noop_when_disabled() {
         let features = ModelFeatures {
             max_one_system_prompt: false,
-
             allowed_metadata: AllowedMetadata::All,
         };
         let prompt = Arc::new(PromptAst::Vec(vec![
             msg("system", "First"),
             msg("system", "Second"),
         ]));
-        let result = consolidate_system_prompts(prompt, &features, true);
+        let result = consolidate_system_prompts(prompt, &features);
         let expected = Arc::new(PromptAst::Vec(vec![
             msg("system", "First"),
             msg("system", "Second"),
@@ -437,7 +390,6 @@ mod tests {
     fn test_filter_metadata_all_allowed() {
         let features = ModelFeatures {
             max_one_system_prompt: false,
-
             allowed_metadata: AllowedMetadata::All,
         };
         let prompt = msg("user", "Hello");
@@ -449,7 +401,6 @@ mod tests {
     fn test_filter_metadata_none_allowed() {
         let features = ModelFeatures {
             max_one_system_prompt: false,
-
             allowed_metadata: AllowedMetadata::None,
         };
         let prompt = msg("user", "Hello");
@@ -461,7 +412,6 @@ mod tests {
     fn test_filter_metadata_only_specific() {
         let features = ModelFeatures {
             max_one_system_prompt: false,
-
             allowed_metadata: AllowedMetadata::Only(vec!["cache_control".to_string()]),
         };
         let prompt = msg("user", "Hello");
@@ -481,10 +431,13 @@ mod tests {
             msg("assistant", "I'm fine"),
         ]));
 
-        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &IndexMap::new());
+        let features = ModelFeatures::for_provider(
+            LlmProvider::Anthropic,
+            &crate::baml_std::PrimitiveClientOptions::default(),
+        );
 
         let result = merge_adjacent_roles(prompt);
-        let result = consolidate_system_prompts(result, &features, true);
+        let result = consolidate_system_prompts(result, &features);
         let result = filter_metadata(result, &features);
 
         let expected = Arc::new(PromptAst::Vec(vec![
@@ -494,7 +447,7 @@ mod tests {
                 content: Arc::new("HelloHow are you?".to_string().into()),
                 metadata: Value::Null,
             }),
-            msg("system", "Also be concise"),
+            msg("user", "Also be concise"),
             msg("assistant", "I'm fine"),
         ]));
         assert_eq!(result, expected);

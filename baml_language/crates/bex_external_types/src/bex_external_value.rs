@@ -24,7 +24,6 @@
 
 // Re-export Ty and TypeName from baml_type for convenience
 pub use baml_type::{Ty, TyAttr, TypeName};
-use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
@@ -85,10 +84,12 @@ impl UnionMetadata {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BexExternalAdt {
-    Media(bex_vm_types::MediaValue),
-    PromptAst(bex_vm_types::PromptAst),
     Collector(bex_vm_types::CollectorRef),
     Type(baml_type::Ty),
+    /// A rendered prompt AST (from `baml.llm.render_prompt`).
+    PromptAst(std::sync::Arc<baml_builtins::PromptAst>),
+    /// A media value (image, audio, etc.) passed as a function argument.
+    Media(std::sync::Arc<baml_builtins::MediaValue>),
 }
 
 /// A deep-copied value tree with no heap references.
@@ -104,7 +105,7 @@ pub enum BexExternalAdt {
 /// - **BexExternalValue**: When you need to convert the entire value to another format
 ///   (Python objects, JSON, etc.). Since you're traversing anyway, might as
 ///   well have owned data.
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Default)]
 pub enum BexExternalValue {
     /// Null value.
     #[default]
@@ -163,8 +164,9 @@ pub enum BexExternalValue {
         metadata: UnionMetadata,
     },
 
-    /// Resource handle (file, socket, etc.) for sys operations.
-    Resource(ResourceHandle),
+    /// Opaque Rust data for `$rust_type` fields.
+    /// Engine converts to `Object::RustData` on the VM heap.
+    RustData(std::sync::Arc<dyn std::any::Any + Send + Sync>),
 
     /// Reference to a function by its global index.
     ///
@@ -184,19 +186,139 @@ pub enum BexExternalValue {
     Adt(BexExternalAdt),
 }
 
+impl std::fmt::Debug for BexExternalValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Null => write!(f, "Null"),
+            Self::Int(v) => f.debug_tuple("Int").field(v).finish(),
+            Self::Float(v) => f.debug_tuple("Float").field(v).finish(),
+            Self::Bool(v) => f.debug_tuple("Bool").field(v).finish(),
+            Self::String(v) => f.debug_tuple("String").field(v).finish(),
+            Self::Array {
+                element_type,
+                items,
+            } => f
+                .debug_struct("Array")
+                .field("element_type", element_type)
+                .field("items", items)
+                .finish(),
+            Self::Map {
+                key_type,
+                value_type,
+                entries,
+            } => f
+                .debug_struct("Map")
+                .field("key_type", key_type)
+                .field("value_type", value_type)
+                .field("entries", entries)
+                .finish(),
+            Self::Instance { class_name, fields } => f
+                .debug_struct("Instance")
+                .field("class_name", class_name)
+                .field("fields", fields)
+                .finish(),
+            Self::Variant {
+                enum_name,
+                variant_name,
+            } => f
+                .debug_struct("Variant")
+                .field("enum_name", enum_name)
+                .field("variant_name", variant_name)
+                .finish(),
+            Self::Union { value, metadata } => f
+                .debug_struct("Union")
+                .field("value", value)
+                .field("metadata", metadata)
+                .finish(),
+            Self::RustData(_) => write!(f, "RustData(...)"),
+            Self::FunctionRef { global_index } => f
+                .debug_struct("FunctionRef")
+                .field("global_index", global_index)
+                .finish(),
+            Self::Handle(v) => f.debug_tuple("Handle").field(v).finish(),
+            Self::Adt(v) => f.debug_tuple("Adt").field(v).finish(),
+        }
+    }
+}
+
+impl PartialEq for BexExternalValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Null, Self::Null) => true,
+            (Self::Int(a), Self::Int(b)) => a == b,
+            (Self::Float(a), Self::Float(b)) => a == b,
+            (Self::Bool(a), Self::Bool(b)) => a == b,
+            (Self::String(a), Self::String(b)) => a == b,
+            (
+                Self::Array {
+                    element_type: et1,
+                    items: i1,
+                },
+                Self::Array {
+                    element_type: et2,
+                    items: i2,
+                },
+            ) => et1 == et2 && i1 == i2,
+            (
+                Self::Map {
+                    key_type: k1,
+                    value_type: v1,
+                    entries: e1,
+                },
+                Self::Map {
+                    key_type: k2,
+                    value_type: v2,
+                    entries: e2,
+                },
+            ) => k1 == k2 && v1 == v2 && e1 == e2,
+            (
+                Self::Instance {
+                    class_name: c1,
+                    fields: f1,
+                },
+                Self::Instance {
+                    class_name: c2,
+                    fields: f2,
+                },
+            ) => c1 == c2 && f1 == f2,
+            (
+                Self::Variant {
+                    enum_name: e1,
+                    variant_name: v1,
+                },
+                Self::Variant {
+                    enum_name: e2,
+                    variant_name: v2,
+                },
+            ) => e1 == e2 && v1 == v2,
+            (
+                Self::Union {
+                    value: v1,
+                    metadata: m1,
+                },
+                Self::Union {
+                    value: v2,
+                    metadata: m2,
+                },
+            ) => v1 == v2 && m1 == m2,
+            (Self::RustData(a), Self::RustData(b)) => std::sync::Arc::ptr_eq(a, b),
+            (Self::FunctionRef { global_index: a }, Self::FunctionRef { global_index: b }) => {
+                a == b
+            }
+            (Self::Handle(a), Self::Handle(b)) => a == b,
+            (Self::Adt(a), Self::Adt(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
 impl BexExternalAdt {
     pub fn type_name(&self) -> &'static str {
         match self {
-            BexExternalAdt::Media(media) => match media.kind {
-                baml_type::MediaKind::Image => "image",
-                baml_type::MediaKind::Audio => "audio",
-                baml_type::MediaKind::Video => "video",
-                baml_type::MediaKind::Pdf => "pdf",
-                baml_type::MediaKind::Generic => "media",
-            },
-            BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Collector(_) => "collector",
             BexExternalAdt::Type(_) => "type",
+            BexExternalAdt::PromptAst(_) => "prompt_ast",
+            BexExternalAdt::Media(_) => "media",
         }
     }
 }
@@ -270,11 +392,7 @@ impl BexExternalValue {
             BexExternalValue::Instance { .. } => "instance",
             BexExternalValue::Variant { .. } => "variant",
             BexExternalValue::Union { .. } => "union",
-            BexExternalValue::Resource(handle) => match handle.kind() {
-                bex_resource_types::ResourceType::File => "file",
-                bex_resource_types::ResourceType::Socket => "socket",
-                bex_resource_types::ResourceType::Response => "http-response",
-            },
+            BexExternalValue::RustData(_) => "rust_data",
             BexExternalValue::Adt(adt) => adt.type_name(),
             BexExternalValue::FunctionRef { .. } => "function",
             BexExternalValue::Handle(_) => "handle",
@@ -365,21 +483,9 @@ impl AsBexExternalValue for bool {
     }
 }
 
-impl AsBexExternalValue for bex_vm_types::PromptAst {
-    fn into_bex_external_value(self) -> BexExternalValue {
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
-    }
-}
-
 impl AsBexExternalValue for baml_type::Ty {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Type(self))
-    }
-}
-
-impl AsBexExternalValue for bex_vm_types::MediaValue {
-    fn into_bex_external_value(self) -> BexExternalValue {
-        BexExternalValue::Adt(BexExternalAdt::Media(self))
     }
 }
 
@@ -392,36 +498,76 @@ impl<T: AsBexExternalValue> AsBexExternalValue for Option<T> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_resource_variant_construction() {
-        // Test that we can construct a Resource variant with an opaque handle
-        let handle = bex_resource_types::ResourceHandle::new_without_cleanup(
-            1,
-            bex_resource_types::ResourceType::File,
-            "test.txt".to_string(),
-        );
-
-        let resource = BexExternalValue::Resource(handle);
-
-        // Test type_name returns "file"
-        assert_eq!(resource.type_name(), "file");
+impl AsBexExternalValue for indexmap::IndexMap<String, String> {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Map {
+            key_type: baml_type::Ty::string(),
+            value_type: baml_type::Ty::string(),
+            entries: self
+                .into_iter()
+                .map(|(k, v)| (k, v.into_bex_external_value()))
+                .collect(),
+        }
+        .into_bex_external_value()
     }
+}
 
-    #[test]
-    fn test_resource_socket_type_name() {
-        let handle = bex_resource_types::ResourceHandle::new_without_cleanup(
-            2,
-            bex_resource_types::ResourceType::Socket,
-            "localhost:8080".to_string(),
-        );
-
-        let resource = BexExternalValue::Resource(handle);
-
-        // Test type_name returns "socket"
-        assert_eq!(resource.type_name(), "socket");
+impl AsBexExternalValue for indexmap::IndexMap<String, BexExternalValue> {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Map {
+            key_type: baml_type::Ty::string(),
+            value_type: baml_type::Ty::unknown(),
+            entries: self,
+        }
+        .into_bex_external_value()
     }
+}
+
+impl AsBexExternalValue for Vec<String> {
+    fn into_bex_external_value(self) -> BexExternalValue {
+        BexExternalValue::Array {
+            element_type: baml_type::Ty::string(),
+            items: self.into_iter().map(BexExternalValue::String).collect(),
+        }
+        .into_bex_external_value()
+    }
+}
+
+/// Trait for opaque Rust data stored in `Object::RustData` that knows how to
+/// convert itself to a [`BexExternalValue`].
+///
+/// Implement this for any type that is stored as `RustData` on the VM heap and
+/// needs to survive the VM-to-external conversion boundary (e.g. `PromptAst`,
+/// `MediaValue`).
+pub trait ToBexExternalValue: std::any::Any + Send + Sync {
+    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue;
+}
+
+impl ToBexExternalValue for baml_builtins::PromptAst {
+    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
+    }
+}
+
+impl ToBexExternalValue for baml_builtins::MediaValue {
+    fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
+        BexExternalValue::Adt(BexExternalAdt::Media(self))
+    }
+}
+
+/// Try to convert an `Arc<dyn Any + Send + Sync>` from `Object::RustData` to a
+/// [`BexExternalValue`] by attempting downcast to known [`ToBexExternalValue`]
+/// implementors.
+///
+/// Returns `None` if the concrete type is not recognised.
+pub fn try_convert_rust_data(
+    arc: &std::sync::Arc<dyn std::any::Any + Send + Sync>,
+) -> Option<BexExternalValue> {
+    if let Ok(typed) = arc.clone().downcast::<baml_builtins::PromptAst>() {
+        return Some(typed.to_bex_external_value());
+    }
+    if let Ok(typed) = arc.clone().downcast::<baml_builtins::MediaValue>() {
+        return Some(typed.to_bex_external_value());
+    }
+    None
 }

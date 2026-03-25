@@ -21,8 +21,7 @@
 
 use baml_base::{FileId, SourceFile, Span};
 use baml_compiler_diagnostics::{Diagnostic, DiagnosticId, DiagnosticPhase, ToDiagnostic};
-use baml_compiler2_hir::body::FunctionBody;
-use baml_compiler2_ppir::file_semantic_index;
+use baml_compiler2_hir::{body::FunctionBody, file_semantic_index};
 use baml_compiler2_tir::inference::render_scope_diagnostics;
 
 use crate::Db;
@@ -123,10 +122,19 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // param types and return type to check for unresolved types.
     // Expression-body functions already get this check in step 3 via
     // `infer_scope_types`, so we skip them to avoid duplicate diagnostics.
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+
+    // Build a method → enclosing class list so we can merge class generic params.
+    let mut method_to_class = Vec::new();
+    for (class_id, class_data) in &item_tree.classes {
+        for &method_id in &class_data.methods {
+            method_to_class.push((method_id, *class_id));
+        }
+    }
+
     for (local_id, func_data) in &item_tree.functions {
         let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
         let body = baml_compiler2_hir::body::function_body(db, func_loc);
@@ -140,12 +148,24 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
         let mut type_errors = Vec::new();
 
+        // Compute the effective generic params: method params + enclosing class params.
+        let mut generic_params = func_data.generic_params.clone();
+        if let Some((_, class_id)) = method_to_class.iter().find(|(mid, _)| mid == local_id) {
+            let class_data = &item_tree[*class_id];
+            // Prepend class generic params (class params come first, method params after)
+            let mut merged = class_data.generic_params.clone();
+            merged.extend(generic_params);
+            generic_params = merged;
+        }
+
         // Check return type — use the span from the item tree's SpannedTypeExpr.
         if let Some(ret_te) = &sig.return_type {
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                 db,
                 ret_te,
-                &pkg_items,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &generic_params,
                 &mut type_errors,
             );
             if !type_errors.is_empty() {
@@ -170,10 +190,12 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
         // Check parameter types — use the type_expr span, not the whole param span.
         for (i, (_name, te)) in sig.params.iter().enumerate() {
             type_errors.clear();
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+            baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns(
                 db,
                 te,
-                &pkg_items,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &generic_params,
                 &mut type_errors,
             );
             if !type_errors.is_empty() {
@@ -243,6 +265,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::DeadCode { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::VoidUsedAsValue => DiagnosticId::TypeMismatch,
         TirTypeError::NotCallable { .. } => DiagnosticId::NotCallable,
+        TirTypeError::NotIterable { .. } => DiagnosticId::NotCallable,
         TirTypeError::NotIndexable { .. } => DiagnosticId::NotIndexable,
         TirTypeError::InvalidBinaryOp { .. } => DiagnosticId::InvalidOperator,
         TirTypeError::InvalidUnaryOp { .. } => DiagnosticId::InvalidOperator,
@@ -256,5 +279,6 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InvalidCatchBindingType { .. } => DiagnosticId::InvalidCatchBindingType,
         TirTypeError::ThrowsContractViolation { .. } => DiagnosticId::ThrowsContractViolation,
         TirTypeError::ExtraneousThrowsDeclaration { .. } => DiagnosticId::ThrowsContractExtraneous,
+        TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
     }
 }

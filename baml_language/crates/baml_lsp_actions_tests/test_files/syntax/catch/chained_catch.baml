@@ -24,48 +24,53 @@ function TripleChainedCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: Unreachable catch arm
-//    ╭─[ catch_chained_catch.baml:8:7 ]
+// Error: unreachable arm
+//    ╭─[ catch_chained_catch.baml:8:20 ]
 //    │
-//  8 │     _: string => "string error"
-//    │       ────┬────  
-//    │           ╰────── Unreachable catch arm
-//    │ 
-//    │ Note: Error code: E0095
+//  8 │ ╭─▶     _: string => "string error"
+//  9 │ ├─▶   } catch (e2) {
+//    │ │                      
+//    │ ╰────────────────────── unreachable arm
+//    │     
+//    │     Note: Error code: E0001
 // ───╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_chained_catch.baml:10:7 ]
+// Error: unreachable arm
+//     ╭─[ catch_chained_catch.baml:10:17 ]
 //     │
-//  10 │     _: int => "int error"
-//     │       ───┬──  
-//     │          ╰──── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
+//  10 │ ╭─▶     _: int => "int error"
+//  11 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
 // ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_chained_catch.baml:17:7 ]
+// Error: unreachable arm
+//     ╭─[ catch_chained_catch.baml:17:20 ]
 //     │
-//  17 │     _: string => "first"
-//     │       ────┬────  
-//     │           ╰────── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
+//  17 │ ╭─▶     _: string => "first"
+//  18 │ ├─▶   } catch (e2) {
+//     │ │                      
+//     │ ╰────────────────────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
 // ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_chained_catch.baml:19:7 ]
+// Error: unreachable arm
+//     ╭─[ catch_chained_catch.baml:19:17 ]
 //     │
-//  19 │     _: int => "second"
-//     │       ───┬──  
-//     │          ╰──── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
+//  19 │ ╭─▶     _: int => "second"
+//  20 │ ├─▶   } catch (e3) {
+//     │ │                      
+//     │ ╰────────────────────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
 // ────╯
-// Warning: Unreachable catch arm
-//     ╭─[ catch_chained_catch.baml:21:7 ]
+// Error: unreachable arm
+//     ╭─[ catch_chained_catch.baml:21:12 ]
 //     │
-//  21 │     _ => "third"
-//     │       ┬  
-//     │       ╰── Unreachable catch arm
-//     │ 
-//     │ Note: Error code: E0095
+//  21 │ ╭─▶     _ => "third"
+//  22 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
 // ────╯

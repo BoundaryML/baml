@@ -71,7 +71,7 @@ pub enum TypeInfo {
     TemplateString { name: String },
     /// A local variable (let binding or parameter): name + inferred/declared type.
     LocalVar { name: String, ty: String },
-    /// A non-structural top-level item (client, generator, test, retry_policy).
+    /// A non-structural top-level item (client, generator, test, `retry_policy`).
     OtherItem { name: String, kind: &'static str },
 }
 
@@ -170,7 +170,7 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
     match resolved {
         baml_compiler2_tir::resolve::ResolvedName::Item(def)
         | baml_compiler2_tir::resolve::ResolvedName::Builtin(def) => {
-            type_info_for_definition(db, def)
+            Some(type_info_for_definition(db, def))
         }
 
         baml_compiler2_tir::resolve::ResolvedName::Local {
@@ -189,7 +189,7 @@ pub fn type_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<TypeIn
 // ── type_info_for_definition ──────────────────────────────────────────────────
 
 /// Build `TypeInfo` for a top-level item definition.
-fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo> {
+fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
     match def {
         Definition::Function(func_loc) => {
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
@@ -203,19 +203,16 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
                     )
                 })
                 .collect();
-            let return_type = sig
-                .return_type
-                .as_ref()
-                .map(|te| utils::display_type_expr(te));
-            Some(TypeInfo::Function {
+            let return_type = sig.return_type.as_ref().map(utils::display_type_expr);
+            TypeInfo::Function {
                 name: sig.name.as_str().to_string(),
                 params,
                 return_type,
-            })
+            }
         }
 
         Definition::Class(class_loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
             let class_data = &item_tree[class_loc.id(db)];
             let class_name = class_data.name.as_str().to_string();
 
@@ -227,28 +224,28 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
                 .map(|(field_name, ty)| (field_name.as_str().to_string(), utils::display_ty(ty)))
                 .collect();
 
-            Some(TypeInfo::Class {
+            TypeInfo::Class {
                 name: class_name,
                 fields,
-            })
+            }
         }
 
         Definition::Enum(enum_loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
             let enum_data = &item_tree[enum_loc.id(db)];
             let variants = enum_data
                 .variants
                 .iter()
                 .map(|v| v.name.as_str().to_string())
                 .collect();
-            Some(TypeInfo::Enum {
+            TypeInfo::Enum {
                 name: enum_data.name.as_str().to_string(),
                 variants,
-            })
+            }
         }
 
         Definition::TypeAlias(alias_loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, alias_loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, alias_loc.file(db));
             let alias_data = &item_tree[alias_loc.id(db)];
             let alias_name = alias_data.name.as_str().to_string();
 
@@ -256,54 +253,68 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> Option<TypeInfo
             let resolved = baml_compiler2_tir::inference::resolve_type_alias(db, alias_loc);
             let expansion = utils::display_ty(&resolved.ty);
 
-            Some(TypeInfo::TypeAlias {
+            TypeInfo::TypeAlias {
                 name: alias_name,
                 expansion,
-            })
+            }
         }
 
         Definition::TemplateString(ts_loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, ts_loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, ts_loc.file(db));
             let ts_data = &item_tree[ts_loc.id(db)];
-            Some(TypeInfo::TemplateString {
+            TypeInfo::TemplateString {
                 name: ts_data.name.as_str().to_string(),
-            })
+            }
         }
 
         Definition::Client(loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
-            Some(TypeInfo::OtherItem {
+            TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
                 kind: "client",
-            })
+            }
         }
 
         Definition::Generator(loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
-            Some(TypeInfo::OtherItem {
+            TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
                 kind: "generator",
-            })
+            }
         }
 
         Definition::Test(loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
-            Some(TypeInfo::OtherItem {
+            TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
                 kind: "test",
-            })
+            }
         }
 
         Definition::RetryPolicy(loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
             let data = &item_tree[loc.id(db)];
-            Some(TypeInfo::OtherItem {
+            TypeInfo::OtherItem {
                 name: data.name.as_str().to_string(),
                 kind: "retry_policy",
-            })
+            }
+        }
+
+        Definition::Let(loc) => {
+            let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+            let data = &item_tree[loc.id(db)];
+            let kind = match data.origin {
+                baml_compiler2_ast::ast::LetOrigin::Client => "client",
+                baml_compiler2_ast::ast::LetOrigin::RetryPolicy => "retry_policy",
+                _ => "let",
+            };
+            TypeInfo::OtherItem {
+                name: data.name.as_str().to_string(),
+                kind,
+            }
         }
     }
 }
@@ -318,11 +329,11 @@ fn local_type_info(
     name: &Name,
     site: DefinitionSite,
 ) -> Option<TypeInfo> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
 
     // Find the enclosing Function scope.
-    let scope_id = index.scope_at_offset(at_offset);
+    let scope_id = index.scope_at_offset(at_offset, None);
     let enclosing_func_scope = index
         .ancestor_scopes(scope_id)
         .into_iter()
@@ -374,16 +385,24 @@ fn local_type_info(
             let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
             let ty_str = inference
                 .binding_type(pat_id)
-                .map(|ty| utils::display_ty(ty))
+                .map(utils::display_ty)
                 .unwrap_or_else(|| {
                     // Try child scopes if the binding is in a nested block.
-                    find_binding_ty_in_scopes(db, &index, pat_id)
+                    find_binding_ty_in_scopes(db, index, pat_id)
                         .unwrap_or_else(|| "unknown".to_string())
                 });
 
             Some(TypeInfo::LocalVar {
                 name: name.as_str().to_string(),
                 ty: ty_str,
+            })
+        }
+
+        DefinitionSite::PatternBinding(_) => {
+            // Pattern bindings — report as local variable with unknown type for now.
+            Some(TypeInfo::LocalVar {
+                name: name.as_str().to_string(),
+                ty: "unknown".to_string(),
             })
         }
     }

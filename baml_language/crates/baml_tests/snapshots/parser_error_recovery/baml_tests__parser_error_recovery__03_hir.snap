@@ -1,95 +1,34 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function Foo() -> <unknown> {
+=== HIR2 ===
+enum user.Status {ACTIVE, INACTIVE, PENDING}
+function user.Foo() -> ?  [expr] {
+  {  } GPT4
 }
-
-function GPT4.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("GPT4", "unknown", "system", ["system", "user", "assistant"], {  })
-}
-
-enum Status {
-  ACTIVE
-  INACTIVE
-  PENDING
-}
-
-client GPT4 {
-  provider: unknown
-}
-
-class Another {
+class user.Another {
   field: int
 }
-
-class User {
+class user.User {
   name: string
 }
-
-class stream_User {
-  name: null | string
-}
-
-class stream_Another {
-  field: null | int
-}
-
-function Incomplete(param1: string) -> <unknown> {
-    // missing body
-}
-
-function NextFunction() -> string {
-    return "parsed";
-}
-
-class Partial {
-  field1: str
-  field2: <unknown>
+class user.Partial {
+  field1: user.str
+  field2: ?
   field3: string
   field4: string
-  string: <unknown>
+  string: ?
 }
-
-enum ValidEnum {
-  OPTION1
-  OPTION2
+enum user.VALUE1 {}
+enum user.ValidEnum {OPTION1, OPTION2}
+function user.Incomplete(param1: string) -> ?  [missing]
+function user.NextFunction() -> string  [expr] {
+  { return "parsed" }
 }
-
-class stream_Partial {
-  field1: null | str
-  field2: <unknown>
-  sap: <unknown>
-  class_completed_field_missing: null
-  field3: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  field4: null | string
-
-  string: <unknown>
-  sap: <unknown>
-  class_completed_field_missing: null
-}
-
-class Test {
+class user.Test {
   field1: string
   field2: string
-  another: closed
+  another: user.closed
   string: ")  // Should still parse this
-}"
-}
-
-class stream_Test {
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  field1: null | string
-
-  @sap.class_in_progress_field_missing(null)
-  @sap.class_completed_field_missing(null)
-  field2: null | string
-
-  another: null | closed
-  string: never | ")  // Should still parse this
 }"
 }

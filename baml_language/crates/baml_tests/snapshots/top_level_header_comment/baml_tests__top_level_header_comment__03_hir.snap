@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function Foo() -> int {
-    1
+=== HIR2 ===
+function user.Foo() -> int  [expr] {
+  {  } 1
 }

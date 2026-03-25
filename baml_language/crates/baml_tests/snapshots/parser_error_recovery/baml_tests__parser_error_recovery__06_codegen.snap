@@ -1,29 +1,15 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function Foo() -> null {
+function user.Foo() -> void {
     load_const null
     return
 }
 
-function GPT4.resolve() -> baml.llm.PrimitiveClient {
-    load_const "GPT4"
-    load_const "unknown"
-    load_const "system"
-    load_const "system"
-    load_const "user"
-    load_const "assistant"
-    alloc_array 3
-    alloc_map 0
-    dispatch_future baml.llm.build_primitive_client
-    await
-    return
+function user.Incomplete(param1: string) -> null {
 }
 
-function Incomplete(param1: string) -> null {
-}
-
-function NextFunction() -> string {
+function user.NextFunction() -> string {
     load_const "parsed"
     return
 }

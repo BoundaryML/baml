@@ -48,7 +48,7 @@ test BasicTest {
 // test_block.baml:12:1 (keyword) len=8 "function"
 // test_block.baml:12:10 (function) len=9 "Summarize"
 // test_block.baml:12:20 (parameter) len=5 "input"
-// test_block.baml:12:27 (class) len=5 "Input"
+// test_block.baml:12:27 (namespace) len=5 "Input"
 // test_block.baml:12:37 (type) len=6 "string"
 // test_block.baml:13:3 (property) len=6 "client"
 // test_block.baml:14:3 (property) len=6 "prompt"

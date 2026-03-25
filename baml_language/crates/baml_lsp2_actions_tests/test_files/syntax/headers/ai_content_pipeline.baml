@@ -134,30 +134,12 @@ function AIContentPipeline(video_id: string, zoom_meeting_id: string, transcript
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved name: kind
-//     ╭─[ headers_ai_content_pipeline.baml:40:38 ]
-//     │
-//  40 │         let structure = GetStructure(kind);
-//     │                                      ──┬─  
-//     │                                        ╰─── unresolved name: kind
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
 // Error: unresolved name: GenerateContent
 //     ╭─[ headers_ai_content_pipeline.baml:41:21 ]
 //     │
 //  41 │         let draft = GenerateContent(kind, video_id, summary);
 //     │                     ───────┬───────  
 //     │                            ╰───────── unresolved name: GenerateContent
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: kind
-//     ╭─[ headers_ai_content_pipeline.baml:41:37 ]
-//     │
-//  41 │         let draft = GenerateContent(kind, video_id, summary);
-//     │                                     ──┬─  
-//     │                                       ╰─── unresolved name: kind
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

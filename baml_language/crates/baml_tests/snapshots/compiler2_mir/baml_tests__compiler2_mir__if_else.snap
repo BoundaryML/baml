@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.f(x: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // x // param
+    let _2: bool
+
+    bb0: {
+        _2 = copy _1 > const 0_i64;
+        branch copy _2 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const "non-positive";
+        goto -> bb3;
+    }
+
+    bb2: {
+        _0 = const "positive";
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}

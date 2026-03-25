@@ -21,12 +21,4 @@ function main() -> int {
 
 //----
 //- diagnostics
-// Error: unresolved name: baml
-//     ╭─[ expr_null.baml:13:15 ]
-//     │
-//  13 │     let copy = baml.deep_copy(a);
-//     │               ───────┬───────  
-//     │                      ╰───────── unresolved name: baml
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+// <no-diagnostics-expected>

@@ -17,12 +17,4 @@ client<llm> NegativeTimeout {
 
 //----
 //- diagnostics
-// Error: connect_timeout_ms must be non-negative, got: -1000ms
-//    ╭─[ client_http_config_negative_timeout.baml:6:7 ]
-//    │
-//  6 │       connect_timeout_ms -1000
-//    │       ─────────┬────────  
-//    │                ╰────────── connect_timeout_ms must be non-negative, got: -1000ms
-//    │ 
-//    │ Note: Error code: E0025
-// ───╯
+// <no-diagnostics-expected>

@@ -96,7 +96,7 @@ fn walk_dir_native(
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
-    for entry in entries.filter_map(|e| e.ok()) {
+    for entry in entries.filter_map(std::result::Result::ok) {
         let path = entry.path();
         if path.is_dir() {
             walk_dir_native(&path, pattern, results);

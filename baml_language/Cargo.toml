@@ -3,6 +3,7 @@ members = [
   "crates/*",
   "rig_tests/crates/*",
 ]
+exclude = [  ]
 resolver = "2"
 
 [workspace.package]
@@ -23,27 +24,24 @@ version = "0.0.0-beta"
 baml_base = { path = "crates/baml_base" }
 baml_type = { path = "crates/baml_type" }
 baml_builtins = { path = "crates/baml_builtins" }
+baml_builtins_codegen = { path = "crates/baml_builtins_codegen" }
 baml_builtins2 = { path = "crates/baml_builtins2" }
+baml_builtins2_codegen = { path = "crates/baml_builtins2_codegen" }
 baml_builtins_macros = { path = "crates/baml_builtins_macros" }
 baml_codegen_python = { path = "crates/baml_codegen_python" }
 baml_codegen_tests = { path = "crates/baml_codegen_tests" }
 baml_codegen_types = { path = "crates/baml_codegen_types" }
-baml_compiler_analysis = { path = "crates/baml_compiler_analysis" }
 baml_compiler2_ast = { path = "crates/baml_compiler2_ast" }
 baml_compiler2_hir = { path = "crates/baml_compiler2_hir" }
 baml_compiler2_ppir = { path = "crates/baml_compiler2_ppir" }
 baml_compiler2_tir = { path = "crates/baml_compiler2_tir" }
+baml_compiler2_mir = { path = "crates/baml_compiler2_mir" }
+baml_compiler2_emit = { path = "crates/baml_compiler2_emit" }
 baml_compiler2_visualization = { path = "crates/baml_compiler2_visualization" }
 baml_compiler_diagnostics = { path = "crates/baml_compiler_diagnostics" }
-baml_compiler_emit = { path = "crates/baml_compiler_emit" }
-baml_compiler_hir = { path = "crates/baml_compiler_hir" }
 baml_compiler_lexer = { path = "crates/baml_compiler_lexer" }
-baml_compiler_mir = { path = "crates/baml_compiler_mir" }
 baml_compiler_parser = { path = "crates/baml_compiler_parser" }
-baml_compiler_ppir = { path = "crates/baml_compiler_ppir" }
 baml_compiler_syntax = { path = "crates/baml_compiler_syntax" }
-baml_compiler_tir = { path = "crates/baml_compiler_tir" }
-baml_compiler_vir = { path = "crates/baml_compiler_vir" }
 bex_project = { path = "crates/bex_project" }
 bex_engine = { path = "crates/bex_engine" }
 sys_llm = { path = "crates/sys_llm" }

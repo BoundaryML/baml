@@ -39,21 +39,3 @@ class InterfaceOne {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: unresolved type: strin
-//    ╭─[ class_spelling_error.baml:1:1 ]
-//    │
-//  1 │ class InterfaceTwo {
-//    │ │ 
-//    │ ╰─ unresolved type: strin
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯
-// Error: unresolved type: InterfaceT
-//    ╭─[ class_spelling_error.baml:1:1 ]
-//    │
-//  1 │ class InterfaceTwo {
-//    │ │ 
-//    │ ╰─ unresolved type: InterfaceT
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯

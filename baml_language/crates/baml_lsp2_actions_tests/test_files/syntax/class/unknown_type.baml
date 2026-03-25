@@ -21,12 +21,3 @@ class InterfaceTwo {
 //    │ 
 //    │ Note: Error code: E0002
 // ───╯
-// Error: unresolved type: Bar
-//    ╭─[ class_unknown_type.baml:1:1 ]
-//    │
-//  1 │ class InterfaceTwo {
-//    │ │ 
-//    │ ╰─ unresolved type: Bar
-//    │ 
-//    │ Note: Error code: E0002
-// ───╯

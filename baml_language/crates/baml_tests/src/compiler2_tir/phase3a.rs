@@ -13,7 +13,7 @@ fn union_normalization_deduplicates() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: int | int) -> int { return x; }");
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(x: int | int) -> int {
+    function user.f(x: int | int) -> int throws never {
       { : never
         return x : int | int
       }
@@ -30,13 +30,12 @@ fn union_normalization_alias() {
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
     type user.A = int | string
-    function user.f(x: user.A) -> string {
+    function user.f(x: user.A) -> string throws never {
       { : never
         return x : user.A
       }
       !! 58..59: type mismatch: expected string, got user.A
     }
-    type user.stream_A = int | string
     ");
 }
 
@@ -50,7 +49,7 @@ fn unknown_type_in_param() {
         "function f(x: Nonexistent) -> int { return 0; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(x: unknown) -> int {
+    function user.f(x: unknown) -> int throws never {
       { : never
         return 0 : 0
       }
@@ -64,7 +63,7 @@ fn unknown_type_in_return() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> DoesNotExist { return 0; }");
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> unknown {
+    function user.f() -> unknown throws never {
       { : never
         return 0 : 0
       }
@@ -83,7 +82,7 @@ fn unresolved_variable() {
         "function f() -> int { return nonexistent_var; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         return nonexistent_var : unknown
       }
@@ -100,7 +99,7 @@ fn unresolved_variable_in_let() {
         "function f() -> int { let x = unknown_thing; return x; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         let x = unknown_thing : unknown
         return x : unknown
@@ -120,12 +119,12 @@ fn too_many_args() {
         "function add(a: int, b: int) -> int { return a + b; }\nfunction f() -> int { return add(1, 2, 3); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.add(a: int, b: int) -> int {
+    function user.add(a: int, b: int) -> int throws never {
       { : never
         return a Add b : int
       }
     }
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         return add(1, 2, 3) : int
       }
@@ -142,12 +141,12 @@ fn too_few_args() {
         "function add(a: int, b: int) -> int { return a + b; }\nfunction f() -> int { return add(1); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.add(a: int, b: int) -> int {
+    function user.add(a: int, b: int) -> int throws never {
       { : never
         return a Add b : int
       }
     }
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         return add(1) : int
       }
@@ -166,7 +165,7 @@ fn calling_non_function() {
         "function f() -> int { let x = 42; return x(1); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         let x = 42 : 42 -> int
         return x(1) : unknown
@@ -187,14 +186,11 @@ fn calling_class_as_function() {
     class user.Foo {
       name: string
     }
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         return Foo(1) : unknown
       }
       !! 55..61: type `user.Foo` is not callable
-    }
-    class user.stream_Foo {
-      name: null | string
     }
     ");
 }
@@ -206,7 +202,7 @@ fn missing_return() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { let x = 1; }");
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : int
         let x = 1 : 1 -> int
       }
@@ -220,7 +216,7 @@ fn block_ending_in_stmt() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> string { let x = \"hello\"; }");
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> string {
+    function user.f() -> string throws never {
       { : string
         let x = "hello" : "hello" -> string
       }
@@ -236,7 +232,7 @@ fn invalid_binary_op_string_minus_int() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { return \"hello\" - 5; }");
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         return "hello" Sub 5 : unknown
       }
@@ -250,7 +246,7 @@ fn invalid_binary_op_bool_add() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { return true + false; }");
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         return true Add false : unknown
       }
@@ -264,7 +260,7 @@ fn invalid_unary_op_neg_string() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f() -> int { return -\"hello\"; }");
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> int {
+    function user.f() -> int throws never {
       { : never
         return Neg "hello" : unknown
       }
@@ -280,7 +276,7 @@ fn indexing_bool() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: bool) -> int { return x[0]; }");
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(x: bool) -> int {
+    function user.f(x: bool) -> int throws never {
       { : never
         return x[0] : unknown
       }
@@ -294,7 +290,7 @@ fn indexing_int() {
     let mut db = make_db();
     let file = db.add_file("test.baml", "function f(x: int) -> int { return x[0]; }");
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(x: int) -> int {
+    function user.f(x: int) -> int throws never {
       { : never
         return x[0] : unknown
       }
@@ -313,7 +309,7 @@ fn float_literal_in_annotation() {
         "function f(x: 3.14 | 2.72) -> float { return x; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(x: 3.14 | 2.72) -> float {
+    function user.f(x: 3.14 | 2.72) -> float throws never {
       { : never
         return x : 3.14 | 2.72
       }
@@ -331,7 +327,7 @@ fn if_without_else_optional() {
         "function f(x: bool) -> int? { return if (x) { 5 }; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(x: bool) -> int? {
+    function user.f(x: bool) -> int? throws never {
       { : never
         return : void
           if (x : bool) : void
@@ -352,7 +348,7 @@ fn if_without_else_let_binding() {
         "function f(x: bool) -> int { let y = if (x) { 5 }; return y ?? 0; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(x: bool) -> int {
+    function user.f(x: bool) -> int throws never {
       { : never
         let y = : void
           if (x : bool) : void
@@ -389,7 +385,7 @@ function f(x: Color) -> string {
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     enum user.Color
-    function user.f(x: user.Color) -> string {
+    function user.f(x: user.Color) -> string throws never {
       { : never
         return : "red" | "green" | "blue"
           match (x : user.Color) : "red" | "green" | "blue"
@@ -416,7 +412,7 @@ fn match_catch_all() {
 }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(x: int) -> int {
+    function user.f(x: int) -> int throws never {
       { : never
         return : int
           match (x : int) : int
@@ -449,18 +445,10 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
       name: string
       legs: int
     }
-    function user.f(x: user.Cat | user.Dog) -> string {
+    function user.f(x: user.Cat | user.Dog) -> string throws never {
       { : never
         return x.name : string | string
       }
-    }
-    class user.stream_Cat {
-      name: null | string
-      legs: null | int
-    }
-    class user.stream_Dog {
-      name: null | string
-      legs: null | int
     }
     ");
 }
@@ -485,19 +473,11 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       name: string
       tail: bool
     }
-    function user.f(x: user.Cat | user.Dog) -> int {
+    function user.f(x: user.Cat | user.Dog) -> int throws never {
       { : never
         return x.whiskers : unknown
       }
       !! 115..126: unresolved member: user.Dog.whiskers
-    }
-    class user.stream_Cat {
-      name: null | string
-      whiskers: null | int
-    }
-    class user.stream_Dog {
-      name: null | string
-      tail: null | bool
     }
     ");
 }
@@ -523,20 +503,11 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.C {
       age: int
     }
-    function user.f(x: user.A | user.B | user.C) -> string {
+    function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
         return x.name : unknown
       }
       !! 111..118: unresolved member: user.C.name
-    }
-    class user.stream_A {
-      name: null | string
-    }
-    class user.stream_B {
-      name: null | string
-    }
-    class user.stream_C {
-      age: null | int
     }
     ");
 }
@@ -562,21 +533,12 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     class user.C {
       age: int
     }
-    function user.f(x: user.A | user.B | user.C) -> string {
+    function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
         return x.name : unknown
       }
       !! 110..117: unresolved member: user.B.name
       !! 110..117: unresolved member: user.C.name
-    }
-    class user.stream_A {
-      name: null | string
-    }
-    class user.stream_B {
-      age: null | string
-    }
-    class user.stream_C {
-      age: null | int
     }
     ");
 }
@@ -598,17 +560,11 @@ function f(x: A | B) -> string { return x.value; }"#,
     class user.B {
       value: string
     }
-    function user.f(x: user.A | user.B) -> string {
+    function user.f(x: user.A | user.B) -> string throws never {
       { : never
         return x.value : int | string
       }
       !! 86..94: type mismatch: expected string, got int | string
-    }
-    class user.stream_A {
-      value: null | int
-    }
-    class user.stream_B {
-      value: null | string
     }
     ");
 }
@@ -630,17 +586,11 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     class user.B {
       name: string
     }
-    function user.f(x: user.A | user.B | null) -> string {
+    function user.f(x: user.A | user.B | null) -> string throws never {
       { : never
         return x.name : unknown
       }
       !! 94..101: unresolved member: null.name
-    }
-    class user.stream_A {
-      name: null | string
-    }
-    class user.stream_B {
-      name: null | string
     }
     ");
 }

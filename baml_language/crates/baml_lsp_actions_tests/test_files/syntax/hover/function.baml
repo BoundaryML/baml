@@ -12,4 +12,4 @@ function GetOutput<[CURSOR]() -> Output {
 //
 //- on_hover expressions
 // hover at hover_function.baml:5:19
-// function GetOutput() -> Output
+// No hover content
