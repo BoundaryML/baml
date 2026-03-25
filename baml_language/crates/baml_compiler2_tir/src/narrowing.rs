@@ -28,7 +28,7 @@ use baml_base::Name;
 use baml_compiler2_ast::{BinaryOp, Expr, ExprBody, ExprId, UnaryOp};
 use rustc_hash::FxHashMap;
 
-use crate::ty::{PrimitiveType, Ty};
+use crate::ty::{PrimitiveType, Ty, TyAttr};
 
 // ── Narrowing descriptor ──────────────────────────────────────────────────────
 
@@ -87,13 +87,13 @@ fn collect_narrowings(
                 let (then_ty, else_ty) = if negated {
                     // !(x != null) == x == null
                     (
-                        Ty::Primitive(PrimitiveType::Null),
+                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
                         remove_null(&original_ty),
                     )
                 } else {
                     (
                         remove_null(&original_ty),
-                        Ty::Primitive(PrimitiveType::Null),
+                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
                     )
                 };
                 out.push(Narrowing {
@@ -115,11 +115,11 @@ fn collect_narrowings(
                     // !(x == null) == x != null
                     (
                         remove_null(&original_ty),
-                        Ty::Primitive(PrimitiveType::Null),
+                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
                     )
                 } else {
                     (
-                        Ty::Primitive(PrimitiveType::Null),
+                        Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
                         remove_null(&original_ty),
                     )
                 };
@@ -206,11 +206,11 @@ fn null_check_name(
 /// with null) or is directly `Null`.
 fn is_nullable(ty: &Ty) -> bool {
     match ty {
-        Ty::Optional(_) => true,
-        Ty::Primitive(PrimitiveType::Null) => true,
-        Ty::Union(members) => members
+        Ty::Optional(_, _) => true,
+        Ty::Primitive(PrimitiveType::Null, _) => true,
+        Ty::Union(members, _) => members
             .iter()
-            .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null))),
+            .any(|m| matches!(m, Ty::Primitive(PrimitiveType::Null, _))),
         _ => false,
     }
 }
@@ -225,20 +225,24 @@ fn is_nullable(ty: &Ty) -> bool {
 /// | `T` (not nullable)  | `T` (unchanged)            |
 pub fn remove_null(ty: &Ty) -> Ty {
     match ty {
-        Ty::Optional(inner) => inner.as_ref().clone(),
-        Ty::Union(members) => {
+        Ty::Optional(inner, _) => inner.as_ref().clone(),
+        Ty::Union(members, _) => {
             let filtered: Vec<Ty> = members
                 .iter()
-                .filter(|m| !matches!(m, Ty::Primitive(PrimitiveType::Null)))
+                .filter(|m| !matches!(m, Ty::Primitive(PrimitiveType::Null, _)))
                 .cloned()
                 .collect();
             match filtered.len() {
-                0 => Ty::Never,
+                0 => Ty::Never {
+                    attr: TyAttr::default(),
+                },
                 1 => filtered.into_iter().next().unwrap(),
-                _ => Ty::Union(filtered),
+                _ => Ty::Union(filtered, TyAttr::default()),
             }
         }
-        Ty::Primitive(PrimitiveType::Null) => Ty::Never,
+        Ty::Primitive(PrimitiveType::Null, _) => Ty::Never {
+            attr: TyAttr::default(),
+        },
         _ => ty.clone(),
     }
 }

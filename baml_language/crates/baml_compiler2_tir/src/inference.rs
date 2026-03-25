@@ -26,7 +26,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     builder::TypeInferenceBuilder,
     infer_context::{InferContext, TypeCheckDiagnostics},
-    ty::Ty,
+    ty::{Ty, TyAttr},
 };
 
 // ── Method Resolution ─────────────────────────────────────────────────────
@@ -256,7 +256,9 @@ pub fn infer_scope_types<'db>(
                                     &mut diags,
                                 )
                             })
-                            .unwrap_or(Ty::Unknown);
+                            .unwrap_or(Ty::Unknown {
+                                attr: TyAttr::default(),
+                            });
 
                         // Report unresolved type diagnostics for return type
                         if !diags.is_empty() {
@@ -300,12 +302,15 @@ pub fn infer_scope_types<'db>(
                                         let mut ns_path = pkg_info.namespace_path.clone();
                                         ns_path.push(cn.clone());
                                         pkg_items.lookup_type(&ns_path).map(|def| {
-                                            Ty::Class(crate::lower_type_expr::qualify_def(
-                                                db, def, cn,
-                                            ))
+                                            Ty::Class(
+                                                crate::lower_type_expr::qualify_def(db, def, cn),
+                                                TyAttr::default(),
+                                            )
                                         })
                                     })
-                                    .unwrap_or(Ty::Unknown)
+                                    .unwrap_or(Ty::Unknown {
+                                        attr: TyAttr::default(),
+                                    })
                             } else {
                                 let mut param_diags = Vec::new();
                                 let ty = crate::lower_type_expr::lower_type_expr_in_ns(
@@ -562,7 +567,9 @@ pub fn resolve_class_fields<'db>(
                     }
                     ty
                 })
-                .unwrap_or(Ty::Unknown);
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
             (f.name.clone(), ty)
         })
         .collect();
@@ -607,7 +614,9 @@ pub fn resolve_type_alias<'db>(
             }
             ty
         })
-        .unwrap_or(Ty::Unknown);
+        .unwrap_or(Ty::Unknown {
+            attr: TyAttr::default(),
+        });
 
     Arc::new(ResolvedTypeAlias {
         ty,

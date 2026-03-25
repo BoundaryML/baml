@@ -498,7 +498,12 @@ fn rust_type_field_lowers_to_rust_type() {
         &mut diags,
     );
 
-    assert_eq!(ty, baml_compiler2_tir::ty::Ty::RustType);
+    assert_eq!(
+        ty,
+        baml_compiler2_tir::ty::Ty::RustType {
+            attr: Default::default()
+        }
+    );
     assert!(diags.is_empty(), "No diagnostics expected for $rust_type");
 }
 

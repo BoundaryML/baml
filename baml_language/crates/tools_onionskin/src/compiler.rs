@@ -2149,10 +2149,13 @@ impl CompilerRunner {
                 let mut expr_types: Vec<_> = Vec::new();
                 for (expr_id, owner_scope) in &index.expr_scopes {
                     if owner_scope.index() as usize == i {
-                        let ty = inference
-                            .expression_type(*expr_id)
-                            .cloned()
-                            .unwrap_or(Ty::Unknown);
+                        let ty =
+                            inference
+                                .expression_type(*expr_id)
+                                .cloned()
+                                .unwrap_or(Ty::Unknown {
+                                    attr: Default::default(),
+                                });
                         expr_types.push((*expr_id, ty));
                     }
                 }

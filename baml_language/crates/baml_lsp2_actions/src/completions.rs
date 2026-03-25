@@ -30,7 +30,7 @@
 //! - `resolve_class_fields(class_loc)` — fields for field-access completions.
 //! - `file_item_tree(file)[enum_loc.id]` — variants for field-access on enums.
 
-use baml_base::{Name, SourceFile};
+use baml_base::{Name, SourceFile, attr::TyAttr};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 use baml_compiler2_hir::{
     contributions::Definition,
@@ -459,7 +459,7 @@ fn completions_for_field_access(
 /// Returns completions for the members of `ty`.
 fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
     match ty {
-        Ty::Class(qn) => {
+        Ty::Class(qn, _) => {
             // Find the class definition and return its fields and methods.
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
@@ -498,7 +498,7 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
             items
         }
 
-        Ty::Enum(qn) => {
+        Ty::Enum(qn, _) => {
             // Find the enum and return its variants.
             let pkg_id = PackageId::new(db, Name::new(qn.package().as_str()));
             let pkg = package_items(db, pkg_id);
@@ -522,17 +522,17 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
                 .collect()
         }
 
-        Ty::List(_) | Ty::EvolvingList(_) => {
+        Ty::List(..) | Ty::EvolvingList(..) => {
             // Built-in list methods.
             builtin_list_completions()
         }
 
-        Ty::Map(_, _) | Ty::EvolvingMap(_, _) => {
+        Ty::Map(..) | Ty::EvolvingMap(..) => {
             // Built-in map methods.
             builtin_map_completions()
         }
 
-        Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::String) => {
+        Ty::Primitive(baml_compiler2_tir::ty::PrimitiveType::String, _) => {
             // Built-in string methods.
             builtin_string_completions()
         }
@@ -652,21 +652,27 @@ fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
             let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
             let class = &item_tree[class_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
-            Some(Ty::Class(baml_compiler2_tir::ty::QualifiedTypeName::new(
-                pkg_info.package,
-                pkg_info.namespace_path,
-                class.name.clone(),
-            )))
+            Some(Ty::Class(
+                baml_compiler2_tir::ty::QualifiedTypeName::new(
+                    pkg_info.package,
+                    pkg_info.namespace_path,
+                    class.name.clone(),
+                ),
+                TyAttr::default(),
+            ))
         }
         Definition::Enum(enum_loc) => {
             let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
             let enum_data = &item_tree[enum_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db));
-            Some(Ty::Enum(baml_compiler2_tir::ty::QualifiedTypeName::new(
-                pkg_info.package,
-                pkg_info.namespace_path,
-                enum_data.name.clone(),
-            )))
+            Some(Ty::Enum(
+                baml_compiler2_tir::ty::QualifiedTypeName::new(
+                    pkg_info.package,
+                    pkg_info.namespace_path,
+                    enum_data.name.clone(),
+                ),
+                TyAttr::default(),
+            ))
         }
         _ => None,
     }

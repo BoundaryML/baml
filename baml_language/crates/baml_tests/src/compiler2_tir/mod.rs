@@ -398,23 +398,23 @@ pub(crate) mod support {
     fn collect_typevars_inner(ty: &baml_compiler2_tir::ty::Ty, out: &mut Vec<String>) {
         use baml_compiler2_tir::ty::Ty;
         match ty {
-            Ty::TypeVar(name) => {
+            Ty::TypeVar(name, _) => {
                 let s = name.to_string();
                 if !out.contains(&s) {
                     out.push(s);
                 }
             }
-            Ty::List(inner) | Ty::Optional(inner) => collect_typevars_inner(inner, out),
-            Ty::Map(k, v) => {
+            Ty::List(inner, _) | Ty::Optional(inner, _) => collect_typevars_inner(inner, out),
+            Ty::Map(k, v, _) => {
                 collect_typevars_inner(k, out);
                 collect_typevars_inner(v, out);
             }
-            Ty::Union(members) => {
+            Ty::Union(members, _) => {
                 for m in members {
                     collect_typevars_inner(m, out);
                 }
             }
-            Ty::Function { params, ret } => {
+            Ty::Function { params, ret, .. } => {
                 for (_, p) in params {
                     collect_typevars_inner(p, out);
                 }
@@ -625,7 +625,17 @@ pub(crate) mod support {
                                 let resolved = resolve_class_fields(db, class_loc);
                                 writeln!(output, "{kind_str} {fqn} {{").ok();
                                 for (fname, fty) in &resolved.fields {
-                                    writeln!(output, "  {fname}: {fty}").ok();
+                                    let sap_attr_names = fty.attr().attr_names();
+                                    if sap_attr_names.is_empty() {
+                                        writeln!(output, "  {fname}: {fty}").ok();
+                                    } else {
+                                        let attrs_str = sap_attr_names
+                                            .iter()
+                                            .map(|a| format!("@{a}"))
+                                            .collect::<Vec<_>>()
+                                            .join(" ");
+                                        writeln!(output, "  {fname}: {fty} {attrs_str}").ok();
+                                    }
                                 }
                                 writeln!(output, "}}").ok();
                                 // Render class cycle diagnostic if applicable
@@ -714,6 +724,7 @@ pub(crate) mod support {
                                                 baml_compiler2_tir::lower_type_expr::qualify_def(
                                                     db, def, cn,
                                                 ),
+                                                Default::default(),
                                             )
                                         })
                                     })
@@ -737,9 +748,11 @@ pub(crate) mod support {
                                 let ty = if pname.as_str() == "self"
                                     && matches!(ptype, baml_compiler2_ast::TypeExpr::Unknown { .. })
                                 {
-                                    enclosing_class_ty
-                                        .clone()
-                                        .unwrap_or(baml_compiler2_tir::ty::Ty::Unknown)
+                                    enclosing_class_ty.clone().unwrap_or(
+                                        baml_compiler2_tir::ty::Ty::Unknown {
+                                            attr: Default::default(),
+                                        },
+                                    )
                                 } else {
                                     let mut diags = Vec::new();
                                     lower_type_expr_in_ns(db, ptype, pkg_items, ns, gp, &mut diags)

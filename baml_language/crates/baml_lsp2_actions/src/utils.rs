@@ -114,9 +114,9 @@ pub fn definition_span<'db>(
 pub fn display_ty(ty: &Ty) -> String {
     use baml_compiler2_tir::ty::PrimitiveType;
     match ty {
-        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.to_string(),
-        Ty::EnumVariant(qn, v) => format!("{qn}.{v}"),
-        Ty::Primitive(p) => match p {
+        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
+        Ty::EnumVariant(qn, v, _) => format!("{qn}.{v}"),
+        Ty::Primitive(p, _) => match p {
             PrimitiveType::Int => "int".to_string(),
             PrimitiveType::Float => "float".to_string(),
             PrimitiveType::String => "string".to_string(),
@@ -127,29 +127,29 @@ pub fn display_ty(ty: &Ty) -> String {
             PrimitiveType::Video => "video".to_string(),
             PrimitiveType::Pdf => "pdf".to_string(),
         },
-        Ty::List(inner) => format!("{}[]", display_ty(inner)),
-        Ty::Map(k, v) => format!("map<{}, {}>", display_ty(k), display_ty(v)),
-        Ty::EvolvingList(inner) => {
-            if matches!(**inner, Ty::Never) {
+        Ty::List(inner, _) => format!("{}[]", display_ty(inner)),
+        Ty::Map(k, v, _) => format!("map<{}, {}>", display_ty(k), display_ty(v)),
+        Ty::EvolvingList(inner, _) => {
+            if matches!(**inner, Ty::Never { .. }) {
                 "_[]".to_string()
             } else {
                 format!("{}[]", display_ty(inner))
             }
         }
-        Ty::EvolvingMap(k, v) => {
-            if matches!(**k, Ty::Never) && matches!(**v, Ty::Never) {
+        Ty::EvolvingMap(k, v, _) => {
+            if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) {
                 "map<_, _>".to_string()
             } else {
                 format!("map<{}, {}>", display_ty(k), display_ty(v))
             }
         }
-        Ty::Union(members) => {
+        Ty::Union(members, _) => {
             let parts: Vec<_> = members.iter().map(display_ty).collect();
             parts.join(" | ")
         }
-        Ty::Optional(inner) => format!("{}?", display_ty(inner)),
-        Ty::Literal(lit, _freshness) => lit.to_string(),
-        Ty::Function { params, ret } => {
+        Ty::Optional(inner, _) => format!("{}?", display_ty(inner)),
+        Ty::Literal(lit, _freshness, _) => lit.to_string(),
+        Ty::Function { params, ret, .. } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|(name, ty)| {
@@ -160,13 +160,13 @@ pub fn display_ty(ty: &Ty) -> String {
                 .collect();
             format!("({}) -> {}", ps.join(", "), display_ty(ret))
         }
-        Ty::TypeVar(name) => name.to_string(),
-        Ty::Never => "never".to_string(),
-        Ty::Void => "void".to_string(),
-        Ty::BuiltinUnknown | Ty::Unknown => "unknown".to_string(),
-        Ty::RustType => "$rust_type".to_string(),
-        Ty::Type => "type".to_string(),
-        Ty::Error => "!error".to_string(),
+        Ty::TypeVar(name, _) => name.to_string(),
+        Ty::Never { .. } => "never".to_string(),
+        Ty::Void { .. } => "void".to_string(),
+        Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
+        Ty::RustType { .. } => "$rust_type".to_string(),
+        Ty::Type { .. } => "type".to_string(),
+        Ty::Error { .. } => "!error".to_string(),
     }
 }
 

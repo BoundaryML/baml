@@ -606,10 +606,10 @@ impl<'db> ExprBodyVisitor<'db> {
 /// Returns `None` for unknown/error types so they don't get classified.
 fn ty_to_token_type(ty: &Ty) -> Option<SemanticTokenType> {
     match ty {
-        Ty::Class(_) => Some(SemanticTokenType::Class),
-        Ty::Enum(_) => Some(SemanticTokenType::Enum),
-        Ty::EnumVariant(_, _) => Some(SemanticTokenType::EnumMember),
-        Ty::TypeAlias(_) => Some(SemanticTokenType::Type),
+        Ty::Class(..) => Some(SemanticTokenType::Class),
+        Ty::Enum(..) => Some(SemanticTokenType::Enum),
+        Ty::EnumVariant(..) => Some(SemanticTokenType::EnumMember),
+        Ty::TypeAlias(..) => Some(SemanticTokenType::Type),
         Ty::Function { .. } => Some(SemanticTokenType::Function),
         // Primitives, lists, maps, unions etc. — don't highlight specially
         _ => None,

@@ -102,89 +102,89 @@ pub fn convert_tir2_ty(
     type_aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
     recursive_aliases: &HashSet<QualifiedTypeName>,
 ) -> Ty {
-    let attr = TyAttr::default();
+    let attr = ty.attr().clone();
     match ty {
         // Primitives
-        Tir2Ty::Primitive(PrimitiveType::Int) => Ty::Int { attr },
-        Tir2Ty::Primitive(PrimitiveType::Float) => Ty::Float { attr },
-        Tir2Ty::Primitive(PrimitiveType::String) => Ty::String { attr },
-        Tir2Ty::Primitive(PrimitiveType::Bool) => Ty::Bool { attr },
-        Tir2Ty::Primitive(PrimitiveType::Null) => Ty::Null { attr },
-        Tir2Ty::Primitive(PrimitiveType::Image) => Ty::Media(MediaKind::Image, attr),
-        Tir2Ty::Primitive(PrimitiveType::Audio) => Ty::Media(MediaKind::Audio, attr),
-        Tir2Ty::Primitive(PrimitiveType::Video) => Ty::Media(MediaKind::Video, attr),
-        Tir2Ty::Primitive(PrimitiveType::Pdf) => Ty::Media(MediaKind::Pdf, attr),
+        Tir2Ty::Primitive(PrimitiveType::Int, attr) => Ty::Int { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Float, attr) => Ty::Float { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::String, attr) => Ty::String { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Bool, attr) => Ty::Bool { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Null, attr) => Ty::Null { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Image, attr) => Ty::Media(MediaKind::Image, attr.clone()),
+        Tir2Ty::Primitive(PrimitiveType::Audio, attr) => Ty::Media(MediaKind::Audio, attr.clone()),
+        Tir2Ty::Primitive(PrimitiveType::Video, attr) => Ty::Media(MediaKind::Video, attr.clone()),
+        Tir2Ty::Primitive(PrimitiveType::Pdf, attr) => Ty::Media(MediaKind::Pdf, attr.clone()),
 
         // Named types
-        Tir2Ty::Class(qtn) => Ty::Class(qtn_to_type_name(qtn), attr),
-        Tir2Ty::Enum(qtn) => Ty::Enum(qtn_to_type_name(qtn), attr),
-        Tir2Ty::TypeAlias(qtn) => {
+        Tir2Ty::Class(qtn, attr) => Ty::Class(qtn_to_type_name(qtn), attr.clone()),
+        Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn_to_type_name(qtn), attr.clone()),
+        Tir2Ty::TypeAlias(qtn, attr) => {
             if recursive_aliases.contains(qtn) {
                 // Keep recursive aliases opaque — they need runtime resolution
-                Ty::TypeAlias(qtn_to_type_name(qtn), attr)
+                Ty::TypeAlias(qtn_to_type_name(qtn), attr.clone())
             } else if let Some(target) = type_aliases.get(qtn) {
                 // Expand non-recursive aliases inline
                 convert_tir2_ty(target, type_aliases, recursive_aliases)
             } else {
                 // Unknown alias (e.g. from another package) — keep opaque
-                Ty::TypeAlias(qtn_to_type_name(qtn), attr)
+                Ty::TypeAlias(qtn_to_type_name(qtn), attr.clone())
             }
         }
 
         // EnumVariant → preserve variant-level type info
-        Tir2Ty::EnumVariant(qtn, variant) => {
-            Ty::EnumVariant(qtn_to_type_name(qtn), variant.clone(), attr)
+        Tir2Ty::EnumVariant(qtn, variant, attr) => {
+            Ty::EnumVariant(qtn_to_type_name(qtn), variant.clone(), attr.clone())
         }
 
         // Containers
-        Tir2Ty::List(inner) => Ty::List(
+        Tir2Ty::List(inner, attr) => Ty::List(
             Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr,
+            attr.clone(),
         ),
-        Tir2Ty::Map(k, v) => Ty::Map {
+        Tir2Ty::Map(k, v, attr) => Ty::Map {
             key: Box::new(convert_tir2_ty(k, type_aliases, recursive_aliases)),
             value: Box::new(convert_tir2_ty(v, type_aliases, recursive_aliases)),
-            attr,
+            attr: attr.clone(),
         },
-        Tir2Ty::Union(members) => Ty::Union(
+        Tir2Ty::Union(members, attr) => Ty::Union(
             members
                 .iter()
                 .map(|m| convert_tir2_ty(m, type_aliases, recursive_aliases))
                 .collect(),
-            attr,
+            attr.clone(),
         ),
-        Tir2Ty::Optional(inner) => Ty::Optional(
+        Tir2Ty::Optional(inner, attr) => Ty::Optional(
             Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr,
+            attr.clone(),
         ),
-        Tir2Ty::Literal(lit, _freshness) => Ty::Literal(lit.clone(), attr),
+        Tir2Ty::Literal(lit, _freshness, attr) => Ty::Literal(lit.clone(), attr.clone()),
 
         // Evolving containers → freeze to regular containers
-        Tir2Ty::EvolvingList(inner) => Ty::List(
+        Tir2Ty::EvolvingList(inner, attr) => Ty::List(
             Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr,
+            attr.clone(),
         ),
-        Tir2Ty::EvolvingMap(k, v) => Ty::Map {
+        Tir2Ty::EvolvingMap(k, v, attr) => Ty::Map {
             key: Box::new(convert_tir2_ty(k, type_aliases, recursive_aliases)),
             value: Box::new(convert_tir2_ty(v, type_aliases, recursive_aliases)),
-            attr,
+            attr: attr.clone(),
         },
 
         // Functions — drop param names
-        Tir2Ty::Function { params, ret } => Ty::Function {
+        Tir2Ty::Function { params, ret, attr } => Ty::Function {
             params: params
                 .iter()
                 .map(|(_, t)| convert_tir2_ty(t, type_aliases, recursive_aliases))
                 .collect(),
             ret: Box::new(convert_tir2_ty(ret, type_aliases, recursive_aliases)),
-            attr,
+            attr: attr.clone(),
         },
 
         // Bottom / sentinel types
-        Tir2Ty::Never => Ty::Void { attr },
-        Tir2Ty::Void => Ty::Void { attr },
-        Tir2Ty::BuiltinUnknown => Ty::BuiltinUnknown { attr },
-        Tir2Ty::RustType => {
+        Tir2Ty::Never { attr } => Ty::Void { attr: attr.clone() },
+        Tir2Ty::Void { attr } => Ty::Void { attr: attr.clone() },
+        Tir2Ty::BuiltinUnknown { attr } => Ty::BuiltinUnknown { attr: attr.clone() },
+        Tir2Ty::RustType { attr } => {
             // RustType is an opaque sentinel — map to Opaque with a synthetic name
             Ty::Opaque(
                 TypeName {
@@ -192,10 +192,10 @@ pub fn convert_tir2_ty(
                     module_path: vec![Name::new("baml"), Name::new("rust")],
                     display_name: Name::new("RustType"),
                 },
-                attr,
+                attr.clone(),
             )
         }
-        Tir2Ty::Type => {
+        Tir2Ty::Type { attr } => {
             // The `type` metatype maps to the same opaque representation as v1.
             // See Ty::type_type() in baml_type/src/lib.rs.
             Ty::Opaque(
@@ -204,14 +204,14 @@ pub fn convert_tir2_ty(
                     module_path: vec![Name::new("baml"), Name::new("reflect")],
                     display_name: Name::new("type"),
                 },
-                attr,
+                attr.clone(),
             )
         }
-        Tir2Ty::Unknown => Ty::Void { attr }, // error recovery
-        Tir2Ty::Error => Ty::Void { attr },   // error recovery
+        Tir2Ty::Unknown { attr } => Ty::Void { attr: attr.clone() }, // error recovery
+        Tir2Ty::Error { attr } => Ty::Void { attr: attr.clone() },   // error recovery
         // TypeVar should never reach MIR — it is erased to Unknown before VIR.
         // Map defensively to Void as error recovery.
-        Tir2Ty::TypeVar(_) => Ty::Void { attr },
+        Tir2Ty::TypeVar(..) => Ty::Void { attr },
     }
 }
 
@@ -848,6 +848,7 @@ impl LoweringContext<'_> {
                         pkg_items.lookup_type(std::slice::from_ref(cn)).map(|def| {
                             let tir_ty = baml_compiler2_tir::ty::Ty::Class(
                                 baml_compiler2_tir::lower_type_expr::qualify_def(self.db, def, cn),
+                                baml_compiler2_tir::ty::TyAttr::default(),
                             );
                             convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
                         })
@@ -1160,7 +1161,7 @@ impl<'db> LoweringContext<'db> {
     fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
         let item = def_to_item_ref(self.db, def);
         // Check if this expression's type is EnumVariant
-        if let Some(Tir2Ty::EnumVariant(_qtn, variant)) =
+        if let Some(Tir2Ty::EnumVariant(_qtn, variant, _)) =
             self.expr_types.get(&expr_id).cloned().as_ref()
         {
             let variant_name = variant.clone();
@@ -1349,7 +1350,7 @@ impl LoweringContext<'_> {
                 let base_is_value = self
                     .expr_types
                     .get(base)
-                    .map(|ty| !matches!(ty, Tir2Ty::Unknown))
+                    .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
                     .unwrap_or(false);
                 if base_is_value {
                     // Method call: arr.length() — prepend receiver as self
@@ -1710,7 +1711,7 @@ impl LoweringContext<'_> {
         }
 
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
-        if let Some(Tir2Ty::EnumVariant(qtn, variant)) =
+        if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
             self.expr_types.get(&expr_id).cloned().as_ref()
         {
             let enum_ref = ItemRef::EnumType {
@@ -1735,11 +1736,11 @@ impl LoweringContext<'_> {
         // concrete type, this is a real field access whose field type happens to be
         // Unknown (unresolved type annotation). In that case, fall through to emit
         // the field projection.
-        if let Some(Tir2Ty::Unknown) = self.expr_types.get(&expr_id) {
+        if let Some(Tir2Ty::Unknown { .. }) = self.expr_types.get(&expr_id) {
             let base_is_also_unknown = self
                 .expr_types
                 .get(&base)
-                .map(|ty| matches!(ty, Tir2Ty::Unknown))
+                .map(|ty| matches!(ty, Tir2Ty::Unknown { .. }))
                 .unwrap_or(true);
             if base_is_also_unknown {
                 self.builder
@@ -2711,7 +2712,7 @@ impl LoweringContext<'_> {
                 // Resolve the enum's package from TIR type info when available,
                 // otherwise fall back to the current file's package.
                 let enum_ref =
-                    if let Some(Tir2Ty::EnumVariant(qtn, _)) = self.pat_types.get(&pat_id) {
+                    if let Some(Tir2Ty::EnumVariant(qtn, _, _)) = self.pat_types.get(&pat_id) {
                         ItemRef::EnumType {
                             package: qtn.package().clone(),
                             namespace: qtn.namespace().clone(),
