@@ -83,11 +83,13 @@ export interface CfgNode {
   label: string;
   sourceExpr: number | null;
   nodeType: CfgNodeType;
+  isContainer: boolean;
 }
 
 export interface CfgEdge {
   src: number;
   dst: number;
+  label?: string;
 }
 
 export interface ControlFlowGraph {

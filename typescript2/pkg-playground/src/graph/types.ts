@@ -17,12 +17,14 @@ export interface GraphNode {
   metadata: {
     logFilterKey: string;
     sourceExpr: number | null;
+    isContainer: boolean;
   };
 }
 
 export interface GraphEdge {
   source: string;
   target: string;
+  label?: string;
 }
 
 // Execution state (for future Phase 4)
