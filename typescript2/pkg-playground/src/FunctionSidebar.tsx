@@ -199,6 +199,12 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                 <span className="truncate">{fn.name}</span>
               </div>
 
+              {!hasTests && isSelected && (
+                <div className="pl-8 py-1 text-[10px] text-vsc-text-faint italic">
+                  No test cases. Add a <code className="font-vsc-mono">test</code> block in your .baml file.
+                </div>
+              )}
+
               {hasTests && (
                 <Collapsible.Content>
                   {fnTests

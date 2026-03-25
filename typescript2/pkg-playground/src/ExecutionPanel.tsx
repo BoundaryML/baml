@@ -17,6 +17,7 @@ import { ApiKeysDialog } from './components/ApiKeysDialog';
 import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
 import { MetadataBadges } from './components/MetadataBadges';
+import { PromptStats } from './components/PromptStats';
 import type { RuntimePort } from './runtime-port';
 import type {
   ControlFlowGraph,
@@ -109,6 +110,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [curlPreviewError, setCurlPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(220);
+  const resizingRef = useRef(false);
   const [resultModes, setResultModes] = useState<Record<number, 'parsed' | 'raw'>>({});
 
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false);
@@ -374,8 +377,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     const setResult = activeTab === 'prompt' ? setPromptPreviewResult : setCurlPreviewResult;
     const setError = activeTab === 'prompt' ? setPromptPreviewError : setCurlPreviewError;
 
-    // Clear previous result while loading
-    setResult(null);
+    // Clear previous error while loading (keep last result visible)
     setError(null);
 
     // Don't attempt if args are empty or not valid JSON
@@ -420,7 +422,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         setPreviewLoading(false);
       } catch (e) {
         const errMsg = e instanceof Error ? e.message : String(e);
-        setResult(null);
+        // Don't clear result — keep last valid prompt visible with error banner above
         setError(errMsg);
         setPreviewLoading(false);
       }
@@ -477,6 +479,25 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       [runId]: (prev[runId] ?? 'parsed') === 'parsed' ? 'raw' : 'parsed',
     }));
   }, []);
+
+  const onResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    resizingRef.current = true;
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+
+    const onMouseMove = (moveE: MouseEvent) => {
+      const delta = moveE.clientX - startX;
+      setSidebarWidth(Math.max(160, Math.min(400, startWidth + delta)));
+    };
+    const onMouseUp = () => {
+      resizingRef.current = false;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, [sidebarWidth]);
 
   const onRunFunction = useCallback(async () => {
     if (!selectedFn || !selectedProject || isRunning) return;
@@ -804,25 +825,31 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}
         {sidebarOpen && (
-          <div className="shrink-0 border-r border-vsc-border overflow-hidden" style={{ width: 220 }}>
-            <FunctionSidebar
-              functions={functions}
-              tests={tests}
-              selectedFn={selectedFn}
-              onSelectFn={setSelectedFn}
-              onSelectTest={handleSelectTest}
-              onRunTest={handleRunTest}
-              isRunning={isRunning}
-              testStatuses={testStatuses}
-              onRunAllTests={() => handleRunAllTests(tests)}
-              onStopAllTests={handleStopAllTests}
-              onRerunFailed={handleRerunFailed}
-              hasFailedTests={runs.some((r) => r.testName != null && r.status === 'error')}
-              hasRunningTests={runs.some((r) => r.testName != null && r.status === 'running')}
-              parallelTests={parallelTests}
-              onToggleParallel={() => setParallelTests((p) => !p)}
+          <>
+            <div className="shrink-0 overflow-hidden" style={{ width: sidebarWidth }}>
+              <FunctionSidebar
+                functions={functions}
+                tests={tests}
+                selectedFn={selectedFn}
+                onSelectFn={setSelectedFn}
+                onSelectTest={handleSelectTest}
+                onRunTest={handleRunTest}
+                isRunning={isRunning}
+                testStatuses={testStatuses}
+                onRunAllTests={() => handleRunAllTests(tests)}
+                onStopAllTests={handleStopAllTests}
+                onRerunFailed={handleRerunFailed}
+                hasFailedTests={runs.some((r) => r.testName != null && r.status === 'error')}
+                hasRunningTests={runs.some((r) => r.testName != null && r.status === 'running')}
+                parallelTests={parallelTests}
+                onToggleParallel={() => setParallelTests((p) => !p)}
+              />
+            </div>
+            <div
+              onMouseDown={onResizeStart}
+              className="w-1 shrink-0 cursor-col-resize hover:bg-vsc-accent/30 transition-colors border-r border-vsc-border"
             />
-          </div>
+          </>
         )}
 
         {/* Content area */}
@@ -853,13 +880,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               {canPreviewPrompt && (
                 <button
                   onClick={() => setActiveTab('prompt')}
-                  className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
+                  className={`flex items-center gap-1 px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
                     activeTab === 'prompt'
                       ? 'border-vsc-accent text-vsc-text font-semibold'
                       : 'border-transparent text-vsc-text-muted'
                   }`}
                 >
                   Prompt
+                  {selectedFnInfo?.capabilities?.clientName && (
+                    <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
+                      {selectedFnInfo.capabilities.clientName}
+                    </span>
+                  )}
                 </button>
               )}
               {canPreviewCurl && (
@@ -896,23 +928,27 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
           {/* Prompt preview */}
           {selectedFn && activeTab === 'prompt' ? (
-            <div className="group relative flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
-              {promptPreviewResult != null && (
-                <div className="absolute top-1 right-1 z-10">
-                  <CopyButton text={promptPreviewResult} />
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {promptPreviewError && (
+                <div className="px-2.5 py-1.5 text-[10px] text-vsc-error bg-vsc-error/10 border-b border-vsc-error/20 shrink-0">
+                  Preview error: {promptPreviewError}
                 </div>
               )}
-              {promptPreviewResult != null ? (
-                <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
-              ) : promptPreviewError ? (
-                <div className="flex items-center justify-center text-vsc-error text-xs h-full">
-                  {promptPreviewError}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
-                  {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
-                </div>
-              )}
+              <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 group relative">
+                {promptPreviewResult != null && (
+                  <div className="absolute top-1 right-1 z-10">
+                    <CopyButton text={promptPreviewResult} />
+                  </div>
+                )}
+                {promptPreviewResult != null ? (
+                  <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
+                ) : (
+                  <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
+                    {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
+                  </div>
+                )}
+              </div>
+              {promptPreviewResult && <PromptStats text={promptPreviewResult} />}
             </div>
           ) : null}
 
