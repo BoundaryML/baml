@@ -139,30 +139,45 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   // ── Cursor context navigation ────────────────────────────────────────
 
-  /** Resolve a source expression ID to a graph node ID by scanning the cached CFG.
-   *  Prefers leaf nodes (otherScope, loop) over structural nodes (branchArm, branchGroup)
-   *  because a branch arm's body expression and its child call node can share the same
-   *  sourceExpr (e.g., `"positive" => Summarize(text)` — the arm body IS the call). */
-  function resolveSourceExprToNodeId(
-    graph: ControlFlowGraph | null,
-    sourceExprId: number | null,
-  ): number | null {
-    if (!graph || sourceExprId == null) return null;
-    let fallback: number | null = null;
+  /** Build a lookup from sourceExpr → nodeId for the cached CFG.
+   *  When multiple nodes share a sourceExpr, prefer semantic types
+   *  (call/loop/branch/header) over structural ones (branchArm). */
+  function buildSourceExprIndex(graph: ControlFlowGraph | null): Map<number, number> {
+    const map = new Map<number, number>();
+    if (!graph) return map;
+    const preferred = new Set(['otherScope', 'loop', 'branchGroup', 'headerContextEnter']);
     for (const [, node] of Object.entries(graph.nodes)) {
-      if (node.sourceExpr === sourceExprId) {
-        // Leaf node types match CFG call/loop nodes — prefer these
-        if (node.nodeType === 'otherScope' || node.nodeType === 'loop') {
-          return node.id;
-        }
-        fallback ??= node.id;
+      if (node.sourceExpr == null) continue;
+      if (preferred.has(node.nodeType)) {
+        map.set(node.sourceExpr, node.id);
+      } else if (!map.has(node.sourceExpr)) {
+        map.set(node.sourceExpr, node.id);
       }
     }
-    return fallback;
+    return map;
   }
 
-  /** Find a graph node whose label starts with `funcName(` — used when ExprId matching fails
-   *  because the cursor is on a callee Path expression but the graph stores the Call expression. */
+  /** Try each candidate expression ID (most-specific first) against the
+   *  graph, returning the first node that matches. This gives "closest
+   *  ancestor" highlighting — e.g. cursor on a local variable inside a
+   *  call highlights the call; cursor on `if` keyword highlights the
+   *  branch group; cursor inside a branch arm body highlights the arm. */
+  function resolveCandidatesToNodeId(
+    graph: ControlFlowGraph | null,
+    candidates: number[],
+  ): number | null {
+    if (!graph || candidates.length === 0) return null;
+    const index = buildSourceExprIndex(graph);
+    for (const exprId of candidates) {
+      const nodeId = index.get(exprId);
+      if (nodeId != null) return nodeId;
+    }
+    return null;
+  }
+
+  /** Find a graph node whose label starts with `funcName(` — used when candidate
+   *  matching fails because the cursor is on a callee Path expression but the
+   *  graph stores the Call expression. */
   function resolveNodeByFunctionName(
     graph: ControlFlowGraph | null,
     funcName: string,
@@ -181,15 +196,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     const currentFn = selectedFnRef.current;
     const cachedGraph = controlFlowGraphRef.current;
 
-    // Resolve sourceExprId → nodeId using cached graph.
-    // Falls back to matching by function name in node labels when sourceExprId
-    // is present but didn't match (e.g., old WASM before Call-preference fix).
-    // When sourceExprId is null (cursor is on a function definition, not a call
-    // site), skip the fallback so we fall through to Rule 3 (switch function).
-    const nodeId = resolveSourceExprToNodeId(cachedGraph, ctx.sourceExprId)
+    // Use the ordered candidate list (most-specific to least-specific) to
+    // find the closest matching graph node. Falls back to label matching.
+    const candidates = ctx.sourceExprCandidates ?? [];
+    const nodeId = resolveCandidatesToNodeId(cachedGraph, candidates)
       ?? (ctx.sourceExprId != null ? resolveNodeByFunctionName(cachedGraph, ctx.functionName) : null);
 
-    console.log('[handleCursorContext]', { currentFn, ctx, nodeId });
+    console.log('[handleCursorContext]', { currentFn, functionName: ctx.functionName, nodeId });
 
     // Rule 0: cursor is on a function definition (not a call site) — switch to that function.
     // sourceExprId is null when the cursor is on the definition line, not inside a call.

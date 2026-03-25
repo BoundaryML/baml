@@ -789,6 +789,7 @@ dependencies = [
  "baml_lsp2_actions",
  "baml_workspace",
  "bex_vm_types",
+ "la-arena",
  "lsp-types",
  "rowan 0.16.1",
  "salsa",

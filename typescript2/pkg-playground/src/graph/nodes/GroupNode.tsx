@@ -12,9 +12,12 @@ const stateBorderColors: Record<string, string> = {
   'cached': '#7c3aed',
 };
 
-export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
+export const GroupNode: ComponentType<NodeProps> = memo(({ data, id, selected }) => {
   const d = data as WorkflowNodeData;
-  const borderColor = stateBorderColors[d.executionState] ?? stateBorderColors['not-started'];
+  const isHighlighted = d.selected || selected;
+  const borderColor = isHighlighted
+    ? '#4fc3f7'
+    : (stateBorderColors[d.executionState] ?? stateBorderColors['not-started']);
 
   return (
     <div
@@ -26,6 +29,8 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
         borderRadius: 8,
         border: `1px dashed ${borderColor}`,
         background: 'rgba(37,37,38,0.5)',
+        boxShadow: isHighlighted ? '0 0 8px rgba(79,195,247,0.3)' : undefined,
+        transition: 'border-color 0.15s, box-shadow 0.15s',
       }}
     >
       <Handle type="target" position={Position.Left} style={{ opacity: 0, pointerEvents: 'auto' }} />
@@ -44,10 +49,13 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id }) => {
           borderRadius: 6,
           fontWeight: 600,
           fontSize: 12,
-          color: '#ccc',
-          background: '#2d2d2d',
+          color: isHighlighted ? '#fff' : '#ccc',
+          background: isHighlighted ? '#1a3a4a' : '#2d2d2d',
           border: `1px solid ${borderColor}`,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+          boxShadow: isHighlighted
+            ? '0 0 0 2px #4fc3f7, 0 0 10px rgba(79,195,247,0.4)'
+            : '0 1px 3px rgba(0,0,0,0.3)',
+          transition: 'all 0.15s',
         }}
       >
         {d.label || id}

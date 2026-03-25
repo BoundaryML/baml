@@ -1978,22 +1978,38 @@ impl LoweringContext {
     }
 
     fn lower_header_comment(&mut self, node: &SyntaxNode) -> StmtId {
-        // HEADER_COMMENT: # level heading Name
-        let mut name = Name::new("_");
-        let mut level = 1usize;
+        let mut level = 0usize;
+        let mut title_parts: Vec<String> = Vec::new();
+        let mut past_hashes = false;
 
         for elem in node.children_with_tokens() {
             if let rowan::NodeOrToken::Token(token) = elem {
                 match token.kind() {
-                    SyntaxKind::WORD => {
-                        name = Name::new(token.text());
-                    }
-                    SyntaxKind::HASH => {
+                    SyntaxKind::SLASH if !past_hashes => {}
+                    SyntaxKind::HASH if !past_hashes => {
                         level += 1;
                     }
-                    _ => {}
+                    _ => {
+                        past_hashes = true;
+                        if !token.kind().is_trivia() {
+                            title_parts.push(token.text().to_string());
+                        } else if token.kind() == SyntaxKind::WHITESPACE && !title_parts.is_empty()
+                        {
+                            title_parts.push(" ".to_string());
+                        }
+                    }
                 }
             }
+        }
+
+        let title = title_parts.join("").trim().to_string();
+        let name = if title.is_empty() {
+            Name::new("_")
+        } else {
+            Name::new(&title)
+        };
+        if level == 0 {
+            level = 1;
         }
 
         self.alloc_stmt(Stmt::HeaderComment { name, level }, node.text_range())

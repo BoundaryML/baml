@@ -72,7 +72,11 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             .lock()
                             .unwrap()
                             .insert(resp._handle.key(), (cid, fetch_id));
-                        let headers: HashMap<String, String> = resp.headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                        let headers: HashMap<String, String> = resp
+                            .headers
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
                             call_id: cid,
                             log_id: fetch_id,
@@ -106,7 +110,11 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             .lock()
                             .unwrap()
                             .insert(resp._handle.key(), (cid, fetch_id));
-                        let headers: HashMap<String, String> = resp.headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                        let headers: HashMap<String, String> = resp
+                            .headers
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
                             call_id: cid,
                             log_id: fetch_id,

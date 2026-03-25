@@ -9,7 +9,7 @@ mod from_ast;
 use std::{collections::HashMap, fmt};
 
 pub use flatten::flatten_control_flow_graph;
-pub use from_ast::build_control_flow_graph_from_ast;
+pub use from_ast::{STMT_SOURCE_EXPR_TAG, build_control_flow_graph_from_ast};
 use indexmap::IndexMap;
 
 // ---------------------------------------------------------------------------

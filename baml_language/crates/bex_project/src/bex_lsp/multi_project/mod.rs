@@ -604,6 +604,7 @@ impl super::BexLsp for BexMulitProject {
             is_workflow: false,
             workflow_memberships: vec![],
             source_expr_id: None,
+            source_expr_candidates: vec![],
             test_name: None,
         };
 

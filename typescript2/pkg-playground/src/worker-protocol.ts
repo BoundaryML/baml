@@ -108,6 +108,10 @@ export interface CursorContext {
   /** Raw ExprId index — NOT a CFG NodeId. Match against node.metadata.sourceExpr
    *  in the cached ControlFlowGraph to find the corresponding graph node. */
   sourceExprId: number | null;
+  /** Ordered list of expression IDs containing the cursor, from most specific
+   *  (smallest span) to least specific (largest span). The TS side tries each
+   *  in order, highlighting the first that matches a CFG node. */
+  sourceExprCandidates?: number[];
   testName: string | null;
 }
 

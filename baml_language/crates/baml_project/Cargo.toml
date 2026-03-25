@@ -36,6 +36,7 @@ baml_db = { workspace = true }
 baml_lsp2_actions = { workspace = true }
 baml_workspace = { workspace = true }
 bex_vm_types = { workspace = true }
+la-arena = { workspace = true }
 lsp-types = { workspace = true }
 rowan = { workspace = true }
 salsa = { workspace = true }
