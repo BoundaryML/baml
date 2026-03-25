@@ -2,13 +2,13 @@
 //!
 //! Each sub-module implements one or more generated traits:
 //!
-//! - [`array`] — `BamlClassArray` (length, push, at, concat, ...)
-//! - [`string`] — `BamlClassString` (length, trim, split, ...)
-//! - [`map`] — `BamlClassMap` (length, has, keys, values, ...)
-//! - [`math`] — `BamlNamespaceMath` (trunc)
-//! - [`media`] — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
-//! - [`unstable`] — `BamlNamespaceUnstable` (string)
-//! - [`root`] — `BamlPackageBaml` (`deep_copy`, `deep_equals`)
+//! - `array` — `BamlClassArray` (length, push, at, concat, ...)
+//! - `string` — `BamlClassString` (length, trim, split, ...)
+//! - `map` — `BamlClassMap` (length, has, keys, values, ...)
+//! - `math` — `BamlNamespaceMath` (trunc)
+//! - `media` — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
+//! - `unstable` — `BamlNamespaceUnstable` (string)
+//! - `root` — `BamlPackageBaml` (`deep_copy`, `deep_equals`)
 //!
 //! # Adding a new builtin
 //!
