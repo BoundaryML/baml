@@ -716,6 +716,7 @@ version = "0.0.0-beta"
 dependencies = [
  "anyhow",
  "axum",
+ "baml_compiler2_visualization",
  "base64",
  "bex_events_native",
  "bex_heap",

@@ -336,7 +336,10 @@ async fn handle_ws_in_message(
             function_name,
         } => {
             let graph = state.bex.ast_control_flow_graph(&function_name);
-            let graph_json = graph.and_then(|g| serde_json::to_value(&g).ok());
+            let graph = graph.map(|g| {
+                baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(&g)
+            });
+            let graph_json = graph.as_ref().and_then(|g| serde_json::to_value(g).ok());
             let msg = WsOutMessage::ControlFlowGraphResult {
                 function_name,
                 graph: graph_json,

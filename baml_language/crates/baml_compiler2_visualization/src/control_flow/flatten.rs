@@ -23,6 +23,139 @@ pub fn flatten_control_flow_graph(graph: &ControlFlowGraph) -> ControlFlowGraph 
     inline_branch_arms_and_scopes(&pass_two)
 }
 
+/// Produces a visualization-ready graph by:
+/// 1. Hoisting branch arms with labeled fan-out edges (adapted Pass 2)
+/// 2. Renaming `_` branch arm labels to `"default"`
+/// 3. Computing `is_container` for each node
+///
+/// Does NOT run Pass 1 (`remove_implicit_nodes`) or Pass 3
+/// (`inline_branch_arms_and_scopes`) — the playground needs all nodes
+/// visible and uses BranchArm/OtherScope as group containers.
+pub fn prepare_control_flow_graph_for_visualization(
+    graph: &ControlFlowGraph,
+) -> ControlFlowGraph {
+    struct BranchGroupInfo {
+        node_id: NodeId,
+        parent: Option<NodeId>,
+        depth: usize,
+        branch_children: Vec<NodeId>,
+        successors: Vec<NodeId>,
+    }
+
+    let mut graph = graph.clone();
+
+    // ── Step 1: Hoist branch arms with labeled fan-out edges ──────────
+    // Adapted from hoist_branch_arms — same deepest-first BranchGroup
+    // iteration, but fan-out edges carry the arm's label.
+
+    let children_map = build_children_map(&graph.nodes);
+    let mut groups: Vec<BranchGroupInfo> = Vec::new();
+    for (node_id, node) in &graph.nodes {
+        if node.node_type != NodeType::BranchGroup {
+            continue;
+        }
+        let branch_children: Vec<NodeId> = children_map
+            .get(node_id)
+            .map(|c| {
+                c.iter()
+                    .copied()
+                    .filter(|cid| {
+                        graph.nodes.get(cid).is_some_and(|n| {
+                            n.node_type == NodeType::BranchArm
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if branch_children.is_empty() {
+            continue;
+        }
+        let successors: Vec<NodeId> = graph
+            .edges_by_src
+            .get(node_id)
+            .map(|edges| edges.iter().map(|e| e.dst).collect())
+            .unwrap_or_default();
+        groups.push(BranchGroupInfo {
+            node_id: *node_id,
+            parent: node.parent_node_id,
+            depth: node_depth(*node_id, &graph.nodes),
+            branch_children,
+            successors,
+        });
+    }
+
+    // Process deepest groups first (handles nested conditionals)
+    groups.sort_by_key(|g| std::cmp::Reverse(g.depth));
+
+    for info in &groups {
+        // Remove BranchGroup's outgoing edges
+        graph.edges_by_src.shift_remove(&info.node_id);
+
+        // Copy BranchGroup's successors onto each arm (deduplicating)
+        for arm_id in &info.branch_children {
+            let entry = graph.edges_by_src.entry(*arm_id).or_default();
+            let mut existing: std::collections::HashSet<NodeId> =
+                entry.iter().map(|e| e.dst).collect();
+            for succ in &info.successors {
+                if existing.insert(*succ) {
+                    entry.push(Edge {
+                        src: *arm_id,
+                        dst: *succ,
+                        label: None,
+                    });
+                }
+            }
+        }
+
+        // Reparent each arm to the BranchGroup's parent
+        for arm_id in &info.branch_children {
+            if let Some(arm_node) = graph.nodes.get_mut(arm_id) {
+                arm_node.parent_node_id = info.parent;
+            }
+        }
+
+        // Create labeled fan-out edges BranchGroup → BranchArm
+        let mut fan_out_edges = Vec::new();
+        for arm_id in &info.branch_children {
+            let arm_label = graph
+                .nodes
+                .get(arm_id)
+                .map(|n| n.label.clone());
+            fan_out_edges.push(Edge {
+                src: info.node_id,
+                dst: *arm_id,
+                label: arm_label,
+            });
+        }
+        graph
+            .edges_by_src
+            .insert(info.node_id, fan_out_edges);
+    }
+
+    // ── Step 2: Rename "_" to "default" on BranchArm labels ──────────
+    for node in graph.nodes.values_mut() {
+        if node.node_type == NodeType::BranchArm && node.label == "_" {
+            node.label = "default".to_string();
+        }
+    }
+
+    // ── Step 3: Compute is_container ─────────────────────────────────
+    // A node is a container if other nodes reference it as parent,
+    // UNLESS it's a BranchGroup (those are diamond dispatch points,
+    // not layout containers).
+    let parent_set: std::collections::HashSet<NodeId> = graph
+        .nodes
+        .values()
+        .filter_map(|n| n.parent_node_id)
+        .collect();
+    for node in graph.nodes.values_mut() {
+        node.is_container =
+            parent_set.contains(&node.id) && node.node_type != NodeType::BranchGroup;
+    }
+
+    graph
+}
+
 // ===========================================================================
 // Pass 1: Remove implicit nodes
 // ===========================================================================
@@ -197,6 +330,7 @@ fn hoist_branch_arms(graph: &ControlFlowGraph) -> ControlFlowGraph {
                         entry.push(Edge {
                             src: *child,
                             dst: *succ,
+                            label: None,
                         });
                     }
                 }
@@ -215,6 +349,7 @@ fn hoist_branch_arms(graph: &ControlFlowGraph) -> ControlFlowGraph {
             group_edges.push(Edge {
                 src: info.node_id,
                 dst: *child,
+                label: None,
             });
         }
         next.edges_by_src.insert(info.node_id, group_edges);
@@ -371,6 +506,7 @@ fn fan_out_outgoing_edges(graph: &mut ControlFlowGraph, exits: &[NodeId], outgoi
                 entry.push(Edge {
                     src: *exit,
                     dst: edge.dst,
+                    label: None,
                 });
             }
         }
@@ -445,6 +581,7 @@ mod tests {
             label: label.to_string(),
             source_expr: None,
             node_type,
+            is_container: false,
         }
     }
 
@@ -456,6 +593,7 @@ mod tests {
             .push(Edge {
                 src: NodeId::new(src),
                 dst: NodeId::new(dst),
+                label: None,
             });
     }
 

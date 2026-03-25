@@ -9,6 +9,7 @@ mod from_ast;
 use std::{collections::HashMap, fmt};
 
 pub use flatten::flatten_control_flow_graph;
+pub use flatten::prepare_control_flow_graph_for_visualization;
 pub use from_ast::{STMT_SOURCE_EXPR_TAG, build_control_flow_graph_from_ast};
 use indexmap::IndexMap;
 
@@ -49,7 +50,7 @@ pub enum PathSegment {
 }
 
 /// The type of a visualization node.
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NodeType {
     FunctionRoot,
@@ -75,6 +76,8 @@ pub struct Node {
     /// - AST builder: not yet set (always `None`)
     pub source_expr: Option<u32>,
     pub node_type: NodeType,
+    #[serde(default)]
+    pub is_container: bool,
 }
 
 impl Node {
@@ -93,6 +96,7 @@ impl Node {
             label: label.into(),
             source_expr,
             node_type,
+            is_container: false,
         }
     }
 
@@ -113,6 +117,8 @@ impl Node {
 pub struct Edge {
     pub src: NodeId,
     pub dst: NodeId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 /// The control flow visualization graph.
@@ -155,7 +161,7 @@ impl GraphAccumulator {
     }
 
     pub fn add_edge(&mut self, src: NodeId, dst: NodeId) {
-        self.edges.push(Edge { src, dst });
+        self.edges.push(Edge { src, dst, label: None });
     }
 
     pub fn finish(self) -> ControlFlowGraph {

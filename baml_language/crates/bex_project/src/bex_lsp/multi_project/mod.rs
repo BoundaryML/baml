@@ -584,6 +584,9 @@ impl super::BexLsp for BexMulitProject {
 
     fn request_control_flow_graph(&self, function_name: &str) {
         let graph = self.ast_control_flow_graph(function_name);
+        let graph = graph.map(|g| {
+            baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(&g)
+        });
         let graph_json = graph.as_ref().and_then(|g| serde_json::to_value(g).ok());
         self.playground_sender.send_playground_notification(
             crate::bex_lsp::PlaygroundNotification::ControlFlowGraphResult {
