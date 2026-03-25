@@ -23,7 +23,7 @@ mod tests {
     use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 
     use crate::{
-        ast::{BuiltinKind, Expr, FunctionBodyDef, Item, Stmt, TypeExpr},
+        ast::{BuiltinKind, Expr, FunctionBodyDef, Item, SpannedTypeExprKind, Stmt, TypeExpr},
         lower_cst::lower_file,
     };
 
@@ -336,7 +336,7 @@ class Media {
             .expect("expected _data field");
 
         match &field.type_expr {
-            Some(spanned) => match &spanned.expr {
+            Some(spanned) => match spanned.to_type_expr() {
                 TypeExpr::Rust => {}
                 other => panic!("expected TypeExpr::Rust, got {other:?}"),
             },
@@ -446,7 +446,11 @@ class Media {
             assert!(data_field.is_some(), "expected _data field");
             assert!(
                 matches!(
-                    data_field.unwrap().type_expr.as_ref().map(|te| &te.expr),
+                    data_field
+                        .unwrap()
+                        .type_expr
+                        .as_ref()
+                        .map(super::ast::SpannedTypeExpr::to_type_expr),
                     Some(TypeExpr::Rust)
                 ),
                 "_data field should have TypeExpr::Rust"
@@ -467,10 +471,32 @@ function f() -> int throws never {
         let throws = func
             .throws
             .expect("expected throws clause to be lowered into FunctionDef.throws");
-        assert!(
-            matches!(throws.expr, TypeExpr::Never),
-            "expected throws type to lower as TypeExpr::Never, got {:?}",
-            throws.expr
+        match throws.to_type_expr() {
+            TypeExpr::Never => {}
+            other => panic!("expected throws type to lower as TypeExpr::Never, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn nested_container_type_has_distinct_spans_per_level() {
+        let source = "function f(x: int[][]) -> int { return 0 }";
+        let items = parse_and_lower(source);
+        let func = first_function(items);
+        let param = func.params.first().expect("one param");
+        let te = param.type_expr.as_ref().expect("param has type annotation");
+        // int[][] lowers to List(List(Int)); outer and inner List should have distinct spans.
+        let SpannedTypeExprKind::List(inner) = &te.kind else {
+            panic!("expected outer List, got {:?}", te.kind);
+        };
+        let SpannedTypeExprKind::List(inner_inner) = &inner.kind else {
+            panic!("expected inner List, got {:?}", inner.kind);
+        };
+        let SpannedTypeExprKind::Int = &inner_inner.kind else {
+            panic!("expected Int, got {:?}", inner_inner.kind);
+        };
+        assert_ne!(
+            te.span, inner.span,
+            "nested container levels should have distinct spans for precise diagnostics"
         );
     }
 

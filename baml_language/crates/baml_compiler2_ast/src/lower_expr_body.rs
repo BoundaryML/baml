@@ -105,9 +105,10 @@ impl LoweringContext {
         id
     }
 
-    fn alloc_type_annot(&mut self, ty: TypeExpr, range: TextRange) -> TypeAnnotId {
-        let id = self.type_annotations.alloc(ty);
-        self.source_map.type_annotation_spans.alloc(range);
+    fn alloc_type_annot(&mut self, spanned: crate::ast::SpannedTypeExpr) -> TypeAnnotId {
+        let id = self.type_annotations.alloc(spanned.to_type_expr());
+        self.source_map.type_annotation_spans.alloc(spanned.span);
+        self.source_map.type_annotation_spanned_exprs.push(spanned);
         id
     }
 
@@ -585,9 +586,8 @@ impl LoweringContext {
                         if let Some(type_expr) =
                             baml_compiler_syntax::ast::TypeExpr::cast(child.clone())
                         {
-                            let span = child.text_range();
-                            let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr);
-                            scrutinee_type = Some(self.alloc_type_annot(ty, span));
+                            let spanned = crate::lower_type_expr::lower_type_expr_node(&type_expr);
+                            scrutinee_type = Some(self.alloc_type_annot(spanned));
                         }
                     }
                     _ => {
@@ -780,11 +780,15 @@ impl LoweringContext {
                                 // After `name:`, we expect the type to be a node child (TYPE_EXPR),
                                 // but sometimes parser emits it as a WORD token directly.
                                 // Treat it as a named type.
-                                let pat = Pattern::TypedBinding {
-                                    name,
-                                    ty: crate::ast::TypeExpr::Path(vec![Name::new(&text)]),
+                                let span = token.text_range();
+                                let ty = crate::ast::SpannedTypeExpr {
+                                    kind: crate::ast::SpannedTypeExprKind::Path(vec![Name::new(
+                                        &text,
+                                    )]),
+                                    span,
                                 };
-                                elements.push(self.alloc_pattern(pat, token.text_range()));
+                                let pat = Pattern::TypedBinding { name, ty };
+                                elements.push(self.alloc_pattern(pat, span));
                                 continue;
                             }
 
@@ -892,9 +896,9 @@ impl LoweringContext {
                                 if let Some(type_expr) =
                                     baml_compiler_syntax::ast::TypeExpr::cast(child.clone())
                                 {
-                                    let ty =
+                                    let spanned =
                                         crate::lower_type_expr::lower_type_expr_node(&type_expr);
-                                    let pat = Pattern::TypedBinding { name, ty };
+                                    let pat = Pattern::TypedBinding { name, ty: spanned };
                                     elements.push(self.alloc_pattern(pat, child.text_range()));
                                 }
                             }
@@ -1747,9 +1751,9 @@ impl LoweringContext {
                             if let Some(type_expr) =
                                 baml_compiler_syntax::ast::TypeExpr::cast(child.clone())
                             {
-                                let span = child.text_range();
-                                let ty = crate::lower_type_expr::lower_type_expr_node(&type_expr);
-                                type_annotation = Some(self.alloc_type_annot(ty, span));
+                                let spanned =
+                                    crate::lower_type_expr::lower_type_expr_node(&type_expr);
+                                type_annotation = Some(self.alloc_type_annot(spanned));
                                 seen_colon = false;
                             }
                         } else if pattern_id.is_none() {

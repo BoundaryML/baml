@@ -137,63 +137,72 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
             continue;
         }
 
-        let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-        let mut type_errors = Vec::new();
+        let mut type_errors_spanned = Vec::new();
 
-        // Check return type — use the span from the item tree's SpannedTypeExpr.
-        if let Some(ret_te) = &sig.return_type {
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        // Check return type — use lower_spanned_type_expr for per-node spans.
+        if let Some(ret_spanned) = &func_data.return_type {
+            baml_compiler2_tir::lower_type_expr::lower_spanned_type_expr(
                 db,
-                ret_te,
+                ret_spanned,
                 &pkg_items,
-                &mut type_errors,
+                &mut type_errors_spanned,
             );
-            if !type_errors.is_empty() {
-                if let Some(ret_spanned) = &func_data.return_type {
-                    for error in type_errors.drain(..) {
-                        diagnostics.push(
-                            Diagnostic::error(
-                                tir_type_error_to_diagnostic_id(&error),
-                                error.to_string(),
-                            )
-                            .with_primary_span(Span {
-                                file_id,
-                                range: ret_spanned.span,
-                            })
-                            .with_phase(DiagnosticPhase::Type),
-                        );
-                    }
+            for (error, span) in type_errors_spanned.drain(..) {
+                diagnostics.push(
+                    Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
+                        .with_primary_span(Span {
+                            file_id,
+                            range: span,
+                        })
+                        .with_phase(DiagnosticPhase::Type),
+                );
+            }
+        }
+
+        // Check parameter types — use lower_spanned_type_expr for per-node spans.
+        for param in &func_data.params {
+            if let Some(type_spanned) = &param.type_expr {
+                type_errors_spanned.clear();
+                baml_compiler2_tir::lower_type_expr::lower_spanned_type_expr(
+                    db,
+                    type_spanned,
+                    &pkg_items,
+                    &mut type_errors_spanned,
+                );
+                for (error, span) in type_errors_spanned.drain(..) {
+                    diagnostics.push(
+                        Diagnostic::error(
+                            tir_type_error_to_diagnostic_id(&error),
+                            error.to_string(),
+                        )
+                        .with_primary_span(Span {
+                            file_id,
+                            range: span,
+                        })
+                        .with_phase(DiagnosticPhase::Type),
+                    );
                 }
             }
         }
 
-        // Check parameter types — use the type_expr span, not the whole param span.
-        for (i, (_name, te)) in sig.params.iter().enumerate() {
-            type_errors.clear();
-            baml_compiler2_tir::lower_type_expr::lower_type_expr(
+        // Check throws type — use lower_spanned_type_expr for per-node spans.
+        if let Some(throws_spanned) = &func_data.throws {
+            type_errors_spanned.clear();
+            baml_compiler2_tir::lower_type_expr::lower_spanned_type_expr(
                 db,
-                te,
+                throws_spanned,
                 &pkg_items,
-                &mut type_errors,
+                &mut type_errors_spanned,
             );
-            if !type_errors.is_empty() {
-                if let Some(param) = func_data.params.get(i) {
-                    if let Some(type_spanned) = &param.type_expr {
-                        for error in type_errors.drain(..) {
-                            diagnostics.push(
-                                Diagnostic::error(
-                                    tir_type_error_to_diagnostic_id(&error),
-                                    error.to_string(),
-                                )
-                                .with_primary_span(Span {
-                                    file_id,
-                                    range: type_spanned.span,
-                                })
-                                .with_phase(DiagnosticPhase::Type),
-                            );
-                        }
-                    }
-                }
+            for (error, span) in type_errors_spanned.drain(..) {
+                diagnostics.push(
+                    Diagnostic::error(tir_type_error_to_diagnostic_id(&error), error.to_string())
+                        .with_primary_span(Span {
+                            file_id,
+                            range: span,
+                        })
+                        .with_phase(DiagnosticPhase::Type),
+                );
             }
         }
     }

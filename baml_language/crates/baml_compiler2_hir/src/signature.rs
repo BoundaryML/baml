@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use baml_compiler2_ast::TypeExpr;
+use baml_compiler2_ast::{SpannedTypeExpr, TypeExpr};
 use text_size::TextRange;
 
 use crate::loc::FunctionLoc;
@@ -33,14 +33,23 @@ pub struct FunctionSignature {
 /// Kept separate from `FunctionSignature` so that whitespace-only source
 /// changes only invalidate `function_signature_source_map`, not
 /// `function_signature`.
+///
+/// Stores recursive `SpannedTypeExpr` trees so each sub-expression (e.g.
+/// individual union members) carries its own span for precise diagnostics.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureSourceMap {
     /// One span per parameter, parallel to `FunctionSignature::params`.
     pub param_spans: Vec<TextRange>,
+    /// Recursive spanned type expression trees for parameter types.
+    pub param_type_exprs: Vec<Option<SpannedTypeExpr>>,
     /// Span of the return type annotation, if present.
     pub return_type_span: Option<TextRange>,
+    /// Recursive spanned return type tree, if present.
+    pub return_type_expr: Option<SpannedTypeExpr>,
     /// Span of the throws type annotation, if present.
     pub throws_type_span: Option<TextRange>,
+    /// Recursive spanned throws type tree, if present.
+    pub throws_type_expr: Option<SpannedTypeExpr>,
 }
 
 /// Shared implementation — reads from the `ItemTree` (full AST data),
@@ -53,7 +62,7 @@ fn function_signature_with_source_map<'db>(
     let item_tree = crate::raw_file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    // Build semantic signature — strip spans, keep TypeExpr
+    // Build semantic signature — strip spans via to_type_expr()
     let params: Vec<_> = func_data
         .params
         .iter()
@@ -61,26 +70,36 @@ fn function_signature_with_source_map<'db>(
             let type_expr = p
                 .type_expr
                 .as_ref()
-                .map(|te| te.expr.clone())
+                .map(SpannedTypeExpr::to_type_expr)
                 .unwrap_or(TypeExpr::Unknown);
             (p.name.clone(), type_expr)
         })
         .collect();
 
-    let return_type = func_data.return_type.as_ref().map(|te| te.expr.clone());
+    let return_type = func_data
+        .return_type
+        .as_ref()
+        .map(SpannedTypeExpr::to_type_expr);
 
     let sig = Arc::new(FunctionSignature {
         name: func_data.name.clone(),
         params,
         return_type,
-        throws: func_data.throws.as_ref().map(|te| te.expr.clone()),
+        throws: func_data.throws.as_ref().map(SpannedTypeExpr::to_type_expr),
     });
 
-    // Build source map — spans only (separate for early-cutoff)
+    // Build source map — spans + recursive SpannedTypeExpr trees
     let source_map = SignatureSourceMap {
         param_spans: func_data.params.iter().map(|p| p.span).collect(),
+        param_type_exprs: func_data
+            .params
+            .iter()
+            .map(|p| p.type_expr.clone())
+            .collect(),
         return_type_span: func_data.return_type.as_ref().map(|te| te.span),
+        return_type_expr: func_data.return_type.clone(),
         throws_type_span: func_data.throws.as_ref().map(|te| te.span),
+        throws_type_expr: func_data.throws.clone(),
     };
 
     (sig, source_map)

@@ -258,6 +258,28 @@ impl UnionMemberParts {
             .find(|t| t.kind() == SyntaxKind::FLOAT_LITERAL)
             .map(|t| t.text().to_string())
     }
+
+    /// Compute the text range covering all tokens and child nodes in this member.
+    pub fn text_range(&self) -> rowan::TextRange {
+        let mut start = None::<rowan::TextSize>;
+        let mut end = None::<rowan::TextSize>;
+
+        for t in &self.tokens {
+            let r = t.text_range();
+            start = Some(start.map_or(r.start(), |s: rowan::TextSize| s.min(r.start())));
+            end = Some(end.map_or(r.end(), |e: rowan::TextSize| e.max(r.end())));
+        }
+        for n in &self.child_nodes {
+            let r = n.text_range();
+            start = Some(start.map_or(r.start(), |s: rowan::TextSize| s.min(r.start())));
+            end = Some(end.map_or(r.end(), |e: rowan::TextSize| e.max(r.end())));
+        }
+
+        match (start, end) {
+            (Some(s), Some(e)) => rowan::TextRange::new(s, e),
+            _ => rowan::TextRange::default(),
+        }
+    }
 }
 
 impl Default for UnionMemberParts {
@@ -590,6 +612,34 @@ impl TypeExpr {
     /// This is useful for error reporting and span creation.
     pub fn text_range(&self) -> rowan::TextRange {
         self.syntax.text_range()
+    }
+
+    /// Get the text range excluding leading/trailing trivia (whitespace/comments).
+    ///
+    /// Rowan attaches trivia to the node's first/last tokens, so
+    /// `syntax().text_range()` can include surrounding whitespace.
+    /// This method finds the first and last non-trivia tokens to produce
+    /// a tight range covering only the meaningful syntax.
+    pub fn trimmed_text_range(&self) -> rowan::TextRange {
+        let mut start = None::<rowan::TextSize>;
+        let mut end = None::<rowan::TextSize>;
+
+        for element in self.syntax.descendants_with_tokens() {
+            if let rowan::NodeOrToken::Token(token) = element {
+                if !token.kind().is_trivia() {
+                    let r = token.text_range();
+                    if start.is_none() {
+                        start = Some(r.start());
+                    }
+                    end = Some(r.end());
+                }
+            }
+        }
+
+        match (start, end) {
+            (Some(s), Some(e)) => rowan::TextRange::new(s, e),
+            _ => self.syntax.text_range(),
+        }
     }
 
     /// Check if this is a function type: `(x: int, y: int) -> bool` or `(int) -> bool`.

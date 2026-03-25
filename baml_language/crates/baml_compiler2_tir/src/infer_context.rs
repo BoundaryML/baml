@@ -140,7 +140,7 @@ impl fmt::Display for TirTypeError {
                 write!(f, "operator `{op:?}` cannot be applied to `{operand}`")
             }
             TirTypeError::UnresolvedType { name } => {
-                write!(f, "unresolved type: {name}")
+                write!(f, "unresolved type: `{name}`")
             }
             TirTypeError::ArgumentCountMismatch { expected, got } => {
                 write!(f, "expected {expected} argument(s), got {got}")

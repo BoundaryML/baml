@@ -98,7 +98,7 @@ pub(crate) mod support {
         match pat {
             Pattern::Binding(n) => n.to_string(),
             Pattern::TypedBinding { name, ty } => {
-                format!("{name}: {}", type_expr_to_string(ty))
+                format!("{name}: {}", type_expr_to_string(&ty.to_type_expr()))
             }
             Pattern::Literal(lit) => lit.to_string(),
             Pattern::Null => "null".into(),
@@ -349,7 +349,7 @@ pub(crate) mod support {
                 let pat_name = match &body.patterns[*pattern] {
                     Pattern::Binding(n) => n.to_string(),
                     Pattern::TypedBinding { name, ty } => {
-                        format!("{name}: {}", type_expr_to_string(ty))
+                        format!("{name}: {}", type_expr_to_string(&ty.to_type_expr()))
                     }
                     other => format!("{other:?}"),
                 };

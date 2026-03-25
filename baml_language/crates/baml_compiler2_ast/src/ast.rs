@@ -84,12 +84,96 @@ pub struct FunctionTypeParam {
     pub ty: TypeExpr,
 }
 
+/// Recursive spanned type expression kind — mirrors `TypeExpr` but children
+/// are `SpannedTypeExpr` so every sub-expression carries its own source span.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SpannedTypeExprKind {
+    Path(Vec<Name>),
+    Int,
+    Float,
+    String,
+    Bool,
+    Null,
+    Never,
+    Media(baml_base::MediaKind),
+    Optional(Box<SpannedTypeExpr>),
+    List(Box<SpannedTypeExpr>),
+    Map {
+        key: Box<SpannedTypeExpr>,
+        value: Box<SpannedTypeExpr>,
+    },
+    Union(Vec<SpannedTypeExpr>),
+    Literal(baml_base::Literal),
+    Function {
+        params: Vec<SpannedFunctionTypeParam>,
+        ret: Box<SpannedTypeExpr>,
+    },
+    BuiltinUnknown,
+    Type,
+    Rust,
+    Error,
+    Unknown,
+}
+
+/// A parameter in a spanned function type expression.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpannedFunctionTypeParam {
+    pub name: Option<Name>,
+    pub ty: SpannedTypeExpr,
+}
+
 /// A type expression with its source span — used in item definitions
 /// where we need both the type data and the source location.
+///
+/// Recursive: children are also `SpannedTypeExpr`, so every sub-expression
+/// (e.g. each union member) carries its own span for precise diagnostics.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SpannedTypeExpr {
-    pub expr: TypeExpr,
+    pub kind: SpannedTypeExprKind,
     pub span: TextRange,
+}
+
+impl SpannedTypeExpr {
+    /// Recursively strip spans to produce a span-free `TypeExpr` for Salsa queries.
+    pub fn to_type_expr(&self) -> TypeExpr {
+        match &self.kind {
+            SpannedTypeExprKind::Path(segments) => TypeExpr::Path(segments.clone()),
+            SpannedTypeExprKind::Int => TypeExpr::Int,
+            SpannedTypeExprKind::Float => TypeExpr::Float,
+            SpannedTypeExprKind::String => TypeExpr::String,
+            SpannedTypeExprKind::Bool => TypeExpr::Bool,
+            SpannedTypeExprKind::Null => TypeExpr::Null,
+            SpannedTypeExprKind::Never => TypeExpr::Never,
+            SpannedTypeExprKind::Media(kind) => TypeExpr::Media(*kind),
+            SpannedTypeExprKind::Optional(inner) => {
+                TypeExpr::Optional(Box::new(inner.to_type_expr()))
+            }
+            SpannedTypeExprKind::List(inner) => TypeExpr::List(Box::new(inner.to_type_expr())),
+            SpannedTypeExprKind::Map { key, value } => TypeExpr::Map {
+                key: Box::new(key.to_type_expr()),
+                value: Box::new(value.to_type_expr()),
+            },
+            SpannedTypeExprKind::Union(members) => {
+                TypeExpr::Union(members.iter().map(SpannedTypeExpr::to_type_expr).collect())
+            }
+            SpannedTypeExprKind::Literal(lit) => TypeExpr::Literal(lit.clone()),
+            SpannedTypeExprKind::Function { params, ret } => TypeExpr::Function {
+                params: params
+                    .iter()
+                    .map(|p| FunctionTypeParam {
+                        name: p.name.clone(),
+                        ty: p.ty.to_type_expr(),
+                    })
+                    .collect(),
+                ret: Box::new(ret.to_type_expr()),
+            },
+            SpannedTypeExprKind::BuiltinUnknown => TypeExpr::BuiltinUnknown,
+            SpannedTypeExprKind::Type => TypeExpr::Type,
+            SpannedTypeExprKind::Rust => TypeExpr::Rust,
+            SpannedTypeExprKind::Error => TypeExpr::Error,
+            SpannedTypeExprKind::Unknown => TypeExpr::Unknown,
+        }
+    }
 }
 
 // ── Expression Bodies ───────────────────────────────────────────
@@ -130,6 +214,9 @@ pub struct AstSourceMap {
     pub pattern_spans: Arena<TextRange>,
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
+    /// Parallel to `type_annotation_spans` — full `SpannedTypeExpr` tree for
+    /// per-node diagnostics (e.g. underline only the bad union member).
+    pub type_annotation_spanned_exprs: Vec<SpannedTypeExpr>,
     pub catch_arm_spans: Arena<TextRange>,
 }
 
@@ -141,6 +228,7 @@ impl AstSourceMap {
             pattern_spans: Arena::new(),
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
+            type_annotation_spanned_exprs: Vec::new(),
             catch_arm_spans: Arena::new(),
         }
     }
@@ -186,6 +274,12 @@ impl AstSourceMap {
             .nth(raw as usize)
             .map(|(_, &span)| span)
             .unwrap_or_default()
+    }
+
+    /// Look up the full `SpannedTypeExpr` for a type annotation (for per-node diagnostics).
+    pub fn type_annotation_spanned(&self, id: TypeAnnotId) -> Option<&SpannedTypeExpr> {
+        let raw: u32 = id.into_raw().into_u32();
+        self.type_annotation_spanned_exprs.get(raw as usize)
     }
 
     /// Look up the source span of a catch arm by its `CatchArmId`.
@@ -314,7 +408,7 @@ pub enum Stmt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pattern {
     Binding(Name),
-    TypedBinding { name: Name, ty: TypeExpr },
+    TypedBinding { name: Name, ty: SpannedTypeExpr },
     Literal(Literal),
     Null,
     EnumVariant { enum_name: Name, variant: Name },

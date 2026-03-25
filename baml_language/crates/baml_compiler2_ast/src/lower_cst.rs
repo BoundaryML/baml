@@ -17,8 +17,7 @@ use crate::{
     ast::{
         BuiltinKind, ClientDef, ConfigItemDef, EnumDef, FieldDef, FunctionBodyDef, FunctionDef,
         GeneratorDef, Interpolation, Item, LlmBodyDef, Param, RawAttribute, RawAttributeArg,
-        RawPrompt, RetryPolicyDef, SpannedTypeExpr, TemplateStringDef, TestDef, TypeAliasDef,
-        VariantDef,
+        RawPrompt, RetryPolicyDef, TemplateStringDef, TestDef, TypeAliasDef, VariantDef,
     },
     lower_expr_body, lower_type_expr,
 };
@@ -102,18 +101,14 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
         .map(|pl| lower_params(&pl))
         .unwrap_or_default();
 
-    let return_type = func.return_type().map(|te| SpannedTypeExpr {
-        expr: lower_type_expr::lower_type_expr_node(&te),
-        span: te.syntax().text_range(),
-    });
+    let return_type = func
+        .return_type()
+        .map(|te| lower_type_expr::lower_type_expr_node(&te));
 
     let throws = func
         .throws_clause()
         .and_then(|tc| tc.type_expr())
-        .map(|te| SpannedTypeExpr {
-            expr: lower_type_expr::lower_type_expr_node(&te),
-            span: te.syntax().text_range(),
-        });
+        .map(|te| lower_type_expr::lower_type_expr_node(&te));
 
     let body = if let Some(llm) = func.llm_body() {
         Some(FunctionBodyDef::Llm(lower_llm_body(&llm)))
@@ -182,10 +177,9 @@ fn lower_param(param: &ast::Parameter) -> Option<Param> {
     let name_token = param.name()?;
     Some(Param {
         name: Name::new(name_token.text()),
-        type_expr: param.ty().map(|te| SpannedTypeExpr {
-            expr: lower_type_expr::lower_type_expr_node(&te),
-            span: te.syntax().text_range(),
-        }),
+        type_expr: param
+            .ty()
+            .map(|te| lower_type_expr::lower_type_expr_node(&te)),
         span: param.syntax().text_range(),
         name_span: name_token.text_range(),
     })
@@ -268,10 +262,7 @@ fn lower_class(node: &SyntaxNode) -> Option<crate::ast::ClassDef> {
             let fname = f.name()?;
             Some(FieldDef {
                 name: Name::new(fname.text()),
-                type_expr: f.ty().map(|te| SpannedTypeExpr {
-                    expr: lower_type_expr::lower_type_expr_node(&te),
-                    span: te.syntax().text_range(),
-                }),
+                type_expr: f.ty().map(|te| lower_type_expr::lower_type_expr_node(&te)),
                 attributes: lower_field_attributes(&f),
                 span: f.syntax().text_range(),
                 name_span: fname.text_range(),
@@ -357,10 +348,9 @@ fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAliasDef> {
 
     Some(TypeAliasDef {
         name: Name::new(name_token.text()),
-        type_expr: alias.ty().map(|te| SpannedTypeExpr {
-            expr: lower_type_expr::lower_type_expr_node(&te),
-            span: te.syntax().text_range(),
-        }),
+        type_expr: alias
+            .ty()
+            .map(|te| lower_type_expr::lower_type_expr_node(&te)),
         span: node.text_range(),
         name_span: name_token.text_range(),
     })

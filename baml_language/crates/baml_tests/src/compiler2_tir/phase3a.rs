@@ -54,7 +54,7 @@ fn unknown_type_in_param() {
       { : never
         return 0 : 0
       }
-      !! 11..25: unresolved type: Nonexistent
+      !! 14..25: unresolved type: `Nonexistent`
     }
     ");
 }
@@ -68,7 +68,84 @@ fn unknown_type_in_return() {
       { : never
         return 0 : 0
       }
-      !! 15..28: unresolved type: DoesNotExist
+      !! 16..28: unresolved type: `DoesNotExist`
+    }
+    ");
+}
+
+#[test]
+fn unknown_type_in_union_return() {
+    // Precise diagnostic: only the bad union member is underlined, not the whole type.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f() -> int | sring | bool { return 0; }",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> int | unknown | bool {
+      { : never
+        return 0 : 0
+      }
+      !! 22..27: unresolved type: `sring`
+    }
+    ");
+}
+
+#[test]
+fn unknown_type_in_throws() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f() -> int throws MissingType { return 0; }",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> int throws unknown {
+      { : never
+        return 0 : 0
+      }
+      !! 27..38: unresolved type: `MissingType`
+      ?? 27..38: extraneous throws declaration: unknown
+    }
+    ");
+}
+
+// ── 3A-2b. UnknownType on let-binding annotation ──────────────────────────
+// Quick test: see how let x: BadType = ... is diagnosed (span precision).
+
+#[test]
+fn unknown_type_in_let_binding() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f() -> int { let x: Nonexistent = 1; return x; }",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> int {
+      { : never
+        let x = 1 : 1
+        return x : 1
+      }
+      !! 29..40: unresolved type: `Nonexistent`
+    }
+    ");
+}
+
+#[test]
+fn unknown_type_in_let_binding_union() {
+    // Bug check: without SpannedTypeExpr in body we get one span per type annotation (whole "int | sring").
+    // With per-node spans we'd get the diagnostic only on "sring". Snapshot shows actual span.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "function f() -> int { let x: int | sring = 1; return x; }",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    function user.f() -> int {
+      { : never
+        let x = 1 : 1
+        return x : 1
+      }
+      !! 35..40: unresolved type: `sring`
     }
     ");
 }
@@ -210,7 +287,7 @@ fn missing_return() {
       { : int
         let x = 1 : 1 -> int
       }
-      !! 19..34: missing return: expected `int`
+      !! 16..19: missing return: expected `int`
     }
     ");
 }
@@ -224,7 +301,7 @@ fn block_ending_in_stmt() {
       { : string
         let x = "hello" : "hello" -> string
       }
-      !! 22..43: missing return: expected `string`
+      !! 16..22: missing return: expected `string`
     }
     "#);
 }

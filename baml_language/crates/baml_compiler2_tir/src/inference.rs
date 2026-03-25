@@ -155,33 +155,35 @@ pub fn infer_scope_types<'db>(
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
-                        // Get declared return type
-                        let mut diags = Vec::new();
-                        let return_ty = sig
-                            .return_type
-                            .as_ref()
-                            .map(|te| {
-                                crate::lower_type_expr::lower_type_expr(
-                                    db, te, pkg_items, &mut diags,
-                                )
-                            })
-                            .unwrap_or(Ty::Unknown);
+                        let sig_sm = baml_compiler2_hir::signature::function_signature_source_map(
+                            db, func_loc,
+                        );
+                        builder.set_body_source_map(
+                            baml_compiler2_hir::body::function_body_source_map(db, func_loc),
+                        );
 
-                        // Report unresolved type diagnostics for return type
-                        if !diags.is_empty() {
-                            let sig_sm =
-                                baml_compiler2_hir::signature::function_signature_source_map(
-                                    db, func_loc,
-                                );
-                            if let Some(ret_span) = sig_sm.return_type_span {
-                                for diag in diags.drain(..) {
-                                    builder.report_at_span(diag, ret_span);
-                                }
+                        // Get declared return type — use spanned version for precise diagnostics
+                        let return_ty = if let Some(ret_spanned) = &sig_sm.return_type_expr {
+                            let mut diags = Vec::new();
+                            let ty = crate::lower_type_expr::lower_spanned_type_expr(
+                                db,
+                                ret_spanned,
+                                pkg_items,
+                                &mut diags,
+                            );
+                            for (diag, span) in diags {
+                                builder.report_at_span(diag, span);
                             }
-                        }
+                            ty
+                        } else {
+                            Ty::Unknown
+                        };
 
                         // Set declared return type for return statement checking
                         builder.set_return_type(return_ty.clone());
+                        if let Some(span) = sig_sm.return_type_span {
+                            builder.set_return_type_span(span);
+                        }
 
                         // Determine enclosing class name for `self` parameter resolution
                         let enclosing_class_name: Option<Name> =
@@ -195,18 +197,13 @@ pub fn infer_scope_types<'db>(
                             });
 
                         // Add parameter bindings as locals
-                        let sig_sm = baml_compiler2_hir::signature::function_signature_source_map(
-                            db, func_loc,
-                        );
                         for (i, (param_name, param_te)) in sig.params.iter().enumerate() {
                             let param_ty = if param_name.as_str() == "self"
                                 && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
                             {
-                                // `self` parameter with no type annotation — infer from enclosing class
                                 enclosing_class_name
                                     .as_ref()
                                     .and_then(|cn| {
-                                        // Look up the class to get its definition's package
                                         pkg_items.lookup_type(&[cn.clone()]).map(|def| {
                                             Ty::Class(crate::lower_type_expr::qualify_def(
                                                 db, def, cn,
@@ -214,6 +211,19 @@ pub fn infer_scope_types<'db>(
                                         })
                                     })
                                     .unwrap_or(Ty::Unknown)
+                            } else if let Some(Some(param_spanned)) = sig_sm.param_type_exprs.get(i)
+                            {
+                                let mut param_diags = Vec::new();
+                                let ty = crate::lower_type_expr::lower_spanned_type_expr(
+                                    db,
+                                    param_spanned,
+                                    pkg_items,
+                                    &mut param_diags,
+                                );
+                                for (diag, span) in param_diags {
+                                    builder.report_at_span(diag, span);
+                                }
+                                ty
                             } else {
                                 let mut param_diags = Vec::new();
                                 let ty = crate::lower_type_expr::lower_type_expr(
@@ -242,7 +252,7 @@ pub fn infer_scope_types<'db>(
                         // Validate declared `throws` against effective escaping throws.
                         builder.check_throws_contract(
                             expr_body,
-                            sig.throws.as_ref(),
+                            sig_sm.throws_type_expr.as_ref(),
                             sig_sm.throws_type_span,
                             func_data.span,
                         );
@@ -434,12 +444,10 @@ pub fn resolve_class_fields<'db>(
                 .as_ref()
                 .map(|te| {
                     let mut diags = Vec::new();
-                    let ty = crate::lower_type_expr::lower_type_expr(
-                        db, &te.expr, pkg_items, &mut diags,
+                    let ty = crate::lower_type_expr::lower_spanned_type_expr(
+                        db, te, pkg_items, &mut diags,
                     );
-                    for d in diags {
-                        all_diags.push((d, te.span));
-                    }
+                    all_diags.extend(diags);
                     ty
                 })
                 .unwrap_or(Ty::Unknown);
@@ -474,10 +482,8 @@ pub fn resolve_type_alias<'db>(
         .as_ref()
         .map(|te| {
             let mut diags = Vec::new();
-            let ty = crate::lower_type_expr::lower_type_expr(db, &te.expr, pkg_items, &mut diags);
-            for d in diags {
-                all_diags.push((d, te.span));
-            }
+            let ty = crate::lower_type_expr::lower_spanned_type_expr(db, te, pkg_items, &mut diags);
+            all_diags.extend(diags);
             ty
         })
         .unwrap_or(Ty::Unknown);

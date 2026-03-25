@@ -16,7 +16,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeExpr};
+use baml_compiler2_ast::{AstSourceMap, Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeExpr};
 use baml_compiler2_hir::{
     contributions::Definition,
     package::{PackageId, PackageItems},
@@ -79,6 +79,10 @@ pub struct TypeInferenceBuilder<'db> {
     scope: ScopeId<'db>,
     /// Declared return type for the function (used to check return statements).
     declared_return_ty: Option<Ty>,
+    /// Source span of the return type annotation (for precise diagnostics).
+    return_type_span: Option<TextRange>,
+    /// Body source map (when in function scope) for per-node type annotation diagnostics.
+    body_source_map: Option<AstSourceMap>,
     /// Local variable bindings: name → inferred type (flow-sensitive, updated
     /// by narrowing and assignments).
     locals: FxHashMap<Name, Ty>,
@@ -115,6 +119,8 @@ impl<'db> TypeInferenceBuilder<'db> {
             package_id,
             scope,
             declared_return_ty: None,
+            return_type_span: None,
+            body_source_map: None,
             locals: FxHashMap::default(),
             declared_types: FxHashMap::default(),
             aliases,
@@ -137,6 +143,16 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Set the declared return type (for return statement checking).
     pub fn set_return_type(&mut self, ty: Ty) {
         self.declared_return_ty = Some(ty);
+    }
+
+    /// Set the source span of the return type annotation.
+    pub fn set_return_type_span(&mut self, span: TextRange) {
+        self.return_type_span = Some(span);
+    }
+
+    /// Set the body source map (for precise type-annotation diagnostics in let etc.).
+    pub fn set_body_source_map(&mut self, source_map: Option<AstSourceMap>) {
+        self.body_source_map = source_map;
     }
 
     /// Report a type error at a raw source span (for type annotations).
@@ -396,14 +412,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 } else if let Some(tail) = tail_expr {
                     self.check_expr(*tail, body, expected)
                 } else if !matches!(expected, Ty::Unknown | Ty::Void) {
-                    // No tail expression, no divergence — block falls through
-                    // without producing a value. Report missing return.
-                    self.context.report_simple(
-                        TirTypeError::MissingReturn {
-                            expected: expected.clone(),
-                        },
-                        expr_id,
-                    );
+                    let error = TirTypeError::MissingReturn {
+                        expected: expected.clone(),
+                    };
+                    if let Some(span) = self.return_type_span {
+                        self.context.report_at_span(error, span);
+                    } else {
+                        self.context.report_simple(error, expr_id);
+                    }
                     expected.clone()
                 } else {
                     Ty::Void
@@ -565,14 +581,40 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let mut ann_ty_for_decl: Option<Ty> = None;
                 let init_ty = if let Some(init) = initializer {
                     if let Some(ann_idx) = type_annotation {
-                        let mut diags = Vec::new();
-                        let ann_ty = crate::lower_type_expr::lower_type_expr(
-                            self.context.db(),
-                            &body.type_annotations[*ann_idx],
-                            self.package_items,
-                            &mut diags,
-                        );
-                        for diag in diags {
+                        let (ann_ty, fallback_diags) = if let Some(ref sm) = self.body_source_map {
+                            if let Some(spanned) = sm.type_annotation_spanned(*ann_idx) {
+                                let mut spanned_diags = Vec::new();
+                                let ty = crate::lower_type_expr::lower_spanned_type_expr(
+                                    self.context.db(),
+                                    spanned,
+                                    self.package_items,
+                                    &mut spanned_diags,
+                                );
+                                for (diag, span) in spanned_diags {
+                                    self.context.report_at_span(diag, span);
+                                }
+                                (ty, Vec::new())
+                            } else {
+                                let mut diags = Vec::new();
+                                let ty = crate::lower_type_expr::lower_type_expr(
+                                    self.context.db(),
+                                    &body.type_annotations[*ann_idx],
+                                    self.package_items,
+                                    &mut diags,
+                                );
+                                (ty, diags)
+                            }
+                        } else {
+                            let mut diags = Vec::new();
+                            let ty = crate::lower_type_expr::lower_type_expr(
+                                self.context.db(),
+                                &body.type_annotations[*ann_idx],
+                                self.package_items,
+                                &mut diags,
+                            );
+                            (ty, diags)
+                        };
+                        for diag in fallback_diags {
                             self.context.report_at_type_annot(diag, *ann_idx);
                         }
                         let ty = self.check_expr(*init, body, &ann_ty);
@@ -922,7 +964,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             let binding_name = match &body.patterns[clause.binding] {
                 baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
                 baml_compiler2_ast::Pattern::TypedBinding { name, ty } => {
-                    if let Some(banned) = crate::throw_inference::is_banned_catch_binding_type(ty) {
+                    if let Some(banned) =
+                        crate::throw_inference::is_banned_catch_binding_type(&ty.to_type_expr())
+                    {
                         self.context.report_simple(
                             TirTypeError::InvalidCatchBindingType {
                                 type_name: banned.to_string(),
@@ -998,25 +1042,25 @@ impl<'db> TypeInferenceBuilder<'db> {
     pub fn check_throws_contract(
         &mut self,
         body: &ExprBody,
-        declared_throws: Option<&TypeExpr>,
+        declared_throws: Option<&baml_compiler2_ast::SpannedTypeExpr>,
         throws_span: Option<TextRange>,
         fallback_span: TextRange,
     ) {
-        let Some(declared_expr) = declared_throws else {
+        let Some(declared_spanned) = declared_throws else {
             return;
         };
 
         let mut diags = Vec::new();
-        let declared_ty = crate::lower_type_expr::lower_type_expr(
+        let declared_ty = crate::lower_type_expr::lower_spanned_type_expr(
             self.context.db(),
-            declared_expr,
+            declared_spanned,
             self.package_items,
             &mut diags,
         );
-        let span = throws_span.unwrap_or(fallback_span);
-        for diag in diags {
+        for (diag, span) in diags {
             self.context.report_at_span(diag, span);
         }
+        let span = throws_span.unwrap_or(fallback_span);
 
         let declared = crate::throw_inference::throw_facts_from_ty(&declared_ty);
         let effective = self.collect_effective_throws(body);
@@ -1203,7 +1247,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
-                self.lower_pattern_type_expr(ty, at_expr)
+                self.lower_pattern_type_expr(&ty.to_type_expr(), at_expr)
             }
             baml_compiler2_ast::Pattern::Literal(lit) => {
                 Ty::Literal(lit.clone(), crate::ty::Freshness::Regular)
@@ -1361,7 +1405,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
-                let lowered = self.lower_pattern_type_expr(ty, at_expr);
+                let lowered = self.lower_pattern_type_expr(&ty.to_type_expr(), at_expr);
                 if self.ty_matches_throw_fact(&lowered, throw_fact) {
                     PatternMatchStrength::DefiniteMatch
                 } else if throw_fact == "unknown" {
@@ -2127,21 +2171,19 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let item_tree = baml_compiler2_ppir::file_item_tree(self.context.db(), file);
                 let class_data = &item_tree[class_loc.id(self.context.db())];
                 for field in &class_data.fields {
-                    let mut diags = Vec::new();
+                    // Don't report diagnostics here — check_file() already reports
+                    // class-field type errors once via resolve_class_fields.
                     let field_ty = field
                         .type_expr
                         .as_ref()
                         .map(|te| {
-                            let ty = crate::lower_type_expr::lower_type_expr(
+                            let mut diags = Vec::new();
+                            crate::lower_type_expr::lower_spanned_type_expr(
                                 self.context.db(),
-                                &te.expr,
+                                te,
                                 self.package_items,
                                 &mut diags,
-                            );
-                            for diag in diags.drain(..) {
-                                self.context.report_at_span(diag, te.span);
-                            }
-                            ty
+                            )
                         })
                         .unwrap_or(Ty::Unknown);
                     result.insert(field.name.clone(), field_ty);
@@ -2338,7 +2380,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .map(|te| {
                         crate::generics::lower_type_expr_with_generics(
                             db,
-                            &te.expr,
+                            &te.to_type_expr(),
                             self.package_items,
                             &bindings,
                             &mut diags,
