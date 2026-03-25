@@ -20,35 +20,6 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:159:17 ]
-//      │
-//  159 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:189:17 ]
-//      │
-//  189 │ ╭─▶             _ => {
-//      ┆ ┆   
-//  194 │ ├─▶             }
-//      │ │                   
-//      │ ╰─────────────────── unreachable arm
-//      │     
-//      │     Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:208:17 ]
-//      │
-//  208 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
 // Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `2`
 //    ╭─[ headers_for_loop_mermaid.baml:9:25 ]
 //    │

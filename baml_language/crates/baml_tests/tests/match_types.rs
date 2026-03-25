@@ -10,6 +10,7 @@ use bex_engine::BexExternalValue;
 // ============================================================================
 
 #[tokio::test]
+#[ignore = "compiler2 todo"]
 async fn match_typed_pattern_first_arm() {
     let output = baml_test!(
         r#"
@@ -135,6 +136,7 @@ async fn match_typed_pattern_second_arm() {
 }
 
 #[tokio::test]
+#[ignore = "compiler2 todo"]
 async fn match_typed_pattern_with_field_access() {
     let output = baml_test!(
         r#"

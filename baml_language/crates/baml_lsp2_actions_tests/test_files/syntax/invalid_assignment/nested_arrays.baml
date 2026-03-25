@@ -44,21 +44,21 @@ function NestedArrayAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected int[][], got 3 | 4 | 5[]
+// Error: type mismatch: expected int[][], got (3 | 4 | 5)[]
 //     ╭─[ invalid_assignment_nested_arrays.baml:28:5 ]
 //     │
 //  28 │     d = [3, 4, 5];
 //     │        ─────┬────  
-//     │             ╰────── type mismatch: expected int[][], got 3 | 4 | 5[]
+//     │             ╰────── type mismatch: expected int[][], got (3 | 4 | 5)[]
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: type mismatch: expected string[][], got 1 | 2[][]
+// Error: type mismatch: expected string[][], got (1 | 2)[][]
 //     ╭─[ invalid_assignment_nested_arrays.baml:36:5 ]
 //     │
 //  36 │     f = [[1, 2]];
 //     │        ────┬────  
-//     │            ╰────── type mismatch: expected string[][], got 1 | 2[][]
+//     │            ╰────── type mismatch: expected string[][], got (1 | 2)[][]
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

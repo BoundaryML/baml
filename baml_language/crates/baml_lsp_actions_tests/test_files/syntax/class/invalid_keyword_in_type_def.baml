@@ -31,35 +31,6 @@ random_keyword WrongEnum {
 
 //----
 //- diagnostics
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:159:17 ]
-//      │
-//  159 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:189:17 ]
-//      │
-//  189 │ ╭─▶             _ => {
-//      ┆ ┆   
-//  194 │ ├─▶             }
-//      │ │                   
-//      │ ╰─────────────────── unreachable arm
-//      │     
-//      │     Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:208:17 ]
-//      │
-//  208 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
 // Error: Unknown keyword 'classs'. Expected 'class', 'enum', 'function', 'client', 'generator', 'test', or 'type'.
 //     ╭─[ class_invalid_keyword_in_type_def.baml:10:1 ]
 //     │

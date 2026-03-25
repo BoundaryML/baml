@@ -272,13 +272,13 @@ function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     alloc_array 3
     store_var scores
     load_var scores
-    load_var _48
+    load_const 0
     load_var total
     store_array_element
     alloc_instance Report
     copy 0
     load_var scores
-    load_var _51
+    load_const 0
     load_array_element
     store_field .score
     copy 0

@@ -67,35 +67,6 @@ function NominalTypingAssignments() -> int {
 
 //----
 //- diagnostics
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:159:17 ]
-//      │
-//  159 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:189:17 ]
-//      │
-//  189 │ ╭─▶             _ => {
-//      ┆ ┆   
-//  194 │ ├─▶             }
-//      │ │                   
-//      │ ╰─────────────────── unreachable arm
-//      │     
-//      │     Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:208:17 ]
-//      │
-//  208 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
 // Error: type mismatch: expected user.Person[], got user.Human[]
 //     ╭─[ invalid_assignment_nominal_typing.baml:59:10 ]
 //     │

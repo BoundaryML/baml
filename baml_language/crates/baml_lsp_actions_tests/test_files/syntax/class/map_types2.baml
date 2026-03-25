@@ -59,35 +59,6 @@ function InputAndOutput(i1: map<string, string>, i2: map<MapDummy, string>) -> m
 
 //----
 //- diagnostics
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:159:17 ]
-//      │
-//  159 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:189:17 ]
-//      │
-//  189 │ ╭─▶             _ => {
-//      ┆ ┆   
-//  194 │ ├─▶             }
-//      │ │                   
-//      │ ╰─────────────────── unreachable arm
-//      │     
-//      │     Note: Error code: E0001
-// ─────╯
-// Error: unreachable arm
-//      ╭─[ llm_types.baml:208:17 ]
-//      │
-//  208 │             _ => { continue; }
-//      │                 ───────┬──────  
-//      │                        ╰──────── unreachable arm
-//      │ 
-//      │ Note: Error code: E0001
-// ─────╯
 // Error: unresolved type: map
 //     ╭─[ class_map_types2.baml:26:5 ]
 //     │
