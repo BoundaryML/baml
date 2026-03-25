@@ -1,5 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
-=== CONTROL FLOW GRAPHS ===
-Legacy control flow test removed.
