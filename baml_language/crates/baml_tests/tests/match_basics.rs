@@ -1544,7 +1544,6 @@ async fn match_float_literal() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "compiler2: negative literal patterns produce unreachable arm errors"]
 async fn match_negative_int_first_arm() {
     let output = baml_test!(
         r#"
@@ -1615,7 +1614,6 @@ async fn match_negative_int_first_arm() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: negative literal patterns produce unreachable arm errors"]
 async fn match_negative_int_fallback() {
     let output = baml_test!(
         r#"
@@ -1741,7 +1739,6 @@ async fn match_negative_int_with_variable() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: negative literal patterns produce unreachable arm errors"]
 async fn match_negative_float_pattern() {
     let output = baml_test!(
         r#"
@@ -1810,7 +1807,6 @@ async fn match_negative_float_pattern() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: negative literal patterns produce unreachable arm errors"]
 async fn match_multiple_negative_patterns() {
     let output = baml_test!(
         r#"
@@ -1880,7 +1876,6 @@ async fn match_multiple_negative_patterns() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: negative literal patterns produce unreachable arm errors"]
 async fn match_negative_in_union_pattern() {
     let output = baml_test!(
         r#"

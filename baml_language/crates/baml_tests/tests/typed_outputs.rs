@@ -103,7 +103,6 @@ async fn class_with_union_field() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: class TypeName has module_path=['user'] but test expects module_path=[]"]
 async fn union_of_classes_returns_success() {
     let output = baml_test!(
         r#"
@@ -127,14 +126,13 @@ async fn union_of_classes_returns_success() {
                 class_name: "Success".to_string(),
                 fields: indexmap! { "value".to_string() => BexExternalValue::Int(42) },
             },
-            [Ty::class("Success"), Ty::class("Failure")],
-            Ty::class("Success"),
+            [Ty::user_class("Success"), Ty::user_class("Failure")],
+            Ty::user_class("Success"),
         ))
     );
 }
 
 #[tokio::test]
-#[ignore = "compiler2: class TypeName has module_path=['user'] but test expects module_path=[]"]
 async fn union_of_classes_returns_failure() {
     let output = baml_test!(
         r#"
@@ -158,8 +156,8 @@ async fn union_of_classes_returns_failure() {
                 class_name: "Failure".to_string(),
                 fields: indexmap! { "error".to_string() => BexExternalValue::String("something went wrong".to_string()) },
             },
-            [Ty::class("Success"), Ty::class("Failure")],
-            Ty::class("Failure"),
+            [Ty::user_class("Success"), Ty::user_class("Failure")],
+            Ty::user_class("Failure"),
         ))
     );
 }
@@ -225,7 +223,6 @@ async fn array_of_unions() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: class TypeName has module_path=['user'] but test expects module_path=[]"]
 async fn optional_class() {
     let output = baml_test!(
         r#"
@@ -245,13 +242,12 @@ async fn optional_class() {
                 class_name: "Data".to_string(),
                 fields: indexmap! { "value".to_string() => BexExternalValue::Int(42) },
             },
-            Ty::class("Data"),
+            Ty::user_class("Data"),
         ))
     );
 }
 
 #[tokio::test]
-#[ignore = "compiler2: class TypeName has module_path=['user'] but test expects module_path=[]"]
 async fn optional_class_returns_null() {
     let output = baml_test!(
         r#"
@@ -268,7 +264,7 @@ async fn optional_class_returns_null() {
         output.result,
         Ok(BexExternalValue::optional(
             BexExternalValue::Null,
-            Ty::class("Data")
+            Ty::user_class("Data")
         ))
     );
 }

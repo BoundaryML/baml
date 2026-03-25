@@ -10,7 +10,6 @@ use bex_engine::BexExternalValue;
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "compiler2: typed pattern match produces unreachable arm error"]
 async fn match_typed_pattern_first_arm() {
     let output = baml_test!(
         r#"
@@ -46,6 +45,10 @@ async fn match_typed_pattern_first_arm() {
         jump L1
 
       L0:
+        load_var result
+        load_const Failure
+        cmp_op instanceof
+        pop_jump_if_false L2
         load_const "failure"
         jump L2
 
@@ -132,7 +135,6 @@ async fn match_typed_pattern_second_arm() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: typed pattern match produces unreachable arm error"]
 async fn match_typed_pattern_with_field_access() {
     let output = baml_test!(
         r#"
