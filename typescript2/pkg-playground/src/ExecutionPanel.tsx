@@ -12,7 +12,8 @@
 import type { ChangeEvent, FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
-import { PanelLeft, Square } from 'lucide-react';
+import { KeyRound, PanelLeft, Square } from 'lucide-react';
+import { ApiKeysDialog } from './components/ApiKeysDialog';
 import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
 import { MetadataBadges } from './components/MetadataBadges';
@@ -22,7 +23,6 @@ import type {
   CursorContext,
   DiagnosticEntry,
   FetchLogEntry,
-  EnvVarRequest,
   FunctionInfo,
   ProjectUpdate,
   RunEntry,
@@ -111,12 +111,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [resultModes, setResultModes] = useState<Record<number, 'parsed' | 'raw'>>({});
 
+  const [showApiKeysDialog, setShowApiKeysDialog] = useState(false);
+  const showApiKeysDialogRef = useRef(false);
+
   const [buildTime, setBuildTime] = useState<number | null>(null);
-  const [envRequests, setEnvRequests] = useState<EnvVarRequest[]>([]);
   const [envVars, setEnvVarsState] = useState<Record<string, string>>({});
-  const [envInputs, setEnvInputs] = useState<Record<number, string>>({});
-  const [newEnvKey, setNewEnvKey] = useState('');
-  const [newEnvValue, setNewEnvValue] = useState('');
+  // Keys the project is known to need — accumulated from envVarRequests, never shrunk.
+  const [knownRequiredKeys, setKnownRequiredKeys] = useState<Set<string>>(new Set());
+  // In-flight worker requests waiting for a value: id → variable name. Ref because it doesn't drive renders.
+  const pendingEnvRequestsRef = useRef<Map<number, string>>(new Map());
 
   // Ref mirror of envVars so the message handler closure always sees current values.
   const envVarsRef = useRef(envVars);
@@ -294,12 +297,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
 
         case 'envVarRequest': {
+          // Always track as a known required key (proactive indicator)
+          setKnownRequiredKeys((prev) => prev.has(data.variable) ? prev : new Set([...prev, data.variable]));
           const cached = envVarsRef.current[data.variable];
           if (cached !== undefined) {
-            // Auto-respond from UI cache — no prompt needed.
             port.postMessage({ type: 'envVarResponse', id: data.id, value: cached, variable: data.variable });
           } else {
-            setEnvRequests((prev) => [...prev, { id: data.id, variable: data.variable }]);
+            // Park the request — it will be resolved when the dialog closes
+            pendingEnvRequestsRef.current.set(data.id, data.variable);
+            if (!showApiKeysDialogRef.current) {
+              setShowApiKeysDialog(true);
+              showApiKeysDialogRef.current = true;
+            }
           }
           break;
         }
@@ -431,27 +440,23 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
   // ── Env var helpers ────────────────────────────────────────────────────
 
-  const resolveEnvRequest = useCallback((reqId: number, value: string | undefined) => {
-    setEnvRequests((prev) => {
-      const req = prev.find((r) => r.id === reqId);
-      if (!req) return prev;
-      if (value !== undefined) {
-        setEnvVarsState((prevVars) => ({ ...prevVars, [req.variable]: value }));
-      }
-      port.postMessage({ type: 'envVarResponse', id: reqId, value, variable: req.variable });
-      return prev.filter((r) => r.id !== reqId);
-    });
-  }, [port]);
-
   const addEnvVar = useCallback((key: string, value: string) => {
     setEnvVarsState((prev) => ({ ...prev, [key]: value }));
+    envVarsRef.current[key] = value;
     port.postMessage({ type: 'setEnvVar', key, value });
   }, [port]);
 
   const removeEnvVar = useCallback((key: string) => {
     setEnvVarsState((prev) => { const { [key]: _, ...rest } = prev; return rest; });
+    delete envVarsRef.current[key];
     port.postMessage({ type: 'deleteEnvVar', key });
   }, [port]);
+
+  const handleImportEnvVars = useCallback((vars: Record<string, string>) => {
+    for (const [key, value] of Object.entries(vars)) {
+      addEnvVar(key, value);
+    }
+  }, [addEnvVar]);
 
   const onArgsJsonChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
     setArgsJson(e.target.value);
@@ -672,54 +677,8 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     if (failedTests.length > 0) handleRunAllTests(failedTests);
   }, [tests, runs, handleRunAllTests]);
 
-  const envInputRow = (
-    <form
-      onSubmit={(e) => e.preventDefault()}
-      className="contents"
-    >
-      <input
-        placeholder="KEY"
-        value={newEnvKey}
-        onChange={(e) => setNewEnvKey(e.target.value)}
-        className="w-[60px] px-1.5 py-px rounded-sm border border-vsc-input-border bg-vsc-input-bg text-vsc-input-fg font-vsc-mono text-[10px] outline-none"
-      />
-      <input
-        type="password"
-        autoComplete="off"
-        data-1p-ignore
-        data-lpignore="true"
-        placeholder="value"
-        value={newEnvValue}
-        onChange={(e) => setNewEnvValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && newEnvKey.trim()) {
-            addEnvVar(newEnvKey.trim(), newEnvValue);
-            setNewEnvKey('');
-            setNewEnvValue('');
-          }
-        }}
-        className="w-[90px] px-1.5 py-px rounded-sm border border-vsc-input-border bg-vsc-input-bg text-vsc-input-fg font-vsc-mono text-[10px] outline-none"
-      />
-      <button
-        type="button"
-        disabled={!newEnvKey.trim()}
-        onClick={() => {
-          if (newEnvKey.trim()) {
-            addEnvVar(newEnvKey.trim(), newEnvValue);
-            setNewEnvKey('');
-            setNewEnvValue('');
-          }
-        }}
-        className={`px-1.5 py-px rounded-sm border-none text-[10px] font-semibold ${
-          newEnvKey.trim()
-            ? 'bg-vsc-accent text-vsc-accent-fg cursor-pointer'
-            : 'bg-vsc-text-faint text-vsc-text-muted cursor-default'
-        }`}
-      >
-        +
-      </button>
-    </form>
-  );
+  // Whether any known-required keys are missing — proactive, not just reactive to pending requests
+  const hasMissingKeys = [...knownRequiredKeys].some((k) => !envVars[k]);
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -728,85 +687,32 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       {buildTime != null && (
         <span data-testid="hot-reload-test" style={{ display: 'none' }}>{buildTime}</span>
       )}
-      {(connectionVersion != null || buildTime != null) && (
-        <div className="flex items-center gap-1.5 px-2.5 py-0.5 shrink-0 border-b border-vsc-border bg-vsc-surface">
-          {connectionVersion != null && (
-            <>
-              <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">PORT</span>
-              <code className="text-[10px] font-vsc-mono text-vsc-text-muted">v{connectionVersion}</code>
-            </>
-          )}
-          {buildTime != null && (() => {
-            const { absolute, relative } = formatBuildTime(buildTime);
-            return (
-              <>
-                <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none ml-2">Built</span>
-                <code className="text-[10px] font-vsc-mono text-vsc-text-muted">
-                  {absolute} ({relative})
-                </code>
-              </>
-            );
-          })()}
-        </div>
-      )}
-      {/* ──── Env vars ──── */}
-      <div className="flex items-center gap-1.5 px-2.5 py-1 flex-wrap shrink-0 border-b border-vsc-border bg-vsc-surface">
-        <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">ENV</span>
-        {Object.keys(envVars).map((key) => (
-          <span key={key} className="text-[10px] font-vsc-mono text-vsc-text-muted bg-vsc-bg px-1.5 py-px rounded border border-vsc-border-subtle inline-flex items-center gap-0.5">
-            {key}
-            <span onClick={() => removeEnvVar(key)} className="cursor-pointer text-vsc-text-faint leading-none">&times;</span>
-          </span>
-        ))}
-        {envInputRow}
-      </div>
 
-      {/* Env var request banner */}
-      {envRequests.length > 0 && (
-        <div className="bg-vsc-yellow-subtle border-b border-vsc-border shrink-0">
-          {envRequests.map((req) => (
-            <form
-              key={req.id}
-              onSubmit={(e) => e.preventDefault()}
-              className="flex items-center gap-1.5 px-2.5 py-1.5"
-            >
-              <span className="text-[10px] text-vsc-yellow font-semibold">ENV</span>
-              <code className="font-vsc-mono text-[11px] text-vsc-yellow">{req.variable}</code>
-              <input
-                type="password"
-                autoComplete="off"
-                data-1p-ignore
-                data-lpignore="true"
-                autoFocus
-                placeholder="paste value..."
-                value={envInputs[req.id] ?? ''}
-                onChange={(e) => setEnvInputs((prev) => ({ ...prev, [req.id]: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    resolveEnvRequest(req.id, envInputs[req.id] ?? '');
-                    setEnvInputs((prev) => { const { [req.id]: _, ...rest } = prev; return rest; });
-                  }
-                }}
-                className="flex-1 px-1.5 py-0.5 rounded-sm border border-vsc-input-border bg-vsc-input-bg font-vsc-mono text-[11px] text-vsc-input-fg outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => { resolveEnvRequest(req.id, envInputs[req.id] ?? ''); setEnvInputs((prev) => { const { [req.id]: _, ...rest } = prev; return rest; }); }}
-                className="px-2 py-0.5 rounded-sm border-none bg-vsc-accent text-vsc-accent-fg font-semibold text-[10px] cursor-pointer"
-              >
-                Set
-              </button>
-              <button
-                type="button"
-                onClick={() => { resolveEnvRequest(req.id, undefined); setEnvInputs((prev) => { const { [req.id]: _, ...rest } = prev; return rest; }); }}
-                className="px-1.5 py-0.5 rounded-sm border border-vsc-border bg-transparent text-vsc-text-muted text-[10px] cursor-pointer"
-              >
-                Skip
-              </button>
-            </form>
-          ))}
-        </div>
-      )}
+      {/* ──── Status bar ──── */}
+      <div className="flex items-center gap-2 px-2.5 py-1 shrink-0 border-b border-vsc-border bg-vsc-surface">
+        {connectionVersion != null && (
+          <code className="text-[10px] font-vsc-mono text-vsc-text-faint">v{connectionVersion}</code>
+        )}
+        {buildTime != null && (() => {
+          const { absolute, relative } = formatBuildTime(buildTime);
+          return (
+            <code className="text-[10px] font-vsc-mono text-vsc-text-faint">
+              {absolute} ({relative})
+            </code>
+          );
+        })()}
+        <div className="flex-1" />
+        <button
+          onClick={() => setShowApiKeysDialog(true)}
+          className="relative p-1 rounded hover:bg-vsc-hover text-vsc-text-muted"
+          title="API Keys"
+        >
+          <KeyRound size={14} />
+          {hasMissingKeys && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400" />
+          )}
+        </button>
+      </div>
 
       {/* Project selector (shown when multiple projects exist) */}
       {projectRoots.length > 1 && (
@@ -1194,6 +1100,27 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         </div>
       </div>
 
+      <ApiKeysDialog
+        open={showApiKeysDialog}
+        onOpenChange={(open) => {
+          setShowApiKeysDialog(open);
+          showApiKeysDialogRef.current = open;
+          if (!open) {
+            // Dialog closed — resolve ALL pending env requests in one batch.
+            // If user provided a value, envVarsRef has it. If not, value is undefined → worker errors the call.
+            for (const [id, variable] of pendingEnvRequestsRef.current) {
+              const value = envVarsRef.current[variable];
+              port.postMessage({ type: 'envVarResponse', id, value, variable });
+            }
+            pendingEnvRequestsRef.current.clear();
+          }
+        }}
+        envVars={envVars}
+        requiredKeys={knownRequiredKeys}
+        onSetEnvVar={addEnvVar}
+        onDeleteEnvVar={removeEnvVar}
+        onImportEnvVars={handleImportEnvVars}
+      />
     </>
   );
 };
