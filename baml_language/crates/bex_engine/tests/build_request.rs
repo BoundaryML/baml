@@ -653,7 +653,7 @@ function get_body() -> string {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "anthropic render_prompt produces wrong output"]
+#[ignore = "anthropic build_request missing max_tokens"]
 async fn test_anthropic_three_role_conversation() {
     let source = [
         ANTHROPIC_CLIENT,
@@ -700,7 +700,7 @@ function get_body() -> string {
 }
 
 #[tokio::test]
-#[ignore = "anthropic render_prompt produces wrong output"]
+#[ignore = "anthropic build_request missing max_tokens"]
 async fn test_anthropic_multi_turn_conversation() {
     let source = [
         ANTHROPIC_CLIENT,
@@ -859,7 +859,7 @@ function get_body(audio: audio) -> string {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "anthropic render_prompt produces wrong output"]
+#[ignore = "anthropic build_request missing max_tokens + merge_adjacent_roles concatenates content"]
 async fn test_anthropic_multiple_system_messages() {
     let source = [
         ANTHROPIC_CLIENT,

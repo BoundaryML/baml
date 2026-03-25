@@ -268,7 +268,6 @@ function test_render() -> int {
 /// This test calls `render_prompt` and verifies the result is a `PromptAst`
 /// containing the expected rendered content.
 #[tokio::test]
-#[ignore = "PromptAst is RustData and cannot be converted to BexExternalValue yet"]
 async fn test_render_prompt_returns_prompt_ast() {
     use bex_engine::{BexEngine, BexExternalValue};
     use sys_native::SysOpsExt;
@@ -530,13 +529,21 @@ function test_call_llm() -> unknown {
 // Template String Tests
 // ============================================================================
 
-/// Build a `BexExternalValue` wrapping a simple string `PromptAst`.
-fn prompt_ast_string(s: &str) -> BexExternalValue {
+/// Build a `BexExternalValue` wrapping a single-message `PromptAst`.
+///
+/// The engine renders a prompt without explicit `_.role()` calls as a single
+/// `Message` with the client's default role ("system" for openai).
+fn prompt_ast_message(role: &str, content: &str) -> BexExternalValue {
+    use bex_external_types::BexExternalAdt;
     BexExternalValue::Instance {
         class_name: "baml.llm.PromptAst".to_string(),
         fields: indexmap::indexmap! {
-            "_data".to_string() => BexExternalValue::RustData(std::sync::Arc::new(
-                BuiltinPromptAst::Simple(std::sync::Arc::new(s.to_string().into())),
+            "_data".to_string() => BexExternalValue::Adt(BexExternalAdt::PromptAst(
+                std::sync::Arc::new(BuiltinPromptAst::Message {
+                    role: role.to_string(),
+                    content: std::sync::Arc::new(content.to_string().into()),
+                    metadata: serde_json::Value::Null,
+                }),
             ))
         },
     }
@@ -544,7 +551,6 @@ fn prompt_ast_string(s: &str) -> BexExternalValue {
 
 /// Test that a `template_string` is expanded as a Jinja macro in `render_prompt`.
 #[tokio::test]
-#[ignore = "PromptAst is RustData and cannot be converted to BexExternalValue yet"]
 async fn test_template_string_in_prompt() {
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
@@ -584,12 +590,11 @@ function get_prompt() -> baml.llm.PromptAst {
         )
         .await
         .expect("failed to render prompt that calls template_string Greet(name)");
-    assert_eq!(result, prompt_ast_string("Hello, Alice!"));
+    assert_eq!(result, prompt_ast_message("system","Hello, Alice!"));
 }
 
 /// Test that nested `template_strings` expand correctly.
 #[tokio::test]
-#[ignore = "PromptAst is RustData and cannot be converted to BexExternalValue yet"]
 async fn test_nested_template_strings() {
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
@@ -628,12 +633,11 @@ function get_prompt() -> baml.llm.PromptAst {
         )
         .await
         .expect("failed to render prompt with nested template_strings Outer() -> Inner()");
-    assert_eq!(result, prompt_ast_string("before INNER after"));
+    assert_eq!(result, prompt_ast_message("system","before INNER after"));
 }
 
 /// Test a `template_string` with two args, one of which is a class (struct).
 #[tokio::test]
-#[ignore = "PromptAst is RustData and cannot be converted to BexExternalValue yet"]
 async fn test_template_string_with_struct_arg() {
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
@@ -678,12 +682,11 @@ function get_prompt() -> baml.llm.PromptAst {
         )
         .await
         .expect("failed to render prompt with 2-arg template_string Describe(label, person)");
-    assert_eq!(result, prompt_ast_string("User: Bob (age 42)"));
+    assert_eq!(result, prompt_ast_message("system","User: Bob (age 42)"));
 }
 
 /// Test that parameterless `template_strings` work.
 #[tokio::test]
-#[ignore = "PromptAst is RustData and cannot be converted to BexExternalValue yet"]
 async fn test_parameterless_template_string() {
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
@@ -722,5 +725,5 @@ function get_prompt() -> baml.llm.PromptAst {
         )
         .await
         .expect("failed to render prompt that calls parameterless template_string Header()");
-    assert_eq!(result, prompt_ast_string("=== HEADER ===\nContent here"));
+    assert_eq!(result, prompt_ast_message("system","=== HEADER ===\nContent here"));
 }
