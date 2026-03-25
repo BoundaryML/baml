@@ -136,6 +136,7 @@ export interface RunEntry {
   id: number;
   functionName: string;
   argsJson: string;
+  testName?: string;
   fetchLogs: FetchLogEntry[];
   result: string | null;
   error: string | null;

@@ -1,8 +1,18 @@
 import type { FC } from 'react';
 import { useEffect, useState } from 'react';
 import * as Collapsible from '@radix-ui/react-collapsible';
-import { Bot, FunctionSquare, ChevronRight, Play, Search } from 'lucide-react';
-import type { FunctionInfo, TestInfo } from './worker-protocol';
+import { Bot, FunctionSquare, ChevronRight, Play, Search, Loader2, CheckCircle2, XCircle, Ban, FlaskConical } from 'lucide-react';
+import type { FunctionInfo, RunEntry, TestInfo } from './worker-protocol';
+
+function TestStatusIcon({ status }: { status?: RunEntry['status'] }) {
+  switch (status) {
+    case 'running': return <Loader2 size={12} className="text-blue-400 animate-spin" />;
+    case 'success': return <CheckCircle2 size={12} className="text-green-400" />;
+    case 'error': return <XCircle size={12} className="text-red-400" />;
+    case 'cancelled': return <Ban size={12} className="text-vsc-text-faint" />;
+    default: return <FlaskConical size={12} className="text-vsc-text-faint" />;
+  }
+}
 
 export interface FunctionSidebarProps {
   functions: FunctionInfo[];
@@ -12,6 +22,7 @@ export interface FunctionSidebarProps {
   onSelectTest: (test: TestInfo) => void;
   onRunTest: (test: TestInfo) => void;
   isRunning: boolean;
+  testStatuses: Map<string, RunEntry['status']>;
 }
 
 export const FunctionSidebar: FC<FunctionSidebarProps> = ({
@@ -22,6 +33,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   onSelectTest,
   onRunTest,
   isRunning,
+  testStatuses,
 }) => {
   const [search, setSearch] = useState('');
   const [expandedFns, setExpandedFns] = useState<Set<string>>(new Set());
@@ -96,6 +108,13 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
           const isExpanded = expandedFns.has(fn.name);
           const Icon = fn.kind === 'llm' ? Bot : FunctionSquare;
 
+          // Compute function-level aggregate border color from test statuses
+          const fnStatuses = fnTests.map((t) => testStatuses.get(t.name)).filter(Boolean) as RunEntry['status'][];
+          const fnBorderColor = fnStatuses.length === 0 ? '' :
+            fnStatuses.some((s) => s === 'running') ? 'border-l-2 border-l-blue-400' :
+            fnStatuses.some((s) => s === 'error') ? 'border-l-2 border-l-red-400' :
+            fnStatuses.every((s) => s === 'success') ? 'border-l-2 border-l-green-400' : '';
+
           return (
             <Collapsible.Root
               key={fn.name}
@@ -103,7 +122,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
               onOpenChange={() => toggleExpanded(fn.name)}
             >
               <div
-                className={`flex items-center gap-1 px-2 py-1 cursor-pointer text-[11px] font-vsc-mono ${
+                className={`flex items-center gap-1 px-2 py-1 cursor-pointer text-[11px] font-vsc-mono ${fnBorderColor} ${
                   isSelected
                     ? 'bg-vsc-accent/15 text-vsc-text font-semibold'
                     : 'text-vsc-text-muted hover:bg-vsc-hover'
@@ -137,10 +156,13 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                     .map((t) => (
                       <div
                         key={t.name}
-                        className="flex items-center gap-1 pl-8 pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover group"
+                        className="flex items-center gap-1 pl-6 pr-2 py-0.5 cursor-pointer text-[10px] font-vsc-mono text-vsc-text-muted hover:bg-vsc-hover group"
                         onClick={() => onSelectTest(t)}
                       >
-                        <span className="truncate flex-1">{t.name}</span>
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                          <TestStatusIcon status={testStatuses.get(t.name)} />
+                          <span className="truncate text-[11px]">{t.name}</span>
+                        </div>
                         <button
                           disabled={isRunning}
                           onClick={(e) => { e.stopPropagation(); onRunTest(t); }}

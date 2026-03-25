@@ -109,6 +109,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [curlPreviewError, setCurlPreviewError] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [resultModes, setResultModes] = useState<Record<number, 'parsed' | 'raw'>>({});
 
   const [buildTime, setBuildTime] = useState<number | null>(null);
   const [envRequests, setEnvRequests] = useState<EnvVarRequest[]>([]);
@@ -465,6 +466,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     port.postMessage({ type: 'cancelCall', id: runId, project: selectedProject });
   }, [port, selectedProject]);
 
+  const toggleResultMode = useCallback((runId: number) => {
+    setResultModes((prev) => ({
+      ...prev,
+      [runId]: (prev[runId] ?? 'parsed') === 'parsed' ? 'raw' : 'parsed',
+    }));
+  }, []);
+
   const onRunFunction = useCallback(async () => {
     if (!selectedFn || !selectedProject || isRunning) return;
 
@@ -536,6 +544,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       id: runId,
       functionName: test.functionName,
       argsJson: test.argsJson,
+      testName: test.name,
       fetchLogs: [],
       result: null,
       error: null,
@@ -606,6 +615,14 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const errors = diags.filter((d) => d.severity === 'error');
   const warnings = diags.filter((d) => d.severity === 'warning');
   const hasErrors = errors.length > 0;
+
+  // Derive per-test status from run history (most recent run wins)
+  const testStatuses = new Map<string, RunEntry['status']>();
+  for (const run of runs) {
+    if (run.testName) {
+      testStatuses.set(run.testName, run.status);
+    }
+  }
 
   const envInputRow = (
     <form
@@ -842,6 +859,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               onSelectTest={handleSelectTest}
               onRunTest={handleRunTest}
               isRunning={isRunning}
+              testStatuses={testStatuses}
             />
           </div>
         )}
@@ -1078,12 +1096,30 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                               <MetadataBadges fetchLogs={run.fetchLogs} durationMs={run.durationMs} />
                             </div>
                           )}
-                          <div className="group relative">
+                          <div className="space-y-1">
                             <div className="flex items-center gap-1">
-                              <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
+                              <div className="text-[10px] font-semibold text-vsc-green uppercase tracking-wide">Result</div>
+                              <button
+                                onClick={() => toggleResultMode(run.id)}
+                                className={`px-1.5 py-0.5 text-[10px] rounded ${(resultModes[run.id] ?? 'parsed') === 'parsed' ? 'bg-vsc-accent text-vsc-accent-fg' : 'text-vsc-text-muted'}`}
+                              >
+                                Parsed
+                              </button>
+                              <button
+                                onClick={() => toggleResultMode(run.id)}
+                                className={`px-1.5 py-0.5 text-[10px] rounded ${(resultModes[run.id] ?? 'parsed') === 'raw' ? 'bg-vsc-accent text-vsc-accent-fg' : 'text-vsc-text-muted'}`}
+                              >
+                                Raw
+                              </button>
                               <CopyButton text={run.result} iconSize={11} />
                             </div>
-                            <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                            {(resultModes[run.id] ?? 'parsed') === 'parsed' ? (
+                              <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                            ) : (
+                              <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
+                                {run.result}
+                              </pre>
+                            )}
                           </div>
                         </div>
                       )}
