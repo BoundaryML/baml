@@ -531,12 +531,9 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     setActiveTab('run');
   }, []);
 
-  const handleRunTest = useCallback(async (test: TestInfo) => {
-    if (!selectedProject || isRunning) return;
-
-    setSelectedFn(test.functionName);
-    setArgsJson(test.argsJson);
-    setActiveTab('run');
+  // Core test execution — no isRunning guard, usable from batch loops
+  const executeTest = useCallback(async (test: TestInfo) => {
+    if (!selectedProject) return;
 
     const runId = nextCallIdRef.current++;
     const startTime = performance.now();
@@ -588,7 +585,15 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
         durationMs: dur,
       } : r));
     }
-  }, [selectedProject, isRunning, port]);
+  }, [selectedProject, port]);
+
+  const handleRunTest = useCallback(async (test: TestInfo) => {
+    if (!selectedProject || isRunning) return;
+    setSelectedFn(test.functionName);
+    setArgsJson(test.argsJson);
+    setActiveTab('run');
+    await executeTest(test);
+  }, [selectedProject, isRunning, executeTest]);
 
   // ── Derived state ──────────────────────────────────────────────────────
 
@@ -623,6 +628,49 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
       testStatuses.set(run.testName, run.status);
     }
   }
+
+  // ── Batch test execution ───────────────────────────────────────────────
+
+  const [parallelTests, setParallelTests] = useState(false);
+  const batchAbortRef = useRef(false);
+
+  const handleRunAllTests = useCallback(async (testsToRun: TestInfo[]) => {
+    if (!selectedProject) return;
+    batchAbortRef.current = false;
+    setActiveTab('run');
+
+    if (parallelTests) {
+      // Fire all at once — don't await, each resolves independently
+      for (const test of testsToRun) {
+        executeTest(test);
+      }
+    } else {
+      // Sequential: run one at a time, check abort between each
+      for (const test of testsToRun) {
+        if (batchAbortRef.current) break;
+        await executeTest(test);
+      }
+    }
+  }, [selectedProject, parallelTests, executeTest]);
+
+  const handleStopAllTests = useCallback(() => {
+    if (!selectedProject) return;
+    // Signal sequential loop to stop queuing new tests
+    batchAbortRef.current = true;
+    // Cancel currently running tests
+    for (const run of runs) {
+      if (run.status === 'running' && run.testName) {
+        port.postMessage({ type: 'cancelCall', id: run.id, project: selectedProject });
+      }
+    }
+  }, [runs, selectedProject, port]);
+
+  const handleRerunFailed = useCallback(() => {
+    const failedTests = tests.filter((t) =>
+      runs.some((r) => r.testName === t.name && r.status === 'error')
+    );
+    if (failedTests.length > 0) handleRunAllTests(failedTests);
+  }, [tests, runs, handleRunAllTests]);
 
   const envInputRow = (
     <form
@@ -860,6 +908,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
               onRunTest={handleRunTest}
               isRunning={isRunning}
               testStatuses={testStatuses}
+              onRunAllTests={() => handleRunAllTests(tests)}
+              onStopAllTests={handleStopAllTests}
+              onRerunFailed={handleRerunFailed}
+              hasFailedTests={runs.some((r) => r.testName != null && r.status === 'error')}
+              hasRunningTests={runs.some((r) => r.testName != null && r.status === 'running')}
+              parallelTests={parallelTests}
+              onToggleParallel={() => setParallelTests((p) => !p)}
             />
           </div>
         )}

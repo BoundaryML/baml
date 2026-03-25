@@ -1,7 +1,7 @@
 import type { FC } from 'react';
 import { useEffect, useState } from 'react';
 import * as Collapsible from '@radix-ui/react-collapsible';
-import { Bot, FunctionSquare, ChevronRight, Play, Search, Loader2, CheckCircle2, XCircle, Ban, FlaskConical } from 'lucide-react';
+import { Bot, FunctionSquare, ChevronRight, Play, RefreshCw, Search, Square, Loader2, CheckCircle2, XCircle, Ban, FlaskConical } from 'lucide-react';
 import type { FunctionInfo, RunEntry, TestInfo } from './worker-protocol';
 
 function TestStatusIcon({ status }: { status?: RunEntry['status'] }) {
@@ -23,6 +23,13 @@ export interface FunctionSidebarProps {
   onRunTest: (test: TestInfo) => void;
   isRunning: boolean;
   testStatuses: Map<string, RunEntry['status']>;
+  onRunAllTests: () => void;
+  onStopAllTests: () => void;
+  onRerunFailed: () => void;
+  hasFailedTests: boolean;
+  hasRunningTests: boolean;
+  parallelTests: boolean;
+  onToggleParallel: () => void;
 }
 
 export const FunctionSidebar: FC<FunctionSidebarProps> = ({
@@ -34,6 +41,13 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
   onRunTest,
   isRunning,
   testStatuses,
+  onRunAllTests,
+  onStopAllTests,
+  onRerunFailed,
+  hasFailedTests,
+  hasRunningTests,
+  parallelTests,
+  onToggleParallel,
 }) => {
   const [search, setSearch] = useState('');
   const [expandedFns, setExpandedFns] = useState<Set<string>>(new Set());
@@ -92,6 +106,42 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
           />
         </div>
       </div>
+
+      {/* Batch controls */}
+      {tests.length > 0 && (
+        <div className="flex items-center gap-1 px-2 py-1 border-b border-vsc-border shrink-0">
+          {hasRunningTests ? (
+            <button
+              onClick={onStopAllTests}
+              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-vsc-error/20 text-vsc-error hover:bg-vsc-error/30"
+            >
+              <Square size={10} /> Stop All
+            </button>
+          ) : (
+            <button
+              onClick={onRunAllTests}
+              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-vsc-accent/20 text-vsc-accent hover:bg-vsc-accent/30"
+            >
+              <Play size={10} /> Run All
+            </button>
+          )}
+          {hasFailedTests && !hasRunningTests && (
+            <button
+              onClick={onRerunFailed}
+              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded text-vsc-text-muted hover:bg-vsc-hover"
+            >
+              <RefreshCw size={10} /> Re-run Failed
+            </button>
+          )}
+          <button
+            onClick={onToggleParallel}
+            className={`ml-auto px-1.5 py-0.5 text-[10px] rounded ${parallelTests ? 'bg-vsc-accent/20 text-vsc-accent' : 'text-vsc-text-faint'}`}
+            title={parallelTests ? 'Parallel mode' : 'Sequential mode'}
+          >
+            {parallelTests ? '∥' : '→'}
+          </button>
+        </div>
+      )}
 
       {/* Function list */}
       <div className="flex-1 overflow-y-auto py-0.5">
