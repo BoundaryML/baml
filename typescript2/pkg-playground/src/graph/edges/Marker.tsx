@@ -22,7 +22,7 @@ export const kAllMarkerColors = [
 ];
 
 export const getMarkerColors = () => {
-  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const isDark = typeof document === 'undefined' || !document.body?.dataset?.vscodeThemeKind?.includes('light');
   return {
     base: isDark ? kBaseMarkerColorDark : kBaseMarkerColorLight,
     yes: isDark ? kYesMarkerColorDark : kYesMarkerColorLight,

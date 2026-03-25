@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 import type { FetchLogEntry } from '../worker-protocol';
 import { Clock, Cpu, Hash } from 'lucide-react';
+import { Badge } from './ui/badge';
 
 interface MetadataBadgesProps {
   fetchLogs: FetchLogEntry[];
@@ -44,8 +45,6 @@ function extractMetadata(logs: FetchLogEntry[]) {
   return { model, totalTokens, processingMs };
 }
 
-const badgeCls = 'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-vsc-mono bg-vsc-bg-secondary text-vsc-text-muted border border-vsc-border';
-
 export const MetadataBadges: FC<MetadataBadgesProps> = ({ fetchLogs, durationMs }) => {
   const { model, totalTokens, processingMs } = extractMetadata(fetchLogs);
   const latency = processingMs ?? (durationMs ? Math.round(durationMs) : null);
@@ -54,9 +53,9 @@ export const MetadataBadges: FC<MetadataBadgesProps> = ({ fetchLogs, durationMs 
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {model && <span className={badgeCls}><Cpu size={10} />{model}</span>}
-      {latency != null && <span className={badgeCls}><Clock size={10} />{latency}ms</span>}
-      {totalTokens != null && <span className={badgeCls}><Hash size={10} />{totalTokens} tokens</span>}
+      {model && <Badge variant="secondary" className="gap-0.5 text-[10px] font-vsc-mono"><Cpu size={10} />{model}</Badge>}
+      {latency != null && <Badge variant="secondary" className="gap-0.5 text-[10px] font-vsc-mono"><Clock size={10} />{latency}ms</Badge>}
+      {totalTokens != null && <Badge variant="secondary" className="gap-0.5 text-[10px] font-vsc-mono"><Hash size={10} />{totalTokens} tokens</Badge>}
     </div>
   );
 };

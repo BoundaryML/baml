@@ -9,11 +9,9 @@
 import { useState, type FC } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { CopyButton } from './components/CopyButton';
+import { CodeBlock } from './components/ui/code-block';
 import { getBamlType, getResultRenderer, BAML_TYPE_KEY } from './result-renderers';
 import type { ResultRendererProps } from './result-renderers';
-
-const codeBlockCls =
-  'whitespace-pre-wrap break-all font-vsc-mono text-xs leading-relaxed p-2 rounded bg-vsc-bg border border-vsc-border text-vsc-text overflow-auto max-h-[200px] m-0';
 
 export interface ResultDisplayProps {
   /** Raw result JSON string from the runtime. */
@@ -49,7 +47,7 @@ const ValueRenderer: FC<{
   if (type) {
     const Renderer = resolve(type, customRenderers);
     if (Renderer) return <Renderer value={value} />;
-    return <pre className={codeBlockCls}>{JSON.stringify(value, null, 2)}</pre>;
+    return <CodeBlock>{JSON.stringify(value, null, 2)}</CodeBlock>;
   }
 
   // Array
@@ -125,7 +123,7 @@ export const ResultDisplay: FC<ResultDisplayProps> = ({ resultJson, customRender
   try {
     value = JSON.parse(resultJson);
   } catch {
-    return <pre className={codeBlockCls}>{resultJson}</pre>;
+    return <CodeBlock>{resultJson}</CodeBlock>;
   }
 
   return <ValueRenderer value={value} customRenderers={customRenderers} />;

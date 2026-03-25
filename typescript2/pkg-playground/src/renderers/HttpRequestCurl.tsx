@@ -6,6 +6,8 @@ import type { FC } from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Highlight, themes } from 'prism-react-renderer';
 import type { ResultRendererProps } from '../result-renderers';
+import { ToggleGroup } from '../components/ui/toggle-group';
+import { Button } from '../components/ui/button';
 
 interface HttpRequestShape {
   method?: string;
@@ -227,11 +229,6 @@ export function httpRequestToCurl(req: HttpRequestShape): string {
 const preCls =
   'whitespace-pre font-vsc-mono text-xs leading-relaxed p-3 rounded bg-vsc-bg border border-vsc-border text-vsc-text overflow-auto max-h-[400px] m-0';
 
-const tabCls = (active: boolean) =>
-  active
-    ? 'px-1.5 py-0.5 rounded font-vsc-mono text-[10px] cursor-pointer border bg-vsc-accent text-vsc-accent-fg border-vsc-accent'
-    : 'px-1.5 py-0.5 rounded font-vsc-mono text-[10px] cursor-pointer border border-vsc-border bg-vsc-surface text-vsc-text-muted hover:bg-vsc-list-hoverBg';
-
 export const HttpRequestCurlRenderer: FC<ResultRendererProps> = ({ value }) => {
   const [copied, setCopied] = useState(false);
   const [format, setFormat] = useState<HttpRequestSnippetFormat>('curl');
@@ -259,23 +256,20 @@ export const HttpRequestCurlRenderer: FC<ResultRendererProps> = ({ value }) => {
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-center gap-1">
-        {FORMATS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setFormat(id)}
-            className={tabCls(format === id)}
-          >
-            {label}
-          </button>
-        ))}
-        <button
-          type="button"
+        <ToggleGroup
+          value={format}
+          onValueChange={setFormat}
+          options={FORMATS.map(({ id, label }) => ({ value: id, label }))}
+          size="sm"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto text-[10px]"
           onClick={onCopy}
-          className="ml-auto px-1.5 py-0.5 rounded border border-vsc-border bg-vsc-surface text-vsc-text-muted text-[10px] cursor-pointer hover:bg-vsc-accent hover:text-vsc-accent-fg"
         >
           {copied ? 'Copied' : 'Copy'}
-        </button>
+        </Button>
       </div>
       <Highlight
         theme={themes.vsDark}

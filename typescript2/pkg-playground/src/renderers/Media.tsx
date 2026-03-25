@@ -5,6 +5,8 @@
 import type { FC } from 'react';
 import type { BamlJsMedia } from '@b/pkg-proto';
 import type { ResultRendererProps } from '../result-renderers';
+import { Badge } from '../components/ui/badge';
+import { CodeBlock } from '../components/ui/code-block';
 
 function isMedia(value: unknown): value is BamlJsMedia {
   if (value == null || typeof value !== 'object') return false;
@@ -22,15 +24,9 @@ function getMediaSrc(m: BamlJsMedia): string | null {
   return null;
 }
 
-const badgeCls =
-  'inline-flex items-center gap-1 px-2 py-0.5 rounded border border-vsc-border bg-vsc-surface text-vsc-text-muted font-vsc-mono text-[11px]';
-
-const codeBlockCls =
-  'whitespace-pre-wrap break-all font-vsc-mono text-xs leading-relaxed p-2 rounded bg-vsc-bg border border-vsc-border text-vsc-text overflow-auto max-h-[200px] m-0';
-
 export const MediaRenderer: FC<ResultRendererProps> = ({ value }) => {
   if (!isMedia(value)) {
-    return <pre className={codeBlockCls}>{JSON.stringify(value, null, 2)}</pre>;
+    return <CodeBlock>{JSON.stringify(value, null, 2)}</CodeBlock>;
   }
 
   const src = getMediaSrc(value);
@@ -41,7 +37,7 @@ export const MediaRenderer: FC<ResultRendererProps> = ({ value }) => {
   if (value.media_type === 'image' && src) {
     return (
       <div className="space-y-1">
-        <span className={badgeCls}>{label}</span>
+        <Badge variant="secondary" className="gap-1 text-[11px] font-vsc-mono">{label}</Badge>
         <img
           src={src}
           alt="media"
@@ -54,7 +50,7 @@ export const MediaRenderer: FC<ResultRendererProps> = ({ value }) => {
   if (value.media_type === 'audio' && src) {
     return (
       <div className="space-y-1">
-        <span className={badgeCls}>{label}</span>
+        <Badge variant="secondary" className="gap-1 text-[11px] font-vsc-mono">{label}</Badge>
         <audio controls src={src} className="w-full" />
       </div>
     );
@@ -63,7 +59,7 @@ export const MediaRenderer: FC<ResultRendererProps> = ({ value }) => {
   if (value.media_type === 'video' && src) {
     return (
       <div className="space-y-1">
-        <span className={badgeCls}>{label}</span>
+        <Badge variant="secondary" className="gap-1 text-[11px] font-vsc-mono">{label}</Badge>
         <video controls src={src} className="max-w-full max-h-[300px] rounded border border-vsc-border" />
       </div>
     );
@@ -74,8 +70,8 @@ export const MediaRenderer: FC<ResultRendererProps> = ({ value }) => {
     : value.content_type === 'file' ? value.file
     : '(base64)';
   return (
-    <div className={badgeCls}>
+    <Badge variant="secondary" className="gap-1 text-[11px] font-vsc-mono">
       {label}: {ref}
-    </div>
+    </Badge>
   );
 };

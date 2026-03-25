@@ -1,17 +1,8 @@
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { GitBranch } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
+import { stateColors } from '../constants';
 import type { WorkflowNodeData } from '../types';
-
-const stateColors: Record<string, { border: string; bg: string }> = {
-  'not-started': { border: '#3c3c3c', bg: '#252526' },
-  'running':     { border: '#2563eb', bg: '#1e293b' },
-  'success':     { border: '#16a34a', bg: '#14281e' },
-  'error':       { border: '#dc2626', bg: '#2a1515' },
-  'pending':     { border: '#d97706', bg: '#252526' },
-  'skipped':     { border: '#6b7280', bg: '#1f1f1f' },
-  'cached':      { border: '#7c3aed', bg: '#1e1528' },
-};
 
 export const DiamondNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
   const d = data as WorkflowNodeData;

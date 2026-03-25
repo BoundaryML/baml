@@ -6,6 +6,7 @@ import type { FC } from 'react';
 import type { BamlJsPromptAst, BamlJsPromptAstSimple, BamlJsPromptAstMessage } from '@b/pkg-proto';
 import type { ResultRendererProps } from '../result-renderers';
 import { MediaRenderer } from './Media';
+import { CodeBlock } from '../components/ui/code-block';
 
 function isPromptAst(value: unknown): value is BamlJsPromptAst {
   if (value == null || typeof value !== 'object') return false;
@@ -74,12 +75,9 @@ const AstNode: FC<{ node: BamlJsPromptAst }> = ({ node }) => {
   }
 };
 
-const codeBlockCls =
-  'whitespace-pre-wrap break-all font-vsc-mono text-xs leading-relaxed p-2 rounded bg-vsc-bg border border-vsc-border text-vsc-text overflow-auto max-h-[200px] m-0';
-
 export const PromptAstRenderer: FC<ResultRendererProps> = ({ value }) => {
   if (!isPromptAst(value)) {
-    return <pre className={codeBlockCls}>{JSON.stringify(value, null, 2)}</pre>;
+    return <CodeBlock>{JSON.stringify(value, null, 2)}</CodeBlock>;
   }
 
   return (

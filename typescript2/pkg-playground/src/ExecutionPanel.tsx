@@ -9,10 +9,17 @@
  * VS Code webview without an embedded Monaco editor).
  */
 
-import type { ChangeEvent, FC } from 'react';
+import type { ChangeEvent, FC, RefObject } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
 import { KeyRound, PanelLeft, Square } from 'lucide-react';
+import { Button } from './components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
+import { Input } from './components/ui/input';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/ui/tooltip';
+import { CodeBlock } from './components/ui/code-block';
+import { ToggleGroup } from './components/ui/toggle-group';
+import { cn } from './lib/utils';
 import { ApiKeysDialog } from './components/ApiKeysDialog';
 import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
@@ -63,9 +70,6 @@ function formatBuildTime(epochSecs: number): { absolute: string; relative: strin
   return { absolute, relative };
 }
 
-/** Shared classes for <pre> code blocks */
-const codeBlockCls = 'whitespace-pre-wrap break-all font-vsc-mono text-xs leading-relaxed p-2 rounded bg-vsc-bg border border-vsc-border text-vsc-text overflow-auto max-h-[200px] m-0';
-
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -100,6 +104,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [runs, setRuns] = useState<RunEntry[]>([]);
   const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
+  const promptContentRef = useRef<HTMLDivElement>(null);
 
   const [controlFlowGraph, setControlFlowGraph] = useState<ControlFlowGraph | null>(null);
   const [activeTab, setActiveTab] = useState<'run' | 'graph' | 'prompt' | 'curl'>('run');
@@ -746,41 +751,41 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           );
         })()}
         <div className="flex-1" />
-        <button
-          onClick={() => setShowApiKeysDialog(true)}
-          className="relative p-1 rounded hover:bg-vsc-hover text-vsc-text-muted"
-          title="API Keys"
-        >
-          <KeyRound size={14} />
-          {hasMissingKeys && (
-            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400" />
-          )}
-        </button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative h-7 w-7" onClick={() => setShowApiKeysDialog(true)}>
+                <KeyRound size={14} />
+                {hasMissingKeys && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-yellow-400" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>API Keys</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {/* Project selector (shown when multiple projects exist) */}
       {projectRoots.length > 1 && (
         <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
           <span className="text-[10px] text-vsc-text-faint font-vsc-mono select-none">PROJECT</span>
-          {projectRoots.map((root) => {
-            const isSelected = root === selectedProject;
-            const update = projectUpdates[root];
-            return (
-              <button
-                key={root}
-                onClick={() => setSelectedProject(root)}
-                title={root}
-                className={`px-2 py-0.5 rounded font-vsc-mono text-[10px] cursor-pointer border ${
-                  isSelected
-                    ? 'bg-vsc-accent text-vsc-accent-fg border-vsc-accent font-semibold'
-                    : 'bg-transparent text-vsc-text-muted border-vsc-border'
-                }`}
-              >
-                {root}
-                {update && !update.isBexCurrent && <span className="ml-0.5 text-vsc-yellow">*</span>}
-              </button>
-            );
-          })}
+          <ToggleGroup
+            value={selectedProject ?? projectRoots[0]}
+            onValueChange={(v) => setSelectedProject(v)}
+            options={projectRoots.map((root) => ({
+              value: root,
+              label: (
+                <>
+                  {root}
+                  {projectUpdates[root] && !projectUpdates[root].isBexCurrent && (
+                    <span className="ml-0.5 text-vsc-yellow">*</span>
+                  )}
+                </>
+              ),
+            }))}
+            size="sm"
+          />
         </div>
       )}
 
@@ -805,40 +810,48 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
       {/* Sidebar toggle */}
       <div className="flex items-center gap-1.5 px-2.5 py-1 border-b border-vsc-border shrink-0 bg-vsc-surface">
-        <button
-          onClick={() => setSidebarOpen((prev) => !prev)}
-          className="p-0.5 rounded hover:bg-vsc-hover cursor-pointer"
-          title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-        >
-          <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
-        </button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={() => setSidebarOpen((prev) => !prev)}
+              >
+                <PanelLeft className="h-3.5 w-3.5 text-vsc-text-muted" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         {selectedFn && (
           <span className="text-[11px] font-vsc-mono text-vsc-accent font-semibold">{selectedFn}()</span>
         )}
         {selectedFn && (
           <div className="flex items-center gap-1 ml-auto">
-            <button
+            <Button
+              variant="success"
+              size="sm"
+              className="text-[11px] font-semibold"
               disabled={hasErrors || isRunning || !selectedProject}
               onClick={onRunFunction}
-              className={`px-3 py-0.5 rounded border-none font-semibold text-[11px] ${
-                hasErrors || isRunning || !selectedProject
-                  ? 'bg-vsc-text-faint text-vsc-text-muted cursor-not-allowed'
-                  : 'bg-vsc-green text-white cursor-pointer'
-              }`}
             >
               {isRunning ? 'Running...' : 'Run'}
-            </button>
+            </Button>
             {runs.length > 0 && !isRunning && (
-              <button
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-[10px]"
                 onClick={() => {
                   const runIds = runs.map((r) => r.id);
                   port.postMessage({ type: 'clearHandles', runIds });
                   setRuns([]);
                 }}
-                className="px-2 py-0.5 rounded border border-vsc-border bg-transparent text-vsc-text-muted text-[10px] cursor-pointer"
               >
                 Clear
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -877,300 +890,266 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         {/* Content area */}
         <div className="flex-1 flex flex-col min-h-0 min-w-0">
-          {/* Tab switcher */}
-          {selectedFn && (
-            <div className="flex items-center gap-0 px-2.5 py-0 border-b border-vsc-border shrink-0 bg-vsc-surface">
-              <button
-                onClick={() => setActiveTab('run')}
-                className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
-                  activeTab === 'run'
-                    ? 'border-vsc-accent text-vsc-text font-semibold'
-                    : 'border-transparent text-vsc-text-muted'
-                }`}
-              >
-                Run
-              </button>
-              <button
-                onClick={() => setActiveTab('graph')}
-                className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
-                  activeTab === 'graph'
-                    ? 'border-vsc-accent text-vsc-text font-semibold'
-                    : 'border-transparent text-vsc-text-muted'
-                }`}
-              >
-                Graph
-              </button>
-              {canPreviewPrompt && (
-                <button
-                  onClick={() => setActiveTab('prompt')}
-                  className={`flex items-center gap-1 px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
-                    activeTab === 'prompt'
-                      ? 'border-vsc-accent text-vsc-text font-semibold'
-                      : 'border-transparent text-vsc-text-muted'
-                  }`}
-                >
-                  Prompt
-                  {selectedFnInfo?.capabilities?.clientName && (
-                    <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
-                      {selectedFnInfo.capabilities.clientName}
-                    </span>
-                  )}
-                </button>
-              )}
-              {canPreviewCurl && (
-                <button
-                  onClick={() => setActiveTab('curl')}
-                  className={`px-3 py-1.5 text-[11px] font-vsc-mono border-b-2 cursor-pointer bg-transparent ${
-                    activeTab === 'curl'
-                      ? 'border-vsc-accent text-vsc-text font-semibold'
-                      : 'border-transparent text-vsc-text-muted'
-                  }`}
-                >
-                  cURL
-                </button>
-              )}
-            </div>
-          )}
+          {selectedFn ? (
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as typeof activeTab)}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              <TabsList className="px-2.5 shrink-0 bg-vsc-surface">
+                <TabsTrigger value="run">Run</TabsTrigger>
+                <TabsTrigger value="graph">Graph</TabsTrigger>
+                {canPreviewPrompt && (
+                  <TabsTrigger value="prompt">
+                    Prompt
+                    {selectedFnInfo?.capabilities?.clientName && (
+                      <span className="ml-1 px-1 py-0 text-[9px] rounded bg-vsc-bg-secondary text-vsc-text-faint">
+                        {selectedFnInfo.capabilities.clientName}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                )}
+                {canPreviewCurl && <TabsTrigger value="curl">cURL</TabsTrigger>}
+              </TabsList>
 
-          {/* Graph view */}
-          {selectedFn && activeTab === 'graph' ? (
-            <div className="flex-1 min-h-0 flex flex-col" style={{ minHeight: 300 }}>
-              {/* "Called from" bar — shown when the current function is called from workflows */}
-              {workflowContext && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] bg-vsc-bg-secondary border-b border-vsc-border shrink-0">
-                  <span className="text-vsc-text-faint">Called from:</span>
-                  {workflowContext.workflows.map((wf) => (
-                    <button
-                      key={wf}
-                      onClick={() => {
-                        setWorkflowContext(null);
-                        setSelectedFn(wf);
-                        setHighlightedNodeId(null);
-                      }}
-                      className="px-1.5 py-0.5 rounded border border-vsc-border bg-vsc-bg text-vsc-text-muted hover:text-vsc-text hover:border-vsc-accent cursor-pointer text-[10px]"
-                    >
-                      {wf}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {controlFlowGraph ? (
-                <GraphView
-                  graph={controlFlowGraph}
-                  selectedNodeId={highlightedNodeId}
-                  onNodeClick={(nodeId) => setHighlightedNodeId(nodeId)}
-                />
-              ) : (
-                <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
-                  Loading graph...
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          {/* Prompt preview */}
-          {selectedFn && activeTab === 'prompt' ? (
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {promptPreviewError && (
-                <div className="px-2.5 py-1.5 text-[10px] text-vsc-error bg-vsc-error/10 border-b border-vsc-error/20 shrink-0">
-                  Preview error: {promptPreviewError}
-                </div>
-              )}
-              <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 group relative">
-                {promptPreviewResult != null && (
-                  <div className="absolute top-1 right-1 z-10">
-                    <CopyButton text={promptPreviewResult} />
+              {/* Graph view */}
+              <TabsContent value="graph" className="flex-1 min-h-0 mt-0 flex flex-col" style={{ minHeight: 300 }}>
+                {/* "Called from" bar — shown when the current function is called from workflows */}
+                {workflowContext && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] bg-vsc-bg-secondary border-b border-vsc-border shrink-0">
+                    <span className="text-vsc-text-faint">Called from:</span>
+                    {workflowContext.workflows.map((wf) => (
+                      <Button
+                        key={wf}
+                        variant="outline"
+                        size="sm"
+                        className="h-auto px-1.5 py-0.5 text-[10px]"
+                        onClick={() => {
+                          setWorkflowContext(null);
+                          setSelectedFn(wf);
+                          setHighlightedNodeId(null);
+                        }}
+                      >
+                        {wf}
+                      </Button>
+                    ))}
                   </div>
                 )}
-                {promptPreviewResult != null ? (
-                  <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
+                {controlFlowGraph ? (
+                  <GraphView
+                    graph={controlFlowGraph}
+                    selectedNodeId={highlightedNodeId}
+                    onNodeClick={(nodeId) => setHighlightedNodeId(nodeId)}
+                  />
                 ) : (
-                  <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
-                    {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
+                  <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg h-full">
+                    Loading graph...
                   </div>
                 )}
-              </div>
-              {promptPreviewResult && <PromptStats text={promptPreviewResult} />}
-            </div>
-          ) : null}
+              </TabsContent>
 
-          {/* cURL preview */}
-          {selectedFn && activeTab === 'curl' ? (
-            <div className="group relative flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
-              {curlPreviewResult != null && (
-                <div className="absolute top-1 right-1 z-10">
-                  <CopyButton text={curlPreviewResult} />
-                </div>
-              )}
-              {curlPreviewResult != null ? (
-                <ResultDisplay resultJson={curlPreviewResult} customRenderers={resultRenderers} />
-              ) : curlPreviewError ? (
-                <div className="flex items-center justify-center text-vsc-error text-xs h-full">
-                  {curlPreviewError}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
-                  {previewLoading ? 'Loading cURL preview...' : 'Enter args to preview cURL'}
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          {/* Execution area */}
-          {selectedFn && activeTab === 'run' ? (
-            <div className="flex-1 flex flex-col min-h-0">
-              {/* Args */}
-              <div className="flex items-center border-b border-vsc-border shrink-0">
-                <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
-                  args
-                </span>
-                <input
-                  spellCheck={false}
-                  value={argsJson}
-                  onChange={onArgsJsonChange}
-                  className="flex-1 px-2 py-1 font-vsc-mono text-xs bg-vsc-input-bg text-vsc-input-fg border-none outline-none"
-                  placeholder='{"key": "value"}'
-                />
-              </div>
-
-              {/* Run history (scrollable) */}
-              <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
-                {runs.length === 0 && (
-                  <div className="p-5 text-center text-vsc-text-faint text-[11px]">
-                    Press Run to execute {selectedFn}()
-                  </div>
-                )}
-
-                {[...runs].reverse().map((run, runIdx) => {
-                  const isLatest = runIdx === 0;
-                  const statusCls = run.status === 'error' ? 'bg-vsc-red' : run.status === 'success' ? 'bg-vsc-green' : run.status === 'cancelled' ? 'bg-vsc-yellow' : 'bg-vsc-text-muted';
-
-                  return (
-                    <div key={run.id} className={!isLatest ? 'border-b-2 border-vsc-border' : ''}>
-                      {/* Run header */}
-                      <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border-subtle">
-                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`} />
-                        <span className="text-vsc-accent font-semibold text-[11px]">
-                          {run.functionName}()
-                        </span>
-                        <span className="text-vsc-text-faint text-[10px] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                          {run.argsJson}
-                        </span>
-                        {run.status === 'running' && (
-                          <>
-                            <span className="text-vsc-text-muted text-[10px]">running...</span>
-                            <button
-                              onClick={() => onCancelRun(run.id)}
-                              className="p-0.5 rounded hover:bg-vsc-hover text-vsc-text-muted hover:text-vsc-error"
-                              title="Cancel execution"
-                            >
-                              <Square size={12} />
-                            </button>
-                          </>
-                        )}
-                        {run.durationMs != null && (
-                          <span className="text-vsc-text-faint text-[10px] shrink-0">{run.durationMs}ms</span>
-                        )}
+              {/* Prompt preview */}
+              {canPreviewPrompt && (
+                <TabsContent value="prompt" className="flex-1 flex flex-col overflow-hidden mt-0">
+                  {promptPreviewError && (
+                    <div className="px-2.5 py-1.5 text-[10px] text-vsc-error bg-vsc-error/10 border-b border-vsc-error/20 shrink-0">
+                      Preview error: {promptPreviewError}
+                    </div>
+                  )}
+                  <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 group relative">
+                    {promptPreviewResult != null && (
+                      <div className="absolute top-1 right-1 z-10">
+                        <CopyButton textRef={promptContentRef} />
                       </div>
-
-                      {/* Fetch logs for this run */}
-                      {run.fetchLogs.map((log) => {
-                        const isExp = expandedLogId === log.id;
-                        const statusColorCls = log.status === null ? 'text-vsc-text-muted'
-                          : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
-                          : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
-                        return (
-                          <div key={`n-${log.id}`}>
-                            <div
-                              onClick={() => setExpandedLogId(isExp ? null : log.id)}
-                              className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
-                            >
-                              <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
-                              <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
-                              <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
-                              {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
-                              <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
-                            </div>
-                            {isExp && (
-                              <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
-                                {log.error && <pre className={`${codeBlockCls} border-vsc-red! text-vsc-red!`}>{log.error}</pre>}
-                                <div>
-                                  <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
-                                  <pre className={codeBlockCls}>{JSON.stringify(log.requestHeaders, null, 2)}</pre>
-                                </div>
-                                {log.requestBody && (
-                                  <div>
-                                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
-                                    <pre className={codeBlockCls}>{tryFormatJson(log.requestBody)}</pre>
-                                  </div>
-                                )}
-                                {log.responseBody != null && (
-                                  <div>
-                                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
-                                    <pre className={codeBlockCls}>{tryFormatJson(log.responseBody)}</pre>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      {/* Result / Error / Cancelled for this run */}
-                      {run.status === 'cancelled' && (
-                        <div className="py-1.5 pr-2.5 pl-[22px]">
-                          <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
-                        </div>
-                      )}
-                      {run.error && (
-                        <div className="py-1.5 pr-2.5 pl-[22px]">
-                          <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">Error</div>
-                          <ErrorDisplay error={run.error} onRetry={onRunFunction} />
-                        </div>
-                      )}
-                      {run.result != null && (
-                        <div className="py-1.5 pr-2.5 pl-[22px]">
-                          {run.status === 'success' && run.fetchLogs.length > 0 && (
-                            <div className="mb-1">
-                              <MetadataBadges fetchLogs={run.fetchLogs} durationMs={run.durationMs} />
-                            </div>
-                          )}
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1">
-                              <div className="text-[10px] font-semibold text-vsc-green uppercase tracking-wide">Result</div>
-                              <button
-                                onClick={() => toggleResultMode(run.id)}
-                                className={`px-1.5 py-0.5 text-[10px] rounded ${(resultModes[run.id] ?? 'parsed') === 'parsed' ? 'bg-vsc-accent text-vsc-accent-fg' : 'text-vsc-text-muted'}`}
-                              >
-                                Parsed
-                              </button>
-                              <button
-                                onClick={() => toggleResultMode(run.id)}
-                                className={`px-1.5 py-0.5 text-[10px] rounded ${(resultModes[run.id] ?? 'parsed') === 'raw' ? 'bg-vsc-accent text-vsc-accent-fg' : 'text-vsc-text-muted'}`}
-                              >
-                                Raw
-                              </button>
-                              <CopyButton text={run.result} iconSize={11} />
-                            </div>
-                            {(resultModes[run.id] ?? 'parsed') === 'parsed' ? (
-                              <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
-                            ) : (
-                              <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
-                                {run.result}
-                              </pre>
-                            )}
-                          </div>
+                    )}
+                    <div ref={promptContentRef}>
+                      {promptPreviewResult != null ? (
+                        <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
+                      ) : (
+                        <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
+                          {previewLoading ? 'Loading prompt preview...' : 'Enter args to preview prompt'}
                         </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
+                  </div>
+                  {promptPreviewResult && <PromptStats text={promptPreviewResult} />}
+                </TabsContent>
+              )}
 
-          {/* No function selected fallback */}
-          {!selectedFn && (
+              {/* cURL preview */}
+              {canPreviewCurl && (
+                <TabsContent value="curl" className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5 mt-0">
+                  {curlPreviewResult != null ? (
+                    <ResultDisplay resultJson={curlPreviewResult} customRenderers={resultRenderers} />
+                  ) : curlPreviewError ? (
+                    <div className="flex items-center justify-center text-vsc-error text-xs h-full">
+                      {curlPreviewError}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center text-vsc-text-faint text-xs h-full">
+                      {previewLoading ? 'Loading cURL preview...' : 'Enter args to preview cURL'}
+                    </div>
+                  )}
+                </TabsContent>
+              )}
+
+              {/* Execution area */}
+              <TabsContent value="run" className="flex-1 flex flex-col min-h-0 mt-0">
+                {/* Args */}
+                <div className="flex items-center border-b border-vsc-border shrink-0">
+                  <span className="px-2 py-1 text-[10px] text-vsc-text-faint font-vsc-mono bg-vsc-surface border-r border-vsc-border self-stretch flex items-center">
+                    args
+                  </span>
+                  <Input
+                    spellCheck={false}
+                    value={argsJson}
+                    onChange={onArgsJsonChange}
+                    className="flex-1 h-7 rounded-none border-none font-vsc-mono text-xs"
+                    placeholder='{"key": "value"}'
+                  />
+                </div>
+
+                {/* Run history (scrollable) */}
+                <div ref={outputRef} className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg">
+                  {runs.length === 0 && (
+                    <div className="p-5 text-center text-vsc-text-faint text-[11px]">
+                      Press Run to execute {selectedFn}()
+                    </div>
+                  )}
+
+                  {[...runs].reverse().map((run, runIdx) => {
+                    const isLatest = runIdx === 0;
+                    const statusCls = run.status === 'error' ? 'bg-vsc-red' : run.status === 'success' ? 'bg-vsc-green' : run.status === 'cancelled' ? 'bg-vsc-yellow' : 'bg-vsc-text-muted';
+
+                    return (
+                      <div key={run.id} className={!isLatest ? 'border-b-2 border-vsc-border' : ''}>
+                        {/* Run header */}
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-vsc-surface border-b border-vsc-border-subtle">
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusCls}`} />
+                          <span className="text-vsc-accent font-semibold text-[11px]">
+                            {run.functionName}()
+                          </span>
+                          <span className="text-vsc-text-faint text-[10px] flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                            {run.argsJson}
+                          </span>
+                          {run.status === 'running' && (
+                            <>
+                              <span className="text-vsc-text-muted text-[10px]">running...</span>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-5 w-5 text-vsc-text-muted hover:text-vsc-error"
+                                      onClick={() => onCancelRun(run.id)}
+                                    >
+                                      <Square size={12} />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Cancel execution</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </>
+                          )}
+                          {run.durationMs != null && (
+                            <span className="text-vsc-text-faint text-[10px] shrink-0">{run.durationMs}ms</span>
+                          )}
+                        </div>
+
+                        {/* Fetch logs for this run */}
+                        {run.fetchLogs.map((log) => {
+                          const isExp = expandedLogId === log.id;
+                          const statusColorCls = log.status === null ? 'text-vsc-text-muted'
+                            : log.status >= 200 && log.status < 300 ? 'text-vsc-green'
+                            : log.status === 0 ? 'text-vsc-red' : 'text-vsc-yellow';
+                          return (
+                            <div key={`n-${log.id}`}>
+                              <div
+                                onClick={() => setExpandedLogId(isExp ? null : log.id)}
+                                className="flex items-center gap-1.5 py-0.5 pr-2.5 pl-[22px] cursor-pointer border-b border-vsc-border-subtle"
+                              >
+                                <span className={`${statusColorCls} font-semibold text-[11px]`}>{log.status ?? '...'}</span>
+                                <span className="text-vsc-text-faint text-[10px]">{log.method}</span>
+                                <span className="text-vsc-text flex-1 overflow-hidden text-ellipsis whitespace-nowrap text-[11px]">{log.url}</span>
+                                {log.durationMs != null && <span className="text-vsc-text-faint text-[10px]">{log.durationMs}ms</span>}
+                                <span className="text-vsc-text-faint text-[9px]">{isExp ? '\u25B4' : '\u25BE'}</span>
+                              </div>
+                              {isExp && (
+                                <div className="py-2 pr-2.5 pl-[22px] flex flex-col gap-2 border-b border-vsc-border">
+                                  {log.error && <CodeBlock variant="error">{log.error}</CodeBlock>}
+                                  <div>
+                                    <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Headers</div>
+                                    <CodeBlock>{JSON.stringify(log.requestHeaders, null, 2)}</CodeBlock>
+                                  </div>
+                                  {log.requestBody && (
+                                    <div>
+                                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Request Body</div>
+                                      <CodeBlock>{tryFormatJson(log.requestBody)}</CodeBlock>
+                                    </div>
+                                  )}
+                                  {log.responseBody != null && (
+                                    <div>
+                                      <div className="text-[10px] font-semibold text-vsc-text-muted mb-0.5 uppercase tracking-wide">Response Body</div>
+                                      <CodeBlock>{tryFormatJson(log.responseBody)}</CodeBlock>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Result / Error / Cancelled for this run */}
+                        {run.status === 'cancelled' && (
+                          <div className="py-1.5 pr-2.5 pl-[22px]">
+                            <div className="text-[11px] text-vsc-text-faint italic">Cancelled</div>
+                          </div>
+                        )}
+                        {run.error && (
+                          <div className="py-1.5 pr-2.5 pl-[22px]">
+                            <div className="text-[10px] font-semibold text-vsc-red mb-0.5 uppercase tracking-wide">Error</div>
+                            <ErrorDisplay error={run.error} onRetry={onRunFunction} />
+                          </div>
+                        )}
+                        {run.result != null && (
+                          <div className="py-1.5 pr-2.5 pl-[22px]">
+                            {run.status === 'success' && run.fetchLogs.length > 0 && (
+                              <div className="mb-1">
+                                <MetadataBadges fetchLogs={run.fetchLogs} durationMs={run.durationMs} />
+                              </div>
+                            )}
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1">
+                                <div className="text-[10px] font-semibold text-vsc-green uppercase tracking-wide">Result</div>
+                                <ToggleGroup
+                                  value={resultModes[run.id] ?? 'parsed'}
+                                  onValueChange={(v) => setResultModes((prev) => ({ ...prev, [run.id]: v as 'parsed' | 'raw' }))}
+                                  options={[
+                                    { value: 'parsed', label: 'Parsed' },
+                                    { value: 'raw', label: 'Raw' },
+                                  ]}
+                                  size="sm"
+                                />
+                                <CopyButton text={run.result} iconSize={11} />
+                              </div>
+                              {(resultModes[run.id] ?? 'parsed') === 'parsed' ? (
+                                <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                              ) : (
+                                <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[400px] overflow-auto">
+                                  {run.result}
+                                </pre>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </TabsContent>
+            </Tabs>
+          ) : (
             <div className="flex-1 flex items-center justify-center text-vsc-text-faint text-xs bg-vsc-bg">
               Select a function to run
             </div>

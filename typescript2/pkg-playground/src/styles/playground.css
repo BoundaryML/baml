@@ -1,0 +1,198 @@
+/* ═══════════════════════════════════════════════════════════════════════
+ * playground.css — Single source of truth for playground design tokens
+ *
+ * Both app-promptfiddle and app-vscode-webview import this file.
+ * All playground components in pkg-playground use these tokens.
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Scan pkg-playground component source for Tailwind classes ──────── */
+@source "../**/*.tsx";
+
+/* ── Animations for shadcn dialog/tooltip transitions ──────────────── */
+@import "tw-animate-css";
+
+/* ── shadcn semantic CSS variables → VS Code theme ─────────────────── */
+:root {
+  --radius: 0.375rem;
+
+  /* Core */
+  --background: var(--vscode-editor-background, #1f1f1f);
+  --foreground: var(--vscode-editor-foreground, #cccccc);
+
+  /* Card / Popover */
+  --card: var(--vscode-editor-background, #1f1f1f);
+  --card-foreground: var(--vscode-editor-foreground, #cccccc);
+  --popover: var(--vscode-editor-background, #1f1f1f);
+  --popover-foreground: var(--vscode-editor-foreground, #cccccc);
+
+  /* Primary = VS Code button */
+  --primary: var(--vscode-button-background, #0078d4);
+  --primary-foreground: var(--vscode-button-foreground, #ffffff);
+
+  /* Secondary = sidebar / muted surface */
+  --secondary: var(--vscode-sideBar-background, #181818);
+  --secondary-foreground: var(--vscode-editor-foreground, #cccccc);
+
+  /* Muted = secondary alias */
+  --muted: var(--vscode-sideBar-background, #181818);
+  --muted-foreground: var(--vscode-descriptionForeground, #858585);
+
+  /* Accent = hover/highlight */
+  --accent: var(--vscode-list-hoverBackground, #2a2d2e);
+  --accent-foreground: var(--vscode-editor-foreground, #cccccc);
+
+  /* Destructive */
+  --destructive: var(--vscode-errorForeground, #f85149);
+  --destructive-foreground: var(--vscode-editor-foreground, #cccccc);
+
+  /* Borders + inputs */
+  --border: var(--vscode-panel-border, var(--vscode-editorWidget-border, #2b2b2b));
+  --input: var(--vscode-input-border, transparent);
+  --ring: var(--vscode-focusBorder, #007fd4);
+}
+
+/* ── Register tokens for Tailwind utility generation ───────────────── */
+@theme inline {
+  /* ─ shadcn semantic tokens ─ */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* shadcn radius scale */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+
+  /* ─ Backward-compat vsc-* tokens (migrate off incrementally) ─ */
+  --color-vsc-bg: var(--vscode-editor-background, #1f1f1f);
+  --color-vsc-surface: var(--vscode-sideBar-background, #181818);
+  --color-vsc-panel: var(--vscode-panel-background, var(--vscode-editor-background, #1f1f1f));
+  --color-vsc-border: var(--vscode-panel-border, var(--vscode-editorWidget-border, #2b2b2b));
+  --color-vsc-border-subtle: var(--vscode-widget-border, #2b2b2b);
+  --color-vsc-text: var(--vscode-editor-foreground, #cccccc);
+  --color-vsc-text-bright: var(--vscode-foreground, #cccccc);
+  --color-vsc-text-muted: var(--vscode-descriptionForeground, #858585);
+  --color-vsc-text-faint: var(--vscode-disabledForeground, #6b6b6b);
+  --color-vsc-accent: var(--vscode-button-background, #0078d4);
+  --color-vsc-accent-fg: var(--vscode-button-foreground, #ffffff);
+  --color-vsc-accent-hover: var(--vscode-button-hoverBackground, #026ec1);
+  --color-vsc-list-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+  --color-vsc-green: var(--vscode-testing-iconPassed, #3fb950);
+  --color-vsc-red: var(--vscode-errorForeground, #f85149);
+  --color-vsc-yellow: var(--vscode-editorWarning-foreground, #d29922);
+  --color-vsc-yellow-subtle: var(--vscode-inputValidation-warningBackground, rgba(210, 153, 34, 0.15));
+  --color-vsc-input-bg: var(--vscode-input-background, #313131);
+  --color-vsc-input-fg: var(--vscode-input-foreground, #cccccc);
+  --color-vsc-input-border: var(--vscode-input-border, transparent);
+
+  /* ─ Previously undefined vsc-* tokens (now defined) ─ */
+  --color-vsc-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+  --color-vsc-error: var(--vscode-errorForeground, #f85149);
+  --color-vsc-link: var(--vscode-textLink-foreground, #3794ff);
+  --color-vsc-bg-secondary: var(--vscode-editor-background, #262626);
+  --color-vsc-list-hoverBg: var(--vscode-list-hoverBackground, #2a2d2e);
+
+  /* ─ Fonts ─ */
+  --font-vsc: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif);
+  --font-vsc-mono: var(--vscode-editor-font-family, "SF Mono", "Fira Code", Consolas, monospace);
+}
+
+/* ── Scoped preflight reset ────────────────────────────────────────── */
+@layer base {
+  .playground-root *,
+  .playground-root *::before,
+  .playground-root *::after {
+    box-sizing: border-box;
+    border-width: 0;
+    border-style: solid;
+    border-color: var(--border);
+  }
+
+  .playground-root button,
+  .playground-root [type='button'],
+  .playground-root [type='reset'],
+  .playground-root [type='submit'] {
+    appearance: none;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+  }
+
+  .playground-root input,
+  .playground-root select,
+  .playground-root textarea {
+    appearance: none;
+    background-color: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+  }
+
+  .playground-root input::placeholder,
+  .playground-root textarea::placeholder {
+    opacity: 1;
+    color: var(--muted-foreground);
+  }
+
+  .playground-root a {
+    color: inherit;
+    text-decoration: inherit;
+  }
+
+  .playground-root h1,
+  .playground-root h2,
+  .playground-root h3,
+  .playground-root h4,
+  .playground-root h5,
+  .playground-root h6 {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  .playground-root ol,
+  .playground-root ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .playground-root img,
+  .playground-root video,
+  .playground-root canvas {
+    display: block;
+    max-width: 100%;
+  }
+
+  .playground-root [hidden]:not([hidden="until-found"]) {
+    display: none !important;
+  }
+
+  .playground-root {
+    @apply border-border outline-ring/50;
+  }
+}

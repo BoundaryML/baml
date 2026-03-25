@@ -1,6 +1,10 @@
 import type { FC } from 'react';
 import { useEffect, useState } from 'react';
-import * as Collapsible from '@radix-ui/react-collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './components/ui/collapsible';
+import { Button } from './components/ui/button';
+import { Input } from './components/ui/input';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/ui/tooltip';
+import { cn } from './lib/utils';
 import { Bot, FunctionSquare, ChevronRight, Play, RefreshCw, Search, Square, Loader2, CheckCircle2, XCircle, Ban, FlaskConical } from 'lucide-react';
 import type { FunctionInfo, RunEntry, TestInfo } from './worker-protocol';
 
@@ -98,11 +102,11 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
       <div className="px-2 py-1.5 border-b border-vsc-border shrink-0">
         <div className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-vsc-input-border bg-vsc-input-bg">
           <Search className="h-3 w-3 text-vsc-text-faint shrink-0" />
-          <input
+          <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter..."
-            className="flex-1 bg-transparent text-vsc-input-fg font-vsc-mono text-[11px] border-none outline-none placeholder:text-vsc-text-faint"
+            className="flex-1 h-6 border-none bg-transparent text-xs"
           />
         </div>
       </div>
@@ -111,35 +115,49 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
       {tests.length > 0 && (
         <div className="flex items-center gap-1 px-2 py-1 border-b border-vsc-border shrink-0">
           {hasRunningTests ? (
-            <button
+            <Button
+              variant="destructive"
+              size="sm"
+              className="text-[10px] gap-1"
               onClick={onStopAllTests}
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-vsc-error/20 text-vsc-error hover:bg-vsc-error/30"
             >
               <Square size={10} /> Stop All
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
+              variant="default"
+              size="sm"
+              className="text-[10px] gap-1"
               onClick={onRunAllTests}
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-vsc-accent/20 text-vsc-accent hover:bg-vsc-accent/30"
             >
               <Play size={10} /> Run All
-            </button>
+            </Button>
           )}
           {hasFailedTests && !hasRunningTests && (
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-[10px] gap-1"
               onClick={onRerunFailed}
-              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded text-vsc-text-muted hover:bg-vsc-hover"
             >
               <RefreshCw size={10} /> Re-run Failed
-            </button>
+            </Button>
           )}
-          <button
-            onClick={onToggleParallel}
-            className={`ml-auto px-1.5 py-0.5 text-[10px] rounded ${parallelTests ? 'bg-vsc-accent/20 text-vsc-accent' : 'text-vsc-text-faint'}`}
-            title={parallelTests ? 'Parallel mode' : 'Sequential mode'}
-          >
-            {parallelTests ? '∥' : '→'}
-          </button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn('ml-auto h-6 w-6', parallelTests ? 'text-vsc-accent' : 'text-muted-foreground')}
+                  onClick={onToggleParallel}
+                >
+                  <FlaskConical size={12} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{parallelTests ? 'Running in parallel' : 'Running sequentially'}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       )}
 
@@ -166,7 +184,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
             fnStatuses.every((s) => s === 'success') ? 'border-l-2 border-l-green-400' : '';
 
           return (
-            <Collapsible.Root
+            <Collapsible
               key={fn.name}
               open={isExpanded}
               onOpenChange={() => toggleExpanded(fn.name)}
@@ -180,18 +198,16 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                 onClick={() => onSelectFn(isSelected ? null : fn.name)}
               >
                 {hasTests ? (
-                  <Collapsible.Trigger asChild>
+                  <CollapsibleTrigger asChild>
                     <span
                       className="shrink-0 p-0.5 -ml-0.5"
                       onClick={(e) => { e.stopPropagation(); }}
                     >
                       <ChevronRight
-                        className={`h-3 w-3 text-vsc-text-faint transition-transform ${
-                          isExpanded ? 'rotate-90' : ''
-                        }`}
+                        className={cn('h-3 w-3 text-vsc-text-faint transition-transform', isExpanded && 'rotate-90')}
                       />
                     </span>
-                  </Collapsible.Trigger>
+                  </CollapsibleTrigger>
                 ) : (
                   <span className="w-4 shrink-0" />
                 )}
@@ -206,7 +222,7 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
               )}
 
               {hasTests && (
-                <Collapsible.Content>
+                <CollapsibleContent>
                   {fnTests
                     .filter((t) => !search || t.name.toLowerCase().includes(lowerSearch) || fn.name.toLowerCase().includes(lowerSearch))
                     .map((t) => (
@@ -219,19 +235,20 @@ export const FunctionSidebar: FC<FunctionSidebarProps> = ({
                           <TestStatusIcon status={testStatuses.get(t.name)} />
                           <span className="truncate text-[11px]">{t.name}</span>
                         </div>
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-vsc-green"
                           disabled={isRunning}
                           onClick={(e) => { e.stopPropagation(); onRunTest(t); }}
-                          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-vsc-accent/20 disabled:opacity-30"
-                          title="Run test"
                         >
-                          <Play className="h-3 w-3 text-vsc-green" />
-                        </button>
+                          <Play size={10} />
+                        </Button>
                       </div>
                     ))}
-                </Collapsible.Content>
+                </CollapsibleContent>
               )}
-            </Collapsible.Root>
+            </Collapsible>
           );
         })}
       </div>

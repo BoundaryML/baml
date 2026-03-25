@@ -1,6 +1,8 @@
 import { type FC, type ReactNode } from 'react';
 import { CopyButton } from './CopyButton';
 import { RefreshCw } from 'lucide-react';
+import { Button } from './ui/button';
+import { CodeBlock } from './ui/code-block';
 
 interface ErrorContext {
   message: string;
@@ -27,14 +29,14 @@ registerErrorRenderer({
   render: ({ message, onRetry }) => (
     <div className="space-y-2">
       <div className="text-[11px] font-semibold text-vsc-error">Internal Error (WASM)</div>
-      <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[120px] overflow-auto">
+      <CodeBlock variant="error">
         {message.replace(/^.*WASM panic:\s*/, '')}
-      </pre>
+      </CodeBlock>
       <div className="text-[10px] text-vsc-text-faint">Try reopening the playground if this persists.</div>
       {onRetry && (
-        <button onClick={onRetry} className="flex items-center gap-1 text-[10px] text-vsc-link hover:underline">
-          <RefreshCw size={10} /> Retry
-        </button>
+        <Button variant="link" size="sm" className="text-vsc-link text-[11px] gap-1 px-0" onClick={onRetry}>
+          <RefreshCw size={10} />Retry
+        </Button>
       )}
     </div>
   ),
@@ -48,14 +50,12 @@ registerErrorRenderer({
     return (
       <div className="space-y-2">
         <div className="text-[11px] font-semibold text-vsc-error">Network Error</div>
-        <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border">
-          {message}
-        </pre>
+        <CodeBlock variant="error">{message}</CodeBlock>
         {urlMatch && <div className="text-[10px] text-vsc-text-faint">URL: {urlMatch[0]}</div>}
         {onRetry && (
-          <button onClick={onRetry} className="flex items-center gap-1 text-[10px] text-vsc-link hover:underline">
-            <RefreshCw size={10} /> Retry
-          </button>
+          <Button variant="link" size="sm" className="text-vsc-link text-[11px] gap-1 px-0" onClick={onRetry}>
+            <RefreshCw size={10} />Retry
+          </Button>
         )}
       </div>
     );
@@ -67,13 +67,11 @@ registerErrorRenderer({
   test: () => true,
   render: ({ message, onRetry }) => (
     <div className="space-y-2">
-      <pre className="whitespace-pre-wrap break-all font-vsc-mono text-[11px] text-vsc-text bg-vsc-bg-secondary p-2 rounded border border-vsc-border max-h-[200px] overflow-auto">
-        {message}
-      </pre>
+      <CodeBlock variant="error">{message}</CodeBlock>
       {onRetry && (
-        <button onClick={onRetry} className="flex items-center gap-1 text-[10px] text-vsc-link hover:underline">
-          <RefreshCw size={10} /> Retry
-        </button>
+        <Button variant="link" size="sm" className="text-vsc-link text-[11px] gap-1 px-0" onClick={onRetry}>
+          <RefreshCw size={10} />Retry
+        </Button>
       )}
     </div>
   ),

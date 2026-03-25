@@ -1,16 +1,7 @@
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import { type ComponentType, memo } from 'react';
+import { stateBorderColors } from '../constants';
 import type { WorkflowNodeData } from '../types';
-
-const stateBorderColors: Record<string, string> = {
-  'not-started': '#3c3c3c',
-  'running': '#2563eb',
-  'success': '#16a34a',
-  'error': '#dc2626',
-  'pending': '#d97706',
-  'skipped': '#6b7280',
-  'cached': '#7c3aed',
-};
 
 export const GroupNode: ComponentType<NodeProps> = memo(({ data, id, selected }) => {
   const d = data as WorkflowNodeData;
