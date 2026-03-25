@@ -5,6 +5,7 @@ import {
   useNodesState,
   useEdgesState,
   useReactFlow,
+  useStore,
   Controls,
   Background,
   BackgroundVariant,
@@ -62,8 +63,10 @@ function GraphViewInner({ graph, selectedNodeId, onNodeClick }: GraphViewProps) 
     );
   }, [selectedNodeId, setNodes]);
 
-  // Auto-pan viewport to center the selected node
-  const { setCenter, getNode } = useReactFlow();
+  // Auto-pan viewport to center the selected node — only when it's off-screen
+  const { setCenter, getNode, getViewport } = useReactFlow();
+  const containerWidth = useStore((s) => s.width);
+  const containerHeight = useStore((s) => s.height);
   const prevGraphRef = useRef(graph);
   useEffect(() => {
     if (selectedNodeId == null) return;
@@ -89,8 +92,24 @@ function GraphViewInner({ graph, selectedNodeId, onNodeClick }: GraphViewProps) 
 
     const w = target.measured?.width ?? 150;
     const h = target.measured?.height ?? 40;
-    setCenter(absX + w / 2, absY + h / 2, { duration: 300 });
-  }, [selectedNodeId, graph, setCenter, getNode]);
+    const centerX = absX + w / 2;
+    const centerY = absY + h / 2;
+
+    // Check if node center is already visible in the viewport
+    const { x: vx, y: vy, zoom } = getViewport();
+    const screenX = centerX * zoom + vx;
+    const screenY = centerY * zoom + vy;
+    const pad = 60;
+    const isVisible =
+      screenX >= pad && screenX <= containerWidth - pad &&
+      screenY >= pad && screenY <= containerHeight - pad;
+
+    if (!isVisible) {
+      // Pan to the node; if over-zoomed, ease back to 1.0
+      const targetZoom = Math.min(zoom, 1.0);
+      setCenter(centerX, centerY, { duration: 300, zoom: targetZoom });
+    }
+  }, [selectedNodeId, graph, setCenter, getNode, getViewport, containerWidth, containerHeight]);
 
   const handleNodeClick: NodeMouseHandler<WorkflowNode> = useCallback(
     (_event, node) => {
@@ -113,7 +132,7 @@ function GraphViewInner({ graph, selectedNodeId, onNodeClick }: GraphViewProps) 
         panOnDrag={[0, 1, 2]}
         panOnScroll
         fitView
-        fitViewOptions={{ minZoom: 0.3, maxZoom: 1.5, padding: 0.2 }}
+        fitViewOptions={{ minZoom: 0.3, maxZoom: 0.85, padding: 0.2 }}
         proOptions={{ hideAttribution: true }}
       >
         <Controls
