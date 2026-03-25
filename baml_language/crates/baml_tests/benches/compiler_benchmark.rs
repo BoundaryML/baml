@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo bench --bench compiler_benchmark
 
-use baml_compiler2_emit::{CompileOptions, OptLevel, generate_project_bytecode};
+use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
 use baml_db::*;
 use baml_project::ProjectDatabase;
 use divan::{Bencher, black_box};
@@ -28,7 +28,8 @@ fn bench_empty_project(bencher: Bencher) {
     bencher.bench(|| {
         let mut db = ProjectDatabase::new();
         let _ = db.set_project_root(std::path::Path::new("."));
-        let _ = black_box(force_compile(&db));
+        force_compile(&db);
+        black_box(());
     });
 }
 
@@ -56,7 +57,8 @@ client GPT4 {
         let _root = db.set_project_root(std::path::Path::new("."));
         let filename = format!("test{}", BAML_EXT);
         db.add_file(&filename, content);
-        let _ = black_box(force_compile(&db));
+        force_compile(&db);
+        black_box(());
     });
 }
 
@@ -106,14 +108,15 @@ client GPT4 {
 
             // Initial compilation to warm up Salsa
             db.add_file(&filename, initial);
-            let _ = force_compile(&db);
+            force_compile(&db);
 
             (db, _root, filename)
         })
         .bench_values(|(mut db, _root, filename)| {
             // Measure only the incremental update
             db.add_file(&filename, updated);
-            let _ = black_box(force_compile(&db));
+            force_compile(&db);
+            black_box(());
         });
 }
 
@@ -162,14 +165,15 @@ client GPT4 {
 
             // Initial compilation to warm up Salsa
             db.add_file(&filename, initial);
-            let _ = force_compile(&db);
+            force_compile(&db);
 
             (db, _root, filename)
         })
         .bench_values(|(mut db, _root, filename)| {
             // Measure only the incremental update
             db.add_file(&filename, updated);
-            let _ = black_box(force_compile(&db));
+            force_compile(&db);
+            black_box(());
         });
 }
 
@@ -204,14 +208,15 @@ function CreatePost(title: string, content: string) -> Post {
 
             // Add first file and compile
             db.add_file("user.baml", existing_file);
-            let _ = force_compile(&db);
+            force_compile(&db);
 
             (db, _root)
         })
         .bench_values(|(mut db, _root)| {
             // Measure adding a new file to existing project
             db.add_file("post.baml", new_file);
-            let _ = black_box(force_compile(&db));
+            force_compile(&db);
+            black_box(());
         });
 }
 
@@ -242,14 +247,15 @@ client GPT4 {
             let _root = db.set_project_root(std::path::Path::new("."));
 
             db.add_file("app.baml", content);
-            let _ = force_compile(&db);
+            force_compile(&db);
 
             (db, _root)
         })
         .bench_values(|(db, _root)| {
             // Measure cost of re-checking when nothing changed
             // Salsa should return memoized results immediately
-            let _ = black_box(force_compile(&db));
+            force_compile(&db);
+            black_box(());
         });
 }
 

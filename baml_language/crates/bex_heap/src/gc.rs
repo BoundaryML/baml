@@ -406,7 +406,7 @@ impl BexHeap {
 mod tests {
     use std::sync::Arc;
 
-    use bex_vm_types::{Class, Enum, Object, Value};
+    use bex_vm_types::{Object, Value};
 
     use super::*;
     use crate::Tlab;
@@ -477,7 +477,7 @@ mod tests {
 
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
-        let compile_time = vec![Object::Enum(Enum {
+        let compile_time = vec![Object::Enum(bex_vm_types::Enum {
             name: baml_type::TypeName::local(baml_type::Name::new("E")),
             variants: vec![bex_vm_types::EnumVariant {
                 name: "A".to_string(),
@@ -515,7 +515,7 @@ mod tests {
 
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
-        let compile_time = vec![Object::Class(Class {
+        let compile_time = vec![Object::Class(bex_vm_types::Class {
             name: baml_type::TypeName::local(baml_type::Name::new("C")),
             fields: vec![bex_vm_types::ClassField {
                 name: "x".to_string(),

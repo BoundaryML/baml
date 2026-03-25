@@ -205,7 +205,7 @@ pub async fn run_test(
     let bytecode = display_user_functions(&program);
 
     // Resolve the entry name (bare "main" → "user.main" for compiler2 output).
-    let resolved_entry = resolve_entry_name(&program, entry).to_owned();
+    let resolved_entry = resolve_entry_name(&program, entry).clone();
 
     // Resolve named args to positional before the engine consumes the program.
     let positional_args = resolve_args(&program, entry, args);

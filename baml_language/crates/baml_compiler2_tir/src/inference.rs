@@ -77,7 +77,7 @@ pub struct ScopeInference<'db> {
     bindings: FxHashMap<PatId, Ty>,
     /// Method resolutions: for field-access expressions that resolved to a
     /// method or free function, records the structural path (package, namespace,
-    /// class, name) so MIR can emit the correct QualifiedName.
+    /// class, name) so MIR can emit the correct `QualifiedName`.
     resolutions: FxHashMap<ExprId, MethodResolution<'db>>,
     /// Match expressions that the exhaustiveness checker determined cover all cases.
     exhaustive_matches: FxHashSet<ExprId>,
@@ -94,7 +94,7 @@ pub struct ScopeInferenceExtra<'db> {
 // (which contains `Name`, a Salsa-interned type). The `FxHashMap` doesn't
 // implement `salsa::Update` automatically; we provide the impl manually.
 #[allow(unsafe_code)]
-unsafe impl<'db> salsa::Update for ScopeInference<'db> {
+unsafe impl salsa::Update for ScopeInference<'_> {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         #[allow(unsafe_code)]
         let old = unsafe { &*old_pointer };
@@ -123,12 +123,12 @@ impl<'db> ScopeInference<'db> {
         self.bindings.get(&pat_id)
     }
 
-    /// Iterate over all (ExprId, Ty) pairs for expressions in this scope.
+    /// Iterate over all (`ExprId`, Ty) pairs for expressions in this scope.
     pub fn iter_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
         self.expressions.iter()
     }
 
-    /// Iterate over all (PatId, Ty) pairs for pattern bindings in this scope.
+    /// Iterate over all (`PatId`, Ty) pairs for pattern bindings in this scope.
     pub fn iter_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
         self.bindings.iter()
     }
@@ -138,7 +138,7 @@ impl<'db> ScopeInference<'db> {
         self.resolutions.get(&expr_id)
     }
 
-    /// Iterate over all (ExprId, MethodResolution) pairs for this scope.
+    /// Iterate over all (`ExprId`, `MethodResolution`) pairs for this scope.
     pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MethodResolution<'db>)> {
         self.resolutions.iter()
     }
@@ -148,7 +148,7 @@ impl<'db> ScopeInference<'db> {
         self.exhaustive_matches.contains(&expr_id)
     }
 
-    /// Iterate over all exhaustive match ExprIds in this scope.
+    /// Iterate over all exhaustive match `ExprIds` in this scope.
     pub fn iter_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
         self.exhaustive_matches.iter()
     }
@@ -169,8 +169,8 @@ impl<'db> ScopeInference<'db> {
                 unsafe {
                     let empty = EMPTY.get_or_init(TypeCheckDiagnostics::default);
                     // Extend the lifetime — safe because the data is empty and 'static.
-                    &*(empty as *const TypeCheckDiagnostics<'static>
-                        as *const TypeCheckDiagnostics<'db>)
+                    &*std::ptr::from_ref::<TypeCheckDiagnostics<'static>>(empty)
+                        .cast::<TypeCheckDiagnostics<'db>>()
                 }
             })
     }
@@ -227,7 +227,7 @@ pub fn infer_scope_types<'db>(
                         let parent = &index.scopes[parent_idx.index() as usize];
                         if matches!(parent.kind, ScopeKind::Class) {
                             if let Some(class_name) = &parent.name {
-                                for (_class_id, class_data) in &item_tree.classes {
+                                for class_data in item_tree.classes.values() {
                                     if class_data.name == *class_name {
                                         let mut merged = class_data.generic_params.clone();
                                         merged.extend(generic_params);
@@ -672,10 +672,10 @@ pub fn render_scope_diagnostics<'db>(
 /// Collect all type-check diagnostics for a file by iterating all scopes.
 ///
 /// Modeled after Ty's `check_types` (`types.rs:127-168`).
-pub fn collect_file_diagnostics<'db>(
-    db: &'db dyn crate::Db,
+pub fn collect_file_diagnostics(
+    db: &dyn crate::Db,
     file: baml_base::SourceFile,
-) -> TypeCheckDiagnostics<'db> {
+) -> TypeCheckDiagnostics<'_> {
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let mut all_diagnostics = TypeCheckDiagnostics::default();
 

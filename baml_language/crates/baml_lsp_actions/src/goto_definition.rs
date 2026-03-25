@@ -82,7 +82,7 @@ pub fn goto_definition(
 /// Look up the definition of a named symbol.
 ///
 /// NOTE: Stubbed — returns None. Will be reimplemented with compiler2 HIR.
-#[allow(unused_variables)]
+#[allow(unused_variables, dead_code)]
 pub(crate) fn lookup_symbol_definition(
     _db: &ProjectDatabase,
     _name: &str,

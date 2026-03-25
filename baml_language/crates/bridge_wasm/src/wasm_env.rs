@@ -7,9 +7,7 @@
 use std::sync::Arc;
 
 use js_sys::{Function, Promise};
-use sys_types::{
-    BexExternalValue, BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput, io::IoNamespaceEnv,
-};
+use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput, io::IoNamespaceEnv};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 

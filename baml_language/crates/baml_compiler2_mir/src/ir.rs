@@ -55,7 +55,7 @@ impl MirFunctionBody {
 pub enum MirFunctionKind {
     /// Has a body that will be compiled to bytecode.
     Bytecode(MirFunctionBody),
-    /// Rust-bound builtin — SysOp (Io) or NativeUnresolved (Vm).
+    /// Rust-bound builtin — `SysOp` (Io) or `NativeUnresolved` (Vm).
     Builtin(BuiltinKind),
 }
 
@@ -66,7 +66,7 @@ pub struct MirFunction {
     pub arity: usize,
     /// Source span for error reporting.
     pub span: Option<Span>,
-    /// Fully-qualified identity (e.g., "user.my_func", "baml.sys.panic").
+    /// Fully-qualified identity (e.g., "`user.my_func`", "baml.sys.panic").
     pub item_ref: ItemRef,
     /// Whether this function has bytecode or is a builtin.
     pub kind: MirFunctionKind,

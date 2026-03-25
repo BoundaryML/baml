@@ -7,10 +7,7 @@
 use std::sync::Arc;
 
 use bex_heap::BexHeap;
-use sys_types::{
-    AsBexExternalValue,
-    io::{self, BexExternalValue, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned},
-};
+use sys_types::io::{self, CallId, OpErrorKind, SysOpContext, SysOpOutput, owned};
 
 use crate::NativeSysOps;
 

@@ -13,7 +13,7 @@ use std::{
 
 use bex_heap::BexHeap;
 use sys_types::{
-    BexExternalValue, CallId, SysOpContext, SysOpOutput,
+    CallId, SysOpContext, SysOpOutput,
     io::{self, owned},
 };
 use tokio::sync::broadcast;

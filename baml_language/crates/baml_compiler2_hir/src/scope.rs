@@ -1,4 +1,4 @@
-//! Scope tree data structures for compiler2_hir.
+//! Scope tree data structures for `compiler2_hir`.
 //!
 //! Scopes are allocated in DFS pre-order during `SemanticIndexBuilder::build`.
 //! Each `Scope` carries a `TextRange` for `scope_at_offset()`.
@@ -25,12 +25,13 @@ impl FileScopeId {
         self.0
     }
 
+    #[must_use]
     pub fn next(self) -> Self {
         Self(self.0 + 1)
     }
 
     /// Convert to a cross-file Salsa identity.
-    pub fn to_scope_id<'db>(self, db: &'db dyn crate::Db, file: SourceFile) -> ScopeId<'db> {
+    pub fn to_scope_id(self, db: &dyn crate::Db, file: SourceFile) -> ScopeId<'_> {
         ScopeId::new(db, file, self)
     }
 }

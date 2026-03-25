@@ -340,8 +340,7 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         let current_len = self.len.load(Ordering::Acquire);
         assert!(
             index < current_len,
-            "index {index} out of bounds (len={})",
-            current_len
+            "index {index} out of bounds (len={current_len})"
         );
         let (chunk_idx, offset) = self.chunk_location(index);
         // SAFETY: Index bounds checked above, and we read the len with Acquire
@@ -359,8 +358,7 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         let current_len = self.len.load(Ordering::Acquire);
         assert!(
             index < current_len,
-            "index {index} out of bounds (len={})",
-            current_len
+            "index {index} out of bounds (len={current_len})"
         );
         let (chunk_idx, offset) = self.chunk_location(index);
         // SAFETY: Index bounds checked above, we have &mut self
@@ -382,8 +380,7 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         let current_len = self.len.load(Ordering::Acquire);
         assert!(
             index < current_len,
-            "index {index} out of bounds (len={})",
-            current_len
+            "index {index} out of bounds (len={current_len})"
         );
         let (chunk_idx, offset) = self.chunk_location(index);
         // SAFETY: Index bounds checked above
@@ -405,8 +402,7 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         let current_len = self.len.load(Ordering::Acquire);
         assert!(
             index < current_len,
-            "index {index} out of bounds (len={})",
-            current_len
+            "index {index} out of bounds (len={current_len})"
         );
         let (chunk_idx, offset) = self.chunk_location(index);
         // SAFETY: Caller ensures exclusive access to this index.

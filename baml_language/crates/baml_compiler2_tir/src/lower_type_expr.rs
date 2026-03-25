@@ -87,7 +87,7 @@ pub fn lower_type_expr_in_ns(
                     Definition::Enum(_) => Ty::Enum(qualify_def(db, def, short)),
                     Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, short)),
                     // Let bindings are values, not types — produce Unknown in a type position.
-                    Definition::Let(_) | _ => Ty::Unknown,
+                    _ => Ty::Unknown,
                 }
             } else {
                 // Check if this is a generic type parameter (e.g. T, K, V).
@@ -98,7 +98,7 @@ pub fn lower_type_expr_in_ns(
                 }
                 let name = segments
                     .iter()
-                    .map(|n| n.as_str())
+                    .map(smol_str::SmolStr::as_str)
                     .collect::<Vec<_>>()
                     .join(".");
                 diagnostics.push(TirTypeError::UnresolvedType {

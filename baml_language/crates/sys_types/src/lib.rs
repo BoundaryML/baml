@@ -74,7 +74,7 @@ impl std::error::Error for OpError {
 }
 
 impl OpError {
-    fn unsupported(operation: SysOp) -> Self {
+    fn _unsupported(operation: SysOp) -> Self {
         Self {
             fn_name: operation,
             kind: OpErrorKind::Unsupported,
@@ -517,7 +517,15 @@ impl<T> FunctionRef<T> {
     unreachable_pub,
     unused_imports,
     unused_variables,
-    clippy::all
+    unused_parens,
+    clippy::all,
+    clippy::wildcard_imports,
+    clippy::pub_underscore_fields,
+    clippy::used_underscore_binding,
+    clippy::redundant_closure_for_method_calls,
+    clippy::redundant_clone,
+    clippy::used_underscore_items,
+    clippy::implicit_clone
 )]
 pub mod io {
     use std::sync::Arc;
@@ -643,7 +651,7 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         let old_client = convert_io_primitive_client(&client);
         SysOpOutput::Ready(
             sys_llm::execute_parse_response_from_owned(&old_client, &response, &type_def)
-                .map(|v| v.into_bex_external_value())
+                .map(bex_external_types::AsBexExternalValue::into_bex_external_value)
                 .map_err(OpErrorKind::from),
         )
     }
@@ -705,6 +713,7 @@ fn wrap_prompt_ast(ast: bex_vm_types::PromptAst) -> io::owned::llm::PromptAst {
 }
 
 /// Unwrap the `_data` field of a generated `owned::llm::PromptAst` back to `bex_vm_types::PromptAst`.
+#[allow(clippy::used_underscore_binding)]
 fn unwrap_prompt_ast(owned: &io::owned::llm::PromptAst) -> bex_vm_types::PromptAst {
     owned
         ._data
@@ -923,6 +932,7 @@ impl IoSysOpsBuilder {
     }
 
     /// Override the `env` namespace with a pre-built instance.
+    #[must_use]
     pub fn with_env_instance(
         mut self,
         instance: Arc<dyn io::IoNamespaceEnv + Send + Sync + 'static>,
@@ -937,11 +947,13 @@ impl IoSysOpsBuilder {
     }
 
     /// Override the `env` namespace with a default-constructible type.
+    #[must_use]
     pub fn with_env<T: io::IoNamespaceEnv + Default + Send + Sync + 'static>(self) -> Self {
         self.with_env_instance(Arc::new(T::default()))
     }
 
     /// Override the `fs` namespace (including `fs.File` methods) with a pre-built instance.
+    #[must_use]
     pub fn with_fs_instance(
         mut self,
         instance: Arc<dyn io::IoNamespaceFs + Send + Sync + 'static>,
@@ -968,11 +980,13 @@ impl IoSysOpsBuilder {
     }
 
     /// Override the `fs` namespace with a default-constructible type.
+    #[must_use]
     pub fn with_fs<T: io::IoNamespaceFs + Default + Send + Sync + 'static>(self) -> Self {
         self.with_fs_instance(Arc::new(T::default()))
     }
 
     /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.
+    #[must_use]
     pub fn with_http_instance(
         mut self,
         instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
@@ -999,11 +1013,13 @@ impl IoSysOpsBuilder {
     }
 
     /// Override the `http` namespace with a default-constructible type.
+    #[must_use]
     pub fn with_http<T: io::IoNamespaceHttp + Default + Send + Sync + 'static>(self) -> Self {
         self.with_http_instance(Arc::new(T::default()))
     }
 
     /// Override the `net` namespace (including `net.Socket` methods) with a pre-built instance.
+    #[must_use]
     pub fn with_net_instance(
         mut self,
         instance: Arc<dyn io::IoNamespaceNet + Send + Sync + 'static>,
@@ -1030,11 +1046,13 @@ impl IoSysOpsBuilder {
     }
 
     /// Override the `net` namespace with a default-constructible type.
+    #[must_use]
     pub fn with_net<T: io::IoNamespaceNet + Default + Send + Sync + 'static>(self) -> Self {
         self.with_net_instance(Arc::new(T::default()))
     }
 
     /// Override the `sys` namespace with a pre-built instance.
+    #[must_use]
     pub fn with_sys_instance(
         mut self,
         instance: Arc<dyn io::IoNamespaceSys + Send + Sync + 'static>,
@@ -1061,6 +1079,7 @@ impl IoSysOpsBuilder {
     }
 
     /// Override the `sys` namespace with a default-constructible type.
+    #[must_use]
     pub fn with_sys<T: io::IoNamespaceSys + Default + Send + Sync + 'static>(self) -> Self {
         self.with_sys_instance(Arc::new(T::default()))
     }

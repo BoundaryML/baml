@@ -130,11 +130,11 @@ pub(crate) struct NativeFnDef {
     /// Whether this is a `sys_op` function (runs async outside VM).
     pub is_sys_op: bool,
     /// Whether this `sys_op` needs engine context (marked with `#[uses(engine_ctx)]`).
-    pub uses_engine_ctx: bool,
+    pub _uses_engine_ctx: bool,
     /// Contract error categories from `#[throws(Io, Timeout)]`.
-    pub throws: Vec<String>,
+    pub _throws: Vec<String>,
     /// Contract panic categories from `#[panics(HostPanic)]`.
-    pub panics: Vec<String>,
+    pub _panics: Vec<String>,
 }
 
 /// Classify a DSL field type for accessor code generation.
@@ -184,7 +184,7 @@ pub(crate) struct AccessorFieldDef {
 /// and then uses the subset of fields it needs.
 pub(crate) struct CollectedBuiltins {
     /// Map from struct name to full path (e.g., `"File"` → `"baml.fs.File"`).
-    pub builtin_types: HashMap<String, String>,
+    pub _builtin_types: HashMap<String, String>,
     /// Builtin function definitions (for signature registration).
     pub defs: Vec<BuiltinDef>,
     /// Native function definitions (for trait + glue generation).
@@ -232,7 +232,7 @@ impl CollectedBuiltins {
         }
 
         CollectedBuiltins {
-            builtin_types,
+            _builtin_types: builtin_types,
             defs,
             native_defs,
             type_defs,
@@ -573,9 +573,9 @@ fn collect_struct_builtins(s: &StructItem, ctx: &mut CollectContext) {
             returns: native_returns,
             uses_vm: method.uses_vm,
             is_sys_op: method.is_sys_op,
-            uses_engine_ctx: method.uses_engine_ctx,
-            throws: method.throws.iter().map(ToString::to_string).collect(),
-            panics: method.panics.iter().map(ToString::to_string).collect(),
+            _uses_engine_ctx: method.uses_engine_ctx,
+            _throws: method.throws.iter().map(ToString::to_string).collect(),
+            _panics: method.panics.iter().map(ToString::to_string).collect(),
         });
     }
 }
@@ -702,9 +702,9 @@ fn collect_function_builtins(f: &FunctionItem, ctx: &mut CollectContext) {
         returns: native_returns,
         uses_vm: f.uses_vm,
         is_sys_op: f.is_sys_op,
-        uses_engine_ctx: f.uses_engine_ctx,
-        throws: f.throws.iter().map(ToString::to_string).collect(),
-        panics: f.panics.iter().map(ToString::to_string).collect(),
+        _uses_engine_ctx: f.uses_engine_ctx,
+        _throws: f.throws.iter().map(ToString::to_string).collect(),
+        _panics: f.panics.iter().map(ToString::to_string).collect(),
     });
 }
 

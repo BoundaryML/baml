@@ -77,11 +77,7 @@ pub use bex_vm_types::Program as ProgramAlias;
 /// the full FQ path is kept.
 fn fq_to_type_name(fq: &str) -> baml_type::TypeName {
     // Strip the "user." prefix from the display name for user-defined types.
-    let display = if fq.starts_with("user.") {
-        &fq["user.".len()..]
-    } else {
-        fq
-    };
+    let display = fq.strip_prefix("user.").unwrap_or(fq);
     let segments: Vec<&str> = fq.split('.').collect();
     let name = baml_base::Name::new(*segments.last().expect("non-empty fq name"));
     let module_path = segments[..segments.len() - 1]
@@ -113,7 +109,7 @@ pub fn generate_project_bytecode(
     // First sub-pass: assign slots to all functions across all files.
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
-        for (local_id, _func_data) in item_tree.functions.iter() {
+        for local_id in item_tree.functions.keys() {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
             let mir = lower_function(db, func_loc);
             let fq_name = mir.item_ref.to_string();
@@ -129,7 +125,7 @@ pub fn generate_project_bytecode(
     // after all function slots have been reserved.
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
-        for (local_id, _let_data) in item_tree.lets.iter() {
+        for local_id in item_tree.lets.keys() {
             let let_loc = LetLoc::new(db, *file, *local_id);
             let fq_name = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
             globals.entry(fq_name).or_insert_with(|| {
@@ -152,15 +148,19 @@ pub fn generate_project_bytecode(
         let pkg_info = file_package(db, *file);
         let pkg_id = PackageId::new(db, pkg_info.package.clone());
         let pkg_items = package_items(db, pkg_id);
-        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
+        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
         let recursive_aliases =
             baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
-        for (_class_id, class_data) in item_tree.classes.iter() {
+        for class_data in item_tree.classes.values() {
             // Build fully-qualified name: "user.MyClass" or "baml.ns.MyClass"
             let fq_name = if pkg_info.namespace_path.is_empty() {
                 format!("{}.{}", pkg_info.package, class_data.name)
             } else {
-                let ns: Vec<&str> = pkg_info.namespace_path.iter().map(|n| n.as_str()).collect();
+                let ns: Vec<&str> = pkg_info
+                    .namespace_path
+                    .iter()
+                    .map(baml_base::Name::as_str)
+                    .collect();
                 format!("{}.{}.{}", pkg_info.package, ns.join("."), class_data.name)
             };
 
@@ -176,7 +176,7 @@ pub fn generate_project_bytecode(
                         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
                             db,
                             &te.expr,
-                            &pkg_items,
+                            pkg_items,
                             &[],
                             &mut diags,
                         );
@@ -195,7 +195,7 @@ pub fn generate_project_bytecode(
                     description: None,
                     alias: None,
                     skip: false,
-                    field_attr: Default::default(),
+                    field_attr: baml_type::FieldAttr::default(),
                 });
             }
 
@@ -238,11 +238,15 @@ pub fn generate_project_bytecode(
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
         let pkg_info = file_package(db, *file);
-        for (_enum_id, enum_data) in item_tree.enums.iter() {
+        for enum_data in item_tree.enums.values() {
             let fq_name = if pkg_info.namespace_path.is_empty() {
                 format!("{}.{}", pkg_info.package, enum_data.name)
             } else {
-                let ns: Vec<&str> = pkg_info.namespace_path.iter().map(|n| n.as_str()).collect();
+                let ns: Vec<&str> = pkg_info
+                    .namespace_path
+                    .iter()
+                    .map(baml_base::Name::as_str)
+                    .collect();
                 format!("{}.{}.{}", pkg_info.package, ns.join("."), enum_data.name)
             };
 
@@ -274,7 +278,7 @@ pub fn generate_project_bytecode(
     for file in &all_files {
         let line_starts = build_line_starts(file.text(db));
         let item_tree = file_item_tree(db, *file);
-        for (local_id, func_data) in item_tree.functions.iter() {
+        for (local_id, func_data) in &item_tree.functions {
             let func_loc = FunctionLoc::new(db, *file, *local_id);
             let mir = lower_function(db, func_loc);
             let fq_name = mir.item_ref.to_string();
@@ -291,7 +295,7 @@ pub fn generate_project_bytecode(
                     };
                     let mut f =
                         compile_mir_function(body, mir.arity, &line_starts, ctx, OptLevel::One);
-                    f.name = fq_name.clone();
+                    f.name.clone_from(&fq_name);
                     f
                 }
                 MirFunctionKind::Builtin(BuiltinKind::Io) => {
@@ -375,7 +379,7 @@ pub fn generate_project_bytecode(
         for file in &all_files {
             let item_tree = file_item_tree(db, *file);
             let pkg_info = file_package(db, *file);
-            for (local_id, _let_data) in item_tree.lets.iter() {
+            for local_id in item_tree.lets.keys() {
                 let let_loc = LetLoc::new(db, *file, *local_id);
                 let fq_name = def_to_item_ref(db, Definition::Let(let_loc)).to_string();
                 // Ensure the global slot for this let binding is populated with Null.
@@ -396,7 +400,7 @@ pub fn generate_project_bytecode(
         // Track package init order for runtime.
         // Topological sort: dependencies before dependents.
         let pkg_name_list: Vec<baml_base::Name> =
-            pkg_lets.keys().map(|s| baml_base::Name::new(s)).collect();
+            pkg_lets.keys().map(baml_base::Name::new).collect();
         let sorted_pkg_name_owned = topological_sort_packages(db, &pkg_name_list);
         let sorted_pkg_names: Vec<&String> = sorted_pkg_name_owned
             .iter()
@@ -451,11 +455,11 @@ pub fn generate_project_bytecode(
     let mut template_macros = Vec::new();
     for file in &all_files {
         let item_tree = file_item_tree(db, *file);
-        for (_ts_id, ts_data) in item_tree.template_strings.iter() {
+        for ts_data in item_tree.template_strings.values() {
             let args = ts_data
                 .params
                 .iter()
-                .map(|p| p.to_string())
+                .map(ToString::to_string)
                 .collect::<Vec<_>>()
                 .join(", ");
             if let Some(body) = &ts_data.body {
@@ -490,7 +494,7 @@ pub fn generate_project_bytecode(
                 let pkg_id = PackageId::new(db, pkg_info.package.clone());
                 let pkg_items = package_items(db, pkg_id);
                 let type_aliases =
-                    baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
+                    baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
                 let recursive_aliases =
                     baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
                 for (qtn, tir_ty) in &type_aliases {
@@ -512,11 +516,11 @@ pub fn generate_project_bytecode(
     if options.emit_test_cases {
         for file in &all_files {
             let item_tree = file_item_tree(db, *file);
-            for (_test_id, test_data) in item_tree.tests.iter() {
+            for test_data in item_tree.tests.values() {
                 let function_names: Vec<String> = test_data
                     .function_refs
                     .iter()
-                    .map(|n| n.to_string())
+                    .map(ToString::to_string)
                     .collect();
                 let args: indexmap::IndexMap<String, bex_vm_types::TestArgValue> = test_data
                     .args
@@ -573,7 +577,7 @@ fn convert_test_arg_value(
     }
 }
 
-/// Extract param names, param types, and return type from an item_tree Function.
+/// Extract param names, param types, and return type from an `item_tree` Function.
 ///
 /// Type resolution delegates to TIR's `lower_type_expr` (single source of truth)
 /// then converts via MIR's `convert_tir2_ty` to produce `baml_type::Ty`.
@@ -589,9 +593,9 @@ fn compute_function_metadata_from_item_tree(
         .collect();
 
     let pkg_info = file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = PackageId::new(db, pkg_info.package);
     let pkg_items = package_items(db, pkg_id);
-    let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
+    let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
     let recursive_aliases = baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
     let null_ty = || baml_type::Ty::Null {
         attr: baml_type::TyAttr::default(),
@@ -602,7 +606,7 @@ fn compute_function_metadata_from_item_tree(
         let tir_ty = baml_compiler2_tir::lower_type_expr::lower_type_expr(
             db,
             te,
-            &pkg_items,
+            pkg_items,
             &[],
             &mut diags,
         );
@@ -735,7 +739,7 @@ fn topological_sort_lets<'db>(
 
     // Kahn's algorithm: if A depends on B, B must come first.
     // Build reverse edges (used_by) and in-degree (dep count).
-    let mut in_degree: Vec<usize> = deps.iter().map(|d| d.len()).collect();
+    let mut in_degree: Vec<usize> = deps.iter().map(HashSet::len).collect();
     let mut reverse_deps: Vec<Vec<usize>> = vec![Vec::new(); bindings.len()];
     for (i, dep_set) in deps.iter().enumerate() {
         for &j in dep_set {
@@ -777,6 +781,7 @@ fn topological_sort_lets<'db>(
 /// as a standalone zero-arg helper function. Register the helper in globals
 /// (for `Call` addressability), then emit a `$init` body that calls each helper
 /// and `StoreGlobal`s the result into the let binding's global slot.
+#[allow(clippy::too_many_arguments)]
 fn compile_init_function<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     sorted_bindings: &[(String, LetLoc<'db>, baml_base::SourceFile)],
@@ -793,13 +798,10 @@ fn compile_init_function<'db>(
 
     for (i, (fq_name, let_loc, file)) in sorted_bindings.iter().enumerate() {
         // Find the global slot for this let binding.
-        let let_slot = match globals.get(fq_name.as_str()) {
-            Some(&slot) => slot,
-            None => {
-                return Err(LoweringError::Internal(format!(
-                    "no global slot for let binding: {fq_name}"
-                )));
-            }
+        let Some(&let_slot) = globals.get(fq_name.as_str()) else {
+            return Err(LoweringError::Internal(format!(
+                "no global slot for let binding: {fq_name}"
+            )));
         };
 
         // Lower the let initializer through MIR → MirFunctionBody.
@@ -874,9 +876,11 @@ fn compile_init_function<'db>(
     init_instructions.push(Instruction::LoadConst(null_const_idx));
     init_instructions.push(Instruction::Return);
 
-    let mut bytecode = Bytecode::default();
-    bytecode.instructions = init_instructions;
-    bytecode.constants = init_constants;
+    let bytecode = Bytecode {
+        instructions: init_instructions,
+        constants: init_constants,
+        ..Bytecode::default()
+    };
 
     Ok(Function {
         name: "$init".to_string(),

@@ -376,13 +376,13 @@ pub struct BexEngine {
 }
 
 #[cfg(target_arch = "wasm32")]
-fn default_round_robin_start() -> usize {
+fn _default_round_robin_start() -> usize {
     // Keep wasm deterministic for tooling (matches legacy behavior).
     0
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn default_round_robin_start() -> usize {
+fn _default_round_robin_start() -> usize {
     use web_time::UNIX_EPOCH;
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -509,7 +509,7 @@ impl BexEngine {
                             globals = vm.globals;
                             break;
                         }
-                        Ok(VmExecState::Notify(_)) | Ok(VmExecState::SpanNotify(_)) => {
+                        Ok(VmExecState::Notify(_) | VmExecState::SpanNotify(_)) => {
                             // Ignore watch/span notifications during init.
                             continue;
                         }

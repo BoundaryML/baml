@@ -1,4 +1,4 @@
-//! Interned location structs for compiler2_hir.
+//! Interned location structs for `compiler2_hir`.
 //!
 //! Each `*Loc` uniquely identifies where an item is defined:
 //!   `SourceFile` (Salsa input) + `LocalItemId<Marker>`.

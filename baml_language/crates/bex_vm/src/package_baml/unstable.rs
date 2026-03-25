@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use bex_vm_types::types::{Object, Value};
 
-use super::*;
+use super::{BamlNamespaceUnstable, PackageBamlImpl};
 use crate::{
     BexVm,
     errors::{RuntimeError, VmError},

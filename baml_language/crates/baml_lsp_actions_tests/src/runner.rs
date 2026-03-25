@@ -297,7 +297,7 @@ fn format_as_comment(text: &str) -> String {
             if line.is_empty() {
                 "//".to_string()
             } else {
-                format!("// {}", line)
+                format!("// {line}")
             }
         })
         .collect::<Vec<_>>()

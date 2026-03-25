@@ -626,7 +626,7 @@ impl PullSink for StackCarryPullSink<'_> {
                     .get(&local)
                     .and_then(|du| du.def.as_ref())
                     .ok_or(())?;
-                Ok(LocalPullAction::Inline(def.rvalue.clone()))
+                Ok(LocalPullAction::Inline(Box::new(def.rvalue.clone())))
             }
             // Another stack-carried local in this context makes single-local
             // simulation ambiguous; reject to keep the optimization sound.

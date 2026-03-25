@@ -4,7 +4,7 @@
 //! - `Ty` — the resolved type representation
 //! - `ScopeInference` — per-scope expression type map with optional diagnostics
 //! - `infer_scope_types(db, ScopeId)` — per-scope Salsa tracked query
-//! - `TypeInferenceBuilder` — walks ExprBody within a scope, infers types
+//! - `TypeInferenceBuilder` — walks `ExprBody` within a scope, infers types
 //! - `resolve_name_at(db, file, offset, name)` — on-demand name resolution
 //! - `resolve_class_fields`, `resolve_type_alias` — per-item structural queries
 //! - `CycleDetector` — runtime cycle guard for recursive type handling
@@ -32,7 +32,7 @@ pub mod ty;
 
 // ── Db trait ──────────────────────────────────────────────────────────────────
 
-/// Database trait for compiler2_tir queries.
+/// Database trait for `compiler2_tir` queries.
 ///
 /// Extends `baml_compiler2_hir::Db`. Use `infer_scope_types` for type
 /// inference queries, `resolve_name_at` for name resolution.

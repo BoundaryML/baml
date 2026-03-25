@@ -31,24 +31,6 @@ pub(crate) fn to_snake_case(s: &str) -> String {
     result
 }
 
-/// Convert a `snake_case` identifier to `PascalCase`.
-///
-/// E.g., `"baml_fs_open"` → `"BamlFsOpen"`.
-pub(crate) fn to_pascal_case(s: &str) -> String {
-    s.split('_')
-        .map(|part| {
-            let mut chars = part.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(c) => {
-                    let upper: String = c.to_uppercase().collect();
-                    upper + &chars.collect::<String>()
-                }
-            }
-        })
-        .collect()
-}
-
 /// Derive the Rust struct identifier from a builtin DSL path.
 ///
 /// Strips the `baml.` prefix, `PascalCases` each remaining segment, and joins.

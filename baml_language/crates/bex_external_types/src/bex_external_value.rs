@@ -24,7 +24,6 @@
 
 // Re-export Ty and TypeName from baml_type for convenience
 pub use baml_type::{Ty, TyAttr, TypeName};
-use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
@@ -528,10 +527,7 @@ impl AsBexExternalValue for Vec<String> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Array {
             element_type: baml_type::Ty::string(),
-            items: self
-                .into_iter()
-                .map(|v| BexExternalValue::String(v))
-                .collect(),
+            items: self.into_iter().map(BexExternalValue::String).collect(),
         }
         .into_bex_external_value()
     }

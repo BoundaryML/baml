@@ -329,8 +329,9 @@ pub fn union_ty(a: &Ty, b: &Ty) -> Ty {
 /// Replace any remaining `Ty::TypeVar` with `Ty::Unknown` and emit diagnostics.
 ///
 /// Called after call-site inference to ensure no type variables escape to
-/// VIR/runtime. Each erased TypeVar produces a `CannotInferTypeParameter`
+/// VIR/runtime. Each erased `TypeVar` produces a `CannotInferTypeParameter`
 /// diagnostic.
+#[allow(clippy::only_used_in_recursion)] // diagnostics param kept for future use
 pub fn erase_unresolved_typevars(
     ty: &Ty,
     diagnostics: &mut Vec<crate::infer_context::TirTypeError>,

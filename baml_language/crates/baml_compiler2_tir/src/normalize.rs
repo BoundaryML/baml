@@ -78,7 +78,7 @@ enum StructuralTy {
         body: Box<StructuralTy>,
     },
     TyVar(QualifiedTypeName),
-    /// A generic type parameter — opaque, only subtypes itself and BuiltinUnknown.
+    /// A generic type parameter — opaque, only subtypes itself and `BuiltinUnknown`.
     TypeVar(Name),
     // Special
     Never,
@@ -201,10 +201,7 @@ impl StructuralTy {
             (
                 StructuralTy::Map { key: k1, value: v1 },
                 StructuralTy::Map { key: k2, value: v2 },
-            ) => {
-                k1.is_subtype_of(k2, assumptions)
-                    && v1.is_subtype_of(v2, assumptions)
-            }
+            ) => k1.is_subtype_of(k2, assumptions) && v1.is_subtype_of(v2, assumptions),
 
             // Int <: Float
             (StructuralTy::Int, StructuralTy::Float) => true,
@@ -635,7 +632,7 @@ impl<'g> Tarjan<'g> {
 
         // Sort nodes for deterministic traversal order.
         let mut nodes: Vec<_> = graph.keys().cloned().collect();
-        nodes.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+        nodes.sort_by_key(std::string::ToString::to_string);
 
         for node in &nodes {
             if tarjan.state[node].index == Self::UNVISITED {
@@ -663,7 +660,7 @@ impl<'g> Tarjan<'g> {
 
         // Sort successors for deterministic DFS order.
         let mut successors: Vec<_> = self.graph[node_id].iter().collect();
-        successors.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+        successors.sort_by_key(std::string::ToString::to_string);
 
         for successor_id in successors {
             let mut successor = self.state[successor_id];
@@ -906,7 +903,7 @@ fn format_cycle_path(cycle: &[QualifiedTypeName]) -> String {
     if cycle.len() == 1 {
         cycle[0].to_string()
     } else {
-        let mut path: Vec<String> = cycle.iter().map(|qn| qn.to_string()).collect();
+        let mut path: Vec<String> = cycle.iter().map(std::string::ToString::to_string).collect();
         path.push(cycle[0].to_string());
         path.join(" -> ")
     }
@@ -1239,8 +1236,14 @@ mod tests {
         // map<"name", "World"> <: map<string, unknown>
         assert!(is_subtype_of(
             &Ty::Map(
-                Box::new(Ty::Literal(LiteralValue::String("name".into()), Freshness::Fresh)),
-                Box::new(Ty::Literal(LiteralValue::String("World".into()), Freshness::Fresh)),
+                Box::new(Ty::Literal(
+                    LiteralValue::String("name".into()),
+                    Freshness::Fresh
+                )),
+                Box::new(Ty::Literal(
+                    LiteralValue::String("World".into()),
+                    Freshness::Fresh
+                )),
             ),
             &Ty::Map(
                 Box::new(Ty::Primitive(PrimitiveType::String)),
@@ -1251,8 +1254,14 @@ mod tests {
         // map<"name", "World"> <: map<string, string>
         assert!(is_subtype_of(
             &Ty::Map(
-                Box::new(Ty::Literal(LiteralValue::String("name".into()), Freshness::Fresh)),
-                Box::new(Ty::Literal(LiteralValue::String("World".into()), Freshness::Fresh)),
+                Box::new(Ty::Literal(
+                    LiteralValue::String("name".into()),
+                    Freshness::Fresh
+                )),
+                Box::new(Ty::Literal(
+                    LiteralValue::String("World".into()),
+                    Freshness::Fresh
+                )),
             ),
             &Ty::Map(
                 Box::new(Ty::Primitive(PrimitiveType::String)),
@@ -1289,7 +1298,10 @@ mod tests {
                 Box::new(Ty::Primitive(PrimitiveType::Int)),
             ),
             &Ty::Map(
-                Box::new(Ty::Literal(LiteralValue::String("name".into()), Freshness::Fresh)),
+                Box::new(Ty::Literal(
+                    LiteralValue::String("name".into()),
+                    Freshness::Fresh
+                )),
                 Box::new(Ty::Primitive(PrimitiveType::Int)),
             ),
             &aliases

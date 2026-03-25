@@ -5,7 +5,15 @@ use baml_compiler2_ast::ExprId;
 use baml_type::{MediaKind, Ty, TyAttr, TypeName};
 use indexmap::IndexMap;
 
-use crate::{builder::MirBuilder, cleanup, ir::*};
+use crate::{
+    builder::MirBuilder,
+    cleanup,
+    ir::{
+        AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, ItemRef, Local, LocalDecl,
+        MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, StatementKind,
+        Terminator,
+    },
+};
 
 // --- Helper enums carried forward from old code ---
 
@@ -39,6 +47,7 @@ struct PendingHeader {
 }
 
 struct VizContext {
+    #[allow(dead_code)]
     function_name: String,
     #[allow(dead_code)]
     next_node_id: u32,
@@ -74,7 +83,7 @@ pub fn qtn_to_type_name(qtn: &QualifiedTypeName) -> TypeName {
         let parts: Vec<_> = qtn
             .namespace()
             .iter()
-            .map(|n| n.to_string())
+            .map(std::string::ToString::to_string)
             .chain(std::iter::once(qtn.name().to_string()))
             .collect();
         smol_str::SmolStr::new(parts.join("."))
@@ -232,11 +241,11 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
     // the item tree's class methods lists.
     if let Definition::Function(func_loc) = def {
         let func_local_id = func_loc.id(db);
-        for (_class_local_id, class_data) in item_tree.classes.iter() {
+        for class_data in item_tree.classes.values() {
             if class_data.methods.contains(&func_local_id) {
                 return ItemRef::Method {
                     package: pkg_info.package.clone(),
-                    namespace: pkg_info.namespace_path.clone(),
+                    namespace: pkg_info.namespace_path,
                     class: class_data.name.clone(),
                     name,
                 };
@@ -246,7 +255,7 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
 
     ItemRef::Free {
         package: pkg_info.package.clone(),
-        namespace: pkg_info.namespace_path.clone(),
+        namespace: pkg_info.namespace_path,
         name,
     }
 }
@@ -355,7 +364,7 @@ struct LoweringContext<'db> {
 }
 
 impl<'db> LoweringContext<'db> {
-    /// Populate class_fields, class_type_tags, and enum_variants from a single
+    /// Populate `class_fields`, `class_type_tags`, and `enum_variants` from a single
     /// package's items.
     fn populate_from_package(
         db: &'db dyn crate::Db,
@@ -371,7 +380,7 @@ impl<'db> LoweringContext<'db> {
             let mut module_path: Vec<Name> = vec![pkg_name.clone()];
             module_path.extend(ns_names.iter().cloned());
 
-            for (_name, def) in &ns.types {
+            for def in ns.types.values() {
                 match def {
                     Definition::Class(class_loc) => {
                         let cfile = class_loc.file(db);
@@ -388,8 +397,7 @@ impl<'db> LoweringContext<'db> {
                         for (idx, field) in class_data.fields.iter().enumerate() {
                             fields.insert(field.name.to_string(), idx);
                         }
-                        let type_tag =
-                            baml_type::typetag::CLASS_BASE + *class_type_tag_counter;
+                        let type_tag = baml_type::typetag::CLASS_BASE + *class_type_tag_counter;
                         *class_type_tag_counter += 1;
                         class_type_tags.insert(tn.clone(), type_tag);
                         class_fields.insert(tn, fields);
@@ -502,7 +510,7 @@ impl<'db> LoweringContext<'db> {
             let dep_name = dep_id.name(db);
             Self::populate_from_package(
                 db,
-                &dep_items,
+                dep_items,
                 &dep_name,
                 &mut class_fields,
                 &mut class_type_tags,
@@ -515,7 +523,7 @@ impl<'db> LoweringContext<'db> {
         let pkg_items = package_items(db, pkg_id);
         Self::populate_from_package(
             db,
-            &pkg_items,
+            pkg_items,
             &pkg_info.package,
             &mut class_fields,
             &mut class_type_tags,
@@ -524,7 +532,7 @@ impl<'db> LoweringContext<'db> {
         );
 
         // --- Build type alias maps for inline expansion ---
-        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
+        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
         let recursive_aliases =
             baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
 
@@ -675,7 +683,7 @@ impl<'db> LoweringContext<'db> {
             let dep_name = dep_id.name(db);
             Self::populate_from_package(
                 db,
-                &dep_items,
+                dep_items,
                 &dep_name,
                 &mut class_fields,
                 &mut class_type_tags,
@@ -688,7 +696,7 @@ impl<'db> LoweringContext<'db> {
         let pkg_items = package_items(db, pkg_id);
         Self::populate_from_package(
             db,
-            &pkg_items,
+            pkg_items,
             &pkg_info.package,
             &mut class_fields,
             &mut class_type_tags,
@@ -697,7 +705,7 @@ impl<'db> LoweringContext<'db> {
         );
 
         // --- Build type alias maps for inline expansion ---
-        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, &pkg_items);
+        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
         let recursive_aliases =
             baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
 
@@ -728,7 +736,7 @@ impl<'db> LoweringContext<'db> {
         }
     }
 
-    /// Generate a unique synthetic variable name, e.g. __for_idx, __for_idx_1, __for_idx_2.
+    /// Generate a unique synthetic variable name, e.g. __`for_idx`, __`for_idx_1`, __`for_idx_2`.
     fn gensym(&mut self, prefix: &str) -> Name {
         let count = self
             .synthetic_name_counts
@@ -743,7 +751,7 @@ impl<'db> LoweringContext<'db> {
         Name::new(&name)
     }
 
-    /// Get the baml_type::Ty for an expression by looking up in the aggregated map
+    /// Get the `baml_type::Ty` for an expression by looking up in the aggregated map
     /// and converting from TIR Ty.
     fn expr_ty(&self, expr_id: AstExprId) -> Ty {
         self.expr_types
@@ -754,7 +762,7 @@ impl<'db> LoweringContext<'db> {
             })
     }
 
-    /// Get the baml_type::Ty for a pattern binding
+    /// Get the `baml_type::Ty` for a pattern binding
     fn pat_ty(&self, pat_id: AstPatId) -> Ty {
         self.pat_types
             .get(&pat_id)
@@ -764,23 +772,23 @@ impl<'db> LoweringContext<'db> {
             })
     }
 
-    /// Resolve a TypeExpr annotation directly to a baml_type::Ty.
-    /// Used for TypedBinding patterns where TIR may not have populated the
+    /// Resolve a `TypeExpr` annotation directly to a `baml_type::Ty`.
+    /// Used for `TypedBinding` patterns where TIR may not have populated the
     /// bindings map (e.g. catch arm and match arm patterns).
     fn resolve_type_annotation(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Ty {
         use baml_compiler2_tir::lower_type_expr::lower_type_expr;
         let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
         let pkg_items = package_items(self.db, pkg_id);
         let mut diags = Vec::new();
-        let tir_ty = lower_type_expr(self.db, ty_expr, &pkg_items, &[], &mut diags);
+        let tir_ty = lower_type_expr(self.db, ty_expr, pkg_items, &[], &mut diags);
         convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
     }
 }
 
 // ─── 3.1: lower_function_body ────────────────────────────────────────────────
 
-impl<'db> LoweringContext<'db> {
+impl LoweringContext<'_> {
     fn lower_function_body(&mut self) -> MirFunction {
         use baml_compiler2_tir::lower_type_expr::lower_type_expr;
 
@@ -791,7 +799,7 @@ impl<'db> LoweringContext<'db> {
 
         // Return place _0
         let pkg_info = file_package(self.db, self.file);
-        let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
+        let pkg_id = PackageId::new(self.db, pkg_info.package);
         let pkg_items = package_items(self.db, pkg_id);
 
         let ret_ty = sig
@@ -799,7 +807,7 @@ impl<'db> LoweringContext<'db> {
             .as_ref()
             .map(|te| {
                 let mut diags = Vec::new();
-                let tir_ty = lower_type_expr(self.db, te, &pkg_items, &[], &mut diags);
+                let tir_ty = lower_type_expr(self.db, te, pkg_items, &[], &mut diags);
                 convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
             })
             .unwrap_or(Ty::Null {
@@ -828,7 +836,7 @@ impl<'db> LoweringContext<'db> {
         // Parameter locals _1..=_n
         // For `self` with no annotation, look up the TIR-inferred parameter type
         // which correctly resolves to the enclosing class type.
-        for (param_name, param_te) in sig.params.iter() {
+        for (param_name, param_te) in &sig.params {
             let param_ty = if param_name.as_str() == "self"
                 && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
             {
@@ -837,7 +845,7 @@ impl<'db> LoweringContext<'db> {
                 enclosing_class_name
                     .as_ref()
                     .and_then(|cn| {
-                        pkg_items.lookup_type(&[cn.clone()]).map(|def| {
+                        pkg_items.lookup_type(std::slice::from_ref(cn)).map(|def| {
                             let tir_ty = baml_compiler2_tir::ty::Ty::Class(
                                 baml_compiler2_tir::lower_type_expr::qualify_def(self.db, def, cn),
                             );
@@ -849,7 +857,7 @@ impl<'db> LoweringContext<'db> {
                     })
             } else {
                 let mut diags = Vec::new();
-                let tir_ty = lower_type_expr(self.db, param_te, &pkg_items, &[], &mut diags);
+                let tir_ty = lower_type_expr(self.db, param_te, pkg_items, &[], &mut diags);
                 convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
             };
             let local = self
@@ -941,13 +949,13 @@ impl<'db> LoweringContext<'db> {
 
 // ─── 3.2: Core lower_expr dispatch ───────────────────────────────────────────
 
-impl<'db> LoweringContext<'db> {
+impl LoweringContext<'_> {
     fn lower_expr(&mut self, expr_id: AstExprId, dest: Place) {
         // Clone expr to avoid borrow issues
         let expr = self.body.exprs[expr_id].clone();
         match expr {
             AstExpr::Literal(lit) => {
-                let constant = self.lower_literal(&lit);
+                let constant = Self::lower_literal(&lit);
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
             }
@@ -958,7 +966,7 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Path(segments) => {
-                self.lower_path_expr(expr_id, &segments.clone(), dest);
+                self.lower_path_expr(expr_id, &segments, dest);
             }
 
             AstExpr::If {
@@ -970,15 +978,15 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Binary { op, lhs, rhs } => {
-                self.lower_binary(expr_id, &op.clone(), lhs, rhs, dest);
+                self.lower_binary(expr_id, op, lhs, rhs, dest);
             }
 
             AstExpr::Unary { op, expr } => {
-                self.lower_unary(expr_id, &op.clone(), expr, dest);
+                self.lower_unary(expr_id, op, expr, dest);
             }
 
             AstExpr::Call { callee, args } => {
-                self.lower_call(expr_id, callee, &args.clone(), dest);
+                self.lower_call(expr_id, callee, &args, dest);
             }
 
             AstExpr::Array { elements } => {
@@ -1000,17 +1008,11 @@ impl<'db> LoweringContext<'db> {
                 fields,
                 spreads,
             } => {
-                self.lower_object(
-                    expr_id,
-                    &type_name.clone(),
-                    &fields.clone(),
-                    &spreads.clone(),
-                    dest,
-                );
+                self.lower_object(expr_id, type_name.as_ref(), &fields, &spreads, dest);
             }
 
             AstExpr::FieldAccess { base, field } => {
-                self.lower_field_access(expr_id, base, &field.clone(), dest);
+                self.lower_field_access(expr_id, base, &field, dest);
             }
 
             AstExpr::Index { base, index } => {
@@ -1018,7 +1020,7 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstExpr::Block { stmts, tail_expr } => {
-                for &stmt_id in &stmts.clone() {
+                for &stmt_id in &stmts {
                     self.lower_stmt(stmt_id);
                     if self.builder.is_current_terminated() {
                         break; // Remaining stmts are dead code (after return/throw/break/continue)
@@ -1038,13 +1040,13 @@ impl<'db> LoweringContext<'db> {
             AstExpr::Match {
                 scrutinee, arms, ..
             } => {
-                let arms_owned = arms.clone();
+                let arms_owned = arms;
                 self.lower_match(expr_id, scrutinee, &arms_owned, dest);
             }
 
             AstExpr::Catch { base, clauses } => {
-                let clauses_owned = clauses.clone();
-                self.lower_catch(expr_id, base, &clauses_owned, dest);
+                let clauses_owned = clauses;
+                self.lower_catch(expr_id, base, &clauses_owned, &dest);
             }
 
             AstExpr::Throw { value } => {
@@ -1054,10 +1056,8 @@ impl<'db> LoweringContext<'db> {
                     // local and jump to the handler instead of unwinding.
                     let error_local = catch_ctx.error_local;
                     let unwind_target = catch_ctx.unwind_target;
-                    self.builder.assign(
-                        Place::Local(error_local),
-                        Rvalue::Use(val_op),
-                    );
+                    self.builder
+                        .assign(Place::Local(error_local), Rvalue::Use(val_op));
                     self.builder.goto(unwind_target);
                 } else {
                     self.builder.throw(val_op);
@@ -1076,8 +1076,8 @@ impl<'db> LoweringContext<'db> {
 
 // ─── Literal helper ───────────────────────────────────────────────────────────
 
-impl<'db> LoweringContext<'db> {
-    fn lower_literal(&self, lit: &AstLiteral) -> Constant {
+impl LoweringContext<'_> {
+    fn lower_literal(lit: &AstLiteral) -> Constant {
         use baml_base::Literal;
         match lit {
             Literal::Int(v) => Constant::Int(*v),
@@ -1086,7 +1086,7 @@ impl<'db> LoweringContext<'db> {
                 let v: f64 = s.parse().unwrap_or(0.0);
                 Constant::Float(v)
             }
-            Literal::String(v) => Constant::String(v.to_string()),
+            Literal::String(v) => Constant::String(v.clone()),
             Literal::Bool(v) => Constant::Bool(*v),
         }
     }
@@ -1160,31 +1160,31 @@ impl<'db> LoweringContext<'db> {
     fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
         let item = def_to_item_ref(self.db, def);
         // Check if this expression's type is EnumVariant
-        if let Some(tir_ty) = self.expr_types.get(&expr_id).cloned() {
-            if let Tir2Ty::EnumVariant(_qtn, variant) = &tir_ty {
-                let variant_name = variant.clone();
-                // Convert the Free item ref to an EnumType variant
-                let enum_ref = match item {
-                    ItemRef::Free {
-                        package,
-                        namespace,
-                        name,
-                    } => ItemRef::EnumType {
-                        package,
-                        namespace,
-                        name,
-                    },
-                    other => other,
-                };
-                self.builder.assign(
-                    dest,
-                    Rvalue::Use(Operand::Constant(Constant::EnumVariant {
-                        enum_ref,
-                        variant: variant_name,
-                    })),
-                );
-                return;
-            }
+        if let Some(Tir2Ty::EnumVariant(_qtn, variant)) =
+            self.expr_types.get(&expr_id).cloned().as_ref()
+        {
+            let variant_name = variant.clone();
+            // Convert the Free item ref to an EnumType variant
+            let enum_ref = match item {
+                ItemRef::Free {
+                    package,
+                    namespace,
+                    name,
+                } => ItemRef::EnumType {
+                    package,
+                    namespace,
+                    name,
+                },
+                other => other,
+            };
+            self.builder.assign(
+                dest,
+                Rvalue::Use(Operand::Constant(Constant::EnumVariant {
+                    enum_ref,
+                    variant: variant_name,
+                })),
+            );
+            return;
         }
         // Otherwise treat as function/constructor reference
         self.builder.assign(
@@ -1196,8 +1196,8 @@ impl<'db> LoweringContext<'db> {
 
 // ─── 3.4: Operator mapping and binary/unary lowering ─────────────────────────
 
-impl<'db> LoweringContext<'db> {
-    fn convert_binop(op: &AstBinaryOp) -> Option<BinOp> {
+impl LoweringContext<'_> {
+    fn convert_binop(op: AstBinaryOp) -> Option<BinOp> {
         match op {
             AstBinaryOp::Add => Some(BinOp::Add),
             AstBinaryOp::Sub => Some(BinOp::Sub),
@@ -1225,7 +1225,7 @@ impl<'db> LoweringContext<'db> {
     fn lower_binary(
         &mut self,
         expr_id: AstExprId,
-        op: &AstBinaryOp,
+        op: AstBinaryOp,
         lhs: AstExprId,
         rhs: AstExprId,
         dest: Place,
@@ -1293,7 +1293,7 @@ impl<'db> LoweringContext<'db> {
         }
 
         self.builder.set_current_block(bb_rhs);
-        self.lower_expr(rhs, dest.clone());
+        self.lower_expr(rhs, dest);
         if !self.builder.is_current_terminated() {
             self.builder.goto(bb_join);
         }
@@ -1301,7 +1301,7 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(bb_join);
     }
 
-    fn lower_unary(&mut self, _expr_id: AstExprId, op: &AstUnaryOp, expr: AstExprId, dest: Place) {
+    fn lower_unary(&mut self, _expr_id: AstExprId, op: AstUnaryOp, expr: AstExprId, dest: Place) {
         let operand = self.lower_to_operand(expr);
         let mir_op = match op {
             AstUnaryOp::Not => crate::UnaryOp::Not,
@@ -1319,7 +1319,7 @@ impl<'db> LoweringContext<'db> {
 
 // ─── 3.5: Call lowering with builtin detection ────────────────────────────────
 
-impl<'db> LoweringContext<'db> {
+impl LoweringContext<'_> {
     fn lower_call(
         &mut self,
         expr_id: AstExprId,
@@ -1434,9 +1434,9 @@ impl<'db> LoweringContext<'db> {
             } else {
                 // Multi-segment: check TIR resolution
                 use baml_compiler2_tir::inference::MethodResolution;
-                self.resolutions.get(&callee).and_then(|res| match res {
-                    MethodResolution::Free { func_loc, .. } => Some(*func_loc),
-                    MethodResolution::Method { func_loc, .. } => Some(*func_loc),
+                self.resolutions.get(&callee).map(|res| match res {
+                    MethodResolution::Free { func_loc, .. } => *func_loc,
+                    MethodResolution::Method { func_loc, .. } => *func_loc,
                 })
             };
             if let Some(fl) = func_loc {
@@ -1470,7 +1470,7 @@ impl<'db> LoweringContext<'db> {
 
 // ─── 3.6: Helper methods ─────────────────────────────────────────────────────
 
-impl<'db> LoweringContext<'db> {
+impl LoweringContext<'_> {
     fn lower_to_operand(&mut self, expr_id: AstExprId) -> Operand {
         let ty = self.expr_ty(expr_id);
         let temp = self.builder.temp(ty);
@@ -1542,7 +1542,7 @@ impl<'db> LoweringContext<'db> {
     fn lower_object(
         &mut self,
         expr_id: AstExprId,
-        type_name: &Option<Name>,
+        type_name: Option<&Name>,
         fields: &[(Name, AstExprId)],
         spreads: &[baml_compiler2_ast::SpreadField],
         dest: Place,
@@ -1561,7 +1561,9 @@ impl<'db> LoweringContext<'db> {
         let class_name = if let Some(n) = type_name {
             n.to_string()
         } else {
-            type_name_key.as_ref().map_or_else(String::new, |tn| tn.name.to_string())
+            type_name_key
+                .as_ref()
+                .map_or_else(String::new, |tn| tn.name.to_string())
         };
 
         if spreads.is_empty() {
@@ -1581,10 +1583,15 @@ impl<'db> LoweringContext<'db> {
             // order), then assemble the aggregate respecting override semantics:
             // later source entries override earlier ones for the same class field.
 
+            enum Entry {
+                Spread(Local),
+                Named(String, Operand),
+            }
+
             let field_count = type_name_key
                 .as_ref()
                 .and_then(|tn| self.class_fields.get(tn))
-                .map(|f| f.len())
+                .map(indexmap::IndexMap::len)
                 .unwrap_or(0);
 
             // Lower all spread expressions into locals.
@@ -1601,8 +1608,7 @@ impl<'db> LoweringContext<'db> {
             // Named fields occupy source positions 0.. excluding spread positions.
             // Assign each named field its source position by counting up and
             // skipping positions occupied by spreads.
-            let spread_positions: HashSet<usize> =
-                spreads.iter().map(|s| s.position).collect();
+            let spread_positions: HashSet<usize> = spreads.iter().map(|s| s.position).collect();
             let explicit_with_pos: Vec<(usize, String, Operand)> = {
                 let mut pos = 0usize;
                 fields
@@ -1620,7 +1626,10 @@ impl<'db> LoweringContext<'db> {
 
             // Build per-class-field operand array. Process all entries in source
             // position order; later entries overwrite earlier ones.
-            let field_name_to_idx: &IndexMap<String, usize> = match type_name_key.as_ref().and_then(|tn| self.class_fields.get(tn)) {
+            let field_name_to_idx: &IndexMap<String, usize> = match type_name_key
+                .as_ref()
+                .and_then(|tn| self.class_fields.get(tn))
+            {
                 Some(m) => m,
                 None => {
                     // Unknown class — just emit named fields in order.
@@ -1640,10 +1649,6 @@ impl<'db> LoweringContext<'db> {
             };
 
             // Merge all entries into a single sorted list by source position.
-            enum Entry {
-                Spread(Local),
-                Named(String, Operand),
-            }
             let mut entries: Vec<(usize, Entry)> = Vec::new();
             for (pos, local) in &spread_locals {
                 entries.push((*pos, Entry::Spread(*local)));
@@ -1662,8 +1667,8 @@ impl<'db> LoweringContext<'db> {
                 match entry {
                     Entry::Spread(local) => {
                         // A spread fills every field from the base object.
-                        for idx in 0..field_count {
-                            result[idx] = Operand::Copy(Place::Field {
+                        for (idx, slot) in result.iter_mut().enumerate().take(field_count) {
+                            *slot = Operand::Copy(Place::Field {
                                 base: Box::new(Place::Local(*local)),
                                 field: idx,
                             });
@@ -1705,22 +1710,22 @@ impl<'db> LoweringContext<'db> {
         }
 
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
-        if let Some(tir_ty) = self.expr_types.get(&expr_id).cloned() {
-            if let Tir2Ty::EnumVariant(qtn, variant) = &tir_ty {
-                let enum_ref = ItemRef::EnumType {
-                    package: qtn.package().clone(),
-                    namespace: qtn.namespace().clone(),
-                    name: qtn.name().clone(),
-                };
-                self.builder.assign(
-                    dest,
-                    Rvalue::Use(Operand::Constant(Constant::EnumVariant {
-                        enum_ref,
-                        variant: variant.clone(),
-                    })),
-                );
-                return;
-            }
+        if let Some(Tir2Ty::EnumVariant(qtn, variant)) =
+            self.expr_types.get(&expr_id).cloned().as_ref()
+        {
+            let enum_ref = ItemRef::EnumType {
+                package: qtn.package().clone(),
+                namespace: qtn.namespace().clone(),
+                name: qtn.name().clone(),
+            };
+            self.builder.assign(
+                dest,
+                Rvalue::Use(Operand::Constant(Constant::EnumVariant {
+                    enum_ref,
+                    variant: variant.clone(),
+                })),
+            );
+            return;
         }
 
         // Check if this is a package path intermediate (e.g. `baml.HttpMethod` in
@@ -1859,15 +1864,13 @@ impl<'db> LoweringContext<'db> {
     ) {
         // Find the watched local from the base expression
         let base_op = self.lower_to_operand(base);
-        let local = match base_op {
-            Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) => l,
-            _ => {
-                // Not a direct local — fall back to regular call lowering
-                // (shouldn't happen in well-formed code)
-                self.builder
-                    .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
-                return;
-            }
+        let (Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))) = base_op
+        else {
+            // Not a direct local — fall back to regular call lowering
+            // (shouldn't happen in well-formed code)
+            self.builder
+                .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
+            return;
         };
 
         if method.as_str() == "options" {
@@ -1892,7 +1895,7 @@ impl<'db> LoweringContext<'db> {
 
 // ─── Statement lowering ───────────────────────────────────────────────────────
 
-impl<'db> LoweringContext<'db> {
+impl LoweringContext<'_> {
     fn lower_stmt(&mut self, stmt_id: AstStmtId) {
         let stmt = self.body.stmts[stmt_id].clone();
         match stmt {
@@ -2058,7 +2061,7 @@ impl<'db> LoweringContext<'db> {
 
                 // 5. Header: check __idx < len(__coll)
                 self.builder.set_current_block(bb_header);
-                let len_local = self.builder.temp(int_ty.clone());
+                let len_local = self.builder.temp(int_ty);
                 self.builder.assign(
                     Place::local(len_local),
                     Rvalue::Len(Place::local(coll_local)),
@@ -2184,7 +2187,7 @@ impl<'db> LoweringContext<'db> {
                 let place = self.lower_lvalue(target);
                 let current = Operand::Copy(place.clone());
                 let rhs = self.lower_to_operand(value);
-                let mir_op = Self::convert_assign_op(&op);
+                let mir_op = Self::convert_assign_op(op);
                 self.builder.assign(
                     place,
                     Rvalue::BinaryOp {
@@ -2225,18 +2228,13 @@ impl<'db> LoweringContext<'db> {
             }
 
             AstStmt::HeaderComment { name, level } => {
-                self.builder.push_statement(
-                    StatementKind::NotifyBlock {
-                        name: name.clone(),
-                        level,
-                    },
-                    None,
-                );
+                self.builder
+                    .push_statement(StatementKind::NotifyBlock { name, level }, None);
             }
         }
     }
 
-    fn convert_assign_op(op: &AstAssignOp) -> BinOp {
+    fn convert_assign_op(op: AstAssignOp) -> BinOp {
         match op {
             AstAssignOp::Add => BinOp::Add,
             AstAssignOp::Sub => BinOp::Sub,
@@ -2329,7 +2327,7 @@ impl<'db> LoweringContext<'db> {
 
 // ─── Match lowering ───────────────────────────────────────────────────────────
 
-impl<'db> LoweringContext<'db> {
+impl LoweringContext<'_> {
     fn lower_match(
         &mut self,
         expr_id: AstExprId,
@@ -2439,7 +2437,7 @@ impl<'db> LoweringContext<'db> {
                         .and_then(|m| m.get(variant.as_str()))
                         .copied();
                     let Some(idx) = idx else { return false };
-                    let disc = idx as i64;
+                    let disc = i64::try_from(idx).expect("discriminant overflow");
                     if seen_values.insert(disc) {
                         int_arms.push((disc, i));
                     }
@@ -2475,7 +2473,7 @@ impl<'db> LoweringContext<'db> {
                                     .and_then(|m| m.get(variant.as_str()))
                                     .copied();
                                 let Some(idx) = idx else { return false };
-                                let disc = idx as i64;
+                                let disc = i64::try_from(idx).expect("discriminant overflow");
                                 if seen_values.insert(disc) {
                                     int_arms.push((disc, i));
                                 }
@@ -2556,14 +2554,19 @@ impl<'db> LoweringContext<'db> {
                     // Build reverse map: variant_idx -> variant_name
                     let reverse: std::collections::HashMap<i64, &str> = variants
                         .iter()
-                        .map(|(name, idx)| (*idx as i64, name.as_str()))
+                        .map(|(name, idx)| {
+                            (
+                                i64::try_from(*idx).expect("discriminant overflow"),
+                                name.as_str(),
+                            )
+                        })
                         .collect();
                     int_arms
                         .iter()
                         .filter_map(|(val, _)| {
                             reverse
                                 .get(val)
-                                .map(|vname| (*val, format!("{}.{}", enum_name, vname)))
+                                .map(|vname| (*val, format!("{enum_name}.{vname}")))
                         })
                         .collect()
                 } else {
@@ -2580,7 +2583,7 @@ impl<'db> LoweringContext<'db> {
         self.builder.set_current_block(bb_otherwise);
         if let Some(idx) = otherwise_idx {
             self.bind_pattern(scrutinee, arms[idx].pattern);
-            self.lower_expr(arms[idx].body, dest.clone());
+            self.lower_expr(arms[idx].body, dest);
             if !self.builder.is_current_terminated() {
                 self.builder.goto(join);
             }
@@ -2678,7 +2681,7 @@ impl<'db> LoweringContext<'db> {
                     .branch(Operand::Copy(Place::Local(test_local)), success, failure);
             }
             AstPattern::Literal(lit) => {
-                let constant = self.lower_literal(&lit);
+                let constant = Self::lower_literal(&lit);
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
                     left: Operand::Copy(Place::Local(scrutinee)),
@@ -2718,17 +2721,14 @@ impl<'db> LoweringContext<'db> {
                         let pkg_info = file_package(self.db, self.file);
                         ItemRef::EnumType {
                             package: pkg_info.package.clone(),
-                            namespace: pkg_info.namespace_path.clone(),
-                            name: enum_name.clone(),
+                            namespace: pkg_info.namespace_path,
+                            name: enum_name,
                         }
                     };
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
                     left: Operand::Copy(Place::Local(scrutinee)),
-                    right: Operand::Constant(Constant::EnumVariant {
-                        enum_ref,
-                        variant: variant.clone(),
-                    }),
+                    right: Operand::Constant(Constant::EnumVariant { enum_ref, variant }),
                 };
                 let test_local = self.builder.temp(Ty::Bool {
                     attr: TyAttr::default(),
@@ -2798,13 +2798,13 @@ impl<'db> LoweringContext<'db> {
 
 // ─── Catch lowering ───────────────────────────────────────────────────────────
 
-impl<'db> LoweringContext<'db> {
+impl LoweringContext<'_> {
     fn lower_catch(
         &mut self,
         _expr_id: AstExprId,
         base: AstExprId,
         clauses: &[baml_compiler2_ast::CatchClause],
-        dest: Place,
+        dest: &Place,
     ) {
         let bb_join = self.builder.create_block();
         let bb_handler = self.builder.create_block();

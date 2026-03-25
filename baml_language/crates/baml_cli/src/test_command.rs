@@ -213,7 +213,7 @@ fn build_ordered_args(
 /// Returns empty until compiler2 has a cross-file test enumeration API.
 #[allow(unused_variables)]
 fn discover_tests(db: &ProjectDatabase, project: baml_workspace::Project) -> Vec<DiscoveredTest> {
-    use baml_db::{SourceFile, baml_compiler2_hir};
+    use baml_db::baml_compiler2_hir;
 
     let mut tests = Vec::new();
 

@@ -1,4 +1,4 @@
-//! Position-independent item storage for compiler2_hir.
+//! Position-independent item storage for `compiler2_hir`.
 //!
 //! `ItemTree` stores minimal item representations keyed by name-based IDs,
 //! following the same scheme as `baml_compiler_hir::item_tree`.
@@ -18,7 +18,7 @@ use crate::ids::{
 
 // ── Minimal item data structs ────────────────────────────────────────────────
 
-/// Full function data stored in the ItemTree.
+/// Full function data stored in the `ItemTree`.
 /// Params and return type are stored for signature queries.
 /// Body is stored for body queries (no CST re-parsing needed).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,7 +41,7 @@ pub struct Function {
     pub span: TextRange,
 }
 
-/// A function parameter entry in the ItemTree.
+/// A function parameter entry in the `ItemTree`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionParam {
     pub name: Name,
@@ -49,7 +49,7 @@ pub struct FunctionParam {
     pub span: TextRange,
 }
 
-/// A class field stored in the ItemTree.
+/// A class field stored in the `ItemTree`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClassField {
     pub name: Name,
@@ -69,7 +69,7 @@ pub struct Class {
     pub methods: Vec<LocalItemId<FunctionMarker>>,
 }
 
-/// An enum variant stored in the ItemTree.
+/// An enum variant stored in the `ItemTree`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumVariant {
     pub name: Name,
@@ -102,7 +102,7 @@ pub struct Client {
     pub round_robin_start: Option<usize>,
 }
 
-/// A test argument value stored in the ItemTree.
+/// A test argument value stored in the `ItemTree`.
 ///
 /// Floats are stored as bit patterns (via `f64::to_bits`) to allow `Eq` and `Hash`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,17 +156,17 @@ pub struct TemplateString {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RetryPolicy {
     pub name: Name,
-    /// Raw string value of max_retries (parsed at emit time).
+    /// Raw string value of `max_retries` (parsed at emit time).
     pub max_retries: Option<String>,
-    /// Raw string value of initial_delay_ms.
+    /// Raw string value of `initial_delay_ms`.
     pub initial_delay_ms: Option<String>,
     /// Raw string value of multiplier.
     pub multiplier: Option<String>,
-    /// Raw string value of max_delay_ms.
+    /// Raw string value of `max_delay_ms`.
     pub max_delay_ms: Option<String>,
 }
 
-/// A top-level let binding stored in the ItemTree.
+/// A top-level let binding stored in the `ItemTree`.
 /// Carries the optional initializer `ExprBody` for body queries.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Let {
@@ -233,7 +233,7 @@ impl ItemTree {
         id
     }
 
-    /// Allocate a function in the ItemTree with full AST data.
+    /// Allocate a function in the `ItemTree` with full AST data.
     pub fn alloc_function(&mut self, f: &ast::FunctionDef) -> LocalItemId<FunctionMarker> {
         let id = self.alloc_id(ItemKind::Function, &f.name);
         let params = f

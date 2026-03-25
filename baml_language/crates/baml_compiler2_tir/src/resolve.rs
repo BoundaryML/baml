@@ -112,10 +112,10 @@ pub fn resolve_name_at<'db>(
             // Check declared dependencies (e.g. `baml` builtins) via res_ctx.
             for (dep_name, _) in &res_ctx.dep_interfaces {
                 if let Some(dep_items) = res_ctx.items_for_package(db, dep_name) {
-                    if let Some(def) = dep_items.lookup_value(&[name.clone()]) {
+                    if let Some(def) = dep_items.lookup_value(std::slice::from_ref(name)) {
                         return ResolvedName::Builtin(def);
                     }
-                    if let Some(def) = dep_items.lookup_type(&[name.clone()]) {
+                    if let Some(def) = dep_items.lookup_type(std::slice::from_ref(name)) {
                         return ResolvedName::Builtin(def);
                     }
                 }
@@ -132,7 +132,7 @@ pub fn resolve_name_at<'db>(
 /// Multi-segment paths are resolved by treating the first segment as either:
 /// - `root` — substituted with the current file's package
 /// - a literal package name (e.g. `baml`)
-/// The remaining segments are looked up inside that package.
+///   The remaining segments are looked up inside that package.
 pub fn resolve_path_at<'db>(
     db: &'db dyn crate::Db,
     file: SourceFile,
@@ -157,7 +157,7 @@ pub fn resolve_path_at<'db>(
     };
 
     // Use PackageResolutionContext to validate access to the target package.
-    let own_pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let own_pkg_id = PackageId::new(db, pkg_info.package);
     let res_ctx = crate::package_interface::package_resolution_context(db, own_pkg_id);
 
     let Some(pkg_items) = res_ctx.items_for_package(db, &pkg_name) else {

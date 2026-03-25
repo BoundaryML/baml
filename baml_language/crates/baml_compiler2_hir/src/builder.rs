@@ -11,7 +11,6 @@ use std::sync::Arc;
 use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::diagnostic::DiagnosticId;
 use baml_compiler2_ast as ast;
-use la_arena;
 use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
@@ -41,7 +40,7 @@ pub struct SemanticIndexBuilder<'db> {
     /// contribute to top-level symbols — they belong to the class scope).
     class_depth: u32,
 
-    /// Expression → scope mappings, sorted by ExprId at the end.
+    /// Expression → scope mappings, sorted by `ExprId` at the end.
     expr_scopes: Vec<(ast::ExprId, FileScopeId)>,
 
     item_tree: ItemTree,
@@ -71,7 +70,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     ///
     /// `file_range` is the full text range of the file (used for
     /// Project/Package/Namespace/File scopes).
-    pub fn build(mut self, items: Vec<ast::Item>, file_range: TextRange) -> FileSemanticIndex<'db> {
+    pub fn build(mut self, items: &[ast::Item], file_range: TextRange) -> FileSemanticIndex<'db> {
         let pkg_info = file_package(self.db, self.file);
 
         // Build scope chain: Project → Package → Namespace* → File
@@ -92,10 +91,10 @@ impl<'db> SemanticIndexBuilder<'db> {
         self.push_scope(ScopeKind::File, file_name, file_range);
 
         // Walk AST items
-        for item in &items {
+        for item in items {
             self.lower_item(item);
         }
-        self.validate_phase1_builtin_contracts(&items);
+        self.validate_phase1_builtin_contracts(items);
 
         // Pop: File, Namespace*, Package, Project
         self.pop_scope(); // File
@@ -186,7 +185,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     | ScopeKind::Package
                     | ScopeKind::Namespace
                     | ScopeKind::File => None,
-                    _ => scope.name.as_ref().map(|n| n.as_str()),
+                    _ => scope.name.as_ref().map(Name::as_str),
                 }
             })
             .collect();
@@ -318,10 +317,10 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     /// Extract the binding name from a pattern, if it has one.
-    fn pattern_binding_name<'a>(
-        patterns: &'a la_arena::Arena<ast::Pattern>,
+    fn pattern_binding_name(
+        patterns: &la_arena::Arena<ast::Pattern>,
         pat_id: ast::PatId,
-    ) -> Option<&'a Name> {
+    ) -> Option<&Name> {
         match &patterns[pat_id] {
             ast::Pattern::Binding(name) if name.as_str() != "_" => Some(name),
             ast::Pattern::TypedBinding { name, .. } if name.as_str() != "_" => Some(name),
@@ -577,7 +576,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn validate_item_phase1(&mut self, item: &ast::Item, is_builtin_file: bool) {
         match item {
             ast::Item::Function(function) => {
-                self.validate_function_phase1(function, is_builtin_file, "function")
+                self.validate_function_phase1(function, is_builtin_file, "function");
             }
             ast::Item::Class(class) => {
                 self.validate_internal_attributes(

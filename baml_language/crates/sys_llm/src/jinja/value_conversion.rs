@@ -3,12 +3,13 @@ use bex_vm_types::MediaValue;
 use indexmap::IndexMap;
 use minijinja::value::Value as JinjaValue;
 
-use super::{MAGIC_MEDIA_DELIMITER, RenderPromptError};
+use super::RenderPromptError;
 
 /// Convert a `BexExternalValue` to a minijinja Value.
 ///
 /// `BexExternalValue` is already fully extracted from the VM heap,
 /// so no heap access is needed here.
+#[allow(clippy::only_used_in_recursion)] // media_handles will be used when media support is re-enabled
 pub(crate) fn external_value_to_jinja(
     value: &BexExternalValue,
     media_handles: &mut std::collections::HashMap<usize, MediaValue>,

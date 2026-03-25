@@ -1,7 +1,7 @@
 use bex_vm_types::types::Value;
 use indexmap::IndexMap;
 
-use super::*;
+use super::{BamlClassMap, PackageBamlImpl};
 use crate::BexVm;
 
 impl BamlClassMap for PackageBamlImpl {

@@ -35,31 +35,26 @@ pub(crate) fn verify_mir_emit_invariants(
     for (&src, &dst) in &analysis.redirect_targets {
         assert!(
             block_ids.contains(&src),
-            "redirect source {:?} missing in MIR body",
-            src,
+            "redirect source {src:?} missing in MIR body",
         );
         assert!(
             block_ids.contains(&dst),
-            "redirect target {:?} missing in MIR body",
-            dst,
+            "redirect target {dst:?} missing in MIR body",
         );
-        assert!(src != dst, "self-redirect for {:?} in MIR body", src,);
+        assert!(src != dst, "self-redirect for {src:?} in MIR body");
 
         let src_block = body.block(src);
         let is_threadable =
             analysis::threadable_goto_target(src_block, &analysis.classifications).is_some();
         assert!(
             is_threadable,
-            "non-threadable redirect source {:?} in MIR body",
-            src,
+            "non-threadable redirect source {src:?} in MIR body",
         );
 
         let resolved = analysis.resolve_jump_target(src);
         assert!(
             !analysis.redirect_targets.contains_key(&resolved),
-            "redirect chain did not converge for {:?} -> {:?} in MIR body",
-            src,
-            resolved,
+            "redirect chain did not converge for {src:?} -> {resolved:?} in MIR body",
         );
     }
 
@@ -89,19 +84,16 @@ pub(crate) fn verify_mir_emit_invariants(
             let local = Local(idx);
             assert!(
                 decl.name.is_some(),
-                "watched local {} must have a user-visible name",
-                local,
+                "watched local {local} must have a user-visible name",
             );
             let class = analysis
                 .classifications
                 .get(&local)
                 .copied()
-                .unwrap_or_else(|| panic!("missing classification for watched local {}", local,));
+                .unwrap_or_else(|| panic!("missing classification for watched local {local}"));
             assert!(
                 class == LocalClassification::Real,
-                "watched local {} classified as {:?} (expected Real)",
-                local,
-                class,
+                "watched local {local} classified as {class:?} (expected Real)",
             );
         }
     }
@@ -121,13 +113,11 @@ pub(crate) fn verify_mir_emit_invariants(
             let decl = body.local(local);
             assert!(
                 decl.is_watched,
-                "watch statement references non-watched local {}",
-                local,
+                "watch statement references non-watched local {local}",
             );
             assert!(
                 decl.name.is_some(),
-                "watch statement references unnamed watched local {}",
-                local,
+                "watch statement references unnamed watched local {local}",
             );
         }
     }

@@ -885,7 +885,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     let inst = self.emit(Instruction::LoadConst(idx));
                     self.set_operand(
                         inst,
-                        OperandMeta::Const(format!("undefined_enum::{enum_name_str}.{}", variant)),
+                        OperandMeta::Const(format!("undefined_enum::{enum_name_str}.{variant}")),
                     );
                     return;
                 };
@@ -1739,7 +1739,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     .as_ref()
                     .map(|def| def.rvalue.clone())
                     .unwrap_or_else(|| panic!("virtual local {local} without definition"));
-                LocalPullAction::Inline(rvalue)
+                LocalPullAction::Inline(Box::new(rvalue))
             }
             LocalClassification::PhiLike
             | LocalClassification::ReturnPhi

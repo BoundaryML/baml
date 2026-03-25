@@ -57,7 +57,7 @@ impl QualifiedTypeName {
         self.namespace
             .iter()
             .chain(std::iter::once(&self.name))
-            .map(|n| n.clone())
+            .cloned()
             .collect::<Vec<_>>()
     }
 }
@@ -67,7 +67,7 @@ impl fmt::Display for QualifiedTypeName {
         let namespace = self
             .namespace
             .iter()
-            .map(|n| n.to_string())
+            .map(std::string::ToString::to_string)
             .collect::<Vec<_>>()
             .join(".");
         if !namespace.is_empty() {
@@ -76,7 +76,11 @@ impl fmt::Display for QualifiedTypeName {
             write!(f, "{}.{}", self.pkg, self.name)?;
         }
         if !self.generic_params.is_empty() {
-            let params: Vec<_> = self.generic_params.iter().map(|p| p.to_string()).collect();
+            let params: Vec<_> = self
+                .generic_params
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect();
             write!(f, "<{}>", params.join(", "))?;
         }
         Ok(())
@@ -281,6 +285,7 @@ impl Ty {
     ///
     /// Called at mutable binding sites (`let` without annotation).
     /// Regular (non-fresh) literals pass through unchanged.
+    #[must_use]
     pub fn widen_fresh(self) -> Ty {
         match self {
             Ty::Literal(lit, Freshness::Fresh) => Ty::Primitive(PrimitiveType::from_literal(&lit)),
@@ -298,6 +303,7 @@ impl Ty {
     /// Only converts `List(Never)` and `Map(Never, Never)` — non-empty
     /// container literals already have a known element type and don't need
     /// evolving semantics.
+    #[must_use]
     pub fn make_evolving(self) -> Ty {
         match self {
             Ty::List(inner) if matches!(*inner, Ty::Never) => Ty::EvolvingList(inner),
@@ -357,7 +363,10 @@ impl fmt::Display for Ty {
                 }
             }
             Ty::Union(members) => {
-                let parts: Vec<_> = members.iter().map(|m| m.to_string()).collect();
+                let parts: Vec<_> = members
+                    .iter()
+                    .map(std::string::ToString::to_string)
+                    .collect();
                 write!(f, "{}", parts.join(" | "))
             }
             Ty::Optional(inner) => {

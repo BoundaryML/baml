@@ -702,7 +702,7 @@ struct RowData<'a> {
     /// Diff against the previous real-value row, if any.
     pub diff: Option<ItemDiff>,
 }
-impl<'a> RowData<'a> {
+impl RowData<'_> {
     pub fn add_char(&mut self, c: char) {
         match c {
             '\n' => self.text.push_str("\\n"),
@@ -728,7 +728,7 @@ impl<'a> RowData<'a> {
         };
 
         let num_label = ui.colored_label(Color32::GRAY, display_idx);
-        let sep1 = ui.horizontal(|ui| ui.separator());
+        let sep1 = ui.horizontal(eframe::egui::Ui::separator);
         let segment_label = ui
             .label(
                 RichText::new(text)
@@ -739,7 +739,7 @@ impl<'a> RowData<'a> {
             .on_hover_ui(|ui| {
                 ui.label(RichText::new(&sap.json()[..byte_idx + text_len]).monospace());
             });
-        let sep2 = ui.horizontal(|ui| ui.separator());
+        let sep2 = ui.horizontal(eframe::egui::Ui::separator);
 
         let (color, s) = item;
         let item_label = match diff {

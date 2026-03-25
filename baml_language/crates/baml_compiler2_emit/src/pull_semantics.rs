@@ -20,7 +20,7 @@ pub(crate) enum LocalPullAction {
     /// Local pull fully handled by the sink.
     Done,
     /// Inline this local by recursively pulling its defining rvalue.
-    Inline(Rvalue),
+    Inline(Box<Rvalue>),
 }
 
 /// Backend for pull-model traversal.

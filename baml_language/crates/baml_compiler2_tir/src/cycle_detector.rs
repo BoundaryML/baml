@@ -27,18 +27,18 @@ impl<T: Eq + std::hash::Hash + Clone> CycleDetector<T> {
     ///
     /// Returns `default` if the key has been seen (cycle detected) or
     /// if the maximum depth has been reached.
-    pub fn visit(&self, key: T, default: bool, f: impl FnOnce() -> bool) -> bool {
+    pub fn visit(&self, key: &T, default: bool, f: impl FnOnce() -> bool) -> bool {
         if !self.seen.borrow_mut().insert(key.clone()) {
             return default;
         }
         if self.depth.get() >= MAX_DEPTH {
-            self.seen.borrow_mut().swap_remove(&key);
+            self.seen.borrow_mut().swap_remove(key);
             return default;
         }
         self.depth.set(self.depth.get() + 1);
         let result = f();
         self.depth.set(self.depth.get() - 1);
-        self.seen.borrow_mut().swap_remove(&key);
+        self.seen.borrow_mut().swap_remove(key);
         result
     }
 }

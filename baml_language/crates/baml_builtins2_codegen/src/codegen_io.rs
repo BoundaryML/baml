@@ -10,7 +10,10 @@
 //! - Root trait (`IoPackageBaml`) composing all namespace traits
 //! - `SysOps` struct with `get()`, `unsupported()`, `all_unsupported()`, `from_impl()`
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Write,
+};
 
 use crate::types::{BamlType, NativeBuiltin, NativeClassDef};
 
@@ -23,7 +26,7 @@ struct IoNamespaceNode<'a> {
     classes: BTreeMap<String, Vec<&'a NativeBuiltin>>,
 }
 
-impl<'a> IoNamespaceNode<'a> {
+impl IoNamespaceNode<'_> {
     fn new() -> Self {
         Self {
             free_fns: Vec::new(),
@@ -37,7 +40,7 @@ impl<'a> IoNamespaceNode<'a> {
 /// All IO builtins start with "baml." and have a namespace as the second segment:
 /// - "baml.fs.open" → "fs"
 /// - "baml.fs.File.read" → "fs"
-/// - "baml.llm.get_client" → "llm"
+/// - `"baml.llm.get_client"` → `"llm"`
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
     let after_baml = builtin.path.strip_prefix("baml.").unwrap_or(&builtin.path);
     after_baml.split('.').next().unwrap_or("")
@@ -138,7 +141,7 @@ fn group_class_defs_by_ns<'a>(
 // Type mapping helpers
 // ============================================================================
 
-/// Map a BamlType to the Rust type string for an owned struct field.
+/// Map a `BamlType` to the Rust type string for an owned struct field.
 fn owned_rust_type(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> String {
     match ty {
         BamlType::String => "String".into(),
@@ -172,7 +175,7 @@ fn owned_rust_type(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> St
     }
 }
 
-/// Map a BamlType to the return type string for a view struct accessor.
+/// Map a `BamlType` to the return type string for a view struct accessor.
 fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> String {
     match ty {
         BamlType::Int => "Result<i64, AccessError>".into(),
@@ -283,7 +286,7 @@ fn external_to_typed_expr(
     }
 }
 
-/// Generate the into_owned conversion expression for a view field.
+/// Generate the `into_owned` conversion expression for a view field.
 fn into_owned_expr(
     field_name: &str,
     ty: &BamlType,
@@ -309,7 +312,8 @@ fn into_owned_expr(
     }
 }
 
-/// Generate the BexExternalValue conversion expression for an owned field.
+/// Generate the `BexExternalValue` conversion expression for an owned field.
+#[allow(clippy::only_used_in_recursion)]
 fn owned_to_external_expr(
     field_expr: &str,
     ty: &BamlType,
@@ -348,7 +352,7 @@ fn owned_to_external_expr(
     }
 }
 
-/// Map a BamlType to the Rust type for a clean trait method param/return.
+/// Map a `BamlType` to the Rust type for a clean trait method param/return.
 fn clean_rust_type(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> String {
     match ty {
         BamlType::String => "String".into(),
@@ -394,7 +398,7 @@ fn glue_extract_expr(
     if is_receiver {
         // Receiver (self) params are always IO classes → extract via view + into_owned
         // The receiver class is determined by the method's class context
-        return format!("/* receiver extracted below */");
+        return "/* receiver extracted below */".to_string();
     }
     match ty {
         BamlType::String => format!("{arg_var}.as_string(&__p)?.to_string()"),
@@ -455,7 +459,8 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
     out.push_str("#[derive(Clone, Copy, Debug, PartialEq, Eq)]\n");
     out.push_str("pub enum SysOp {\n");
     for b in io_builtins {
-        out.push_str(&format!("    {},\n", b.sys_op_variant_name()));
+        let variant = b.sys_op_variant_name();
+        writeln!(out, "    {variant},").unwrap();
     }
     out.push_str("}\n\n");
 
@@ -466,11 +471,13 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
     out.push_str("    pub const fn path(&self) -> &'static str {\n");
     out.push_str("        match self {\n");
     for b in io_builtins {
-        out.push_str(&format!(
-            "            SysOp::{} => {:?},\n",
+        writeln!(
+            out,
+            "            SysOp::{} => {:?},",
             b.sys_op_variant_name(),
             b.path
-        ));
+        )
+        .unwrap();
     }
     out.push_str("        }\n    }\n\n");
 
@@ -480,17 +487,19 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
     for b in io_builtins {
         let variant = b.sys_op_variant_name();
         if b.throws.is_empty() {
-            out.push_str(&format!("            SysOp::{variant} => &[],\n"));
+            writeln!(out, "            SysOp::{variant} => &[],").unwrap();
         } else {
             let cats: Vec<String> = b
                 .throws
                 .iter()
                 .map(|t| format!("SysOpErrorCategory::{t}"))
                 .collect();
-            out.push_str(&format!(
-                "            SysOp::{variant} => &[{}],\n",
+            writeln!(
+                out,
+                "            SysOp::{variant} => &[{}],",
                 cats.join(", ")
-            ));
+            )
+            .unwrap();
         }
     }
     out.push_str("        }\n    }\n\n");
@@ -501,11 +510,13 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
     for b in io_builtins {
         let variant = b.sys_op_variant_name();
         if variant == "BamlSysPanic" {
-            out.push_str(&format!(
-                "            SysOp::{variant} => &[SysOpPanicCategory::HostPanic],\n"
-            ));
+            writeln!(
+                out,
+                "            SysOp::{variant} => &[SysOpPanicCategory::HostPanic],"
+            )
+            .unwrap();
         } else {
-            out.push_str(&format!("            SysOp::{variant} => &[],\n"));
+            writeln!(out, "            SysOp::{variant} => &[],").unwrap();
         }
     }
     out.push_str("        }\n    }\n");
@@ -522,11 +533,13 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
     out.push_str("pub fn sys_op_for_path(path: &str) -> Option<SysOp> {\n");
     out.push_str("    match path {\n");
     for b in io_builtins {
-        out.push_str(&format!(
-            "        {:?} => Some(SysOp::{}),\n",
+        writeln!(
+            out,
+            "        {:?} => Some(SysOp::{}),",
             b.path,
             b.sys_op_variant_name()
-        ));
+        )
+        .unwrap();
     }
     out.push_str("        // Legacy aliases (baml_builtins paths)\n");
     out.push_str("        \"env.get\" | \"env.get_or_panic\" => Some(SysOp::BamlEnvGet),\n");
@@ -572,7 +585,7 @@ fn emit_view_module(
     out.push_str("pub mod view {\n");
 
     for (ns, classes) in class_defs_by_ns {
-        out.push_str(&format!("    pub mod {ns} {{\n"));
+        writeln!(out, "    pub mod {ns} {{").unwrap();
         out.push_str("        use super::super::*;\n\n");
 
         for cd in classes {
@@ -594,30 +607,30 @@ fn emit_view_struct(
     let name = &cd.name;
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
 
-    out.push_str(&format!("        pub struct {name}<'a> {{\n"));
+    writeln!(out, "        pub struct {name}<'a> {{").unwrap();
     out.push_str("            cls: BexClass<'a>,\n");
     out.push_str("        }\n\n");
 
     // From<BexClass<'a>>
-    out.push_str(&format!(
-        "        impl<'a> From<BexClass<'a>> for {name}<'a> {{\n"
-    ));
-    out.push_str(&format!(
-        "            fn from(cls: BexClass<'a>) -> Self {{ Self {{ cls }} }}\n"
-    ));
+    writeln!(out, "        impl<'a> From<BexClass<'a>> for {name}<'a> {{").unwrap();
+    writeln!(
+        out,
+        "            fn from(cls: BexClass<'a>) -> Self {{ Self {{ cls }} }}"
+    )
+    .unwrap();
     out.push_str("        }\n\n");
 
     // BuiltinClass<'a>
-    out.push_str(&format!(
-        "        impl<'a> BuiltinClass<'a> for {name}<'a> {{\n"
-    ));
-    out.push_str(&format!(
-        "            fn name() -> &'static str {{ {full_path:?} }}\n"
-    ));
+    writeln!(out, "        impl<'a> BuiltinClass<'a> for {name}<'a> {{").unwrap();
+    writeln!(
+        out,
+        "            fn name() -> &'static str {{ {full_path:?} }}"
+    )
+    .unwrap();
     out.push_str("        }\n\n");
 
     // Field accessors
-    out.push_str(&format!("        impl<'a> {name}<'a> {{\n"));
+    writeln!(out, "        impl<'a> {name}<'a> {{").unwrap();
     for field in &cd.fields {
         let mut needs_heap = false;
         let ret_type = view_return_type(&field.field_type, &mut needs_heap);
@@ -629,24 +642,26 @@ fn emit_view_struct(
         let sep = if needs_heap { ", " } else { "" };
         let body = view_accessor_body(&field.name, &field.field_type);
 
-        out.push_str(&format!(
-            "            pub fn {}(&self{sep}{heap_param}) -> {ret_type} {{\n",
+        writeln!(
+            out,
+            "            pub fn {}(&self{sep}{heap_param}) -> {ret_type} {{",
             field.name
-        ));
-        out.push_str(&format!("                {body}\n"));
+        )
+        .unwrap();
+        writeln!(out, "                {body}").unwrap();
         out.push_str("            }\n\n");
     }
 
     // into_owned()
     let owned_path = format!("owned::{ns}::{name}");
-    out.push_str(&format!(
-        "            pub fn into_owned(self, heap: &'a GcProtectedHeap<'a>) -> Result<{owned_path}, AccessError> {{\n"
-    ));
+    writeln!(out,
+        "            pub fn into_owned(self, heap: &'a GcProtectedHeap<'a>) -> Result<{owned_path}, AccessError> {{"
+    ).unwrap();
 
-    out.push_str(&format!("                Ok({owned_path} {{\n"));
+    writeln!(out, "                Ok({owned_path} {{").unwrap();
     for field in &cd.fields {
         let expr = into_owned_expr(&field.name, &field.field_type, class_ns_map);
-        out.push_str(&format!("                    {}: {expr},\n", field.name));
+        writeln!(out, "                    {}: {expr},", field.name).unwrap();
     }
     out.push_str("                })\n");
     out.push_str("            }\n");
@@ -667,7 +682,7 @@ fn emit_owned_module(
     out.push_str("pub mod owned {\n");
 
     for (ns, classes) in class_defs_by_ns {
-        out.push_str(&format!("    pub mod {ns} {{\n"));
+        writeln!(out, "    pub mod {ns} {{").unwrap();
         out.push_str("        use super::super::*;\n\n");
 
         for cd in classes {
@@ -690,28 +705,32 @@ fn emit_owned_struct(
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
 
     // Struct definition
-    out.push_str(&format!("        pub struct {name} {{\n"));
+    writeln!(out, "        pub struct {name} {{").unwrap();
     for field in &cd.fields {
         let rust_ty = owned_rust_type(&field.field_type, class_ns_map);
-        out.push_str(&format!("            pub {}: {rust_ty},\n", field.name));
+        writeln!(out, "            pub {}: {rust_ty},", field.name).unwrap();
     }
     out.push_str("        }\n\n");
 
     // AsBexExternalValue impl
-    out.push_str(&format!("        impl AsBexExternalValue for {name} {{\n"));
+    writeln!(out, "        impl AsBexExternalValue for {name} {{").unwrap();
     out.push_str("            fn into_bex_external_value(self) -> BexExternalValue {\n");
     out.push_str("                BexExternalValue::Instance {\n");
-    out.push_str(&format!(
-        "                    class_name: {full_path:?}.to_string(),\n"
-    ));
+    writeln!(
+        out,
+        "                    class_name: {full_path:?}.to_string(),"
+    )
+    .unwrap();
     out.push_str("                    fields: indexmap::indexmap! {\n");
     for field in &cd.fields {
         let field_expr = format!("self.{}", field.name);
         let conv = owned_to_external_expr(&field_expr, &field.field_type, class_ns_map);
-        out.push_str(&format!(
-            "                        {:?}.to_string() => {conv},\n",
+        writeln!(
+            out,
+            "                        {:?}.to_string() => {conv},",
             field.name
-        ));
+        )
+        .unwrap();
     }
     out.push_str("                    },\n");
     out.push_str("                }\n");
@@ -719,31 +738,31 @@ fn emit_owned_struct(
     out.push_str("        }\n\n");
 
     // from_external() — convert BexExternalValue::Instance back to this owned struct
-    out.push_str(&format!("        impl {name} {{\n"));
-    out.push_str(&format!(
-        "            pub fn from_external(__val: BexExternalValue) -> Result<Self, AccessError> {{\n"
-    ));
-    out.push_str(&format!("                match __val {{\n"));
-    out.push_str(&format!(
-        "                    BexExternalValue::Instance {{ mut fields, .. }} => Ok(Self {{\n"
-    ));
+    writeln!(out, "        impl {name} {{").unwrap();
+    writeln!(
+        out,
+        "            pub fn from_external(__val: BexExternalValue) -> Result<Self, AccessError> {{"
+    )
+    .unwrap();
+    out.push_str("                match __val {\n");
+    out.push_str(
+        "                    BexExternalValue::Instance { mut fields, .. } => Ok(Self {\n",
+    );
     for field in &cd.fields {
         let field_val = format!(
             "fields.swap_remove({:?}).unwrap_or(BexExternalValue::Null)",
             field.name
         );
         let conv = external_to_typed_expr(&field_val, &field.field_type, class_ns_map);
-        out.push_str(&format!(
-            "                        {}: ({conv})?,\n",
-            field.name
-        ));
+        writeln!(out, "                        {}: ({conv})?,", field.name).unwrap();
     }
     out.push_str("                    }),\n");
-    out.push_str(&format!(
+    writeln!(
+        out,
         "                    __other => Err(AccessError::TypeMismatch {{ \
-         expected: {:?}, actual: __other.type_name().to_string() }}),\n",
-        name
-    ));
+         expected: {name:?}, actual: __other.type_name().to_string() }}),",
+    )
+    .unwrap();
     out.push_str("                }\n");
     out.push_str("            }\n");
     out.push_str("        }\n\n");
@@ -775,7 +794,7 @@ fn emit_one_class_trait(
     let trait_name = class_trait_name(ns, class_name);
     let dispatch_fn = format!("__dispatch_{ns}_{}", class_name.to_lowercase());
 
-    out.push_str(&format!("pub trait {trait_name} {{\n"));
+    writeln!(out, "pub trait {trait_name} {{").unwrap();
 
     // Clean methods
     for m in methods {
@@ -796,10 +815,12 @@ fn emit_one_class_trait(
         }
         param_strs.push("ctx: &SysOpContext".to_string());
 
-        out.push_str(&format!(
+        write!(
+            out,
             "    fn {method_name}({}) -> SysOpOutput<{ret_ty}>;\n\n",
             param_strs.join(", ")
-        ));
+        )
+        .unwrap();
     }
 
     // Glue methods
@@ -808,18 +829,22 @@ fn emit_one_class_trait(
     }
 
     // Dispatch method
-    out.push_str(&format!(
+    write!(
+        out,
         "    fn {dispatch_fn}(&self, method: &str, heap: &std::sync::Arc<BexHeap>,\n\
          \x20       args: Vec<BexValue<'_>>, ctx: &SysOpContext, call_id: CallId,\n\
          \x20   ) -> Option<SysOpResult> {{\n"
-    ));
+    )
+    .unwrap();
     out.push_str("        match method {\n");
     for m in methods {
         let method_name = io_method_name(m);
         let glue_name = format!("__glue_{}", m.fn_name);
-        out.push_str(&format!(
-            "            \"{method_name}\" => Some(self.{glue_name}(heap, args, ctx, call_id)),\n"
-        ));
+        writeln!(
+            out,
+            "            \"{method_name}\" => Some(self.{glue_name}(heap, args, ctx, call_id)),"
+        )
+        .unwrap();
     }
     out.push_str("            _ => None,\n");
     out.push_str("        }\n    }\n");
@@ -839,36 +864,36 @@ fn emit_glue_method(
     let variant = builtin.sys_op_variant_name();
     let clean_method = method_name;
 
-    out.push_str(&format!(
+    write!(
+        out,
         "    fn {glue_name}(&self, heap: &std::sync::Arc<BexHeap>, args: Vec<BexValue<'_>>,\n\
          \x20       ctx: &SysOpContext, call_id: CallId,\n\
          \x20   ) -> SysOpResult {{\n"
-    ));
+    )
+    .unwrap();
 
     // Extract args
     out.push_str("        let mut __args = args.into_iter();\n");
 
     // Receiver arg (self/class instance)
-    out.push_str(&format!(
-        "        let __arg_self = __args.next().unwrap();\n"
-    ));
+    out.push_str("        let __arg_self = __args.next().unwrap();\n");
 
     // Other args
     let mut arg_names = Vec::new();
     for (i, _p) in builtin.params.iter().enumerate() {
-        out.push_str(&format!("        let __arg{i} = __args.next().unwrap();\n"));
+        writeln!(out, "        let __arg{i} = __args.next().unwrap();").unwrap();
         arg_names.push(format!("__arg{i}"));
     }
 
     // GC protection block
     out.push_str("        let __extraction = heap.with_gc_protection(move |__p| {\n");
-    out.push_str(&format!(
-        "            let __receiver = __arg_self.as_builtin_class::<view::{ns}::{class_name}>(&__p)?.into_owned(&__p)?;\n"
-    ));
+    writeln!(out,
+        "            let __receiver = __arg_self.as_builtin_class::<view::{ns}::{class_name}>(&__p)?.into_owned(&__p)?;"
+    ).unwrap();
 
     for (i, p) in builtin.params.iter().enumerate() {
         let extract = glue_extract_expr(&format!("__arg{i}"), &p.ty, class_ns_map, false);
-        out.push_str(&format!("            let __{} = {extract};\n", p.name));
+        writeln!(out, "            let __{} = {extract};", p.name).unwrap();
     }
 
     // Return tuple
@@ -876,10 +901,12 @@ fn emit_glue_method(
     for p in &builtin.params {
         tuple_elems.push(format!("__{}", p.name));
     }
-    out.push_str(&format!(
-        "            Ok::<_, AccessError>(({}))\n",
+    writeln!(
+        out,
+        "            Ok::<_, AccessError>(({}))",
         tuple_elems.join(", ")
-    ));
+    )
+    .unwrap();
     out.push_str("        });\n");
 
     // Handle extraction result
@@ -894,15 +921,19 @@ fn emit_glue_method(
     call_args.push("ctx".to_string());
 
     let destructure_names: Vec<String> = tuple_elems.clone();
-    out.push_str(&format!(
-        "            Ok(({d})) => self.{clean_method}({c}).into_result(SysOp::{variant}),\n",
+    writeln!(
+        out,
+        "            Ok(({d})) => self.{clean_method}({c}).into_result(SysOp::{variant}),",
         d = destructure_names.join(", "),
         c = call_args.join(", ")
-    ));
-    out.push_str(&format!(
+    )
+    .unwrap();
+    writeln!(
+        out,
         "            Err(e) => SysOpResult::Ready(Err(OpError::new(\
-SysOp::{variant}, OpErrorKind::AccessError(e)))),\n"
-    ));
+SysOp::{variant}, OpErrorKind::AccessError(e)))),"
+    )
+    .unwrap();
     out.push_str("        }\n");
     out.push_str("    }\n\n");
 }
@@ -938,12 +969,14 @@ fn emit_one_namespace_trait(
         .collect();
 
     if class_traits.is_empty() {
-        out.push_str(&format!("pub trait {trait_name} {{\n"));
+        writeln!(out, "pub trait {trait_name} {{").unwrap();
     } else {
-        out.push_str(&format!(
-            "pub trait {trait_name}: {} {{\n",
+        writeln!(
+            out,
+            "pub trait {trait_name}: {} {{",
             class_traits.join(" + ")
-        ));
+        )
+        .unwrap();
     }
 
     // Clean methods for free functions
@@ -963,10 +996,12 @@ fn emit_one_namespace_trait(
         // Some functions need ctx
         param_strs.push("ctx: &SysOpContext".to_string());
 
-        out.push_str(&format!(
+        write!(
+            out,
             "    fn {fn_name}({}) -> SysOpOutput<{ret_ty}>;\n\n",
             param_strs.join(", ")
-        ));
+        )
+        .unwrap();
     }
 
     // Glue methods for free functions
@@ -975,11 +1010,13 @@ fn emit_one_namespace_trait(
     }
 
     // Dispatch method
-    out.push_str(&format!(
+    write!(
+        out,
         "    fn {dispatch_fn}(&self, rest: &str, heap: &std::sync::Arc<BexHeap>,\n\
          \x20       args: Vec<BexValue<'_>>, ctx: &SysOpContext, call_id: CallId,\n\
          \x20   ) -> Option<SysOpResult> {{\n"
-    ));
+    )
+    .unwrap();
 
     if node.classes.is_empty() {
         // Only free functions — match directly
@@ -987,29 +1024,33 @@ fn emit_one_namespace_trait(
         for f in &node.free_fns {
             let fn_name = io_method_name(f);
             let glue_name = format!("__glue_{}", f.fn_name);
-            out.push_str(&format!(
-                "            \"{fn_name}\" => Some(self.{glue_name}(heap, args, ctx, call_id)),\n"
-            ));
+            writeln!(
+                out,
+                "            \"{fn_name}\" => Some(self.{glue_name}(heap, args, ctx, call_id)),"
+            )
+            .unwrap();
         }
         out.push_str("            _ => None,\n");
         out.push_str("        }\n");
     } else {
         // Mix of classes and free functions — use split_once to route
         out.push_str("        match rest.split_once('.') {\n");
-        for (cn, _) in &node.classes {
+        for cn in node.classes.keys() {
             let dispatch = format!("__dispatch_{ns}_{}", cn.to_lowercase());
-            out.push_str(&format!(
-                "            Some((\"{cn}\", method)) => self.{dispatch}(method, heap, args, ctx, call_id),\n"
-            ));
+            writeln!(out,
+                "            Some((\"{cn}\", method)) => self.{dispatch}(method, heap, args, ctx, call_id),"
+            ).unwrap();
         }
         // Free functions (no dot)
         out.push_str("            None => match rest {\n");
         for f in &node.free_fns {
             let fn_name = io_method_name(f);
             let glue_name = format!("__glue_{}", f.fn_name);
-            out.push_str(&format!(
-                "                \"{fn_name}\" => Some(self.{glue_name}(heap, args, ctx, call_id)),\n"
-            ));
+            writeln!(
+                out,
+                "                \"{fn_name}\" => Some(self.{glue_name}(heap, args, ctx, call_id)),"
+            )
+            .unwrap();
         }
         out.push_str("                _ => None,\n");
         out.push_str("            },\n");
@@ -1030,42 +1071,45 @@ fn emit_free_fn_glue(
     let variant = builtin.sys_op_variant_name();
     let clean_name = io_method_name(builtin);
 
-    out.push_str(&format!(
+    write!(
+        out,
         "    fn {glue_name}(&self, heap: &std::sync::Arc<BexHeap>, args: Vec<BexValue<'_>>,\n\
          \x20       ctx: &SysOpContext, call_id: CallId,\n\
          \x20   ) -> SysOpResult {{\n"
-    ));
+    )
+    .unwrap();
 
     if builtin.params.is_empty() {
         // No params to extract
-        out.push_str(&format!(
-            "        self.{clean_name}(heap, call_id, ctx).into_result(SysOp::{variant})\n"
-        ));
+        writeln!(
+            out,
+            "        self.{clean_name}(heap, call_id, ctx).into_result(SysOp::{variant})"
+        )
+        .unwrap();
     } else {
         // Extract args
         out.push_str("        let mut __args = args.into_iter();\n");
         for (i, _p) in builtin.params.iter().enumerate() {
-            out.push_str(&format!("        let __arg{i} = __args.next().unwrap();\n"));
+            writeln!(out, "        let __arg{i} = __args.next().unwrap();").unwrap();
         }
 
         out.push_str("        let __extraction = heap.with_gc_protection(move |__p| {\n");
         let mut param_names = Vec::new();
         for (i, p) in builtin.params.iter().enumerate() {
             let extract = glue_extract_expr(&format!("__arg{i}"), &p.ty, class_ns_map, false);
-            out.push_str(&format!("            let __{} = {extract};\n", p.name));
+            writeln!(out, "            let __{} = {extract};", p.name).unwrap();
             param_names.push(format!("__{}", p.name));
         }
 
         if param_names.len() == 1 {
-            out.push_str(&format!(
-                "            Ok::<_, AccessError>({})\n",
-                param_names[0]
-            ));
+            writeln!(out, "            Ok::<_, AccessError>({})", param_names[0]).unwrap();
         } else {
-            out.push_str(&format!(
-                "            Ok::<_, AccessError>(({}))\n",
+            writeln!(
+                out,
+                "            Ok::<_, AccessError>(({}))",
                 param_names.join(", ")
-            ));
+            )
+            .unwrap();
         }
         out.push_str("        });\n");
 
@@ -1079,22 +1123,28 @@ fn emit_free_fn_glue(
         call_args.push("ctx".to_string());
 
         if param_names.len() == 1 {
-            out.push_str(&format!(
-                "            Ok({}) => self.{clean_name}({}).into_result(SysOp::{variant}),\n",
+            writeln!(
+                out,
+                "            Ok({}) => self.{clean_name}({}).into_result(SysOp::{variant}),",
                 param_names[0],
                 call_args.join(", ")
-            ));
+            )
+            .unwrap();
         } else {
-            out.push_str(&format!(
-                "            Ok(({d})) => self.{clean_name}({c}).into_result(SysOp::{variant}),\n",
+            writeln!(
+                out,
+                "            Ok(({d})) => self.{clean_name}({c}).into_result(SysOp::{variant}),",
                 d = param_names.join(", "),
                 c = call_args.join(", ")
-            ));
+            )
+            .unwrap();
         }
-        out.push_str(&format!(
+        writeln!(
+            out,
             "            Err(e) => SysOpResult::Ready(Err(OpError::new(\
-SysOp::{variant}, OpErrorKind::AccessError(e)))),\n"
-        ));
+SysOp::{variant}, OpErrorKind::AccessError(e)))),"
+        )
+        .unwrap();
         out.push_str("        }\n");
     }
 
@@ -1108,10 +1158,7 @@ SysOp::{variant}, OpErrorKind::AccessError(e)))),\n"
 fn emit_root_trait(out: &mut String, tree: &BTreeMap<String, IoNamespaceNode>) {
     let ns_traits: Vec<String> = tree.keys().map(|ns| ns_trait_name(ns)).collect();
 
-    out.push_str(&format!(
-        "pub trait IoPackageBaml: {} {{\n",
-        ns_traits.join(" + ")
-    ));
+    writeln!(out, "pub trait IoPackageBaml: {} {{", ns_traits.join(" + ")).unwrap();
 
     // get_sys_op_fn dispatch
     out.push_str(
@@ -1124,9 +1171,9 @@ fn emit_root_trait(out: &mut String, tree: &BTreeMap<String, IoNamespaceNode>) {
     out.push_str("                match rest.split_once('.') {\n");
     for ns in tree.keys() {
         let dispatch_fn = format!("__dispatch_{ns}");
-        out.push_str(&format!(
-            "                    Some((\"{ns}\", rest)) => self.{dispatch_fn}(rest, heap, args, ctx, call_id),\n"
-        ));
+        writeln!(out,
+            "                    Some((\"{ns}\", rest)) => self.{dispatch_fn}(rest, heap, args, ctx, call_id),"
+        ).unwrap();
     }
     out.push_str("                    _ => None,\n");
     out.push_str("                }\n");
@@ -1146,7 +1193,7 @@ fn emit_sys_ops_struct(out: &mut String, io_builtins: &[NativeBuiltin]) {
     out.push_str("#[derive(Clone)]\n");
     out.push_str("pub struct SysOps {\n");
     for b in io_builtins {
-        out.push_str(&format!("    pub {}: SysOpFn,\n", b.fn_name));
+        writeln!(out, "    pub {}: SysOpFn,", b.fn_name).unwrap();
     }
     out.push_str("}\n\n");
 
@@ -1156,11 +1203,13 @@ fn emit_sys_ops_struct(out: &mut String, io_builtins: &[NativeBuiltin]) {
     out.push_str("    pub fn get(&self, op: SysOp) -> &SysOpFn {\n");
     out.push_str("        match op {\n");
     for b in io_builtins {
-        out.push_str(&format!(
-            "            SysOp::{} => &self.{},\n",
+        writeln!(
+            out,
+            "            SysOp::{} => &self.{},",
             b.sys_op_variant_name(),
             b.fn_name
-        ));
+        )
+        .unwrap();
     }
     out.push_str("        }\n    }\n\n");
 
@@ -1178,11 +1227,13 @@ fn emit_sys_ops_struct(out: &mut String, io_builtins: &[NativeBuiltin]) {
     out.push_str("    pub fn all_unsupported() -> Self {\n");
     out.push_str("        Self {\n");
     for b in io_builtins {
-        out.push_str(&format!(
-            "            {}: Self::unsupported(SysOp::{}),\n",
+        writeln!(
+            out,
+            "            {}: Self::unsupported(SysOp::{}),",
             b.fn_name,
             b.sys_op_variant_name()
-        ));
+        )
+        .unwrap();
     }
     out.push_str("        }\n    }\n\n");
 
@@ -1194,18 +1245,22 @@ fn emit_sys_ops_struct(out: &mut String, io_builtins: &[NativeBuiltin]) {
     out.push_str("        Self {\n");
     for b in io_builtins {
         let variant = b.sys_op_variant_name();
-        out.push_str(&format!("            {}: {{\n", b.fn_name));
+        writeln!(out, "            {}: {{", b.fn_name).unwrap();
         out.push_str("                let t = t.clone();\n");
         out.push_str("                std::sync::Arc::new(move |heap, args, ctx, call_id| {\n");
-        out.push_str(&format!(
-            "                    t.get_sys_op_fn({:?}, heap, args, ctx, call_id)\n",
+        writeln!(
+            out,
+            "                    t.get_sys_op_fn({:?}, heap, args, ctx, call_id)",
             b.path
-        ));
-        out.push_str(&format!(
+        )
+        .unwrap();
+        write!(
+            out,
             "                        .unwrap_or_else(|| SysOpResult::Ready(Err(OpError::new(\n\
              \x20                           SysOp::{variant}, OpErrorKind::Unsupported,\n\
              \x20                       ))))\n"
-        ));
+        )
+        .unwrap();
         out.push_str("                })\n");
         out.push_str("            },\n");
     }
@@ -1265,8 +1320,8 @@ mod tests {
 
     #[test]
     fn test_sys_ops_struct_field_names() {
-        let (_vm, io, _cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &_cd);
+        let (_vm, io, cd) = extract_native_builtins().unwrap();
+        let code = generate_io_traits(&io, &cd);
 
         let expected_fields = [
             "pub baml_fs_open: SysOpFn",

@@ -32,7 +32,7 @@ pub struct EpochGuard<'a> {
     _marker: PhantomData<&'a ()>,
 }
 
-impl<'a> EpochGuard<'a> {
+impl EpochGuard<'_> {
     /// Create a new epoch guard.
     ///
     /// # Safety

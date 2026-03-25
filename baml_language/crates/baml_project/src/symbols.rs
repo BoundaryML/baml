@@ -5,7 +5,7 @@
 //!
 //! NOTE: This module is a stub pending full compiler2 HIR symbol listing API.
 
-use baml_db::{FileId, SourceFile, Span};
+use baml_db::Span;
 
 /// The kind of a symbol in a BAML project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +51,7 @@ pub fn list_functions(db: &ProjectDatabase, _project: baml_workspace::Project) -
     let pkg_items = package_items(db, pkg_id);
 
     let mut symbols = Vec::new();
-    for (_ns_path, ns_items) in &pkg_items.namespaces {
+    for ns_items in pkg_items.namespaces.values() {
         for (name, defn) in &ns_items.values {
             if defn.kind() != DefinitionKind::Function {
                 continue;

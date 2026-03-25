@@ -1285,7 +1285,7 @@ impl BexVm {
         path: watch::Path,
         old_value: Value,
         new_value: Value,
-    ) -> Result<(), VmError> {
+    ) {
         if let Value::Object(old) = old_value {
             self.watch
                 .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
@@ -1313,8 +1313,6 @@ impl BexVm {
                 state.last_assigned = Some(old_value);
             }
         }
-
-        Ok(())
     }
 
     /// Load the function object for the given frame.
@@ -1500,7 +1498,7 @@ impl BexVm {
                                 watch::Path::Binding,
                                 old_value,
                                 value,
-                            )?;
+                            );
 
                             if let Some(state) = self.watch.root_state_mut(watched_node) {
                                 state.value = value;
@@ -1578,7 +1576,7 @@ impl BexVm {
                             watch::Path::InstanceField(index),
                             old_value,
                             new_value,
-                        )?;
+                        );
 
                         // Set the new value.
                         if let Object::Instance(instance) = self.get_object_mut(instance_index) {
@@ -2178,7 +2176,7 @@ impl BexVm {
                             watch::Path::ArrayIndex(index),
                             old_value,
                             new_value,
-                        )?;
+                        );
 
                         // Set the new value.
                         if let Object::Array(array) = self.get_object_mut(array_object_index) {
@@ -2229,7 +2227,7 @@ impl BexVm {
                             watch::Path::MapKey(key.clone()),
                             old_value,
                             new_value,
-                        )?;
+                        );
 
                         // Set the new value.
                         if let Object::Map(map) = self.get_object_mut(map_index) {

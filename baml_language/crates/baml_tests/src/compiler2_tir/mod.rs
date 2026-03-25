@@ -388,7 +388,6 @@ pub(crate) mod support {
 
     /// Collect unique TypeVar names from a Ty (in order of appearance).
     fn collect_typevars(ty: &baml_compiler2_tir::ty::Ty) -> Vec<String> {
-        use baml_compiler2_tir::ty::Ty;
         let mut result = Vec::new();
         collect_typevars_inner(ty, &mut result);
         result
@@ -618,63 +617,63 @@ pub(crate) mod support {
                 match &scope.kind {
                     ScopeKind::Class => {
                         for (name, c) in &contrib.types {
-                            if scope.name.as_ref() == Some(name) {
-                                if let Definition::Class(class_loc) = c.definition {
-                                    let resolved = resolve_class_fields(db, class_loc);
-                                    writeln!(output, "{kind_str} {fqn} {{").ok();
-                                    for (fname, fty) in &resolved.fields {
-                                        writeln!(output, "  {fname}: {fty}").ok();
-                                    }
-                                    writeln!(output, "}}").ok();
-                                    // Render class cycle diagnostic if applicable
-                                    let qn = baml_compiler2_tir::ty::QualifiedTypeName::new(
-                                        pkg_info.package.clone(),
-                                        pkg_info.namespace_path.clone(),
-                                        name.clone(),
-                                    );
-                                    if let Some(cycle_path) = class_cycle_map.get(&qn) {
-                                        let start = u32::from(scope.range.start());
-                                        let end = u32::from(scope.range.end());
-                                        writeln!(
-                                            output,
-                                            "  !! {start}..{end}: class cycle: {cycle_path}"
-                                        )
-                                        .ok();
-                                    }
-                                    break;
+                            if scope.name.as_ref() == Some(name)
+                                && let Definition::Class(class_loc) = c.definition
+                            {
+                                let resolved = resolve_class_fields(db, class_loc);
+                                writeln!(output, "{kind_str} {fqn} {{").ok();
+                                for (fname, fty) in &resolved.fields {
+                                    writeln!(output, "  {fname}: {fty}").ok();
                                 }
+                                writeln!(output, "}}").ok();
+                                // Render class cycle diagnostic if applicable
+                                let qn = baml_compiler2_tir::ty::QualifiedTypeName::new(
+                                    pkg_info.package.clone(),
+                                    pkg_info.namespace_path.clone(),
+                                    name.clone(),
+                                );
+                                if let Some(cycle_path) = class_cycle_map.get(&qn) {
+                                    let start = u32::from(scope.range.start());
+                                    let end = u32::from(scope.range.end());
+                                    writeln!(
+                                        output,
+                                        "  !! {start}..{end}: class cycle: {cycle_path}"
+                                    )
+                                    .ok();
+                                }
+                                break;
                             }
                         }
                     }
                     ScopeKind::TypeAlias => {
                         for (name, c) in &contrib.types {
-                            if scope.name.as_ref() == Some(name) {
-                                if let Definition::TypeAlias(alias_loc) = c.definition {
-                                    let resolved = resolve_type_alias(db, alias_loc);
-                                    writeln!(output, "{kind_str} {fqn} = {}", resolved.ty).ok();
-                                    // Render type-lowering diagnostics
-                                    for (diag, span) in &resolved.diagnostics {
-                                        let start = u32::from(span.start());
-                                        let end = u32::from(span.end());
-                                        writeln!(output, "  !! {start}..{end}: {diag}").ok();
-                                    }
-                                    // Render cycle diagnostic if this alias is in an invalid cycle
-                                    let qn = baml_compiler2_tir::ty::QualifiedTypeName::new(
-                                        pkg_info.package.clone(),
-                                        pkg_info.namespace_path.clone(),
-                                        name.clone(),
-                                    );
-                                    if invalid_cycles.contains(&qn) {
-                                        let start = u32::from(scope.range.start());
-                                        let end = u32::from(scope.range.end());
-                                        writeln!(
-                                            output,
-                                            "  !! {start}..{end}: recursive type alias cycle: {name}"
-                                        )
-                                        .ok();
-                                    }
-                                    break;
+                            if scope.name.as_ref() == Some(name)
+                                && let Definition::TypeAlias(alias_loc) = c.definition
+                            {
+                                let resolved = resolve_type_alias(db, alias_loc);
+                                writeln!(output, "{kind_str} {fqn} = {}", resolved.ty).ok();
+                                // Render type-lowering diagnostics
+                                for (diag, span) in &resolved.diagnostics {
+                                    let start = u32::from(span.start());
+                                    let end = u32::from(span.end());
+                                    writeln!(output, "  !! {start}..{end}: {diag}").ok();
                                 }
+                                // Render cycle diagnostic if this alias is in an invalid cycle
+                                let qn = baml_compiler2_tir::ty::QualifiedTypeName::new(
+                                    pkg_info.package.clone(),
+                                    pkg_info.namespace_path.clone(),
+                                    name.clone(),
+                                );
+                                if invalid_cycles.contains(&qn) {
+                                    let start = u32::from(scope.range.start());
+                                    let end = u32::from(scope.range.end());
+                                    writeln!(
+                                        output,
+                                        "  !! {start}..{end}: recursive type alias cycle: {name}"
+                                    )
+                                    .ok();
+                                }
+                                break;
                             }
                         }
                     }
@@ -694,7 +693,7 @@ pub(crate) mod support {
             if matches!(scope.kind, ScopeKind::Function) {
                 let item_tree = &index.item_tree;
                 for (local_id, func_data) in &item_tree.functions {
-                    let name_matches = scope.name.as_ref().map_or(true, |n| *n == func_data.name);
+                    let name_matches = scope.name.as_ref().is_none_or(|n| *n == func_data.name);
                     if func_data.span == scope.range && name_matches {
                         let func_loc = FunctionLoc::new(db, file, *local_id);
                         func_body_opt = Some(function_body(db, func_loc));
@@ -741,7 +740,7 @@ pub(crate) mod support {
                                         .unwrap_or(baml_compiler2_tir::ty::Ty::Unknown)
                                 } else {
                                     let mut diags = Vec::new();
-                                    lower_type_expr_in_ns(db, ptype, &pkg_items, ns, gp, &mut diags)
+                                    lower_type_expr_in_ns(db, ptype, pkg_items, ns, gp, &mut diags)
                                 };
                                 format!("{}: {}", pname, ty)
                             })
@@ -751,7 +750,7 @@ pub(crate) mod support {
                             .as_ref()
                             .map(|t| {
                                 let mut diags = Vec::new();
-                                lower_type_expr_in_ns(db, t, &pkg_items, ns, gp, &mut diags)
+                                lower_type_expr_in_ns(db, t, pkg_items, ns, gp, &mut diags)
                                     .to_string()
                             })
                             .unwrap_or_else(|| "?".into());
@@ -771,7 +770,7 @@ pub(crate) mod support {
                         let throws = if let Some(t) = &sig.throws {
                             let mut diags = Vec::new();
                             let declared =
-                                lower_type_expr_in_ns(db, t, &pkg_items, ns, gp, &mut diags);
+                                lower_type_expr_in_ns(db, t, pkg_items, ns, gp, &mut diags);
                             match &inferred_throws {
                                 Some(inferred) => {
                                     format!(" throws {declared} infers {inferred}")
@@ -813,10 +812,10 @@ pub(crate) mod support {
                 }
             });
 
-            if let Some(body) = expr_body {
-                if let Some(root) = body.root_expr {
-                    render_expr(root, body, &inference, 2, &mut output);
-                }
+            if let Some(body) = expr_body
+                && let Some(root) = body.root_expr
+            {
+                render_expr(root, body, inference, 2, &mut output);
             }
 
             // Per-scope diagnostics
@@ -1237,13 +1236,13 @@ pub(crate) mod support {
         let item_tree = file_item_tree(db, file);
 
         let mut local_type_names = std::collections::HashSet::new();
-        for (_, class) in &item_tree.classes {
+        for class in item_tree.classes.values() {
             local_type_names.insert(class.name.as_str());
         }
-        for (_, enum_def) in &item_tree.enums {
+        for enum_def in item_tree.enums.values() {
             local_type_names.insert(enum_def.name.as_str());
         }
-        for (_, ta) in &item_tree.type_aliases {
+        for ta in item_tree.type_aliases.values() {
             local_type_names.insert(ta.name.as_str());
         }
 

@@ -1,6 +1,6 @@
 use bex_vm_types::types::Value;
 
-use super::*;
+use super::{BamlClassArray, PackageBamlImpl};
 use crate::BexVm;
 
 impl BamlClassArray for PackageBamlImpl {
@@ -9,6 +9,7 @@ impl BamlClassArray for PackageBamlImpl {
         array.len() as i64
     }
 
+    #[allow(clippy::cast_possible_wrap)]
     fn push(array: &mut Vec<Value>, item: &Value) -> i64 {
         array.push(*item);
         array.len() as i64
@@ -33,7 +34,11 @@ impl BamlClassArray for PackageBamlImpl {
         result
     }
 
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
     fn slice(array: &[Value], start: i64, end: i64) -> Vec<Value> {
         let len = array.len() as i64;
         let start = start.max(0).min(len) as usize;
@@ -45,7 +50,7 @@ impl BamlClassArray for PackageBamlImpl {
     fn join(vm: &mut BexVm, array: &[Value], separator: &str) -> String {
         array
             .iter()
-            .map(|v| vm.as_string(v).map(|s| s.clone()).unwrap_or_default())
+            .map(|v| vm.as_string(v).cloned().unwrap_or_default())
             .collect::<Vec<_>>()
             .join(separator)
     }

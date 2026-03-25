@@ -356,7 +356,7 @@ async fn proxy_request(upstream: String, req: Request<Body>) -> Response {
     let uri_path_and_query = req
         .uri()
         .path_and_query()
-        .map(|pq| pq.as_str())
+        .map(axum::http::uri::PathAndQuery::as_str)
         .unwrap_or("/");
     let target_url = format!("{upstream}{uri_path_and_query}");
 
@@ -407,7 +407,7 @@ async fn proxy_ws(upstream: String, req: Request<Body>) -> Response {
     let uri_path_and_query = req
         .uri()
         .path_and_query()
-        .map(|pq| pq.as_str())
+        .map(axum::http::uri::PathAndQuery::as_str)
         .unwrap_or("/");
     let ws_url = format!(
         "ws://{}",

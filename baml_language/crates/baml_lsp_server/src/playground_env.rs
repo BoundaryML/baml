@@ -13,7 +13,7 @@ use std::{
 };
 
 use bex_heap::BexHeap;
-use sys_types::{AsBexExternalValue, BexExternalValue, CallId, SysOpContext, SysOpOutput};
+use sys_types::{CallId, SysOpContext, SysOpOutput};
 use tokio::sync::{broadcast, oneshot};
 
 use crate::playground_ws::WsOutMessage;

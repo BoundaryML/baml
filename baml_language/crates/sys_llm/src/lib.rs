@@ -122,28 +122,8 @@ pub fn execute_parse_response_from_owned(
     }
 }
 
-fn extract_string_list(
-    value: Option<&bex_external_types::BexExternalValue>,
-) -> Option<Vec<String>> {
-    let bex_external_types::BexExternalValue::Array { items, .. } = value? else {
-        return None;
-    };
-
-    Some(
-        items
-            .iter()
-            .filter_map(|v| match v {
-                bex_external_types::BexExternalValue::String(s) => Some(s.clone()),
-                _ => None,
-            })
-            .collect(),
-    )
-}
-
 #[cfg(test)]
 mod tests {
-    use bex_external_types::BexExternalValue;
-
     use super::execute_parse_response_from_owned;
     use crate::baml_std;
 
@@ -154,15 +134,6 @@ mod tests {
             name: "TestClient".to_string(),
             provider: "openai".to_string(),
             options,
-        }
-    }
-
-    fn single_string_array(value: &str) -> BexExternalValue {
-        BexExternalValue::Array {
-            element_type: baml_type::Ty::String {
-                attr: baml_type::TyAttr::default(),
-            },
-            items: vec![BexExternalValue::String(value.to_string())],
         }
     }
 

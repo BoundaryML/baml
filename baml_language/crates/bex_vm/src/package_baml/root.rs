@@ -6,7 +6,7 @@ use bex_vm_types::{
 };
 use indexmap::IndexMap;
 
-use super::*;
+use super::{BamlPackageBaml, PackageBamlImpl};
 use crate::BexVm;
 
 impl BamlPackageBaml for PackageBamlImpl {

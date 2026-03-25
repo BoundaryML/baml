@@ -110,7 +110,7 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
     body.blocks = new_blocks;
 }
 
-/// Rewrite all BlockId references in a terminator using old->new mapping.
+/// Rewrite all `BlockId` references in a terminator using old->new mapping.
 fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>]) {
     let remap = |id: &mut BlockId| {
         *id = map[id.0].expect("successor block must be reachable");
@@ -157,7 +157,7 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
 // Phase 2a: Copy propagation
 // ============================================================================
 
-/// Count uses of each Local across all blocks and unwind_error_locals.
+/// Count uses of each Local across all blocks and `unwind_error_locals`.
 /// Collect all locals that appear inside a `Place` projection.
 ///
 /// This includes locals used as `Place::Local` bases of field/index projections
@@ -165,8 +165,6 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
 /// typed as `Local` (not `Operand`), so they cannot be replaced by a `Constant`
 /// during copy propagation.
 fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
-    let mut set = HashSet::new();
-
     fn scan_place(p: &Place, set: &mut HashSet<Local>) {
         match p {
             Place::Local(_) => {}
@@ -218,23 +216,23 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                     scan_operand(f, set);
                 }
             }
-            crate::Rvalue::Discriminant(p)
-            | crate::Rvalue::TypeTag(p)
-            | crate::Rvalue::Len(p) => scan_place(p, set),
+            crate::Rvalue::Discriminant(p) | crate::Rvalue::TypeTag(p) | crate::Rvalue::Len(p) => {
+                scan_place(p, set);
+            }
             crate::Rvalue::IsType { operand, .. } => scan_operand(operand, set),
         }
     }
 
+    let mut set = HashSet::new();
+
     for block in &body.blocks {
         for stmt in &block.statements {
-            match &stmt.kind {
-                crate::StatementKind::Assign {
-                    destination, value, ..
-                } => {
-                    scan_place(destination, &mut set);
-                    scan_rvalue(value, &mut set);
-                }
-                _ => {}
+            if let crate::StatementKind::Assign {
+                destination, value, ..
+            } = &stmt.kind
+            {
+                scan_place(destination, &mut set);
+                scan_rvalue(value, &mut set);
             }
         }
         if let Some(term) = &block.terminator {
@@ -265,13 +263,11 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 }
                 Terminator::Branch { condition, .. } => scan_operand(condition, &mut set),
                 Terminator::Switch { discriminant, .. } => {
-                    scan_operand(discriminant, &mut set)
+                    scan_operand(discriminant, &mut set);
                 }
                 Terminator::Throw { value } => scan_operand(value, &mut set),
                 Terminator::Await { destination, .. } => scan_place(destination, &mut set),
-                Terminator::Goto { .. }
-                | Terminator::Return
-                | Terminator::Unreachable => {}
+                Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
             }
         }
     }
@@ -292,14 +288,14 @@ fn count_local_uses(body: &MirFunctionBody) -> Vec<usize> {
     }
 
     // Count uses in unwind_error_locals values
-    for (_, local) in &body.unwind_error_locals {
+    for local in body.unwind_error_locals.values() {
         uses[local.0] += 1;
     }
 
     uses
 }
 
-fn count_in_place(p: &Place, uses: &mut Vec<usize>) {
+fn count_in_place(p: &Place, uses: &mut [usize]) {
     let mut cur = p;
     loop {
         match cur {
@@ -316,14 +312,14 @@ fn count_in_place(p: &Place, uses: &mut Vec<usize>) {
     }
 }
 
-fn count_in_operand(op: &Operand, uses: &mut Vec<usize>) {
+fn count_in_operand(op: &Operand, uses: &mut [usize]) {
     match op {
         Operand::Copy(p) | Operand::Move(p) => count_in_place(p, uses),
         Operand::Constant(_) => {}
     }
 }
 
-fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut Vec<usize>) {
+fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
     match rv {
         crate::Rvalue::Use(op) => count_in_operand(op, uses),
         crate::Rvalue::BinaryOp { left, right, .. } => {
@@ -354,7 +350,7 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut Vec<usize>) {
     }
 }
 
-fn count_in_statement(stmt: &crate::Statement, uses: &mut Vec<usize>) {
+fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
     match &stmt.kind {
         crate::StatementKind::Assign { destination, value } => {
             // Count the destination place (for field/index projections)
@@ -383,12 +379,12 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut Vec<usize>) {
     }
 }
 
-fn count_in_terminator(term: &Terminator, uses: &mut Vec<usize>) {
+fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
     // For terminator destination places (Call::destination, Await::destination,
     // DispatchFuture::future): these are writes, so don't count plain Local
     // destinations. But if the destination is a projection (Field/Index), the
     // base local IS being read (partial update), so count it.
-    let count_dest_place = |p: &Place, uses: &mut Vec<usize>| {
+    let count_dest_place = |p: &Place, uses: &mut [usize]| {
         if !matches!(p, Place::Local(_)) {
             count_in_place(p, uses);
         }
@@ -491,7 +487,7 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
 
     // Resolve transitive chains: if _3 -> copy _1 and _4 -> copy _3,
     // follow the chain so _4 -> copy _1 directly.
-    let keys: Vec<Local> = subst.keys().cloned().collect();
+    let keys: Vec<Local> = subst.keys().copied().collect();
     for key in keys {
         let mut resolved = subst[&key].clone();
         loop {
@@ -556,8 +552,8 @@ fn apply_subst_to_place_locals(p: &mut Place, subst: &HashMap<Local, Operand>) {
     match p {
         Place::Local(l) => {
             // Substitute bare local if it maps to another local
-            if let Some(Operand::Copy(Place::Local(new_l)))
-            | Some(Operand::Move(Place::Local(new_l))) = subst.get(l)
+            if let Some(Operand::Copy(Place::Local(new_l)) | Operand::Move(Place::Local(new_l))) =
+                subst.get(l)
             {
                 *l = *new_l;
             }
@@ -567,8 +563,8 @@ fn apply_subst_to_place_locals(p: &mut Place, subst: &HashMap<Local, Operand>) {
         }
         Place::Index { base, index, .. } => {
             // Substitute the index local if it maps to a plain local
-            if let Some(Operand::Copy(Place::Local(new_l)))
-            | Some(Operand::Move(Place::Local(new_l))) = subst.get(index).cloned()
+            if let Some(Operand::Copy(Place::Local(new_l)) | Operand::Move(Place::Local(new_l))) =
+                subst.get(index).cloned()
             {
                 *index = new_l;
             }
@@ -902,10 +898,7 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
     let check_local = |l: Local, ctx: &str| {
         assert!(
             l.0 < num_locals,
-            "dangling Local {} in {} of MIR function {}",
-            l,
-            ctx,
-            name,
+            "dangling Local {l} in {ctx} of MIR function {name}",
         );
     };
 
@@ -1053,9 +1046,7 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
         if decl.is_watched {
             assert!(
                 decl.name.is_some(),
-                "watched local _{} must have a user-visible name in MIR function {}",
-                idx,
-                name,
+                "watched local _{idx} must have a user-visible name in MIR function {name}",
             );
         }
     }
@@ -1083,15 +1074,11 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
     for (&block_id, &local) in &body.unwind_error_locals {
         assert!(
             block_id.0 < num_blocks,
-            "dangling BlockId {:?} in unwind_error_locals of MIR function {}",
-            block_id,
-            name,
+            "dangling BlockId {block_id:?} in unwind_error_locals of MIR function {name}",
         );
         assert!(
             local.0 < num_locals,
-            "dangling Local {} in unwind_error_locals of MIR function {}",
-            local,
-            name,
+            "dangling Local {local} in unwind_error_locals of MIR function {name}",
         );
     }
 

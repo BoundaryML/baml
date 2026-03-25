@@ -11,7 +11,7 @@
 //! - **`BamlPackageBaml`** (root): supertraits of all top-level classes and namespaces,
 //!   root free functions, and `get_native_fn(path)` entry point.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Write};
 
 use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
 
@@ -56,7 +56,7 @@ struct NamespaceNode<'a> {
     sub_namespaces: BTreeMap<String, NamespaceNode<'a>>,
 }
 
-impl<'a> NamespaceNode<'a> {
+impl NamespaceNode<'_> {
     fn new() -> Self {
         Self {
             free_fns: Vec::new(),
@@ -87,7 +87,7 @@ struct ClassNamespaceNode<'a> {
     sub_namespaces: BTreeMap<String, ClassNamespaceNode<'a>>,
 }
 
-impl<'a> ClassNamespaceNode<'a> {
+impl ClassNamespaceNode<'_> {
     fn new() -> Self {
         Self {
             classes: BTreeMap::new(),
@@ -96,7 +96,7 @@ impl<'a> ClassNamespaceNode<'a> {
     }
 }
 
-fn build_class_namespace_tree<'a>(class_defs: &'a [NativeClassDef]) -> ClassNamespaceNode<'a> {
+fn build_class_namespace_tree(class_defs: &[NativeClassDef]) -> ClassNamespaceNode<'_> {
     let mut root = ClassNamespaceNode::new();
     for def in class_defs {
         // namespace_prefix is e.g. "baml.media", "baml.errors", "baml"
@@ -127,7 +127,7 @@ fn build_class_namespace_tree<'a>(class_defs: &'a [NativeClassDef]) -> ClassName
 /// - `baml.media.Pdf.url` → namespace `media`, class `Pdf`, method `url`
 /// - `baml.deep_copy` → root free function
 /// - `baml.math.trunc` → namespace `math`, free function `trunc`
-fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin]) -> NamespaceNode<'a> {
+fn build_namespace_tree(builtins: &[NativeBuiltin]) -> NamespaceNode<'_> {
     let mut root = NamespaceNode::new();
 
     for b in builtins {
@@ -151,9 +151,8 @@ fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin]) -> NamespaceNode<'a> 
             if seg.starts_with(|c: char| c.is_uppercase()) {
                 class_name = Some(seg);
                 break;
-            } else {
-                ns_segments.push(seg);
             }
+            ns_segments.push(seg);
         }
 
         let node = root.get_or_create_namespace(&ns_segments);
@@ -190,10 +189,10 @@ fn emit_view_namespace_contents(out: &mut String, node: &ClassNamespaceNode, dep
 
     // Emit sub-namespace modules
     for (ns_name, sub_node) in &node.sub_namespaces {
-        out.push_str(&format!("{indent}pub mod {ns_name} {{\n"));
-        out.push_str(&format!("{indent}    use super::super::*;\n\n"));
+        writeln!(out, "{indent}pub mod {ns_name} {{").unwrap();
+        write!(out, "{indent}    use super::super::*;\n\n").unwrap();
         emit_view_namespace_contents(out, sub_node, depth + 1);
-        out.push_str(&format!("{indent}}}\n\n"));
+        writeln!(out, "{indent}}}\n").unwrap();
     }
 }
 
@@ -203,138 +202,176 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     let inner2 = "    ".repeat(depth + 2);
 
     // Struct definition
-    out.push_str(&format!("{indent}pub struct {class_name}<'a> {{\n"));
-    out.push_str(&format!("{inner}pub instance: &'a Instance,\n"));
-    out.push_str(&format!("{indent}}}\n\n"));
+    writeln!(out, "{indent}pub struct {class_name}<'a> {{").unwrap();
+    writeln!(out, "{inner}pub instance: &'a Instance,").unwrap();
+    writeln!(out, "{indent}}}\n").unwrap();
 
     // Impl block with typed accessors
-    out.push_str(&format!("{indent}impl<'a> {class_name}<'a> {{\n"));
+    writeln!(out, "{indent}impl<'a> {class_name}<'a> {{").unwrap();
 
     for field in &def.fields {
         let field_name = &field.name;
         match &field.field_type {
             BamlType::RustType => {
                 // Generic downcast accessor: fn _data<T: 'static>(&self, vm: &BexVm) -> &T
-                out.push_str(&format!(
-                    "{inner}pub fn {field_name}<'v, T: 'static>(&self, vm: &'v BexVm) -> &'v T {{\n"
-                ));
-                out.push_str(&format!(
-                    "{inner2}vm.as_rust_data::<T>(&self.instance.fields[{}])\n",
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}<'v, T: 'static>(&self, vm: &'v BexVm) -> &'v T {{"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}vm.as_rust_data::<T>(&self.instance.fields[{}])",
                     field.index
-                ));
-                out.push_str(&format!(
-                    "{inner2}    .expect(\"{class_name}.{field_name}: downcast failed\")\n"
-                ));
-                out.push_str(&format!("{inner}}}\n\n"));
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    .expect(\"{class_name}.{field_name}: downcast failed\")"
+                )
+                .unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Int => {
-                out.push_str(&format!("{inner}pub fn {field_name}(&self) -> i64 {{\n"));
-                out.push_str(&format!(
-                    "{inner2}match self.instance.fields[{}] {{\n",
+                writeln!(out, "{inner}pub fn {field_name}(&self) -> i64 {{").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}match self.instance.fields[{}] {{",
                     field.index
-                ));
-                out.push_str(&format!("{inner2}    Value::Int(i) => i,\n"));
-                out.push_str(&format!(
-                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Int\"),\n"
-                ));
-                out.push_str(&format!("{inner2}}}\n"));
-                out.push_str(&format!("{inner}}}\n\n"));
+                )
+                .unwrap();
+                writeln!(out, "{inner2}    Value::Int(i) => i,").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Int\"),"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}}}").unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Float => {
-                out.push_str(&format!("{inner}pub fn {field_name}(&self) -> f64 {{\n"));
-                out.push_str(&format!(
-                    "{inner2}match self.instance.fields[{}] {{\n",
+                writeln!(out, "{inner}pub fn {field_name}(&self) -> f64 {{").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}match self.instance.fields[{}] {{",
                     field.index
-                ));
-                out.push_str(&format!("{inner2}    Value::Float(f) => f,\n"));
-                out.push_str(&format!(
-                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Float\"),\n"
-                ));
-                out.push_str(&format!("{inner2}}}\n"));
-                out.push_str(&format!("{inner}}}\n\n"));
+                )
+                .unwrap();
+                writeln!(out, "{inner2}    Value::Float(f) => f,").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Float\"),"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}}}").unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Bool => {
-                out.push_str(&format!("{inner}pub fn {field_name}(&self) -> bool {{\n"));
-                out.push_str(&format!(
-                    "{inner2}match self.instance.fields[{}] {{\n",
+                writeln!(out, "{inner}pub fn {field_name}(&self) -> bool {{").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}match self.instance.fields[{}] {{",
                     field.index
-                ));
-                out.push_str(&format!("{inner2}    Value::Bool(b) => b,\n"));
-                out.push_str(&format!(
-                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Bool\"),\n"
-                ));
-                out.push_str(&format!("{inner2}}}\n"));
-                out.push_str(&format!("{inner}}}\n\n"));
+                )
+                .unwrap();
+                writeln!(out, "{inner2}    Value::Bool(b) => b,").unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    _ => panic!(\"{class_name}.{field_name}: expected Bool\"),"
+                )
+                .unwrap();
+                writeln!(out, "{inner2}}}").unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::String => {
                 // Heap type — vm parameter needed
-                out.push_str(&format!(
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v str {{\n"
-                ));
-                out.push_str(&format!(
-                    "{inner2}vm.as_string(&self.instance.fields[{}])\n",
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v str {{"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}vm.as_string(&self.instance.fields[{}])",
                     field.index
-                ));
-                out.push_str(&format!(
-                    "{inner2}    .expect(\"{class_name}.{field_name}: expected String\")\n"
-                ));
-                out.push_str(&format!("{inner}}}\n\n"));
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    .expect(\"{class_name}.{field_name}: expected String\")"
+                )
+                .unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::List(_) => {
-                out.push_str(&format!(
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v [Value] {{\n"
-                ));
-                out.push_str(&format!(
-                    "{inner2}vm.as_array(&self.instance.fields[{}])\n",
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v [Value] {{"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}vm.as_array(&self.instance.fields[{}])",
                     field.index
-                ));
-                out.push_str(&format!(
-                    "{inner2}    .expect(\"{class_name}.{field_name}: expected Array\")\n"
-                ));
-                out.push_str(&format!("{inner}}}\n\n"));
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    .expect(\"{class_name}.{field_name}: expected Array\")"
+                )
+                .unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Map(_, _) => {
-                out.push_str(&format!(
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v IndexMap<String, Value> {{\n"
-                ));
-                out.push_str(&format!(
-                    "{inner2}vm.as_map(&self.instance.fields[{}])\n",
+                writeln!(out,
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> &'v IndexMap<String, Value> {{"
+                ).unwrap();
+                writeln!(
+                    out,
+                    "{inner2}vm.as_map(&self.instance.fields[{}])",
                     field.index
-                ));
-                out.push_str(&format!(
-                    "{inner2}    .expect(\"{class_name}.{field_name}: expected Map\")\n"
-                ));
-                out.push_str(&format!("{inner}}}\n\n"));
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}    .expect(\"{class_name}.{field_name}: expected Map\")"
+                )
+                .unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
             }
             BamlType::Optional(inner_ty) => {
                 // For optional fields, return Option<T> with appropriate accessor
                 let (ret_type, some_expr) =
                     view_optional_type_and_expr(class_name, field_name, inner_ty, field.index);
-                out.push_str(&format!(
-                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> {ret_type} {{\n"
-                ));
-                out.push_str(&format!(
-                    "{inner2}match self.instance.fields[{}] {{\n",
+                writeln!(
+                    out,
+                    "{inner}pub fn {field_name}<'v>(&self, vm: &'v BexVm) -> {ret_type} {{"
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "{inner2}match self.instance.fields[{}] {{",
                     field.index
-                ));
-                out.push_str(&format!("{inner2}    Value::Null => None,\n"));
-                out.push_str(&format!("{inner2}    _ => Some({some_expr}),\n"));
-                out.push_str(&format!("{inner2}}}\n"));
-                out.push_str(&format!("{inner}}}\n\n"));
+                )
+                .unwrap();
+                writeln!(out, "{inner2}    Value::Null => None,").unwrap();
+                writeln!(out, "{inner2}    _ => Some({some_expr}),").unwrap();
+                writeln!(out, "{inner2}}}").unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
             }
             // Generic, Named, Media, Null — fallback to &Value
             _ => {
-                out.push_str(&format!("{inner}pub fn {field_name}(&self) -> &Value {{\n"));
-                out.push_str(&format!("{inner2}&self.instance.fields[{}]\n", field.index));
-                out.push_str(&format!("{inner}}}\n\n"));
+                writeln!(out, "{inner}pub fn {field_name}(&self) -> &Value {{").unwrap();
+                writeln!(out, "{inner2}&self.instance.fields[{}]", field.index).unwrap();
+                writeln!(out, "{inner}}}\n").unwrap();
             }
         }
     }
 
-    out.push_str(&format!("{indent}}}\n\n"));
+    writeln!(out, "{indent}}}\n").unwrap();
 }
 
-/// Returns (return_type, some_expression) for Optional field view accessors.
+/// Returns (`return_type`, `some_expression`) for Optional field view accessors.
 fn view_optional_type_and_expr(
     class_name: &str,
     field_name: &str,
@@ -395,12 +432,12 @@ fn emit_copy_namespace_contents(out: &mut String, node: &ClassNamespaceNode, dep
     }
 
     for (ns_name, sub_node) in &node.sub_namespaces {
-        out.push_str(&format!("{indent}pub mod {ns_name} {{\n"));
-        out.push_str(&format!("{indent}    use super::super::*;\n"));
-        out.push_str(&format!("{indent}    use std::sync::Arc;\n"));
-        out.push_str(&format!("{indent}    use std::any::Any;\n\n"));
+        writeln!(out, "{indent}pub mod {ns_name} {{").unwrap();
+        writeln!(out, "{indent}    use super::super::*;").unwrap();
+        writeln!(out, "{indent}    use std::sync::Arc;").unwrap();
+        write!(out, "{indent}    use std::any::Any;\n\n").unwrap();
         emit_copy_namespace_contents(out, sub_node, depth + 1);
-        out.push_str(&format!("{indent}}}\n\n"));
+        writeln!(out, "{indent}}}\n").unwrap();
     }
 }
 
@@ -410,43 +447,43 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     let inner2 = "    ".repeat(depth + 2);
 
     // Struct definition with owned fields
-    out.push_str(&format!("{indent}pub struct {class_name} {{\n"));
+    writeln!(out, "{indent}pub struct {class_name} {{").unwrap();
     for field in &def.fields {
         let rust_type = copy_field_type(&field.field_type);
-        out.push_str(&format!("{inner}pub {}: {rust_type},\n", field.name));
+        writeln!(out, "{inner}pub {}: {rust_type},", field.name).unwrap();
     }
-    out.push_str(&format!("{indent}}}\n\n"));
+    writeln!(out, "{indent}}}\n").unwrap();
 
     // Impl with to_value()
     let fqn = format!("{}.{}", def.namespace_prefix, def.name);
-    out.push_str(&format!("{indent}impl {class_name} {{\n"));
-    out.push_str(&format!(
-        "{inner}pub fn to_value(self, vm: &mut BexVm) -> Value {{\n"
-    ));
-    out.push_str(&format!(
-        "{inner2}let class_ptr = vm.resolve_class({fqn:?});\n"
-    ));
+    writeln!(out, "{indent}impl {class_name} {{").unwrap();
+    writeln!(
+        out,
+        "{inner}pub fn to_value(self, vm: &mut BexVm) -> Value {{"
+    )
+    .unwrap();
+    writeln!(out, "{inner2}let class_ptr = vm.resolve_class({fqn:?});").unwrap();
 
     // Convert each field to a Value
     for field in &def.fields {
         let conversion = copy_field_to_value(&field.name, &field.field_type);
-        out.push_str(&format!("{inner2}let f_{} = {conversion};\n", field.name));
+        writeln!(out, "{inner2}let f_{} = {conversion};", field.name).unwrap();
     }
 
     // Build the fields vec
-    out.push_str(&format!("{inner2}vm.alloc_instance(class_ptr, vec!["));
+    write!(out, "{inner2}vm.alloc_instance(class_ptr, vec![").unwrap();
     for (i, field) in def.fields.iter().enumerate() {
         if i > 0 {
             out.push_str(", ");
         }
-        out.push_str(&format!("f_{}", field.name));
+        write!(out, "f_{}", field.name).unwrap();
     }
     out.push_str("])\n");
-    out.push_str(&format!("{inner}}}\n"));
-    out.push_str(&format!("{indent}}}\n\n"));
+    writeln!(out, "{inner}}}").unwrap();
+    writeln!(out, "{indent}}}\n").unwrap();
 }
 
-/// Map BamlType to the owned Rust type used in copy structs.
+/// Map `BamlType` to the owned Rust type used in copy structs.
 fn copy_field_type(ty: &BamlType) -> String {
     match ty {
         BamlType::RustType => "Arc<dyn Any + Send + Sync>".to_string(),
@@ -579,7 +616,7 @@ fn emit_class_trait(
     dispatch_name: &str,
     entries: &[BuiltinEntry],
 ) {
-    out.push_str(&format!("pub trait {trait_name} {{\n"));
+    writeln!(out, "pub trait {trait_name} {{").unwrap();
 
     for entry in entries {
         emit_required_method(out, &entry.rust_method_name, entry.builtin);
@@ -590,15 +627,19 @@ fn emit_class_trait(
         emit_glue_method(out, &entry.rust_method_name, entry.builtin);
     }
 
-    out.push_str(&format!(
-        "    fn {dispatch_name}(method: &str) -> Option<NativeFunction> {{\n"
-    ));
+    writeln!(
+        out,
+        "    fn {dispatch_name}(method: &str) -> Option<NativeFunction> {{"
+    )
+    .unwrap();
     out.push_str("        match method {\n");
     for entry in entries {
-        out.push_str(&format!(
-            "            {:?} => Some(Self::__glue_{}),\n",
+        writeln!(
+            out,
+            "            {:?} => Some(Self::__glue_{}),",
             entry.baml_method_name, entry.rust_method_name
-        ));
+        )
+        .unwrap();
     }
     out.push_str("            _ => None,\n");
     out.push_str("        }\n");
@@ -624,10 +665,10 @@ fn emit_namespace_trait(out: &mut String, ns_name: &str, node: &NamespaceNode) {
     }
 
     if supertraits.is_empty() {
-        out.push_str(&format!("pub trait {trait_name} {{\n"));
+        writeln!(out, "pub trait {trait_name} {{").unwrap();
     } else {
         let bounds = supertraits.join(" + ");
-        out.push_str(&format!("pub trait {trait_name}: {bounds} {{\n"));
+        writeln!(out, "pub trait {trait_name}: {bounds} {{").unwrap();
     }
 
     for entry in &node.free_fns {
@@ -643,36 +684,42 @@ fn emit_namespace_trait(out: &mut String, ns_name: &str, node: &NamespaceNode) {
 
     let has_children = !node.classes.is_empty() || !node.sub_namespaces.is_empty();
 
-    out.push_str(&format!(
-        "    fn {dispatch_name}(rest: &str) -> Option<NativeFunction> {{\n"
-    ));
+    writeln!(
+        out,
+        "    fn {dispatch_name}(rest: &str) -> Option<NativeFunction> {{"
+    )
+    .unwrap();
 
     if has_children {
         out.push_str("        match rest.split_once('.') {\n");
 
-        for (class_name, _) in &node.classes {
+        for class_name in node.classes.keys() {
             let child_dispatch = class_dispatch_name(ns_name, class_name);
-            out.push_str(&format!(
-                "            Some(({:?}, method)) => Self::{child_dispatch}(method),\n",
-                class_name
-            ));
+            writeln!(
+                out,
+                "            Some(({class_name:?}, method)) => Self::{child_dispatch}(method),"
+            )
+            .unwrap();
         }
 
-        for (sub_ns, _) in &node.sub_namespaces {
+        for sub_ns in node.sub_namespaces.keys() {
             let child_dispatch = namespace_dispatch_name(sub_ns);
-            out.push_str(&format!(
-                "            Some(({:?}, rest)) => Self::{child_dispatch}(rest),\n",
-                sub_ns
-            ));
+            writeln!(
+                out,
+                "            Some(({sub_ns:?}, rest)) => Self::{child_dispatch}(rest),",
+            )
+            .unwrap();
         }
 
         if !node.free_fns.is_empty() {
             out.push_str("            None => match rest {\n");
             for entry in &node.free_fns {
-                out.push_str(&format!(
-                    "                {:?} => Some(Self::__glue_{}),\n",
+                writeln!(
+                    out,
+                    "                {:?} => Some(Self::__glue_{}),",
                     entry.baml_method_name, entry.rust_method_name
-                ));
+                )
+                .unwrap();
             }
             out.push_str("                _ => None,\n");
             out.push_str("            },\n");
@@ -683,10 +730,13 @@ fn emit_namespace_trait(out: &mut String, ns_name: &str, node: &NamespaceNode) {
     } else {
         out.push_str("        match rest {\n");
         for entry in &node.free_fns {
-            out.push_str(&format!(
-                "            {:?} => Some(Self::__glue_{}),\n",
-                entry.baml_method_name, entry.rust_method_name
-            ));
+            let baml_name = &entry.baml_method_name;
+            let rust_name = &entry.rust_method_name;
+            writeln!(
+                out,
+                "            {baml_name:?} => Some(Self::__glue_{rust_name}),",
+            )
+            .unwrap();
         }
         out.push_str("            _ => None,\n");
         out.push_str("        }\n");
@@ -714,7 +764,7 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode) {
         out.push_str("pub trait BamlPackageBaml {\n");
     } else {
         let bounds = supertraits.join(" + ");
-        out.push_str(&format!("pub trait BamlPackageBaml: {bounds} {{\n"));
+        writeln!(out, "pub trait BamlPackageBaml: {bounds} {{").unwrap();
     }
 
     for entry in &root.free_fns {
@@ -732,29 +782,34 @@ fn emit_root_trait(out: &mut String, root: &NamespaceNode) {
     out.push_str("        let rest = path.strip_prefix(\"baml.\")?;\n");
     out.push_str("        match rest.split_once('.') {\n");
 
-    for (class_name, _) in &root.classes {
+    for class_name in root.classes.keys() {
         let dispatch = class_dispatch_name("", class_name);
-        out.push_str(&format!(
-            "            Some(({:?}, method)) => Self::{dispatch}(method),\n",
-            class_name
-        ));
+        writeln!(
+            out,
+            "            Some(({class_name:?}, method)) => Self::{dispatch}(method),",
+        )
+        .unwrap();
     }
 
-    for (ns_name, _) in &root.sub_namespaces {
+    for ns_name in root.sub_namespaces.keys() {
         let dispatch = namespace_dispatch_name(ns_name);
-        out.push_str(&format!(
-            "            Some(({:?}, rest)) => Self::{dispatch}(rest),\n",
-            ns_name
-        ));
+        writeln!(
+            out,
+            "            Some(({ns_name:?}, rest)) => Self::{dispatch}(rest),",
+        )
+        .unwrap();
     }
 
     if !root.free_fns.is_empty() {
         out.push_str("            None => match rest {\n");
         for entry in &root.free_fns {
-            out.push_str(&format!(
-                "                {:?} => Some(Self::__glue_{}),\n",
-                entry.baml_method_name, entry.rust_method_name
-            ));
+            let baml_name = &entry.baml_method_name;
+            let rust_name = &entry.rust_method_name;
+            writeln!(
+                out,
+                "                {baml_name:?} => Some(Self::__glue_{rust_name}),",
+            )
+            .unwrap();
         }
         out.push_str("                _ => None,\n");
         out.push_str("            },\n");
@@ -775,15 +830,19 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
     let params = clean_param_list(b);
 
     match b.vm_usage {
-        VmUsage::None => out.push_str(&format!(
-            "    fn {method_name}({params}) -> {return_type};\n",
-        )),
-        VmUsage::Ref => out.push_str(&format!(
-            "    fn {method_name}(vm: &BexVm, {params}) -> {return_type};\n",
-        )),
-        VmUsage::MutRef => out.push_str(&format!(
-            "    fn {method_name}(vm: &mut BexVm, {params}) -> {return_type};\n",
-        )),
+        VmUsage::None => {
+            writeln!(out, "    fn {method_name}({params}) -> {return_type};",).unwrap();
+        }
+        VmUsage::Ref => writeln!(
+            out,
+            "    fn {method_name}(vm: &BexVm, {params}) -> {return_type};",
+        )
+        .unwrap(),
+        VmUsage::MutRef => writeln!(
+            out,
+            "    fn {method_name}(vm: &mut BexVm, {params}) -> {return_type};",
+        )
+        .unwrap(),
     }
 }
 
@@ -791,9 +850,11 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
     let glue_name = format!("__glue_{method_name}");
     let fallible = is_fallible(&b.path);
 
-    out.push_str(&format!(
-        "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeFunctionResult {{\n"
-    ));
+    writeln!(
+        out,
+        "    fn {glue_name}(vm: &mut BexVm, args: &[Value]) -> NativeFunctionResult {{"
+    )
+    .unwrap();
 
     emit_arg_extractions(out, b);
 
@@ -809,14 +870,10 @@ fn emit_glue_method(out: &mut String, method_name: &str, b: &NativeBuiltin) {
 
     match b.vm_usage {
         VmUsage::MutRef | VmUsage::Ref => {
-            out.push_str(&format!(
-                "{binding}Self::{method_name}(vm, {call_args}){suffix}"
-            ));
+            write!(out, "{binding}Self::{method_name}(vm, {call_args}){suffix}").unwrap();
         }
         VmUsage::None => {
-            out.push_str(&format!(
-                "{binding}Self::{method_name}({call_args}){suffix}"
-            ));
+            write!(out, "{binding}Self::{method_name}({call_args}){suffix}").unwrap();
         }
     }
 
@@ -859,9 +916,8 @@ fn clean_return_type(b: &NativeBuiltin) -> String {
             let inner = format!("copy::{ns}::{class_name}");
             if is_fallible(&b.path) {
                 return format!("Result<{inner}, VmError>");
-            } else {
-                return inner;
             }
+            return inner;
         }
     }
     let inner = baml_type_to_output(&b.return_type);
@@ -933,23 +989,27 @@ fn emit_arg_extractions(out: &mut String, b: &NativeBuiltin) {
 
 fn emit_single_extraction(out: &mut String, name: &str, idx: usize, ty: &BamlType) {
     let rhs = extraction_expr(&format!("&args[{idx}]"), ty, false);
-    out.push_str(&format!("        let {name} = {rhs};\n"));
+    writeln!(out, "        let {name} = {rhs};").unwrap();
 }
 
 fn emit_immut_receiver_extraction(out: &mut String, name: &str, idx: usize, recv: &Receiver) {
     match recv.class_name.as_str() {
         "Pdf" | "Audio" | "Video" | "Image" => {
             let cls = &recv.class_name;
-            out.push_str(&format!(
-                "        let __instance = vm.as_instance(&args[{idx}])?;\n"
-            ));
-            out.push_str(&format!(
-                "        let {name} = view::media::{cls} {{ instance: __instance }};\n"
-            ));
+            writeln!(
+                out,
+                "        let __instance = vm.as_instance(&args[{idx}])?;"
+            )
+            .unwrap();
+            writeln!(
+                out,
+                "        let {name} = view::media::{cls} {{ instance: __instance }};"
+            )
+            .unwrap();
         }
         _ => {
             let rhs = receiver_immut_extraction_expr(&format!("&args[{idx}]"), recv);
-            out.push_str(&format!("        let {name} = {rhs};\n"));
+            writeln!(out, "        let {name} = {rhs};").unwrap();
         }
     }
 }
@@ -961,7 +1021,7 @@ fn emit_mut_receiver_extraction(out: &mut String, name: &str, recv: &Receiver) {
         "String" => "vm.as_string_mut(&args[0])?".to_string(),
         _ => "vm.as_value_mut(&args[0])?".to_string(),
     };
-    out.push_str(&format!("        let {name} = {expr};\n"));
+    writeln!(out, "        let {name} = {expr};").unwrap();
 }
 
 // ============================================================================
@@ -1017,12 +1077,12 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool) -> String {
             let inner_expr = extraction_expr("other", inner, false);
             format!("match {val} {{ Value::Null => None, other => Some({inner_expr}) }}")
         }
-        BamlType::Generic(_) => format!("{val}"),
+        BamlType::Generic(_) => val.to_string(),
         BamlType::Media(name) => {
             let kind = media_kind_expr(name);
             format!("vm.as_media({val}, {kind})?.clone()")
         }
-        BamlType::Named(_) | BamlType::Null | BamlType::RustType => format!("{val}"),
+        BamlType::Named(_) | BamlType::Null | BamlType::RustType => val.to_string(),
     }
 }
 
@@ -1093,7 +1153,7 @@ fn emit_result_conversion(out: &mut String, b: &NativeBuiltin) {
         return;
     }
     let conversion = result_conversion_expr("result", &b.return_type);
-    out.push_str(&format!("        Ok({conversion})\n"));
+    writeln!(out, "        Ok({conversion})").unwrap();
 }
 
 fn result_conversion_expr(name: &str, ty: &BamlType) -> String {
@@ -1475,7 +1535,7 @@ mod tests {
             } else {
                 match b.vm_usage {
                     VmUsage::MutRef => {
-                        assert!(has_mut_vm, "method {name} should have vm: &mut BexVm")
+                        assert!(has_mut_vm, "method {name} should have vm: &mut BexVm");
                     }
                     VmUsage::Ref => assert!(has_ref_vm, "method {name} should have vm: &BexVm"),
                     VmUsage::None => assert!(

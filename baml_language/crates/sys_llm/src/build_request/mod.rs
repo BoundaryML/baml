@@ -280,7 +280,10 @@ mod tests {
 
     #[test]
     fn test_unsupported_provider() {
-        let client = make_client("unknown-provider", Default::default());
+        let client = make_client(
+            "unknown-provider",
+            crate::baml_std::PrimitiveClientOptions::default(),
+        );
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt);
         assert!(result.is_err());
@@ -304,7 +307,7 @@ mod tests {
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gpt-4o".to_string()),
                 api_key: Some("sk-test-key".to_string()),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
 
@@ -354,7 +357,7 @@ mod tests {
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gpt-4-turbo".to_string()),
                 api_key: Some("sk-test-key".to_string()),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
 
@@ -397,7 +400,7 @@ mod tests {
             "openai",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gpt-4o".to_string()),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
         let prompt = msg("user", "Hello world");
@@ -414,7 +417,7 @@ mod tests {
             "openai",
             crate::baml_std::PrimitiveClientOptions {
                 base_url: Some("https://custom.api.com".to_string()),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
         let prompt = msg("user", "hello");
@@ -432,7 +435,7 @@ mod tests {
                     "temperature".to_string(),
                     BexExternalValue::Float(0.7),
                 )]),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
         let prompt = msg("user", "hello");
@@ -449,7 +452,7 @@ mod tests {
                 api_key: Some("sk-secret".to_string()),
                 base_url: Some("https://api.openai.com".to_string()),
                 model: Some("gpt-4o".to_string()),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
         let prompt = msg("user", "hello");
@@ -477,7 +480,7 @@ mod tests {
                     "max_tokens".to_string(),
                     BexExternalValue::Int(1000),
                 )]),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
 
@@ -530,7 +533,7 @@ mod tests {
                     "max_tokens".to_string(),
                     BexExternalValue::Int(1000),
                 )]),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
         let prompt = msg("user", "Hello");
@@ -567,7 +570,7 @@ mod tests {
                     "anthropic-beta".to_string(),
                     "prompt-caching-2024-07-31".into(),
                 )]),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
 
@@ -590,7 +593,7 @@ mod tests {
             "anthropic",
             crate::baml_std::PrimitiveClientOptions {
                 anthropic_version: Some("2024-01-01".to_string()),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
         let prompt = msg("user", "hello");
@@ -603,7 +606,10 @@ mod tests {
 
     #[test]
     fn test_anthropic_default_version() {
-        let client = make_client("anthropic", Default::default());
+        let client = make_client(
+            "anthropic",
+            crate::baml_std::PrimitiveClientOptions::default(),
+        );
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt).unwrap();
         assert_eq!(
@@ -622,7 +628,7 @@ mod tests {
                     "max_tokens".to_string(),
                     BexExternalValue::Int(1000),
                 )]),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
         let prompt = msg("user", "hello");

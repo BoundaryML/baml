@@ -47,6 +47,7 @@ impl std::error::Error for ExtractNativeBuiltinsError {}
 ///
 /// Fails with [`ExtractNativeBuiltinsError`] if any file has parse errors or non-empty HIR
 /// diagnostics (so codegen never runs on a silently broken stdlib).
+#[allow(clippy::type_complexity)]
 pub fn extract_native_builtins()
 -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
 {
@@ -151,9 +152,8 @@ fn extract_from_class(
         .collect();
 
     for method in &class_def.methods {
-        let pipeline = match extract_builtin_pipeline(method) {
-            Some(p) => p,
-            None => continue,
+        let Some(pipeline) = extract_builtin_pipeline(method) else {
+            continue;
         };
 
         // Merge class generics with method-level generics.
@@ -184,18 +184,16 @@ fn extract_from_class(
         let has_vm = has_method_directive(cst_root, class_name, method_name, "//baml:vm");
         let has_mut_vm = has_method_directive(cst_root, class_name, method_name, "//baml:mut_vm");
 
-        if has_vm && has_mut_vm {
-            panic!(
-                "baml codegen error: {path} has both //baml:vm and //baml:mut_vm \
-                 -- these are mutually exclusive"
-            );
-        }
-        if is_mut && (has_vm || has_mut_vm) {
-            panic!(
-                "baml codegen error: {path} has //baml:mut_self with //baml:vm or //baml:mut_vm \
-                 -- these are mutually exclusive (mutable receiver already borrows vm)"
-            );
-        }
+        assert!(
+            !(has_vm && has_mut_vm),
+            "baml codegen error: {path} has both //baml:vm and //baml:mut_vm \
+             -- these are mutually exclusive"
+        );
+        assert!(
+            !(is_mut && (has_vm || has_mut_vm)),
+            "baml codegen error: {path} has //baml:mut_self with //baml:vm or //baml:mut_vm \
+             -- these are mutually exclusive (mutable receiver already borrows vm)"
+        );
 
         let vm_usage = if has_mut_vm {
             VmUsage::MutRef
@@ -318,9 +316,8 @@ fn extract_from_free_function(
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
 ) {
-    let pipeline = match extract_builtin_pipeline(func_def) {
-        Some(p) => p,
-        None => return,
+    let Some(pipeline) = extract_builtin_pipeline(func_def) else {
+        return;
     };
 
     let generics: Vec<String> = func_def
@@ -334,12 +331,11 @@ fn extract_from_free_function(
     let has_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:vm");
     let has_mut_vm = has_free_fn_directive(cst_root, func_def.name.as_str(), "//baml:mut_vm");
 
-    if has_vm && has_mut_vm {
-        panic!(
-            "baml codegen error: {path} has both //baml:vm and //baml:mut_vm \
-             -- these are mutually exclusive"
-        );
-    }
+    assert!(
+        !(has_vm && has_mut_vm),
+        "baml codegen error: {path} has both //baml:vm and //baml:mut_vm \
+         -- these are mutually exclusive"
+    );
 
     let vm_usage = if has_mut_vm {
         VmUsage::MutRef
@@ -414,6 +410,7 @@ fn extract_throws(func: &FunctionDef) -> Vec<String> {
     extract_throw_categories(&throws_expr.expr)
 }
 
+#[allow(clippy::redundant_closure_for_method_calls)]
 fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
     match ty {
         TypeExpr::Path(segments) => {
@@ -430,10 +427,7 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
                 ]
             }
         }
-        TypeExpr::Union(members) => members
-            .iter()
-            .flat_map(|m| extract_throw_categories(m))
-            .collect(),
+        TypeExpr::Union(members) => members.iter().flat_map(extract_throw_categories).collect(),
         _ => vec![],
     }
 }
@@ -468,6 +462,7 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 /// Convert a `TypeExpr` from the AST to a `BamlType`.
 ///
 /// `generics` is the combined set of type parameter names in scope (class + method).
+#[allow(clippy::redundant_closure_for_method_calls)]
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     match ty {
         TypeExpr::Int => BamlType::Int,
@@ -593,7 +588,7 @@ fn has_free_fn_directive(cst_root: &SyntaxNode, fn_name: &str, directive: &str) 
     false
 }
 
-/// Returns true if the CLASS_DEF node has a name token matching `class_name`.
+/// Returns true if the `CLASS_DEF` node has a name token matching `class_name`.
 fn class_node_has_name(class_node: &SyntaxNode, class_name: &str) -> bool {
     // The class name is the first WORD token that is a direct meaningful child.
     // In the CST: `class WORD<...> { ... }`
@@ -613,7 +608,7 @@ fn class_node_has_name(class_node: &SyntaxNode, class_name: &str) -> bool {
     false
 }
 
-/// Returns true if the FUNCTION_DEF node has a name matching `method_name`.
+/// Returns true if the `FUNCTION_DEF` node has a name matching `method_name`.
 fn func_node_has_name(func_node: &SyntaxNode, method_name: &str) -> bool {
     for element in func_node.children_with_tokens() {
         if let NodeOrToken::Token(tok) = element {

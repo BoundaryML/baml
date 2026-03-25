@@ -224,7 +224,7 @@ pub enum RelatedLocation<'db> {
 }
 
 /// Primary location for a diagnostic — either an expression, a statement,
-/// or a raw source span (for type annotations that lack an ExprId).
+/// or a raw source span (for type annotations that lack an `ExprId`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticLocation {
     Expr(ExprId),
@@ -246,7 +246,7 @@ pub struct TirDiagnostic<'db> {
     pub related: Vec<(RelatedLocation<'db>, &'static str)>,
 }
 
-impl<'db> TirDiagnostic<'db> {
+impl TirDiagnostic<'_> {
     /// Resolve this diagnostic's arena IDs to source ranges and produce a
     /// rendered diagnostic with a human-readable message and `TextRange`.
     ///

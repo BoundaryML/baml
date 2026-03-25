@@ -1,6 +1,6 @@
 use bex_vm_types::types::Value;
 
-use super::*;
+use super::{BamlClassString, PackageBamlImpl};
 use crate::BexVm;
 
 impl BamlClassString for PackageBamlImpl {

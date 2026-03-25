@@ -8,7 +8,7 @@
 //! - [`math`] — `BamlNamespaceMath` (trunc)
 //! - [`media`] — `BamlClassMedia{Pdf,Audio,Video,Image}` + `BamlNamespaceMedia`
 //! - [`unstable`] — `BamlNamespaceUnstable` (string)
-//! - [`root`] — `BamlPackageBaml` (deep_copy, deep_equals)
+//! - [`root`] — `BamlPackageBaml` (`deep_copy`, `deep_equals`)
 //!
 //! # Adding a new builtin
 //!
@@ -38,7 +38,18 @@ pub type NativeFunctionResult = Result<Value, VmError>;
 pub type NativeFunction = fn(&mut BexVm, &[Value]) -> NativeFunctionResult;
 
 // Generate the BamlClass*/BamlNamespace*/BamlPackageBaml trait hierarchy.
-include!(concat!(env!("OUT_DIR"), "/nativefunctions_generated.rs"));
+#[allow(
+    clippy::wildcard_imports,
+    clippy::pub_underscore_fields,
+    clippy::used_underscore_binding,
+    clippy::elidable_lifetime_names,
+    clippy::needless_lifetimes
+)]
+mod generated {
+    use super::*;
+    include!(concat!(env!("OUT_DIR"), "/nativefunctions_generated.rs"));
+}
+pub use generated::*;
 
 /// The VM's native function implementations.
 pub struct PackageBamlImpl;

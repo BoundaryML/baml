@@ -227,8 +227,6 @@ fn filter_metadata_value(metadata: &Value, features: &ModelFeatures) -> Value {
 mod tests {
     use std::sync::Arc;
 
-    use indexmap::IndexMap;
-
     use super::*;
     use crate::{AllowedMetadata, LlmProvider, ModelFeatures};
 
@@ -244,19 +242,28 @@ mod tests {
 
     #[test]
     fn test_openai_defaults() {
-        let features = ModelFeatures::for_provider(LlmProvider::OpenAi, &Default::default());
+        let features = ModelFeatures::for_provider(
+            LlmProvider::OpenAi,
+            &crate::baml_std::PrimitiveClientOptions::default(),
+        );
         assert!(!features.max_one_system_prompt);
     }
 
     #[test]
     fn test_anthropic_defaults() {
-        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &Default::default());
+        let features = ModelFeatures::for_provider(
+            LlmProvider::Anthropic,
+            &crate::baml_std::PrimitiveClientOptions::default(),
+        );
         assert!(features.max_one_system_prompt);
     }
 
     #[test]
     fn test_strategy_provider_defaults() {
-        let features = ModelFeatures::for_provider(LlmProvider::BamlFallback, &Default::default());
+        let features = ModelFeatures::for_provider(
+            LlmProvider::BamlFallback,
+            &crate::baml_std::PrimitiveClientOptions::default(),
+        );
         assert!(features.max_one_system_prompt);
     }
 
@@ -266,7 +273,7 @@ mod tests {
             LlmProvider::Anthropic,
             &crate::baml_std::PrimitiveClientOptions {
                 max_one_system_prompt: Some(false),
-                ..Default::default()
+                ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
         assert!(!features.max_one_system_prompt);
@@ -424,7 +431,10 @@ mod tests {
             msg("assistant", "I'm fine"),
         ]));
 
-        let features = ModelFeatures::for_provider(LlmProvider::Anthropic, &Default::default());
+        let features = ModelFeatures::for_provider(
+            LlmProvider::Anthropic,
+            &crate::baml_std::PrimitiveClientOptions::default(),
+        );
 
         let result = merge_adjacent_roles(prompt);
         let result = consolidate_system_prompts(result, &features);

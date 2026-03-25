@@ -2,13 +2,17 @@ use std::sync::Arc;
 
 use baml_type::MediaKind;
 
-use super::*;
+use super::{
+    BamlClassMediaAudio, BamlClassMediaImage, BamlClassMediaPdf, BamlClassMediaVideo,
+    BamlNamespaceMedia, PackageBamlImpl, copy, view,
+};
 use crate::BexVm;
 
 // =========================================================================
 // Pdf
 // =========================================================================
 
+#[allow(clippy::used_underscore_items)]
 impl BamlClassMediaPdf for PackageBamlImpl {
     fn url(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<String> {
         let media: &baml_builtins::MediaValue = pdf._data(vm);
@@ -53,6 +57,7 @@ impl BamlClassMediaPdf for PackageBamlImpl {
 // Audio
 // =========================================================================
 
+#[allow(clippy::used_underscore_items)]
 impl BamlClassMediaAudio for PackageBamlImpl {
     fn url(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<String> {
         let media: &baml_builtins::MediaValue = audio._data(vm);
@@ -97,6 +102,7 @@ impl BamlClassMediaAudio for PackageBamlImpl {
 // Video
 // =========================================================================
 
+#[allow(clippy::used_underscore_items)]
 impl BamlClassMediaVideo for PackageBamlImpl {
     fn url(vm: &BexVm, video: &view::media::Video<'_>) -> Option<String> {
         let media: &baml_builtins::MediaValue = video._data(vm);
@@ -141,6 +147,7 @@ impl BamlClassMediaVideo for PackageBamlImpl {
 // Image
 // =========================================================================
 
+#[allow(clippy::used_underscore_items)]
 impl BamlClassMediaImage for PackageBamlImpl {
     fn url(vm: &BexVm, image: &view::media::Image<'_>) -> Option<String> {
         let media: &baml_builtins::MediaValue = image._data(vm);
@@ -235,7 +242,7 @@ fn media_from_url(
             url: url.to_string(),
             base64_data: None,
         },
-        mime_type.map(|s| s.to_string()),
+        mime_type.map(std::string::ToString::to_string),
     )
 }
 
@@ -250,7 +257,7 @@ fn media_from_file(
             file: file.to_string(),
             base64_data: None,
         },
-        mime_type.map(|s| s.to_string()),
+        mime_type.map(std::string::ToString::to_string),
     )
 }
 
@@ -264,6 +271,6 @@ fn media_from_base64(
         baml_builtins::MediaContent::Base64 {
             base64_data: base64.to_string(),
         },
-        mime_type.map(|s| s.to_string()),
+        mime_type.map(std::string::ToString::to_string),
     )
 }

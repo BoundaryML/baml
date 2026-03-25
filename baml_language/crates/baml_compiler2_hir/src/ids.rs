@@ -1,4 +1,4 @@
-//! Position-independent item identifiers for compiler2_hir.
+//! Position-independent item identifiers for `compiler2_hir`.
 //!
 //! `LocalItemId<T>` packs a 16-bit name hash and a 16-bit collision index
 //! into 32 bits, following the same scheme as `baml_compiler_hir::ids`.

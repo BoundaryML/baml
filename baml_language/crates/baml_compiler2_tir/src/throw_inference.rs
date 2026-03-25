@@ -69,7 +69,7 @@ pub fn function_throw_sets<'db>(
         package_dependencies(db, package_id)
             .iter()
             .map(|dep_id| {
-                let name = dep_id.name(db).clone();
+                let name = dep_id.name(db);
                 let iface = crate::package_interface::package_interface(db, *dep_id);
                 (name, iface)
             })
@@ -139,10 +139,9 @@ pub fn function_throw_sets<'db>(
             for &method_id in &class_data.methods {
                 let method_data = &item_tree[method_id];
                 let method_name = &method_data.name;
-                let func_loc =
-                    baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
+                let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 // Key as "ClassName.method_name" (with namespace prefix if any).
-                let method_short = Name::new(format!("{}.{}", class_name, method_name));
+                let method_short = Name::new(format!("{class_name}.{method_name}"));
                 let key = function_key(db, func_loc, &method_short);
 
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
@@ -299,7 +298,7 @@ fn fact_display_name(fact: &Ty) -> String {
     match fact {
         Ty::Primitive(p) => p.to_string(),
         Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.to_string(),
-        Ty::EnumVariant(qn, variant) => format!("{}.{}", qn, variant),
+        Ty::EnumVariant(qn, variant) => format!("{qn}.{variant}"),
         Ty::Unknown => "unknown".to_string(),
         _ => format!("{fact}"),
     }
@@ -318,7 +317,7 @@ pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
     targets
 }
 
-/// Convert a thrown expression to a `Ty` directly, using pkg_items to resolve
+/// Convert a thrown expression to a `Ty` directly, using `pkg_items` to resolve
 /// paths to their actual types (enum variants, classes, etc).
 fn throw_fact_from_expr<'db>(
     db: &'db dyn crate::Db,
@@ -340,7 +339,7 @@ fn throw_fact_from_expr<'db>(
             type_name: Some(name),
             ..
         } => {
-            if let Some(def) = pkg_items.lookup_type(&[name.clone()]) {
+            if let Some(def) = pkg_items.lookup_type(std::slice::from_ref(name)) {
                 match def {
                     Definition::Class(_) => Ty::Class(qualify_def(db, def, name)),
                     Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name)),
@@ -359,7 +358,7 @@ fn throw_fact_from_expr<'db>(
 fn rewrite_self_target(target: &Name, class_name: &Name) -> Name {
     let s = target.as_str();
     if let Some(rest) = s.strip_prefix("self.") {
-        Name::new(format!("{}.{}", class_name, rest))
+        Name::new(format!("{class_name}.{rest}"))
     } else {
         target.clone()
     }

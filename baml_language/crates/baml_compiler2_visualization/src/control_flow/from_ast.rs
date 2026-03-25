@@ -5,6 +5,8 @@
 //! the compiler2 AST uses `Expr::Missing` / `Stmt::Missing` sentinels for error
 //! recovery, so the CFG survives parse and type errors.
 
+use std::fmt::Write;
+
 use baml_compiler2_ast as ast;
 
 use super::{
@@ -21,17 +23,14 @@ pub fn build_control_flow_graph_from_ast(
     function_name: &str,
     body: &ast::ExprBody,
 ) -> ControlFlowGraph {
-    let root_expr = match body.root_expr {
-        Some(id) => id,
-        None => {
-            // No root expression — return a graph with just the root node.
-            let mut graph = GraphAccumulator::default();
-            let root_id = graph.allocate_id();
-            let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
-            let root_key = encode_segments(function_name, std::slice::from_ref(&root_segment));
-            graph.add_node(Node::root(root_id, root_key, function_name));
-            return graph.finish();
-        }
+    let Some(root_expr) = body.root_expr else {
+        // No root expression — return a graph with just the root node.
+        let mut graph = GraphAccumulator::default();
+        let root_id = graph.allocate_id();
+        let root_segment = PathSegment::FunctionRoot { ordinal: 0 };
+        let root_key = encode_segments(function_name, std::slice::from_ref(&root_segment));
+        graph.add_node(Node::root(root_id, root_key, function_name));
+        return graph.finish();
     };
 
     let mut builder = AstGraphBuilder::new(function_name, body);
@@ -186,23 +185,23 @@ impl<'a> AstGraphBuilder<'a> {
             }
 
             ast::Stmt::Let {
-                initializer,
+                initializer: Some(init),
                 pattern,
                 ..
             } => {
-                if let Some(init) = initializer {
-                    let init_expr = self.body.exprs[*init].clone();
-                    let needs_scope =
-                        matches!(init_expr, ast::Expr::If { .. } | ast::Expr::Match { .. });
-                    if needs_scope {
-                        let pat_name = self.format_pattern(*pattern);
-                        let label = format!("let {pat_name} = ...");
-                        self.emit_other_scope(*init, Some(label));
-                    } else {
-                        self.visit_expr(*init);
-                    }
+                let init_expr = self.body.exprs[*init].clone();
+                let needs_scope =
+                    matches!(init_expr, ast::Expr::If { .. } | ast::Expr::Match { .. });
+                if needs_scope {
+                    let pat_name = self.format_pattern(*pattern);
+                    let label = format!("let {pat_name} = ...");
+                    self.emit_other_scope(*init, Some(label));
+                } else {
+                    self.visit_expr(*init);
                 }
             }
+
+            ast::Stmt::Let { .. } => {}
 
             ast::Stmt::Expr(expr_id) => {
                 self.visit_expr(*expr_id);
@@ -634,7 +633,7 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                     ast::CatchClauseKind::CatchAll => "catch_all",
                     ast::CatchClauseKind::CatchAllPanics => "catch_all_panics",
                 };
-                out.push_str(&format!(" {kind}(...)"));
+                write!(out, " {kind}(...)").unwrap();
             }
             out
         }

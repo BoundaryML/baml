@@ -29,9 +29,9 @@ use crate::{
 /// Consumers never touch dependency `ItemTree` or raw `TypeExpr`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PackageInterface {
-    /// All exported types: namespace path -> name -> ExportedType
+    /// All exported types: namespace path -> name -> `ExportedType`
     pub types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>>,
-    /// All exported free functions: namespace path -> name -> ExportedFunction
+    /// All exported free functions: namespace path -> name -> `ExportedFunction`
     pub functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>>,
     /// Throw sets for all functions in this package (transitive, fully inferred).
     pub throw_sets: FunctionThrowSets,
@@ -101,7 +101,7 @@ pub struct PackageResolutionContext<'db> {
     pub own_package_name: Name,
 }
 
-impl<'db> PartialEq for PackageResolutionContext<'db> {
+impl PartialEq for PackageResolutionContext<'_> {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.own_items, other.own_items)
             && self.own_package_name == other.own_package_name
@@ -135,7 +135,7 @@ unsafe impl salsa::Update for PackageInterface {
 }
 
 #[allow(unsafe_code)]
-unsafe impl<'db> salsa::Update for PackageResolutionContext<'db> {
+unsafe impl salsa::Update for PackageResolutionContext<'_> {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         #[allow(unsafe_code)]
         unsafe {
@@ -149,7 +149,7 @@ unsafe impl<'db> salsa::Update for PackageResolutionContext<'db> {
 // ── PackageInterface lookup helpers ────────────────────────────────────────
 
 impl PackageInterface {
-    /// Look up a type by path, using the same namespace-prefix-split logic as PackageItems.
+    /// Look up a type by path, using the same namespace-prefix-split logic as `PackageItems`.
     pub fn lookup_type(&self, path: &[Name]) -> Option<&ExportedType> {
         if path.is_empty() {
             return None;
@@ -219,8 +219,9 @@ impl ExportedType {
 pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) -> PackageInterface {
     let pkg_items = package_items(db, pkg_id);
 
-    let mut types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>> = Default::default();
-    let mut functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>> = Default::default();
+    let mut types: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedType>> = FxHashMap::default();
+    let mut functions: FxHashMap<Vec<Name>, FxHashMap<Name, ExportedFunction>> =
+        FxHashMap::default();
 
     for (ns_path, ns_items) in &pkg_items.namespaces {
         // Export types
@@ -438,7 +439,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
     }
 }
 
-/// Build the self-type for a class with TypeVar placeholders for generic params.
+/// Build the self-type for a class with `TypeVar` placeholders for generic params.
 fn build_self_type_for_class(
     class_data: &baml_compiler2_hir::item_tree::Class,
     ns_path: &[Name],
@@ -476,7 +477,7 @@ pub fn package_resolution_context<'db>(
     let dep_interfaces: Vec<(Name, &PackageInterface)> = deps
         .iter()
         .map(|dep_id| {
-            let name = dep_id.name(db).clone();
+            let name = dep_id.name(db);
             let iface = package_interface(db, *dep_id);
             (name, iface)
         })
@@ -484,7 +485,7 @@ pub fn package_resolution_context<'db>(
     PackageResolutionContext {
         own_items,
         dep_interfaces,
-        own_package_name: pkg_id.name(db).clone(),
+        own_package_name: pkg_id.name(db),
     }
 }
 
@@ -514,7 +515,7 @@ impl<'db> PackageResolutionContext<'db> {
         }
     }
 
-    /// Resolve a type by path. Own-package via PackageItems, then deps.
+    /// Resolve a type by path. Own-package via `PackageItems`, then deps.
     pub fn resolve_type(
         &self,
         db: &'db dyn crate::Db,
@@ -597,8 +598,8 @@ impl<'db> PackageResolutionContext<'db> {
     }
 
     /// Look up class fields. Dual dispatch:
-    /// - Own-package: ItemTree -> lower fields
-    /// - Dependency: ExportedType::Class { fields }
+    /// - Own-package: `ItemTree` -> lower fields
+    /// - Dependency: `ExportedType::Class` { fields }
     pub fn lookup_class_fields(
         &self,
         db: &'db dyn crate::Db,

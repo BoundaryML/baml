@@ -1,7 +1,6 @@
 use std::{any::Any, collections::HashMap, sync::Arc};
 
 use baml_type::Ty;
-use bex_resource_types::ResourceHandle;
 use indexmap::IndexMap;
 
 use crate::{bytecode::Bytecode, heap_ptr::HeapPtr, indexable::ObjectPool};

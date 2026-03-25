@@ -104,8 +104,8 @@ pub fn let_body_source_map<'db>(
     let item_tree = crate::file_item_tree(db, file);
     let let_data = &item_tree[let_binding.id(db)];
 
-    match &let_data.initializer {
-        Some((_body, source_map)) => Some(source_map.clone()),
-        None => None,
-    }
+    let_data
+        .initializer
+        .as_ref()
+        .map(|(_body, source_map)| source_map.clone())
 }

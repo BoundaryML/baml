@@ -18,11 +18,11 @@ pub fn generate_module(input: &str) -> syn::Result<String> {
     let builtins = codegen_builtins::generate(&collected);
     let native = wrap_macro(
         "generate_native_trait",
-        codegen_native::generate(&collected),
+        &codegen_native::generate(&collected),
     );
     let accessors = wrap_macro(
         "generate_builtin_accessors",
-        codegen_accessors::generate(&collected),
+        &codegen_accessors::generate(&collected),
     );
 
     Ok(quote! {
@@ -33,7 +33,7 @@ pub fn generate_module(input: &str) -> syn::Result<String> {
     .to_string())
 }
 
-fn wrap_macro(name: &str, body: TokenStream2) -> TokenStream2 {
+fn wrap_macro(name: &str, body: &TokenStream2) -> TokenStream2 {
     let name = syn::Ident::new(name, proc_macro2::Span::call_site());
     quote! {
         #[macro_export]

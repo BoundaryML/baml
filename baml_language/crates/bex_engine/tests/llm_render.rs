@@ -312,12 +312,11 @@ function get_prompt() -> baml.llm.PromptAst {
             // Verify it's a PromptAst (wrapped in Adt)
             match &value {
                 BexExternalValue::Instance { class_name, fields } => {
-                    if class_name != "baml.llm.PromptAst" {
-                        panic!("Expected class name 'baml.llm.PromptAst', got {class_name}");
-                    }
-                    if fields.len() != 1 {
-                        panic!("Expected 1 field, got {}", fields.len());
-                    }
+                    assert!(
+                        class_name == "baml.llm.PromptAst",
+                        "Expected class name 'baml.llm.PromptAst', got {class_name}"
+                    );
+                    assert!(fields.len() == 1, "Expected 1 field, got {}", fields.len());
                     // The template "Hello, {{ name }}!" with name="World" should render to PromptAst::String
                     // match ast.as_ref() {
                     //     BuiltinPromptAst::Simple(s) => {
@@ -590,7 +589,7 @@ function get_prompt() -> baml.llm.PromptAst {
         )
         .await
         .expect("failed to render prompt that calls template_string Greet(name)");
-    assert_eq!(result, prompt_ast_message("system","Hello, Alice!"));
+    assert_eq!(result, prompt_ast_message("system", "Hello, Alice!"));
 }
 
 /// Test that nested `template_strings` expand correctly.
@@ -633,7 +632,7 @@ function get_prompt() -> baml.llm.PromptAst {
         )
         .await
         .expect("failed to render prompt with nested template_strings Outer() -> Inner()");
-    assert_eq!(result, prompt_ast_message("system","before INNER after"));
+    assert_eq!(result, prompt_ast_message("system", "before INNER after"));
 }
 
 /// Test a `template_string` with two args, one of which is a class (struct).
@@ -682,7 +681,7 @@ function get_prompt() -> baml.llm.PromptAst {
         )
         .await
         .expect("failed to render prompt with 2-arg template_string Describe(label, person)");
-    assert_eq!(result, prompt_ast_message("system","User: Bob (age 42)"));
+    assert_eq!(result, prompt_ast_message("system", "User: Bob (age 42)"));
 }
 
 /// Test that parameterless `template_strings` work.
@@ -725,5 +724,8 @@ function get_prompt() -> baml.llm.PromptAst {
         )
         .await
         .expect("failed to render prompt that calls parameterless template_string Header()");
-    assert_eq!(result, prompt_ast_message("system","=== HEADER ===\nContent here"));
+    assert_eq!(
+        result,
+        prompt_ast_message("system", "=== HEADER ===\nContent here")
+    );
 }

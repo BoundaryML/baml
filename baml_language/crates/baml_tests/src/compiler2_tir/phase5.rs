@@ -490,7 +490,7 @@ fn rust_type_field_lowers_to_rust_type() {
 
     // Lower $rust_type — should produce Ty::RustType
     let mut diags = Vec::new();
-    let ty = lower_type_expr(&db, &TypeExpr::Rust, &items, &[], &mut diags);
+    let ty = lower_type_expr(&db, &TypeExpr::Rust, items, &[], &mut diags);
 
     assert_eq!(ty, baml_compiler2_tir::ty::Ty::RustType);
     assert!(diags.is_empty(), "No diagnostics expected for $rust_type");

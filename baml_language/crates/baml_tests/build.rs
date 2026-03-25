@@ -1059,7 +1059,7 @@ fn generate_incremental_benchmark(
 fn generate_scale_benchmark(name: &str, path: &Path) -> TokenStream {
     let fn_name = format_ident!("bench_scale_{}", name.replace("-", "_"));
     let path_str = path.display().to_string();
-    let file_name = format!("{}.baml", name);
+    let file_name = format!("{name}.baml");
     let include_content = make_include_str(&path_str);
 
     quote! {

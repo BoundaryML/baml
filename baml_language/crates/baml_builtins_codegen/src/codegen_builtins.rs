@@ -1,9 +1,9 @@
 //! Code generation for `define_builtins` — the main signature registration macro.
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote};
+use quote::quote;
 
-use crate::{collect::CollectedBuiltins, util::to_pascal_case};
+use crate::collect::CollectedBuiltins;
 
 pub(crate) fn generate(collected: &CollectedBuiltins) -> TokenStream2 {
     // Generate path constants.

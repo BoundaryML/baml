@@ -222,8 +222,8 @@ class ClassB {
     );
 
     // Query both files initially.
-    let _ = query_semantic_index(test_db.db(), file_a);
-    let _ = query_semantic_index(test_db.db(), file_b);
+    query_semantic_index(test_db.db(), file_a);
+    query_semantic_index(test_db.db(), file_b);
 
     // Modify only file_a
     file_a.set_text(test_db.db_mut()).to(r#"

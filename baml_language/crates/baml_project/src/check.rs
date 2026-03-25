@@ -55,7 +55,7 @@ pub fn collect_diagnostics(
 /// sources plus compiler2 stdlib stubs under `<builtin>/baml/...` (packages
 /// `baml`, `env`, etc.).
 ///
-/// Diagnostics are sorted by (file_id, primary span start, message) for
+/// Diagnostics are sorted by (`file_id`, primary span start, message) for
 /// stable snapshot output.
 pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
@@ -120,8 +120,8 @@ impl ProjectDatabase {
         let all_c2_files = baml_compiler2_hir::compiler2_all_files(self);
         for file in &all_c2_files {
             let file_id = file.file_id(self);
-            if !sources.contains_key(&file_id) {
-                sources.insert(file_id, file.text(self).clone());
+            if let std::collections::hash_map::Entry::Vacant(e) = sources.entry(file_id) {
+                e.insert(file.text(self).clone());
                 file_paths.insert(file_id, file.path(self));
             }
         }

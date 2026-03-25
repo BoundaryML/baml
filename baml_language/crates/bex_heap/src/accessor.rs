@@ -36,7 +36,7 @@ pub struct GcProtectedHeap<'a> {
     _guard: RwLockReadGuard<'a, std::collections::HashMap<usize, HeapPtr>>,
 }
 
-impl<'a> GcProtectedHeap<'a> {
+impl GcProtectedHeap<'_> {
     /// Resolve a handle's slab key to a HeapPtr.
     ///
     /// Safe because we hold the handles read lock, preventing GC from
@@ -190,7 +190,7 @@ impl<'a> BexValue<'a> {
         match self {
             BexValue::ExternalValue(value) => value.type_name().to_string(),
             BexValue::HeapPtr(ptr) => ptr.to_string(),
-            BexValue::Value(value) => value.to_string().to_string(),
+            BexValue::Value(value) => value.to_string(),
         }
     }
 
@@ -354,7 +354,7 @@ impl<'a> BexValue<'a> {
                 if class_name != expected_class_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_class_name,
-                        actual: class_name.to_string(),
+                        actual: class_name.clone(),
                     });
                 }
                 Ok(BexClass::ExternalClass {
@@ -402,7 +402,7 @@ impl<'a> BexValue<'a> {
                 if enum_name != expected_enum_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_enum_name,
-                        actual: enum_name.to_string(),
+                        actual: enum_name.clone(),
                     });
                 }
                 Ok(map_fn(BexVariant::ExternalVariant {
