@@ -72,6 +72,7 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             .lock()
                             .unwrap()
                             .insert(resp._handle.key(), (cid, fetch_id));
+                        let headers: HashMap<String, String> = resp.headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
                             call_id: cid,
                             log_id: fetch_id,
@@ -79,6 +80,7 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             duration_ms: Some(elapsed),
                             response_body: None,
                             error: None,
+                            response_headers: Some(headers),
                         });
                     }
                     Err(e) => {
@@ -89,6 +91,7 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             duration_ms: Some(elapsed),
                             response_body: None,
                             error: Some(format!("{e}")),
+                            response_headers: None,
                         });
                     }
                 }
@@ -103,6 +106,7 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             .lock()
                             .unwrap()
                             .insert(resp._handle.key(), (cid, fetch_id));
+                        let headers: HashMap<String, String> = resp.headers.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
                             call_id: cid,
                             log_id: fetch_id,
@@ -110,6 +114,7 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             duration_ms: Some(elapsed),
                             response_body: None,
                             error: None,
+                            response_headers: Some(headers),
                         });
                     }
                     Err(e) => {
@@ -120,6 +125,7 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             duration_ms: Some(elapsed),
                             response_body: None,
                             error: Some(format!("{e}")),
+                            response_headers: None,
                         });
                     }
                 }
@@ -165,6 +171,7 @@ impl sys_types::SysOpHttp for PlaygroundHttp {
                             duration_ms: None,
                             response_body: Some(text.clone()),
                             error: None,
+                            response_headers: None,
                         });
                         Ok(text)
                     })

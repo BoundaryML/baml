@@ -123,6 +123,7 @@ export interface FetchLogEntry {
   responseBody: string | null;
   error: string | null;
   durationMs: number | null;
+  responseHeaders: Record<string, string> | null;
 }
 
 export interface EnvVarRequest {

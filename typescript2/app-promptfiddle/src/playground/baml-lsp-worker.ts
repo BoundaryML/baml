@@ -147,6 +147,7 @@ async function loggingFetch(
       responseBody: null,
       error: null,
       durationMs: null,
+      responseHeaders: null,
     },
   });
 
@@ -171,7 +172,7 @@ async function loggingFetch(
     postOut({
       type: "fetchLogUpdate",
       logId,
-      patch: { status: response.status, durationMs: elapsed },
+      patch: { status: response.status, durationMs: elapsed, responseHeaders },
     });
 
     // Update log with body when it resolves

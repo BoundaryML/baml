@@ -23,7 +23,7 @@ type WsOutMessage =
   | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
-  | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string }
+  | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string; responseHeaders?: Record<string, string> }
   | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null }
   | { type: 'cursorContext'; context: unknown };
 
@@ -260,6 +260,7 @@ export class WebSocketRuntimePort implements RuntimePort {
             responseBody: null,
             error: null,
             durationMs: null,
+            responseHeaders: null,
           },
         };
       case 'fetchLogUpdate':
@@ -271,6 +272,7 @@ export class WebSocketRuntimePort implements RuntimePort {
             ...(raw.durationMs !== undefined ? { durationMs: raw.durationMs } : {}),
             ...(raw.responseBody !== undefined ? { responseBody: raw.responseBody } : {}),
             ...(raw.error !== undefined ? { error: raw.error } : {}),
+            ...(raw.responseHeaders !== undefined ? { responseHeaders: raw.responseHeaders } : {}),
           },
         };
       case 'controlFlowGraphResult':

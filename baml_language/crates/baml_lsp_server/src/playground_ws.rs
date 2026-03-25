@@ -97,6 +97,8 @@ pub enum WsOutMessage {
         response_body: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
+        #[serde(rename = "responseHeaders", skip_serializing_if = "Option::is_none")]
+        response_headers: Option<std::collections::HashMap<String, String>>,
     },
     #[serde(rename = "controlFlowGraphResult")]
     ControlFlowGraphResult {

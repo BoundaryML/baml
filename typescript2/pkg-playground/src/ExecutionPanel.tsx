@@ -13,7 +13,9 @@ import type { ChangeEvent, FC } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeCallArgs } from '@b/pkg-proto';
 import { PanelLeft, Square } from 'lucide-react';
+import { CopyButton } from './components/CopyButton';
 import { ErrorDisplay } from './components/ErrorDisplay';
+import { MetadataBadges } from './components/MetadataBadges';
 import type { RuntimePort } from './runtime-port';
 import type {
   ControlFlowGraph,
@@ -301,7 +303,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
         }
 
-        case "ready": 
+        case "ready":
           break;
 
         case 'buildTime':
@@ -915,7 +917,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
           {/* Prompt preview */}
           {selectedFn && activeTab === 'prompt' ? (
-            <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
+            <div className="group relative flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
+              {promptPreviewResult != null && (
+                <div className="absolute top-1 right-1 z-10">
+                  <CopyButton text={promptPreviewResult} />
+                </div>
+              )}
               {promptPreviewResult != null ? (
                 <ResultDisplay resultJson={promptPreviewResult} customRenderers={resultRenderers} />
               ) : promptPreviewError ? (
@@ -932,7 +939,12 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
           {/* cURL preview */}
           {selectedFn && activeTab === 'curl' ? (
-            <div className="flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
+            <div className="group relative flex-1 overflow-auto font-vsc-mono text-xs bg-vsc-bg p-2.5">
+              {curlPreviewResult != null && (
+                <div className="absolute top-1 right-1 z-10">
+                  <CopyButton text={curlPreviewResult} />
+                </div>
+              )}
               {curlPreviewResult != null ? (
                 <ResultDisplay resultJson={curlPreviewResult} customRenderers={resultRenderers} />
               ) : curlPreviewError ? (
@@ -1061,8 +1073,18 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                       )}
                       {run.result != null && (
                         <div className="py-1.5 pr-2.5 pl-[22px]">
-                          <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
-                          <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                          {run.status === 'success' && run.fetchLogs.length > 0 && (
+                            <div className="mb-1">
+                              <MetadataBadges fetchLogs={run.fetchLogs} durationMs={run.durationMs} />
+                            </div>
+                          )}
+                          <div className="group relative">
+                            <div className="flex items-center gap-1">
+                              <div className="text-[10px] font-semibold text-vsc-green mb-0.5 uppercase tracking-wide">Result</div>
+                              <CopyButton text={run.result} iconSize={11} />
+                            </div>
+                            <ResultDisplay resultJson={run.result} customRenderers={resultRenderers} />
+                          </div>
                         </div>
                       )}
                     </div>
