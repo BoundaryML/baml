@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   Controls,
   Background,
   BackgroundVariant,
@@ -60,6 +61,36 @@ function GraphViewInner({ graph, selectedNodeId, onNodeClick }: GraphViewProps) 
       })),
     );
   }, [selectedNodeId, setNodes]);
+
+  // Auto-pan viewport to center the selected node
+  const { setCenter, getNode } = useReactFlow();
+  const prevGraphRef = useRef(graph);
+  useEffect(() => {
+    if (selectedNodeId == null) return;
+    // Skip auto-pan when the graph itself just changed (fitView handles that)
+    if (prevGraphRef.current !== graph) {
+      prevGraphRef.current = graph;
+      return;
+    }
+    const target = getNode(String(selectedNodeId));
+    if (!target) return;
+
+    // Compute absolute position by walking up parentId chain
+    let absX = target.position.x;
+    let absY = target.position.y;
+    let current = target;
+    while (current.parentId) {
+      const parent = getNode(current.parentId);
+      if (!parent) break;
+      absX += parent.position.x;
+      absY += parent.position.y;
+      current = parent;
+    }
+
+    const w = target.measured?.width ?? 150;
+    const h = target.measured?.height ?? 40;
+    setCenter(absX + w / 2, absY + h / 2, { duration: 300 });
+  }, [selectedNodeId, graph, setCenter, getNode]);
 
   const handleNodeClick: NodeMouseHandler<WorkflowNode> = useCallback(
     (_event, node) => {

@@ -104,6 +104,13 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [controlFlowGraph, setControlFlowGraph] = useState<ControlFlowGraph | null>(null);
   const [activeTab, setActiveTab] = useState<'run' | 'graph' | 'prompt' | 'curl'>('run');
   const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(null);
+
+  // Workflow context: when a function belongs to multiple workflows,
+  // this tracks which workflow is being viewed and the alternatives.
+  const [workflowContext, setWorkflowContext] = useState<{
+    functionName: string;
+    workflows: string[];
+  } | null>(null);
   const [promptPreviewResult, setPromptPreviewResult] = useState<string | null>(null);
   const [curlPreviewResult, setCurlPreviewResult] = useState<string | null>(null);
   const [promptPreviewError, setPromptPreviewError] = useState<string | null>(null);
@@ -196,47 +203,40 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     const currentFn = selectedFnRef.current;
     const cachedGraph = controlFlowGraphRef.current;
 
-    // Use the ordered candidate list (most-specific to least-specific) to
-    // find the closest matching graph node. Falls back to label matching.
     const candidates = ctx.sourceExprCandidates ?? [];
     const nodeId = resolveCandidatesToNodeId(cachedGraph, candidates)
       ?? (ctx.sourceExprId != null ? resolveNodeByFunctionName(cachedGraph, ctx.functionName) : null);
 
-    console.log('[handleCursorContext]', { currentFn, functionName: ctx.functionName, nodeId });
-
-    // Rule 0: cursor is on a function definition (not a call site) — switch to that function.
-    // sourceExprId is null when the cursor is on the definition line, not inside a call.
-    if (ctx.sourceExprId == null && ctx.functionName !== currentFn) {
-      console.log('[handleCursorContext] Rule 0: switch to definition', ctx.functionName);
-      setSelectedFn(ctx.functionName);
-      setHighlightedNodeId(null);
-      return;
-    }
-
     // Rule 1: cursor is on a node in the currently-displayed workflow
     if (nodeId != null && ctx.functionName === currentFn) {
-      console.log('[handleCursorContext] Rule 1: highlight node', nodeId);
       setHighlightedNodeId(nodeId);
       return;
     }
 
-    // Rule 2: cursor is on a call site inside the current workflow — highlight the call node.
+    // Rule 2: cursor is on a call site inside the current workflow
     if (nodeId != null && ctx.workflowMemberships.includes(currentFn ?? '')) {
-      console.log('[handleCursorContext] Rule 2: highlight node', nodeId);
       setHighlightedNodeId(nodeId);
       return;
     }
 
-    // Rule 3: switch to the function or its first workflow parent
-    if (ctx.workflowMemberships.length > 0) {
-      const target = ctx.workflowMemberships[0];
-      console.log('[handleCursorContext] Rule 3: switch to workflow', target);
-      setSelectedFn(target);
-      setHighlightedNodeId(null);
-    } else {
-      console.log('[handleCursorContext] Rule 3: switch to', ctx.functionName);
+    // Rule 3: navigate to the function the cursor is on.
+    // Always show THAT function's own graph — never auto-redirect to a
+    // workflow. If the function is called from workflows, expose them via
+    // the "called from" picker so the user can opt in.
+    if (ctx.functionName !== currentFn) {
       setSelectedFn(ctx.functionName);
       setHighlightedNodeId(null);
+    }
+    // Update "called from" context (shown as a picker above the graph).
+    // Set on every navigation, including when already on the function,
+    // so it reflects the current membership info.
+    if (ctx.workflowMemberships.length > 0) {
+      setWorkflowContext({
+        functionName: ctx.functionName,
+        workflows: ctx.workflowMemberships,
+      });
+    } else {
+      setWorkflowContext(null);
     }
   }
 
@@ -361,13 +361,26 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     return unsubscribe;
   }, [port]);
 
-  // Request control flow graph when selected function changes
+  // Request control flow graph when selected function changes OR code is edited.
+  // On function/project switch: clear the graph (shows loading state).
+  // On code edit (projectUpdateVersion): keep old graph visible, swap when new one arrives.
+  const prevGraphFnRef = useRef(selectedFn);
+  const prevGraphProjectRef = useRef(selectedProject);
+  const projectUpdateVersion = selectedProject ? projectUpdates[selectedProject] : undefined;
+
   useEffect(() => {
-    setControlFlowGraph(null);
-    setHighlightedNodeId(null);
+    const fnChanged = prevGraphFnRef.current !== selectedFn;
+    const projChanged = prevGraphProjectRef.current !== selectedProject;
+    prevGraphFnRef.current = selectedFn;
+    prevGraphProjectRef.current = selectedProject;
+
+    if (fnChanged || projChanged) {
+      setControlFlowGraph(null);
+      setHighlightedNodeId(null);
+    }
     if (!selectedFn || !selectedProject) return;
     port.postMessage({ type: 'requestControlFlowGraph', project: selectedProject, functionName: selectedFn });
-  }, [port, selectedFn, selectedProject]);
+  }, [port, selectedFn, selectedProject, projectUpdateVersion]);
 
   // Clear preview results when selected function changes
   useEffect(() => {
@@ -377,9 +390,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
     setCurlPreviewError(null);
     setPreviewLoading(false);
   }, [selectedFn]);
-
-  // Re-trigger preview when the project update changes (e.g. Bex becomes available)
-  const projectUpdateVersion = selectedProject ? projectUpdates[selectedProject] : undefined;
 
   // Auto-refresh prompt/curl preview when args change while tab is active
   useEffect(() => {
@@ -844,7 +854,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
                 functions={functions}
                 tests={tests}
                 selectedFn={selectedFn}
-                onSelectFn={setSelectedFn}
+                onSelectFn={(fn) => { setWorkflowContext(null); setSelectedFn(fn); }}
                 onSelectTest={handleSelectTest}
                 onRunTest={handleRunTest}
                 isRunning={isRunning}
@@ -924,7 +934,26 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
           {/* Graph view */}
           {selectedFn && activeTab === 'graph' ? (
-            <div className="flex-1 min-h-0" style={{ minHeight: 300 }}>
+            <div className="flex-1 min-h-0 flex flex-col" style={{ minHeight: 300 }}>
+              {/* "Called from" bar — shown when the current function is called from workflows */}
+              {workflowContext && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] bg-vsc-bg-secondary border-b border-vsc-border shrink-0">
+                  <span className="text-vsc-text-faint">Called from:</span>
+                  {workflowContext.workflows.map((wf) => (
+                    <button
+                      key={wf}
+                      onClick={() => {
+                        setWorkflowContext(null);
+                        setSelectedFn(wf);
+                        setHighlightedNodeId(null);
+                      }}
+                      className="px-1.5 py-0.5 rounded border border-vsc-border bg-vsc-bg text-vsc-text-muted hover:text-vsc-text hover:border-vsc-accent cursor-pointer text-[10px]"
+                    >
+                      {wf}
+                    </button>
+                  ))}
+                </div>
+              )}
               {controlFlowGraph ? (
                 <GraphView
                   graph={controlFlowGraph}
