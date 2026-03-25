@@ -2187,7 +2187,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         let lookup_val = pkg_items.lookup_value(path);
         if let Some(Definition::Function(func_loc)) = lookup_val {
             let db = self.context.db();
-            let item_tree_for_func = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+            let item_tree_for_func = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
             let func_data_for_sig = &item_tree_for_func[func_loc.id(db)];
             let generic_params = &func_data_for_sig.generic_params;
             let member = path.last().unwrap();
@@ -2289,7 +2289,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Get function signature to build the function type
                     let db = self.context.db();
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-                    let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+                    let item_tree = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
                     let func_data = &item_tree[func_loc.id(db)];
                     let generic_params = &func_data.generic_params;
                     let sig_ns =

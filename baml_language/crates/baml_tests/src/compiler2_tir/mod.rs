@@ -30,7 +30,6 @@ pub(crate) mod support {
     use baml_compiler2_hir::{
         body::{FunctionBody, function_body},
         contributions::Definition,
-        file_semantic_index,
         loc::FunctionLoc,
         scope::ScopeKind,
         signature::function_signature,
@@ -571,6 +570,7 @@ pub(crate) mod support {
     }
 
     /// Render a file's TIR output in the same format as the onion skin tool.
+    /// Uses the PPIR semantic index which includes synthetic stream_* types.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         use baml_compiler2_hir::package::{PackageId, package_items};
         use baml_compiler2_tir::inference::{
@@ -578,7 +578,7 @@ pub(crate) mod support {
         };
 
         let mut output = String::new();
-        let index = file_semantic_index(db, file);
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
 
         // Get package items for resolving TypeExpr -> Ty in signatures
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);

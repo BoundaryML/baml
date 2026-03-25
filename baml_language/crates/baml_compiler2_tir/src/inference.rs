@@ -18,7 +18,7 @@ use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
     loc::{ClassLoc, FunctionLoc, LetLoc, TypeAliasLoc},
-    package::{PackageId, PackageItems, package_items},
+    package::{PackageId, PackageItems},
     scope::{ScopeId, ScopeKind},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -435,7 +435,7 @@ pub fn detect_invalid_alias_cycles<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> std::collections::HashSet<crate::ty::QualifiedTypeName> {
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let aliases = collect_type_aliases(db, pkg_items);
     crate::normalize::find_invalid_alias_cycles(&aliases)
 }
@@ -448,7 +448,7 @@ pub fn detect_invalid_class_cycles<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> Vec<crate::normalize::ClassCycleInfo> {
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let aliases = collect_type_aliases(db, pkg_items);
     let class_fields = collect_class_fields(db, pkg_items);
     crate::normalize::find_invalid_class_cycles(&class_fields, &aliases)
@@ -541,7 +541,7 @@ pub fn resolve_class_fields<'db>(
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let class_data = &item_tree[class_loc.id(db)];
     let mut all_diags = Vec::new();
@@ -592,7 +592,7 @@ pub fn resolve_type_alias<'db>(
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let alias_data = &item_tree[alias_loc.id(db)];
     let mut all_diags = Vec::new();
