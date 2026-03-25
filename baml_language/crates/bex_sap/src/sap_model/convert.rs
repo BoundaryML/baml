@@ -2,8 +2,7 @@
 
 use std::borrow::Cow;
 
-use baml_type::{SapAttrValue, SapConstValue, TypeName};
-use indexmap::IndexMap;
+use baml_type::{TyAttrValue, TypeName};
 
 use crate::sap_model::{
     self, AnnotatedTy, ArrayTy, AttrLiteral, BoolLiteralTy, BoolTy, FloatTy, IntLiteralTy, IntTy,
@@ -146,37 +145,13 @@ pub fn convert(ty: &baml_type::Ty) -> Result<AnnotatedTy<'_, TypeName>, ConvertE
 pub fn convert_ty_attrs(
     attrs: &baml_type::TyAttr,
 ) -> Result<TypeAnnotations<'_, TypeName>, ConvertError<'_>> {
-    let Some(attrs) = &attrs.0 else {
-        return Ok(TypeAnnotations::default());
+    let in_progress = match attrs.sap_in_progress_never {
+        TyAttrValue::Set => Some(AttrLiteral::Never),
+        TyAttrValue::Unset => None,
     };
     Ok(TypeAnnotations {
-        in_progress: Some(convert_attr_literal(&attrs.sap_in_progress)?),
+        in_progress,
         parse_as: None,      // TODO: parse_as
         asserts: Vec::new(), // TODO: assertions
     })
-}
-
-pub fn convert_attr_literal(
-    lit: &SapAttrValue<TypeName>,
-) -> Result<AttrLiteral<'_, TypeName>, ConvertError<'_>> {
-    let lit = match lit {
-        SapAttrValue::Never => AttrLiteral::Never,
-        SapAttrValue::ConstValueExpr(SapConstValue::Null) => AttrLiteral::Null,
-        SapAttrValue::ConstValueExpr(SapConstValue::String(s)) => {
-            AttrLiteral::String(Cow::Borrowed(s))
-        }
-        SapAttrValue::ConstValueExpr(SapConstValue::Int(i)) => AttrLiteral::Int(*i),
-        SapAttrValue::ConstValueExpr(SapConstValue::Float(f)) => AttrLiteral::Float(f.parse()?),
-        SapAttrValue::ConstValueExpr(SapConstValue::Bool(b)) => AttrLiteral::Bool(*b),
-        SapAttrValue::ConstValueExpr(SapConstValue::EmptyList) => AttrLiteral::Array(Vec::new()),
-        SapAttrValue::ConstValueExpr(SapConstValue::EmptyMap) => AttrLiteral::Map(IndexMap::new()),
-        SapAttrValue::ConstValueExpr(SapConstValue::EnumValue {
-            enum_name,
-            variant_name,
-        }) => AttrLiteral::EnumVariant {
-            enum_name,
-            variant_name: Cow::Borrowed(variant_name),
-        },
-    };
-    Ok(lit)
 }
