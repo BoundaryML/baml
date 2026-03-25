@@ -5231,7 +5231,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb201: {
-        _291 = is_type(copy _287, Int { attr: TyAttr(None) });
+        _291 = is_type(copy _287, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
         branch copy _291 -> [bb202, bb203];
     }
 
@@ -5243,7 +5243,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb203: {
-        _295 = is_type(copy _287, Int { attr: TyAttr(None) });
+        _295 = is_type(copy _287, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
         branch copy _295 -> [bb205, bb204];
     }
 
@@ -5890,7 +5890,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb19: {
-        _5 = is_type(copy _1, Int { attr: TyAttr(None) });
+        _5 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
         branch copy _5 -> [bb20, bb21];
     }
 
@@ -5914,7 +5914,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb24: {
-        _9 = is_type(copy _1, Int { attr: TyAttr(None) });
+        _9 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
         branch copy _9 -> [bb25, bb26];
     }
 
@@ -6019,7 +6019,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb48: {
-        _18 = is_type(copy _1, Int { attr: TyAttr(None) });
+        _18 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
         branch copy _18 -> [bb50, bb49];
     }
 
@@ -6102,12 +6102,12 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb68: {
-        _21 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr(None)));
+        _21 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
         branch copy _21 -> [bb72, bb69];
     }
 
     bb69: {
-        _24 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr(None)));
+        _24 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
         branch copy _24 -> [bb71, bb70];
     }
 
@@ -6128,7 +6128,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb73: {
-        _27 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr(None)), Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr(None))], TyAttr(None)));
+        _27 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }), Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
         branch copy _27 -> [bb75, bb74];
     }
 
@@ -6154,7 +6154,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb79: {
-        _29 = is_type(copy _28, Int { attr: TyAttr(None) });
+        _29 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
         branch copy _29 -> [bb80, bb81];
     }
 
@@ -6166,7 +6166,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb81: {
-        _33 = is_type(copy _28, Int { attr: TyAttr(None) });
+        _33 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
         branch copy _33 -> [bb82, bb83];
     }
 
@@ -6194,7 +6194,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb87: {
-        _37 = is_type(copy _28, Int { attr: TyAttr(None) });
+        _37 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
         branch copy _37 -> [bb88, bb99];
     }
 
@@ -6340,7 +6340,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb118: {
-        _53 = is_type(copy _28, Int { attr: TyAttr(None) });
+        _53 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
         branch copy _53 -> [bb119, bb128];
     }
 
@@ -6408,7 +6408,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb131: {
-        _65 = is_type(copy _28, Int { attr: TyAttr(None) });
+        _65 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
         branch copy _65 -> [bb132, bb141];
     }
 
@@ -6599,12 +6599,12 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb166: {
-        _115 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr(None)));
+        _115 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
         branch copy _115 -> [bb170, bb167];
     }
 
     bb167: {
-        _120 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr(None)));
+        _120 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset }));
         branch copy _120 -> [bb169, bb168];
     }
 
