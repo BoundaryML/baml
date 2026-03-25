@@ -312,6 +312,18 @@ impl Ty {
         Ty::Class(TypeName::local(name.into()), TyAttr::default())
     }
 
+    /// `Class(name)` under the `"user"` package (matches compiler2 output for user-defined classes).
+    pub fn user_class(name: &str) -> Self {
+        Ty::Class(
+            TypeName {
+                display_name: Name::new(name),
+                name: Name::new(name),
+                module_path: vec![Name::new("user")],
+            },
+            TyAttr::default(),
+        )
+    }
+
     /// `unknown` with default attributes.
     pub fn unknown() -> Self {
         Ty::BuiltinUnknown {
