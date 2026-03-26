@@ -366,7 +366,7 @@ int[]
 (int | int)?
 
 ### expected
-int?
+int | null
 
 ---
 
@@ -621,7 +621,7 @@ Optional wraps a union — inner null moves to end.
 (null | int)?
 
 ### expected
-(int | null)?
+int | null
 
 ---
 
