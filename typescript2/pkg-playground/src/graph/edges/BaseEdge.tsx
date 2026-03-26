@@ -1,8 +1,9 @@
-import { BaseEdge as RFBaseEdge, type EdgeProps, getSmoothStepPath } from '@xyflow/react';
+import { BaseEdge as RFBaseEdge, type EdgeProps, type Edge, getSmoothStepPath } from '@xyflow/react';
 import { memo } from 'react';
 import { getMarkerColors } from './Marker';
+import type { WorkflowEdgeData } from '../types';
 
-export const BaseEdge = memo<EdgeProps>(
+export const BaseEdge = memo<EdgeProps<Edge<WorkflowEdgeData>>>(
   ({
     id,
     selected,
@@ -14,15 +15,15 @@ export const BaseEdge = memo<EdgeProps>(
     targetPosition,
     style,
     markerStart,
-    label,
     labelStyle,
-    labelShowBg,
-    labelBgStyle,
     labelBgPadding,
     labelBgBorderRadius,
     interactionWidth,
+    data,
   }) => {
     const colors = getMarkerColors();
+    const edgeColor = data?.color ?? colors.base;
+    const edgeLabel = data?.edgeLabel;
 
     const [edgePath, labelX, labelY] = getSmoothStepPath({
       sourceX,
@@ -38,22 +39,30 @@ export const BaseEdge = memo<EdgeProps>(
       <RFBaseEdge
         id={id}
         interactionWidth={interactionWidth}
-        label={label}
-        labelBgBorderRadius={labelBgBorderRadius}
-        labelBgPadding={labelBgPadding}
-        labelBgStyle={labelBgStyle}
-        labelShowBg={labelShowBg}
-        labelStyle={labelStyle}
+        label={edgeLabel}
+        labelBgBorderRadius={labelBgBorderRadius ?? 3}
+        labelBgPadding={labelBgPadding ?? [4, 6]}
+        labelBgStyle={{
+          fill: 'var(--vscode-editor-background, #1f1f1f)',
+          fillOpacity: 0.85,
+        }}
+        labelShowBg={edgeLabel != null}
+        labelStyle={{
+          fill: edgeColor,
+          fontSize: '10px',
+          fontWeight: 500,
+          ...labelStyle,
+        }}
         labelX={labelX}
         labelY={labelY}
-        markerEnd={`url('#${colors.base.replace('#', '')}')`}
+        markerEnd={`url(#${edgeColor.replace('#', '')})`}
         markerStart={markerStart}
         path={edgePath}
         style={{
-          ...style,
-          stroke: colors.base,
+          stroke: edgeColor,
           opacity: selected ? 1 : 0.6,
           strokeWidth: selected ? 2 : 1.5,
+          ...style,
         }}
       />
     );

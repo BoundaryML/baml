@@ -1,5 +1,6 @@
 import type { ControlFlowGraph, CfgNodeType } from '../worker-protocol';
 import type { GraphNode, GraphEdge, GraphNodeType, WorkflowNode, WorkflowEdge } from './types';
+import { getMarkerColors } from './edges/Marker';
 
 // Stage 1: ControlFlowGraph JSON -> GraphNode[] / GraphEdge[]
 export function cfgToGraphNodes(cfg: ControlFlowGraph): { nodes: GraphNode[]; edges: GraphEdge[] } {
@@ -91,10 +92,63 @@ export function graphToReactflow(
     source: e.source,
     target: e.target,
     type: 'base',
-    ...(e.label ? { data: { label: e.label } } : {}),
+    data: { label: e.label },
   }));
 
+  // Build source→edges index for sibling count determination
+  const edgesBySource = new Map<string, WorkflowEdge[]>();
+  for (const edge of edges) {
+    const list = edgesBySource.get(edge.source) ?? [];
+    list.push(edge);
+    edgesBySource.set(edge.source, list);
+  }
+
+  // Apply color and label data to fan-out edges
+  for (const [, siblings] of edgesBySource) {
+    const siblingCount = siblings.length;
+    siblings.forEach((edge, idx) => {
+      const rawLabel = edge.data?.label;
+      const style = computeEdgeStyle(rawLabel, siblingCount, idx);
+      edge.data = {
+        ...edge.data,
+        color: style.color,
+        ...(style.label != null ? { edgeLabel: style.label } : {}),
+      };
+    });
+  }
+
   return { nodes, edges };
+}
+
+function computeEdgeStyle(
+  label: string | undefined,
+  siblingCount: number,
+  siblingIndex: number,
+): { color: string; label?: string } {
+  const colors = getMarkerColors();
+
+  // No label = sequential edge → base color, no label
+  if (!label) return { color: colors.base };
+
+  // 2-arm branch: green for true/first, red for else/default
+  if (siblingCount === 2) {
+    const isNegative = /^(else|default)$/i.test(label);
+    return {
+      color: isNegative ? colors.no : colors.yes,
+      label,
+    };
+  }
+
+  // 3+ arm branch: rotating colorful palette
+  if (siblingCount > 2) {
+    return {
+      color: colors.colors[siblingIndex % colors.colors.length]!,
+      label,
+    };
+  }
+
+  // Single outgoing edge with a label (unusual) — base color + label
+  return { color: colors.base, label };
 }
 
 function graphTypeToReactflowType(gt: GraphNodeType): string {

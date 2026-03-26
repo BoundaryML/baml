@@ -8,8 +8,7 @@ mod from_ast;
 
 use std::{collections::HashMap, fmt};
 
-pub use flatten::flatten_control_flow_graph;
-pub use flatten::prepare_control_flow_graph_for_visualization;
+pub use flatten::{flatten_control_flow_graph, prepare_control_flow_graph_for_visualization};
 pub use from_ast::{STMT_SOURCE_EXPR_TAG, build_control_flow_graph_from_ast};
 use indexmap::IndexMap;
 
@@ -161,7 +160,11 @@ impl GraphAccumulator {
     }
 
     pub fn add_edge(&mut self, src: NodeId, dst: NodeId) {
-        self.edges.push(Edge { src, dst, label: None });
+        self.edges.push(Edge {
+            src,
+            dst,
+            label: None,
+        });
     }
 
     pub fn finish(self) -> ControlFlowGraph {

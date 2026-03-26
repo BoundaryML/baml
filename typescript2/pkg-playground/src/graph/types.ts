@@ -50,4 +50,12 @@ export interface WorkflowNodeData {
 }
 
 export type WorkflowNode = ReactFlowNode<WorkflowNodeData>;
-export type WorkflowEdge = ReactFlowEdge;
+
+export interface WorkflowEdgeData {
+  label?: string;
+  edgeLabel?: string;
+  color?: string;
+  [key: string]: unknown;
+}
+
+export type WorkflowEdge = ReactFlowEdge<WorkflowEdgeData>;

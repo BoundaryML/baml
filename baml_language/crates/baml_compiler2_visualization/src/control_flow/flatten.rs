@@ -31,9 +31,7 @@ pub fn flatten_control_flow_graph(graph: &ControlFlowGraph) -> ControlFlowGraph 
 /// Does NOT run Pass 1 (`remove_implicit_nodes`) or Pass 3
 /// (`inline_branch_arms_and_scopes`) — the playground needs all nodes
 /// visible and uses BranchArm/OtherScope as group containers.
-pub fn prepare_control_flow_graph_for_visualization(
-    graph: &ControlFlowGraph,
-) -> ControlFlowGraph {
+pub fn prepare_control_flow_graph_for_visualization(graph: &ControlFlowGraph) -> ControlFlowGraph {
     struct BranchGroupInfo {
         node_id: NodeId,
         parent: Option<NodeId>,
@@ -60,9 +58,10 @@ pub fn prepare_control_flow_graph_for_visualization(
                 c.iter()
                     .copied()
                     .filter(|cid| {
-                        graph.nodes.get(cid).is_some_and(|n| {
-                            n.node_type == NodeType::BranchArm
-                        })
+                        graph
+                            .nodes
+                            .get(cid)
+                            .is_some_and(|n| n.node_type == NodeType::BranchArm)
                     })
                     .collect()
             })
@@ -117,25 +116,27 @@ pub fn prepare_control_flow_graph_for_visualization(
         // Create labeled fan-out edges BranchGroup → BranchArm
         let mut fan_out_edges = Vec::new();
         for arm_id in &info.branch_children {
-            let arm_label = graph
-                .nodes
-                .get(arm_id)
-                .map(|n| n.label.clone());
+            let arm_label = graph.nodes.get(arm_id).map(|n| n.label.clone());
             fan_out_edges.push(Edge {
                 src: info.node_id,
                 dst: *arm_id,
                 label: arm_label,
             });
         }
-        graph
-            .edges_by_src
-            .insert(info.node_id, fan_out_edges);
+        graph.edges_by_src.insert(info.node_id, fan_out_edges);
     }
 
-    // ── Step 2: Rename "_" to "default" on BranchArm labels ──────────
+    // ── Step 2: Rename "_" to "default" on BranchArm labels and edges ─
     for node in graph.nodes.values_mut() {
         if node.node_type == NodeType::BranchArm && node.label == "_" {
             node.label = "default".to_string();
+        }
+    }
+    for edges in graph.edges_by_src.values_mut() {
+        for edge in edges.iter_mut() {
+            if edge.label.as_deref() == Some("_") {
+                edge.label = Some("default".to_string());
+            }
         }
     }
 
