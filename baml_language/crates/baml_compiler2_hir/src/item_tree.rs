@@ -182,8 +182,15 @@ pub struct Test {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GeneratorConfigItem {
+    pub key: Name,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Generator {
     pub name: Name,
+    pub config_items: Vec<GeneratorConfigItem>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -479,9 +486,26 @@ impl ItemTree {
         id
     }
 
-    pub fn alloc_generator(&mut self, name: &Name) -> LocalItemId<GeneratorMarker> {
-        let id = self.alloc_id(ItemKind::Generator, name);
-        self.generators.insert(id, Generator { name: name.clone() });
+    pub fn alloc_generator(
+        &mut self,
+        g: &ast::GeneratorDef,
+    ) -> LocalItemId<GeneratorMarker> {
+        let id = self.alloc_id(ItemKind::Generator, &g.name);
+        let config_items = g
+            .config_items
+            .iter()
+            .map(|item| GeneratorConfigItem {
+                key: item.key.clone(),
+                value: item.value.clone(),
+            })
+            .collect();
+        self.generators.insert(
+            id,
+            Generator {
+                name: g.name.clone(),
+                config_items,
+            },
+        );
         id
     }
 

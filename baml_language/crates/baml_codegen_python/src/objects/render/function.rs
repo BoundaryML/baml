@@ -6,6 +6,36 @@ baml_codegen_types::render_fn! {
     pub fn print_signature(function_: &crate::objects::Function, ns: crate::ty::Namespace) -> String;
 }
 
+baml_codegen_types::render_fn! {
+    /// ```askama
+    /// def {{function_.name}}(self,
+    ///     {{ function_.render_method_params(*ns) }}
+    ///     baml_options: BamlCallOptions = {},
+    /// ) -> {{ function_.return_type.render(*ns) }}:
+    ///     __result__ = self.__options.merge_options(baml_options).call_function_sync(
+    ///         function_name="{{ function_.name }}",
+    ///         args={{ function_.render_args_dict() }},
+    ///     )
+    ///     return __result__
+    /// ```
+    pub fn print_sync_impl(function_: &crate::objects::Function, ns: crate::ty::Namespace) -> String;
+}
+
+baml_codegen_types::render_fn! {
+    /// ```askama
+    /// async def {{function_.name}}(self,
+    ///     {{ function_.render_method_params(*ns) }}
+    ///     baml_options: BamlCallOptions = {},
+    /// ) -> {{ function_.return_type.render(*ns) }}:
+    ///     __result__ = await self.__options.merge_options(baml_options).call_function_async(
+    ///         function_name="{{ function_.name }}",
+    ///         args={{ function_.render_args_dict() }},
+    ///     )
+    ///     return __result__
+    /// ```
+    pub fn print_async_impl(function_: &crate::objects::Function, ns: crate::ty::Namespace) -> String;
+}
+
 impl crate::objects::Function {
     fn render_args(&self, ns: crate::ty::Namespace) -> String {
         let args = self
@@ -18,6 +48,32 @@ impl crate::objects::Function {
             return format!("(\n    {},\n)", args.join(",\n    "));
         }
         format!("({})", args.join(", "))
+    }
+
+    /// Render method parameters (without `self`, without `baml_options`).
+    /// Each param on its own line with trailing comma.
+    fn render_method_params(&self, ns: crate::ty::Namespace) -> String {
+        // Filter out the baml_options argument (it's added by the template)
+        self.arguments
+            .iter()
+            .filter(|arg| arg.name.as_str() != "baml_options")
+            .map(|arg| format!("{},", arg.render(ns)))
+            .collect::<Vec<_>>()
+            .join("\n    ")
+    }
+
+    /// Render the args dict for the runtime call: `{"arg1": arg1, "arg2": arg2}`
+    fn render_args_dict(&self) -> String {
+        let entries: Vec<String> = self
+            .arguments
+            .iter()
+            .filter(|arg| arg.name.as_str() != "baml_options")
+            .map(|arg| format!("\"{}\": {}", arg.name, arg.name))
+            .collect();
+        if entries.is_empty() {
+            return "{}".to_string();
+        }
+        format!("{{{}}}", entries.join(", "))
     }
 }
 

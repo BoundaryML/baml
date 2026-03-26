@@ -56,8 +56,16 @@ impl std::fmt::Display for Namespace {
 
 impl Name {
     pub(crate) fn from_codegen_types(name: &baml_codegen_types::Name) -> Self {
+        // Strip the `$stream` suffix — stream types live in their own module
+        // so they can keep the original user-defined name.
+        let bare_name = name
+            .name
+            .as_str()
+            .strip_suffix("$stream")
+            .map(baml_base::Name::new)
+            .unwrap_or_else(|| name.name.clone());
         Name {
-            name: name.name.clone(),
+            name: bare_name,
             namespace: Namespace::from_codegen_types(&name.namespace),
         }
     }
