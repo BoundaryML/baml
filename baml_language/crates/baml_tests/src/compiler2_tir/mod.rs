@@ -17,6 +17,8 @@ mod phase6;
 mod phase7;
 #[cfg(test)]
 mod phase8_exceptions;
+#[cfg(test)]
+mod stream_expansion;
 
 #[cfg(test)]
 pub(crate) mod support {
