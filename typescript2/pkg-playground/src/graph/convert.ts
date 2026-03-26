@@ -103,16 +103,14 @@ export function graphToReactflow(
     edgesBySource.set(edge.source, list);
   }
 
-  // Apply color and label data to fan-out edges
+  // Apply color data to fan-out edges
   for (const [, siblings] of edgesBySource) {
     const siblingCount = siblings.length;
     siblings.forEach((edge, idx) => {
       const rawLabel = edge.data?.label;
-      const style = computeEdgeStyle(rawLabel, siblingCount, idx);
       edge.data = {
         ...edge.data,
-        color: style.color,
-        ...(style.label != null ? { edgeLabel: style.label } : {}),
+        color: computeEdgeColor(rawLabel, siblingCount, idx),
       };
     });
   }
@@ -120,35 +118,27 @@ export function graphToReactflow(
   return { nodes, edges };
 }
 
-function computeEdgeStyle(
+function computeEdgeColor(
   label: string | undefined,
   siblingCount: number,
   siblingIndex: number,
-): { color: string; label?: string } {
+): string {
   const colors = getMarkerColors();
 
-  // No label = sequential edge → base color, no label
-  if (!label) return { color: colors.base };
+  // No label = sequential edge → base color
+  if (!label) return colors.base;
 
   // 2-arm branch: green for true/first, red for else/default
   if (siblingCount === 2) {
-    const isNegative = /^(else|default)$/i.test(label);
-    return {
-      color: isNegative ? colors.no : colors.yes,
-      label,
-    };
+    return /^(else|default)$/i.test(label) ? colors.no : colors.yes;
   }
 
   // 3+ arm branch: rotating colorful palette
   if (siblingCount > 2) {
-    return {
-      color: colors.colors[siblingIndex % colors.colors.length]!,
-      label,
-    };
+    return colors.colors[siblingIndex % colors.colors.length]!;
   }
 
-  // Single outgoing edge with a label (unusual) — base color + label
-  return { color: colors.base, label };
+  return colors.base;
 }
 
 function graphTypeToReactflowType(gt: GraphNodeType): string {

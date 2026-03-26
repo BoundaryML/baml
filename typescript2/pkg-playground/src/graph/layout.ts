@@ -1,6 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js';
 import type { ElkNode, ElkExtendedEdge } from 'elkjs/lib/elk-api';
-import type { WorkflowNode, WorkflowEdge } from './types';
+import type { WorkflowNode, WorkflowEdge, EdgePathData } from './types';
 
 const elk = new ELK();
 
@@ -30,9 +30,6 @@ function buildElkNodes(
 
     const elkNode: ElkNode = {
       id: node.id,
-      // Groups: no explicit size — ELK sizes them from children
-      // Leaves: explicit size
-      ...(isGroup ? {} : { width: size.w, height: size.h }),
     };
 
     if (isGroup) {
@@ -54,6 +51,27 @@ function buildElkNodes(
         elkNode.width = 120;
         elkNode.height = 60;
       }
+    } else {
+      // Leaf node: explicit size + FIXED_SIDE ports
+      elkNode.width = size.w;
+      elkNode.height = size.h;
+      elkNode.layoutOptions = {
+        'org.eclipse.elk.portConstraints': 'FIXED_SIDE',
+      };
+      elkNode.ports = [
+        {
+          id: `${node.id}-target`,
+          layoutOptions: {
+            'port.side': isHorizontal ? 'WEST' : 'NORTH',
+          },
+        },
+        {
+          id: `${node.id}-source`,
+          layoutOptions: {
+            'port.side': isHorizontal ? 'EAST' : 'SOUTH',
+          },
+        },
+      ];
     }
 
     return elkNode;
@@ -72,6 +90,11 @@ export async function layoutGraph(
   // Collect all node IDs that exist in the ELK graph
   const nodeIds = new Set(nodes.map((n) => n.id));
 
+  const validEdges = edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target));
+
+  // Track which nodes are groups (no ports) vs leaves (have ports)
+  const groupNodeIds = new Set(nodes.filter((n) => n.type === 'group').map((n) => n.id));
+
   const elkGraph: ElkNode = {
     id: 'root',
     layoutOptions: {
@@ -82,17 +105,18 @@ export async function layoutGraph(
       'spacing.nodeNodeBetweenLayers': '50',
       'spacing.edgeNode': '20',
       'spacing.edgeEdge': '15',
+      'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.layered.edgeRouting.selfLoopDistribution': 'EQUALLY',
     },
     children: buildElkNodes(nodes, direction),
-    edges: edges
-      .filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
-      .map(
-        (e): ElkExtendedEdge => ({
-          id: e.id,
-          sources: [e.source],
-          targets: [e.target],
-        }),
-      ),
+    edges: validEdges.map(
+      (e): ElkExtendedEdge => ({
+        id: `elk-${e.id}`,
+        // Only reference ports on leaf nodes; groups don't have ports
+        sources: [groupNodeIds.has(e.source) ? e.source : `${e.source}-source`],
+        targets: [groupNodeIds.has(e.target) ? e.target : `${e.target}-target`],
+      }),
+    ),
   };
 
   const layouted = await elk.layout(elkGraph);
@@ -119,6 +143,52 @@ export async function layoutGraph(
 
   extractPositions(layouted.children);
 
+  // Extract ELK edge path sections, accumulating absolute offsets for nested groups.
+  // ELK sections are relative to the containing graph node, so we add parent offsets
+  // when descending into children.
+  const edgePathMap = new Map<string, EdgePathData>();
+
+  function extractEdgePaths(elkNode: ElkNode, offsetX = 0, offsetY = 0) {
+    const nodeX = offsetX + (elkNode.x ?? 0);
+    const nodeY = offsetY + (elkNode.y ?? 0);
+
+    if (elkNode.edges) {
+      for (const elkEdge of elkNode.edges) {
+        const section = elkEdge.sections?.[0];
+        if (!section) continue;
+
+        // Edges stored on 'root' are in absolute coordinates; edges on child
+        // groups are relative to that group's position.
+        const absOffsetX = elkNode.id === 'root' ? 0 : nodeX;
+        const absOffsetY = elkNode.id === 'root' ? 0 : nodeY;
+
+        const transformPoint = (p: { x: number; y: number }) => ({
+          x: p.x + absOffsetX,
+          y: p.y + absOffsetY,
+        });
+
+        const points: Array<{ x: number; y: number }> = [];
+        points.push(transformPoint(section.startPoint));
+        if (section.bendPoints) {
+          points.push(...section.bendPoints.map(transformPoint));
+        }
+        points.push(transformPoint(section.endPoint));
+
+        // Map back from elk edge id ("elk-<ourId>") to our edge id
+        const ourEdgeId = elkEdge.id.replace(/^elk-/, '');
+        edgePathMap.set(ourEdgeId, { points });
+      }
+    }
+
+    if (elkNode.children) {
+      for (const child of elkNode.children) {
+        extractEdgePaths(child, nodeX, nodeY);
+      }
+    }
+  }
+
+  extractEdgePaths(layouted);
+
   const laidNodes = nodes.map((node) => {
     const pos = positionMap.get(node.id);
     if (!pos) return node;
@@ -138,5 +208,10 @@ export async function layoutGraph(
     };
   });
 
-  return { nodes: laidNodes, edges };
+  const laidEdges = edges.map((e) => {
+    const pathData = edgePathMap.get(e.id);
+    return pathData ? { ...e, data: { ...(e.data ?? {}), pathData } } : e;
+  });
+
+  return { nodes: laidNodes, edges: laidEdges };
 }

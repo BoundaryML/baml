@@ -51,10 +51,14 @@ export interface WorkflowNodeData {
 
 export type WorkflowNode = ReactFlowNode<WorkflowNodeData>;
 
+export interface EdgePathData {
+  points: Array<{ x: number; y: number }>;
+}
+
 export interface WorkflowEdgeData {
   label?: string;
-  edgeLabel?: string;
   color?: string;
+  pathData?: EdgePathData;
   [key: string]: unknown;
 }
 
