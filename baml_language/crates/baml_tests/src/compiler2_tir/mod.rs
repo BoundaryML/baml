@@ -626,17 +626,43 @@ pub(crate) mod support {
                             {
                                 let resolved = resolve_class_fields(db, class_loc);
                                 writeln!(output, "{kind_str} {fqn} {{").ok();
-                                for (fname, fty) in &resolved.fields {
-                                    let sap_attr_names = fty.attr().attr_names();
-                                    if sap_attr_names.is_empty() {
-                                        writeln!(output, "  {fname}: {fty}").ok();
+                                for (fname, fty, fattrs) in &resolved.fields {
+                                    let ty_attr_names = fty.attr().attr_names();
+                                    let field_attr_strs: Vec<String> = fattrs
+                                        .iter()
+                                        .map(|a| {
+                                            if a.args.is_empty() {
+                                                format!("@{}", a.name)
+                                            } else {
+                                                let args_str = a
+                                                    .args
+                                                    .iter()
+                                                    .map(|arg| match &arg.key {
+                                                        Some(k) => format!("{}={}", k, arg.value),
+                                                        None => arg.value.clone(),
+                                                    })
+                                                    .collect::<Vec<_>>()
+                                                    .join(", ");
+                                                format!("@{}({})", a.name, args_str)
+                                            }
+                                        })
+                                        .collect();
+                                    // Format: field: (Ty @ty_attr) @field_attr
+                                    let ty_str = if ty_attr_names.is_empty() {
+                                        format!("{fty}")
                                     } else {
-                                        let attrs_str = sap_attr_names
+                                        let ta = ty_attr_names
                                             .iter()
                                             .map(|a| format!("@{a}"))
                                             .collect::<Vec<_>>()
                                             .join(" ");
-                                        writeln!(output, "  {fname}: {fty} {attrs_str}").ok();
+                                        format!("({fty} {ta})")
+                                    };
+                                    if field_attr_strs.is_empty() {
+                                        writeln!(output, "  {fname}: {ty_str}").ok();
+                                    } else {
+                                        let fa = field_attr_strs.join(" ");
+                                        writeln!(output, "  {fname}: {ty_str} {fa}").ok();
                                     }
                                 }
                                 writeln!(output, "}}").ok();

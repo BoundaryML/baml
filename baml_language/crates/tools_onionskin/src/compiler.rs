@@ -2068,8 +2068,18 @@ impl CompilerRunner {
                                         let header = format!("  {kind_str} {fqn} {{");
                                         writeln!(output, "{header}").ok();
                                         output_annotated.push((header, status));
-                                        for (fname, fty) in &resolved.fields {
-                                            let line = format!("    {fname}: {fty}");
+                                        for (fname, fty, _fattrs) in &resolved.fields {
+                                            let attr_names = fty.attr().attr_names();
+                                            let line = if attr_names.is_empty() {
+                                                format!("    {fname}: {fty}")
+                                            } else {
+                                                let attrs_str = attr_names
+                                                    .iter()
+                                                    .map(|a| format!("@{a}"))
+                                                    .collect::<Vec<_>>()
+                                                    .join(" ");
+                                                format!("    {fname}: {fty} {attrs_str}")
+                                            };
                                             writeln!(output, "{line}").ok();
                                             output_annotated.push((line, status));
                                         }
@@ -2825,7 +2835,7 @@ impl CompilerRunner {
                                 "  {} fields (resolved):",
                                 resolved.fields.len()
                             )));
-                            for (fname, fty) in &resolved.fields {
+                            for (fname, fty, _fattrs) in &resolved.fields {
                                 detail.push(vec![
                                     DetailSpan::Code(format!("    {fname}")),
                                     DetailSpan::TypeAnnotation(format!(": {fty}")),

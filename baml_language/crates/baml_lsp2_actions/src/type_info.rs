@@ -221,7 +221,9 @@ fn type_info_for_definition(db: &dyn Db, def: Definition<'_>) -> TypeInfo {
             let fields = resolved
                 .fields
                 .iter()
-                .map(|(field_name, ty)| (field_name.as_str().to_string(), utils::display_ty(ty)))
+                .map(|(field_name, ty, _attrs)| {
+                    (field_name.as_str().to_string(), utils::display_ty(ty))
+                })
                 .collect();
 
             TypeInfo::Class {

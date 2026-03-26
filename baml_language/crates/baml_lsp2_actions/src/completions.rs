@@ -475,7 +475,7 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
 
             // Fields from resolved class fields.
             let resolved = baml_compiler2_tir::inference::resolve_class_fields(db, class_loc);
-            for (field_name, field_ty) in &resolved.fields {
+            for (field_name, field_ty, _field_attrs) in &resolved.fields {
                 items.push(
                     Completion::new(field_name.as_str(), CompletionKind::Field)
                         .with_detail(utils::display_ty(field_ty))

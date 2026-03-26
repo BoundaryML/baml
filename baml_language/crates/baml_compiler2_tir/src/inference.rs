@@ -466,7 +466,12 @@ fn collect_class_fields<'db>(
                 let resolved = resolve_class_fields(db, *loc);
                 let qualified =
                     crate::lower_type_expr::qualify_def(db, Definition::Class(*loc), name);
-                classes.insert(qualified, resolved.fields.clone());
+                let fields_without_attrs: Vec<(Name, crate::ty::Ty)> = resolved
+                    .fields
+                    .iter()
+                    .map(|(n, ty, _attrs)| (n.clone(), ty.clone()))
+                    .collect();
+                classes.insert(qualified, fields_without_attrs);
             }
         }
     }
@@ -478,7 +483,8 @@ fn collect_class_fields<'db>(
 /// Resolved class fields — `TypeExpr` resolved to `Ty` for each field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedClassFields {
-    pub fields: Vec<(Name, Ty)>,
+    /// (field name, resolved type, field-level attributes)
+    pub fields: Vec<(Name, Ty, Vec<baml_compiler2_ast::RawAttribute>)>,
     /// Type lowering diagnostics: (error, span of the type annotation).
     pub diagnostics: Vec<(crate::infer_context::TirTypeError, text_size::TextRange)>,
 }
@@ -570,7 +576,7 @@ pub fn resolve_class_fields<'db>(
                 .unwrap_or(Ty::Unknown {
                     attr: TyAttr::default(),
                 });
-            (f.name.clone(), ty)
+            (f.name.clone(), ty, f.attributes.clone())
         })
         .collect();
 

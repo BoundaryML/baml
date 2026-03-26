@@ -3,13 +3,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 class user.FieldAttributes {
-  money: int
-  currency: string
-  name: string
+  money: int @description("In USD")
+  currency: string @alias("currency_code")
+  name: string @skip
   summary: string
   details: string?
   state: string
-  multiple: string?
+  multiple: string? @description("Multiple attributes") @alias("multiple_alias") @stream.done @stream.not_null
 }
 class user.ClassAttributes {
   name: string
