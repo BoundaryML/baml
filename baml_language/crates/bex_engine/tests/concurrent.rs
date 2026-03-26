@@ -333,12 +333,14 @@ async fn test_call_function_with_external_args() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let engine = BexEngine::new(
-        snapshot,
-        std::sync::Arc::new(sys_types::SysOps::native()),
-        None,
-    )
-    .expect("Failed to create engine");
+    let engine = Arc::new(
+        BexEngine::new(
+            snapshot,
+            std::sync::Arc::new(sys_types::SysOps::native()),
+            None,
+        )
+        .expect("Failed to create engine"),
+    );
 
     // Test passing strings via BexExternalValue
     let result = engine

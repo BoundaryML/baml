@@ -242,8 +242,10 @@ function test_render() -> int {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
-        .expect("Failed to create engine");
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+            .expect("Failed to create engine"),
+    );
 
     let result = engine
         .call_function(
@@ -296,8 +298,10 @@ function get_prompt() -> baml.llm.PromptAst {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
-        .expect("Failed to create engine");
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+            .expect("Failed to create engine"),
+    );
 
     let result = engine
         .call_function(
@@ -371,8 +375,10 @@ function test_build_request() -> int {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
-        .expect("Failed to create engine");
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+            .expect("Failed to create engine"),
+    );
 
     let result = engine
         .call_function(
@@ -411,8 +417,10 @@ function test_call_llm() -> unknown {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
-        .expect("Failed to create engine");
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+            .expect("Failed to create engine"),
+    );
 
     // build_request now succeeds; this should panic at the next unimplemented
     // step: "LlmParseResponse SysOp not yet implemented"
@@ -457,8 +465,10 @@ function test_call_llm() -> string {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
-        .expect("Failed to create engine");
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+            .expect("Failed to create engine"),
+    );
 
     // build_request now succeeds; this should panic at the next unimplemented
     // step: "LlmParseResponse SysOp not yet implemented"
@@ -504,8 +514,10 @@ function test_call_llm() -> unknown {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
-        .expect("Failed to create engine");
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+            .expect("Failed to create engine"),
+    );
 
     // build_request now succeeds; this should panic at the next unimplemented
     // step: "LlmParseResponse SysOp not yet implemented"
@@ -578,8 +590,10 @@ function get_prompt() -> baml.llm.PromptAst {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
-        .expect("Failed to create engine");
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+            .expect("Failed to create engine"),
+    );
 
     let result = engine
         .call_function(
@@ -621,8 +635,10 @@ function get_prompt() -> baml.llm.PromptAst {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
-        .expect("Failed to create engine");
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+            .expect("Failed to create engine"),
+    );
 
     let result = engine
         .call_function(
@@ -670,8 +686,10 @@ function get_prompt() -> baml.llm.PromptAst {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
-        .expect("Failed to create engine");
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+            .expect("Failed to create engine"),
+    );
 
     let result = engine
         .call_function(
@@ -713,8 +731,10 @@ function get_prompt() -> baml.llm.PromptAst {
 "##;
 
     let snapshot = common::compile_for_engine(source);
-    let engine = BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
-        .expect("Failed to create engine");
+    let engine = std::sync::Arc::new(
+        BexEngine::new(snapshot, sys_types::SysOps::native().into(), None)
+            .expect("Failed to create engine"),
+    );
 
     let result = engine
         .call_function(

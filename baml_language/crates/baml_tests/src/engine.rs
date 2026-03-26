@@ -213,6 +213,7 @@ pub async fn run_test(
     // Create engine and execute.
     let engine = BexEngine::new(program, Arc::new(sys_types::SysOps::native()), None)
         .expect("Failed to create BexEngine");
+    let engine = Arc::new(engine);
 
     let result = engine
         .call_function(

@@ -831,7 +831,7 @@ impl BexEngine {
     /// ], None).await?;
     /// ```
     pub async fn call_function(
-        &self,
+        self: &Arc<Self>,
         function_name: &str,
         args: Vec<BexExternalValue>,
         FunctionCallContext {
@@ -1171,7 +1171,7 @@ impl BexEngine {
     /// The `my_epoch` parameter is used to check if GC has been requested
     /// (epoch advanced). VMs from old epochs will park at yield points.
     async fn run_event_loop_with_epoch(
-        &self,
+        self: &Arc<Self>,
         return_type: Ty,
         vm: &mut BexVm,
         my_epoch: u64,
