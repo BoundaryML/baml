@@ -233,7 +233,7 @@
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "semver": "7.7.2",
-    "tar": "7.4.3",
+    "tar": "7.5.11",
     "typescript": "5.8.3",
     "unique-names-generator": "4.7.1",
     "uuid": "11.1.0",
