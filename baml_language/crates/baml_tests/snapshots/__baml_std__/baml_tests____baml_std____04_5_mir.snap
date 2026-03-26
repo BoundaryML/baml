@@ -648,7 +648,7 @@ fn baml.llm.Client.build_plan_with_state(self: null, planner_state: void) -> voi
 
     bb0: {
         _3 = copy _1.3;
-        _4 = is_type(copy _3, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _4 = is_type(copy _3, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _4 -> [bb5, bb1];
     }
 
@@ -838,7 +838,7 @@ fn baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: int) -
 
     bb0: {
         _4 = copy _1.3;
-        _5 = is_type(copy _4, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset } });
+        _5 = is_type(copy _4, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _5 -> [bb6, bb1];
     }
 

@@ -1,9 +1,12 @@
 //! Type attributes.
 //!
-//! Currently only contains SAP metadata (i.e. controls for the schema-aligned parser).
+//! Contains SAP metadata (controls for the schema-aligned parser) and
+//! type-level assertions (`@assert`).
 //!
 //! These live in `baml_base` b/c they're shared by `baml_compiler_tir::Ty`
 //! (TIR) and `baml_type::Ty` (VIR+).
+
+use crate::core_types::Span;
 
 /// Binary present/absent flag for SAP attributes.
 ///
@@ -30,6 +33,16 @@ impl TyAttrValue {
     }
 }
 
+/// A single `@assert` attached to a type expression.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TyAssert {
+    /// Index into the program's function table — the assertion body
+    /// compiled to a `(value) -> bool` function.
+    pub func_idx: u32,
+    /// Source location of the assertion (for diagnostics).
+    pub span: Span,
+}
+
 /// Attributes intrinsic to a type expression.
 ///
 /// Carried on every `Ty` variant from HIR through runtime.
@@ -51,4 +64,7 @@ pub struct TyAttr {
     /// is in the in-progress state (i.e., the JSON value has started but is
     /// not yet complete).
     pub sap_in_progress_never: TyAttrValue,
+
+    /// Type-level assertions (`@assert`).
+    pub asserts: Vec<TyAssert>,
 }
