@@ -60,7 +60,7 @@ pub fn send_error_to_callback(id: u32, error: &str) {
     let error_callback_fn = match ERROR_CALLBACK_FN.get() {
         Some(f) => f,
         None => {
-            eprintln!("Error callback not registered: {}", error);
+            eprintln!("Error callback not registered: {error}");
             return;
         }
     };

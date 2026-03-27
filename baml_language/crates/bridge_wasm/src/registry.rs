@@ -3,7 +3,7 @@
 //! In `sys_native`, response bodies live in a registry as `reqwest::Response`
 //! and are consumed lazily. For WASM, the JS fetch callback returns a
 //! `bodyPromise` (`Promise<string>`); we store that and await it only when
-//! `response_text()` is called.
+//! `response.text()` is called.
 
 use std::{
     collections::HashMap,
@@ -13,7 +13,6 @@ use std::{
     },
 };
 
-use bex_resource_types::{ResourceHandle, ResourceRegistryRef, ResourceType};
 use js_sys::Promise;
 
 use crate::send_wrapper::SendWrapper;
@@ -32,8 +31,8 @@ enum RegistryEntry {
 
 /// WASM resource registry.
 ///
-/// Stores HTTP response body promises and provides opaque handles.
-/// When a handle is dropped, it automatically removes the entry.
+/// Stores HTTP response body promises and provides opaque keys.
+/// When a [`WasmResponseBody`] is dropped, it automatically removes the entry.
 pub(crate) struct WasmRegistry {
     next_key: AtomicUsize,
     entries: RwLock<HashMap<usize, RegistryEntry>>,
@@ -48,30 +47,17 @@ impl WasmRegistry {
         }
     }
 
-    /// Register an HTTP response by storing its body promise; returns an opaque handle.
-    ///
-    /// The JS fetch callback should return an object with `bodyPromise`: a Promise that resolves to the body string.
-    pub(crate) fn register_http_response(
-        self: &Arc<Self>,
-        body_promise: Promise,
-        url: String,
-    ) -> ResourceHandle {
+    /// Store an HTTP response body promise; returns the key for later retrieval.
+    pub(crate) fn store_body_promise(&self, body_promise: Promise) -> usize {
         let key = self.next_key.fetch_add(1, Ordering::SeqCst);
         let entry = ResponseEntry {
             body_promise: Some(SendWrapper::new(body_promise)),
         };
-
         self.entries
             .write()
             .unwrap()
             .insert(key, RegistryEntry::Response(entry));
-
-        ResourceHandle::new(
-            key,
-            ResourceType::Response,
-            url,
-            Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
-        )
+        key
     }
 
     /// Take the body promise for the given key.
@@ -88,10 +74,23 @@ impl WasmRegistry {
             _ => None,
         }
     }
+
+    /// Remove an entry by key (called from [`WasmResponseBody::drop`]).
+    pub(crate) fn remove(&self, key: usize) {
+        self.entries.write().unwrap().remove(&key);
+    }
 }
 
-impl ResourceRegistryRef for WasmRegistry {
-    fn remove(&self, key: usize) {
-        self.entries.write().unwrap().remove(&key);
+/// Opaque body handle stored in `owned::http::Response._body` as `Arc<dyn Any + Send + Sync>`.
+///
+/// Ties the response's body promise to the registry and cleans up on drop.
+pub(crate) struct WasmResponseBody {
+    pub(crate) registry: Arc<WasmRegistry>,
+    pub(crate) key: usize,
+}
+
+impl Drop for WasmResponseBody {
+    fn drop(&mut self) {
+        self.registry.remove(self.key);
     }
 }

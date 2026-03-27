@@ -15,6 +15,7 @@ import { Id } from "../../../convex/_generated/dataModel";
 import { useUser } from "@/components/providers/user-provider";
 import { BepContent } from "@/components/bep/bep-content";
 import { BepNav } from "@/components/bep/bep-nav";
+import { BepTableOfContents } from "@/components/bep/bep-table-of-contents";
 import { BepStatusSelect } from "@/components/bep/bep-status-select";
 import { BepVersionSelect } from "@/components/bep/bep-version-select";
 import { BepExportDialog } from "@/components/bep/bep-export-dialog";
@@ -32,7 +33,7 @@ import { AIAssistantPanel } from "@/components/ai-assistant/ai-assistant-panel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Edit, History, Pencil } from "lucide-react";
+import { ArrowLeft, Check, Copy, Edit, History, Maximize2, Minimize2, Pencil } from "lucide-react";
 import {
   MAIN_CONTENT_ID,
   RESERVED_PAGE_SLUGS,
@@ -87,6 +88,23 @@ export function BepRouteShell() {
   const [hasConflict, setHasConflict] = useState(false);
   const [conflictVersion, setConflictVersion] = useState<number | undefined>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+const [copied, setCopied] = useState(false);
+  const [isWideMode, setIsWideMode] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("beps-wide-mode");
+    if (stored === "true") {
+      setIsWideMode(true);
+    }
+  }, []);
+
+  const toggleWideMode = useCallback(() => {
+    setIsWideMode((prev) => {
+      const next = !prev;
+      localStorage.setItem("beps-wide-mode", String(next));
+      return next;
+    });
+  }, []);
   const editorRef = useRef<MDXEditorHandle>(null);
   const newPages = useMemo(
     () =>
@@ -481,6 +499,17 @@ export function BepRouteShell() {
     }
   };
 
+  const handleCopyMarkdown = useCallback(async () => {
+    const content = getCurrentContent(contentSection);
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy markdown:", err);
+    }
+  }, [getCurrentContent, contentSection]);
+
   const handleDiscardChanges = () => {
     setEditMode(false);
     setShowSubmitModal(false);
@@ -739,6 +768,18 @@ export function BepRouteShell() {
           </Link>
           <div className="flex items-center gap-3">
             {userId && <BepPresence bepId={bep._id} userId={userId} />}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleWideMode}
+              title={isWideMode ? "Narrow view" : "Wide view"}
+            >
+              {isWideMode ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
             <BepExportDialog bepId={bep._id} bepNumber={bep.number} />
             <BepImportDialog bepId={bep._id} bepNumber={bep.number} />
             <BepVersionSelect
@@ -771,7 +812,7 @@ export function BepRouteShell() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8 lg:mr-80 lg:ml-8">
+      <main className={`mx-auto px-4 py-8 lg:mr-80 lg:ml-8 ${isWideMode ? "max-w-7xl" : "max-w-5xl"}`}>
         {isViewingHistorical && viewingVersion && (
           <Alert className="mb-6 border-amber-500 bg-amber-50 dark:bg-amber-950/30">
             <History className="h-4 w-4 text-amber-600" />
@@ -792,9 +833,31 @@ export function BepRouteShell() {
               </span>{" "}
               {isViewingHistorical && viewingVersion ? viewingVersion.title : bep.title}
             </h1>
-            {!isViewingHistorical && (
-              <BepStatusSelect bepId={bep._id} currentStatus={bep.status} />
-            )}
+            <div className="flex items-center gap-2">
+              {isContentRoute && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyMarkdown}
+                  title="Copy raw markdown"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-4 w-4 mr-1.5 text-green-600" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-4 w-4 mr-1.5" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              )}
+              {!isViewingHistorical && (
+                <BepStatusSelect bepId={bep._id} currentStatus={bep.status} />
+              )}
+            </div>
           </div>
           <p className="text-muted-foreground">
             Shepherds: {bep.shepherdNames.join(", ") || "None assigned"}
@@ -858,44 +921,47 @@ export function BepRouteShell() {
                         />
                       </div>
                     ) : (
-                      <div className="relative">
-                        <BepContent
-                          content={currentContent}
-                          linkContext={{
-                            bepNumber,
-                            isHistorical: isViewingHistorical,
-                            versionNumber:
-                              isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
-                                ? routeInfo.versionNumber
-                                : null,
-                          }}
-                        />
-                        {effectiveVersionId && (
-                          <CommentSidebar
-                            contentSelector="[data-bep-content]"
-                            bepId={bep._id}
-                            versionId={effectiveVersionId}
-                            pageId={currentPageId}
-                            readOnly={isViewingHistorical}
-                            comments={(pageComments ?? [])
-                              .filter((c) => c.anchor)
-                              .map((c) => ({
-                                _id: c._id,
-                                parentId: c.parentId,
-                                anchor: c.anchor as {
-                                  nodeId: string;
-                                  nodeType: string;
-                                  nodeText: string;
-                                },
-                                authorName: c.authorName,
-                                content: c.content,
-                                type: c.type,
-                                createdAt: c.createdAt,
-                                resolved: c.resolved,
-                              }))}
+                      <>
+                        <BepTableOfContents content={currentContent} />
+                        <div className="relative">
+                          <BepContent
+                            content={currentContent}
+                            linkContext={{
+                              bepNumber,
+                              isHistorical: isViewingHistorical,
+                              versionNumber:
+                                isViewingHistorical && routeInfo.versionNumber !== latestVersionNumber
+                                  ? routeInfo.versionNumber
+                                  : null,
+                            }}
                           />
-                        )}
-                      </div>
+                          {effectiveVersionId && (
+                            <CommentSidebar
+                              contentSelector="[data-bep-content]"
+                              bepId={bep._id}
+                              versionId={effectiveVersionId}
+                              pageId={currentPageId}
+                              readOnly={isViewingHistorical}
+                              comments={(pageComments ?? [])
+                                .filter((c) => c.anchor)
+                                .map((c) => ({
+                                  _id: c._id,
+                                  parentId: c.parentId,
+                                  anchor: c.anchor as {
+                                    nodeId: string;
+                                    nodeType: string;
+                                    nodeText: string;
+                                  },
+                                  authorName: c.authorName,
+                                  content: c.content,
+                                  type: c.type,
+                                  createdAt: c.createdAt,
+                                  resolved: c.resolved,
+                                }))}
+                            />
+                          )}
+                        </div>
+                      </>
                     )}
                   </>
                 )}

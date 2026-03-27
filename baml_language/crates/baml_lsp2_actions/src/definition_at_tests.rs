@@ -1,0 +1,388 @@
+//! Tests for `definition_at` using cursor-based testing.
+
+#[cfg(test)]
+mod tests {
+    use crate::testing::CursorTest;
+
+    #[test]
+    fn test_goto_def_parameter() {
+        let test = CursorTest::new(
+            r#"
+function Foo(r: SentimentResponse) -> string {
+    match (<[CURSOR]r) {
+        Happy => "happy"
+        Sad => "sad"
+    }
+}
+"#,
+        );
+
+        let loc = test.goto_definition();
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("-> r"),
+            "Should navigate to parameter 'r', got: {desc}"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_local_variable() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> string {
+    let x = "hello"
+    let y = <[CURSOR]x
+    y
+}
+"#,
+        );
+
+        let loc = test.goto_definition();
+        assert!(
+            loc.is_some(),
+            "Should find definition of local variable 'x'"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_function_call() {
+        let test = CursorTest::new(
+            r#"
+function Helper() -> string {
+    "result"
+}
+
+function Main() -> string {
+    <[CURSOR]Helper()
+}
+"#,
+        );
+
+        let loc = test.goto_definition();
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("-> Helper"),
+            "Should navigate to function 'Helper', got: {desc}"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_class_reference() {
+        let test = CursorTest::new(
+            r#"
+class Person {
+    name string
+}
+
+function CreatePerson() -> Person {
+    <[CURSOR]Person { name: "John" }
+}
+"#,
+        );
+
+        let loc = test.goto_definition();
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("-> Person"),
+            "Should navigate to class 'Person', got: {desc}"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_enum_variant() {
+        let test = CursorTest::new(
+            r#"
+enum Status {
+    Active
+    Inactive
+}
+
+function GetStatus() -> Status {
+    Status.<[CURSOR]Active
+}
+"#,
+        );
+
+        let loc = test.goto_definition();
+        // Enum variant goto-definition is not yet implemented.
+        // TODO: once implemented, assert contains("-> Status") || contains("-> Active")
+        assert!(
+            loc.is_none(),
+            "Enum variant goto-def is not yet implemented"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_field_access() {
+        let test = CursorTest::new(
+            r#"
+class Person {
+    name string
+    age int
+}
+
+function GetName(p: Person) -> string {
+    p.<[CURSOR]name
+}
+"#,
+        );
+
+        let loc = test.goto_definition();
+        // Field access goto-definition is not yet implemented.
+        // TODO: once implemented, assert contains("-> name")
+        assert!(
+            loc.is_none(),
+            "Field access goto-def is not yet implemented"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_in_block() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> string {
+    {
+        let inner = "value"
+        <[CURSOR]inner
+    }
+}
+"#,
+        );
+
+        let loc = test.goto_definition();
+        assert!(
+            loc.is_some(),
+            "Should find definition of block-scoped variable 'inner'"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_no_definition() {
+        let test = CursorTest::new(
+            r#"
+function Test() -> string {
+    <[CURSOR]undefined_var
+}
+"#,
+        );
+
+        let loc = test.goto_definition();
+        assert!(
+            loc.is_none(),
+            "Should not find definition for undefined variable"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_multi_file() {
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "types.baml",
+            r#"
+class Person {
+    name string
+}
+"#,
+        );
+        builder.source(
+            "main.baml",
+            r#"
+function CreatePerson() -> Person {
+    <[CURSOR]Person { name: "Alice" }
+}
+"#,
+        );
+        let test = builder.build();
+
+        let loc = test.goto_definition();
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("types.baml") || desc.contains("-> Person"),
+            "Should navigate to Person in types.baml, got: {desc}"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_function_call2() {
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "main.baml",
+            r#"
+function Main() -> int {
+  Fo<[CURSOR]o(1)
+}
+
+function Foo(x: int) -> int {
+  10
+}
+
+"#,
+        );
+        let test = builder.build();
+
+        let loc = test.goto_definition();
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("-> Foo"),
+            "Should navigate to Foo function, got: {desc}"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_match_pattern_type_annotation() {
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "main.baml",
+            r#"
+class Success {
+  data string
+}
+
+class Failure {
+  reason string
+}
+
+type Result = Success | Failure
+
+function Foo(r: Result) -> string {
+  match (r) {
+    s: Success => s.data,
+    f: <[CURSOR]Failure => f.reason,
+  }
+}
+"#,
+        );
+        let test = builder.build();
+
+        let loc = test.goto_definition();
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("-> Failure"),
+            "Should navigate to Failure class, got: {desc}"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_field_access2() {
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "main.baml",
+            r#"
+class Success {
+  data string
+}
+
+function Foo(s: Success) -> string {
+  s.d<[CURSOR]ata
+}
+"#,
+        );
+        let test = builder.build();
+
+        let loc = test.goto_definition();
+        // Field access goto-definition is not yet implemented.
+        // TODO: once implemented, assert contains("-> data")
+        assert!(
+            loc.is_none(),
+            "Field access goto-def is not yet implemented"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_constructor_field() {
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "main.baml",
+            r#"
+class Success {
+  data string
+}
+
+function Foo() -> Success {
+  Success{ d<[CURSOR]ata: "success!" }
+}
+"#,
+        );
+        let test = builder.build();
+
+        let loc = test.goto_definition();
+        // Constructor field goto-definition is not yet implemented.
+        // TODO: once implemented, assert contains("-> data")
+        assert!(
+            loc.is_none(),
+            "Constructor field goto-def is not yet implemented"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_field_receiver() {
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "main.baml",
+            r#"
+class Success {
+  data string
+}
+
+function Foo(s: Success) -> string {
+  <[CURSOR]s.data
+}
+"#,
+        );
+        let test = builder.build();
+
+        let loc = test.goto_definition();
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("-> s"),
+            "Should navigate to s parameter in type signature, got: {desc}"
+        );
+    }
+
+    #[test]
+    fn test_goto_def_method() {
+        let mut builder = CursorTest::builder();
+        builder.source(
+            "main.baml",
+            r#"
+class Success {
+  data string
+  function Celebrate(self) -> string {
+    "Yay!"
+  }
+}
+
+function Foo(s: Success) -> string {
+  s.<[CURSOR]Celebrate()
+}
+"#,
+        );
+        let test = builder.build();
+
+        let loc = test.goto_definition();
+        // Method goto-definition is not yet implemented.
+        // TODO: once implemented, assert contains("Celebrate")
+        assert!(loc.is_none(), "Method goto-def is not yet implemented");
+    }
+}

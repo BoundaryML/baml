@@ -1,6 +1,58 @@
 import { mutation } from "./_generated/server";
 
 /**
+ * Migration: User Roles to New Format
+ *
+ * This migration converts legacy roles to the new role format:
+ *   - admin → bdfl
+ *   - shepherd → team
+ *   - member → unset
+ *
+ * Run this migration ONCE after deploying the schema changes:
+ *   npx convex run migrations:migrateUserRoles
+ */
+export const migrateUserRoles = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const results = {
+      adminToBdfl: 0,
+      shepherdToTeam: 0,
+      memberToUnset: 0,
+      unchanged: 0,
+      errors: [] as string[],
+    };
+
+    const users = await ctx.db.query("users").collect();
+
+    for (const user of users) {
+      try {
+        const role = user.role as string;
+
+        if (role === "admin") {
+          await ctx.db.patch(user._id, { role: "bdfl" });
+          results.adminToBdfl++;
+        } else if (role === "shepherd") {
+          await ctx.db.patch(user._id, { role: "team" });
+          results.shepherdToTeam++;
+        } else if (role === "member") {
+          await ctx.db.patch(user._id, { role: "unset" });
+          results.memberToUnset++;
+        } else {
+          results.unchanged++;
+        }
+      } catch (error) {
+        results.errors.push(`User ${user._id}: ${String(error)}`);
+      }
+    }
+
+    return {
+      ...results,
+      message: `Migration complete. Converted ${results.adminToBdfl} admin→bdfl, ${results.shepherdToTeam} shepherd→team, ${results.memberToUnset} member→unset. ${results.unchanged} users unchanged.`,
+    };
+  },
+});
+
+/**
  * Migration: Content Model Refactor (Phase 9)
  *
  * This migration updates existing data from the old 4-field section model

@@ -1,86 +1,40 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function CatchWithTypedArm(x: int) -> string {
-    MayFail(x) catch (e) {
-        _: string => "caught string",
-    }
+=== HIR2 ===
+function user.AlsoMayFail(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "secondary error", _ => "also ok" }
 }
-
-function CatchAndRethrow(x: int) -> string {
-    MayFail(x) catch (e) {
-        _ => throw e,
-    }
+function user.CatchAndRethrow(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { _ => throw e }
 }
-
-function ChainedCatchClauses(x: int) -> string {
-    MayFailIntOrString(x) catch (e) {
-        _: string => "first handler",
-    } catch (e2) {
-        _: int => "second handler",
-    }
+function user.CatchWithFallback(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch (e) { _: string => "caught string" } catch (e2) { _: int => "caught int fallback" }
 }
-
-function SingleCatchWildcard(x: int) -> string {
-    MayFail(x) catch (e) {
-        _ => "caught",
-    }
+function user.CatchWithTypedArm(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { _: string => "caught string" }
 }
-
-function ThrowStatement(x: int) -> string {
-    throw "error";
-    "unreachable"
+function user.ChainedCatchClauses(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch (e) { _: string => "first handler" } catch (e2) { _: int => "second handler" }
 }
-
-function MayFailIntOrString(x: int) -> string {
-    match (x) {
-        0 => throw "string error",
-        1 => throw 1,
-        _ => "ok",
-    }
+function user.MayFail(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "string error", _ => "ok" }
 }
-
-function MayFail(x: int) -> string {
-    match (x) {
-        0 => throw "string error",
-        _ => "ok",
-    }
+function user.MayFailIntOrString(x: int) -> string  [expr] {
+  {  } match (x) { 0 => throw "string error", 1 => throw 1, _ => "ok" }
 }
-
-function SingleCatchTyped(x: int) -> string {
-    MayFail(x) catch (e) {
-        _: string => "caught string",
-    }
+function user.MultipleCatchArms(x: int) -> string  [expr] {
+  {  } MayFailIntOrString(x) catch (e) { _: string => "caught string", _: int => "caught int" }
 }
-
-function AlsoMayFail(x: int) -> string {
-    match (x) {
-        0 => throw "secondary error",
-        _ => "also ok",
-    }
+function user.NestedCatch(x: int) -> string  [expr] {
+  { let inner = MayFail(x) catch (e) { _ => "inner caught" } } AlsoMayFail(x) catch (e) { _ => inner }
 }
-
-function NestedCatch(x: int) -> string {
-    let inner = MayFail(x) catch (e) {
-        _ => "inner caught",
-    };
-    AlsoMayFail(x) catch (e) {
-        _ => inner,
-    }
+function user.SingleCatchTyped(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { _: string => "caught string" }
 }
-
-function CatchWithFallback(x: int) -> string {
-    MayFailIntOrString(x) catch (e) {
-        _: string => "caught string",
-    } catch (e2) {
-        _: int => "caught int fallback",
-    }
+function user.SingleCatchWildcard(x: int) -> string  [expr] {
+  {  } MayFail(x) catch (e) { _ => "caught" }
 }
-
-function MultipleCatchArms(x: int) -> string {
-    MayFailIntOrString(x) catch (e) {
-        _: string => "caught string",
-        _: int => "caught int",
-    }
+function user.ThrowStatement(x: int) -> string  [expr] {
+  { throw "error" } "unreachable"
 }

@@ -1908,7 +1908,7 @@ impl FieldAccessExpr {
 /// Corresponds to a [`SyntaxKind::ENV_ACCESS_EXPR`] node.
 #[derive(Debug)]
 pub struct EnvAccessExpr {
-    pub keyword: t::Env,
+    pub keyword: t::Word,
     pub dot: t::Dot,
     pub field: t::Word,
 }

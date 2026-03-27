@@ -4,13 +4,66 @@
 //! lookup structure. This is the top-level cross-file query used by the TIR
 //! layer for name resolution.
 
-use baml_base::Name;
+use baml_base::{Name, Span};
+use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use rustc_hash::FxHashMap;
 
 use crate::{
     contributions::Definition,
-    namespace::{NameConflict, NamespaceId, NamespaceItems, raw_namespace_items},
+    namespace::{NameConflict, NamespaceId, NamespaceItems, namespace_items},
 };
+
+/// A namespace name that shadows a root-level declaration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamespaceShadow<'db> {
+    /// The namespace name that shadows (e.g., "foo" from `ns_foo/`).
+    pub ns_name: Name,
+    /// The full namespace path (e.g., `["foo"]` or `["foo", "bar"]`).
+    pub ns_path: Vec<Name>,
+    /// The root-level definition being shadowed.
+    pub shadowed_def: Definition<'db>,
+}
+
+impl<'db> NamespaceShadow<'db> {
+    /// Convert to a `Diagnostic` warning with the shadowed definition's span.
+    pub fn to_diagnostic(&self, db: &'db dyn crate::Db) -> Diagnostic {
+        let def = self.shadowed_def;
+        let file = def.file(db);
+        let file_id = file.file_id(db);
+
+        // Look up the name span from file contributions.
+        let contribs = crate::file_symbol_contributions(db, file);
+        let name_span = contribs
+            .types
+            .iter()
+            .chain(contribs.values.iter())
+            .find(|(_, c)| c.definition == def)
+            .map(|(_, c)| c.name_span);
+
+        let message = format!(
+            "Namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
+            self.ns_name,
+            self.ns_name,
+            def.kind_name(),
+            self.ns_name
+        );
+
+        let mut diag = Diagnostic::warning(DiagnosticId::NamespaceShadow, message);
+
+        if let Some(range) = name_span {
+            diag = diag.with_primary(
+                Span { file_id, range },
+                format!(
+                    "this {} is shadowed by namespace `{}`",
+                    def.kind_name(),
+                    self.ns_name
+                ),
+            );
+        }
+
+        diag.with_phase(DiagnosticPhase::Validation)
+    }
+}
 
 /// Interned package identity.
 #[salsa::interned]
@@ -19,10 +72,11 @@ pub struct PackageId<'db> {
 }
 
 /// Rare/optional data for `PackageItems`. Heap-allocated only when
-/// at least one conflict exists.
+/// at least one conflict or shadow exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageItemsExtra<'db> {
     pub conflicts: Vec<NameConflict<'db>>,
+    pub shadows: Vec<NamespaceShadow<'db>>,
 }
 
 /// All items across all namespaces within a package.
@@ -39,6 +93,13 @@ impl<'db> PackageItems<'db> {
         self.extra
             .as_ref()
             .map(|e| e.conflicts.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub fn shadows(&self) -> &[NamespaceShadow<'db>] {
+        self.extra
+            .as_ref()
+            .map(|e| e.shadows.as_slice())
             .unwrap_or(&[])
     }
 }
@@ -93,6 +154,19 @@ impl<'db> PackageItems<'db> {
         None
     }
 
+    /// Look up a type by short name, searching across ALL namespaces.
+    ///
+    /// Use when the caller only has a short name (e.g. `"File"`) without
+    /// knowing which namespace it lives in. Returns the first match found.
+    pub fn lookup_type_any_ns(&self, name: &Name) -> Option<Definition<'db>> {
+        for ns in self.namespaces.values() {
+            if let Some(def) = ns.types.get(name) {
+                return Some(*def);
+            }
+        }
+        None
+    }
+
     /// Look up a value by path segments.
     pub fn lookup_value(&self, path: &[Name]) -> Option<Definition<'db>> {
         if path.is_empty() {
@@ -111,17 +185,13 @@ impl<'db> PackageItems<'db> {
     }
 }
 
-/// Merges all raw `namespace_items` within a package.
-/// Raw = original AST items only, no PPIR expansion.
+/// Merges all `namespace_items` within a package.
 ///
 /// Discovers all unique namespace paths for the package by scanning project
-/// files, then calls `raw_namespace_items` for each — allowing Salsa to cache
+/// files, then calls `namespace_items` for each — allowing Salsa to cache
 /// each namespace's contribution independently.
 #[salsa::tracked(returns(ref))]
-pub fn raw_package_items<'db>(
-    db: &'db dyn crate::Db,
-    package_id: PackageId<'db>,
-) -> PackageItems<'db> {
+pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) -> PackageItems<'db> {
     let package_name = package_id.name(db);
 
     // Discover all unique namespace paths for this package.
@@ -140,20 +210,59 @@ pub fn raw_package_items<'db>(
     let mut all_conflicts: Vec<NameConflict<'db>> = Vec::new();
     for ns_path in ns_paths {
         let ns_id = NamespaceId::new(db, package_name.clone(), ns_path.clone());
-        let items = raw_namespace_items(db, ns_id);
+        let items = namespace_items(db, ns_id);
         all_conflicts.extend(items.conflicts().iter().cloned());
         namespaces.insert(ns_path, items.clone());
     }
 
+    // Detect namespace names that shadow root-level declarations.
+    let mut shadows: Vec<NamespaceShadow<'db>> = Vec::new();
+    if let Some(root_ns) = namespaces.get(&vec![] as &Vec<Name>) {
+        for ns_path in namespaces.keys() {
+            if ns_path.is_empty() {
+                continue;
+            }
+            let first_segment = &ns_path[0];
+            if let Some(def) = root_ns
+                .types
+                .get(first_segment)
+                .or_else(|| root_ns.values.get(first_segment))
+            {
+                shadows.push(NamespaceShadow {
+                    ns_name: first_segment.clone(),
+                    ns_path: ns_path.clone(),
+                    shadowed_def: *def,
+                });
+            }
+        }
+    }
+    shadows.sort_by(|a, b| a.ns_name.cmp(&b.ns_name));
+
     all_conflicts.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let extra = if all_conflicts.is_empty() {
+    let extra = if all_conflicts.is_empty() && shadows.is_empty() {
         None
     } else {
         Some(Box::new(PackageItemsExtra {
             conflicts: all_conflicts,
+            shadows,
         }))
     };
 
     PackageItems { namespaces, extra }
+}
+
+/// Declares the packages that `package_id` depends on.
+/// Currently hardcoded: "user" depends on "baml", everything else depends on nothing.
+#[salsa::tracked(returns(ref))]
+pub fn package_dependencies<'db>(
+    db: &'db dyn crate::Db,
+    package_id: PackageId<'db>,
+) -> Vec<PackageId<'db>> {
+    match package_id.name(db).as_str() {
+        // The "baml" package provides core builtins; every other package
+        // implicitly depends on it.
+        "baml" => vec![],
+        _ => vec![PackageId::new(db, Name::new("baml"))],
+    }
 }

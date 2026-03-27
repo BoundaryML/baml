@@ -21,8 +21,8 @@ async fn return_enum_variant() {
 
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> Shape {
-        load_const Shape.Rectangle
-        alloc_variant Shape
+        load_const user.Shape.Rectangle
+        alloc_variant user.Shape
         return
     }
     ");
@@ -52,8 +52,8 @@ async fn assign_enum_variant() {
 
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> Shape {
-        load_const Shape.Rectangle
-        alloc_variant Shape
+        load_const user.Shape.Rectangle
+        alloc_variant user.Shape
         return
     }
     ");
@@ -86,9 +86,9 @@ async fn pass_enum_variant_to_function() {
 
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> Shape {
-        load_const Shape.Rectangle
-        alloc_variant Shape
-        call return_shape
+        load_const user.Shape.Rectangle
+        alloc_variant user.Shape
+        call user.return_shape
         return
     }
 

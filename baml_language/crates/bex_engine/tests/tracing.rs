@@ -355,7 +355,7 @@ fn llm_functions_have_trace_flag() {
     let program = compile_for_engine(source);
 
     // LLM functions should have trace: true
-    for name in ["ExtractInfo", "SummarizeInfo"] {
+    for name in ["user.ExtractInfo", "user.SummarizeInfo"] {
         let idx = program
             .function_indices
             .get(name)
@@ -368,7 +368,7 @@ fn llm_functions_have_trace_flag() {
     }
 
     // Expression functions should have trace: false
-    for name in ["InnerPipeline", "OuterPipeline"] {
+    for name in ["user.InnerPipeline", "user.OuterPipeline"] {
         let idx = program
             .function_indices
             .get(name)

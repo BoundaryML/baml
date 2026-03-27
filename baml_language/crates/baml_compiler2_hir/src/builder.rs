@@ -9,6 +9,7 @@
 use std::sync::Arc;
 
 use baml_base::{Name, SourceFile};
+use baml_compiler_diagnostics::diagnostic::DiagnosticId;
 use baml_compiler2_ast as ast;
 use rustc_hash::FxHashMap;
 use text_size::TextRange;
@@ -20,8 +21,8 @@ use crate::{
     ids::{FunctionMarker, LocalItemId},
     item_tree::ItemTree,
     loc::{
-        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, RetryPolicyLoc, TemplateStringLoc,
-        TestLoc, TypeAliasLoc,
+        ClassLoc, ClientLoc, EnumLoc, FunctionLoc, GeneratorLoc, LetLoc, RetryPolicyLoc,
+        TemplateStringLoc, TestLoc, TypeAliasLoc,
     },
     scope::{FileScopeId, Scope, ScopeId, ScopeKind},
     semantic_index::{DefinitionSite, FileSemanticIndex, ScopeBindings, SemanticIndexExtra},
@@ -93,6 +94,7 @@ impl<'db> SemanticIndexBuilder<'db> {
         for item in items {
             self.lower_item(item);
         }
+        self.validate_phase1_builtin_contracts(items);
 
         // Pop: File, Namespace*, Package, Project
         self.pop_scope(); // File
@@ -215,13 +217,18 @@ impl<'db> SemanticIndexBuilder<'db> {
             self.record_expr_scope(expr_id);
             let _ = expr;
         }
-        // Collect let-bindings, detecting duplicates within the scope.
+        // Collect let-bindings and for-loop bindings, detecting duplicates within the scope.
         let mut seen: FxHashMap<Name, Vec<MemberSite>> = FxHashMap::default();
         for (stmt_id, stmt) in body.stmts.iter() {
-            if let ast::Stmt::Let { pattern, .. } = stmt {
+            let binding_pattern = match stmt {
+                ast::Stmt::Let { pattern, .. } => Some(*pattern),
+                ast::Stmt::For { binding, .. } => Some(*binding),
+                _ => None,
+            };
+            if let Some(pattern) = binding_pattern {
                 let scope_id = self.current_scope_id();
-                if let ast::Pattern::Binding(name) = &body.patterns[*pattern] {
-                    let name_range = source_map.pattern_span(*pattern);
+                if let ast::Pattern::Binding(name) = &body.patterns[pattern] {
+                    let name_range = source_map.pattern_span(pattern);
 
                     seen.entry(name.clone()).or_default().push(MemberSite {
                         range: name_range,
@@ -236,6 +243,89 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
 
         self.emit_duplicate_diagnostics(seen);
+
+        // Register match-arm pattern bindings in child scopes.
+        // The MatchArm scope's TextRange covers the arm span, so
+        // scope_at_offset will find it for names used inside the arm body.
+        for (arm_id, arm) in body.match_arms.iter() {
+            let arm_span = source_map.match_arm_span(arm_id);
+            self.push_scope(ScopeKind::MatchArm, None, arm_span);
+
+            if let Some(name) = Self::pattern_binding_name(&body.patterns, arm.pattern) {
+                let name_range = source_map.pattern_span(arm.pattern);
+                let scope_id = self.current_scope_id();
+                self.scope_bindings[scope_id.index() as usize]
+                    .bindings
+                    .push((
+                        name.clone(),
+                        DefinitionSite::PatternBinding(arm.pattern),
+                        name_range,
+                    ));
+            }
+
+            self.pop_scope();
+        }
+
+        // Register catch clause and catch arm pattern bindings in child scopes.
+        // Two-level scoping: CatchClause (holds clause binding) → CatchArm (holds arm pattern).
+        for (expr_id, expr) in body.exprs.iter() {
+            let ast::Expr::Catch { clauses, .. } = expr else {
+                continue;
+            };
+            let catch_span = source_map.expr_span(expr_id);
+
+            for clause in clauses {
+                // Push CatchClause scope — clause binding visible to all arms.
+                self.push_scope(ScopeKind::CatchClause, None, catch_span);
+
+                if let Some(name) = Self::pattern_binding_name(&body.patterns, clause.binding) {
+                    let name_range = source_map.pattern_span(clause.binding);
+                    let scope_id = self.current_scope_id();
+                    self.scope_bindings[scope_id.index() as usize]
+                        .bindings
+                        .push((
+                            name.clone(),
+                            DefinitionSite::PatternBinding(clause.binding),
+                            name_range,
+                        ));
+                }
+
+                // Push CatchArm child scopes — arm pattern visible only in arm body.
+                for &arm_id in &clause.arms {
+                    let arm = &body.catch_arms[arm_id];
+                    let arm_span = source_map.catch_arm_span(arm_id);
+                    self.push_scope(ScopeKind::CatchArm, None, arm_span);
+
+                    if let Some(name) = Self::pattern_binding_name(&body.patterns, arm.pattern) {
+                        let name_range = source_map.pattern_span(arm.pattern);
+                        let scope_id = self.current_scope_id();
+                        self.scope_bindings[scope_id.index() as usize]
+                            .bindings
+                            .push((
+                                name.clone(),
+                                DefinitionSite::PatternBinding(arm.pattern),
+                                name_range,
+                            ));
+                    }
+
+                    self.pop_scope(); // CatchArm
+                }
+
+                self.pop_scope(); // CatchClause
+            }
+        }
+    }
+
+    /// Extract the binding name from a pattern, if it has one.
+    fn pattern_binding_name(
+        patterns: &la_arena::Arena<ast::Pattern>,
+        pat_id: ast::PatId,
+    ) -> Option<&Name> {
+        match &patterns[pat_id] {
+            ast::Pattern::Binding(name) if name.as_str() != "_" => Some(name),
+            ast::Pattern::TypedBinding { name, .. } if name.as_str() != "_" => Some(name),
+            _ => None,
+        }
     }
 
     // ── Item lowering ────────────────────────────────────────────────────────
@@ -253,6 +343,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Item::Generator(g) => self.lower_generator(g),
             ast::Item::TemplateString(ts) => self.lower_template_string(ts),
             ast::Item::RetryPolicy(rp) => self.lower_retry_policy(rp),
+            ast::Item::Let(l) => self.lower_let(l),
         }
     }
 
@@ -379,7 +470,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_client(&mut self, c: &ast::ClientDef) {
-        let local_id = self.item_tree.alloc_client(&c.name);
+        let local_id = self.item_tree.alloc_client(c);
         let loc = ClientLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             c.name.clone(),
@@ -394,7 +485,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_test(&mut self, t: &ast::TestDef) {
-        let local_id = self.item_tree.alloc_test(&t.name);
+        let local_id = self.item_tree.alloc_test(t);
         let loc = TestLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             t.name.clone(),
@@ -424,7 +515,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_template_string(&mut self, ts: &ast::TemplateStringDef) {
-        let local_id = self.item_tree.alloc_template_string(&ts.name);
+        let local_id = self.item_tree.alloc_template_string(ts);
         let loc = TemplateStringLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             ts.name.clone(),
@@ -439,7 +530,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_retry_policy(&mut self, rp: &ast::RetryPolicyDef) {
-        let local_id = self.item_tree.alloc_retry_policy(&rp.name);
+        let local_id = self.item_tree.alloc_retry_policy(rp);
         let loc = RetryPolicyLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             rp.name.clone(),
@@ -451,5 +542,343 @@ impl<'db> SemanticIndexBuilder<'db> {
 
         self.push_scope(ScopeKind::Item, Some(rp.name.clone()), rp.span);
         self.pop_scope();
+    }
+
+    fn lower_let(&mut self, l: &ast::LetDef) {
+        let local_id = self.item_tree.alloc_let(l);
+        let loc = LetLoc::new(self.db, self.file, local_id);
+        self.value_contributions.push((
+            l.name.clone(),
+            Contribution {
+                name_span: l.name_span,
+                definition: Definition::Let(loc),
+            },
+        ));
+
+        self.push_scope(ScopeKind::Let, Some(l.name.clone()), l.span);
+        if let Some((ref body, ref source_map)) = l.initializer {
+            self.walk_expr_body(body, source_map);
+        }
+        self.pop_scope();
+    }
+
+    fn validate_phase1_builtin_contracts(&mut self, items: &[ast::Item]) {
+        let is_builtin_file = self
+            .file
+            .path(self.db)
+            .to_string_lossy()
+            .starts_with("<builtin>/");
+        for item in items {
+            self.validate_item_phase1(item, is_builtin_file);
+        }
+    }
+
+    fn validate_item_phase1(&mut self, item: &ast::Item, is_builtin_file: bool) {
+        match item {
+            ast::Item::Function(function) => {
+                self.validate_function_phase1(function, is_builtin_file, "function");
+            }
+            ast::Item::Class(class) => {
+                self.validate_internal_attributes(
+                    &class.attributes,
+                    is_builtin_file,
+                    "class",
+                    false,
+                );
+                for field in &class.fields {
+                    if let Some(type_expr) = &field.type_expr {
+                        self.validate_type_expr_phase1(
+                            &type_expr.expr,
+                            type_expr.span,
+                            is_builtin_file,
+                        );
+                    }
+                    self.validate_internal_attributes(
+                        &field.attributes,
+                        is_builtin_file,
+                        "class field",
+                        false,
+                    );
+                }
+                for method in &class.methods {
+                    self.validate_function_phase1(method, is_builtin_file, "method");
+                }
+            }
+            ast::Item::TypeAlias(alias) => {
+                if let Some(type_expr) = &alias.type_expr {
+                    self.validate_type_expr_phase1(
+                        &type_expr.expr,
+                        type_expr.span,
+                        is_builtin_file,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn validate_function_phase1(
+        &mut self,
+        function: &ast::FunctionDef,
+        is_builtin_file: bool,
+        context: &'static str,
+    ) {
+        let is_host_bound = matches!(function.body, Some(ast::FunctionBodyDef::Builtin(_)));
+        self.validate_internal_attributes(
+            &function.attributes,
+            is_builtin_file,
+            context,
+            is_host_bound,
+        );
+
+        for param in &function.params {
+            if let Some(type_expr) = &param.type_expr {
+                self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+            }
+        }
+        if let Some(type_expr) = &function.return_type {
+            self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+        }
+        if let Some(type_expr) = &function.throws {
+            self.validate_type_expr_phase1(&type_expr.expr, type_expr.span, is_builtin_file);
+        }
+
+        if let Some(ast::FunctionBodyDef::Builtin(kind)) = function.body {
+            if !is_builtin_file {
+                let feature = match kind {
+                    ast::BuiltinKind::Vm => "$rust_function",
+                    ast::BuiltinKind::Io => "$rust_io_function",
+                };
+                self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
+                    feature: feature.to_string(),
+                    span: function.span,
+                });
+                return;
+            }
+
+            if let Some(throws) = &function.throws {
+                let mut invalid = Vec::new();
+                Self::collect_invalid_builtin_throw_types(&throws.expr, &mut invalid);
+                if !invalid.is_empty() {
+                    self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                        diagnostic_id: DiagnosticId::ThrowsContractViolation,
+                        message: format!(
+                            "Host-bound builtin `{}` may only declare `throws` using `baml.errors.*` types; invalid entries: {}",
+                            function.name,
+                            invalid.join(", ")
+                        ),
+                        span: throws.span,
+                    });
+                }
+            }
+        }
+    }
+
+    fn validate_internal_attributes(
+        &mut self,
+        attributes: &[ast::RawAttribute],
+        is_builtin_file: bool,
+        context: &'static str,
+        is_host_bound: bool,
+    ) {
+        for attr in attributes {
+            let name = attr.name.as_str();
+            if !name.starts_with("internal.") {
+                continue;
+            }
+
+            if !is_builtin_file {
+                self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
+                    feature: format!("@@{name}"),
+                    span: attr.span,
+                });
+                continue;
+            }
+
+            match name {
+                "internal.opaque" => {
+                    if context != "class" {
+                        self.diagnostics
+                            .push(Hir2Diagnostic::InvalidAttributeContext {
+                                attr_name: attr.name.clone(),
+                                context,
+                                allowed_contexts: "builtin classes",
+                                span: attr.span,
+                            });
+                    }
+                }
+                "internal.uses" => {
+                    if !matches!(context, "function" | "method") || !is_host_bound {
+                        self.diagnostics
+                            .push(Hir2Diagnostic::InvalidAttributeContext {
+                                attr_name: attr.name.clone(),
+                                context,
+                                allowed_contexts: "host-bound builtin functions and methods",
+                                span: attr.span,
+                            });
+                        continue;
+                    }
+                    if attr.args.len() != 1 {
+                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                            diagnostic_id: DiagnosticId::InvalidAttributeArg,
+                            message: format!(
+                                "Attribute `@@{name}` expects exactly one argument: `vm` or `engine_ctx`"
+                            ),
+                            span: attr.span,
+                        });
+                        continue;
+                    }
+                    let value = attr.args[0].value.as_str();
+                    if value != "vm" && value != "engine_ctx" {
+                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                            diagnostic_id: DiagnosticId::InvalidAttributeArg,
+                            message: format!(
+                                "Attribute `@@{name}` only accepts `vm` or `engine_ctx`, got `{value}`"
+                            ),
+                            span: attr.args[0].span,
+                        });
+                    }
+                }
+                "internal.panics" => {
+                    if !matches!(context, "function" | "method") || !is_host_bound {
+                        self.diagnostics
+                            .push(Hir2Diagnostic::InvalidAttributeContext {
+                                attr_name: attr.name.clone(),
+                                context,
+                                allowed_contexts: "host-bound builtin functions and methods",
+                                span: attr.span,
+                            });
+                        continue;
+                    }
+                    for arg in &attr.args {
+                        let value = arg.value.as_str();
+                        if value != "HostPanic" && value != "baml.errors.HostPanic" {
+                            self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                                diagnostic_id: DiagnosticId::InvalidAttributeArg,
+                                message: format!(
+                                    "Attribute `@@{name}` may only reference known builtin panic types; got `{value}`"
+                                ),
+                                span: arg.span,
+                            });
+                        }
+                    }
+                }
+                _ => {
+                    self.diagnostics.push(Hir2Diagnostic::UnknownAttribute {
+                        attr_name: attr.name.clone(),
+                        span: attr.span,
+                        valid_attributes: vec![
+                            "internal.opaque",
+                            "internal.uses",
+                            "internal.panics",
+                        ],
+                    });
+                }
+            }
+        }
+    }
+
+    fn validate_type_expr_phase1(
+        &mut self,
+        type_expr: &ast::TypeExpr,
+        span: TextRange,
+        is_builtin_file: bool,
+    ) {
+        if is_builtin_file {
+            return;
+        }
+
+        if Self::type_expr_contains_rust(type_expr) {
+            self.diagnostics.push(Hir2Diagnostic::BuiltinOnlySyntax {
+                feature: "$rust_type".to_string(),
+                span,
+            });
+        }
+    }
+
+    fn type_expr_contains_rust(type_expr: &ast::TypeExpr) -> bool {
+        match type_expr {
+            ast::TypeExpr::Rust => true,
+            ast::TypeExpr::Optional(inner) | ast::TypeExpr::List(inner) => {
+                Self::type_expr_contains_rust(inner)
+            }
+            ast::TypeExpr::Map { key, value } => {
+                Self::type_expr_contains_rust(key) || Self::type_expr_contains_rust(value)
+            }
+            ast::TypeExpr::Union(types) => types.iter().any(Self::type_expr_contains_rust),
+            ast::TypeExpr::Function { params, ret } => {
+                params
+                    .iter()
+                    .any(|param| Self::type_expr_contains_rust(&param.ty))
+                    || Self::type_expr_contains_rust(ret)
+            }
+            _ => false,
+        }
+    }
+
+    fn collect_invalid_builtin_throw_types(type_expr: &ast::TypeExpr, invalid: &mut Vec<String>) {
+        match type_expr {
+            ast::TypeExpr::Path(segments) => {
+                let is_builtin_error = segments.len() >= 3
+                    && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
+                    && segments[1].as_str() == "errors";
+                if !is_builtin_error {
+                    invalid.push(Self::render_type_expr(type_expr));
+                }
+            }
+            ast::TypeExpr::Union(types) => {
+                for ty in types {
+                    Self::collect_invalid_builtin_throw_types(ty, invalid);
+                }
+            }
+            _ => invalid.push(Self::render_type_expr(type_expr)),
+        }
+    }
+
+    fn render_type_expr(type_expr: &ast::TypeExpr) -> String {
+        match type_expr {
+            ast::TypeExpr::Path(segments) => segments
+                .iter()
+                .map(Name::as_str)
+                .collect::<Vec<_>>()
+                .join("."),
+            ast::TypeExpr::Int => "int".to_string(),
+            ast::TypeExpr::Float => "float".to_string(),
+            ast::TypeExpr::String => "string".to_string(),
+            ast::TypeExpr::Bool => "bool".to_string(),
+            ast::TypeExpr::Null => "null".to_string(),
+            ast::TypeExpr::Never => "never".to_string(),
+            ast::TypeExpr::Media(kind) => kind.to_string(),
+            ast::TypeExpr::Optional(inner) => format!("{}?", Self::render_type_expr(inner)),
+            ast::TypeExpr::List(inner) => format!("{}[]", Self::render_type_expr(inner)),
+            ast::TypeExpr::Map { key, value } => format!(
+                "map<{}, {}>",
+                Self::render_type_expr(key),
+                Self::render_type_expr(value)
+            ),
+            ast::TypeExpr::Union(types) => types
+                .iter()
+                .map(Self::render_type_expr)
+                .collect::<Vec<_>>()
+                .join(" | "),
+            ast::TypeExpr::Literal(literal) => literal.to_string(),
+            ast::TypeExpr::Function { params, ret } => format!(
+                "({}) -> {}",
+                params
+                    .iter()
+                    .map(|param| match &param.name {
+                        Some(name) => format!("{}: {}", name, Self::render_type_expr(&param.ty)),
+                        None => Self::render_type_expr(&param.ty),
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                Self::render_type_expr(ret)
+            ),
+            ast::TypeExpr::BuiltinUnknown => "unknown".to_string(),
+            ast::TypeExpr::Type => "type".to_string(),
+            ast::TypeExpr::Rust => "$rust_type".to_string(),
+            ast::TypeExpr::Error => "<error>".to_string(),
+            ast::TypeExpr::Unknown => "<unknown>".to_string(),
+        }
     }
 }

@@ -1,22 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function caller() -> bool {
-    callee() catch (e) {
-        Errors.AuthenticationError => {
-            return e;
-        },
-    }
+=== HIR2 ===
+enum user.Errors {AuthenticationError, AuthorizationError, NotFoundError, InternalServerError}
+function user.callee() -> bool  [expr] {
+  { return true }
 }
-
-function callee() -> bool {
-    return true;
-}
-
-enum Errors {
-  AuthenticationError
-  AuthorizationError
-  NotFoundError
-  InternalServerError
+function user.caller() -> bool  [expr] {
+  {  } callee() catch (e) { user.Errors.AuthenticationError => { return e } }
 }

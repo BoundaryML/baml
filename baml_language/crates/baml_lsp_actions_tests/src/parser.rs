@@ -218,7 +218,7 @@ fn parse_source_section(
 
     // Extract cursor markers from each file and update the content
     let mut cursor_markers: Vec<CursorMarker> = Vec::new();
-    for (filename, vfile) in files.iter_mut() {
+    for (filename, vfile) in &mut files {
         if let Some((clean_content, marker)) = extract_cursor_from_content(&vfile.content, filename)
         {
             vfile.content = clean_content;

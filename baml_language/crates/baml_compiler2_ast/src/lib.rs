@@ -8,6 +8,8 @@
 //! can be constructed directly in tests without parsing.
 
 pub mod ast;
+pub(crate) mod companions;
+pub(crate) mod lower_config_item;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;
@@ -60,6 +62,54 @@ mod tests {
                 }
             })
             .expect("expected a FunctionDef")
+    }
+
+    #[test]
+    fn ast_function_def_has_generic_params() {
+        let source = r#"
+function deep_copy<T>(value: T) -> T {
+  $rust_function
+}
+"#;
+        let function = first_function(parse_and_lower(source));
+
+        assert_eq!(function.generic_params.len(), 1);
+        assert_eq!(function.generic_params[0].as_str(), "T");
+    }
+
+    #[test]
+    fn ast_lowers_method_block_attributes() {
+        let source = r#"
+class Response {
+  @@internal.uses(engine_ctx)
+  function text(self) -> string throws baml.errors.Io {
+    $rust_io_function
+  }
+}
+"#;
+        let items = parse_and_lower(source);
+        let class = items
+            .into_iter()
+            .find_map(|item| match item {
+                Item::Class(class) => Some(class),
+                _ => None,
+            })
+            .expect("expected ClassDef");
+        let method = class.methods.first().expect("expected method");
+
+        assert_eq!(method.attributes.len(), 1);
+        assert_eq!(method.attributes[0].name.as_str(), "internal.uses");
+        assert_eq!(method.attributes[0].args.len(), 1);
+        assert_eq!(method.attributes[0].args[0].value, "engine_ctx");
+        let throws = method.throws.as_ref().expect("expected throws contract");
+        assert_eq!(
+            throws.expr,
+            TypeExpr::Path(vec![
+                baml_base::Name::new("baml"),
+                baml_base::Name::new("errors"),
+                baml_base::Name::new("Io"),
+            ])
+        );
     }
 
     // ── 4.1/4.2: Parser produces GENERIC_PARAM_LIST / GENERIC_PARAM CST nodes ──
@@ -589,5 +639,245 @@ function f() -> int {
         } else {
             panic!("expected expression body for f");
         }
+    }
+
+    // ── Phase 1: retry_policy produces Item::Let with LetOrigin::RetryPolicy ──
+
+    // ── Postfix type expression tests ────────────────────────────────────────
+
+    fn first_type_alias(items: Vec<Item>) -> crate::ast::TypeAliasDef {
+        items
+            .into_iter()
+            .find_map(|item| {
+                if let Item::TypeAlias(ta) = item {
+                    Some(ta)
+                } else {
+                    None
+                }
+            })
+            .expect("expected a TypeAliasDef")
+    }
+
+    #[test]
+    fn type_expr_simple_optional() {
+        let ta = first_type_alias(parse_and_lower("type T = int?\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(te, TypeExpr::Optional(Box::new(TypeExpr::Int)));
+    }
+
+    #[test]
+    fn type_expr_simple_array() {
+        let ta = first_type_alias(parse_and_lower("type T = int[]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(te, TypeExpr::List(Box::new(TypeExpr::Int)));
+    }
+
+    #[test]
+    fn type_expr_array_optional() {
+        let ta = first_type_alias(parse_and_lower("type T = int[]?\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::Optional(Box::new(TypeExpr::List(Box::new(TypeExpr::Int))))
+        );
+    }
+
+    #[test]
+    fn type_expr_optional_in_array() {
+        let ta = first_type_alias(parse_and_lower("type T = string?[]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::Optional(Box::new(TypeExpr::String))))
+        );
+    }
+
+    #[test]
+    fn type_expr_optional_array_optional() {
+        let ta = first_type_alias(parse_and_lower("type T = string?[]?\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::Optional(Box::new(TypeExpr::List(Box::new(TypeExpr::Optional(
+                Box::new(TypeExpr::String)
+            )))))
+        );
+    }
+
+    #[test]
+    fn type_expr_nested_int_array() {
+        let ta = first_type_alias(parse_and_lower("type T = int[][]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::List(Box::new(TypeExpr::Int))))
+        );
+    }
+
+    #[test]
+    fn type_expr_triple_nested_array() {
+        let ta = first_type_alias(parse_and_lower("type T = int[][][]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::List(Box::new(TypeExpr::List(
+                Box::new(TypeExpr::Int)
+            )))))
+        );
+    }
+
+    #[test]
+    fn type_expr_paren_union_array() {
+        let ta = first_type_alias(parse_and_lower("type T = (int | string)[]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::Union(vec![
+                TypeExpr::Int,
+                TypeExpr::String
+            ])))
+        );
+    }
+
+    #[test]
+    fn type_expr_nested_union_array() {
+        let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::List(Box::new(TypeExpr::Union(vec![
+                TypeExpr::Int,
+                TypeExpr::Bool
+            ])))))
+        );
+    }
+
+    #[test]
+    fn type_expr_nested_union_array_opt() {
+        let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]?\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::Optional(Box::new(TypeExpr::List(Box::new(TypeExpr::List(
+                Box::new(TypeExpr::Union(vec![TypeExpr::Int, TypeExpr::Bool]))
+            )))))
+        );
+    }
+
+    #[test]
+    fn type_expr_opt_union_in_array() {
+        let ta = first_type_alias(parse_and_lower("type T = (int | bool)?[]\n"));
+        let te = ta.type_expr.unwrap().expr;
+        assert_eq!(
+            te,
+            TypeExpr::List(Box::new(TypeExpr::Optional(Box::new(TypeExpr::Union(
+                vec![TypeExpr::Int, TypeExpr::Bool]
+            )))))
+        );
+    }
+
+    // ── Phase 1: retry_policy produces Item::Let with LetOrigin::RetryPolicy ──
+
+    #[test]
+    fn retry_policy_produces_let_item_with_retry_policy_origin() {
+        use crate::ast::{Expr, Item, LetOrigin, Literal};
+
+        let source = r#"
+retry_policy MyRetry {
+  max_retries 3
+  initial_delay_ms 500
+  multiplier 2.0
+  max_delay_ms 60000
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(items.len(), 1, "expected exactly one item");
+
+        let let_def = match &items[0] {
+            Item::Let(ld) => ld,
+            other => panic!("expected Item::Let, got {other:?}"),
+        };
+
+        assert_eq!(let_def.name.as_str(), "MyRetry");
+        assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
+
+        let (body, _source_map) = let_def.initializer.as_ref().expect("expected initializer");
+
+        let root_id = body.root_expr.expect("expected root expr");
+        let root_expr = &body.exprs[root_id];
+
+        let (type_name, fields, _) = match root_expr {
+            Expr::Object {
+                type_name,
+                fields,
+                spreads,
+            } => (type_name, fields, spreads),
+            other => panic!("expected Expr::Object, got {other:?}"),
+        };
+
+        assert_eq!(
+            type_name.as_ref().map(smol_str::SmolStr::as_str),
+            Some("RetryPolicy"),
+            "expected type_name to be RetryPolicy"
+        );
+
+        // Check field names
+        let field_names: Vec<&str> = fields.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(
+            field_names,
+            vec![
+                "max_retries",
+                "initial_delay_ms",
+                "multiplier",
+                "max_delay_ms"
+            ]
+        );
+
+        // Check field values
+        let field_exprs: Vec<&Expr> = fields.iter().map(|(_, id)| &body.exprs[*id]).collect();
+
+        assert_eq!(
+            field_exprs[0],
+            &Expr::Literal(Literal::Int(3)),
+            "max_retries should be Int(3)"
+        );
+        assert_eq!(
+            field_exprs[1],
+            &Expr::Literal(Literal::Int(500)),
+            "initial_delay_ms should be Int(500)"
+        );
+        assert_eq!(
+            field_exprs[2],
+            &Expr::Literal(Literal::Float("2.0".to_string())),
+            "multiplier should be Float(2.0)"
+        );
+        assert_eq!(
+            field_exprs[3],
+            &Expr::Literal(Literal::Int(60000)),
+            "max_delay_ms should be Int(60000)"
+        );
+    }
+
+    #[test]
+    fn retry_policy_with_defaults_produces_let_item() {
+        use crate::ast::{Item, LetOrigin};
+
+        // A retry_policy with only max_retries set; other fields use defaults
+        let source = r#"
+retry_policy Simple {
+  max_retries 5
+}
+"#;
+        let items = parse_and_lower(source);
+        assert_eq!(items.len(), 1);
+
+        let let_def = match &items[0] {
+            Item::Let(ld) => ld,
+            other => panic!("expected Item::Let, got {other:?}"),
+        };
+
+        assert_eq!(let_def.name.as_str(), "Simple");
+        assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
+        assert!(let_def.initializer.is_some(), "expected an initializer");
     }
 }

@@ -96,10 +96,18 @@ pub struct TestInfo {
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ProjectDiagnostic {
+    pub severity: &'static str,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
     pub functions: Vec<FunctionInfo>,
     pub tests: Vec<TestInfo>,
+    pub diagnostics: Vec<ProjectDiagnostic>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

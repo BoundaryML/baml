@@ -8,8 +8,11 @@
 #[cfg(test)]
 mod tests {
     use baml_base::Name;
-    use baml_compiler2_hir::{namespace::NamespaceId, package::PackageId};
-    use baml_compiler2_ppir::{file_semantic_index, package_items};
+    use baml_compiler2_hir::{
+        file_semantic_index,
+        namespace::NamespaceId,
+        package::{PackageId, package_items},
+    };
     use baml_project::ProjectDatabase;
     use salsa::Setter;
 
@@ -138,7 +141,7 @@ mod tests {
         let _f = db.add_file("ns.baml", "class Widget {}");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         assert!(ns.types.contains_key(&Name::new("Widget")));
     }
@@ -154,7 +157,7 @@ mod tests {
             "function greet(name: string) -> string { client C\nprompt #\"hi\"# }",
         );
 
-        let item_tree = baml_compiler2_ppir::file_item_tree(&db, file);
+        let item_tree = baml_compiler2_hir::file_item_tree(&db, file);
 
         // Find the function in the item tree
         let func = item_tree
@@ -220,7 +223,7 @@ mod tests {
 
             // scope_bindings_query also works using the pre-interned ScopeId
             let scope_id = index.scope_ids[i];
-            let bindings2 = baml_compiler2_ppir::scope_bindings_query(&db, scope_id);
+            let bindings2 = baml_compiler2_hir::scope_bindings_query(&db, scope_id);
             assert_eq!(bindings2.params.len(), 2);
         } else {
             panic!("No Function scope found in index");
@@ -238,24 +241,20 @@ mod tests {
         let _file_b = db.add_file("b.baml", "class Foo { y string }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         // First wins (a.baml < b.baml alphabetically)
         assert!(ns.types.contains_key(&Name::new("Foo")));
 
-        // Two conflicts: "Foo" and "stream_Foo" (both defined in a.baml and b.baml)
+        // Exactly one conflict for "Foo"
         assert_eq!(
             ns.conflicts().len(),
-            2,
-            "Expected 2 conflicts (Foo + stream_Foo), got: {:?}",
+            1,
+            "Expected 1 conflict, got: {:?}",
             ns.conflicts()
         );
-        let foo_conflict = ns
-            .conflicts()
-            .iter()
-            .find(|c| c.name == Name::new("Foo"))
-            .expect("Foo conflict");
-        assert_eq!(foo_conflict.entries.len(), 2);
+        assert_eq!(ns.conflicts()[0].name, Name::new("Foo"));
+        assert_eq!(ns.conflicts()[0].entries.len(), 2);
     }
 
     /// Three files all defining the same function name.
@@ -276,14 +275,17 @@ mod tests {
         );
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // One conflict with 3 definitions
-        assert_eq!(ns.conflicts().len(), 1);
-        assert_eq!(ns.conflicts()[0].entries.len(), 3);
+        // Three conflicts: greet, greet$render_prompt, greet$build_request
+        // Each LLM function expands to companions, all duplicated across 3 files.
+        assert_eq!(ns.conflicts().len(), 3);
+        for conflict in ns.conflicts() {
+            assert_eq!(conflict.entries.len(), 3);
+        }
     }
 
     /// Different item kinds competing for the same type name (class vs enum).
@@ -294,7 +296,7 @@ mod tests {
         let _file_b = db.add_file("b.baml", "enum Thing { A\nB }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         assert_eq!(ns.conflicts().len(), 1);
         let conflict = &ns.conflicts()[0];
@@ -319,7 +321,7 @@ mod tests {
         let _file_b = db.add_file("b.baml", "class Bar { y string }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         assert!(ns.conflicts().is_empty());
     }
@@ -334,14 +336,8 @@ mod tests {
         let pkg_id = PackageId::new(&db, Name::new("user"));
         let items = package_items(&db, pkg_id);
 
-        // 2 conflicts: "Dup" and "stream_Dup" (both defined in a.baml and b.baml)
-        assert_eq!(items.conflicts().len(), 2);
-        let dup_conflict = items
-            .conflicts()
-            .iter()
-            .find(|c| c.name == Name::new("Dup"))
-            .expect("Dup conflict");
-        assert_eq!(dup_conflict.name, Name::new("Dup"));
+        assert_eq!(items.conflicts().len(), 1);
+        assert_eq!(items.conflicts()[0].name, Name::new("Dup"));
 
         // Resolution still works (first wins)
         let resolved = items.lookup_type(&[Name::new("Dup")]);
@@ -357,10 +353,9 @@ mod tests {
         let file_a = db.add_file("a.baml", "class Widget { a_field int }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
-        // 2 conflicts: "Widget" and "stream_Widget"
-        assert_eq!(ns.conflicts().len(), 2);
+        assert_eq!(ns.conflicts().len(), 1);
         // The winner should be from a.baml
         let winner = ns.types.get(&Name::new("Widget")).unwrap();
         assert!(winner.file(&db) == file_a, "a.baml should win over z.baml");
@@ -377,7 +372,7 @@ mod tests {
         let _file = db.add_file("mixed.baml", "enum Foo { A\nB }\nclass Foo { x int }");
 
         let ns_id = NamespaceId::new(&db, Name::new("user"), vec![]);
-        let ns = baml_compiler2_ppir::namespace_items(&db, ns_id);
+        let ns = baml_compiler2_hir::namespace::namespace_items(&db, ns_id);
 
         assert_eq!(ns.conflicts().len(), 1);
         assert_eq!(ns.conflicts()[0].name, Name::new("Foo"));
@@ -407,7 +402,9 @@ mod tests {
             .collect();
         assert_eq!(dups.len(), 1, "Expected 1 duplicate diagnostic for 'Bar'");
 
-        let Hir2Diagnostic::DuplicateDefinition { name, scope, sites } = dups[0];
+        let Hir2Diagnostic::DuplicateDefinition { name, scope, sites } = dups[0] else {
+            panic!("expected DuplicateDefinition diagnostic");
+        };
         assert_eq!(name, &Name::new("Bar"));
         assert_eq!(scope.as_ref().unwrap(), &Name::new("Foo"));
         assert_eq!(sites.len(), 2);
@@ -428,14 +425,15 @@ mod tests {
         let index = file_semantic_index(&db, file);
         let diags = index.diagnostics();
 
-        // Filter for duplicate "name" field within "Foo" (not "stream_Foo")
         let dups: Vec<_> = diags
             .iter()
-            .filter(|d| matches!(d, Hir2Diagnostic::DuplicateDefinition { name, scope, .. } if name == &Name::new("name") && scope.as_ref().is_some_and(|s| s == &Name::new("Foo"))))
+            .filter(|d| matches!(d, Hir2Diagnostic::DuplicateDefinition { name, .. } if name == &Name::new("name")))
             .collect();
         assert_eq!(dups.len(), 1);
 
-        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0];
+        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
+            panic!("expected DuplicateDefinition diagnostic");
+        };
         assert_eq!(scope.as_ref().unwrap(), &Name::new("Foo"));
         assert_eq!(sites.len(), 2);
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Field));
@@ -458,7 +456,9 @@ mod tests {
             .collect();
         assert_eq!(dups.len(), 1);
 
-        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0];
+        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
+            panic!("expected DuplicateDefinition diagnostic");
+        };
         assert_eq!(scope.as_ref().unwrap(), &Name::new("Color"));
         assert_eq!(sites.len(), 2);
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Variant));
@@ -484,7 +484,9 @@ mod tests {
             .collect();
         assert_eq!(dups.len(), 1);
 
-        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0];
+        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
+            panic!("expected DuplicateDefinition diagnostic");
+        };
         assert_eq!(scope.as_ref().unwrap(), &Name::new("foo"));
         assert_eq!(sites.len(), 2);
         assert!(sites.iter().all(|s| s.kind == DefinitionKind::Binding));
@@ -510,12 +512,281 @@ mod tests {
             .collect();
         assert_eq!(dups.len(), 1, "Expected cross-kind duplicate for 'bar'");
 
-        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0];
+        let Hir2Diagnostic::DuplicateDefinition { scope, sites, .. } = dups[0] else {
+            panic!("expected DuplicateDefinition diagnostic");
+        };
         assert_eq!(scope.as_ref().unwrap(), &Name::new("Foo"));
         assert_eq!(sites.len(), 2);
         let kinds: Vec<_> = sites.iter().map(|s| s.kind).collect();
         assert!(kinds.contains(&DefinitionKind::Field));
         assert!(kinds.contains(&DefinitionKind::Method));
+    }
+
+    #[test]
+    fn builtin_only_rust_function_is_rejected_in_user_file() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "user_rust_fn.baml",
+            "function deep_copy<T>(value: T) -> T {\n  $rust_function\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        assert!(index.diagnostics().iter().any(|diag| {
+            matches!(
+                diag,
+                Hir2Diagnostic::BuiltinOnlySyntax { feature, .. } if feature == "$rust_function"
+            )
+        }));
+    }
+
+    #[test]
+    fn builtin_only_internal_attribute_is_rejected_in_user_file() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "user_internal_attr.baml",
+            "@@internal.uses(vm)\nfunction helper(value: string) -> string {\n  value\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        assert!(index.diagnostics().iter().any(|diag| {
+            matches!(
+                diag,
+                Hir2Diagnostic::BuiltinOnlySyntax { feature, .. } if feature == "@@internal.uses"
+            )
+        }));
+    }
+
+    #[test]
+    fn builtin_only_rust_type_is_rejected_in_user_file() {
+        use baml_compiler2_hir::diagnostic::Hir2Diagnostic;
+
+        let mut db = make_db();
+        let file = db.add_file(
+            "user_rust_type.baml",
+            "class Response {\n  _body $rust_type\n}",
+        );
+
+        let index = file_semantic_index(&db, file);
+        assert!(index.diagnostics().iter().any(|diag| {
+            matches!(
+                diag,
+                Hir2Diagnostic::BuiltinOnlySyntax { feature, .. } if feature == "$rust_type"
+            )
+        }));
+    }
+
+    #[test]
+    fn builtin_http_file_has_no_phase1_contract_diagnostics() {
+        let db = make_db();
+        let builtin = baml_compiler2_hir::compiler2_all_files(&db)
+            .into_iter()
+            .find(|file| file.path(&db) == std::path::Path::new("<builtin>/baml/ns_http/http.baml"))
+            .expect("expected builtin http file");
+
+        let index = file_semantic_index(&db, builtin);
+        assert!(
+            index.diagnostics().is_empty(),
+            "expected builtin http file to be phase1-clean, got: {:?}",
+            index.diagnostics()
+        );
+    }
+
+    // ── Namespace derivation from ns_* folders ─────────────────────────────
+
+    /// ns_llm/client.baml → namespace_path = ["llm"]
+    #[test]
+    fn file_package_ns_folder_creates_namespace() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("ns_llm/client.baml", "class Foo {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            pkg_info.namespace_path,
+            vec![Name::new("llm")],
+            "ns_llm/ should create namespace ['llm']"
+        );
+    }
+
+    /// ns_llm/helpers/utils.baml → namespace_path = ["llm"] (plain subfolder skipped)
+    #[test]
+    fn file_package_plain_subfolder_skipped() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("ns_llm/helpers/utils.baml", "class Bar {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            pkg_info.namespace_path,
+            vec![Name::new("llm")],
+            "plain helpers/ subfolder should be skipped"
+        );
+    }
+
+    /// ns_llm/ns_openai/client.baml → namespace_path = ["llm", "openai"]
+    #[test]
+    fn file_package_nested_ns_folders() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("ns_llm/ns_openai/client.baml", "class Baz {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            pkg_info.namespace_path,
+            vec![Name::new("llm"), Name::new("openai")],
+            "nested ns_ folders should create ['llm', 'openai']"
+        );
+    }
+
+    /// plain/folder/file.baml → namespace_path = [] (no ns_ folders)
+    #[test]
+    fn file_package_plain_folder_no_namespace() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("plain/folder/file.baml", "class Qux {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert!(
+            pkg_info.namespace_path.is_empty(),
+            "plain folders should not create namespaces"
+        );
+    }
+
+    /// Flat file (no folder) → namespace_path = [] (unchanged behavior)
+    #[test]
+    fn file_package_flat_file_unchanged() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("main.baml", "class Root {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert!(
+            pkg_info.namespace_path.is_empty(),
+            "flat files should have empty namespace_path"
+        );
+    }
+
+    /// ns_ with invalid identifier suffix is skipped (ns_123bad/)
+    #[test]
+    fn file_package_invalid_ns_name_skipped() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("ns_123bad/file.baml", "class Bad {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert!(
+            pkg_info.namespace_path.is_empty(),
+            "ns_ with non-identifier suffix should be skipped"
+        );
+    }
+
+    /// Files in ns_llm/ are in a separate namespace from root files.
+    #[test]
+    fn namespace_items_separate_for_ns_folder() {
+        let mut db = make_db();
+        let _root_file = db.add_file("main.baml", "class Config { key string }");
+        let _ns_file = db.add_file("ns_llm/models.baml", "class Response { text string }");
+
+        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let items = package_items(&db, user_pkg_id);
+
+        // Root namespace should have Config but not Response
+        let root_ns = items.namespaces.get(&vec![]).expect("root namespace");
+        assert!(root_ns.types.contains_key(&Name::new("Config")));
+        assert!(!root_ns.types.contains_key(&Name::new("Response")));
+
+        // "llm" namespace should have Response but not Config
+        let llm_ns = items
+            .namespaces
+            .get(&vec![Name::new("llm")])
+            .expect("llm namespace");
+        assert!(llm_ns.types.contains_key(&Name::new("Response")));
+        assert!(!llm_ns.types.contains_key(&Name::new("Config")));
+    }
+
+    /// Same symbol name in different namespaces does NOT conflict.
+    #[test]
+    fn same_name_different_namespaces_no_conflict() {
+        let mut db = make_db();
+        let _f1 = db.add_file("ns_llm/types.baml", "class Response { text string }");
+        let _f2 = db.add_file("ns_http/types.baml", "class Response { status int }");
+
+        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let items = package_items(&db, user_pkg_id);
+
+        // No conflicts — different namespaces
+        assert!(
+            items.conflicts().is_empty(),
+            "Same name in different namespaces should not conflict"
+        );
+
+        // Both namespaces have their own Response
+        let llm_ns = items
+            .namespaces
+            .get(&vec![Name::new("llm")])
+            .expect("llm namespace");
+        assert!(llm_ns.types.contains_key(&Name::new("Response")));
+
+        let http_ns = items
+            .namespaces
+            .get(&vec![Name::new("http")])
+            .expect("http namespace");
+        assert!(http_ns.types.contains_key(&Name::new("Response")));
+    }
+
+    /// Namespace name shadowing a root declaration is detected.
+    #[test]
+    fn namespace_shadows_root_declaration() {
+        use baml_compiler2_hir::package::package_items;
+
+        let mut db = make_db();
+        let _root = db.add_file("main.baml", "class foo { x int }");
+        let _ns = db.add_file("ns_foo/stuff.baml", "class Bar { y string }");
+
+        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let items = package_items(&db, user_pkg_id);
+
+        assert_eq!(
+            items.shadows().len(),
+            1,
+            "Expected 1 shadow, got: {:?}",
+            items.shadows()
+        );
+        assert_eq!(items.shadows()[0].ns_name, Name::new("foo"));
+    }
+
+    /// No shadow when namespace name doesn't collide with root declarations.
+    #[test]
+    fn no_shadow_when_names_distinct() {
+        use baml_compiler2_hir::package::package_items;
+
+        let mut db = make_db();
+        let _root = db.add_file("main.baml", "class Config { x int }");
+        let _ns = db.add_file("ns_llm/stuff.baml", "class Model { y string }");
+
+        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let items = package_items(&db, user_pkg_id);
+
+        assert!(
+            items.shadows().is_empty(),
+            "No shadow expected when names are distinct"
+        );
     }
 
     // ── 9. Early-cutoff: comment-only change ──────────────────────────────────

@@ -1,0 +1,506 @@
+use std::{
+    borrow::Cow,
+    collections::{HashMap, hash_map},
+};
+
+use indexmap::IndexMap;
+
+use super::ParsingContext;
+use crate::{
+    baml_value::{BamlClass, BamlNull, BamlValue},
+    deserializer::{
+        coercer::{
+            ParsingError, TypeCoercer, array_helper, match_string::matches_string_to_string,
+        },
+        deserialize_flags::{DeserializerConditions, Flag},
+        types::{BamlValueWithFlags, DeserializerMeta, ValueWithFlags},
+    },
+    jsonish::{self, CompletionState},
+    sap_model::{
+        AnnotatedField, AttrLiteral, ClassTy, FromLiteral as _, TyResolvedRef, TyWithMeta,
+        TypeAnnotations, TypeIdent,
+    },
+};
+
+impl<'s, 'v, 't, N: TypeIdent> TypeCoercer<'s, 'v, 't, N> for ClassTy<'t, N>
+where
+    't: 's,
+    's: 'v,
+{
+    fn try_cast(
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Option<ValueWithFlags<'s, 'v, 't, BamlClass<'s, 'v, 't, N>, N>> {
+        let class_ty = target.ty;
+        let meta = target.meta;
+        let name = &class_ty.name;
+
+        // Only handle object values for class types
+        let crate::jsonish::Value::Object(obj, completion_state) = value else {
+            return None;
+        };
+
+        let flags = match (completion_state, target.meta.in_progress.as_ref()) {
+            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
+            (CompletionState::Incomplete, Some(lit)) => {
+                return target
+                    .ty
+                    .from_literal(lit, ctx)
+                    .map(|ret| {
+                        ValueWithFlags::new(
+                            ret,
+                            DeserializerMeta {
+                                flags: DeserializerConditions::new()
+                                    .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
+                                ty: TyWithMeta::new(TyResolvedRef::Class(class_ty), meta),
+                            },
+                        )
+                    })
+                    .ok();
+            }
+            (CompletionState::Incomplete, None) => {
+                DeserializerConditions::new().with_flag(Flag::Incomplete)
+            }
+            (CompletionState::Complete, _) => DeserializerConditions::new(),
+        };
+
+        if let Some(parse_as_ty) = target.meta.parse_as.as_ref() {
+            let parse_as = ctx
+                .db
+                .resolve_with_meta(parse_as_ty.as_ref().as_ref())
+                .ok()?;
+            let TyResolvedRef::Class(parse_as_cls) = parse_as.ty else {
+                // Only classes can be subtypes of classes
+                return None;
+            };
+            debug_assert!(
+                parse_as_cls != target.ty,
+                "If parse_as is the same, it should be `None`."
+            );
+            let obj = ClassTy::try_cast(ctx, TyWithMeta::new(parse_as_cls, parse_as.meta), value)?;
+            let value = BamlValue::Class(obj.value);
+            target.meta.expect_asserts(&value, ctx).ok()?;
+            let BamlValue::Class(ret) = value else {
+                unreachable!("we just wrapped it in a BamlValue::Class");
+            };
+            return Some(ValueWithFlags::new(ret, obj.meta));
+        }
+
+        let ctx = {
+            let cls_value_pair = (name.to_string(), value);
+            let ptr_pair = (name.to_string(), ::core::ptr::from_ref(value));
+
+            // If this combination has been visited bail out.
+            if ctx.visited_during_try_cast.contains(&ptr_pair) {
+                return None;
+            }
+
+            // Mark this class as visited for the duration of this function
+            // call. Further recursion from within this function will see that
+            // the class has already been visited and stop recursing. Different
+            // calls to this function for other fields pointing to the same
+            // recursive class should start from scratch with an empty visited
+            // set so they will not fail because this class has already been
+            // coerced for a different field.
+            &ctx.visit_class_value_pair(cls_value_pair, false)
+        };
+
+        // add entries as fields
+        let mut obj: HashMap<&str, &jsonish::Value<'s>> =
+            obj.iter().map(|(k, v)| (k.as_ref(), v)).collect();
+
+        // Iterate fields in definition order for stable output ordering,
+        // using alias-aware matching to find the corresponding input key.
+        let mut field_data = IndexMap::new();
+        for field in &class_ty.fields {
+            let AnnotatedField { name, ty, .. } = field;
+            let ty = ctx.db.resolve_with_meta(ty.as_ref()).ok()?;
+
+            // Use key_matches for alias-aware lookup (when aliases exist,
+            // only aliases match — not the original field name).
+            let matched_key = obj.keys().find(|k| field.key_matches(k)).copied();
+            let Some(key) = matched_key else {
+                return None; // `try_cast` is strict and rejects with missing keys
+            };
+
+            let value = obj.remove(key).unwrap();
+            let value = TyResolvedRef::try_cast(ctx, ty.clone(), value)?;
+            field_data.insert(&**name, value);
+        }
+        if !obj.is_empty() {
+            return None; // `try_cast` is strict and rejects with extra keys
+        }
+
+        Some(ValueWithFlags::new(
+            BamlClass {
+                name: &class_ty.name,
+                value: field_data,
+            },
+            DeserializerMeta {
+                flags,
+                ty: TyWithMeta::new(TyResolvedRef::Class(class_ty), meta),
+            },
+        ))
+    }
+
+    fn coerce(
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        value: &'v crate::jsonish::Value<'s>,
+    ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlClass<'s, 'v, 't, N>, N>>, ParsingError> {
+        let class_ty = target.ty;
+        let meta = target.meta;
+
+        // If value is not None then we'll update the context to store the
+        // current class in the visited set and we'll use that to stop recursion
+        // when dealing with recursive classes.
+        // TODO: is this necessary? we should be recusing over the finite input data, not the potentially infinite type structure
+
+        let cls_value_pair = (class_ty.name.to_string(), value);
+        let ptr_pair = (class_ty.name.to_string(), ::core::ptr::from_ref(value));
+
+        // If this combination has been visited bail out.
+        if ctx.visited_during_coerce.contains(&ptr_pair) {
+            return Err(ctx.error_circular_reference(&class_ty.name.to_string(), value));
+        }
+
+        // Mark this class as visited for the duration of this function
+        // call. Further recursion from within this function will see that
+        // the class has already been visited and stop recursing. Different
+        // calls to this function for other fields pointing to the same
+        // recursive class should start from scratch with an empty visited
+        // set so they will not fail because this class has already been
+        // coerced for a different field.
+        let nested_ctx = Some(ctx.visit_class_value_pair(cls_value_pair, true));
+
+        // Now just maintain the previous context or get the new one and proceed
+        // normally.
+        let ctx = nested_ctx.as_ref().unwrap_or(ctx);
+
+        // There are a few possible approaches here:
+        match (value, target.meta.in_progress.as_ref()) {
+            (value, Some(AttrLiteral::Never))
+                if matches!(value.completion_state(), CompletionState::Incomplete) =>
+            {
+                Ok(None)
+            }
+            (value, Some(lit))
+                if matches!(value.completion_state(), CompletionState::Incomplete) =>
+            {
+                target
+                    .ty
+                    .from_literal(lit, ctx)
+                    .map(|v| {
+                        ValueWithFlags::new(v, DeserializerMeta::new(target))
+                            .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)))
+                    })
+                    .map(Some)
+            }
+            (_, _) if target.meta.parse_as.is_some() => {
+                let parse_as_ty = target.meta.parse_as.as_ref().unwrap_or_else(|| {
+                    unreachable!(
+                        "We just checked it is Some.
+                        Once let guards are stabilized, we can remove this."
+                    )
+                });
+                let parse_as = ctx
+                    .db
+                    .resolve_with_meta(parse_as_ty.as_ref().as_ref())
+                    .map_err(|name| ctx.error_type_resolution(name))?;
+                let TyResolvedRef::Class(parse_as_cls) = parse_as.ty else {
+                    // Only classes can be subtypes of classes
+                    return Err(ctx.error_internal("parse_as should always be an class"));
+                };
+                debug_assert!(
+                    parse_as_cls != target.ty,
+                    "If parse_as is the same, it should be `None`."
+                );
+                let obj =
+                    ClassTy::coerce(ctx, TyWithMeta::new(parse_as_cls, parse_as.meta), value)?;
+                let Some(obj) = obj else {
+                    return Ok(None);
+                };
+                let value = BamlValue::Class(obj.value);
+                target.meta.expect_asserts(&value, ctx)?;
+                let BamlValue::Class(ret) = value else {
+                    unreachable!("we just wrapped it in a BamlValue::Class");
+                };
+                Ok(Some(ValueWithFlags::new(ret, obj.meta)))
+            }
+            (jsonish::Value::Object(obj, c), _) => {
+                let mut flags = DeserializerConditions::new();
+                if c == &CompletionState::Incomplete {
+                    flags.add_flag(Flag::Incomplete);
+                }
+                let mut extra_keys = IndexMap::new();
+                let mut entries = HashMap::new();
+                for (key, v) in obj {
+                    let Some(field) = class_ty.fields.iter().find(|f| {
+                        if f.aliases.is_empty() {
+                            matches_string_to_string(ctx, key, &f.name)
+                        } else {
+                            f.aliases
+                                .iter()
+                                .any(|a| matches_string_to_string(ctx, key, a))
+                        }
+                    }) else {
+                        extra_keys.insert(key.clone(), v);
+                        continue;
+                    };
+
+                    let scope = ctx.enter_scope(&field.name);
+                    let resolved = scope
+                        .db
+                        .resolve_with_meta(field.ty.as_ref())
+                        .map_err(|ident| scope.error_type_resolution(ident));
+                    let Some(parsed) = resolved
+                        .and_then(|resolved| TyResolvedRef::coerce(&scope, resolved, v))
+                        .transpose()
+                    else {
+                        continue;
+                    };
+
+                    match entries.entry(field.name.clone()) {
+                        hash_map::Entry::Occupied(_) => {}
+                        hash_map::Entry::Vacant(entry) => {
+                            entry.insert(parsed);
+                        }
+                    }
+                }
+
+                if entries.is_empty()
+                    && !extra_keys.is_empty()
+                    && let [field] = class_ty.fields.as_slice()
+                {
+                    // Try to coerce the object into the single field
+                    let scope = ctx.enter_scope(&format!("<implied:{}>", field.name));
+                    let resolved = scope
+                        .db
+                        .resolve_with_meta(field.ty.as_ref())
+                        .map_err(|ident| scope.error_type_resolution(ident));
+                    let parsed = resolved
+                        .and_then(|resolved| TyResolvedRef::coerce(&scope, resolved, value))
+                        .map(|v| v.map(|v| v.with_flag(Flag::ImpliedKey(field.name.clone()))));
+
+                    if let Ok(Some(parsed_value)) = parsed {
+                        entries.insert(field.name.clone(), Ok(parsed_value));
+                    } else {
+                        for (key, v) in extra_keys {
+                            flags.add_flag(Flag::ExtraKey(key, Cow::Borrowed(v)));
+                        }
+                    }
+                } else {
+                    for (key, v) in extra_keys {
+                        flags.add_flag(Flag::ExtraKey(key, Cow::Borrowed(v)));
+                    }
+                }
+                class_from_entries(
+                    ctx,
+                    target.clone(),
+                    c == &CompletionState::Incomplete,
+                    entries,
+                    flags,
+                )
+            }
+            (jsonish::Value::Array(items, c), _) => {
+                let mut completed = Vec::new();
+                if let [field] = class_ty.fields.as_slice()
+                    && let scope = ctx.enter_scope(&format!("<implied:{}>", field.name))
+                    && let Ok(Some(mut parsed)) = scope
+                        .db
+                        .resolve_with_meta(field.ty.as_ref())
+                        .map_err(|ident| scope.error_type_resolution(ident))
+                        .and_then(|resolved| TyResolvedRef::coerce(&scope, resolved, value))
+                {
+                    // The class has only one field, and this seems to be the inner type
+                    let mut flags = DeserializerConditions::new();
+                    if c == &CompletionState::Incomplete {
+                        flags.add_flag(Flag::Incomplete);
+                    }
+                    parsed.add_flag(Flag::ImpliedKey(field.name.clone()));
+                    flags.add_flag(Flag::InferedObject(Cow::Borrowed(value)));
+                    let mut entries = IndexMap::new();
+                    entries.insert(&*field.name, parsed);
+
+                    let cls_value = BamlClass {
+                        name: &class_ty.name,
+                        value: entries,
+                    };
+                    let cls_meta =
+                        DeserializerMeta::new(target.clone().map_ty(TyResolvedRef::Class));
+                    completed.push(Ok(ValueWithFlags::new(
+                        BamlValue::Class(cls_value),
+                        cls_meta,
+                    )
+                    .with_flags(flags.flags)));
+                }
+
+                let singular = array_helper::coerce_array_to_singular(
+                    ctx,
+                    TyWithMeta::new(TyResolvedRef::Class(class_ty), meta),
+                    items.iter(),
+                    &|value| {
+                        Self::coerce(ctx, TyWithMeta::new(class_ty, meta), value)
+                            .map(|v| v.map(|v| v.map_value(BamlValue::Class)))
+                    },
+                );
+                match singular {
+                    Ok(Some(v)) => completed.push(Ok(v)),
+                    Ok(None) => {} // all candidates were incomplete with @in_progress(never)
+                    Err(e) => completed.push(Err(e)),
+                }
+
+                if completed.is_empty() {
+                    Err(ctx.error_unexpected_type(&target, value))
+                } else {
+                    array_helper::pick_best(
+                        ctx,
+                        TyWithMeta::new(TyResolvedRef::Class(class_ty), meta),
+                        completed.into_iter().map(|r| r.map(Some)).collect(),
+                    )
+                    .map_err(|e| ctx.error_unexpected_type(&target, value).with_cause(e))
+                    .map(|v| {
+                        v.map(|v| {
+                            v.map_value(|v| match v {
+                                BamlValue::Class(cls) => cls,
+                                _ => unreachable!("We just wrapped it in a BamlValue::Class"),
+                            })
+                        })
+                    })
+                }
+            }
+            (x, _) if class_ty.fields.len() == 1 => {
+                // If the class has a single field, then we can try to coerce it directly
+                let mut flags = DeserializerConditions::new();
+                if x.completion_state() == &CompletionState::Incomplete {
+                    flags.add_flag(Flag::Incomplete);
+                }
+                let field = &class_ty.fields[0];
+                let scope = ctx.enter_scope(&format!("<implied:{}>", field.name));
+                let field_ty = scope
+                    .db
+                    .resolve_with_meta(field.ty.as_ref())
+                    .map_err(|ident| scope.error_type_resolution(ident))?;
+                match TyResolvedRef::coerce(&scope, field_ty, x) {
+                    Ok(Some(mut field_value)) => {
+                        field_value
+                            .meta
+                            .flags
+                            .add_flag(Flag::ImpliedKey(field.name.clone()));
+                        flags.add_flag(Flag::InferedObject(Cow::Borrowed(x)));
+
+                        let mut entries = IndexMap::new();
+                        entries.insert(&*field.name, field_value);
+                        let cls_value = BamlClass {
+                            name: &class_ty.name,
+                            value: entries,
+                        };
+                        let cls_meta =
+                            DeserializerMeta::new(target.clone().map_ty(TyResolvedRef::Class));
+                        Ok(Some(
+                            ValueWithFlags::new(cls_value, cls_meta).with_flags(flags.flags),
+                        ))
+                    }
+                    Ok(None) => Err(ctx.error_unexpected_type(&target, x)),
+                    Err(e) => Err(e),
+                }
+            }
+            _ => Err(ctx.error_unexpected_type(&target, value)),
+        }
+    }
+}
+
+fn class_from_entries<'s, 'v, 't, N: TypeIdent>(
+    ctx: &ParsingContext<'s, 'v, 't, N>,
+    target: TyWithMeta<&'t ClassTy<'t, N>, &'t TypeAnnotations<'t, N>>,
+    is_incomplete: bool,
+    mut entries: HashMap<Cow<'s, str>, Result<BamlValueWithFlags<'s, 'v, 't, N>, ParsingError>>,
+    flags: DeserializerConditions<'s, 'v, 't, N>,
+) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlClass<'s, 'v, 't, N>, N>>, ParsingError>
+where
+    't: 's,
+    's: 'v,
+{
+    let mut field_data = IndexMap::new();
+    let mut err_unparsed = Vec::new();
+    let mut err_missing = Vec::new();
+    for field in &target.ty.fields {
+        let AnnotatedField {
+            name,
+            ty,
+            class_in_progress_field_missing: before_started,
+            class_completed_field_missing: missing,
+            ..
+        } = field;
+        let ty = ctx
+            .db
+            .resolve_with_meta(ty.as_ref())
+            .map_err(|ident| ctx.error_type_resolution(ident))?;
+        // let is_optional = ty.ty.is_optional(ctx.db);
+        let field_entry = match entries.remove(name.as_ref()) {
+            // Happy path: we have this field
+            Some(Ok(some)) => some,
+            // // Skip optional fields with errors
+            // Some(Err(e)) if is_optional => {
+            //     let field_value = match is_incomplete {
+            //         true => before_started,
+            //         false => missing,
+            //     };
+            //     let field_meta = DeserializerMeta::new(ty);
+            //     ValueWithFlags::new(field_value, field_meta)
+            //         .with_flag(Flag::OptionalFieldError(name.clone(), e))
+            // }
+            // // Required field with error
+            Some(Err(e)) => {
+                err_unparsed.push((name, e));
+                continue;
+            }
+            // If missing and class object is incomplete, `before_started=never` means we do not return the class
+            // until it is available.
+            None if is_incomplete && matches!(before_started, AttrLiteral::Never) => {
+                return Ok(None);
+            }
+            // Missing entry falls back to `before_started` when object is incomplete
+            None if is_incomplete => {
+                let field_value = if matches!(before_started, AttrLiteral::Null) {
+                    BamlValue::Null(BamlNull)
+                } else {
+                    ty.ty.from_literal(before_started, ctx)?
+                };
+                let field_meta = DeserializerMeta::new(ty);
+                ValueWithFlags::new(field_value, field_meta)
+            }
+            // If missing and class object is complete, `missing=never` means we error
+            None if !is_incomplete && matches!(missing, AttrLiteral::Never) => {
+                err_missing.push(name.clone());
+                continue;
+            }
+            // Missing entry falls back to `missing` when object is complete
+            None /*if !is_incomplete */=> {
+                let field_value = ty.ty.from_literal(missing, ctx)?;
+                let field_meta = DeserializerMeta {
+                    flags: DeserializerConditions::new()
+                        .with_flag(Flag::DefaultFromNoValue),
+                    ty,
+                };
+                ValueWithFlags::new(field_value, field_meta)
+            }
+        };
+        field_data.insert(&**name, field_entry);
+    }
+    if !err_unparsed.is_empty() || !err_missing.is_empty() {
+        return Err(ctx.error_missing_required_field(err_unparsed, err_missing, None));
+    }
+
+    Ok(Some(ValueWithFlags::new(
+        BamlClass {
+            name: &target.ty.name,
+            value: field_data,
+        },
+        DeserializerMeta {
+            flags,
+            ty: target.map_ty(TyResolvedRef::Class),
+        },
+    )))
+}

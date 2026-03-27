@@ -38,6 +38,19 @@ test Foo {
 
 //----
 //- diagnostics
+// Error: Name `Foo` defined 2 times as: function, test
+//     ╭─[ misc_bad_syntax.baml:10:6 ]
+//     │
+//   5 │ function Foo(input: Input[]) -> string {
+//     │          ─┬─  
+//     │           ╰─── first defined as function here
+//     │ 
+//  10 │ test Foo {
+//     │      ─┬─  
+//     │       ╰─── duplicate test definition
+//     │ 
+//     │ Note: Error code: E0011
+// ────╯
 // Error: Expected identifier, found ','
 //     ╭─[ misc_bad_syntax.baml:15:7 ]
 //     │
@@ -46,22 +59,4 @@ test Foo {
 //     │       ╰── Expected identifier, found ','
 //     │ 
 //     │ Note: Error code: E0010
-// ────╯
-// Error: Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
-//     ╭─[ misc_bad_syntax.baml:12:3 ]
-//     │
-//  12 │   input [
-//     │   ──┬──  
-//     │     ╰──── Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
-//     │ 
-//     │ Note: Error code: E0034
-// ────╯
-// Error: Missing `args` property
-//     ╭─[ misc_bad_syntax.baml:10:6 ]
-//     │
-//  10 │ test Foo {
-//     │      ─┬─  
-//     │       ╰─── Missing `args` property
-//     │ 
-//     │ Note: Error code: E0035
 // ────╯

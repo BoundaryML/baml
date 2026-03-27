@@ -1,183 +1,39 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== MIR ===
-fn MyClient.resolve() -> baml.llm.PrimitiveClient {
+=== MIR2 ===
+fn user.MyClient$new() -> null {
     // Locals:
-    let _0: baml.llm.PrimitiveClient // return
-    let _1: (string, string, string, string[], map<string, unknown>) -> baml.llm.PrimitiveClient
-    let _2: "MyClient"
-    let _3: "baml-openai-chat"
-    let _4: "system"
-    let _5: string[]
-    let _6: "system"
-    let _7: "user"
-    let _8: "assistant"
-    let _9: map<string, unknown>
-    let _10: "max_tokens"
-    let _11: 100
-    let _12: "array_key_with_quoted_unquoted"
-    let _13: string[]
-    let _14: "abc"
-    let _15: "abc"
-    let _16: "ccc"
-    let _17: "key2"
-    let _18: "some random value"
-    let _19: "hello"
-    let _20: "world"
-    let _21: "thing"
-    let _22: "hello"
-    let _23: "block_string"
-    let _24: "hello there my frien
-                d"
-    let _25: "inline_raw_string"
-    let _26: "inline "raw" string,,"
-    let _27: "booleanValue"
-    let _28: true
-    let _29: "stringKey"
-    let _30: "true"
-    let _31: "array1"
-    let _32: string[]
-    let _33: "one"
-    let _34: "two"
-    let _35: "array2"
-    let _36: string[]
-    let _37: "one"
-    let _38: "two"
-    let _39: "array3Numbers"
-    let _40: int[]
-    let _41: 1
-    let _42: 2
-    let _43: 3
-    let _44: "nestedKey"
-    let _45: map<string, string>
-    let _46: "key"
-    let _47: "value"
-    let _48: "key2"
-    let _49: "value2"
-    let _50: "nestedArray"
-    let _51: string[]
-    let _52: "yes"
-    let _53: "queen"
-    let _54: "number"
-    let _55: 10
-    let _56: "oneMoreValueToTestBrokenness"
-    let _57: "value"
-    let _58: "myInteger"
-    let _59: 100
-    let _60: "tools"
-    let _61: map<string, string>[]
-    let _62: map<string, string>
-    let _63: "server_label"
-    let _64: "parallel_web_search"
-    let _65: "server_url"
-    let _66: "https://example.com"
-    let _67: "headers"
-    let _68: map<string, string>
-    let _69: "authorization"
-    let _70: "Bearer token"
-    let _71: "type"
-    let _72: "mcp"
-    let _73: map<string, string>
-    let _74: "another_tool"
-    let _75: "value"
-    let _76: "block_string"
-    let _77: "
-      hello there my friend
-      {# a comment in a prompt #}
-    "
-    let _78: null
+    let _0: null // _0 // return
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"max_tokens" | "array_key_with_quoted_unquoted" | "key2" | "hello" | "thing" | "block_string" | "inline_raw_string" | "booleanValue" | "stringKey" | "array1" | "array2" | "array3Numbers" | "nestedKey" | "oneMoreValueToTestBrokenness" | "myInteger" | "tools", 100 | "abc" | "ccc"[] | "somerandomvalue" | "world" | "hello" | "#hellotheremyfriend#" | "#inlinerawstring,,#" | "true" | "one" | "two"[] | null[] | void | "value" | void[] | "#hellotheremyfriend{#acommentinaprompt#}#">
+    let _5: "abc" | "ccc"[]
+    let _6: "one" | "two"[]
+    let _7: "one" | "two"[]
+    let _8: null[]
+    let _9: void
+    let _10: "yes" | "queen"[]
+    let _11: void[]
 
     bb0: {
-        _1 = const fn baml.llm.build_primitive_client;
-        _2 = const "MyClient";
-        _3 = const "baml-openai-chat";
-        _4 = const "system";
-        _6 = const "system";
-        _7 = const "user";
-        _8 = const "assistant";
-        _5 = [copy _6, copy _7, copy _8];
-        _10 = const "max_tokens";
-        _11 = const 100_i64;
-        _12 = const "array_key_with_quoted_unquoted";
-        _14 = const "abc";
-        _15 = const "abc";
-        _16 = const "ccc";
-        _13 = [copy _14, copy _15, copy _16];
-        _17 = const "key2";
-        _18 = const "some random value";
-        _19 = const "hello";
-        _20 = const "world";
-        _21 = const "thing";
-        _22 = const "hello";
-        _23 = const "block_string";
-        _24 = const "hello there my frien\n                d";
-        _25 = const "inline_raw_string";
-        _26 = const "inline \"raw\" string,,";
-        _27 = const "booleanValue";
-        _28 = const true;
-        _29 = const "stringKey";
-        _30 = const "true";
-        _31 = const "array1";
-        _33 = const "one";
-        _34 = const "two";
-        _32 = [copy _33, copy _34];
-        _35 = const "array2";
-        _37 = const "one";
-        _38 = const "two";
-        _36 = [copy _37, copy _38];
-        _39 = const "array3Numbers";
-        _41 = const 1_i64;
-        _42 = const 2_i64;
-        _43 = const 3_i64;
-        _40 = [copy _41, copy _42, copy _43];
-        _44 = const "nestedKey";
-        _46 = const "key";
-        _47 = const "value";
-        _48 = const "key2";
-        _49 = const "value2";
-        _50 = const "nestedArray";
-        _52 = const "yes";
-        _53 = const "queen";
-        _51 = [copy _52, copy _53];
-        _54 = const "number";
-        _55 = const 10_i64;
-        _45 = { copy _46: copy _47, copy _48: copy _49, copy _50: copy _51, copy _54: copy _55 };
-        _56 = const "oneMoreValueToTestBrokenness";
-        _57 = const "value";
-        _58 = const "myInteger";
-        _59 = const 100_i64;
-        _60 = const "tools";
-        _63 = const "server_label";
-        _64 = const "parallel_web_search";
-        _65 = const "server_url";
-        _66 = const "https://example.com";
-        _67 = const "headers";
-        _69 = const "authorization";
-        _70 = const "Bearer token";
-        _68 = { copy _69: copy _70 };
-        _71 = const "type";
-        _72 = const "mcp";
-        _62 = { copy _63: copy _64, copy _65: copy _66, copy _67: copy _68, copy _71: copy _72 };
-        _74 = const "another_tool";
-        _75 = const "value";
-        _73 = { copy _74: copy _75 };
-        _61 = [copy _62, copy _73];
-        _76 = const "block_string";
-        _77 = const "\n      hello there my friend\n      {# a comment in a prompt #}\n    ";
-        _9 = { copy _10: copy _11, copy _12: copy _13, copy _17: copy _18, copy _19: copy _20, copy _21: copy _22, copy _23: copy _24, copy _25: copy _26, copy _27: copy _28, copy _29: copy _30, copy _31: copy _32, copy _35: copy _36, copy _39: copy _40, copy _44: copy _45, copy _56: copy _57, copy _58: copy _59, copy _60: copy _61, copy _76: copy _77 };
-        _78 = dispatch_future copy _1(copy _2, copy _3, copy _4, copy _5, copy _9) -> bb2;
+        _2 = {  };
+        _3 = {  };
+        _5 = [const "abc", const "abc", const "ccc"];
+        _6 = [const "one", const "two"];
+        _7 = [const "one", const "two"];
+        _8 = [const null, const null, const null];
+        _10 = [const "yes", const "queen"];
+        _9 =  { const "value", const "value2", copy _10, const 10_i64 };
+        _11 = [];
+        _4 = { const "max_tokens": const 100_i64, const "array_key_with_quoted_unquoted": copy _5, const "key2": const "somerandomvalue", const "hello": const "world", const "thing": const "hello", const "block_string": const "#hellotheremyfriend#", const "inline_raw_string": const "#inlinerawstring,,#", const "booleanValue": const "true", const "stringKey": const "true", const "array1": copy _6, const "array2": copy _7, const "array3Numbers": copy _8, const "nestedKey": copy _9, const "oneMoreValueToTestBrokenness": const "value", const "myInteger": const 100_i64, const "tools": copy _11, const "block_string": const "#hellotheremyfriend{#acommentinaprompt#}#" };
+        _1 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "MyClient", const "baml-openai-chat", copy _1 };
+        goto -> bb1;
     }
 
     bb1: {
         return;
-    }
-
-    bb2: {
-        _0 = await _78 -> [bb3];
-    }
-
-    bb3: {
-        goto -> bb1;
     }
 }

@@ -1,21 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function GetTodo() -> Todo {
-    <missing>(baml.HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/todos/1" })
-}
-
-class Todo {
+=== HIR2 ===
+class user.Todo {
   id: int
   title: string
   completed: bool
   userId: int
 }
-
-class stream_Todo {
-  id: null | int
-  title: null | string
-  completed: null | bool
-  userId: null | int
+function user.GetTodo() -> user.Todo  [expr] {
+  {  } <missing>(HttpRequest { method: baml.HttpMethod.Get, url: "dummyjson.com/tod..." })
 }

@@ -1,28 +1,76 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== TYPE INFERENCE ===
-  Function floatArray:
-    Return: List(Float { attr: TyAttr(None) }, TyAttr(None))
-  Function stringArray:
-    Return: List(String { attr: TyAttr(None) }, TyAttr(None))
-  Function pointArray:
-    Return: List(Class(QualifiedName { namespace: Local, name: "Point" }, TyAttr(None)), TyAttr(None))
-  Function boolArray:
-    Return: List(Bool { attr: TyAttr(None) }, TyAttr(None))
-  Function mixedArray:
-    Return: List(Union([Int { attr: TyAttr(None) }, String { attr: TyAttr(None) }], TyAttr(None)), TyAttr(None))
-  Function intArray:
-    Return: List(Int { attr: TyAttr(None) }, TyAttr(None))
-  Function point:
-    Return: Class(QualifiedName { namespace: Local, name: "Point" }, TyAttr(None))
-  Function vec2d:
-    Return: Class(QualifiedName { namespace: Local, name: "Vec2D" }, TyAttr(None))
-  Function boolValues:
-    Return: Map { key: String { attr: TyAttr(None) }, value: Bool { attr: TyAttr(None) }, attr: TyAttr(None) }
-  Function intValues:
-    Return: Map { key: String { attr: TyAttr(None) }, value: Int { attr: TyAttr(None) }, attr: TyAttr(None) }
-  Function stringValues:
-    Return: Map { key: String { attr: TyAttr(None) }, value: String { attr: TyAttr(None) }, attr: TyAttr(None) }
-  Function floatValues:
-    Return: Map { key: String { attr: TyAttr(None) }, value: Float { attr: TyAttr(None) }, attr: TyAttr(None) }
+=== TIR2 ===
+class user.Point {
+  x: int
+  y: int
+}
+function user.stringArray() -> string[] throws never {
+  { : string[]
+    ["hello", "world", "test"] : string[]
+  }
+}
+function user.intArray() -> int[] throws never {
+  { : int[]
+    [1, 2, 3] : int[]
+  }
+}
+function user.floatArray() -> float[] throws never {
+  { : float[]
+    [1.0, 2.0, 3.0] : float[]
+  }
+}
+function user.boolArray() -> bool[] throws never {
+  { : bool[]
+    [true, false, true] : bool[]
+  }
+}
+function user.pointArray() -> user.Point[] throws never {
+  { : user.Point[]
+    [Point { x: 1, y: 2 }, Point { x: 3, y: 4 }, Point { x: 5, y: 6 }] : user.Point[]
+  }
+}
+function user.mixedArray() -> (int | string)[] throws never {
+  { : (int | string)[]
+    [1, "two", 3] : (int | string)[]
+  }
+}
+class user.Point {
+  x: int
+  y: int
+}
+class user.Vec2D {
+  p: user.Point
+  q: user.Point
+}
+function user.point() -> user.Point throws never {
+  { : user.Point
+    Point { x: 1, y: 2 } : user.Point
+  }
+}
+function user.vec2d() -> user.Vec2D throws never {
+  { : user.Vec2D
+    Vec2D { p: Point { x: 1, y: 2 }, q: Point { x: 3, y: 4 } } : user.Vec2D
+  }
+}
+function user.stringValues() -> map<string, string> throws never {
+  { : map<string, string>
+    map { "hello": "world", "test": "test" } : map<string, string>
+  }
+}
+function user.intValues() -> map<string, int> throws never {
+  { : map<string, int>
+    map { "hello": 1, "test": 2 } : map<string, int>
+  }
+}
+function user.floatValues() -> map<string, float> throws never {
+  { : map<string, float>
+    map { "hello": 1.0, "test": 2.0 } : map<string, float>
+  }
+}
+function user.boolValues() -> map<string, bool> throws never {
+  { : map<string, bool>
+    map { "hello": true, "test": false } : map<string, bool>
+  }
+}

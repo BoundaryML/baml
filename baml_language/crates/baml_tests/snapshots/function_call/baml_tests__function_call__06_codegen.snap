@@ -1,13 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function Bar() -> int {
+function user.Bar() -> int {
     load_const 1
-    call Foo
+    call user.Foo
     return
 }
 
-function Baz.Greeting(self: Baz) -> string {
+function user.Baz.Greeting(self: null) -> string {
     load_const "Hello, "
     load_var self
     load_field .name
@@ -17,23 +17,23 @@ function Baz.Greeting(self: Baz) -> string {
     return
 }
 
-function Foo(x: int) -> int {
+function user.Foo(x: int) -> int {
     load_var x
     load_const 1
     bin_op +
     return
 }
 
-function GreetBaz(n: string) -> string {
+function user.GreetBaz(n: string) -> string {
     alloc_instance Baz
     copy 0
     load_var n
     store_field .name
-    call Baz.Greeting
+    call user.Baz.Greeting
     return
 }
 
-function array_length() -> int {
+function user.array_length() -> int {
     load_const 1
     load_const 2
     load_const 3
@@ -42,7 +42,7 @@ function array_length() -> int {
     return
 }
 
-function param_in_if_statement(b: bool) -> int {
+function user.param_in_if_statement(b: bool) -> int {
     load_var b
     pop_jump_if_false L0
     jump L1
@@ -55,15 +55,5 @@ function param_in_if_statement(b: bool) -> int {
     load_const 1
 
   L2:
-    return
-}
-
-function stream_Baz.Greeting(self: stream_Baz) -> string {
-    load_const "Hello, "
-    load_var self
-    load_field .name
-    bin_op +
-    load_const "!"
-    bin_op +
     return
 }

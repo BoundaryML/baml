@@ -16,6 +16,17 @@ interface HttpRequestShape {
   body?: string;
 }
 
+/**
+ * Whether the body must not be reformatted (e.g. SigV4-signed requests where
+ * the body hash is part of the signature).
+ *
+ * TODO: maybe pass a flag through BAML that tells us if we need to preserve
+ * the exact request body?
+ */
+function preserveExactBody(req: HttpRequestShape): boolean {
+  return (req.url ?? '').includes('bedrock-runtime');
+}
+
 function isHttpRequest(value: unknown): value is HttpRequestShape {
   if (value == null || typeof value !== 'object') return false;
   const o = value as Record<string, unknown>;
@@ -56,10 +67,17 @@ function toCurl(req: HttpRequestShape): string {
     }
   }
   if (body != null && body !== '') {
-    const heredoc = safeHeredoc(prettyBody(body));
-    parts.push('-d @-');
-    parts.push(`'${url.replace(/'/g, "'\\''")}'`);
-    return parts.join(' \\\n  ') + ` <<'${heredoc}'\n${prettyBody(body)}\n${heredoc}`;
+    const preserve = preserveExactBody(req);
+    const formatted = preserve ? body : prettyBody(body);
+    if (preserve) {
+      const escaped = formatted.replace(/'/g, "'\\''");
+      parts.push(`-d '${escaped}'`);
+    } else {
+      const heredoc = safeHeredoc(formatted);
+      parts.push('-d @-');
+      parts.push(`'${url.replace(/'/g, "'\\''")}'`);
+      return parts.join(' \\\n  ') + ` <<'${heredoc}'\n${formatted}\n${heredoc}`;
+    }
   }
   parts.push(`'${url.replace(/'/g, "'\\''")}'`);
   return parts.join(' \\\n  ');
@@ -83,7 +101,8 @@ function toJsFetch(req: HttpRequestShape): string {
     opts.push(`  headers: {\n${headersStr}\n  }`);
   }
   if (body != null && body !== '') {
-    const formatted = prettyBody(body);
+    const preserve = preserveExactBody(req);
+    const formatted = preserve ? body : prettyBody(body);
     const escaped = formatted.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
     opts.push(`  body: \`${escaped}\``);
   }
@@ -110,8 +129,15 @@ function toPythonRequests(req: HttpRequestShape): string {
     kwargs.push(`    headers={\n${headersStr}\n    }`);
   }
   if (body != null && body !== '') {
-    const safeBody = prettyBody(body).replace(/'''/g, "\\'\\'\\'" );
-    kwargs.push(`    data='''\n${safeBody}\n    '''`);
+    const preserve = preserveExactBody(req);
+    const formatted = preserve ? body : prettyBody(body);
+    if (preserve) {
+      const escaped = formatted.replace(/'/g, "\\'");
+      kwargs.push(`    data='${escaped}'`);
+    } else {
+      const safeBody = formatted.replace(/'''/g, "\\'\\'\\'");
+      kwargs.push(`    data='''\n${safeBody}\n    '''`);
+    }
   }
   const kwargsBlock = kwargs.length ? ',\n' + kwargs.join(',\n') : '';
   return `import requests\n\nresponse = requests.${fn}(\n    ${args}'${escapePySingle(url)}'${kwargsBlock}\n)`;
@@ -126,7 +152,8 @@ function toGo(req: HttpRequestShape): string {
   const url = req.url ?? '';
   const headers = req.headers ?? {};
   const body = req.body ?? '';
-  const bodyArg = body ? `strings.NewReader("${escapeGoString(prettyBody(body))}")` : 'nil';
+  const bodyFormatted = body ? (preserveExactBody(req) ? body : prettyBody(body)) : '';
+  const bodyArg = body ? `strings.NewReader("${escapeGoString(bodyFormatted)}")` : 'nil';
   const lines: string[] = [
     `req, err := http.NewRequest("${method}", "${escapeGoString(url)}", ${bodyArg})`,
     'if err != nil { log.Fatal(err) }',
@@ -160,7 +187,7 @@ function toRust(req: HttpRequestShape): string {
   const url = req.url ?? '';
   const headers = req.headers ?? {};
   const body = req.body ?? '';
-  const bodyFormatted = body ? prettyBody(body) : '';
+  const bodyFormatted = body ? (preserveExactBody(req) ? body : prettyBody(body)) : '';
   const clientCall = REQWEST_SHORTCUT_METHODS.has(method)
     ? `client.${method}("${escapeRustString(url)}")`
     : `client.request("${method.toUpperCase()}".parse().unwrap(), "${escapeRustString(url)}")`;
@@ -172,15 +199,21 @@ function toRust(req: HttpRequestShape): string {
     if (v != null) lines.push(`    .header("${escapeRustString(k)}", "${escapeRustString(String(v))}")`);
   }
   if (body) {
-    let maxHashes = 0;
-    const re = /"(#+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(bodyFormatted)) !== null) {
-      maxHashes = Math.max(maxHashes, m[1].length);
+    const preserve = preserveExactBody(req);
+    if (preserve) {
+      const escaped = bodyFormatted.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      lines.push(`    .body("${escaped}")`);
+    } else {
+      let maxHashes = 0;
+      const re = /"(#+)/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(bodyFormatted)) !== null) {
+        maxHashes = Math.max(maxHashes, m[1].length);
+      }
+      const hashCount = maxHashes + 1;
+      const hash = '#'.repeat(hashCount);
+      lines.push(`    .body(r${hash}"\n${bodyFormatted}\n"${hash})`);
     }
-    const hashCount = maxHashes + 1;
-    const hash = '#'.repeat(hashCount);
-    lines.push(`    .body(r${hash}"\n${bodyFormatted}\n"${hash})`);
   }
   lines.push('    .send()?;');
   return '// reqwest = { version = "0.11", features = ["blocking"] }\n\n' + lines.join('\n');

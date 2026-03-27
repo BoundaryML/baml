@@ -8,8 +8,11 @@
 use std::fmt::Write;
 
 use baml_base::Name;
-use baml_compiler2_hir::{contributions::Definition, package::PackageId};
-use baml_compiler2_ppir::{file_item_tree, package_items};
+use baml_compiler2_hir::{
+    contributions::Definition,
+    file_item_tree,
+    package::{PackageId, package_items},
+};
 use baml_project::ProjectDatabase;
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
@@ -201,22 +204,9 @@ fn baml_package_contains_env_functions() {
         env_ns.values.contains_key(&Name::new("get")),
         "baml.env.get (low-level) should be in baml.env namespace"
     );
-
-    // Package "env" has get and get_or_panic (they call baml.env.get / baml.sys.panic)
-    let env_pkg = PackageId::new(&db, Name::new("env"));
-    let env_items = package_items(&db, env_pkg);
-    let empty_ns: Vec<Name> = vec![];
-    let env_root = env_items
-        .namespaces
-        .get(&empty_ns)
-        .expect("env package should have root namespace");
     assert!(
-        env_root.values.contains_key(&Name::new("get")),
-        "env.get should be in env package"
-    );
-    assert!(
-        env_root.values.contains_key(&Name::new("get_or_panic")),
-        "env.get_or_panic should be in env package"
+        env_ns.values.contains_key(&Name::new("get_or_panic")),
+        "baml.env.get_or_panic should be in baml.env namespace"
     );
 }
 
@@ -430,47 +420,47 @@ fn file_package_derives_correct_namespaces() {
             );
             found_containers = true;
         }
-        // env.baml is at <builtin>/baml/env/env.baml → namespace ["env"]
-        if path_str == "<builtin>/baml/env/env.baml" {
+        // env.baml is at <builtin>/baml/ns_env/env.baml → namespace ["env"]
+        if path_str == "<builtin>/baml/ns_env/env.baml" {
             let pkg_info = file_package(&db, *file);
             assert_eq!(pkg_info.package.as_str(), "baml");
             assert_eq!(
                 pkg_info.namespace_path,
                 vec![Name::new("env")],
-                "env/env.baml should be in baml.env namespace"
+                "ns_env/env.baml should be in baml.env namespace"
             );
             found_env = true;
         }
-        // http.baml is at <builtin>/baml/http/http.baml → namespace ["http"]
-        if path_str == "<builtin>/baml/http/http.baml" {
+        // http.baml is at <builtin>/baml/ns_http/http.baml → namespace ["http"]
+        if path_str == "<builtin>/baml/ns_http/http.baml" {
             let pkg_info = file_package(&db, *file);
             assert_eq!(pkg_info.package.as_str(), "baml");
             assert_eq!(
                 pkg_info.namespace_path,
                 vec![Name::new("http")],
-                "http/http.baml should be in baml.http namespace"
+                "ns_http/http.baml should be in baml.http namespace"
             );
             found_http = true;
         }
-        // math.baml is at <builtin>/baml/math/math.baml → namespace ["math"]
-        if path_str == "<builtin>/baml/math/math.baml" {
+        // math.baml is at <builtin>/baml/ns_math/math.baml → namespace ["math"]
+        if path_str == "<builtin>/baml/ns_math/math.baml" {
             let pkg_info = file_package(&db, *file);
             assert_eq!(pkg_info.package.as_str(), "baml");
             assert_eq!(
                 pkg_info.namespace_path,
                 vec![Name::new("math")],
-                "math/math.baml should be in baml.math namespace"
+                "ns_math/math.baml should be in baml.math namespace"
             );
             found_math = true;
         }
-        // sys.baml is at <builtin>/baml/sys/sys.baml → namespace ["sys"]
-        if path_str == "<builtin>/baml/sys/sys.baml" {
+        // sys.baml is at <builtin>/baml/ns_sys/sys.baml → namespace ["sys"]
+        if path_str == "<builtin>/baml/ns_sys/sys.baml" {
             let pkg_info = file_package(&db, *file);
             assert_eq!(pkg_info.package.as_str(), "baml");
             assert_eq!(
                 pkg_info.namespace_path,
                 vec![Name::new("sys")],
-                "sys/sys.baml should be in baml.sys namespace"
+                "ns_sys/sys.baml should be in baml.sys namespace"
             );
             found_sys = true;
         }
@@ -491,8 +481,7 @@ fn file_package_derives_correct_namespaces() {
 #[test]
 fn rust_type_field_lowers_to_rust_type() {
     use baml_compiler2_ast::TypeExpr;
-    use baml_compiler2_hir::package::PackageId;
-    use baml_compiler2_ppir::package_items;
+    use baml_compiler2_hir::package::{PackageId, package_items};
     use baml_compiler2_tir::lower_type_expr::lower_type_expr;
 
     let db = make_db();
@@ -501,7 +490,7 @@ fn rust_type_field_lowers_to_rust_type() {
 
     // Lower $rust_type — should produce Ty::RustType
     let mut diags = Vec::new();
-    let ty = lower_type_expr(&db, &TypeExpr::Rust, items, &mut diags);
+    let ty = lower_type_expr(&db, &TypeExpr::Rust, items, &[], &mut diags);
 
     assert_eq!(ty, baml_compiler2_tir::ty::Ty::RustType);
     assert!(diags.is_empty(), "No diagnostics expected for $rust_type");
@@ -523,5 +512,158 @@ fn user_package_unaffected_by_builtins() {
     assert!(
         !output.contains("baml.Array"),
         "baml.Array should not appear in user file TIR"
+    );
+}
+
+// ── Cross-namespace type resolution via root.* ──────────────────────────
+
+/// Multi-namespace project: root defines Config, ns_llm defines Response.
+/// Root file uses root.llm.Response, ns_llm file uses root.Config.
+/// All types should resolve without diagnostics.
+#[test]
+fn cross_namespace_type_resolution_via_root() {
+    use baml_compiler2_hir::file_package::file_package;
+    use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+    let mut db = make_db();
+
+    // Root namespace: defines Config
+    let _root_file = db.add_file("main.baml", "class Config { key string }");
+
+    // llm namespace: defines Response
+    let ns_file = db.add_file("ns_llm/models.baml", "class Response { text string }");
+
+    let user_pkg_id = PackageId::new(&db, Name::new("user"));
+    let pkg_items = package_items(&db, user_pkg_id);
+
+    // From root namespace: resolve root.llm.Response
+    let mut diags = Vec::new();
+    let segments = vec![Name::new("root"), Name::new("llm"), Name::new("Response")];
+    let ty = lower_type_expr_in_ns(
+        &db,
+        &baml_compiler2_ast::TypeExpr::Path(segments),
+        pkg_items,
+        &[], // root namespace context
+        &[],
+        &mut diags,
+    );
+    assert!(
+        diags.is_empty(),
+        "root.llm.Response should resolve without errors, got: {:?}",
+        diags
+    );
+    assert!(
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
+        "root.llm.Response should not resolve to Unknown"
+    );
+
+    // From llm namespace: resolve root.Config
+    let mut diags = Vec::new();
+    let segments = vec![Name::new("root"), Name::new("Config")];
+    let pkg_info = file_package(&db, ns_file);
+    let ty = lower_type_expr_in_ns(
+        &db,
+        &baml_compiler2_ast::TypeExpr::Path(segments),
+        pkg_items,
+        &pkg_info.namespace_path, // ["llm"] namespace context
+        &[],
+        &mut diags,
+    );
+    assert!(
+        diags.is_empty(),
+        "root.Config should resolve from llm namespace without errors, got: {:?}",
+        diags
+    );
+    assert!(
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
+        "root.Config should not resolve to Unknown from llm namespace"
+    );
+}
+
+/// Same-namespace resolution: types in the same ns_* folder resolve without root. prefix.
+#[test]
+fn same_namespace_resolution_no_prefix() {
+    use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+    let mut db = make_db();
+
+    // Both files in ns_llm namespace
+    let _f1 = db.add_file("ns_llm/types.baml", "class LLMConfig { model string }");
+    let _f2 = db.add_file("ns_llm/client.baml", "class LLMClient { name string }");
+
+    let user_pkg_id = PackageId::new(&db, Name::new("user"));
+    let pkg_items = package_items(&db, user_pkg_id);
+
+    // From within llm namespace: resolve LLMConfig (no root. prefix)
+    let mut diags = Vec::new();
+    let segments = vec![Name::new("LLMConfig")];
+    let ty = lower_type_expr_in_ns(
+        &db,
+        &baml_compiler2_ast::TypeExpr::Path(segments),
+        pkg_items,
+        &[Name::new("llm")], // llm namespace context
+        &[],
+        &mut diags,
+    );
+    assert!(
+        diags.is_empty(),
+        "LLMConfig should resolve within same namespace, got: {:?}",
+        diags
+    );
+    assert!(
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
+        "LLMConfig should not resolve to Unknown within same namespace"
+    );
+}
+
+/// Nested ns_* folders: ns_llm/ns_openai/ creates namespace ["llm", "openai"].
+/// Resolve root.llm.openai.OpenAIClient from root namespace.
+#[test]
+fn nested_namespace_resolution() {
+    use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+    let mut db = make_db();
+
+    let _root_file = db.add_file("main.baml", "class Config { key string }");
+    let _nested_file = db.add_file(
+        "ns_llm/ns_openai/client.baml",
+        "class OpenAIClient { model string }",
+    );
+
+    let user_pkg_id = PackageId::new(&db, Name::new("user"));
+    let pkg_items = package_items(&db, user_pkg_id);
+
+    // Verify the nested namespace exists
+    assert!(
+        pkg_items
+            .namespaces
+            .contains_key(&vec![Name::new("llm"), Name::new("openai")]),
+        "Nested namespace ['llm', 'openai'] should exist"
+    );
+
+    // Resolve root.llm.openai.OpenAIClient from root namespace
+    let mut diags = Vec::new();
+    let segments = vec![
+        Name::new("root"),
+        Name::new("llm"),
+        Name::new("openai"),
+        Name::new("OpenAIClient"),
+    ];
+    let ty = lower_type_expr_in_ns(
+        &db,
+        &baml_compiler2_ast::TypeExpr::Path(segments),
+        pkg_items,
+        &[],
+        &[],
+        &mut diags,
+    );
+    assert!(
+        diags.is_empty(),
+        "root.llm.openai.OpenAIClient should resolve, got: {:?}",
+        diags
+    );
+    assert!(
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
+        "root.llm.openai.OpenAIClient should not resolve to Unknown"
     );
 }

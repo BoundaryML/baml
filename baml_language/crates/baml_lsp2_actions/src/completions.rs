@@ -33,10 +33,12 @@
 use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode};
 use baml_compiler2_hir::{
-    contributions::Definition, loc::FunctionLoc, package::PackageId, scope::ScopeKind,
+    contributions::Definition,
+    loc::FunctionLoc,
+    package::{PackageId, package_items},
+    scope::ScopeKind,
     semantic_index::ScopeBindings,
 };
-use baml_compiler2_ppir::package_items;
 use baml_compiler2_tir::ty::Ty;
 use rowan::NodeOrToken;
 use text_size::TextSize;
@@ -150,9 +152,8 @@ enum CompletionContext {
 ///
 /// Returns an empty `Vec` if no completions are applicable.
 pub fn completions_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Completion> {
-    let token = match utils::find_token_at_offset(db, file, offset) {
-        Some(t) => t,
-        None => return completions_at_empty_file(db, file),
+    let Some(token) = utils::find_token_at_offset(db, file, offset) else {
+        return completions_at_empty_file(db, file);
     };
 
     let context = detect_context(&token, offset);
@@ -191,7 +192,7 @@ fn detect_context(
     while let Some(current) = node {
         let kind = current.kind();
 
-        match SyntaxKind::from(kind) {
+        match kind {
             // Inside a TYPE_EXPR node → type position.
             SyntaxKind::TYPE_EXPR
             | SyntaxKind::UNION_TYPE
@@ -249,9 +250,8 @@ fn is_field_access_position(token: &baml_compiler_syntax::SyntaxToken) -> bool {
     }
 
     // Check previous sibling tokens in the parent node.
-    let parent = match token.parent() {
-        Some(p) => p,
-        None => return false,
+    let Some(parent) = token.parent() else {
+        return false;
     };
 
     // Walk siblings before our token.
@@ -285,7 +285,7 @@ fn is_field_access_position(token: &baml_compiler_syntax::SyntaxToken) -> bool {
     }
 
     // Also check parent's kind: PATH_EXPR with multiple segments indicates field access.
-    if SyntaxKind::from(parent.kind()) == SyntaxKind::PATH_EXPR {
+    if parent.kind() == SyntaxKind::PATH_EXPR {
         // In a PATH_EXPR like `foo.bar`, `bar` is a field access on `foo`.
         // Count WORD tokens — if more than one, we're in multi-segment path.
         let words: Vec<_> = parent
@@ -324,7 +324,7 @@ fn is_field_access_position(token: &baml_compiler_syntax::SyntaxToken) -> bool {
 fn is_in_type_annotation(node: &SyntaxNode) -> bool {
     let mut current: Option<SyntaxNode> = Some(node.clone());
     while let Some(n) = current {
-        let k = SyntaxKind::from(n.kind());
+        let k = n.kind();
         if k == SyntaxKind::TYPE_EXPR {
             return true;
         }
@@ -366,7 +366,7 @@ fn completions_for_type_position(
 
     // ── User package types ────────────────────────────────────────────────────
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = PackageId::new(db, pkg_info.package);
     let pkg = package_items(db, pkg_id);
 
     for ns_items in pkg.namespaces.values() {
@@ -423,9 +423,8 @@ fn completions_for_field_access(
     offset: TextSize,
 ) -> Vec<Completion> {
     // Find the base expression: the WORD token preceding the `.`.
-    let base_name = match find_base_for_field_access(token) {
-        Some(name) => name,
-        None => return Vec::new(),
+    let Some(base_name) = find_base_for_field_access(token) else {
+        return Vec::new();
     };
 
     let base = Name::new(&base_name);
@@ -462,12 +461,12 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
     match ty {
         Ty::Class(qn) => {
             // Find the class definition and return its fields and methods.
-            let class_name = Name::new(qn.name.as_str());
-            let pkg_info_name = qn.pkg.as_str();
+            let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
             let pkg = package_items(db, pkg_id);
+            let path = qn.to_path_in_package();
 
-            let class_def = pkg.lookup_type(&[class_name]);
+            let class_def = pkg.lookup_type(&path);
             let Some(Definition::Class(class_loc)) = class_def else {
                 return Vec::new();
             };
@@ -485,7 +484,7 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
             }
 
             // Methods from item tree.
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
             let class_data = &item_tree[class_loc.id(db)];
             for method_id in &class_data.methods {
                 let method = &item_tree[*method_id];
@@ -501,16 +500,16 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
 
         Ty::Enum(qn) => {
             // Find the enum and return its variants.
-            let enum_name = Name::new(qn.name.as_str());
-            let pkg_id = PackageId::new(db, Name::new(qn.pkg.as_str()));
+            let pkg_id = PackageId::new(db, Name::new(qn.package().as_str()));
             let pkg = package_items(db, pkg_id);
+            let path = qn.to_path_in_package();
 
-            let enum_def = pkg.lookup_type(&[enum_name]);
+            let enum_def = pkg.lookup_type(&path);
             let Some(Definition::Enum(enum_loc)) = enum_def else {
                 return Vec::new();
             };
 
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
             let enum_data = &item_tree[enum_loc.id(db)];
 
             enum_data
@@ -650,22 +649,24 @@ fn find_base_for_field_access(token: &baml_compiler_syntax::SyntaxToken) -> Opti
 fn definition_to_ty(db: &dyn Db, def: Definition<'_>) -> Option<Ty> {
     match def {
         Definition::Class(class_loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, class_loc.file(db));
             let class = &item_tree[class_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
-            Some(Ty::Class(baml_compiler2_tir::ty::QualifiedTypeName {
-                pkg: Name::new(pkg_info.package.as_str()),
-                name: class.name.clone(),
-            }))
+            Some(Ty::Class(baml_compiler2_tir::ty::QualifiedTypeName::new(
+                pkg_info.package,
+                pkg_info.namespace_path,
+                class.name.clone(),
+            )))
         }
         Definition::Enum(enum_loc) => {
-            let item_tree = baml_compiler2_ppir::file_item_tree(db, enum_loc.file(db));
+            let item_tree = baml_compiler2_hir::file_item_tree(db, enum_loc.file(db));
             let enum_data = &item_tree[enum_loc.id(db)];
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, enum_loc.file(db));
-            Some(Ty::Enum(baml_compiler2_tir::ty::QualifiedTypeName {
-                pkg: Name::new(pkg_info.package.as_str()),
-                name: enum_data.name.clone(),
-            }))
+            Some(Ty::Enum(baml_compiler2_tir::ty::QualifiedTypeName::new(
+                pkg_info.package,
+                pkg_info.namespace_path,
+                enum_data.name.clone(),
+            )))
         }
         _ => None,
     }
@@ -678,11 +679,11 @@ fn local_variable_ty(
     at_offset: TextSize,
     site: baml_compiler2_hir::semantic_index::DefinitionSite,
 ) -> Option<Ty> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
 
     // Find the enclosing Function scope.
-    let scope_id = index.scope_at_offset(at_offset);
+    let scope_id = index.scope_at_offset(at_offset, None);
     let enclosing_func_scope = index
         .ancestor_scopes(scope_id)
         .into_iter()
@@ -709,14 +710,12 @@ fn local_variable_ty(
         baml_compiler2_hir::semantic_index::DefinitionSite::Parameter(param_idx) => {
             // Get declared type from function signature.
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
-            sig.params.get(param_idx).and_then(|(_, te)| {
+            sig.params.get(param_idx).map(|(_, te)| {
                 let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-                let pkg_id = PackageId::new(db, pkg_info.package.clone());
+                let pkg_id = PackageId::new(db, pkg_info.package);
                 let pkg = package_items(db, pkg_id);
                 let mut diags = Vec::new();
-                Some(baml_compiler2_tir::lower_type_expr::lower_type_expr(
-                    db, te, pkg, &mut diags,
-                ))
+                baml_compiler2_tir::lower_type_expr::lower_type_expr(db, te, pkg, &[], &mut diags)
             })
         }
         baml_compiler2_hir::semantic_index::DefinitionSite::Statement(stmt_id) => {
@@ -741,6 +740,10 @@ fn local_variable_ty(
                 None
             })
         }
+        baml_compiler2_hir::semantic_index::DefinitionSite::PatternBinding(_) => {
+            // Pattern bindings — type not yet available via this path.
+            None
+        }
     }
 }
 
@@ -758,8 +761,8 @@ fn completions_for_value_position(
     let mut items: Vec<Completion> = Vec::new();
 
     // ── Locals (innermost scope first) ───────────────────────────────────────
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let scope_id = index.scope_at_offset(offset);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let scope_id = index.scope_at_offset(offset, None);
 
     let mut sort_prefix = 0usize;
     for ancestor_id in index.ancestor_scopes(scope_id) {
@@ -793,7 +796,7 @@ fn completions_for_value_position(
 
     // ── Package-level values (functions, template strings, clients) ───────────
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-    let pkg_id = PackageId::new(db, pkg_info.package.clone());
+    let pkg_id = PackageId::new(db, pkg_info.package);
     let pkg = package_items(db, pkg_id);
 
     let local_sort_base = sort_prefix + 1000;
@@ -806,6 +809,20 @@ fn completions_for_value_position(
                     (CompletionKind::TemplateString, "template_string")
                 }
                 Definition::Client(_) => (CompletionKind::Client, "client"),
+                Definition::RetryPolicy(_) => (CompletionKind::RetryPolicy, "retry_policy"),
+                // Let bindings with Client/RetryPolicy origin are compiler2 clients/retry policies.
+                Definition::Let(loc) => {
+                    let item_tree = baml_compiler2_hir::file_item_tree(db, loc.file(db));
+                    match item_tree[loc.id(db)].origin {
+                        baml_compiler2_ast::ast::LetOrigin::Client => {
+                            (CompletionKind::Client, "client")
+                        }
+                        baml_compiler2_ast::ast::LetOrigin::RetryPolicy => {
+                            (CompletionKind::RetryPolicy, "retry_policy")
+                        }
+                        _ => continue,
+                    }
+                }
                 _ => continue,
             };
             items.push(

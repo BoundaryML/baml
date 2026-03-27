@@ -340,8 +340,7 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         let current_len = self.len.load(Ordering::Acquire);
         assert!(
             index < current_len,
-            "index {index} out of bounds (len={})",
-            current_len
+            "index {index} out of bounds (len={current_len})"
         );
         let (chunk_idx, offset) = self.chunk_location(index);
         // SAFETY: Index bounds checked above, and we read the len with Acquire
@@ -359,8 +358,7 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         let current_len = self.len.load(Ordering::Acquire);
         assert!(
             index < current_len,
-            "index {index} out of bounds (len={})",
-            current_len
+            "index {index} out of bounds (len={current_len})"
         );
         let (chunk_idx, offset) = self.chunk_location(index);
         // SAFETY: Index bounds checked above, we have &mut self
@@ -382,8 +380,7 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         let current_len = self.len.load(Ordering::Acquire);
         assert!(
             index < current_len,
-            "index {index} out of bounds (len={})",
-            current_len
+            "index {index} out of bounds (len={current_len})"
         );
         let (chunk_idx, offset) = self.chunk_location(index);
         // SAFETY: Index bounds checked above
@@ -405,8 +402,7 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         let current_len = self.len.load(Ordering::Acquire);
         assert!(
             index < current_len,
-            "index {index} out of bounds (len={})",
-            current_len
+            "index {index} out of bounds (len={current_len})"
         );
         let (chunk_idx, offset) = self.chunk_location(index);
         // SAFETY: Caller ensures exclusive access to this index.
@@ -732,60 +728,25 @@ mod tests {
     /// # Why this race cannot happen in practice
     ///
     /// The VM uses `HeapPtr` (raw pointers) instead of `ObjectIndex` (indices).
-    /// HeapPtr is obtained once at allocation time via `get_ptr()` and stored in
-    /// `Value::Object(HeapPtr)`. When the VM reads an object, it calls
-    /// `HeapPtr::get()` which is a direct pointer dereference - it never goes
-    /// through `ChunkedVec::get()`.
-    ///
-    /// See `test_miri_heap_ptr_access_is_race_free` which proves the HeapPtr
-    /// approach is race-free.
-    #[test]
-    #[ignore = "Demonstrates ChunkedVec::get() race that VM avoids by using HeapPtr"]
-    fn test_miri_concurrent_read_during_vec_reallocation() {
-        use std::{sync::Arc, thread};
-
-        let vec: Arc<ChunkedVec<i32, 2>> = Arc::new(ChunkedVec::new());
-
-        unsafe {
-            vec.resize_to(2);
-            vec.set(0, 42);
-            vec.set(1, 43);
-        }
-
-        let vec_reader = Arc::clone(&vec);
-        let vec_writer = Arc::clone(&vec);
-
-        // Reader uses get() which has the race
-        let reader = thread::spawn(move || {
-            for _ in 0..1000 {
-                let val = *vec_reader.get(0);
-                assert_eq!(val, 42);
-            }
-        });
-
-        let writer = thread::spawn(move || {
-            for i in 1..100 {
-                let new_len = 2 + (i * 2);
-                unsafe {
-                    vec_writer.resize_to(new_len);
-                }
-            }
-        });
-
-        reader.join().expect("reader panicked");
-        writer.join().expect("writer panicked");
-    }
-
     /// Test that HeapPtr-style access (raw pointers obtained upfront) is race-free.
     ///
-    /// This is the fixed code path that the VM uses. Instead of calling get()
-    /// which internally reads the Vec's buffer pointer, we obtain a raw pointer
-    /// via get_ptr() and use that directly. The raw pointer remains stable even
-    /// when the Vec reallocates because chunks themselves are heap-allocated
-    /// and never move.
+    /// **The race that could happen:** `ChunkedVec::get(index)` reads the
+    /// internal `Vec<*mut [T; CHUNK_SIZE]>` to find the chunk pointer for a
+    /// given index. If another thread calls `resize_to()` concurrently, the
+    /// `Vec` may reallocate its buffer, causing the reader to follow a dangling
+    /// buffer pointer — a use-after-free that Miri catches.
     ///
-    /// This test demonstrates the fix for the data race exposed in
-    /// test_miri_concurrent_read_during_vec_reallocation.
+    /// **Why it can't happen in practice:** The VM never uses `get()` at
+    /// runtime. Instead, at allocation time it obtains a raw pointer via
+    /// `get_ptr()` and stores it in a `HeapPtr`. All subsequent reads go
+    /// through that raw pointer directly (`HeapPtr::get()` is just a deref).
+    /// Because `ChunkedVec` is backed by individually heap-allocated
+    /// fixed-size chunks, those chunks are never moved or freed by growth —
+    /// only new chunks are appended. So raw pointers into existing chunks
+    /// remain stable regardless of concurrent `resize_to()` calls.
+    ///
+    /// This test exercises that exact pattern: one thread reads through raw
+    /// pointers obtained upfront while another thread grows the vec.
     #[test]
     fn test_miri_heap_ptr_access_is_race_free() {
         use std::{sync::Arc, thread};

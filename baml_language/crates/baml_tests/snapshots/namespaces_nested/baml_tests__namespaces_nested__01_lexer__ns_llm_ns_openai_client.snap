@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+Slash "/"
+Slash "/"
+Word "Nested"
+Word "namespace"
+Colon ":"
+Word "llm"
+Dot "."
+Word "openai"
+Class "class"
+Word "OpenAIResponse"
+LBrace "{"
+Word "text"
+Word "string"
+Word "model"
+Word "string"
+RBrace "}"

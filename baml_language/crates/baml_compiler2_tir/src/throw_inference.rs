@@ -8,13 +8,19 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, Stmt, TypeExpr};
-use baml_compiler2_hir::{contributions::Definition, package::PackageId};
-use baml_compiler2_ppir::package_items;
+use baml_compiler2_ast::{Expr, ExprBody, Literal, Pattern, TypeExpr};
+use baml_compiler2_hir::{
+    contributions::Definition,
+    package::{PackageId, PackageItems, package_dependencies, package_items},
+};
 
-use crate::{lower_type_expr::lower_type_expr, ty::Ty};
+use crate::{
+    lower_type_expr::{lower_type_expr_in_ns, qualify_def},
+    ty::{PrimitiveType, Ty},
+};
 
-pub type ThrowFact = String;
+/// A throw fact is now a proper `Ty` — no more lossy string round-trips.
+pub type ThrowFact = Ty;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionThrowSets {
@@ -58,11 +64,24 @@ pub fn function_throw_sets<'db>(
     package_id: PackageId<'db>,
 ) -> FunctionThrowSets {
     let pkg_items = package_items(db, package_id);
-    let mut graph: baml_compiler_analysis::AnalysisGraph<Name, ThrowFact> =
-        baml_compiler_analysis::AnalysisGraph::new();
+    // Load dependency interfaces for cross-package throw lookup
+    let dep_interfaces: Vec<(Name, &crate::package_interface::PackageInterface)> =
+        package_dependencies(db, package_id)
+            .iter()
+            .map(|dep_id| {
+                let name = dep_id.name(db);
+                let iface = crate::package_interface::package_interface(db, *dep_id);
+                (name, iface)
+            })
+            .collect();
+
+    let mut graph: crate::analysis::AnalysisGraph<Name, ThrowFact> =
+        crate::analysis::AnalysisGraph::new();
 
     let mut call_edges: BTreeMap<Name, BTreeSet<Name>> = BTreeMap::new();
     let mut has_declared_contract: BTreeMap<Name, bool> = BTreeMap::new();
+    // Track direct facts separately so we can merge cross-package facts before adding to graph
+    let mut direct_facts: BTreeMap<Name, BTreeSet<ThrowFact>> = BTreeMap::new();
 
     for ns in pkg_items.namespaces.values() {
         for (short_name, def) in &ns.values {
@@ -76,36 +95,135 @@ pub fn function_throw_sets<'db>(
 
             let declared_throws = sig.throws.as_ref().map(|te| {
                 let mut diags = Vec::new();
-                let lowered = lower_type_expr(db, te, pkg_items, &mut diags);
-                // These diagnostics are reported at the signature site by inference;
-                // throw graph propagation still uses best-effort lowering.
+                let ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
+                    .namespace_path;
+                let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
+                let func_data = &item_tree[func_loc.id(db)];
+                let lowered = lower_type_expr_in_ns(
+                    db,
+                    te,
+                    pkg_items,
+                    &ns,
+                    &func_data.generic_params,
+                    &mut diags,
+                );
                 drop(diags);
-                throw_facts_from_ty(&lowered)
+                flatten_ty_to_facts(&lowered)
             });
 
             let direct = if let Some(declared) = declared_throws.clone() {
                 declared
             } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                collect_direct_throws(expr_body)
+                collect_direct_throws(db, pkg_items, expr_body)
             } else {
                 BTreeSet::new()
             };
 
-            graph.add_node(key.clone(), direct);
+            direct_facts.insert(key.clone(), direct);
             has_declared_contract.insert(key.clone(), declared_throws.is_some());
 
             if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
                 call_edges.insert(key, collect_call_targets(expr_body));
             }
         }
+
+        // Also process class methods, which are not in ns.values.
+        for (class_name, def) in &ns.types {
+            let Definition::Class(class_loc) = def else {
+                continue;
+            };
+            let file = class_loc.file(db);
+            let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+            let class_data = &item_tree[class_loc.id(db)];
+
+            for &method_id in &class_data.methods {
+                let method_data = &item_tree[method_id];
+                let method_name = &method_data.name;
+                let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
+                // Key as "ClassName.method_name" (with namespace prefix if any).
+                let method_short = Name::new(format!("{class_name}.{method_name}"));
+                let key = function_key(db, func_loc, &method_short);
+
+                let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+                let body = baml_compiler2_hir::body::function_body(db, func_loc);
+
+                let declared_throws = sig.throws.as_ref().map(|te| {
+                    let mut diags = Vec::new();
+                    let ns_path =
+                        baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
+                    let lowered = lower_type_expr_in_ns(
+                        db,
+                        te,
+                        pkg_items,
+                        &ns_path,
+                        &method_data.generic_params,
+                        &mut diags,
+                    );
+                    drop(diags);
+                    flatten_ty_to_facts(&lowered)
+                });
+
+                let direct = if let Some(declared) = declared_throws.clone() {
+                    declared
+                } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) =
+                    body.as_ref()
+                {
+                    collect_direct_throws(db, pkg_items, expr_body)
+                } else {
+                    BTreeSet::new()
+                };
+
+                direct_facts.insert(key.clone(), direct);
+                has_declared_contract.insert(key.clone(), declared_throws.is_some());
+
+                if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
+                    // Rewrite "self.X" call targets to "ClassName.X" so edges
+                    // connect to the correct graph nodes.
+                    let raw_targets = collect_call_targets(expr_body);
+                    let rewritten: BTreeSet<Name> = raw_targets
+                        .into_iter()
+                        .map(|t| rewrite_self_target(&t, class_name))
+                        .collect();
+                    call_edges.insert(key, rewritten);
+                }
+            }
+        }
     }
 
+    // Process call edges: for cross-package targets, merge their throw facts
+    // into the caller's direct facts; for same-package targets, add edges.
     for (from, targets) in &call_edges {
         if has_declared_contract.get(from).copied().unwrap_or(false) {
             continue;
         }
         for to in targets {
-            graph.add_edge(from.clone(), to.clone());
+            if let Some(dep_throws) = lookup_dep_throw_set(&dep_interfaces, to) {
+                // Cross-package: merge dependency's transitive throw facts into caller's direct facts
+                direct_facts
+                    .entry(from.clone())
+                    .or_default()
+                    .extend(dep_throws.iter().cloned());
+            } else {
+                // Same-package: will add edge after nodes are added
+                // (edges added below)
+            }
+        }
+    }
+
+    // Add all nodes with their (possibly enriched) direct facts
+    for (key, facts) in &direct_facts {
+        graph.add_node(key.clone(), facts.clone());
+    }
+
+    // Add same-package call edges
+    for (from, targets) in &call_edges {
+        if has_declared_contract.get(from).copied().unwrap_or(false) {
+            continue;
+        }
+        for to in targets {
+            if lookup_dep_throw_set(&dep_interfaces, to).is_none() {
+                graph.add_edge(from.clone(), to.clone());
+            }
         }
     }
 
@@ -143,26 +261,47 @@ fn function_key<'db>(
     }
 }
 
-pub fn collect_direct_throws(body: &ExprBody) -> BTreeSet<ThrowFact> {
+pub fn collect_direct_throws<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    body: &ExprBody,
+) -> BTreeSet<ThrowFact> {
     let mut facts = BTreeSet::new();
 
     for (_, expr) in body.exprs.iter() {
         if let Expr::Throw { value } = expr {
-            facts.insert(throw_fact_from_expr(*value, body));
+            facts.insert(throw_fact_from_expr(db, pkg_items, *value, body));
         }
     }
     for (_, stmt) in body.stmts.iter() {
-        if let Stmt::Throw { value } = stmt {
-            facts.insert(throw_fact_from_expr(*value, body));
+        if let baml_compiler2_ast::Stmt::Throw { value } = stmt {
+            facts.insert(throw_fact_from_expr(db, pkg_items, *value, body));
         }
     }
 
+    // Remove facts that correspond to catch binding variable names.
+    // This is a heuristic: if a binding name happens to shadow a type name,
+    // the corresponding fact is suppressed.
     let catch_bindings = collect_catch_binding_names(body);
     if !catch_bindings.is_empty() {
-        facts.retain(|fact| !catch_bindings.contains(fact.as_str()));
+        facts.retain(|fact| {
+            let name = fact_display_name(fact);
+            !catch_bindings.contains(name.as_str())
+        });
     }
 
     facts
+}
+
+/// Get a display name for a throw fact, used for the catch binding name filter.
+fn fact_display_name(fact: &Ty) -> String {
+    match fact {
+        Ty::Primitive(p) => p.to_string(),
+        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.to_string(),
+        Ty::EnumVariant(qn, variant) => format!("{qn}.{variant}"),
+        Ty::Unknown => "unknown".to_string(),
+        _ => format!("{fact}"),
+    }
 }
 
 pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
@@ -178,33 +317,94 @@ pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
     targets
 }
 
-fn throw_fact_from_expr(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> ThrowFact {
+/// Convert a thrown expression to a `Ty` directly, using `pkg_items` to resolve
+/// paths to their actual types (enum variants, classes, etc).
+fn throw_fact_from_expr<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    expr_id: baml_compiler2_ast::ExprId,
+    body: &ExprBody,
+) -> Ty {
     match &body.exprs[expr_id] {
-        Expr::Literal(Literal::String(_)) => "string".into(),
-        Expr::Literal(Literal::Int(_)) => "int".into(),
-        Expr::Literal(Literal::Float(_)) => "float".into(),
-        Expr::Literal(Literal::Bool(_)) => "bool".into(),
-        Expr::Null => "null".into(),
-        Expr::Path(segments) if !segments.is_empty() => segments
-            .iter()
-            .map(Name::as_str)
-            .collect::<Vec<_>>()
-            .join("."),
+        Expr::Literal(Literal::String(_)) => Ty::Primitive(PrimitiveType::String),
+        Expr::Literal(Literal::Int(_)) => Ty::Primitive(PrimitiveType::Int),
+        Expr::Literal(Literal::Float(_)) => Ty::Primitive(PrimitiveType::Float),
+        Expr::Literal(Literal::Bool(_)) => Ty::Primitive(PrimitiveType::Bool),
+        Expr::Null => Ty::Primitive(PrimitiveType::Null),
+        Expr::Path(segments) if !segments.is_empty() => resolve_path_to_ty(db, pkg_items, segments),
         Expr::FieldAccess { .. } => expr_to_path(expr_id, body)
-            .map(|segments| {
-                segments
-                    .iter()
-                    .map(Name::as_str)
-                    .collect::<Vec<_>>()
-                    .join(".")
-            })
-            .unwrap_or_else(|| "unknown".into()),
+            .map(|segments| resolve_path_to_ty(db, pkg_items, &segments))
+            .unwrap_or(Ty::Unknown),
         Expr::Object {
             type_name: Some(name),
             ..
-        } => name.as_str().into(),
-        _ => "unknown".into(),
+        } => {
+            if let Some(def) = pkg_items.lookup_type(std::slice::from_ref(name)) {
+                match def {
+                    Definition::Class(_) => Ty::Class(qualify_def(db, def, name)),
+                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name)),
+                    _ => Ty::Unknown,
+                }
+            } else {
+                Ty::Unknown
+            }
+        }
+        _ => Ty::Unknown,
     }
+}
+
+/// Rewrite a call target name from `self.X` to `ClassName.X`.
+/// Other targets are returned unchanged.
+fn rewrite_self_target(target: &Name, class_name: &Name) -> Name {
+    let s = target.as_str();
+    if let Some(rest) = s.strip_prefix("self.") {
+        Name::new(format!("{class_name}.{rest}"))
+    } else {
+        target.clone()
+    }
+}
+
+/// Resolve a path like `["Status", "HttpError"]` or `["ns", "Status", "HttpError"]`
+/// or `["Status"]` to a `Ty`.
+fn resolve_path_to_ty<'db>(
+    db: &'db dyn crate::Db,
+    pkg_items: &PackageItems<'db>,
+    segments: &[Name],
+) -> Ty {
+    // Try treating the last segment as an enum variant and the prefix as
+    // the enum path. We try progressively shorter prefixes so that
+    // ["ns", "Status", "HttpError"] → enum_path=["ns", "Status"], variant="HttpError"
+    // works alongside ["Status", "HttpError"] → enum_path=["Status"], variant="HttpError".
+    //
+    // This must run BEFORE the generic lookup because the namespace system
+    // registers enum variants as types in a child namespace, so
+    // `lookup_type(&["Status", "HttpError"])` would incorrectly match
+    // "HttpError" as a standalone enum rather than a variant of Status.
+    if segments.len() >= 2 {
+        let enum_path = &segments[..segments.len() - 1];
+        let variant = &segments[segments.len() - 1];
+        if let Some(def) = pkg_items.lookup_type(enum_path) {
+            if let Definition::Enum(_) = def {
+                let enum_name = &enum_path[enum_path.len() - 1];
+                let qtn = qualify_def(db, def, enum_name);
+                return Ty::EnumVariant(qtn, variant.clone());
+            }
+        }
+    }
+
+    // Try the full path as a type lookup (handles namespaced types and
+    // single-segment names).
+    if let Some(def) = pkg_items.lookup_type(segments) {
+        let name = segments.last().unwrap();
+        return match def {
+            Definition::Class(_) => Ty::Class(qualify_def(db, def, name)),
+            Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name)),
+            Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, name)),
+            _ => Ty::Unknown,
+        };
+    }
+
+    Ty::Unknown
 }
 
 fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
@@ -236,44 +436,50 @@ fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<
     }
 }
 
-pub fn throw_facts_from_ty(ty: &Ty) -> BTreeSet<ThrowFact> {
+/// Flatten a compound `Ty` into its leaf throw facts.
+/// Unions and optionals are decomposed; leaf types are kept as-is.
+pub fn flatten_ty_to_facts(ty: &Ty) -> BTreeSet<ThrowFact> {
     let mut out = BTreeSet::new();
-    collect_throw_facts_from_ty(ty, &mut out);
+    collect_leaf_types(ty, &mut out);
     out
 }
 
-fn collect_throw_facts_from_ty(ty: &Ty, out: &mut BTreeSet<ThrowFact>) {
+fn collect_leaf_types(ty: &Ty, out: &mut BTreeSet<Ty>) {
     match ty {
-        Ty::Primitive(p) => out.insert(p.to_string()),
-        Ty::Literal(lit, _) => out.insert(match lit {
-            baml_base::Literal::String(_) => "string".to_string(),
-            baml_base::Literal::Int(_) => "int".to_string(),
-            baml_base::Literal::Float(_) => "float".to_string(),
-            baml_base::Literal::Bool(_) => "bool".to_string(),
-        }),
-        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => {
-            out.insert(qn.name.as_str().to_string())
-        }
-        Ty::EnumVariant(qn, variant) => out.insert(format!("{}.{}", qn.name, variant)),
+        // Compound types: decompose
         Ty::Optional(inner) => {
-            collect_throw_facts_from_ty(inner, out);
-            out.insert("null".to_string())
+            collect_leaf_types(inner, out);
+            out.insert(Ty::Primitive(PrimitiveType::Null));
         }
         Ty::Union(members) => {
             for member in members {
-                collect_throw_facts_from_ty(member, out);
+                collect_leaf_types(member, out);
             }
-            true
         }
-        Ty::Unknown | Ty::Error | Ty::BuiltinUnknown => out.insert("unknown".to_string()),
-        Ty::Never | Ty::Void => true,
-        Ty::List(_)
-        | Ty::Map(_, _)
-        | Ty::EvolvingList(_)
-        | Ty::EvolvingMap(_, _)
-        | Ty::Function { .. }
-        | Ty::RustType => out.insert(ty.to_string()),
-    };
+        // Literal types: widen to primitive for throw fact purposes
+        Ty::Literal(lit, _) => {
+            out.insert(Ty::Primitive(PrimitiveType::from_literal(lit)));
+        }
+        // Bottom/void: no facts
+        Ty::Never | Ty::Void => {}
+        // Everything else: keep as-is
+        _ => {
+            out.insert(ty.clone());
+        }
+    }
+}
+
+/// Look up a function's transitive throw set from dependency interfaces.
+fn lookup_dep_throw_set<'a>(
+    dep_interfaces: &'a [(Name, &crate::package_interface::PackageInterface)],
+    target_name: &Name,
+) -> Option<&'a BTreeSet<ThrowFact>> {
+    for (_dep_name, dep_iface) in dep_interfaces {
+        if let Some(throws) = dep_iface.throw_sets.transitive_for(target_name) {
+            return Some(throws);
+        }
+    }
+    None
 }
 
 pub fn is_banned_catch_binding_type(ty: &TypeExpr) -> Option<&'static str> {

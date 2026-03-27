@@ -1,35 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function Gpt4oClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("Gpt4oClient", "openai", "system", ["system", "user", "assistant"], { "model": "gpt-4o", "api_key": "sk-test" })
+=== HIR2 ===
+function user.Gpt4oClient$new() -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "Gpt4oClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4o", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "sk-test", provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
-
-function O1MiniClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("O1MiniClient", "openai", "system", ["system", "user", "assistant"], { "model": "o1-mini", "api_key": "sk-test" })
+function user.O1Client$new() -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "O1Client", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "o1", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "sk-test", provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
-
-function O1WithExplicitRoles.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("O1WithExplicitRoles", "openai", "system", ["system", "user", "assistant"], { "model": "o1", "api_key": "sk-test", "allowed_roles": ["system", "user", "assistant"] })
+function user.O1MiniClient$new() -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "O1MiniClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "o1-mini", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "sk-test", provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }
-
-function O1Client.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("O1Client", "openai", "system", ["system", "user", "assistant"], { "model": "o1", "api_key": "sk-test" })
-}
-
-client O1WithExplicitRoles {
-  provider: openai
-}
-
-client O1Client {
-  provider: openai
-}
-
-client O1MiniClient {
-  provider: openai
-}
-
-client Gpt4oClient {
-  provider: openai
+function user.O1WithExplicitRoles$new() -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "O1WithExplicitRoles", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "o1", base_url: null, default_role: null, allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: "sk-test", provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }

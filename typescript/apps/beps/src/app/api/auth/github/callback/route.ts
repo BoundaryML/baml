@@ -152,7 +152,6 @@ export async function GET(request: NextRequest) {
       githubId: githubUser.id.toString(),
       name: githubUser.name || githubUser.login,
       avatarUrl: githubUser.avatar_url,
-      email: githubUser.email,
       boundaryEmail,
     };
 

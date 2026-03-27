@@ -20,12 +20,39 @@ function Caller(x: int) -> string {
 
 //----
 //- diagnostics
-// Warning: `throws` declaration includes types the function never throws: Errors.InternalError, Errors.NotFoundError
-//    ╭─[ throw_throws_caller_sees_contract.baml:9:28 ]
+// Error: extraneous throws declaration: user.Errors
+//    ╭─[ throw_throws_caller_sees_contract.baml:9:42 ]
 //    │
 //  9 │ function MayFail(x: int) -> string throws Errors {
-//    │                            ───┬───  
-//    │                               ╰───── `throws` declaration includes types the function never throws: Errors.InternalError, Errors.NotFoundError
+//    │                                          ───┬───  
+//    │                                             ╰───── extraneous throws declaration: user.Errors
 //    │ 
-//    │ Note: Error code: E0097
+//    │ Note: Error code: E0001
 // ───╯
+// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError
+//    ╭─[ throw_throws_caller_sees_contract.baml:9:42 ]
+//    │
+//  9 │ function MayFail(x: int) -> string throws Errors {
+//    │                                          ───┬───  
+//    │                                             ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: unreachable arm
+//     ╭─[ throw_throws_caller_sees_contract.baml:16:29 ]
+//     │
+//  16 │     Errors.NotFoundError => "notfound",
+//     │                             ─────┬────  
+//     │                                  ╰────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ throw_throws_caller_sees_contract.baml:17:29 ]
+//     │
+//  17 │     Errors.InternalError => "internal"
+//     │                             ─────┬────  
+//     │                                  ╰────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

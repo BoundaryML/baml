@@ -1,23 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-class A {
+=== HIR2 ===
+class user.A {
   field: string
 }
-
-class A {
+class user.A {
   field: string
 }
-
-type A = int
-
-class stream_A {
-  field: null | string
-}
-
-class stream_A {
-  field: null | string
-}
-
-type stream_A = int
+type user.A = int

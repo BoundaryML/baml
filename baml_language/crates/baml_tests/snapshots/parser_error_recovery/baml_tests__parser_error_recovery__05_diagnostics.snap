@@ -1,23 +1,23 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
-  [parse] Error: Expected class name, found integer
-   ╭─[ invalid_syntax.baml:1:7 ]
-   │
- 1 │ class 123Invalid {  // Invalid class name
-   │       ─┬─  
-   │        ╰─── Expected class name, found integer
-   │ 
-   │ Note: Error code: E0010
-───╯
-
+=== COMPILER2 DIAGNOSTICS ===
   [parse] Error: Expected '{', found integer
    ╭─[ invalid_syntax.baml:1:7 ]
    │
  1 │ class 123Invalid {  // Invalid class name
    │       ─┬─  
    │        ╰─── Expected '{', found integer
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected class name, found integer
+   ╭─[ invalid_syntax.baml:1:7 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │       ─┬─  
+   │        ╰─── Expected class name, found integer
    │ 
    │ Note: Error code: E0010
 ───╯
@@ -92,34 +92,14 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected '}', found client
-    ╭─[ invalid_syntax.baml:11:3 ]
+  [type] Error: unresolved name: GPT4
+    ╭─[ invalid_syntax.baml:11:10 ]
     │
  11 │   client GPT4
-    │   ───┬──  
-    │      ╰──── Expected '}', found client
+    │          ──┬─  
+    │            ╰─── unresolved name: GPT4
     │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected config block, found '}'
-    ╭─[ invalid_syntax.baml:12:1 ]
-    │
- 12 │ }
-    │ ┬  
-    │ ╰── Expected config block, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected top-level declaration, found '}'
-    ╭─[ invalid_syntax.baml:12:1 ]
-    │
- 12 │ }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
+    │ Note: Error code: E0001
 ────╯
 
   [parse] Error: Expected '}', found class
@@ -130,6 +110,16 @@ source: crates/baml_tests/src/generated_tests.rs
    │   ╰──── Expected '}', found class
    │ 
    │ Note: Error code: E0010
+───╯
+
+  [type] Error: unresolved type: str
+   ╭─[ partial_input.baml:3:9 ]
+   │
+ 3 │   field1 str  // Incomplete type name
+   │         ──┬─  
+   │           ╰─── unresolved type: str
+   │ 
+   │ Note: Error code: E0002
 ───╯
 
   [parse] Error: field 'field2' is missing a type annotation
@@ -182,22 +172,22 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0010
 ────╯
 
-  [parse] Error: Expected return type (->), found function
-    ╭─[ partial_input.baml:13:1 ]
-    │
- 13 │ function NextFunction() -> string {  // Should still parse this
-    │ ────┬───  
-    │     ╰───── Expected return type (->), found function
-    │ 
-    │ Note: Error code: E0010
-────╯
-
   [parse] Error: Expected function body, found function
     ╭─[ partial_input.baml:13:1 ]
     │
  13 │ function NextFunction() -> string {  // Should still parse this
     │ ────┬───  
     │     ╰───── Expected function body, found function
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected return type (->), found function
+    ╭─[ partial_input.baml:13:1 ]
+    │
+ 13 │ function NextFunction() -> string {  // Should still parse this
+    │ ────┬───  
+    │     ╰───── Expected return type (->), found function
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -242,14 +232,14 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [parse] Error: Expected Unclosed string literal, found EOF
-   ╭─[ unclosed_string.baml:5:2 ]
+  [type] Error: unresolved type: closed
+   ╭─[ unclosed_string.baml:4:32 ]
    │
- 5 │ }
-   │  ┬  
-   │  ╰── Expected Unclosed string literal, found EOF
+ 4 │   field3 string @alias("another closed string")  // Should still parse this
+   │                                ───┬───  
+   │                                   ╰───── unresolved type: closed
    │ 
-   │ Note: Error code: E0010
+   │ Note: Error code: E0002
 ───╯
 
   [parse] Error: Expected '}', found EOF
@@ -262,46 +252,12 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0010
 ───╯
 
-  [hir] Error: Missing `provider` field in client. e.g. `provider openai`
-    ╭─[ invalid_syntax.baml:10:20 ]
-    │
- 10 │ ╭─▶ function Foo() -> {  // Missing return type
- 11 │ ├─▶   client GPT4
-    │ │                   
-    │ ╰─────────────────── Missing `provider` field in client. e.g. `provider openai`
-    │     
-    │     Note: Error code: E0026
-────╯
-
-  [hir] Error: Expected @alias("..."), but got an expression `  // Unclosed attribute
-  field5`
-   ╭─[ partial_input.baml:6:23 ]
+  [parse] Error: Expected Unclosed string literal, found EOF
+   ╭─[ unclosed_string.baml:5:2 ]
    │
- 6 │ ╭─▶   field4 string @alias(  // Unclosed attribute
- 7 │ ├─▶   field5 string  // This should break as `field5` is treated as part of the attribute
-   │ │                                                                                           
-   │ ╰─────────────────────────────────────────────────────────────────────────────────────────── Expected @alias("..."), but got an expression `  // Unclosed attribute
-  field5`
-   │     
-   │     Note: Error code: E0037
-───╯
-
-  [type] Error: Unknown type `str`
-   ╭─[ partial_input.baml:3:9 ]
-   │
- 3 │   field1 str  // Incomplete type name
-   │         ──┬─  
-   │           ╰─── Unknown type `str`
+ 5 │ }
+   │  ┬  
+   │  ╰── Expected Unclosed string literal, found EOF
    │ 
-   │ Note: Error code: E0002
-───╯
-
-  [type] Error: Unknown type `closed`
-   ╭─[ unclosed_string.baml:4:32 ]
-   │
- 4 │   field3 string @alias("another closed string")  // Should still parse this
-   │                                ───┬───  
-   │                                   ╰───── Unknown type `closed`
-   │ 
-   │ Note: Error code: E0002
+   │ Note: Error code: E0010
 ───╯

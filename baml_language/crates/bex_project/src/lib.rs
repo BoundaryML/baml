@@ -13,7 +13,9 @@ pub use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 pub use bex::Bex;
 pub use bex_engine::{EngineError, FunctionCallContextBuilder};
 pub use bex_events::EventSink;
-pub use bex_external_types::{BexExternalAdt, BexExternalValue, Handle, MediaKind, Ty, TyAttr};
+pub use bex_external_types::{
+    BexExternalAdt, BexExternalValue, Handle, MediaKind, Ty, TyAttr, try_convert_rust_data,
+};
 pub use sys_types::{CallId, CancellationToken, SysOps};
 use thiserror::Error;
 
@@ -72,6 +74,6 @@ pub fn new(
 
 pub use bex_lsp::{
     BexLsp, FunctionInfo, FunctionKind, LlmCapabilities, LspClientSenderTrait, LspError,
-    PlaygroundNotification, PlaygroundSender, ProjectUpdate, new_lsp,
+    PlaygroundNotification, PlaygroundSender, ProjectDiagnostic, ProjectUpdate, TestInfo, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

@@ -17,7 +17,6 @@
 use std::{collections::HashMap, sync::Arc};
 
 use bex_heap::{BexHeap, Tlab};
-use bex_resource_types::ResourceHandle;
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, StackIndex, UnaryOp, Value, Variant,
@@ -30,7 +29,7 @@ use crate::{
     StackTrace,
     errors::{ErrorLocation, InternalError, RuntimeError, VmError},
     indexable::{EvalStack, EvalStackTrait},
-    native::NativeFunction,
+    package_baml::{BamlPackageBaml, NativeFunction},
     types::ObjectTrait,
     watch::{self, NodeId, RootState, Watch, WatchFilter},
 };
@@ -214,6 +213,12 @@ pub struct BexVm {
     /// This stores the functions and globally declared variables.
     pub globals: GlobalPool,
 
+    /// Resolved class names mapping fully-qualified class names to their heap pointers.
+    ///
+    /// Used by `resolve_class()` for generated `copy::` struct `to_value()` methods.
+    /// Populated at VM construction time from the compiled program's class index.
+    pub resolved_class_names: HashMap<String, HeapPtr>,
+
     /// Emit dependency graph.
     pub watch: Watch,
 
@@ -333,7 +338,7 @@ pub struct BytecodeProgram {
     /// Compiled test cases.
     pub test_cases: Vec<bex_vm_types::TestCase>,
     /// Recursive type alias definitions for output format rendering.
-    pub recursive_type_alias_defs: indexmap::IndexMap<String, baml_type::Ty>,
+    pub recursive_type_alias_defs: indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>,
 }
 
 /// Convert a compiled `Program` to a `BytecodeProgram` with native functions attached.
@@ -346,7 +351,7 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
     let objects: Vec<Object> = program
         .objects
         .into_iter()
-        .map(crate::native::attach_builtins)
+        .map(crate::package_baml::attach_builtins)
         .collect::<Result<Vec<_>, _>>()?;
 
     // Build resolved name maps by scanning objects
@@ -361,10 +366,10 @@ pub fn convert_program(program: bex_vm_types::Program) -> Result<BytecodeProgram
                 resolved_function_names.insert(func.name.clone(), (obj_idx, func.kind));
             }
             Object::Class(class) => {
-                resolved_class_names.insert(class.name.clone(), obj_idx);
+                resolved_class_names.insert(class.name.to_string(), obj_idx);
             }
             Object::Enum(enum_def) => {
-                resolved_enums_names.insert(enum_def.name.clone(), obj_idx);
+                resolved_enums_names.insert(enum_def.name.to_string(), obj_idx);
             }
             _ => {}
         }
@@ -407,9 +412,7 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Function(_) => type_tags::FUNCTION,
                 Object::Future(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
-                Object::Media(_) => type_tags::MEDIA,
-                Object::Resource(_) => type_tags::RESOURCE,
-                Object::PromptAst(_) => type_tags::PROMPT_AST,
+                Object::RustData(_) => type_tags::UNKNOWN,
                 Object::Collector(_) => type_tags::COLLECTOR,
                 Object::Type(_) => type_tags::TYPE,
                 Object::Class(_) => type_tags::UNKNOWN,
@@ -432,7 +435,11 @@ impl BexVm {
     ///
     /// The heap is shared across all VMs. Each VM gets its own TLAB
     /// for contention-free allocation.
-    pub fn new(heap: Arc<BexHeap>, globals: GlobalPool) -> Self {
+    pub fn new(
+        heap: Arc<BexHeap>,
+        globals: GlobalPool,
+        resolved_class_names: HashMap<String, HeapPtr>,
+    ) -> Self {
         let tlab = Tlab::new(Arc::clone(&heap));
 
         Self {
@@ -441,6 +448,7 @@ impl BexVm {
             heap,
             tlab,
             globals,
+            resolved_class_names,
             watch: Watch::new(),
             watched_vars: HashMap::new(),
             interrupt_frame: None,
@@ -583,44 +591,6 @@ impl BexVm {
         }
     }
 
-    /// Get media from a Value.
-    pub fn as_media(
-        &self,
-        value: &Value,
-        media_kind: baml_type::MediaKind,
-    ) -> Result<&bex_vm_types::types::MediaValue, InternalError> {
-        let index = self.as_object_ptr(value, ObjectType::Media(media_kind))?;
-        let obj = self.get_object(index);
-        match obj {
-            Object::Media(media) => Ok(media),
-            _ => Err(InternalError::TypeError {
-                expected: ObjectType::Media(media_kind).into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
-    }
-
-    /// Get mutable media from a Value (not currently used but required by macro).
-    #[allow(dead_code)]
-    pub fn as_media_mut(
-        &mut self,
-        value: &Value,
-        media_kind: baml_type::MediaKind,
-    ) -> Result<&mut bex_vm_types::types::MediaValue, InternalError> {
-        let index = self.as_object_ptr(value, ObjectType::Media(media_kind))?;
-        // Check type first to avoid borrow issues
-        if !matches!(self.get_object(index), Object::Media(_)) {
-            return Err(InternalError::TypeError {
-                expected: ObjectType::Media(media_kind).into(),
-                got: ObjectType::of(self.get_object(index)).into(),
-            });
-        }
-        match self.get_object_mut(index) {
-            Object::Media(media) => Ok(media),
-            _ => unreachable!("type was just checked"),
-        }
-    }
-
     /// Get Value reference (for generic types).
     #[allow(dead_code)]
     pub fn as_value_mut(&mut self, value: &Value) -> Result<&mut Value, InternalError> {
@@ -654,7 +624,14 @@ impl BexVm {
             .collect();
         let globals = GlobalPool::from_vec(globals_vec);
 
-        Ok(Self::new(heap, globals))
+        // Build resolved_class_names: convert ObjectIndex -> HeapPtr
+        let resolved_class_names: HashMap<String, HeapPtr> = bytecode
+            .resolved_class_names
+            .into_iter()
+            .map(|(name, idx)| (name, heap.compile_time_ptr(idx.into_raw())))
+            .collect();
+
+        Ok(Self::new(heap, globals, resolved_class_names))
     }
 
     /// Bootstraps the VM preparing the given function to run.
@@ -786,29 +763,6 @@ impl BexVm {
         Value::Object(self.tlab.alloc(Object::Future(future)))
     }
 
-    /// Allocate a resource object on the heap.
-    pub fn alloc_resource(&mut self, resource: ResourceHandle) -> Value {
-        Value::Object(self.tlab.alloc(Object::Resource(resource)))
-    }
-
-    /// Allocate a prompt AST object on the heap.
-    pub fn alloc_prompt_ast(&mut self, ast: bex_vm_types::PromptAst) -> Value {
-        Value::Object(self.tlab.alloc(Object::PromptAst(ast)))
-    }
-
-    /// Get prompt AST from a Value.
-    pub fn as_prompt_ast(&self, value: &Value) -> Result<&bex_vm_types::PromptAst, InternalError> {
-        let index = self.as_object_ptr(value, ObjectType::PromptAst)?;
-        let obj = self.get_object(index);
-        match obj {
-            Object::PromptAst(ast) => Ok(ast),
-            _ => Err(InternalError::TypeError {
-                expected: ObjectType::PromptAst.into(),
-                got: ObjectType::of(obj).into(),
-            }),
-        }
-    }
-
     /// Allocate a collector object on the heap.
     pub fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> Value {
         Value::Object(self.tlab.alloc(Object::Collector(collector)))
@@ -830,8 +784,70 @@ impl BexVm {
         }
     }
 
-    pub fn alloc_media(&mut self, media: bex_vm_types::types::MediaValue) -> Value {
-        Value::Object(self.tlab.alloc(Object::Media(media)))
+    /// Allocate opaque Rust data on the heap, returning a `Value::Object(HeapPtr)`.
+    ///
+    /// Used by generated `copy::` structs for `$rust_type` fields.
+    pub fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> Value {
+        Value::Object(self.tlab.alloc(Object::RustData(data)))
+    }
+
+    /// Downcast a `Value::Object` pointing to `Object::RustData` to `&T`.
+    ///
+    /// Used by generated `view::` struct accessors for `$rust_type` fields.
+    pub fn as_rust_data<T: 'static>(&self, value: &Value) -> Result<&T, InternalError> {
+        let ptr = match value {
+            Value::Object(ptr) => *ptr,
+            other => {
+                return Err(InternalError::TypeError {
+                    expected: Type::Object(ObjectType::RustData),
+                    got: self.type_of(other),
+                });
+            }
+        };
+        let obj = self.get_object(ptr);
+        match obj {
+            Object::RustData(arc) => arc.downcast_ref::<T>().ok_or_else(|| {
+                InternalError::Other("RustData downcast failed: wrong concrete type".to_string())
+            }),
+            _ => Err(InternalError::TypeError {
+                expected: Type::Object(ObjectType::RustData),
+                got: self.type_of(value),
+            }),
+        }
+    }
+
+    /// Extract an `&Instance` from a `Value::Object`.
+    ///
+    /// Used by generated glue code to construct `view::` structs.
+    pub fn as_instance(&self, value: &Value) -> Result<&Instance, InternalError> {
+        let ptr = match value {
+            Value::Object(ptr) => *ptr,
+            other => {
+                return Err(InternalError::TypeError {
+                    expected: Type::Object(ObjectType::Instance),
+                    got: self.type_of(other),
+                });
+            }
+        };
+        let obj = self.get_object(ptr);
+        match obj {
+            Object::Instance(instance) => Ok(instance),
+            _ => Err(InternalError::TypeError {
+                expected: Type::Object(ObjectType::Instance),
+                got: self.type_of(value),
+            }),
+        }
+    }
+
+    /// Look up a class by fully-qualified name and return its `HeapPtr`.
+    ///
+    /// Used by generated `copy::` struct `to_value()` methods.
+    /// Panics if the class is not found (programming error — all builtin classes must exist).
+    pub fn resolve_class(&self, name: &str) -> HeapPtr {
+        *self
+            .resolved_class_names
+            .get(name)
+            .unwrap_or_else(|| panic!("resolve_class: class {name:?} not found"))
     }
 
     /// Allocate a type descriptor object on the heap.
@@ -1063,7 +1079,8 @@ impl BexVm {
     fn resolve_callable_target(&self, callee_value: Value) -> Result<(HeapPtr, usize), VmError> {
         let expected_type = FunctionType::Callable;
         let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
-        let Object::Function(callee_fn) = self.get_object(callee_ptr) else {
+        let obj = self.get_object(callee_ptr);
+        let Object::Function(callee_fn) = obj else {
             return Err(InternalError::TypeError {
                 expected: expected_type.into(),
                 got: ObjectType::of(self.get_object(callee_ptr)).into(),
@@ -1228,19 +1245,12 @@ impl BexVm {
                         continue;
                     };
 
-                    match crate::native::baml_deep_equals(self, &[last_assigned, state.value]) {
-                        Ok(Value::Bool(b)) => {
-                            if !b {
-                                filtered_notifications.push(notification);
-                            }
-                        }
-
-                        other => {
-                            return Err(RuntimeError::Other(format!(
-                                "Invalid deep equals result during watch: {other:?}"
-                            ))
-                            .into());
-                        }
+                    if !crate::package_baml::PackageBamlImpl::deep_equals(
+                        self,
+                        &last_assigned,
+                        &state.value,
+                    ) {
+                        filtered_notifications.push(notification);
                     }
                 }
 
@@ -1275,7 +1285,7 @@ impl BexVm {
         path: watch::Path,
         old_value: Value,
         new_value: Value,
-    ) -> Result<(), VmError> {
+    ) {
         if let Value::Object(old) = old_value {
             self.watch
                 .unlink_edge(watched_node, path.clone(), NodeId::HeapObject(old));
@@ -1292,8 +1302,8 @@ impl BexVm {
         let mut old_roots_copies = Vec::with_capacity(roots.len());
 
         for &root in &roots {
-            if let Some(state) = self.watch.root_state(root) {
-                let deep_copy = crate::native::baml_deep_copy(self, &[state.value])?;
+            if let Some(val) = self.watch.root_state(root).map(|s| s.value) {
+                let deep_copy = crate::package_baml::PackageBamlImpl::deep_copy(self, &val);
                 old_roots_copies.push(deep_copy);
             }
         }
@@ -1303,8 +1313,6 @@ impl BexVm {
                 state.last_assigned = Some(old_value);
             }
         }
-
-        Ok(())
     }
 
     /// Load the function object for the given frame.
@@ -1490,7 +1498,7 @@ impl BexVm {
                                 watch::Path::Binding,
                                 old_value,
                                 value,
-                            )?;
+                            );
 
                             if let Some(state) = self.watch.root_state_mut(watched_node) {
                                 state.value = value;
@@ -1568,7 +1576,7 @@ impl BexVm {
                             watch::Path::InstanceField(index),
                             old_value,
                             new_value,
-                        )?;
+                        );
 
                         // Set the new value.
                         if let Object::Instance(instance) = self.get_object_mut(instance_index) {
@@ -2168,7 +2176,7 @@ impl BexVm {
                             watch::Path::ArrayIndex(index),
                             old_value,
                             new_value,
-                        )?;
+                        );
 
                         // Set the new value.
                         if let Object::Array(array) = self.get_object_mut(array_object_index) {
@@ -2219,7 +2227,7 @@ impl BexVm {
                             watch::Path::MapKey(key.clone()),
                             old_value,
                             new_value,
-                        )?;
+                        );
 
                         // Set the new value.
                         if let Object::Map(map) = self.get_object_mut(map_index) {
@@ -2317,7 +2325,7 @@ impl BexVm {
                         let expected_type = FunctionType::SysOp;
                         let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
 
-                        // Can't dispatch if it's not a function ¯\_(ツ)_/¯
+                        // Can't dispatch if it's not a function
                         let Object::Function(callable_future) = self.get_object(callee_ptr) else {
                             return Err(InternalError::TypeError {
                                 expected: expected_type.into(),

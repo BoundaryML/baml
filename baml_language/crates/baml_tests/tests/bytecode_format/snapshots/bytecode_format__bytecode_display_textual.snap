@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
 ---
-function User.promote(self: User, bonus: int) -> Report {
+function user.User.promote(self: null, bonus: int) -> Report {
     load_var self
     load_var self
     load_field .age
@@ -10,7 +10,7 @@ function User.promote(self: User, bonus: int) -> Report {
     store_field .age
     load_var self
     load_var bonus
-    call score
+    call user.score
     store_var base
     alloc_instance Report
     copy 0
@@ -30,7 +30,7 @@ function User.promote(self: User, bonus: int) -> Report {
     return
 }
 
-function http_status(code: int) -> string {
+function user.http_status(code: int) -> string {
     load_var code
     copy 0
     load_const 400
@@ -129,7 +129,7 @@ function http_status(code: int) -> string {
     return
 }
 
-function score(input: User | ErrorInfo, threshold: int) -> Report {
+function user.score(input: User | ErrorInfo, threshold: int) -> Report {
     load_var input
     load_const User
     cmp_op instanceof
@@ -186,114 +186,86 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
     load_const ErrorInfo
     cmp_op instanceof
     pop_jump_if_false L12
-    load_const 0
-    store_var role_score
+    load_var threshold
+    store_var role_mult
     jump L12
 
   L7:
     load_var input
     load_field .role
     discriminant
-    jump_table [L11, L10, L9, L8], default L24
+    jump_table [L11, L10, L9, L8], default L19
 
   L8: Role.Guest
-    load_const 1
-    store_var role_score
+    load_var threshold
+    store_var role_mult
     jump L12
 
   L9: Role.Viewer
-    load_const 2
-    store_var role_score
+    load_var threshold
+    store_var role_mult
     jump L12
 
   L10: Role.Editor
-    load_const 5
-    store_var role_score
+    load_var threshold
+    store_var role_mult
     jump L12
 
   L11: Role.Admin
-    load_const 10
-    store_var role_score
+    load_var threshold
+    store_var role_mult
 
   L12:
     load_var age
     load_const 2
     bin_op *
-    load_const 10
+    load_var role_mult
     bin_op +
     store_var base
     load_var base
-    load_const 100
+    load_var role_mult
     cmp_op >
     pop_jump_if_false L13
-    jump L16
+    jump L14
 
   L13:
     load_var base
-    load_const 0
-    cmp_op <
-    pop_jump_if_false L14
+    store_var capped
     jump L15
 
   L14:
-    load_var base
+    load_var role_mult
     store_var capped
-    jump L17
 
   L15:
-    load_const 0
-    store_var capped
-    jump L17
-
-  L16:
-    load_const 100
-    store_var capped
-
-  L17:
     load_var capped
-    load_const 2
-    bin_op %
-    load_const 0
-    cmp_op ==
-    pop_jump_if_false L18
-    jump L19
-
-  L18:
-    load_const 0
-    store_var bonus
-    jump L20
-
-  L19:
-    load_const 5
-    store_var bonus
-
-  L20:
-    load_var capped
-    load_var role_score
-    bin_op *
-    load_var bonus
+    load_var role_mult
     bin_op +
     store_var total
     load_var total
     load_var threshold
     cmp_op >
-    store_var _50
-    load_var _50
+    store_var _37
+    load_var _37
     load_const true
     cmp_op ==
-    pop_jump_if_false L21
-    jump L22
+    pop_jump_if_false L16
+    jump L17
 
-  L21:
+  L16:
+    load_var _37
+    load_const false
+    cmp_op ==
+    pop_jump_if_false L18
     load_const " [LOW]"
     store_var suffix
-    jump L23
+    jump L18
 
-  L22:
+  L17:
     load_const " [HIGH]"
     store_var suffix
 
-  L23:
+  L18:
     load_var base
     load_var capped
     load_var total
@@ -316,42 +288,13 @@ function score(input: User | ErrorInfo, threshold: int) -> Report {
     store_field .label
     copy 0
     load_var base
-    load_var role_score
+    load_var role_mult
     load_const "base"
     load_const "role"
     alloc_map 2
     store_field .breakdown
     return
 
-  L24:
+  L19:
     unreachable
-}
-
-function stream_User.promote(self: stream_User, bonus: int) -> Report {
-    load_var self
-    load_var self
-    load_field .age
-    load_const 1
-    bin_op +
-    store_field .age
-    load_var self
-    load_var bonus
-    call score
-    store_var base
-    alloc_instance Report
-    copy 0
-    load_var base
-    load_field .score
-    load_var bonus
-    bin_op +
-    store_field .score
-    copy 0
-    load_var base
-    load_field .label
-    store_field .label
-    copy 0
-    load_var base
-    load_field .breakdown
-    store_field .breakdown
-    return
 }

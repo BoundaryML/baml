@@ -13,7 +13,6 @@ description = "Builtin .baml stub files for the compiler2 pipeline"
 
 [lib]
 doctest = false
-path = "baml_std/env/src/lib.rs"
 
 [lints]
 workspace = true

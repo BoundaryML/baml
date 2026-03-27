@@ -1,43 +1,16 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function Broken.MixedLiteralAndTyped(x: int) -> string {
-    match (x) {
-        42 | n: int => "mixed",
-    }
-}
-
-function Broken.Invalid() -> <unknown> {
-}
-
-function Broken.BadUnionPattern(x: int | bool) -> string {
-    match (x) {
-        a: int | b => <missing>,
-        _: bool => "bad",
-    }
-}
-
-class Broken {
+=== HIR2 ===
+class user.Broken {
   field: int
 }
-
-function stream_Broken.MixedLiteralAndTyped(x: int) -> string {
-    match (x) {
-        42 | n: int => "mixed",
-    }
+function user.BadUnionPattern(x: int | bool) -> string  [expr] {
+  {  } match (x) { a: int | user.b => <missing>, bool => "bad" }
 }
-
-function stream_Broken.Invalid() -> <unknown> {
+function user.Invalid() -> ?  [expr] {
+  {  }
 }
-
-function stream_Broken.BadUnionPattern(x: int | bool) -> string {
-    match (x) {
-        a: int | b => <missing>,
-        _: bool => "bad",
-    }
-}
-
-class stream_Broken {
-  field: null | int
+function user.MixedLiteralAndTyped(x: int) -> string  [expr] {
+  {  } match (x) { 42 | n: int => "mixed" }
 }

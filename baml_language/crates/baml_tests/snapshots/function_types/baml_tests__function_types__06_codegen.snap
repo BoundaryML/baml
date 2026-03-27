@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function GetTransform() -> (int) -> int {
+function user.GetTransform() -> (int) -> int {
     load_const 1
     return
 }

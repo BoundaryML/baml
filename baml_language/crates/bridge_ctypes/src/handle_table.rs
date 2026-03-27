@@ -9,7 +9,6 @@ use std::{
 };
 
 use bex_project::{BexExternalAdt, BexExternalValue, Handle, MediaKind};
-use bex_resource_types::{ResourceHandle, ResourceType};
 
 use crate::baml::cffi::BamlHandleType;
 
@@ -18,7 +17,6 @@ use crate::baml::cffi::BamlHandleType;
 #[derive(Clone, Debug)]
 pub enum HandleTableValue {
     Handle(Handle),
-    Resource(ResourceHandle),
     FunctionRef { global_index: usize },
     Adt(BexExternalAdt),
 }
@@ -52,23 +50,18 @@ impl HandleTableValue {
     pub fn handle_type(&self) -> BamlHandleType {
         match self {
             Self::Handle(_) => BamlHandleType::HandleUnknown,
-            Self::Resource(r) => match r.kind() {
-                ResourceType::File => BamlHandleType::ResourceFile,
-                ResourceType::Socket => BamlHandleType::ResourceSocket,
-                ResourceType::Response => BamlHandleType::ResourceHttpResponse,
-            },
             Self::FunctionRef { .. } => BamlHandleType::FunctionRef,
             Self::Adt(adt) => match adt {
-                BexExternalAdt::Media(m) => match m.kind {
+                BexExternalAdt::Collector(_) => BamlHandleType::AdtCollector,
+                BexExternalAdt::Type(_) => BamlHandleType::AdtType,
+                BexExternalAdt::PromptAst(_) => BamlHandleType::AdtPromptAst,
+                BexExternalAdt::Media(media) => match media.kind {
                     MediaKind::Image => BamlHandleType::AdtMediaImage,
                     MediaKind::Audio => BamlHandleType::AdtMediaAudio,
                     MediaKind::Video => BamlHandleType::AdtMediaVideo,
                     MediaKind::Pdf => BamlHandleType::AdtMediaPdf,
                     MediaKind::Generic => BamlHandleType::AdtMediaGeneric,
                 },
-                BexExternalAdt::PromptAst(_) => BamlHandleType::AdtPromptAst,
-                BexExternalAdt::Collector(_) => BamlHandleType::AdtCollector,
-                BexExternalAdt::Type(_) => BamlHandleType::AdtType,
             },
         }
     }
@@ -80,7 +73,6 @@ impl TryFrom<BexExternalValue> for HandleTableValue {
     fn try_from(value: BexExternalValue) -> Result<Self, Self::Error> {
         match value {
             BexExternalValue::Handle(h) => Ok(Self::Handle(h)),
-            BexExternalValue::Resource(r) => Ok(Self::Resource(r)),
             BexExternalValue::FunctionRef { global_index } => {
                 Ok(Self::FunctionRef { global_index })
             }
@@ -94,7 +86,8 @@ impl TryFrom<BexExternalValue> for HandleTableValue {
             | BexExternalValue::Map { .. }
             | BexExternalValue::Instance { .. }
             | BexExternalValue::Variant { .. }
-            | BexExternalValue::Union { .. } => {
+            | BexExternalValue::Union { .. }
+            | BexExternalValue::RustData(_) => {
                 Err("only opaque BexExternalValue variants can be held as handles")
             }
         }
@@ -105,7 +98,6 @@ impl From<HandleTableValue> for BexExternalValue {
     fn from(value: HandleTableValue) -> Self {
         match value {
             HandleTableValue::Handle(h) => BexExternalValue::Handle(h),
-            HandleTableValue::Resource(r) => BexExternalValue::Resource(r),
             HandleTableValue::FunctionRef { global_index } => {
                 BexExternalValue::FunctionRef { global_index }
             }

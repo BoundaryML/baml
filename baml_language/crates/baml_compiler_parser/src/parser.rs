@@ -48,7 +48,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Throw => SyntaxKind::KW_THROW,
         TokenKind::Watch => SyntaxKind::KW_WATCH,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
-        TokenKind::Env => SyntaxKind::KW_ENV,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
@@ -347,6 +346,122 @@ impl<'a> Parser<'a> {
         false
     }
 
+    /// Skip trivia and comments starting from an arbitrary token index.
+    fn skip_trivia_and_comments_from(&self, mut i: usize) -> usize {
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
+            if self.is_basic_trivia(self.tokens[i].kind) {
+                i += 1;
+                continue;
+            }
+
+            break;
+        }
+
+        i
+    }
+
+    /// Skip a parenthesized argument list starting at `(`, returning the index after it.
+    fn skip_parenthesized_from(&self, mut i: usize) -> Option<usize> {
+        i = self.skip_trivia_and_comments_from(i);
+        if self.tokens.get(i)?.kind != TokenKind::LParen {
+            return Some(i);
+        }
+
+        let mut depth = 0_u32;
+        while i < self.tokens.len() {
+            let new_i = self.skip_comment_at(i);
+            if new_i != i {
+                i = new_i;
+                continue;
+            }
+
+            let token = &self.tokens[i];
+            if self.is_basic_trivia(token.kind) {
+                i += 1;
+                continue;
+            }
+
+            match token.kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        return Some(i + 1);
+                    }
+                }
+                _ => {}
+            }
+
+            i += 1;
+        }
+
+        None
+    }
+
+    /// Skip one block attribute (`@@foo(...)`) starting at `@@`, returning the index after it.
+    fn skip_block_attribute_from(&self, mut i: usize) -> Option<usize> {
+        i = self.skip_trivia_and_comments_from(i);
+        if self.tokens.get(i)?.kind != TokenKind::AtAt {
+            return None;
+        }
+        i += 1;
+
+        i = self.skip_trivia_and_comments_from(i);
+        let name_kind = self.tokens.get(i)?.kind;
+        if !matches!(
+            name_kind,
+            TokenKind::Word | TokenKind::Dynamic | TokenKind::Assert | TokenKind::Throws
+        ) {
+            return None;
+        }
+        i += 1;
+
+        loop {
+            i = self.skip_trivia_and_comments_from(i);
+            if self.tokens.get(i).map(|t| t.kind) != Some(TokenKind::Dot) {
+                break;
+            }
+            i += 1;
+
+            i = self.skip_trivia_and_comments_from(i);
+            let segment_kind = self.tokens.get(i)?.kind;
+            if !matches!(
+                segment_kind,
+                TokenKind::Word | TokenKind::Dynamic | TokenKind::Assert | TokenKind::Throws
+            ) {
+                return None;
+            }
+            i += 1;
+        }
+
+        i = self.skip_trivia_and_comments_from(i);
+        if self.tokens.get(i).map(|t| t.kind) == Some(TokenKind::LParen) {
+            i = self.skip_parenthesized_from(i)?;
+        }
+
+        Some(i)
+    }
+
+    /// Look ahead past any leading block attributes and return the next item keyword.
+    fn item_keyword_after_leading_block_attributes(&self) -> Option<TokenKind> {
+        let mut i = self.current;
+
+        loop {
+            i = self.skip_trivia_and_comments_from(i);
+            let token = self.tokens.get(i)?;
+            if token.kind != TokenKind::AtAt {
+                return Some(token.kind);
+            }
+            i = self.skip_block_attribute_from(i)?;
+        }
+    }
+
     /// Check if position i starts a line comment (//) but NOT a header comment (//#)
     fn is_line_comment_at(&self, i: usize) -> bool {
         if i + 1 < self.tokens.len()
@@ -607,6 +722,12 @@ impl<'a> Parser<'a> {
                     | TokenKind::TypeBuilder
             )
         )
+    }
+
+    /// [`at_top_level_keyword`] minus `client`: in blocks, `client` can start `client.method(...)`
+    /// (e.g. a parameter named `client`), not a top-level `client` declaration.
+    fn at_top_level_keyword_except_client(&self) -> bool {
+        self.at_top_level_keyword() && !self.at(TokenKind::Client)
     }
 
     /// Expect a '>' token, but also accept '>>' and consume only one '>'.
@@ -1490,12 +1611,19 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::AtAt);
 
             // Attribute name (can be dotted like @@stream.done)
-            if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Assert) {
+            if p.at(TokenKind::Word)
+                || p.at(TokenKind::Dynamic)
+                || p.at(TokenKind::Assert)
+                || p.at(TokenKind::Throws)
+            {
                 p.bump();
                 // Handle dotted attribute names like @@stream.done
                 while p.at(TokenKind::Dot) {
                     p.bump(); // consume dot
-                    if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Assert)
+                    if p.at(TokenKind::Word)
+                        || p.at(TokenKind::Dynamic)
+                        || p.at(TokenKind::Assert)
+                        || p.at(TokenKind::Throws)
                     {
                         p.bump(); // consume next segment
                     } else {
@@ -1563,7 +1691,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse an expression block (`{{ ... }}`).
+    /// Placeholder for expression block parsing (Phase 4)
     fn parse_expression_block(&mut self) {
         // For now, just consume the {{ }} tokens
         self.with_node(SyntaxKind::EXPR, |p| {
@@ -1621,7 +1749,7 @@ impl<'a> Parser<'a> {
                     if attr_name_first.kind == TokenKind::Word
                         && matches!(
                             attr_name_first.text.as_str(),
-                            "alias" | "description" | "skip" | "stream"
+                            "alias" | "description" | "skip"
                         )
                     {
                         // attribute applies to a field, not the type
@@ -1798,8 +1926,8 @@ impl<'a> Parser<'a> {
     fn parse_function_type_param_inner(&mut self) -> bool {
         // Check if this is `name: type` by looking ahead
         // If we see WORD followed by COLON (skipping trivia), it's a named param
-        let is_named =
-            self.at(TokenKind::Word) && self.peek(1).map(|t| t.kind) == Some(TokenKind::Colon);
+        let is_named = (self.at(TokenKind::Word) || self.at(TokenKind::Client))
+            && self.peek(1).map(|t| t.kind) == Some(TokenKind::Colon);
 
         if is_named {
             // Named parameter: `name: type`
@@ -1823,6 +1951,10 @@ impl<'a> Parser<'a> {
     /// Parse an enum declaration
     pub(crate) fn parse_enum(&mut self) {
         self.with_node(SyntaxKind::ENUM_DEF, |p| {
+            while p.at(TokenKind::AtAt) {
+                p.parse_block_attribute();
+            }
+
             // 'enum' keyword
             p.expect(TokenKind::Enum);
 
@@ -1944,6 +2076,10 @@ impl<'a> Parser<'a> {
     /// Parse a class declaration
     pub(crate) fn parse_class(&mut self) {
         self.with_node(SyntaxKind::CLASS_DEF, |p| {
+            while p.at(TokenKind::AtAt) {
+                p.parse_block_attribute();
+            }
+
             // 'class' keyword
             p.expect(TokenKind::Class);
 
@@ -1971,7 +2107,12 @@ impl<'a> Parser<'a> {
                     break;
                 }
 
-                if p.at(TokenKind::AtAt) {
+                if p.at(TokenKind::AtAt)
+                    && p.item_keyword_after_leading_block_attributes() == Some(TokenKind::Function)
+                {
+                    // Method definition with leading block attributes.
+                    p.parse_function();
+                } else if p.at(TokenKind::AtAt) {
                     // Block attribute: @@dynamic
                     p.parse_block_attribute();
                 } else if p.at(TokenKind::Function) {
@@ -2061,6 +2202,10 @@ impl<'a> Parser<'a> {
     /// Parse a function declaration with speculative parsing for body type
     pub(crate) fn parse_function(&mut self) {
         self.with_node(SyntaxKind::FUNCTION_DEF, |p| {
+            while p.at(TokenKind::AtAt) {
+                p.parse_block_attribute();
+            }
+
             // 'function' keyword
             p.expect(TokenKind::Function);
 
@@ -2071,12 +2216,18 @@ impl<'a> Parser<'a> {
                 p.error_unexpected_token("function name".to_string());
                 // Recovery: skip until we see '(', '{', or '->'
                 while !p.at(TokenKind::LParen)
+                    && !p.at(TokenKind::Less)
                     && !p.at(TokenKind::LBrace)
                     && !p.at(TokenKind::Arrow)
                     && !p.at_end()
                 {
                     p.bump();
                 }
+            }
+
+            // Optional generic parameters: <T> or <K, V>
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
             }
 
             // Check for old-style function syntax: `function Name {` (without parens and return type)
@@ -2146,8 +2297,8 @@ impl<'a> Parser<'a> {
             // Check if this is a 'self' parameter (no type annotation allowed)
             let is_self = p.current().map(|t| t.text == "self").unwrap_or(false);
 
-            // Parameter name
-            if p.at(TokenKind::Word) {
+            // Parameter name (`client` lexes as KW_CLIENT, not Word)
+            if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                 p.bump();
             } else {
                 p.error_unexpected_token("parameter name".to_string());
@@ -2197,8 +2348,14 @@ impl<'a> Parser<'a> {
                         return true;
                     }
                 }
-                // Check for Client keyword token (not just Word with text "client")
-                TokenKind::Client if brace_depth == 1 => return true,
+                // `client` as KW_CLIENT: LLM directive is `client Model`, not `client.method(...)`.
+                TokenKind::Client if brace_depth == 1 => {
+                    let j = self.skip_trivia_and_comments_from(i + 1);
+                    let next = self.tokens.get(j).map(|t| t.kind);
+                    if next != Some(TokenKind::Dot) {
+                        return true;
+                    }
+                }
                 // Check for expression function keywords
                 TokenKind::Let
                 | TokenKind::Return
@@ -2344,7 +2501,7 @@ impl<'a> Parser<'a> {
             // Parse statements until closing brace
             while !p.at(TokenKind::RBrace) && !p.at_end() {
                 // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword() {
+                if p.at_top_level_keyword_except_client() {
                     break;
                 }
 
@@ -2572,7 +2729,7 @@ impl<'a> Parser<'a> {
                     // Parse additional arms
                     while !p.at(TokenKind::RBrace) && !p.at_end() {
                         // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                        if p.at_top_level_keyword() {
+                        if p.at_top_level_keyword_except_client() {
                             break;
                         }
                         p.parse_match_arm();
@@ -2778,7 +2935,7 @@ impl<'a> Parser<'a> {
             } else {
                 p.parse_catch_arm();
                 while !p.at(TokenKind::RBrace) && !p.at_end() {
-                    if p.at_top_level_keyword() {
+                    if p.at_top_level_keyword_except_client() {
                         break;
                     }
                     p.parse_catch_arm();
@@ -3248,11 +3405,12 @@ impl<'a> Parser<'a> {
                         );
                     }
                 }
-                Event::Token { kind, .. } => {
+                Event::Token { kind, text, .. } => {
                     if depth == 0 {
-                        // The most recent thing is a bare token (no wrapping node)
-                        // Only WORD tokens can be type names
-                        return *kind == SyntaxKind::WORD;
+                        // Only WORD tokens can be type names, and literals
+                        // like null/true/false are never constructors.
+                        return *kind == SyntaxKind::WORD
+                            && !matches!(text.as_str(), "null" | "true" | "false");
                     }
                 }
                 Event::UnexpectedToken { .. } | Event::SyntaxHint { .. } => {}
@@ -3304,7 +3462,14 @@ impl<'a> Parser<'a> {
             self.parse_throw_expr();
         } else if self.at(TokenKind::Word) {
             let text = self.current().map(|t| t.text.as_str()).unwrap_or("");
-            if text == "true" || text == "false" {
+            if text == "env"
+                && self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
+                && self.peek(2).map(|t| t.kind) == Some(TokenKind::Word)
+                && self.peek(3).map(|t| t.kind) != Some(TokenKind::LParen)
+            {
+                // env.FIELD sugar (not followed by `(`) — desugar to baml.env.get_or_panic("FIELD")
+                self.parse_env_access();
+            } else if text == "true" || text == "false" {
                 // Boolean literal
                 self.bump();
             } else if text == "null" {
@@ -3314,6 +3479,9 @@ impl<'a> Parser<'a> {
                 // Identifier or path (could be multi-segment like baml.HttpMethod.Get)
                 self.parse_path_or_ident();
             }
+        } else if self.at(TokenKind::Client) {
+            // `client` is KW_CLIENT; allow as identifier (e.g. parameter named `client`, `client.execute(...)`)
+            self.parse_path_or_ident();
         } else if self.at(TokenKind::LParen) {
             // Parenthesized expression
             self.with_node(SyntaxKind::PAREN_EXPR, |p| {
@@ -3340,8 +3508,11 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::Match) {
             // Match expression
             self.parse_match_expr();
-        } else if self.at(TokenKind::Env) {
-            // env.FIELD or env.method(...)
+        } else if self.at(TokenKind::Word)
+            && self.current().map(|t| t.text.as_str()) == Some("env")
+            && self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
+        {
+            // env.FIELD sugar
             self.parse_env_access();
         } else {
             self.error_unexpected_token("expression".to_string());
@@ -3354,11 +3525,11 @@ impl<'a> Parser<'a> {
 
     /// Parse `env.FIELD` expressions.
     ///
-    /// Produces an `ENV_ACCESS_EXPR` node: `KW_ENV DOT WORD`.
-    /// HIR lowering decides how to desugar based on context.
+    /// Produces an `ENV_ACCESS_EXPR` node: `WORD("env") DOT WORD`.
+    /// AST lowering desugars to `baml.env.get_or_panic("FIELD")`.
     fn parse_env_access(&mut self) {
         self.with_node(SyntaxKind::ENV_ACCESS_EXPR, |p| {
-            p.bump(); // consume `env` (TokenKind::Env)
+            p.bump(); // consume `env` (Word)
             if p.eat(TokenKind::Dot) {
                 if p.at(TokenKind::Word) {
                     p.bump(); // consume field name
@@ -3611,19 +3782,15 @@ impl<'a> Parser<'a> {
     /// This distinction is made at parse time because we can determine syntactically
     /// whether the base is a simple identifier chain or a complex expression.
     fn parse_path_or_ident(&mut self) {
-        if !self.at(TokenKind::Word) {
+        if !self.at(TokenKind::Word) && !self.at(TokenKind::Client) {
             return;
         }
 
-        // Check if this looks like a path (word followed by dot and another word)
-        if self
-            .peek(1)
-            .map(|t| t.kind == TokenKind::Dot)
-            .unwrap_or(false)
-            && self
-                .peek(2)
-                .map(|t| t.kind == TokenKind::Word)
-                .unwrap_or(false)
+        let segment = |k: TokenKind| matches!(k, TokenKind::Word | TokenKind::Client);
+
+        // Check if this looks like a path (ident.client followed by dot and another ident)
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Dot)
+            && self.peek(2).map(|t| segment(t.kind)).unwrap_or(false)
         {
             // It's a path - all segments are identifiers
             self.with_node(SyntaxKind::PATH_EXPR, |p| {
@@ -3631,7 +3798,7 @@ impl<'a> Parser<'a> {
 
                 // Parse remaining segments
                 while p.eat(TokenKind::Dot) {
-                    if p.at(TokenKind::Word) {
+                    if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
                         p.bump(); // Next segment
                     } else {
                         p.error_unexpected_token("path segment after '.'".to_string());
@@ -4101,10 +4268,14 @@ impl<'a> Parser<'a> {
         }
 
         // Check for `env.` prefix - environment variable access
-        if self.at(TokenKind::Env) {
-            if let Some(next) = self.peek(1) {
-                if next.kind == TokenKind::Dot {
-                    return true;
+        if self.at(TokenKind::Word) {
+            if let Some(token) = self.current() {
+                if token.text.as_str() == "env" {
+                    if let Some(next) = self.peek(1) {
+                        if next.kind == TokenKind::Dot {
+                            return true;
+                        }
+                    }
                 }
             }
         }
@@ -4338,11 +4509,17 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
 
     // Parse top-level declarations
     while !parser.at_end() {
-        if parser.at(TokenKind::Enum) {
+        let attributed_item = if parser.at(TokenKind::AtAt) {
+            parser.item_keyword_after_leading_block_attributes()
+        } else {
+            None
+        };
+
+        if parser.at(TokenKind::Enum) || attributed_item == Some(TokenKind::Enum) {
             parser.parse_enum();
-        } else if parser.at(TokenKind::Class) {
+        } else if parser.at(TokenKind::Class) || attributed_item == Some(TokenKind::Class) {
             parser.parse_class();
-        } else if parser.at(TokenKind::Function) {
+        } else if parser.at(TokenKind::Function) || attributed_item == Some(TokenKind::Function) {
             parser.parse_function();
         } else if parser.at(TokenKind::Client) {
             parser.parse_client();
@@ -4451,6 +4628,117 @@ function Demo(x int) -> int {
         assert!(
             param_text.contains("int"),
             "parameter should still contain the type 'int', got: {param_text:?}"
+        );
+    }
+
+    #[test]
+    fn parses_top_level_function_with_leading_block_attributes() {
+        let source = r#"
+@@internal.uses(engine_ctx)
+@@internal.panics(HostPanic)
+function fetch(url: string) -> string throws baml.errors.Io | baml.errors.Timeout {
+  $rust_io_function
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .children()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        let attrs: Vec<_> = func
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_ATTRIBUTE)
+            .collect();
+
+        assert_eq!(attrs.len(), 2, "expected two function block attributes");
+    }
+
+    #[test]
+    fn parses_method_with_leading_block_attributes() {
+        let source = r#"
+class Response {
+  @@internal.uses(engine_ctx)
+  function text(self) -> string throws baml.errors.Io {
+    $rust_io_function
+  }
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let class = root
+            .children()
+            .find(|n| n.kind() == SyntaxKind::CLASS_DEF)
+            .expect("expected CLASS_DEF");
+        let func = class
+            .children()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF in class");
+        let attrs: Vec<_> = func
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::BLOCK_ATTRIBUTE)
+            .collect();
+
+        assert_eq!(attrs.len(), 1, "expected method block attribute");
+    }
+
+    #[test]
+    fn parses_function_with_client_as_parameter_name() {
+        // `client` is a keyword (KW_CLIENT); it must still be valid as a parameter name.
+        let source = r#"
+function call_llm_function(client: Client, function_name: string) -> unknown {
+  let _ = client
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        let type_exprs: Vec<_> = func
+            .children()
+            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .collect();
+        assert_eq!(
+            type_exprs.len(),
+            1,
+            "expected one top-level return TYPE_EXPR on FUNCTION_DEF"
+        );
+        let expr_body = func
+            .children()
+            .find(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY);
+        assert!(
+            expr_body.is_some(),
+            "expected EXPR_FUNCTION_BODY on FUNCTION_DEF"
+        );
+    }
+
+    #[test]
+    fn expression_body_starting_with_client_dot_path_is_not_llm_body() {
+        let source = r#"
+function f() -> int {
+  client.execute()
+}
+"#;
+
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+
+        let func = root
+            .descendants()
+            .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
+            .expect("expected FUNCTION_DEF");
+        assert!(
+            func.children()
+                .any(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY),
+            "expected expression body, not LLM body"
         );
     }
 

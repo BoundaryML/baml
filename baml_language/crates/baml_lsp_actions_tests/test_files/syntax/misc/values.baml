@@ -41,21 +41,16 @@ test Foo {
 
 //----
 //- diagnostics
-// Error: Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
-//     ╭─[ misc_values.baml:18:3 ]
-//     │
-//  18 │   input {
-//     │   ──┬──  
-//     │     ╰──── Property not known: "input". Did you mean one of these: "functions", "args", "type_builder"?
-//     │ 
-//     │ Note: Error code: E0034
-// ────╯
-// Error: Missing `args` property
+// Error: Name `Foo` defined 2 times as: function, test
 //     ╭─[ misc_values.baml:16:6 ]
 //     │
+//  11 │ function Foo(input: Input) -> string {
+//     │          ─┬─  
+//     │           ╰─── first defined as function here
+//     │ 
 //  16 │ test Foo {
 //     │      ─┬─  
-//     │       ╰─── Missing `args` property
+//     │       ╰─── duplicate test definition
 //     │ 
-//     │ Note: Error code: E0035
+//     │ Note: Error code: E0011
 // ────╯

@@ -78,6 +78,8 @@ enum StructuralTy {
         body: Box<StructuralTy>,
     },
     TyVar(QualifiedTypeName),
+    /// A generic type parameter — opaque, only subtypes itself and `BuiltinUnknown`.
+    TypeVar(Name),
     // Special
     Never,
     Void,
@@ -119,6 +121,13 @@ impl StructuralTy {
         // If self is BuiltinUnknown and other is not BuiltinUnknown (reflexivity
         // already handled equal case above), it's not a subtype.
         if matches!(self, StructuralTy::BuiltinUnknown) {
+            return false;
+        }
+
+        // TypeVar (generic parameter) is opaque — only subtypes itself (reflexivity
+        // above) and BuiltinUnknown (above). Never (bottom) is already handled above.
+        // Must come before Unknown/Error check to avoid bidirectional compatibility.
+        if matches!(self, StructuralTy::TypeVar(_)) || matches!(other, StructuralTy::TypeVar(_)) {
             return false;
         }
 
@@ -179,16 +188,20 @@ impl StructuralTy {
                 inner1.is_subtype_of(inner2, assumptions)
             }
 
-            // Map covariance in value, invariant in key
+            // Map: covariant in both key and value.
+            //
+            // Keys use subtyping (not equality) so that:
+            //   - map<never, T>   <: map<K, V>    (empty map is assignable anywhere)
+            //   - map<"lit", T>   <: map<string, V>  (literal keys widen to string)
+            //   - map<string, T>  <: map<string, V>  (same key type)
+            //
+            // This allows passing `{}` (`map<never, never>`) and `{"foo": "bar"}`
+            // (`map<literal "foo", literal "bar">`) to functions like
+            // baml.llm.build_request(), which takes `map<string, unknown>`.
             (
                 StructuralTy::Map { key: k1, value: v1 },
                 StructuralTy::Map { key: k2, value: v2 },
-            ) => {
-                let keys_compatible = k1 == k2
-                    || matches!(k1.as_ref(), StructuralTy::Unknown | StructuralTy::Error)
-                    || matches!(k2.as_ref(), StructuralTy::Unknown | StructuralTy::Error);
-                keys_compatible && v1.is_subtype_of(v2, assumptions)
-            }
+            ) => k1.is_subtype_of(k2, assumptions) && v1.is_subtype_of(v2, assumptions),
 
             // Int <: Float
             (StructuralTy::Int, StructuralTy::Float) => true,
@@ -361,10 +374,12 @@ fn normalize_impl(
                 .collect(),
             ret: Box::new(normalize_impl(ret, aliases, recursive, expanding)),
         },
+        Ty::TypeVar(name) => StructuralTy::TypeVar(name.clone()),
         // `$rust_type` — opaque Rust-managed state. Treated as Unknown
         // in the structural type system (cannot be constructed or destructured
         // by user code).
-        Ty::RustType => StructuralTy::Unknown,
+        // `type` — the BAML metatype keyword. Also opaque in the structural system.
+        Ty::RustType | Ty::Type => StructuralTy::Unknown,
     }
 }
 
@@ -617,7 +632,7 @@ impl<'g> Tarjan<'g> {
 
         // Sort nodes for deterministic traversal order.
         let mut nodes: Vec<_> = graph.keys().cloned().collect();
-        nodes.sort_by(|a, b| (&a.pkg, &a.name).cmp(&(&b.pkg, &b.name)));
+        nodes.sort_by_key(std::string::ToString::to_string);
 
         for node in &nodes {
             if tarjan.state[node].index == Self::UNVISITED {
@@ -628,7 +643,7 @@ impl<'g> Tarjan<'g> {
         // Sort components by first element for deterministic output.
         tarjan
             .components
-            .sort_by(|a, b| (&a[0].pkg, &a[0].name).cmp(&(&b[0].pkg, &b[0].name)));
+            .sort_by(|a, b| a[0].to_string().cmp(&b[0].to_string()));
 
         tarjan.components
     }
@@ -645,7 +660,7 @@ impl<'g> Tarjan<'g> {
 
         // Sort successors for deterministic DFS order.
         let mut successors: Vec<_> = self.graph[node_id].iter().collect();
-        successors.sort_by(|a, b| (&a.pkg, &a.name).cmp(&(&b.pkg, &b.name)));
+        successors.sort_by_key(std::string::ToString::to_string);
 
         for successor_id in successors {
             let mut successor = self.state[successor_id];
@@ -686,7 +701,7 @@ impl<'g> Tarjan<'g> {
                 if let Some(min_idx) = component
                     .iter()
                     .enumerate()
-                    .min_by(|(_, a), (_, b)| (&a.pkg, &a.name).cmp(&(&b.pkg, &b.name)))
+                    .min_by(|(_, a), (_, b)| a.to_string().cmp(&b.to_string()))
                     .map(|(i, _)| i)
                 {
                     component.rotate_left(min_idx);
@@ -886,10 +901,10 @@ fn extract_required_class_deps(
 /// Format a cycle path as "A -> B -> C -> A".
 fn format_cycle_path(cycle: &[QualifiedTypeName]) -> String {
     if cycle.len() == 1 {
-        cycle[0].name.to_string()
+        cycle[0].to_string()
     } else {
-        let mut path: Vec<String> = cycle.iter().map(|qn| qn.name.to_string()).collect();
-        path.push(cycle[0].name.to_string());
+        let mut path: Vec<String> = cycle.iter().map(std::string::ToString::to_string).collect();
+        path.push(cycle[0].to_string());
         path.join(" -> ")
     }
 }
@@ -900,7 +915,7 @@ mod tests {
     use crate::ty::Freshness;
 
     fn qn(name: &str) -> QualifiedTypeName {
-        QualifiedTypeName::new(Name::new("test"), Name::new(name))
+        QualifiedTypeName::new(Name::new("test"), vec![], Name::new(name))
     }
 
     fn type_alias(name: &str) -> Ty {
@@ -1187,6 +1202,119 @@ mod tests {
             &Ty::Map(
                 Box::new(Ty::Primitive(PrimitiveType::String)),
                 Box::new(Ty::Primitive(PrimitiveType::Int)),
+            ),
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_map_key_covariance_never() {
+        let aliases = HashMap::new();
+        // map<never, never> <: map<string, unknown> — empty map assignable anywhere
+        assert!(is_subtype_of(
+            &Ty::Map(Box::new(Ty::Never), Box::new(Ty::Never)),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::BuiltinUnknown),
+            ),
+            &aliases
+        ));
+        // map<never, never> <: map<string, int>
+        assert!(is_subtype_of(
+            &Ty::Map(Box::new(Ty::Never), Box::new(Ty::Never)),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::Int)),
+            ),
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_map_key_covariance_literal() {
+        let aliases = HashMap::new();
+        // map<"name", "World"> <: map<string, unknown>
+        assert!(is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Literal(
+                    LiteralValue::String("name".into()),
+                    Freshness::Fresh
+                )),
+                Box::new(Ty::Literal(
+                    LiteralValue::String("World".into()),
+                    Freshness::Fresh
+                )),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::BuiltinUnknown),
+            ),
+            &aliases
+        ));
+        // map<"name", "World"> <: map<string, string>
+        assert!(is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Literal(
+                    LiteralValue::String("name".into()),
+                    Freshness::Fresh
+                )),
+                Box::new(Ty::Literal(
+                    LiteralValue::String("World".into()),
+                    Freshness::Fresh
+                )),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+            ),
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_map_value_covariance() {
+        let aliases = HashMap::new();
+        // map<string, int> <: map<string, float>
+        assert!(is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::Int)),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::Float)),
+            ),
+            &aliases
+        ));
+    }
+
+    #[test]
+    fn test_map_key_not_supertype() {
+        let aliases = HashMap::new();
+        // map<string, int> NOT <: map<"name", int> — widening key is not subtyping
+        assert!(!is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::Int)),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Literal(
+                    LiteralValue::String("name".into()),
+                    Freshness::Fresh
+                )),
+                Box::new(Ty::Primitive(PrimitiveType::Int)),
+            ),
+            &aliases
+        ));
+        // map<string, string> NOT <: map<int, string> — incompatible key types
+        assert!(!is_subtype_of(
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+                Box::new(Ty::Primitive(PrimitiveType::String)),
+            ),
+            &Ty::Map(
+                Box::new(Ty::Primitive(PrimitiveType::Int)),
+                Box::new(Ty::Primitive(PrimitiveType::String)),
             ),
             &aliases
         ));

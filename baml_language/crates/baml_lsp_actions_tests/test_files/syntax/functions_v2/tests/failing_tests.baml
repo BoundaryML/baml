@@ -127,29 +127,16 @@ test Bar {
 
 //----
 //- diagnostics
-// Error: Duplicate test `Bar` for function `InputEnum`
+// Error: Name `Bar` defined 2 times as: let, test
 //     ╭─[ functions_v2_tests_failing_tests.baml:77:6 ]
 //     │
+//   1 │ client<llm> Bar {
+//     │             ─┬─  
+//     │              ╰─── first defined as let here
+//     │ 
 //  77 │ test Bar {
 //     │      ─┬─  
-//     │       ╰─── test `Bar` for `InputEnum` redefined here
-//     │       │   
-//     │       ╰─── test `Bar` for `InputEnum` first defined in functions_v2_tests_failing_tests.baml
-//     │ 
-//     │ Note: Error code: E0011
-// ────╯
-// Error: Duplicate test `Foo` for function `InputImage`
-//     ╭─[ functions_v2_tests_failing_tests.baml:71:6 ]
-//     │
-//  71 │ test Foo {
-//     │      ─┬─  
-//     │       ╰─── test `Foo` for `InputImage` redefined here
-//     │
-//     ├─[ functions_v2_tests_failing_tests.baml:71:6 ]
-//     │
-//  65 │ test Foo {
-//     │      ─┬─  
-//     │       ╰─── test `Foo` for `InputImage` first defined in functions_v2_tests_failing_tests.baml
+//     │       ╰─── duplicate test definition
 //     │ 
 //     │ Note: Error code: E0011
 // ────╯

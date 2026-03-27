@@ -1,5 +1,4 @@
 use bex_external_types::BexExternalValue;
-use indexmap::IndexMap;
 
 use crate::LlmProvider;
 
@@ -46,7 +45,7 @@ impl ModelFeatures {
     /// with any matching keys in the `options` map.
     pub(crate) fn for_provider(
         provider: LlmProvider,
-        options: &IndexMap<String, BexExternalValue>,
+        options: &crate::baml_std::PrimitiveClientOptions,
     ) -> Self {
         let mut features = Self::defaults_for_provider(provider);
         features.apply_overrides(options);
@@ -68,9 +67,9 @@ impl ModelFeatures {
                 max_one_system_prompt: false,
                 allowed_metadata: AllowedMetadata::All,
             },
-            // Anthropic: multiple system messages allowed (extracted into system array)
+            // Anthropic: single system prompt only
             LlmProvider::Anthropic => Self {
-                max_one_system_prompt: false,
+                max_one_system_prompt: true,
                 allowed_metadata: AllowedMetadata::All,
             },
             // AWS Bedrock, Google AI, Vertex AI: single system prompt only
@@ -87,12 +86,12 @@ impl ModelFeatures {
     }
 
     /// Override defaults with values from the client options map.
-    fn apply_overrides(&mut self, options: &IndexMap<String, BexExternalValue>) {
-        if let Some(BexExternalValue::Bool(v)) = options.get("max_one_system_prompt") {
-            self.max_one_system_prompt = *v;
+    fn apply_overrides(&mut self, options: &crate::baml_std::PrimitiveClientOptions) {
+        if let Some(v) = options.max_one_system_prompt {
+            self.max_one_system_prompt = v;
         }
 
-        if let Some(val) = options.get("allowed_role_metadata") {
+        if let Some(val) = &options.allowed_role_metadata {
             match val {
                 BexExternalValue::String(s) if s == "all" => {
                     self.allowed_metadata = AllowedMetadata::All;

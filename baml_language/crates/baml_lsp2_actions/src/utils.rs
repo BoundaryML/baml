@@ -78,7 +78,7 @@ pub fn definition_span<'db>(
     def: Definition<'db>,
 ) -> Option<(SourceFile, TextRange)> {
     let def_file = def.file(db);
-    let contributions = baml_compiler2_ppir::file_symbol_contributions(db, def_file);
+    let contributions = baml_compiler2_hir::file_symbol_contributions(db, def_file);
 
     // Search both type and value namespaces.
     let name_span = contributions
@@ -114,8 +114,8 @@ pub fn definition_span<'db>(
 pub fn display_ty(ty: &Ty) -> String {
     use baml_compiler2_tir::ty::PrimitiveType;
     match ty {
-        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.name.as_str().to_string(),
-        Ty::EnumVariant(qn, v) => format!("{}.{}", qn.name, v),
+        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.to_string(),
+        Ty::EnumVariant(qn, v) => format!("{qn}.{v}"),
         Ty::Primitive(p) => match p {
             PrimitiveType::Int => "int".to_string(),
             PrimitiveType::Float => "float".to_string(),
@@ -160,10 +160,12 @@ pub fn display_ty(ty: &Ty) -> String {
                 .collect();
             format!("({}) -> {}", ps.join(", "), display_ty(ret))
         }
+        Ty::TypeVar(name) => name.to_string(),
         Ty::Never => "never".to_string(),
         Ty::Void => "void".to_string(),
         Ty::BuiltinUnknown | Ty::Unknown => "unknown".to_string(),
         Ty::RustType => "$rust_type".to_string(),
+        Ty::Type => "type".to_string(),
         Ty::Error => "!error".to_string(),
     }
 }
@@ -190,8 +192,22 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
         TypeExpr::Bool => "bool".to_string(),
         TypeExpr::Null => "null".to_string(),
         TypeExpr::Media(kind) => format!("{kind:?}").to_lowercase(),
-        TypeExpr::Optional(inner) => format!("{}?", display_type_expr(inner)),
-        TypeExpr::List(inner) => format!("{}[]", display_type_expr(inner)),
+        TypeExpr::Optional(inner) => {
+            let s = display_type_expr(inner);
+            if matches!(**inner, TypeExpr::Union(_)) {
+                format!("({s})?")
+            } else {
+                format!("{s}?")
+            }
+        }
+        TypeExpr::List(inner) => {
+            let s = display_type_expr(inner);
+            if matches!(**inner, TypeExpr::Union(_)) {
+                format!("({s})[]")
+            } else {
+                format!("{s}[]")
+            }
+        }
         TypeExpr::Map { key, value } => {
             format!(
                 "map<{}, {}>",

@@ -1,14 +1,14 @@
 //! LlmProvider-specific HTTP request building.
 //!
-//! Converts a `LlmPrimitiveClient` + `PromptAst` into a `baml.http.Request` instance.
+//! Converts a `crate::baml_std::PrimitiveClient` + `PromptAst` into a `baml.http.Request` instance.
 
 mod anthropic;
 mod openai;
 
 use std::str::FromStr;
 
+use baml_builtins::PromptAstSimple;
 use bex_external_types::BexExternalValue;
-use bex_heap::{builtin_types, builtin_types::owned::LlmPrimitiveClient};
 
 use crate::LlmProvider;
 
@@ -33,31 +33,34 @@ pub(crate) trait LlmRequestBuilder {
     fn provider_skip_keys(&self) -> &'static [&'static str];
 
     /// Build the request URL.
-    fn build_url(&self, client: &LlmPrimitiveClient) -> Result<String, BuildRequestError>;
+    fn build_url(
+        &self,
+        client: &crate::baml_std::PrimitiveClient,
+    ) -> Result<String, BuildRequestError>;
 
     /// Build auth + provider-specific headers (without content-type or custom headers).
-    fn build_auth_headers(&self, client: &LlmPrimitiveClient)
-    -> indexmap::IndexMap<String, String>;
+    fn build_auth_headers(
+        &self,
+        client: &crate::baml_std::PrimitiveClient,
+    ) -> indexmap::IndexMap<String, String>;
 
     /// Convert a specialized prompt into the JSON body fields specific to this provider.
     fn build_prompt_body(
         &self,
-        client: &LlmPrimitiveClient,
         prompt: bex_vm_types::PromptAst,
-    ) -> Result<serde_json::Map<String, serde_json::Value>, BuildRequestError>;
+    ) -> serde_json::Map<String, serde_json::Value>;
 
     // --- Default methods (shared logic) ---
 
     /// Build the full request. Default: POST with url/headers/body from trait methods.
     fn build_request(
         &self,
-        client: &LlmPrimitiveClient,
+        client: &crate::baml_std::PrimitiveClient,
         prompt: bex_vm_types::PromptAst,
-        stream: bool,
     ) -> Result<RawHttpRequest, BuildRequestError> {
         let url = self.build_url(client)?;
         let headers = self.build_headers(client);
-        let body = self.build_body(client, prompt, stream)?;
+        let body = self.build_body(client, prompt)?;
         Ok(RawHttpRequest {
             method: "POST".to_string(),
             url,
@@ -67,17 +70,16 @@ pub(crate) trait LlmRequestBuilder {
     }
 
     /// Build headers: auth headers + content-type + custom headers from options.
-    fn build_headers(&self, client: &LlmPrimitiveClient) -> indexmap::IndexMap<String, String> {
+    fn build_headers(
+        &self,
+        client: &crate::baml_std::PrimitiveClient,
+    ) -> indexmap::IndexMap<String, String> {
         let mut headers = indexmap::IndexMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
         headers.extend(self.build_auth_headers(client));
         // Forward custom headers from client.options["headers"]
-        if let Some(BexExternalValue::Map { entries, .. }) = client.options.get("headers") {
-            for (key, value) in entries {
-                if let BexExternalValue::String(v) = value {
-                    headers.insert(key.clone(), v.clone());
-                }
-            }
+        for (key, value) in &client.options.headers {
+            headers.insert(key.clone(), value.clone());
         }
         headers
     }
@@ -85,15 +87,17 @@ pub(crate) trait LlmRequestBuilder {
     /// Build JSON body: model + prompt fields + forwarded options.
     fn build_body(
         &self,
-        client: &LlmPrimitiveClient,
+        client: &crate::baml_std::PrimitiveClient,
         prompt: bex_vm_types::PromptAst,
-        _stream: bool,
     ) -> Result<String, BuildRequestError> {
         let mut body = serde_json::Map::new();
-        if let Some(model) = get_string_option(client, "model") {
-            body.insert("model".to_string(), serde_json::Value::String(model));
+        if let Some(model) = client.options.model.as_deref() {
+            body.insert(
+                "model".to_string(),
+                serde_json::Value::String(model.to_string()),
+            );
         }
-        body.extend(self.build_prompt_body(client, prompt)?);
+        body.extend(self.build_prompt_body(prompt));
         self.forward_options(client, &mut body);
         serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
             key: "body".into(),
@@ -104,11 +108,11 @@ pub(crate) trait LlmRequestBuilder {
     /// Forward non-skipped options to body.
     fn forward_options(
         &self,
-        client: &LlmPrimitiveClient,
+        client: &crate::baml_std::PrimitiveClient,
         body: &mut serde_json::Map<String, serde_json::Value>,
     ) {
         let provider_keys = self.provider_skip_keys();
-        for (key, value) in &client.options {
+        for (key, value) in &client.options.request_body {
             if SPECIALIZE_PROMPT_SKIP_KEYS.contains(&key.as_str())
                 || BUILD_REQUEST_SKIP_KEYS.contains(&key.as_str())
                 || provider_keys.contains(&key.as_str())
@@ -127,10 +131,9 @@ pub(crate) trait LlmRequestBuilder {
 /// Returns an owned `HttpRequest` matching the `baml.http.Request` class:
 /// `{ method: String, url: String, headers: Map<String, String>, body: String }`
 pub(crate) fn build_request(
-    client: &LlmPrimitiveClient,
+    client: &crate::baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
-    stream: bool,
-) -> Result<builtin_types::owned::HttpRequest, BuildRequestError> {
+) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
 
@@ -139,15 +142,11 @@ pub(crate) fn build_request(
         | LlmProvider::OpenAiGeneric
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
-        | LlmProvider::OpenRouter => {
-            openai::OpenAiBuilder::new(&provider).build_request(client, prompt, stream)?
+        | LlmProvider::OpenRouter
+        | LlmProvider::OpenAiResponses => {
+            openai::OpenAiBuilder::new(&provider).build_request(client, prompt)?
         }
-        LlmProvider::OpenAiResponses => {
-            openai::OpenAiResponsesBuilder::new(&provider).build_request(client, prompt, stream)?
-        }
-        LlmProvider::Anthropic => {
-            anthropic::AnthropicBuilder.build_request(client, prompt, stream)?
-        }
+        LlmProvider::Anthropic => anthropic::AnthropicBuilder.build_request(client, prompt)?,
         LlmProvider::GoogleAi
         | LlmProvider::VertexAi
         | LlmProvider::AwsBedrock
@@ -172,8 +171,8 @@ pub(crate) struct RawHttpRequest {
 
 impl RawHttpRequest {
     /// Convert to an owned `builtin_types::owned::HttpRequest`.
-    fn into_owned(self) -> builtin_types::owned::HttpRequest {
-        builtin_types::owned::HttpRequest {
+    fn into_owned(self) -> crate::baml_std::HttpRequest {
+        crate::baml_std::HttpRequest {
             method: self.method,
             url: self.url,
             headers: self.headers,
@@ -190,30 +189,6 @@ pub(crate) enum BuildRequestError {
     MissingOption(String),
     #[error("Invalid option value for '{key}': {reason}")]
     InvalidOption { key: String, reason: String },
-    #[error("Unsupported media: {0}")]
-    UnsupportedMedia(String),
-    #[error("File not resolved: {0}")]
-    FileNotResolved(String),
-}
-
-/// Returns the MIME type of a media value, or an error if none is set.
-pub(crate) fn mime_type_as_ok(
-    media: &baml_builtins::MediaValue,
-) -> Result<&str, BuildRequestError> {
-    media.mime_type.as_deref().ok_or_else(|| {
-        BuildRequestError::UnsupportedMedia(format!(
-            "missing MIME type for {} media; please specify one explicitly",
-            media.kind
-        ))
-    })
-}
-
-/// Helper to extract a string option from client.options.
-pub(crate) fn get_string_option(client: &LlmPrimitiveClient, key: &str) -> Option<String> {
-    match client.options.get(key) {
-        Some(BexExternalValue::String(s)) => Some(s.clone()),
-        _ => None,
-    }
 }
 
 /// Convert a `BexExternalValue` to a `serde_json::Value`.
@@ -239,6 +214,30 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
     }
 }
 
+fn prompt_to_content_parts_simple(content: &PromptAstSimple) -> Vec<serde_json::Value> {
+    match content {
+        PromptAstSimple::String(s) => {
+            vec![serde_json::json!({"type": "text", "text": s})]
+        }
+        PromptAstSimple::Media(media) => {
+            media.read_content(|f| match f {
+                baml_builtins::MediaContent::Url { url, .. } => {
+                    vec![serde_json::json!({"type": "input_image", "image_url": url})]
+                }
+                baml_builtins::MediaContent::Base64 { base64_data, .. } => {
+                    vec![serde_json::json!({"type": "input_image", "image_url": format!("data:{};base64,{}", media.mime_type.as_deref().unwrap_or("image/png"), base64_data)})]
+                }
+                baml_builtins::MediaContent::File { file, .. } => {
+                    vec![serde_json::json!({"type": "file", "file_id": file})]
+                }
+            })
+        }
+        PromptAstSimple::Multiple(multiple) => {
+            multiple.iter().flat_map(|i| prompt_to_content_parts_simple(i)).collect()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -249,21 +248,20 @@ mod tests {
 
     use super::*;
 
-    fn make_client(provider: &str, options: Vec<(&str, BexExternalValue)>) -> LlmPrimitiveClient {
-        let mut opts = IndexMap::new();
-        for (k, v) in options {
-            opts.insert(k.to_string(), v);
-        }
-        LlmPrimitiveClient {
+    fn make_client(
+        provider: &str,
+        mut options: crate::baml_std::PrimitiveClientOptions,
+    ) -> crate::baml_std::PrimitiveClient {
+        options.default_role = Some("user".to_string());
+        options.allowed_roles = Some(vec![
+            "system".to_string(),
+            "user".to_string(),
+            "assistant".to_string(),
+        ]);
+        crate::baml_std::PrimitiveClient {
             name: "test-client".to_string(),
             provider: provider.to_string(),
-            default_role: "user".to_string(),
-            allowed_roles: vec![
-                "system".to_string(),
-                "user".to_string(),
-                "assistant".to_string(),
-            ],
-            options: opts,
+            options,
         }
     }
 
@@ -276,15 +274,18 @@ mod tests {
     }
 
     /// Parse the body JSON from an `HttpRequest`.
-    fn parse_body(req: &builtin_types::owned::HttpRequest) -> serde_json::Value {
+    fn parse_body(req: &crate::baml_std::HttpRequest) -> serde_json::Value {
         serde_json::from_str(&req.body).unwrap()
     }
 
     #[test]
     fn test_unsupported_provider() {
-        let client = make_client("unknown-provider", vec![]);
+        let client = make_client(
+            "unknown-provider",
+            crate::baml_std::PrimitiveClientOptions::default(),
+        );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false);
+        let result = build_request(&client, prompt);
         assert!(result.is_err());
         assert!(
             result
@@ -303,16 +304,17 @@ mod tests {
     fn test_openai_gpt4o_system_only() {
         let client = make_client(
             "openai",
-            vec![
-                ("model", BexExternalValue::String("gpt-4o".into())),
-                ("api_key", BexExternalValue::String("sk-test-key".into())),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
+                api_key: Some("sk-test-key".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
 
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
         let prompt = Arc::new(PromptAst::Vec(vec![msg("system", system_text)]));
 
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -352,10 +354,11 @@ mod tests {
     fn test_openai_gpt4_turbo_system_and_user() {
         let client = make_client(
             "openai",
-            vec![
-                ("model", BexExternalValue::String("gpt-4-turbo".into())),
-                ("api_key", BexExternalValue::String("sk-test-key".into())),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4-turbo".to_string()),
+                api_key: Some("sk-test-key".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
 
         let prompt = Arc::new(PromptAst::Vec(vec![
@@ -363,7 +366,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
 
         assert_eq!(result.url, "https://api.openai.com/v1/chat/completions");
 
@@ -395,10 +398,13 @@ mod tests {
     fn test_openai_content_always_array() {
         let client = make_client(
             "openai",
-            vec![("model", BexExternalValue::String("gpt-4o".into()))],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
         let prompt = msg("user", "Hello world");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
         let body = parse_body(&result);
         assert!(body["messages"][0]["content"].is_array());
         assert_eq!(body["messages"][0]["content"][0]["type"], "text");
@@ -409,27 +415,31 @@ mod tests {
     fn test_openai_custom_base_url() {
         let client = make_client(
             "openai",
-            vec![(
-                "base_url",
-                BexExternalValue::String("https://custom.api.com".into()),
-            )],
+            crate::baml_std::PrimitiveClientOptions {
+                base_url: Some("https://custom.api.com".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
-        assert_eq!(result.url, "https://custom.api.com/chat/completions");
+        let result = build_request(&client, prompt).unwrap();
+        assert_eq!(result.url, "https://custom.api.com/v1/chat/completions");
     }
 
     #[test]
     fn test_openai_forwards_options_to_body() {
         let client = make_client(
             "openai",
-            vec![
-                ("model", BexExternalValue::String("gpt-4o".into())),
-                ("temperature", BexExternalValue::Float(0.7)),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
+                request_body: IndexMap::from([(
+                    "temperature".to_string(),
+                    BexExternalValue::Float(0.7),
+                )]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
         let body = parse_body(&result);
         assert_eq!(body["temperature"], 0.7);
     }
@@ -438,17 +448,15 @@ mod tests {
     fn test_openai_skips_internal_options_in_body() {
         let client = make_client(
             "openai",
-            vec![
-                ("api_key", BexExternalValue::String("sk-secret".into())),
-                (
-                    "base_url",
-                    BexExternalValue::String("https://api.openai.com".into()),
-                ),
-                ("model", BexExternalValue::String("gpt-4o".into())),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                api_key: Some("sk-secret".to_string()),
+                base_url: Some("https://api.openai.com".to_string()),
+                model: Some("gpt-4o".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
         let body = parse_body(&result);
         assert!(body.get("api_key").is_none());
         assert!(body.get("base_url").is_none());
@@ -465,14 +473,15 @@ mod tests {
     fn test_anthropic_claude_system_extracted() {
         let client = make_client(
             "anthropic",
-            vec![
-                (
-                    "model",
-                    BexExternalValue::String("claude-3-haiku-20240307".into()),
-                ),
-                ("api_key", BexExternalValue::String("sk-ant-test".into())),
-                ("max_tokens", BexExternalValue::Int(1000)),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-3-haiku-20240307".to_string()),
+                api_key: Some("sk-ant-test".to_string()),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(1000),
+                )]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
 
         let prompt = Arc::new(PromptAst::Vec(vec![
@@ -480,7 +489,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
@@ -518,16 +527,17 @@ mod tests {
     fn test_anthropic_no_system_message() {
         let client = make_client(
             "anthropic",
-            vec![
-                (
-                    "model",
-                    BexExternalValue::String("claude-3-haiku-20240307".into()),
-                ),
-                ("max_tokens", BexExternalValue::Int(1000)),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-3-haiku-20240307".to_string()),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(1000),
+                )]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
         let body = parse_body(&result);
         assert!(body.get("system").is_none());
         assert_eq!(body["messages"].as_array().unwrap().len(), 1);
@@ -543,39 +553,29 @@ mod tests {
 
         let client = make_client(
             "anthropic",
-            vec![
-                (
-                    "model",
-                    BexExternalValue::String("claude-3-haiku-20240307".into()),
-                ),
-                ("api_key", BexExternalValue::String("sk-ant-test".into())),
-                ("max_tokens", BexExternalValue::Int(500)),
-                (
-                    "allowed_role_metadata",
-                    BexExternalValue::Array {
-                        element_type: Ty::String {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        items: vec![BexExternalValue::String("cache_control".into())],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-3-haiku-20240307".to_string()),
+                api_key: Some("sk-ant-test".to_string()),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(500),
+                )]),
+                allowed_role_metadata: Some(BexExternalValue::Array {
+                    element_type: Ty::String {
+                        attr: baml_type::TyAttr::default(),
                     },
-                ),
-                (
-                    "headers",
-                    BexExternalValue::Map {
-                        key_type: Ty::String {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        value_type: Ty::String {
-                            attr: baml_type::TyAttr::default(),
-                        },
-                        entries: header_entries,
-                    },
-                ),
-            ],
+                    items: vec![BexExternalValue::String("cache_control".into())],
+                }),
+                headers: IndexMap::from([(
+                    "anthropic-beta".to_string(),
+                    "prompt-caching-2024-07-31".into(),
+                )]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
 
         assert_eq!(
             result.headers.get("anthropic-beta").unwrap(),
@@ -591,13 +591,13 @@ mod tests {
     fn test_anthropic_custom_version() {
         let client = make_client(
             "anthropic",
-            vec![(
-                "anthropic_version",
-                BexExternalValue::String("2024-01-01".into()),
-            )],
+            crate::baml_std::PrimitiveClientOptions {
+                anthropic_version: Some("2024-01-01".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
         assert_eq!(
             result.headers.get("anthropic-version").unwrap(),
             "2024-01-01"
@@ -606,9 +606,12 @@ mod tests {
 
     #[test]
     fn test_anthropic_default_version() {
-        let client = make_client("anthropic", vec![]);
+        let client = make_client(
+            "anthropic",
+            crate::baml_std::PrimitiveClientOptions::default(),
+        );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
         assert_eq!(
             result.headers.get("anthropic-version").unwrap(),
             "2023-06-01"
@@ -619,143 +622,18 @@ mod tests {
     fn test_anthropic_forwards_max_tokens() {
         let client = make_client(
             "anthropic",
-            vec![
-                (
-                    "model",
-                    BexExternalValue::String("claude-3-haiku-20240307".into()),
-                ),
-                ("max_tokens", BexExternalValue::Int(1000)),
-            ],
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-3-haiku-20240307".to_string()),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(1000),
+                )]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
+        let result = build_request(&client, prompt).unwrap();
         let body = parse_body(&result);
         assert_eq!(body["max_tokens"], 1000);
-    }
-
-    // ========================================================================
-    // OpenAI Responses API tests
-    // ========================================================================
-
-    #[test]
-    fn test_responses_url() {
-        let client = make_client(
-            "openai-responses",
-            vec![
-                ("model", BexExternalValue::String("gpt-4o".into())),
-                ("api_key", BexExternalValue::String("sk-test".into())),
-            ],
-        );
-        let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
-        assert_eq!(result.url, "https://api.openai.com/v1/responses");
-        assert_eq!(
-            result.headers.get("authorization").unwrap(),
-            "Bearer sk-test"
-        );
-    }
-
-    #[test]
-    fn test_responses_uses_input_key() {
-        let client = make_client(
-            "openai-responses",
-            vec![("model", BexExternalValue::String("gpt-4o".into()))],
-        );
-        let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
-        let body = parse_body(&result);
-        assert!(
-            body.get("input").is_some(),
-            "Responses API should use 'input' key"
-        );
-        assert!(
-            body.get("messages").is_none(),
-            "Responses API should not have 'messages' key"
-        );
-    }
-
-    #[test]
-    fn test_responses_input_text_type() {
-        let client = make_client(
-            "openai-responses",
-            vec![("model", BexExternalValue::String("gpt-4o".into()))],
-        );
-        let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
-        let body = parse_body(&result);
-        assert_eq!(
-            body,
-            serde_json::json!({
-                "model": "gpt-4o",
-                "input": [
-                    {
-                        "role": "user",
-                        "content": [{"type": "input_text", "text": "hello"}]
-                    }
-                ]
-            })
-        );
-    }
-
-    #[test]
-    fn test_responses_output_text_for_assistant() {
-        let client = make_client(
-            "openai-responses",
-            vec![("model", BexExternalValue::String("gpt-4o".into()))],
-        );
-        let prompt = Arc::new(PromptAst::Vec(vec![
-            msg("user", "hello"),
-            msg("assistant", "hi there"),
-        ]));
-        let result = build_request(&client, prompt, false).unwrap();
-        let body = parse_body(&result);
-        assert_eq!(body["input"][0]["content"][0]["type"], "input_text");
-        assert_eq!(body["input"][1]["content"][0]["type"], "output_text");
-    }
-
-    #[test]
-    fn test_responses_system_and_user() {
-        let client = make_client(
-            "openai-responses",
-            vec![("model", BexExternalValue::String("gpt-4o".into()))],
-        );
-        let prompt = Arc::new(PromptAst::Vec(vec![
-            msg("system", "You are helpful."),
-            msg("user", "Hi"),
-        ]));
-        let result = build_request(&client, prompt, false).unwrap();
-        let body = parse_body(&result);
-        assert_eq!(body["input"][0]["role"], "system");
-        assert_eq!(body["input"][0]["content"][0]["type"], "input_text");
-        assert_eq!(body["input"][1]["role"], "user");
-    }
-
-    #[test]
-    fn test_responses_custom_base_url() {
-        let client = make_client(
-            "openai-responses",
-            vec![(
-                "base_url",
-                BexExternalValue::String("https://custom.api.com/v1".into()),
-            )],
-        );
-        let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
-        assert_eq!(result.url, "https://custom.api.com/v1/responses");
-    }
-
-    #[test]
-    fn test_responses_forwards_options() {
-        let client = make_client(
-            "openai-responses",
-            vec![
-                ("model", BexExternalValue::String("gpt-4o".into())),
-                ("temperature", BexExternalValue::Float(0.5)),
-            ],
-        );
-        let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt, false).unwrap();
-        let body = parse_body(&result);
-        assert_eq!(body["temperature"], 0.5);
     }
 }

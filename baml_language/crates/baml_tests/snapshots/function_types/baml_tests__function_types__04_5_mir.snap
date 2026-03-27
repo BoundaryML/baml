@@ -1,10 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== MIR ===
-fn GetTransform() -> (int) -> int {
+=== MIR2 ===
+fn user.GetTransform() -> (int) -> int {
     // Locals:
-    let _0: (int) -> int // return
+    let _0: (int) -> int // _0 // return
 
     bb0: {
         _0 = const 1_i64;

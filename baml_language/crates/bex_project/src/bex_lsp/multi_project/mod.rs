@@ -470,56 +470,82 @@ impl BexMulitProject {
             *prev = current_paths;
         }
 
+        let flat_diags = Self::flatten_diagnostics(&diagnostics);
+
         self.send_list_projects();
-        self.send_update_project(project_root, &project);
+        self.send_update_project(project_root, &project, flat_diags);
         tracing::debug!("refresh_project done");
     }
 
-    fn build_project_update(project: &LiveProject) -> crate::bex_lsp::ProjectUpdate {
+    fn flatten_diagnostics(
+        diagnostics: &std::collections::HashMap<std::path::PathBuf, Vec<lsp_types::Diagnostic>>,
+    ) -> Vec<crate::bex_lsp::ProjectDiagnostic> {
+        let mut out = Vec::new();
+        for (path, diags) in diagnostics {
+            let filename = path
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            for d in diags {
+                let severity = match d.severity {
+                    Some(lsp_types::DiagnosticSeverity::ERROR) => "error",
+                    Some(lsp_types::DiagnosticSeverity::WARNING) => "warning",
+                    _ => "info",
+                };
+                let line = d.range.start.line + 1;
+                out.push(crate::bex_lsp::ProjectDiagnostic {
+                    severity,
+                    message: format!("{filename}:{line}: {}", d.message),
+                });
+            }
+        }
+        out.sort_by(|a, b| a.message.cmp(&b.message));
+        out
+    }
+
+    fn build_project_update(
+        project: &LiveProject,
+        diagnostics: Vec<crate::bex_lsp::ProjectDiagnostic>,
+    ) -> crate::bex_lsp::ProjectUpdate {
         let is_bex_current = project.project.is_bex_current();
 
         let db_guard = project.project.db.lock().unwrap();
         let db = db_guard.db();
-        let functions = match db_guard.project() {
-            Some(p) => baml_project::list_functions_with_metadata(db, p)
-                .into_iter()
-                .map(|f| crate::bex_lsp::FunctionInfo {
-                    name: f.name,
-                    kind: if f.is_llm {
-                        crate::bex_lsp::FunctionKind::Llm
-                    } else {
-                        crate::bex_lsp::FunctionKind::Expr
-                    },
-                    capabilities: if f.is_llm {
-                        Some(crate::bex_lsp::LlmCapabilities {
-                            render_prompt: true,
-                            build_request: true,
-                            client_name: f.client_name,
-                        })
-                    } else {
-                        None
-                    },
-                })
-                .collect(),
-            None => vec![],
-        };
+        let functions = baml_project::list_functions_with_metadata(db)
+            .into_iter()
+            .map(|f| crate::bex_lsp::FunctionInfo {
+                name: f.name,
+                kind: if f.is_llm {
+                    crate::bex_lsp::FunctionKind::Llm
+                } else {
+                    crate::bex_lsp::FunctionKind::Expr
+                },
+                capabilities: if f.is_llm {
+                    Some(crate::bex_lsp::LlmCapabilities {
+                        render_prompt: true,
+                        build_request: true,
+                        client_name: f.client_name,
+                    })
+                } else {
+                    None
+                },
+            })
+            .collect();
 
-        let tests = match db_guard.project() {
-            Some(p) => baml_project::list_tests_with_metadata(db, p)
-                .into_iter()
-                .map(|t| crate::bex_lsp::TestInfo {
-                    name: t.name,
-                    function_name: t.function_name,
-                    args_json: t.args_json,
-                })
-                .collect(),
-            None => vec![],
-        };
+        let tests = baml_project::list_tests_with_metadata(db)
+            .into_iter()
+            .map(|t| crate::bex_lsp::TestInfo {
+                name: t.name,
+                function_name: t.function_name,
+                args_json: t.args_json,
+            })
+            .collect();
 
         crate::bex_lsp::ProjectUpdate {
             is_bex_current,
             functions,
             tests,
+            diagnostics,
         }
     }
 
@@ -534,8 +560,13 @@ impl BexMulitProject {
         );
     }
 
-    fn send_update_project(&self, project_root: &vfs::VfsPath, project: &LiveProject) {
-        let update = Self::build_project_update(project);
+    fn send_update_project(
+        &self,
+        project_root: &vfs::VfsPath,
+        project: &LiveProject,
+        diagnostics: Vec<crate::bex_lsp::ProjectDiagnostic>,
+    ) {
+        let update = Self::build_project_update(project, diagnostics);
         self.playground_sender.send_playground_notification(
             crate::bex_lsp::PlaygroundNotification::UpdateProject {
                 project: project_root.as_str().to_string(),
@@ -558,7 +589,9 @@ impl super::BexLsp for BexMulitProject {
         let projects = self.projects.lock().unwrap();
         for (fs_path, project) in projects.iter() {
             let root_str = fs_path.as_path().to_string_lossy().into_owned();
-            let update = Self::build_project_update(project);
+            let diags_by_file = project.project.diagnostics_by_file(self.position_encoding);
+            let flat_diags = Self::flatten_diagnostics(&diags_by_file);
+            let update = Self::build_project_update(project, flat_diags);
             self.playground_sender.send_playground_notification(
                 crate::bex_lsp::PlaygroundNotification::UpdateProject {
                     project: root_str,

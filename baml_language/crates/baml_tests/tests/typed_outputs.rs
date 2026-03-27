@@ -126,8 +126,8 @@ async fn union_of_classes_returns_success() {
                 class_name: "Success".to_string(),
                 fields: indexmap! { "value".to_string() => BexExternalValue::Int(42) },
             },
-            [Ty::class("Success"), Ty::class("Failure")],
-            Ty::class("Success"),
+            [Ty::user_class("Success"), Ty::user_class("Failure")],
+            Ty::user_class("Success"),
         ))
     );
 }
@@ -156,8 +156,8 @@ async fn union_of_classes_returns_failure() {
                 class_name: "Failure".to_string(),
                 fields: indexmap! { "error".to_string() => BexExternalValue::String("something went wrong".to_string()) },
             },
-            [Ty::class("Success"), Ty::class("Failure")],
-            Ty::class("Failure"),
+            [Ty::user_class("Success"), Ty::user_class("Failure")],
+            Ty::user_class("Failure"),
         ))
     );
 }
@@ -242,7 +242,7 @@ async fn optional_class() {
                 class_name: "Data".to_string(),
                 fields: indexmap! { "value".to_string() => BexExternalValue::Int(42) },
             },
-            Ty::class("Data"),
+            Ty::user_class("Data"),
         ))
     );
 }
@@ -264,7 +264,7 @@ async fn optional_class_returns_null() {
         output.result,
         Ok(BexExternalValue::optional(
             BexExternalValue::Null,
-            Ty::class("Data")
+            Ty::user_class("Data")
         ))
     );
 }

@@ -27,7 +27,7 @@ mod db;
 pub mod position;
 pub mod symbols;
 
-pub use check::{CheckResult, collect_diagnostics};
+pub use check::{CheckResult, collect_compiler2_diagnostics, collect_diagnostics};
 pub use db::{CursorContext, EventCallback, ProjectDatabase};
 pub use symbols::{
     FunctionSymbol, Symbol, SymbolKind, TestSymbol, find_symbol, find_symbol_locations,

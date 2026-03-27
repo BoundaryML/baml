@@ -3,12 +3,13 @@ use bex_vm_types::MediaValue;
 use indexmap::IndexMap;
 use minijinja::value::Value as JinjaValue;
 
-use super::{MAGIC_MEDIA_DELIMITER, RenderPromptError};
+use super::RenderPromptError;
 
 /// Convert a `BexExternalValue` to a minijinja Value.
 ///
 /// `BexExternalValue` is already fully extracted from the VM heap,
 /// so no heap access is needed here.
+#[allow(clippy::only_used_in_recursion)] // media_handles will be used when media support is re-enabled
 pub(crate) fn external_value_to_jinja(
     value: &BexExternalValue,
     media_handles: &mut std::collections::HashMap<usize, MediaValue>,
@@ -61,23 +62,17 @@ pub(crate) fn external_value_to_jinja(
             external_value_to_jinja(value, media_handles)
         }
 
-        BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
-            let media_id = media.random_id;
-            media_handles.insert(media_id, media.clone());
-            Ok(JinjaValue::from(format!(
-                "{MAGIC_MEDIA_DELIMITER}:baml-start-media:{media_id}:baml-end-media:{MAGIC_MEDIA_DELIMITER}"
-            )))
-        }
-
-        BexExternalValue::Resource(_) => Err(RenderPromptError::ConversionError {
-            reason: "Resource should not be passed to Jinja templates".to_string(),
+        // TODO: Do this with rust types.
+        // BexExternalValue::Adt(BexExternalAdt::Media(media)) => {
+        //     let media_id = media.random_id;
+        //     media_handles.insert(media_id, media.clone());
+        //     Ok(JinjaValue::from(format!(
+        //         "{MAGIC_MEDIA_DELIMITER}:baml-start-media:{media_id}:baml-end-media:{MAGIC_MEDIA_DELIMITER}"
+        //     )))
+        // }
+        BexExternalValue::RustData(_) => Err(RenderPromptError::ConversionError {
+            reason: "RustData should not be passed to Jinja templates".to_string(),
         }),
-
-        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
-            Err(RenderPromptError::ConversionError {
-                reason: "PromptAst should not be passed to Jinja templates".to_string(),
-            })
-        }
 
         BexExternalValue::Adt(BexExternalAdt::Collector(_)) => {
             Err(RenderPromptError::ConversionError {
@@ -88,6 +83,18 @@ pub(crate) fn external_value_to_jinja(
         BexExternalValue::Adt(BexExternalAdt::Type(_)) => Err(RenderPromptError::ConversionError {
             reason: "Type values cannot be passed to Jinja templates".to_string(),
         }),
+
+        BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
+            Err(RenderPromptError::ConversionError {
+                reason: "PromptAst should not be passed to Jinja templates".to_string(),
+            })
+        }
+
+        BexExternalValue::Adt(BexExternalAdt::Media(_)) => {
+            Err(RenderPromptError::ConversionError {
+                reason: "Media values should not be passed to Jinja templates directly".to_string(),
+            })
+        }
 
         BexExternalValue::FunctionRef { .. } => Err(RenderPromptError::ConversionError {
             reason: "FunctionRef should not be passed to Jinja templates".to_string(),

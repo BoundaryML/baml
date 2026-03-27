@@ -95,7 +95,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [projectRoots, setProjectRoots] = useState<string[]>([]);
   const [projectUpdates, setProjectUpdates] = useState<Record<string, ProjectUpdate>>({});
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const [diags, setDiags] = useState<DiagnosticEntry[]>([]);
 
   const [selectedFn, setSelectedFn] = useState<string | null>(null);
   const [argsJson, setArgsJson] = useState('{}');
@@ -129,6 +128,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const [showApiKeysDialog, setShowApiKeysDialog] = useState(false);
   const showApiKeysDialogRef = useRef(false);
 
+  const [diagsExpanded, setDiagsExpanded] = useState(false);
   const [buildTime, setBuildTime] = useState<number | null>(null);
   const [envVars, setEnvVarsState] = useState<Record<string, string>>({});
   // Keys the project is known to need — accumulated from envVarRequests, never shrunk.
@@ -275,10 +275,6 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
           break;
         }
 
-        case 'diagnostics':
-          setDiags(data.entries ?? []);
-          break;
-
         case 'callFunctionResult': {
           const pending = pendingCallsRef.current.get(data.id);
           if (pending) {
@@ -343,6 +339,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
         case "vfsFileChanged":
         case "vfsFileDeleted":
+        case "diagnostics":
           break;
 
         case "controlFlowGraphResult":
@@ -656,6 +653,7 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
   const functionNames = functions.map((f) => f.name);
   const tests: TestInfo[] = currentUpdate?.tests ?? [];
   const engineStale = currentUpdate ? !currentUpdate.isBexCurrent : false;
+  const diags = currentUpdate?.diagnostics ?? [];
 
   const selectedFnInfo = functions.find((f) => f.name === selectedFn);
   const canPreviewPrompt = selectedFnInfo?.capabilities?.renderPrompt ?? false;
@@ -801,10 +799,47 @@ export const ExecutionPanel: FC<ExecutionPanelProps> = ({ port, connectionVersio
 
       {/* Diagnostics banner */}
       {(hasErrors || engineStale) && (
-        <div className="px-2.5 py-1 border-b border-vsc-border shrink-0 bg-[#3e1a1a]">
-          <div className="font-vsc-mono text-[10px] text-[#f48771]">
-            {hasErrors ? `${errors.length} error${errors.length !== 1 ? 's' : ''}` : 'Build is stale'} — using last successful build
-          </div>
+        <div className="border-b border-vsc-border shrink-0 bg-[#3e1a1a]">
+          {diags.length > 0 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setDiagsExpanded((v) => !v)}
+                className="w-full flex items-center gap-1 px-2.5 py-1 bg-transparent border-none cursor-pointer text-left"
+              >
+                <span
+                  className="text-[10px] text-[#f48771] select-none transition-transform duration-150"
+                  style={{ display: 'inline-block', transform: diagsExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
+                >
+                  ▶
+                </span>
+                <span className="font-vsc-mono text-[10px] text-[#f48771]">
+                  {errors.length > 0 ? `${errors.length} error${errors.length !== 1 ? 's' : ''}` : ''}
+                  {errors.length > 0 && warnings.length > 0 ? ', ' : ''}
+                  {warnings.length > 0 ? `${warnings.length} warning${warnings.length !== 1 ? 's' : ''}` : ''}
+                  {' — using last successful build'}
+                </span>
+              </button>
+              {diagsExpanded && (
+                <div className="px-2.5 pb-1.5 flex flex-col gap-0.5 max-h-[200px] overflow-y-auto">
+                  {errors.map((e, i) => (
+                    <div key={`e${i}`} className="font-vsc-mono text-[10px] text-[#f48771]/80 pl-3.5 break-words whitespace-pre-wrap">
+                      {e.message}
+                    </div>
+                  ))}
+                  {warnings.map((w, i) => (
+                    <div key={`w${i}`} className="font-vsc-mono text-[10px] text-[#cca700]/80 pl-3.5 break-words whitespace-pre-wrap">
+                      {w.message}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="px-2.5 py-1 font-vsc-mono text-[10px] text-[#f48771]">
+              Build is stale — using last successful build
+            </div>
+          )}
         </div>
       )}
 

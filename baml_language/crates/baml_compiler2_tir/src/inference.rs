@@ -15,20 +15,48 @@ use std::{collections::HashMap, sync::Arc};
 use baml_base::Name;
 use baml_compiler2_ast::{ExprId, PatId};
 use baml_compiler2_hir::{
-    body::FunctionBody,
+    body::{FunctionBody, LetBody},
     contributions::Definition,
-    loc::{ClassLoc, TypeAliasLoc},
-    package::{PackageId, PackageItems},
+    loc::{ClassLoc, FunctionLoc, LetLoc, TypeAliasLoc},
+    package::{PackageId, PackageItems, package_items},
     scope::{ScopeId, ScopeKind},
 };
-use baml_compiler2_ppir::package_items;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     builder::TypeInferenceBuilder,
     infer_context::{InferContext, TypeCheckDiagnostics},
     ty::Ty,
 };
+
+// ── Method Resolution ─────────────────────────────────────────────────────
+
+/// Records what a field-access expression resolved to during type inference.
+///
+/// Stored per-ExprId alongside the `Ty`, so MIR can emit the correct
+/// `Constant::Function(QualifiedName)` without re-doing resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MethodResolution<'db> {
+    /// A free item accessed via a package/namespace path.
+    /// e.g. `env.get` → package="env", namespace=[], name="get"
+    Free {
+        package: Name,
+        namespace: Vec<Name>,
+        name: Name,
+        func_loc: FunctionLoc<'db>,
+    },
+    /// A method on a class (user-defined or builtin).
+    /// e.g. `arr.length` → package="baml", namespace=[], class="Array", name="length"
+    /// e.g. `baz.Greeting` → package="user", namespace=[], class="Baz", name="Greeting"
+    Method {
+        package: Name,
+        namespace: Vec<Name>,
+        class: Name,
+        name: Name,
+        class_loc: ClassLoc<'db>,
+        func_loc: FunctionLoc<'db>,
+    },
+}
 
 // ── Per-Scope Inference Result ─────────────────────────────────────────────
 
@@ -47,6 +75,12 @@ pub struct ScopeInference<'db> {
     /// May differ from the initializer expression type (e.g. `let x = 1` has
     /// expression type `Literal(1, Fresh)` but binding type `int`).
     bindings: FxHashMap<PatId, Ty>,
+    /// Method resolutions: for field-access expressions that resolved to a
+    /// method or free function, records the structural path (package, namespace,
+    /// class, name) so MIR can emit the correct `QualifiedName`.
+    resolutions: FxHashMap<ExprId, MethodResolution<'db>>,
+    /// Match expressions that the exhaustiveness checker determined cover all cases.
+    exhaustive_matches: FxHashSet<ExprId>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
     extra: Option<Box<ScopeInferenceExtra<'db>>>,
 }
@@ -60,7 +94,7 @@ pub struct ScopeInferenceExtra<'db> {
 // (which contains `Name`, a Salsa-interned type). The `FxHashMap` doesn't
 // implement `salsa::Update` automatically; we provide the impl manually.
 #[allow(unsafe_code)]
-unsafe impl<'db> salsa::Update for ScopeInference<'db> {
+unsafe impl salsa::Update for ScopeInference<'_> {
     unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
         #[allow(unsafe_code)]
         let old = unsafe { &*old_pointer };
@@ -89,6 +123,36 @@ impl<'db> ScopeInference<'db> {
         self.bindings.get(&pat_id)
     }
 
+    /// Iterate over all (`ExprId`, Ty) pairs for expressions in this scope.
+    pub fn iter_expressions(&self) -> impl Iterator<Item = (&ExprId, &Ty)> {
+        self.expressions.iter()
+    }
+
+    /// Iterate over all (`PatId`, Ty) pairs for pattern bindings in this scope.
+    pub fn iter_bindings(&self) -> impl Iterator<Item = (&PatId, &Ty)> {
+        self.bindings.iter()
+    }
+
+    /// Look up the method resolution for an expression in this scope.
+    pub fn resolution(&self, expr_id: ExprId) -> Option<&MethodResolution<'db>> {
+        self.resolutions.get(&expr_id)
+    }
+
+    /// Iterate over all (`ExprId`, `MethodResolution`) pairs for this scope.
+    pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MethodResolution<'db>)> {
+        self.resolutions.iter()
+    }
+
+    /// Check whether a match expression was determined to be exhaustive by TIR.
+    pub fn is_exhaustive_match(&self, expr_id: ExprId) -> bool {
+        self.exhaustive_matches.contains(&expr_id)
+    }
+
+    /// Iterate over all exhaustive match `ExprIds` in this scope.
+    pub fn iter_exhaustive_matches(&self) -> impl Iterator<Item = &ExprId> {
+        self.exhaustive_matches.iter()
+    }
+
     /// Get diagnostics for this scope (empty slice if none).
     pub fn diagnostics(&self) -> &TypeCheckDiagnostics<'db> {
         self.extra
@@ -105,8 +169,8 @@ impl<'db> ScopeInference<'db> {
                 unsafe {
                     let empty = EMPTY.get_or_init(TypeCheckDiagnostics::default);
                     // Extend the lifetime — safe because the data is empty and 'static.
-                    &*(empty as *const TypeCheckDiagnostics<'static>
-                        as *const TypeCheckDiagnostics<'db>)
+                    &*std::ptr::from_ref::<TypeCheckDiagnostics<'static>>(empty)
+                        .cast::<TypeCheckDiagnostics<'db>>()
                 }
             })
     }
@@ -135,24 +199,46 @@ pub fn infer_scope_types<'db>(
     // Get package items for cross-file resolution
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = package_items(db, pkg_id);
+    let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
+    let pkg_items = res_ctx.own_items;
 
     let aliases = collect_type_aliases(db, pkg_items);
     let context = InferContext::new(db, scope_id);
-    let mut builder = TypeInferenceBuilder::new(context, pkg_items, pkg_id, scope_id, aliases);
+    let mut builder = TypeInferenceBuilder::new(context, res_ctx, pkg_id, scope_id, aliases);
 
     // Dispatch based on scope kind
     match &scope.kind {
         ScopeKind::Function => {
-            // Find the function by matching scope range against item_tree functions.
-            // This works for both top-level functions AND class methods.
+            // Find the function by matching scope range AND name against item_tree functions.
+            // Both checks are required to disambiguate companion functions that
+            // share the parent's span.
             let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
             let mut found = false;
             for (local_id, func_data) in &item_tree.functions {
-                if func_data.span == scope.range {
+                if func_data.span == scope.range && scope.name.as_ref() == Some(&func_data.name) {
                     let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
                     let body = baml_compiler2_hir::body::function_body(db, func_loc);
                     let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
+
+                    // Compute the generic params for this function scope.
+                    // If this is a method inside a class, also include the class's generic params.
+                    let mut generic_params = func_data.generic_params.clone();
+                    if let Some(parent_idx) = scope.parent {
+                        let parent = &index.scopes[parent_idx.index() as usize];
+                        if matches!(parent.kind, ScopeKind::Class) {
+                            if let Some(class_name) = &parent.name {
+                                for class_data in item_tree.classes.values() {
+                                    if class_data.name == *class_name {
+                                        let mut merged = class_data.generic_params.clone();
+                                        merged.extend(generic_params);
+                                        generic_params = merged;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    builder.set_generic_params(generic_params.clone());
 
                     if let FunctionBody::Expr(expr_body) = body.as_ref() {
                         // Get declared return type
@@ -161,8 +247,13 @@ pub fn infer_scope_types<'db>(
                             .return_type
                             .as_ref()
                             .map(|te| {
-                                crate::lower_type_expr::lower_type_expr(
-                                    db, te, pkg_items, &mut diags,
+                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                    db,
+                                    te,
+                                    pkg_items,
+                                    &pkg_info.namespace_path,
+                                    &generic_params,
+                                    &mut diags,
                                 )
                             })
                             .unwrap_or(Ty::Unknown);
@@ -206,8 +297,9 @@ pub fn infer_scope_types<'db>(
                                 enclosing_class_name
                                     .as_ref()
                                     .and_then(|cn| {
-                                        // Look up the class to get its definition's package
-                                        pkg_items.lookup_type(&[cn.clone()]).map(|def| {
+                                        let mut ns_path = pkg_info.namespace_path.clone();
+                                        ns_path.push(cn.clone());
+                                        pkg_items.lookup_type(&ns_path).map(|def| {
                                             Ty::Class(crate::lower_type_expr::qualify_def(
                                                 db, def, cn,
                                             ))
@@ -216,10 +308,12 @@ pub fn infer_scope_types<'db>(
                                     .unwrap_or(Ty::Unknown)
                             } else {
                                 let mut param_diags = Vec::new();
-                                let ty = crate::lower_type_expr::lower_type_expr(
+                                let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                                     db,
                                     param_te,
                                     pkg_items,
+                                    &pkg_info.namespace_path,
+                                    &generic_params,
                                     &mut param_diags,
                                 );
                                 if !param_diags.is_empty() {
@@ -264,13 +358,32 @@ pub fn infer_scope_types<'db>(
             // Fields are resolved by resolve_class_fields.
             // Methods are child Function scopes with their own infer_scope_types.
         }
+        ScopeKind::Let => {
+            // Top-level let binding — find the matching let in the item tree
+            // and type-infer its initializer expression.
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+            for (local_id, let_data) in &item_tree.lets {
+                if let_data.span == scope.range && scope.name.as_ref() == Some(&let_data.name) {
+                    let let_loc = LetLoc::new(db, file, *local_id);
+                    let body = baml_compiler2_hir::body::let_body(db, let_loc);
+
+                    if let LetBody::Expr(expr_body) = body.as_ref() {
+                        // Infer the root expression type bottom-up.
+                        if let Some(root_expr) = expr_body.root_expr {
+                            builder.infer_expr(root_expr, expr_body);
+                        }
+                    }
+                    break;
+                }
+            }
+        }
         _ => {
             // Project, Package, Namespace, File, Enum, TypeAlias, Block, Item:
             // typically no expressions to infer at these scope levels.
         }
     }
 
-    let (expressions, bindings, diagnostics) = builder.finish();
+    let (expressions, bindings, resolutions, exhaustive_matches, diagnostics) = builder.finish();
 
     let extra = if diagnostics.is_empty() {
         None
@@ -281,6 +394,8 @@ pub fn infer_scope_types<'db>(
     ScopeInference {
         expressions,
         bindings,
+        resolutions,
+        exhaustive_matches,
         extra,
     }
 }
@@ -288,7 +403,7 @@ pub fn infer_scope_types<'db>(
 // ── Type Alias Collection ────────────────────────────────────────────────────
 
 /// Build a map of alias name → resolved Ty from all type aliases in the package.
-fn collect_type_aliases<'db>(
+pub fn collect_type_aliases<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
 ) -> HashMap<crate::ty::QualifiedTypeName, Ty> {
@@ -434,8 +549,13 @@ pub fn resolve_class_fields<'db>(
                 .as_ref()
                 .map(|te| {
                     let mut diags = Vec::new();
-                    let ty = crate::lower_type_expr::lower_type_expr(
-                        db, &te.expr, pkg_items, &mut diags,
+                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                        db,
+                        &te.expr,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &class_data.generic_params,
+                        &mut diags,
                     );
                     for d in diags {
                         all_diags.push((d, te.span));
@@ -474,7 +594,14 @@ pub fn resolve_type_alias<'db>(
         .as_ref()
         .map(|te| {
             let mut diags = Vec::new();
-            let ty = crate::lower_type_expr::lower_type_expr(db, &te.expr, pkg_items, &mut diags);
+            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                db,
+                &te.expr,
+                pkg_items,
+                &pkg_info.namespace_path,
+                &[],
+                &mut diags,
+            );
             for d in diags {
                 all_diags.push((d, te.span));
             }
@@ -520,6 +647,17 @@ pub fn render_scope_diagnostics<'db>(
         .and_then(|(local_id, _)| {
             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
             baml_compiler2_hir::body::function_body_source_map(db, func_loc)
+        })
+        .or_else(|| {
+            // Also search let bindings — synthesized Item::Let initializers have source maps too.
+            item_tree
+                .lets
+                .iter()
+                .find(|(_, l)| l.span == scope.range)
+                .and_then(|(local_id, _)| {
+                    let let_loc = baml_compiler2_hir::loc::LetLoc::new(db, file, *local_id);
+                    baml_compiler2_hir::body::let_body_source_map(db, let_loc)
+                })
         });
 
     diags
@@ -534,10 +672,10 @@ pub fn render_scope_diagnostics<'db>(
 /// Collect all type-check diagnostics for a file by iterating all scopes.
 ///
 /// Modeled after Ty's `check_types` (`types.rs:127-168`).
-pub fn collect_file_diagnostics<'db>(
-    db: &'db dyn crate::Db,
+pub fn collect_file_diagnostics(
+    db: &dyn crate::Db,
     file: baml_base::SourceFile,
-) -> TypeCheckDiagnostics<'db> {
+) -> TypeCheckDiagnostics<'_> {
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
     let mut all_diagnostics = TypeCheckDiagnostics::default();
 

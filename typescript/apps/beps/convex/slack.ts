@@ -98,6 +98,48 @@ async function postToSlack(
   }
 }
 
+async function updateSlackMessage(
+  ts: string,
+  blocks: SlackBlock[],
+  text: string
+): Promise<SlackPostResponse> {
+  const token = process.env.SLACK_BOUNDARY_BOT_TOKEN;
+
+  if (!token) {
+    console.warn("SLACK_BOUNDARY_BOT_TOKEN not configured - skipping Slack update");
+    return { ok: false, error: "SLACK_BOUNDARY_BOT_TOKEN not configured" };
+  }
+
+  const payload = {
+    channel: SLACK_CHANNEL,
+    ts,
+    blocks,
+    text,
+  };
+
+  try {
+    const response = await fetch("https://slack.com/api/chat.update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const result = (await response.json()) as SlackPostResponse;
+
+    if (!result.ok) {
+      console.error("Slack API update error:", result.error);
+    }
+
+    return result;
+  } catch (error) {
+    console.error("Failed to update Slack message:", error);
+    return { ok: false, error: String(error) };
+  }
+}
+
 function getBepUrl(bepNumber: number): string {
   const baseUrl = process.env.NEXT_PUBLIC_CONVEX_URL
     ? process.env.NEXT_PUBLIC_CONVEX_URL.replace(".convex.cloud", ".vercel.app")
@@ -133,85 +175,133 @@ function getStatusEmoji(status: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Build the overview blocks for a BEP thread.
+ * This is used both for creating new threads and updating existing ones.
+ */
+interface BepOverviewData {
+  number: number;
+  title: string;
+  status: string;
+  updatedAt: number;
+  author: { name: string; slackUserId?: string };
+  shepherds: Array<{ name: string; slackUserId?: string }>;
+  commenters: Array<{ name: string; slackUserId?: string }>;
+  lastComment: { authorName: string; authorSlackUserId?: string; createdAt: number } | null;
+  commentCount: number;
+}
+
+function buildOverviewBlocks(overview: BepOverviewData, isNew: boolean): SlackBlock[] {
+  const bepUrl = getBepUrl(overview.number);
+  const statusEmoji = getStatusEmoji(overview.status);
+
+  const authorDisplay = formatAuthorForSlack(overview.author.name, overview.author.slackUserId);
+  const shepherdDisplay = overview.shepherds.length > 0
+    ? overview.shepherds.map(s => formatAuthorForSlack(s.name, s.slackUserId)).join(", ")
+    : "None assigned";
+
+  const headerText = isNew
+    ? `🆕 New BEP Created: BEP-${overview.number}`
+    : `📋 BEP-${overview.number}`;
+
+  const blocks: SlackBlock[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: headerText,
+        emoji: true,
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*<${bepUrl}|${overview.title}>*`,
+      },
+    },
+    {
+      type: "section",
+      fields: [
+        {
+          type: "mrkdwn",
+          text: `*Status:* ${statusEmoji} ${overview.status}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Author:* ${authorDisplay}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Shepherds:* ${shepherdDisplay}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Last Updated:* <!date^${Math.floor(overview.updatedAt / 1000)}^{date_short_pretty} at {time}|${new Date(overview.updatedAt).toISOString()}>`,
+        },
+      ],
+    },
+  ];
+
+  // Add comment info if there are any comments
+  if (overview.commentCount > 0 && overview.lastComment) {
+    const commenterDisplay = overview.commenters.length > 0
+      ? overview.commenters.slice(0, 5).map(c => formatAuthorForSlack(c.name, c.slackUserId)).join(", ")
+        + (overview.commenters.length > 5 ? ` +${overview.commenters.length - 5} more` : "")
+      : "None";
+
+    const lastCommenterDisplay = formatAuthorForSlack(
+      overview.lastComment.authorName,
+      overview.lastComment.authorSlackUserId
+    );
+
+    blocks.push({
+      type: "section",
+      fields: [
+        {
+          type: "mrkdwn",
+          text: `*Commented by:* ${commenterDisplay}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*Last Comment:* ${lastCommenterDisplay} on <!date^${Math.floor(overview.lastComment.createdAt / 1000)}^{date_short_pretty} at {time}|${new Date(overview.lastComment.createdAt).toISOString()}>`,
+        },
+      ],
+    });
+  }
+
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `${overview.commentCount} comment${overview.commentCount !== 1 ? "s" : ""} | <${bepUrl}|View BEP-${overview.number} →>`,
+      },
+    ],
+  });
+
+  return blocks;
+}
+
+/**
  * Notify Slack when a new BEP is created.
- * Creates a new thread in #beps and stores the thread_ts.
- * If shepherds have linked Slack accounts, mentions them directly.
+ * Creates a new thread in #beps with the overview and stores the thread_ts.
  */
 export const notifyBepCreated = internalAction({
   args: {
     bepId: v.id("beps"),
   },
   handler: async (ctx, args) => {
-    const bep = await ctx.runQuery(internal.beps.getById, { id: args.bepId });
-    if (!bep) {
+    const overview = await ctx.runQuery(internal.beps.getBepOverview, { bepId: args.bepId });
+    if (!overview) {
       console.error("BEP not found for Slack notification:", args.bepId);
       return;
     }
 
-    const shepherds: string[] = [];
-    for (const shepherdId of bep.shepherds) {
-      const user = await ctx.runQuery(internal.users.getById, { id: shepherdId });
-      if (user) {
-        shepherds.push(formatAuthorForSlack(user.name, user.slackUserId));
-      }
-    }
-
-    const bepUrl = getBepUrl(bep.number);
-    const statusEmoji = getStatusEmoji(bep.status);
-
-    const blocks: SlackBlock[] = [
-      {
-        type: "header",
-        text: {
-          type: "plain_text",
-          text: `🆕 New BEP Created: BEP-${bep.number}`,
-          emoji: true,
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `*<${bepUrl}|${bep.title}>*`,
-        },
-      },
-      {
-        type: "section",
-        fields: [
-          {
-            type: "mrkdwn",
-            text: `*Status:* ${statusEmoji} ${bep.status}`,
-          },
-          {
-            type: "mrkdwn",
-            text: `*Shepherds:* ${shepherds.length > 0 ? shepherds.join(", ") : "None assigned"}`,
-          },
-        ],
-      },
-    ];
-
-    if (bep.content) {
-      const preview = bep.content.substring(0, 300) + (bep.content.length > 300 ? "..." : "");
-      blocks.push({
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `_${preview}_`,
-        },
-      });
-    }
-
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `<${bepUrl}|View BEP-${bep.number} →>`,
-      },
-    });
+    const blocks = buildOverviewBlocks(overview, true);
 
     const result = await postToSlack(
       blocks,
-      `New BEP Created: BEP-${bep.number} - ${bep.title}`
+      `New BEP Created: BEP-${overview.number} - ${overview.title}`
     );
 
     if (result.ok && result.ts) {
@@ -224,9 +314,51 @@ export const notifyBepCreated = internalAction({
 });
 
 /**
+ * Update the Slack thread overview message for a BEP.
+ * This is called when the BEP is updated, commented on, or status changes.
+ */
+export const updateBepThreadOverview = internalAction({
+  args: {
+    bepId: v.id("beps"),
+  },
+  handler: async (ctx, args) => {
+    const overview = await ctx.runQuery(internal.beps.getBepOverview, { bepId: args.bepId });
+    if (!overview) {
+      console.error("BEP not found for Slack thread update:", args.bepId);
+      return;
+    }
+
+    if (!overview.slackThreadTs) {
+      console.log("No Slack thread for BEP, creating one:", args.bepId);
+      const blocks = buildOverviewBlocks(overview, false);
+      const result = await postToSlack(
+        blocks,
+        `BEP-${overview.number} - ${overview.title}`
+      );
+      if (result.ok && result.ts) {
+        await ctx.runMutation(internal.beps.storeSlackThreadTs, {
+          bepId: args.bepId,
+          slackThreadTs: result.ts,
+        });
+      }
+      return;
+    }
+
+    const blocks = buildOverviewBlocks(overview, false);
+
+    await updateSlackMessage(
+      overview.slackThreadTs,
+      blocks,
+      `BEP-${overview.number} - ${overview.title}`
+    );
+  },
+});
+
+/**
  * Notify Slack when a BEP is updated with a new version.
  * Replies to the existing thread if one exists.
  * If the editor has a linked Slack account, mentions them directly.
+ * Also updates the thread overview message.
  */
 export const notifyBepVersionCreated = internalAction({
   args: {
@@ -286,6 +418,9 @@ export const notifyBepVersionCreated = internalAction({
         slackThreadTs: result.ts,
       });
     }
+
+    // Update the thread overview with new "last updated" info
+    await ctx.runAction(internal.slack.updateBepThreadOverview, { bepId: args.bepId });
   },
 });
 
@@ -426,12 +561,16 @@ export const notifyCommentAdded = internalAction({
         slackThreadTs: result.ts,
       });
     }
+
+    // Update the thread overview with new commenter info
+    await ctx.runAction(internal.slack.updateBepThreadOverview, { bepId: args.bepId });
   },
 });
 
 /**
  * Notify Slack when a BEP's status changes.
  * Replies to the existing thread if one exists.
+ * Also updates the thread overview message.
  */
 export const notifyStatusChanged = internalAction({
   args: {
@@ -470,6 +609,9 @@ export const notifyStatusChanged = internalAction({
         slackThreadTs: result.ts,
       });
     }
+
+    // Update the thread overview with new status
+    await ctx.runAction(internal.slack.updateBepThreadOverview, { bepId: args.bepId });
   },
 });
 

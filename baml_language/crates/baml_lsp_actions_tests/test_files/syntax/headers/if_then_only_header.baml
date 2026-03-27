@@ -48,58 +48,74 @@ function IfThenOnlyHeader2() -> int {
 
 //----
 //- diagnostics
-// Error: Duplicate function `IfThenOnlyHeader2`
-//     ╭─[ headers_if_then_only_header.baml:15:10 ]
-//     │
-//  15 │ function IfThenOnlyHeader2() -> int {
-//     │          ────────┬────────  
-//     │                  ╰────────── function `IfThenOnlyHeader2` redefined here
-//     │ 
-//  33 │ function IfThenOnlyHeader2() -> int {
-//     │          ────────┬────────  
-//     │                  ╰────────── `IfThenOnlyHeader2` first defined in headers_if_then_only_header.baml
-//     │ 
-//     │ Note: Error code: E0011
-// ────╯
-// Error: Duplicate function `IfThenOnlyHeader2`
-//     ╭─[ headers_if_then_only_header.baml:33:10 ]
-//     │
-//  33 │ function IfThenOnlyHeader2() -> int {
-//     │          ────────┬────────  
-//     │                  ╰────────── function `IfThenOnlyHeader2` redefined here
-//     │
-//     ├─[ headers_if_then_only_header.baml:33:10 ]
-//     │
-//  15 │ function IfThenOnlyHeader2() -> int {
-//     │          ────────┬────────  
-//     │                  ╰────────── `IfThenOnlyHeader2` first defined in headers_if_then_only_header.baml
-//     │ 
-//     │ Note: Error code: E0011
-// ────╯
-// Error: Expected `int`, found `int | null`
-//     ╭─[ headers_if_then_only_header.baml:28:5 ]
-//     │
-//  28 │     y
-//     │     ┬  
-//     │     ╰── Expected `int`, found `int | null`
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: Expected `int`, found `int | null`
-//     ╭─[ headers_if_then_only_header.baml:28:5 ]
-//     │
-//  28 │     y
-//     │     ┬  
-//     │     ╰── Expected `int`, found `int | null`
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: Expected `int`, found `int | null`
+// Error: `if` without `else` cannot be used as a value; add an `else` branch
+//    ╭─[ headers_if_then_only_header.baml:8:12 ]
+//    │
+//  8 │     let y = if (false) { 1 };
+//    │            ────────┬────────  
+//    │                    ╰────────── `if` without `else` cannot be used as a value; add an `else` branch
+//    │ 
+//    │ Note: Error code: E0001
+// ───╯
+// Error: `if` without `else` cannot be used as a value; add an `else` branch
 //     ╭─[ headers_if_then_only_header.baml:11:5 ]
 //     │
 //  11 │     y
 //     │     ┬  
-//     │     ╰── Expected `int`, found `int | null`
+//     │     ╰── `if` without `else` cannot be used as a value; add an `else` branch
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: `if` without `else` cannot be used as a value; add an `else` branch
+//     ╭─[ headers_if_then_only_header.baml:22:12 ]
+//     │
+//  22 │ ╭─▶     let y = if (false) {
+//     ┆ ┆   
+//  25 │ ├─▶     };
+//     │ │            
+//     │ ╰──────────── `if` without `else` cannot be used as a value; add an `else` branch
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Error: `if` without `else` cannot be used as a value; add an `else` branch
+//     ╭─[ headers_if_then_only_header.baml:28:5 ]
+//     │
+//  28 │     y
+//     │     ┬  
+//     │     ╰── `if` without `else` cannot be used as a value; add an `else` branch
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: Duplicate function `IfThenOnlyHeader2`
+//     ╭─[ headers_if_then_only_header.baml:33:10 ]
+//     │
+//  15 │ function IfThenOnlyHeader2() -> int {
+//     │          ────────┬────────  
+//     │                  ╰────────── first defined as function here
+//     │ 
+//  33 │ function IfThenOnlyHeader2() -> int {
+//     │          ────────┬────────  
+//     │                  ╰────────── duplicate function definition
+//     │ 
+//     │ Note: Error code: E0011
+// ────╯
+// Error: `if` without `else` cannot be used as a value; add an `else` branch
+//     ╭─[ headers_if_then_only_header.baml:40:12 ]
+//     │
+//  40 │ ╭─▶     let y = if (false) {
+//     ┆ ┆   
+//  43 │ ├─▶     };
+//     │ │            
+//     │ ╰──────────── `if` without `else` cannot be used as a value; add an `else` branch
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Error: `if` without `else` cannot be used as a value; add an `else` branch
+//     ╭─[ headers_if_then_only_header.baml:46:5 ]
+//     │
+//  46 │     y
+//     │     ┬  
+//     │     ╰── `if` without `else` cannot be used as a value; add an `else` branch
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

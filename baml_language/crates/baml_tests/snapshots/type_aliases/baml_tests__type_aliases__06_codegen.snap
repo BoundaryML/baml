@@ -1,17 +1,17 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function Bar() -> int {
+function user.Bar() -> int {
     load_const true
     return
 }
 
-function Baz() -> Json {
+function user.Baz() -> Json {
     load_const "hello"
     return
 }
 
-function EchoJSON(i: JSON) -> JSON {
+function user.EchoJSON(i: JSON) -> JSON {
     alloc_instance NotJSON
     copy 0
     load_const "Whoops"
@@ -19,12 +19,12 @@ function EchoJSON(i: JSON) -> JSON {
     return
 }
 
-function Foo() -> int {
+function user.Foo() -> int {
     load_const 1
     return
 }
 
-function MakeJSON(i: NotJSON) -> JSON {
+function user.MakeJSON(i: NotJSON) -> JSON {
     load_var i
     load_field .inner
     return

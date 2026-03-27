@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function ChainCommands() -> string {
+function user.ChainCommands() -> string {
     load_const "pwd"
     dispatch_future baml.sys.shell
     await
@@ -18,7 +18,7 @@ function ChainCommands() -> string {
     return
 }
 
-function ConnectAndRead() -> string {
+function user.ConnectAndRead() -> string {
     load_const "127.0.0.1:8080"
     dispatch_future baml.net.connect
     await
@@ -27,7 +27,7 @@ function ConnectAndRead() -> string {
     return
 }
 
-function ConnectAndReadInline() -> string {
+function user.ConnectAndReadInline() -> string {
     load_const "localhost:3000"
     dispatch_future baml.net.connect
     await
@@ -36,7 +36,7 @@ function ConnectAndReadInline() -> string {
     return
 }
 
-function ConnectReadAndClose() -> string {
+function user.ConnectReadAndClose() -> string {
     load_const "127.0.0.1:8080"
     dispatch_future baml.net.connect
     await
@@ -53,7 +53,7 @@ function ConnectReadAndClose() -> string {
     return
 }
 
-function MultipleConnections() -> string {
+function user.MultipleConnections() -> string {
     load_const "server1:80"
     dispatch_future baml.net.connect
     await
@@ -76,7 +76,7 @@ function MultipleConnections() -> string {
     return
 }
 
-function ReadAndClose() -> string {
+function user.ReadAndClose() -> string {
     load_const "example.txt"
     dispatch_future baml.fs.open
     await
@@ -93,7 +93,7 @@ function ReadAndClose() -> string {
     return
 }
 
-function ReadFile() -> string {
+function user.ReadFile() -> string {
     load_const "example.txt"
     dispatch_future baml.fs.open
     await
@@ -102,7 +102,7 @@ function ReadFile() -> string {
     return
 }
 
-function ReadFileInline() -> string {
+function user.ReadFileInline() -> string {
     load_const "data.json"
     dispatch_future baml.fs.open
     await
@@ -111,7 +111,7 @@ function ReadFileInline() -> string {
     return
 }
 
-function ReadMultipleFiles() -> string {
+function user.ReadMultipleFiles() -> string {
     load_const "file1.txt"
     dispatch_future baml.fs.open
     await
@@ -134,14 +134,14 @@ function ReadMultipleFiles() -> string {
     return
 }
 
-function RunCommand() -> string {
+function user.RunCommand() -> string {
     load_const "echo hello"
     dispatch_future baml.sys.shell
     await
     return
 }
 
-function RunCommandWithVar() -> string {
+function user.RunCommandWithVar() -> string {
     load_const "ls -la"
     dispatch_future baml.sys.shell
     await

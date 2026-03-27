@@ -1,13 +1,13 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== DIAGNOSTICS ===
-  [type] Error: Expected `string`, found `int`
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: type mismatch: expected string, got int
      ╭─[ edge_cases.baml:135:15 ]
      │
  135 │ function VeryLongHeaderTitle() -> string {
      │               ┬  
-     │               ╰── Expected `string`, found `int`
+     │               ╰── type mismatch: expected string, got int
      │ 
      │ Note: Error code: E0001
 ─────╯

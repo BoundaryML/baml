@@ -455,7 +455,7 @@ mod tests {
 
         // Simulate a class at index 0
         let class_ptr = tlab.alloc(Object::Class(Class {
-            name: "TestClass".to_string(),
+            name: baml_type::TypeName::local(baml_type::Name::new("TestClass")),
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
@@ -465,7 +465,6 @@ mod tests {
                     description: None,
                     alias: None,
                     skip: false,
-                    field_attr: Default::default(),
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
@@ -475,7 +474,6 @@ mod tests {
                     description: None,
                     alias: None,
                     skip: false,
-                    field_attr: Default::default(),
                 },
             ],
             description: None,
@@ -509,7 +507,7 @@ mod tests {
 
         // Simulate an enum at index 0
         let enum_ptr = tlab.alloc(Object::Enum(Enum {
-            name: "Color".to_string(),
+            name: baml_type::TypeName::local(baml_type::Name::new("Color")),
             variants: vec![
                 bex_vm_types::EnumVariant {
                     name: "Red".to_string(),
@@ -570,21 +568,19 @@ mod tests {
     /// The test needs `collect_garbage_with_forwarding` to return a
     /// `HashMap<HeapPtr, HeapPtr>` forwarding table.
     #[test]
-    #[ignore = "Requires GC update to use HeapPtr"]
     fn test_miri_tlab_invalidation_and_refill() {
         let heap = BexHeap::with_tlab_size(vec![], 10);
         let mut tlab = Tlab::new(Arc::clone(&heap));
 
         // Allocate some objects before GC
-        let _obj1 = tlab.alloc_string("before_gc_1".to_string());
-        let _obj2 = tlab.alloc_string("before_gc_2".to_string());
+        let obj1 = tlab.alloc_string("before_gc_1".to_string());
+        let obj2 = tlab.alloc_string("before_gc_2".to_string());
 
         assert!(tlab.is_valid());
 
-        // TODO: Update once GC returns HeapPtr forwarding map
-        // let (stats, _remapped, forwarding) =
-        //     unsafe { heap.collect_garbage_with_forwarding(&[obj1, obj2]) };
-        // assert_eq!(stats.live_count, 2);
+        let (stats, _remapped, _forwarding) =
+            unsafe { heap.collect_garbage_with_forwarding(&[obj1, obj2]) };
+        assert_eq!(stats.live_count, 2);
 
         // Invalidate TLAB (what bex_engine does after GC)
         tlab.invalidate();
@@ -609,8 +605,6 @@ mod tests {
                 _ => panic!("Expected String"),
             }
         }
-
-        // Note: Verifying forwarded objects (obj1, obj2) requires GC update
     }
 
     /// Tests set_object for field mutation patterns.

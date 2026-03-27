@@ -224,6 +224,11 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     timeout-minutes: 15
+    env:
+      # Disable Python + pipx tools: mise 2025.12.12 downloads a broken
+      # freethreaded Python build that's missing a lib/ directory.
+      # Prek hooks only need Rust + cargo tools; Python scripts use system Python + uv.
+      MISE_DISABLE_TOOLS: python,pipx:uv,pipx:ruff,pipx:maturin
     steps:
       - name: "Checkout Branch"
         uses: actions/checkout@v4

@@ -608,6 +608,26 @@ fn tracker_visit_expr(
         ast::Expr::GetItem(_expr) => Type::Unknown,
         ast::Expr::Slice(_slice) => Type::Unknown,
         ast::Expr::Call(expr) => {
+            // Intercept string method calls: "str".method(args) or string_var.method(args)
+            if let ast::Expr::GetAttr(get_attr) = &expr.expr {
+                let parent = tracker_visit_expr(&get_attr.expr, state, types);
+                if parent.is_subtype_of(&Type::String) {
+                    if let Some(ret) = string_method_return_type(get_attr.name) {
+                        // Visit args for side effects (variable tracking, error checking)
+                        for arg in &expr.args {
+                            match arg {
+                                ast::CallArg::Pos(e) | ast::CallArg::Kwarg(_, e) => {
+                                    tracker_visit_expr(e, state, types);
+                                }
+                                ast::CallArg::PosSplat(e) | ast::CallArg::KwargSplat(e) => {
+                                    tracker_visit_expr(e, state, types);
+                                }
+                            }
+                        }
+                        return ret;
+                    }
+                }
+            }
             let func = tracker_visit_expr(&expr.expr, state, types);
             let (t, errs) = parse_as_function_call(expr, state, types, &func);
             state.errors.extend(errs);
@@ -848,6 +868,44 @@ fn typecheck_attr_access_on_union(
         Some(attr_type) => attr_type,
         None => expected_class_got(union_type, get_attr, state),
     }
+}
+
+/// Return type for a known Python string method, or None if unknown.
+///
+/// Source of truth for supported methods:
+/// https://docs.rs/minijinja-contrib/latest/src/minijinja_contrib/pycompat.rs.html
+fn string_method_return_type(method: &str) -> Option<Type> {
+    let methods: IndexMap<&str, Type> = IndexMap::from([
+        // Methods returning String
+        ("capitalize", Type::String),
+        ("format", Type::String),
+        ("join", Type::String),
+        ("lower", Type::String),
+        ("lstrip", Type::String),
+        ("replace", Type::String),
+        ("rstrip", Type::String),
+        ("strip", Type::String),
+        ("title", Type::String),
+        ("upper", Type::String),
+        // Methods returning Bool
+        ("endswith", Type::Bool),
+        ("isalnum", Type::Bool),
+        ("isalpha", Type::Bool),
+        ("isascii", Type::Bool),
+        ("isdigit", Type::Bool),
+        ("islower", Type::Bool),
+        ("isnumeric", Type::Bool),
+        ("isupper", Type::Bool),
+        ("startswith", Type::Bool),
+        // Methods returning Int
+        ("count", Type::Int),
+        ("find", Type::Int),
+        ("rfind", Type::Int),
+        // Methods returning List[String]
+        ("split", Type::List(Box::new(Type::String))),
+        ("splitlines", Type::List(Box::new(Type::String))),
+    ]);
+    methods.get(method).cloned()
 }
 
 /// Helper for [`typecheck_attr_access_on_union`].

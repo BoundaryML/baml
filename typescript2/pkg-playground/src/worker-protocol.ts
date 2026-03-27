@@ -55,6 +55,7 @@ export interface ProjectUpdate {
   isBexCurrent: boolean;
   functions: FunctionInfo[];
   tests: TestInfo[];
+  diagnostics: DiagnosticEntry[];
 }
 
 export type PlaygroundNotification =

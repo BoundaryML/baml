@@ -1,0 +1,116 @@
+
+//# Main Function
+function ComplexHeaderTest() -> string {
+    //# Initialization
+    let items = ["a", "b", "c"];
+    let result = "";
+
+    //## Processing Loop
+    for (let item in items) {
+
+        //# Markdown Header tester
+        let hello = "Hello";
+
+        //### Item Analysis
+        let processed = 2;
+
+        //### Validation
+        let z = if (true) {
+
+            //# Markdown Header tester in statement
+            let hello = "Hello";
+
+            //### another header in the statement
+            let hello = "Hello";
+
+            //### True totally
+            12
+        } else {
+            //### False other branch
+            13
+        };
+
+        //## very useful header
+        let hello2 = "Hello";
+
+        //### Result
+        result
+    }
+
+    //# Final Processing
+    let final_result = 213;
+
+    //# Return Result
+    final_result
+}
+
+//# Loop Processing
+function ForLoopWithHeaders() -> int {
+    let items = [1, 2, 3, 4, 5];
+    let result = 0;
+
+    //## Main Loop
+    for (let item in items) {
+        //### Item Processing
+        let processed = item * 2;
+
+        //### Accumulation
+        let result = result + processed;
+
+        processed
+    }
+
+    //## Final Result
+    result
+}
+
+//----
+//- diagnostics
+// Error: Duplicate binding `hello` in `ComplexHeaderTest`
+//     ╭─[ headers_complex_headers_test.baml:20:17 ]
+//     │
+//  11 │         let hello = "Hello";
+//     │             ──┬──  
+//     │               ╰──── first defined as binding here
+//     │ 
+//  20 │             let hello = "Hello";
+//     │                 ──┬──  
+//     │                   ╰──── duplicate binding definition
+//     │ 
+//  23 │             let hello = "Hello";
+//     │                 ──┬──  
+//     │                   ╰──── duplicate binding definition
+//     │ 
+//     │ Note: Error code: E0012
+// ────╯
+// Error: Duplicate binding `result` in `ForLoopWithHeaders`
+//     ╭─[ headers_complex_headers_test.baml:57:13 ]
+//     │
+//  49 │     let result = 0;
+//     │         ───┬──  
+//     │            ╰──── first defined as binding here
+//     │ 
+//  57 │         let result = result + processed;
+//     │             ───┬──  
+//     │                ╰──── duplicate binding definition
+//     │ 
+//     │ Note: Error code: E0012
+// ────╯
+// Error: type mismatch: expected string, got int
+//     ╭─[ headers_complex_headers_test.baml:43:5 ]
+//     │
+//  43 │     final_result
+//     │     ──────┬─────  
+//     │           ╰─────── type mismatch: expected string, got int
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `2`
+//     ╭─[ headers_complex_headers_test.baml:54:25 ]
+//     │
+//  54 │         let processed = item * 2;
+//     │                         ────┬───  
+//     │                             ╰───── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `2`
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

@@ -16,7 +16,7 @@ fn array_length_returns_int() {
         "function f(arr: int[]) -> int { return arr.length(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(arr: int[]) -> int {
+    function user.f(arr: int[]) -> int throws never {
       { : never
         return arr.length() : int
       }
@@ -32,7 +32,7 @@ fn array_at_returns_element_type_int() {
         "function f(arr: int[]) -> int? { return arr.at(0); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(arr: int[]) -> int? {
+    function user.f(arr: int[]) -> int? throws never {
       { : never
         return arr.at(0) : int?
       }
@@ -48,7 +48,7 @@ fn array_at_returns_element_type_string() {
         "function f(arr: string[]) -> string? { return arr.at(0); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(arr: string[]) -> string? {
+    function user.f(arr: string[]) -> string? throws never {
       { : never
         return arr.at(0) : string?
       }
@@ -64,7 +64,7 @@ fn array_join_returns_string() {
         r#"function f(arr: string[]) -> string { return arr.join(","); }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(arr: string[]) -> string {
+    function user.f(arr: string[]) -> string throws never {
       { : never
         return arr.join(",") : string
       }
@@ -82,7 +82,7 @@ fn map_keys_returns_key_type_array() {
         "function f(m: map<string, int>) -> string[] { return m.keys(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(m: map<string, int>) -> string[] {
+    function user.f(m: map<string, int>) -> string[] throws never {
       { : never
         return m.keys() : string[]
       }
@@ -98,7 +98,7 @@ fn map_values_returns_value_type_array() {
         "function f(m: map<string, int>) -> int[] { return m.values(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(m: map<string, int>) -> int[] {
+    function user.f(m: map<string, int>) -> int[] throws never {
       { : never
         return m.values() : int[]
       }
@@ -114,7 +114,7 @@ fn map_has_returns_bool() {
         r#"function f(m: map<string, int>) -> bool { return m.has("x"); }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(m: map<string, int>) -> bool {
+    function user.f(m: map<string, int>) -> bool throws never {
       { : never
         return m.has("x") : bool
       }
@@ -130,7 +130,7 @@ fn map_length_returns_int() {
         "function f(m: map<string, int>) -> int { return m.length(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(m: map<string, int>) -> int {
+    function user.f(m: map<string, int>) -> int throws never {
       { : never
         return m.length() : int
       }
@@ -148,7 +148,7 @@ fn string_length_returns_int() {
         r#"function f(s: string) -> int { return s.length(); }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(s: string) -> int {
+    function user.f(s: string) -> int throws never {
       { : never
         return s.length() : int
       }
@@ -164,7 +164,7 @@ fn string_split_returns_string_array() {
         r#"function f(s: string) -> string[] { return s.split(","); }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(s: string) -> string[] {
+    function user.f(s: string) -> string[] throws never {
       { : never
         return s.split(",") : string[]
       }
@@ -180,7 +180,7 @@ fn string_includes_returns_bool() {
         r#"function f(s: string) -> bool { return s.includes("ell"); }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(s: string) -> bool {
+    function user.f(s: string) -> bool throws never {
       { : never
         return s.includes("ell") : bool
       }
@@ -196,7 +196,7 @@ fn string_to_lower_case_returns_string() {
         "function f(s: string) -> string { return s.toLowerCase(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(s: string) -> string {
+    function user.f(s: string) -> string throws never {
       { : never
         return s.toLowerCase() : string
       }
@@ -214,7 +214,7 @@ fn let_inferred_from_array_length() {
         "function f(arr: int[]) -> int { let len = arr.length(); return len; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(arr: int[]) -> int {
+    function user.f(arr: int[]) -> int throws never {
       { : never
         let len = arr.length() : int
         return len : int
@@ -231,7 +231,7 @@ fn let_inferred_from_array_at() {
         "function f(arr: int[]) -> int? { let x = arr.at(0); return x; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(arr: int[]) -> int? {
+    function user.f(arr: int[]) -> int? throws never {
       { : never
         let x = arr.at(0) : int?
         return x : int?
@@ -248,7 +248,7 @@ fn let_inferred_from_map_keys() {
         "function f(m: map<string, int>) -> string[] { let k = m.keys(); return k; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(m: map<string, int>) -> string[] {
+    function user.f(m: map<string, int>) -> string[] throws never {
       { : never
         let k = m.keys() : string[]
         return k : string[]
@@ -267,7 +267,7 @@ fn image_url_returns_optional_string() {
         "function f(img: image) -> string? { return img.url(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(img: image) -> string? {
+    function user.f(img: image) -> string? throws never {
       { : never
         return img.url() : string?
       }
@@ -283,7 +283,7 @@ fn image_base64_returns_string() {
         "function f(img: image) -> string { return img.base64(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(img: image) -> string {
+    function user.f(img: image) -> string throws never {
       { : never
         return img.base64() : string
       }
@@ -299,7 +299,7 @@ fn image_mime_type_returns_optional_string() {
         "function f(img: image) -> string? { return img.mime_type(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(img: image) -> string? {
+    function user.f(img: image) -> string? throws never {
       { : never
         return img.mime_type() : string?
       }
@@ -315,7 +315,7 @@ fn pdf_url_returns_optional_string() {
         "function f(doc: pdf) -> string? { return doc.url(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(doc: pdf) -> string? {
+    function user.f(doc: pdf) -> string? throws never {
       { : never
         return doc.url() : string?
       }
@@ -331,7 +331,7 @@ fn audio_base64_returns_string() {
         "function f(a: audio) -> string { return a.base64(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(a: audio) -> string {
+    function user.f(a: audio) -> string throws never {
       { : never
         return a.base64() : string
       }
@@ -347,7 +347,7 @@ fn video_file_returns_optional_string() {
         "function f(v: video) -> string? { return v.file(); }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f(v: video) -> string? {
+    function user.f(v: video) -> string? throws never {
       { : never
         return v.file() : string?
       }
@@ -379,7 +379,7 @@ fn image_static_from_url() {
         r#"function f() -> image { return image.from_url("example.com/img.png", null); }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> image {
+    function user.f() -> image throws never {
       { : never
         return image.from_url("example.com/img.png", null) : image
       }
@@ -395,7 +395,7 @@ fn pdf_static_from_base64() {
         r#"function f() -> pdf { return pdf.from_base64("base64data", null); }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> pdf {
+    function user.f() -> pdf throws never {
       { : never
         return pdf.from_base64("base64data", null) : pdf
       }
@@ -411,7 +411,7 @@ fn audio_static_from_file() {
         r#"function f() -> audio { return audio.from_file("song.mp3", null); }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> audio {
+    function user.f() -> audio throws never {
       { : never
         return audio.from_file("song.mp3", null) : audio
       }
@@ -427,7 +427,7 @@ fn video_static_from_url() {
         r#"function f() -> video { return video.from_url("example.com/v.mp4", null); }"#,
     );
     insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f() -> video {
+    function user.f() -> video throws never {
       { : never
         return video.from_url("example.com/v.mp4", null) : video
       }

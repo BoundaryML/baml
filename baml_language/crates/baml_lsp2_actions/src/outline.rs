@@ -23,8 +23,9 @@
 //! to `ClassField` / `EnumVariant` in the HIR item tree.
 
 use baml_base::SourceFile;
-use baml_compiler2_hir::contributions::DefinitionKind;
-use baml_compiler2_ppir::{file_item_tree, file_symbol_contributions};
+use baml_compiler2_hir::{
+    contributions::DefinitionKind, file_item_tree, file_symbol_contributions,
+};
 use text_size::TextRange;
 
 use crate::Db;
@@ -130,9 +131,22 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
     for (name, contrib) in &contribs.values {
         // Value-namespace items have no children in the outline for Phase 2.
         // (Function params/return type could be added in a future phase.)
+        //
+        // For `Definition::Let`, use the `LetOrigin` to report the correct symbol kind
+        // (Client or RetryPolicy) rather than the generic `Let` kind.
+        let kind = match contrib.definition {
+            baml_compiler2_hir::contributions::Definition::Let(loc) => {
+                match item_tree[loc.id(db)].origin {
+                    baml_compiler2_ast::ast::LetOrigin::Client => DefinitionKind::Client,
+                    baml_compiler2_ast::ast::LetOrigin::RetryPolicy => DefinitionKind::RetryPolicy,
+                    _ => DefinitionKind::Let,
+                }
+            }
+            other => other.kind(),
+        };
         items.push(OutlineItem {
             name: name.to_string(),
-            kind: contrib.definition.kind(),
+            kind,
             name_span: contrib.name_span,
             children: Vec::new(),
         });

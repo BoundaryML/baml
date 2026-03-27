@@ -6,7 +6,6 @@ import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
 import { useUser } from "@/components/providers/user-provider";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BepContent } from "@/components/bep/bep-content";
 import { MDXEditorComponent, MDXEditorHandle } from "@/components/editor/mdx";

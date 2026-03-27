@@ -74,7 +74,7 @@ impl std::error::Error for OpError {
 }
 
 impl OpError {
-    fn unsupported(operation: SysOp) -> Self {
+    fn _unsupported(operation: SysOp) -> Self {
         Self {
             fn_name: operation,
             kind: OpErrorKind::Unsupported,
@@ -370,15 +370,6 @@ pub struct SysOpContext {
     /// Prepended to templates by `get_jinja_template`.
     pub template_strings_macros: Arc<String>,
 
-    /// Client metadata for building full client trees, keyed by client name.
-    /// Used by `get_client` to recursively construct `LlmClient` with sub-clients and retry policies.
-    pub client_metadata: Arc<std::collections::HashMap<String, ClientBuildMeta>>,
-
-    /// Atomic round-robin counters, keyed by client name.
-    /// Used by `round_robin_next` to cycle through sub-clients.
-    pub round_robin_counters:
-        Arc<std::collections::HashMap<String, std::sync::Arc<std::sync::atomic::AtomicUsize>>>,
-
     /// Per-call cancellation token.
     ///
     /// Defaults to a never-cancelled token for the shared engine context.
@@ -386,33 +377,17 @@ pub struct SysOpContext {
     pub cancel: CancellationToken,
 
     /// Pre-extracted class definitions for output format rendering.
-    /// Keyed by class name (e.g., "Person").
-    pub class_definitions: Arc<indexmap::IndexMap<String, ClassDefinition>>,
+    /// Keyed by class name.
+    pub class_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, ClassDefinition>>,
 
     /// Pre-extracted enum definitions for output format rendering.
-    /// Keyed by enum name (e.g., "Color").
-    pub enum_definitions: Arc<indexmap::IndexMap<String, EnumDefinition>>,
+    /// Keyed by enum name.
+    pub enum_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, EnumDefinition>>,
 
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
     /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<String, baml_type::Ty>>,
-}
-
-/// Pre-extracted metadata for building a Client tree at runtime.
-///
-/// Populated from HIR `Client` and `RetryPolicy` items during compilation.
-/// Used by `get_client` to recursively build `LlmClient` objects.
-#[derive(Debug, Clone)]
-pub struct ClientBuildMeta {
-    /// The client type (`Primitive`, `Fallback`, `RoundRobin`).
-    pub client_type: bex_heap::builtin_types::owned::LlmClientType,
-    /// Sub-client names (for composite clients: fallback/round-robin).
-    pub sub_client_names: Vec<String>,
-    /// Retry policy, if one was specified.
-    pub retry_policy: Option<bex_heap::builtin_types::owned::LlmRetryPolicy>,
-    /// Optional round-robin start index used to initialize the RR counter.
-    pub round_robin_start: Option<usize>,
+    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>>,
 }
 
 /// Pre-extracted metadata for an LLM function.
@@ -471,12 +446,17 @@ impl SysOpContext {
             llm_functions: Arc::new(std::collections::HashMap::new()),
             function_global_indices: Arc::new(std::collections::HashMap::new()),
             template_strings_macros: Arc::new(String::new()),
-            client_metadata: Arc::new(std::collections::HashMap::new()),
-            round_robin_counters: Arc::new(std::collections::HashMap::new()),
             cancel: CancellationToken::new(),
-            class_definitions: Arc::new(indexmap::IndexMap::new()),
-            enum_definitions: Arc::new(indexmap::IndexMap::new()),
-            type_alias_definitions: Arc::new(indexmap::IndexMap::new()),
+            class_definitions: Arc::new(
+                indexmap::IndexMap::<baml_type::TypeName, ClassDefinition>::new(),
+            ),
+            enum_definitions: Arc::new(
+                indexmap::IndexMap::<baml_type::TypeName, EnumDefinition>::new(),
+            ),
+            type_alias_definitions: Arc::new(indexmap::IndexMap::<
+                baml_type::TypeName,
+                baml_type::Ty,
+            >::new()),
         }
     }
 
@@ -526,222 +506,176 @@ impl<T> FunctionRef<T> {
 }
 
 // ============================================================================
-// SysOps Table (generated from for_all_sys_ops!)
+// IO pipeline (generated from .baml files via baml_builtins2_codegen)
 // ============================================================================
 
-/// Table of system operation implementations.
-///
-/// Generated from `#[sys_op]` definitions in `baml_builtins::with_builtins!`.
-/// This struct has one field per `sys_op`, ensuring complete coverage.
-///
-/// This struct is passed to `BexEngine::new()` and determines how system
-/// operations are executed. Different providers (native Tokio, WASM, FFI)
-/// can supply different implementations.
-///
-/// # Example
-///
-/// ```ignore
-/// // Using the native Tokio provider
-/// let sys_ops = sys_types_native::SysOps::native();
-/// let engine = BexEngine::new(program, sys_ops)?;
-/// ```
-macro_rules! define_sys_ops_struct {
-    ($({ $Variant:ident, $path:expr, $snake:ident, $uses_ctx:expr, [$($throw_cat:ident),*], [$($panic_cat:ident),*] })*) => {
-        #[derive(Clone)]
-        pub struct SysOps {
-            $( pub $snake: SysOpFn, )*
-        }
+// SysOps struct, IO traits (IoClassFsFile, IoNamespaceFs, etc.),
+// view/owned types, from_impl, all_unsupported — all generated from
+// `.baml` `$rust_io_function` definitions by `baml_builtins2_codegen`.
+#[allow(
+    dead_code,
+    unreachable_pub,
+    unused_imports,
+    unused_variables,
+    unused_parens,
+    clippy::all,
+    clippy::wildcard_imports,
+    clippy::pub_underscore_fields,
+    clippy::used_underscore_binding,
+    clippy::redundant_closure_for_method_calls,
+    clippy::redundant_clone,
+    clippy::used_underscore_items,
+    clippy::implicit_clone
+)]
+pub mod io {
+    use std::sync::Arc;
 
-        impl SysOps {
-            /// Look up the function for a given `SysOp`.
-            pub fn get(&self, op: SysOp) -> &SysOpFn {
-                match op {
-                    $( SysOp::$Variant => &self.$snake, )*
-                }
-            }
+    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
+    pub use bex_vm_types::SysOp;
 
-            /// Create a function that always returns `OpError::Unsupported` for a given op.
-            ///
-            /// Useful for providers that don't support certain operations.
-            pub fn unsupported(operation: SysOp) -> SysOpFn {
-                match operation {
-                    $( SysOp::$Variant => Arc::new(|_, _, _, _| SysOpResult::Ready(Err(OpError::unsupported(SysOp::$Variant)))), )*
-                }
-            }
-
-            /// Create a `SysOps` table where all operations return `Unsupported`.
-            ///
-            /// Useful as a base for providers that only implement some operations.
-            pub fn all_unsupported() -> Self {
-                Self {
-                    $( $snake: Self::unsupported(SysOp::$Variant), )*
-                }
-            }
-        }
+    pub use super::{
+        AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, OpErrorKind, SysOpContext,
+        SysOpFn, SysOpOutput, SysOpResult,
     };
-}
 
-baml_builtins::for_all_sys_ops!(define_sys_ops_struct);
-
-// ============================================================================
-// Per-module sys_op traits (generated from DSL definitions)
-// ============================================================================
-
-// Generates: SysOpFs, SysOpSys, SysOpNet, SysOpHttp, SysOpLlm traits
-// and SysOps::from_impl<T>() constructor.
-baml_builtins::with_builtins!(baml_builtins_macros::generate_sys_op_traits);
-
-// ============================================================================
-// SysOpsBuilder — Compose a SysOps table by overriding modules independently
-// ============================================================================
-
-/// Builder for composing a [`SysOps`] table by overriding individual modules.
-///
-/// Starts with all operations returning `Unsupported` (except LLM, which uses
-/// the blanket implementation), and allows selectively overriding modules:
-///
-/// ```ignore
-/// // Use with_http::<T>() when T implements Default; use with_http_instance for pre-built instances.
-/// let ops = SysOpsBuilder::new()
-///     .with_http_instance(Arc::new(my_http_impl))
-///     .build();
-/// ```
-pub struct SysOpsBuilder {
-    inner: SysOps,
-}
-
-/// Default provider — all trait methods return `Unsupported` via defaults.
-/// `SysOpLlm` is provided by the blanket `impl<T> SysOpLlm for T`.
-struct DefaultOps;
-
-impl Default for DefaultOps {
-    fn default() -> Self {
-        Self
-    }
-}
-
-impl SysOpFs for DefaultOps {}
-impl SysOpSys for DefaultOps {}
-impl SysOpNet for DefaultOps {}
-impl SysOpHttp for DefaultOps {}
-impl SysOpEnv for DefaultOps {}
-
-impl SysOpsBuilder {
-    /// Create a new builder with all operations defaulting to `Unsupported`,
-    /// except LLM ops which use the real blanket implementation.
-    pub fn new() -> Self {
-        Self {
-            inner: SysOps::from_impl::<DefaultOps>(),
-        }
-    }
-
-    /// Consume the builder and return the composed [`SysOps`] table.
-    pub fn build(self) -> SysOps {
-        self.inner
-    }
-}
-
-impl Default for SysOpsBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
+    include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
 }
 
 // ============================================================================
-// Blanket SysOpLlm implementation (delegates to sys_llm)
+// Blanket IO LLM implementation (delegates to sys_llm)
 // ============================================================================
 
-/// Blanket implementation of `SysOpLlm` for all types.
-///
-/// Every type gets the real LLM behavior via `sys_llm::execute_*` functions.
-/// When future cross-op calls are needed (e.g., HTTP for media URL resolution),
-/// the bound can be tightened to `impl<T: SysOpHttp> SysOpLlm for T` and
-/// closures can be passed to the `execute_*` functions.
-impl<T> SysOpLlm for T {
-    fn baml_llm_primitive_client_render_prompt(
+impl<T> io::IoClassLlmClient for T {
+    fn get_constructor(
         &self,
+        _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
-        template: String,
-        args: BexExternalValue,
-        return_type: baml_type::Ty,
+        client: io::owned::llm::Client,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<bex_vm_types::PromptAst> {
-        let output_format = build_output_format(
-            &return_type,
-            &ctx.class_definitions,
-            &ctx.enum_definitions,
-            &ctx.type_alias_definitions,
-        );
-        SysOpOutput::Ready(
-            sys_llm::execute_render_prompt_from_owned(
-                &primitive_client,
-                &template,
-                &args,
-                output_format,
-            )
-            .map_err(OpErrorKind::from),
-        )
-    }
-
-    fn baml_llm_primitive_client_specialize_prompt(
-        &self,
-        _call_id: CallId,
-        primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-    ) -> SysOpOutput<bex_vm_types::PromptAst> {
-        SysOpOutput::Ready(
-            sys_llm::execute_specialize_prompt_from_owned(&primitive_client, prompt)
-                .map_err(OpErrorKind::from),
-        )
-    }
-
-    fn baml_llm_primitive_client_build_request(
-        &self,
-        _call_id: CallId,
-        primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-    ) -> SysOpOutput<bex_heap::builtin_types::owned::HttpRequest> {
-        SysOpOutput::Ready(
-            sys_llm::execute_build_request_from_owned(&primitive_client, prompt)
-                .map_err(OpErrorKind::from),
-        )
-    }
-
-    fn baml_llm_primitive_client_parse(
-        &self,
-        _call_id: CallId,
-        primitive_client: bex_heap::builtin_types::owned::LlmPrimitiveClient,
-        response: String,
-        type_def: baml_type::Ty,
-    ) -> SysOpOutput {
-        SysOpOutput::Ready(
-            sys_llm::execute_parse_response_from_owned(&primitive_client, &response, &type_def)
-                .map_err(OpErrorKind::from),
-        )
-    }
-
-    fn baml_llm_get_return_type(
-        &self,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::Ty> {
-        let Some(info) = ctx.llm_functions.get(&function_name) else {
+    ) -> SysOpOutput<BexExternalValue> {
+        let resolve_fn_name = format!("{}$new", client.name);
+        let global_index = ctx
+            .function_global_indices
+            .get(&resolve_fn_name)
+            .or_else(|| {
+                ctx.function_global_indices
+                    .get(&format!("user.{resolve_fn_name}"))
+            });
+        let Some(global_index) = global_index else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
-                "LLM function not found: {function_name}"
+                "Client resolve function not found: {resolve_fn_name}"
             )));
         };
-        SysOpOutput::ok(info.return_type.clone())
+        SysOpOutput::ok(
+            FunctionRef::<io::owned::llm::PrimitiveClient>::new(*global_index).into_external(),
+        )
+    }
+}
+
+/// Blanket impl — all types get real LLM behavior via `sys_llm` delegation.
+/// Uses new IO traits from the `io` module.
+impl<T> io::IoClassLlmPrimitiveClient for T {
+    fn render_prompt(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        template: String,
+        args: indexmap::IndexMap<String, BexExternalValue>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::PromptAst> {
+        let old_client = convert_io_primitive_client(&client);
+        let args_ext = BexExternalValue::Map {
+            key_type: baml_type::Ty::string(),
+            value_type: baml_type::Ty::unknown(),
+            entries: args,
+        };
+        SysOpOutput::Ready(
+            sys_llm::execute_render_prompt_from_owned(&old_client, &template, &args_ext)
+                .map(wrap_prompt_ast)
+                .map_err(OpErrorKind::from),
+        )
     }
 
-    fn baml_llm_get_jinja_template(
+    fn specialize_prompt(
         &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        prompt: io::owned::llm::PromptAst,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::PromptAst> {
+        let old_client = convert_io_primitive_client(&client);
+        let prompt_ast = unwrap_prompt_ast(&prompt);
+        SysOpOutput::Ready(
+            sys_llm::execute_specialize_prompt_from_owned(&old_client, prompt_ast)
+                .map(wrap_prompt_ast)
+                .map_err(OpErrorKind::from),
+        )
+    }
+
+    fn build_request(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        prompt: io::owned::llm::PromptAst,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        let old_client = convert_io_primitive_client(&client);
+        let prompt_ast = unwrap_prompt_ast(&prompt);
+        SysOpOutput::Ready(
+            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast)
+                .map(|req| {
+                    io::owned::http::Request {
+                        method: req.method,
+                        url: req.url,
+                        headers: req.headers,
+                        body: req.body,
+                    }
+                    .into_bex_external_value()
+                })
+                .map_err(OpErrorKind::from),
+        )
+    }
+
+    fn parse(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        response: String,
+        type_def: baml_type::Ty,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        let old_client = convert_io_primitive_client(&client);
+        SysOpOutput::Ready(
+            sys_llm::execute_parse_response_from_owned(&old_client, &response, &type_def)
+                .map(bex_external_types::AsBexExternalValue::into_bex_external_value)
+                .map_err(OpErrorKind::from),
+        )
+    }
+}
+
+/// Look up an LLM function by name, trying the bare name first then "user.{name}".
+fn lookup_llm_function<'a>(
+    function_name: &str,
+    llm_functions: &'a std::collections::HashMap<String, LlmFunctionInfo>,
+) -> Option<&'a LlmFunctionInfo> {
+    llm_functions
+        .get(function_name)
+        .or_else(|| llm_functions.get(&format!("user.{function_name}")))
+}
+
+impl<T> io::IoNamespaceLlm for T {
+    fn get_jinja_template(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         function_name: String,
         ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        let Some(info) = ctx.llm_functions.get(&function_name) else {
+        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
                 "LLM function not found: {function_name}"
             )));
@@ -755,422 +689,416 @@ impl<T> SysOpLlm for T {
         SysOpOutput::ok(template)
     }
 
-    fn baml_llm_build_primitive_client(
+    fn get_return_type(
         &self,
-        _call_id: CallId,
-        name: String,
-        provider: String,
-        default_role: String,
-        allowed_roles: BexExternalValue,
-        options: BexExternalValue,
-    ) -> SysOpOutput<bex_heap::builtin_types::owned::LlmPrimitiveClient> {
-        // Extract allowed_roles from BexExternalValue::Array
-        let allowed_roles = match &allowed_roles {
-            BexExternalValue::Array { items, .. } => {
-                match items
-                    .iter()
-                    .map(|v| match v {
-                        BexExternalValue::String(s) => Ok(s.clone()),
-                        _ => Err(OpErrorKind::TypeError {
-                            expected: "string",
-                            actual: v.type_name().to_string(),
-                        }),
-                    })
-                    .collect::<Result<Vec<_>, _>>()
-                {
-                    Ok(v) => v,
-                    Err(e) => return SysOpOutput::err(e),
-                }
-            }
-            _ => {
-                return SysOpOutput::err(OpErrorKind::TypeError {
-                    expected: "array",
-                    actual: allowed_roles.type_name().to_string(),
-                });
-            }
-        };
-
-        // Extract options from BexExternalValue::Map
-        let BexExternalValue::Map {
-            entries: options, ..
-        } = options
-        else {
-            return SysOpOutput::err(OpErrorKind::TypeError {
-                expected: "map",
-                actual: options.type_name().to_string(),
-            });
-        };
-
-        SysOpOutput::ok(bex_heap::builtin_types::owned::LlmPrimitiveClient {
-            name,
-            provider,
-            default_role,
-            allowed_roles,
-            options,
-        })
-    }
-
-    fn baml_llm_get_client(
-        &self,
+        _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         function_name: String,
         ctx: &SysOpContext,
-    ) -> SysOpOutput<bex_heap::builtin_types::owned::LlmClient> {
-        let Some(info) = ctx.llm_functions.get(&function_name) else {
+    ) -> SysOpOutput<baml_type::Ty> {
+        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
             return SysOpOutput::err(OpErrorKind::Other(format!(
                 "LLM function not found: {function_name}"
             )));
         };
-
-        match build_client_tree(&info.client_name, &ctx.client_metadata) {
-            Ok(client) => SysOpOutput::ok(client),
-            Err(e) => SysOpOutput::err(OpErrorKind::Other(e)),
-        }
-    }
-
-    fn baml_llm_resolve_client(
-        &self,
-        _call_id: CallId,
-        client_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput {
-        let resolve_fn_name = format!("{client_name}.resolve");
-        let Some(global_index) = ctx.function_global_indices.get(&resolve_fn_name) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "Client resolve function not found: {resolve_fn_name}"
-            )));
-        };
-
-        SysOpOutput::ok(
-            FunctionRef::<bex_heap::builtin_types::owned::LlmPrimitiveClient>::new(*global_index)
-                .into_external(),
-        )
-    }
-
-    fn baml_llm_round_robin_next(
-        &self,
-        _call_id: CallId,
-        client_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        let Some(counter) = ctx.round_robin_counters.get(&client_name).cloned() else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "Round-robin counter not found for client: {client_name}"
-            )));
-        };
-        let val = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        #[allow(clippy::cast_possible_wrap)]
-        SysOpOutput::ok(val as i64)
-    }
-
-    fn baml_llm_round_robin_peek(
-        &self,
-        _call_id: CallId,
-        client_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        let Some(counter) = ctx.round_robin_counters.get(&client_name).cloned() else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "Round-robin counter not found for client: {client_name}"
-            )));
-        };
-        let val = counter.load(std::sync::atomic::Ordering::SeqCst);
-        #[allow(clippy::cast_possible_wrap)]
-        SysOpOutput::ok(val as i64)
+        SysOpOutput::ok(info.return_type.clone())
     }
 }
 
-// ============================================================================
-// Cycle Detection for Recursive Classes
-// ============================================================================
-
-/// Find all classes that participate in cycles using Tarjan's SCC algorithm.
-/// Returns the set of class names that are recursive (part of any cycle).
-fn find_recursive_classes(
-    classes: &indexmap::IndexMap<String, sys_llm::OutputClass>,
-) -> std::collections::HashSet<String> {
-    use std::collections::{HashMap, HashSet};
-
-    // Build dependency graph: for each class, find which other collected classes
-    // its fields reference.
-    let class_names: HashSet<&str> = classes.keys().map(String::as_str).collect();
-    let mut graph: HashMap<&str, HashSet<&str>> = HashMap::new();
-
-    for (name, cls) in classes {
-        let mut deps = HashSet::new();
-        for field in &cls.fields {
-            collect_class_refs(&field.field_type, &class_names, &mut deps);
-        }
-        graph.insert(name.as_str(), deps);
-    }
-
-    // Run Tarjan's SCC
-    let sccs = tarjan_scc(&graph);
-
-    // Collect all classes in any non-trivial SCC (size > 1 or self-referencing)
-    let mut recursive = HashSet::new();
-    for scc in sccs {
-        if scc.len() > 1 {
-            for name in scc {
-                recursive.insert(name.to_string());
-            }
-        } else if scc.len() == 1 {
-            let name = scc[0];
-            // Single-node SCC: check for self-edge
-            if let Some(deps) = graph.get(name) {
-                if deps.contains(name) {
-                    recursive.insert(name.to_string());
-                }
-            }
-        }
-    }
-
-    recursive
-}
-
-/// Extract class name references from a type, filtering to only collected classes.
-fn collect_class_refs<'a>(
-    ty: &'a baml_type::Ty,
-    known_classes: &std::collections::HashSet<&str>,
-    refs: &mut std::collections::HashSet<&'a str>,
-) {
-    match ty {
-        baml_type::Ty::Class(tn, _) => {
-            let name = tn.display_name.as_str();
-            if known_classes.contains(name) {
-                refs.insert(name);
-            }
-        }
-        baml_type::Ty::Optional(inner, _) | baml_type::Ty::List(inner, _) => {
-            collect_class_refs(inner, known_classes, refs);
-        }
-        baml_type::Ty::Map { key, value, .. } => {
-            collect_class_refs(key, known_classes, refs);
-            collect_class_refs(value, known_classes, refs);
-        }
-        baml_type::Ty::Union(variants, _) => {
-            for v in variants {
-                collect_class_refs(v, known_classes, refs);
-            }
-        }
-        _ => {}
+/// Wrap a `bex_vm_types::PromptAst` (Arc) into the generated `owned::llm::PromptAst`.
+fn wrap_prompt_ast(ast: bex_vm_types::PromptAst) -> io::owned::llm::PromptAst {
+    io::owned::llm::PromptAst {
+        _data: ast as std::sync::Arc<dyn std::any::Any + Send + Sync>,
     }
 }
 
-/// Tarjan's strongly connected components algorithm.
-/// Returns all SCCs (including trivial single-node ones).
-fn tarjan_scc<'a>(
-    graph: &std::collections::HashMap<&'a str, std::collections::HashSet<&'a str>>,
-) -> Vec<Vec<&'a str>> {
-    use std::collections::HashMap;
-
-    struct TarjanState<'a> {
-        index_counter: usize,
-        stack: Vec<&'a str>,
-        on_stack: HashMap<&'a str, bool>,
-        index: HashMap<&'a str, usize>,
-        lowlink: HashMap<&'a str, usize>,
-        result: Vec<Vec<&'a str>>,
-    }
-
-    fn strongconnect<'a>(
-        v: &'a str,
-        graph: &HashMap<&'a str, std::collections::HashSet<&'a str>>,
-        state: &mut TarjanState<'a>,
-    ) {
-        state.index.insert(v, state.index_counter);
-        state.lowlink.insert(v, state.index_counter);
-        state.index_counter += 1;
-        state.stack.push(v);
-        state.on_stack.insert(v, true);
-
-        if let Some(neighbors) = graph.get(v) {
-            for &w in neighbors {
-                if !state.index.contains_key(w) {
-                    strongconnect(w, graph, state);
-                    let w_low = state.lowlink[w];
-                    let v_low = state.lowlink[v];
-                    if w_low < v_low {
-                        state.lowlink.insert(v, w_low);
-                    }
-                } else if state.on_stack.get(w).copied().unwrap_or(false) {
-                    let w_idx = state.index[w];
-                    let v_low = state.lowlink[v];
-                    if w_idx < v_low {
-                        state.lowlink.insert(v, w_idx);
-                    }
-                }
-            }
-        }
-
-        if state.lowlink[v] == state.index[v] {
-            let mut scc = Vec::new();
-            loop {
-                let w = state.stack.pop().unwrap();
-                state.on_stack.insert(w, false);
-                scc.push(w);
-                if w == v {
-                    break;
-                }
-            }
-            state.result.push(scc);
-        }
-    }
-
-    let mut state = TarjanState {
-        index_counter: 0,
-        stack: Vec::new(),
-        on_stack: HashMap::new(),
-        index: HashMap::new(),
-        lowlink: HashMap::new(),
-        result: Vec::new(),
-    };
-
-    for &v in graph.keys() {
-        if !state.index.contains_key(v) {
-            strongconnect(v, graph, &mut state);
-        }
-    }
-
-    state.result
+/// Unwrap the `_data` field of a generated `owned::llm::PromptAst` back to `bex_vm_types::PromptAst`.
+#[allow(clippy::used_underscore_binding)]
+fn unwrap_prompt_ast(owned: &io::owned::llm::PromptAst) -> bex_vm_types::PromptAst {
+    owned
+        ._data
+        .clone()
+        .downcast::<baml_builtins::PromptAst>()
+        .expect("PromptAst _data should be Arc<baml_builtins::PromptAst>")
 }
 
-// ============================================================================
-// Output Format Builder
-// ============================================================================
-
-/// Walk the type graph and build an `OutputFormatContent` with all referenced
-/// class and enum definitions populated.
-fn build_output_format(
-    return_type: &baml_type::Ty,
-    class_defs: &indexmap::IndexMap<String, ClassDefinition>,
-    enum_defs: &indexmap::IndexMap<String, EnumDefinition>,
-    type_alias_defs: &indexmap::IndexMap<String, baml_type::Ty>,
-) -> sys_llm::OutputFormatContent {
-    let mut content = sys_llm::OutputFormatContent::new(return_type.clone());
-
-    let mut visited = std::collections::HashSet::new();
-    let mut stack = vec![return_type.clone()];
-
-    while let Some(ty) = stack.pop() {
-        match &ty {
-            baml_type::Ty::Class(tn, _) => {
-                let name = tn.display_name.as_str();
-                if visited.insert(name.to_string()) {
-                    if let Some(cls_def) = class_defs.get(name) {
-                        for field in &cls_def.fields {
-                            if !field.skip {
-                                stack.push(field.field_type.clone());
-                            }
-                        }
-                        content = content.with_class(sys_llm::OutputClass {
-                            name: cls_def.name.clone(),
-                            alias: cls_def.alias.clone(),
-                            description: cls_def.description.clone(),
-                            fields: cls_def
-                                .fields
-                                .iter()
-                                .filter(|f| !f.skip)
-                                .map(|f| sys_llm::OutputClassField {
-                                    name: f.name.clone(),
-                                    alias: f.alias.clone(),
-                                    field_type: f.field_type.clone(),
-                                    description: f.description.clone(),
-                                })
-                                .collect(),
-                        });
-                    }
-                }
-            }
-            baml_type::Ty::Enum(tn, _) => {
-                let name = tn.display_name.as_str();
-                if visited.insert(name.to_string()) {
-                    if let Some(enum_def) = enum_defs.get(name) {
-                        content = content.with_enum(sys_llm::OutputEnum {
-                            name: enum_def.name.clone(),
-                            alias: enum_def.alias.clone(),
-                            description: enum_def.description.clone(),
-                            values: enum_def
-                                .variants
-                                .iter()
-                                .map(|v| sys_llm::OutputEnumValue {
-                                    name: v.name.clone(),
-                                    alias: v.alias.clone(),
-                                    description: v.description.clone(),
-                                })
-                                .collect(),
-                        });
-                    }
-                }
-            }
-            baml_type::Ty::TypeAlias(tn, _) => {
-                let name = tn.display_name.as_str();
-                if visited.insert(name.to_string()) {
-                    if let Some(target) = type_alias_defs.get(name) {
-                        // Walk into the target type to collect referenced classes/enums
-                        stack.push(target.clone());
-                        // Register as recursive type alias for hoisted rendering
-                        content =
-                            content.with_recursive_type_alias(name.to_string(), target.clone());
-                    }
-                }
-            }
-            baml_type::Ty::List(inner, _) | baml_type::Ty::Optional(inner, _) => {
-                stack.push(*inner.clone());
-            }
-            baml_type::Ty::Map { key, value, .. } => {
-                stack.push(*key.clone());
-                stack.push(*value.clone());
-            }
-            baml_type::Ty::Union(variants, _) => {
-                stack.extend(variants.iter().cloned());
-            }
-            _ => {}
-        }
-    }
-
-    // Detect recursive classes and mark them for hoisting.
-    // Sort alphabetically for deterministic output order.
-    let recursive = find_recursive_classes(&content.classes);
-    let mut recursive_ordered: Vec<String> = recursive.into_iter().collect();
-    recursive_ordered.sort();
-    for name in recursive_ordered {
-        content = content.with_recursive_class(name);
-    }
-
-    content
-}
-
-// ============================================================================
-// Client Tree Builder
-// ============================================================================
-
-/// Recursively build a `LlmClient` tree from `ClientBuildMeta`.
+/// Convert the generated IO `PrimitiveClient` to the `sys_llm::baml_std::PrimitiveClient`.
 ///
-/// For primitive clients, this returns a leaf node.
-/// For composite clients (fallback/round-robin), this recursively builds
-/// sub-client trees from the metadata.
-fn build_client_tree(
-    client_name: &str,
-    metadata: &std::collections::HashMap<String, ClientBuildMeta>,
-) -> Result<bex_heap::builtin_types::owned::LlmClient, String> {
-    let Some(meta) = metadata.get(client_name) else {
-        return Err(format!("Client not found: {client_name}"));
-    };
-
-    let sub_clients = meta
-        .sub_client_names
-        .iter()
-        .map(|sub_name| build_client_tree(sub_name, metadata))
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(bex_heap::builtin_types::owned::LlmClient {
-        name: client_name.to_string(),
-        client_type: meta.client_type,
-        sub_clients,
-        retry: meta.retry_policy.clone(),
-    })
+/// With typed owned fields, both structs have the same field types so this is
+/// a direct field-by-field clone.
+fn convert_io_primitive_client(
+    io::owned::llm::PrimitiveClient {
+        name,
+        provider,
+        options,
+    }: &io::owned::llm::PrimitiveClient,
+) -> sys_llm::baml_std::PrimitiveClient {
+    sys_llm::baml_std::PrimitiveClient::new(
+        name.clone(),
+        provider.clone(),
+        sys_llm::baml_std::PrimitiveClientOptions {
+            model: options.model.clone(),
+            base_url: options.base_url.clone(),
+            default_role: options.default_role.clone(),
+            allowed_roles: options.allowed_roles.clone(),
+            remap_roles: options.remap_roles.clone(),
+            api_key: options.api_key.clone(),
+            headers: options.headers.clone(),
+            query_params: options.query_params.clone(),
+            request_body: options.request_body.clone(),
+            ..Default::default()
+        },
+    )
 }
+
+// ============================================================================
+// IoSysOpsBuilder — Compose an io::SysOps table by overriding namespaces
+// ============================================================================
+
+/// Default provider for the IO pipeline — non-LLM ops return `Unsupported`,
+/// LLM ops use the blanket `impl<T> IoClassLlmPrimitiveClient/IoNamespaceLlm for T`.
+struct DefaultIoOps;
+
+impl io::IoClassFsFile for DefaultIoOps {
+    fn read(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceFs for DefaultIoOps {
+    fn open(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::fs::File> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoClassHttpResponse for DefaultIoOps {
+    fn text(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _r: io::owned::http::Response,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceHttp for DefaultIoOps {
+    fn fetch(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _url: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn send(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _req: io::owned::http::Request,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoClassNetSocket for DefaultIoOps {
+    fn read(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::Socket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::net::Socket,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceNet for DefaultIoOps {
+    fn connect(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _addr: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::net::Socket> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceEnv for DefaultIoOps {
+    fn get(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _key: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoNamespaceSys for DefaultIoOps {
+    fn shell(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _command: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn sleep(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _ms: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn panic(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _msg: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
+impl io::IoPackageBaml for DefaultIoOps {}
+
+/// Builder for composing an [`io::SysOps`] table by overriding namespaces.
+///
+/// Starts with all operations returning `Unsupported` (except LLM, which uses
+/// the blanket implementation), and allows selectively overriding namespaces:
+///
+/// ```ignore
+/// let ops = IoSysOpsBuilder::new()
+///     .with_http_instance(Arc::new(my_http_impl))
+///     .with_env_instance(Arc::new(my_env_impl))
+///     .build();
+/// ```
+pub struct IoSysOpsBuilder {
+    inner: io::SysOps,
+}
+
+impl IoSysOpsBuilder {
+    /// Create a new builder with all operations defaulting to `Unsupported`,
+    /// except LLM ops which use the real blanket implementation.
+    pub fn new() -> Self {
+        Self {
+            inner: io::SysOps::from_impl(DefaultIoOps),
+        }
+    }
+
+    /// Consume the builder and return the composed [`io::SysOps`] table.
+    pub fn build(self) -> io::SysOps {
+        self.inner
+    }
+
+    /// Override the `env` namespace with a pre-built instance.
+    #[must_use]
+    pub fn with_env_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceEnv + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_env_get = {
+            let t = instance;
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_env_get(heap, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `env` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_env<T: io::IoNamespaceEnv + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_env_instance(Arc::new(T::default()))
+    }
+
+    /// Override the `fs` namespace (including `fs.File` methods) with a pre-built instance.
+    #[must_use]
+    pub fn with_fs_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceFs + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_fs_open = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_open(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_read = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_file_read(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_file_close = {
+            let t = instance;
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_fs_file_close(heap, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `fs` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_fs<T: io::IoNamespaceFs + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_fs_instance(Arc::new(T::default()))
+    }
+
+    /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.
+    #[must_use]
+    pub fn with_http_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_http_fetch = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_http_fetch(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_send = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_http_send(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_http_response_text = {
+            let t = instance;
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_http_response_text(heap, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `http` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_http<T: io::IoNamespaceHttp + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_http_instance(Arc::new(T::default()))
+    }
+
+    /// Override the `net` namespace (including `net.Socket` methods) with a pre-built instance.
+    #[must_use]
+    pub fn with_net_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceNet + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_net_connect = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_net_connect(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_socket_read = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_net_socket_read(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_net_socket_close = {
+            let t = instance;
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_net_socket_close(heap, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `net` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_net<T: io::IoNamespaceNet + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_net_instance(Arc::new(T::default()))
+    }
+
+    /// Override the `sys` namespace with a pre-built instance.
+    #[must_use]
+    pub fn with_sys_instance(
+        mut self,
+        instance: Arc<dyn io::IoNamespaceSys + Send + Sync + 'static>,
+    ) -> Self {
+        self.inner.baml_sys_shell = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_sys_shell(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_sleep = {
+            let t = instance.clone();
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_sys_sleep(heap, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_panic = {
+            let t = instance;
+            Arc::new(move |heap, args, ctx, call_id| {
+                t.__glue_baml_sys_panic(heap, args, ctx, call_id)
+            })
+        };
+        self
+    }
+
+    /// Override the `sys` namespace with a default-constructible type.
+    #[must_use]
+    pub fn with_sys<T: io::IoNamespaceSys + Default + Send + Sync + 'static>(self) -> Self {
+        self.with_sys_instance(Arc::new(T::default()))
+    }
+}
+
+impl Default for IoSysOpsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// Re-export io::SysOps as the primary SysOps type.
+pub use io::SysOps;
+
+/// Builder for composing a [`SysOps`] table by overriding namespaces.
+///
+/// Starts with all operations returning `Unsupported` (except LLM, which uses
+/// the blanket implementation), and allows selectively overriding namespaces.
+pub type SysOpsBuilder = IoSysOpsBuilder;
 
 // ============================================================================
 // Async Completion Utilities
@@ -1323,7 +1251,7 @@ mod tests {
 
     #[test]
     fn contract_rejects_undeclared_category() {
-        let op = bex_vm_types::sys_op_for_path("env.get").unwrap();
+        let op = bex_vm_types::sys_op_for_path("baml.env.get").unwrap();
         let err = OpErrorKind::LlmClientError {
             message: "bad".into(),
         };
@@ -1351,7 +1279,7 @@ mod tests {
             SysOp::BamlFsOpen,
             SysOp::BamlHttpFetch,
             SysOp::BamlSysPanic,
-            SysOp::EnvGet,
+            SysOp::BamlEnvGet,
         ];
         for op in ops {
             let cats = op.allowed_error_categories();
@@ -1397,566 +1325,6 @@ mod tests {
         ];
         for v in &variants {
             let _ = v.category();
-        }
-    }
-
-    // ========================================================================
-    // build_output_format tests
-    // ========================================================================
-
-    fn make_class_defs(defs: Vec<ClassDefinition>) -> indexmap::IndexMap<String, ClassDefinition> {
-        defs.into_iter().map(|d| (d.name.clone(), d)).collect()
-    }
-
-    fn make_enum_defs(defs: Vec<EnumDefinition>) -> indexmap::IndexMap<String, EnumDefinition> {
-        defs.into_iter().map(|d| (d.name.clone(), d)).collect()
-    }
-
-    #[test]
-    fn output_format_primitive_int() {
-        let ty = baml_type::Ty::Int {
-            attr: baml_type::TyAttr::default(),
-        };
-        let content = build_output_format(
-            &ty,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-        );
-        let rendered = content.render(&sys_llm::RenderOptions::default()).unwrap();
-        assert_eq!(rendered, Some("Answer as an int".to_string()));
-    }
-
-    #[test]
-    fn output_format_string_returns_none() {
-        let ty = baml_type::Ty::String {
-            attr: baml_type::TyAttr::default(),
-        };
-        let content = build_output_format(
-            &ty,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-        );
-        let rendered = content.render(&sys_llm::RenderOptions::default()).unwrap();
-        assert_eq!(rendered, None);
-    }
-
-    #[test]
-    fn output_format_class_renders_schema() {
-        let class_defs = make_class_defs(vec![ClassDefinition {
-            name: "Person".to_string(),
-            description: None,
-            alias: None,
-            fields: vec![
-                ClassFieldDefinition {
-                    name: "name".to_string(),
-                    field_type: baml_type::Ty::String {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    description: None,
-                    alias: None,
-                    skip: false,
-                },
-                ClassFieldDefinition {
-                    name: "age".to_string(),
-                    field_type: baml_type::Ty::Int {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    description: None,
-                    alias: None,
-                    skip: false,
-                },
-            ],
-        }]);
-
-        let ty = baml_type::Ty::Class(
-            baml_type::TypeName::local("Person".into()),
-            baml_type::TyAttr::default(),
-        );
-        let content = build_output_format(
-            &ty,
-            &class_defs,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-        );
-        let rendered = content.render(&sys_llm::RenderOptions::default()).unwrap();
-        assert!(rendered.is_some());
-        let text = rendered.unwrap();
-        assert!(text.contains("name: string"), "got: {text}");
-        assert!(text.contains("age: int"), "got: {text}");
-    }
-
-    #[test]
-    fn output_format_enum_renders_values() {
-        let enum_defs = make_enum_defs(vec![EnumDefinition {
-            name: "Color".to_string(),
-            description: None,
-            alias: None,
-            variants: vec![
-                EnumVariantDefinition {
-                    name: "Red".to_string(),
-                    description: None,
-                    alias: None,
-                },
-                EnumVariantDefinition {
-                    name: "Green".to_string(),
-                    description: Some("Like grass".to_string()),
-                    alias: None,
-                },
-                EnumVariantDefinition {
-                    name: "Blue".to_string(),
-                    description: None,
-                    alias: None,
-                },
-            ],
-        }]);
-
-        let ty = baml_type::Ty::Enum(
-            baml_type::TypeName::local("Color".into()),
-            baml_type::TyAttr::default(),
-        );
-        let content = build_output_format(
-            &ty,
-            &indexmap::IndexMap::new(),
-            &enum_defs,
-            &indexmap::IndexMap::new(),
-        );
-        let rendered = content.render(&sys_llm::RenderOptions::default()).unwrap();
-        assert!(rendered.is_some());
-        let text = rendered.unwrap();
-        assert!(text.contains("Red"), "got: {text}");
-        assert!(text.contains("- Green: Like grass"), "got: {text}");
-        assert!(text.contains("Blue"), "got: {text}");
-    }
-
-    #[test]
-    fn output_format_nested_class_resolves() {
-        let class_defs = make_class_defs(vec![
-            ClassDefinition {
-                name: "Address".to_string(),
-                description: None,
-                alias: None,
-                fields: vec![ClassFieldDefinition {
-                    name: "city".to_string(),
-                    field_type: baml_type::Ty::String {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    description: None,
-                    alias: None,
-                    skip: false,
-                }],
-            },
-            ClassDefinition {
-                name: "Person".to_string(),
-                description: None,
-                alias: None,
-                fields: vec![ClassFieldDefinition {
-                    name: "address".to_string(),
-                    field_type: baml_type::Ty::Class(
-                        baml_type::TypeName::local("Address".into()),
-                        baml_type::TyAttr::default(),
-                    ),
-                    description: None,
-                    alias: None,
-                    skip: false,
-                }],
-            },
-        ]);
-
-        let ty = baml_type::Ty::List(
-            Box::new(baml_type::Ty::Class(
-                baml_type::TypeName::local("Person".into()),
-                baml_type::TyAttr::default(),
-            )),
-            baml_type::TyAttr::default(),
-        );
-        let content = build_output_format(
-            &ty,
-            &class_defs,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-        );
-        // Both Person and Address should be resolved
-        assert!(content.find_class("Person").is_some());
-        assert!(content.find_class("Address").is_some());
-    }
-
-    #[test]
-    fn output_format_self_referencing_class_no_infinite_loop() {
-        let class_defs = make_class_defs(vec![ClassDefinition {
-            name: "Node".to_string(),
-            description: None,
-            alias: None,
-            fields: vec![
-                ClassFieldDefinition {
-                    name: "value".to_string(),
-                    field_type: baml_type::Ty::Int {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    description: None,
-                    alias: None,
-                    skip: false,
-                },
-                ClassFieldDefinition {
-                    name: "child".to_string(),
-                    field_type: baml_type::Ty::Optional(
-                        Box::new(baml_type::Ty::Class(
-                            baml_type::TypeName::local("Node".into()),
-                            baml_type::TyAttr::default(),
-                        )),
-                        baml_type::TyAttr::default(),
-                    ),
-                    description: None,
-                    alias: None,
-                    skip: false,
-                },
-            ],
-        }]);
-
-        let ty = baml_type::Ty::Class(
-            baml_type::TypeName::local("Node".into()),
-            baml_type::TyAttr::default(),
-        );
-        // Should not infinite loop
-        let content = build_output_format(
-            &ty,
-            &class_defs,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-        );
-        assert!(content.find_class("Node").is_some());
-    }
-
-    // ========================================================================
-    // Cycle detection unit tests
-    // ========================================================================
-
-    fn mk_output_class(name: &str, fields: Vec<(&str, baml_type::Ty)>) -> sys_llm::OutputClass {
-        sys_llm::OutputClass {
-            name: name.to_string(),
-            description: None,
-            alias: None,
-            fields: fields
-                .into_iter()
-                .map(|(n, t)| sys_llm::OutputClassField {
-                    name: n.to_string(),
-                    alias: None,
-                    field_type: t,
-                    description: None,
-                })
-                .collect(),
-        }
-    }
-
-    fn ty_int() -> baml_type::Ty {
-        baml_type::Ty::Int {
-            attr: baml_type::TyAttr::default(),
-        }
-    }
-    fn ty_class(name: &str) -> baml_type::Ty {
-        baml_type::Ty::Class(
-            baml_type::TypeName::local(name.into()),
-            baml_type::TyAttr::default(),
-        )
-    }
-    fn ty_optional(inner: baml_type::Ty) -> baml_type::Ty {
-        baml_type::Ty::Optional(Box::new(inner), baml_type::TyAttr::default())
-    }
-
-    #[test]
-    fn test_find_recursive_classes_non_recursive() {
-        let mut classes = indexmap::IndexMap::new();
-        classes.insert("A".to_string(), mk_output_class("A", vec![("x", ty_int())]));
-        classes.insert("B".to_string(), mk_output_class("B", vec![("y", ty_int())]));
-        let recursive = find_recursive_classes(&classes);
-        assert!(recursive.is_empty());
-    }
-
-    #[test]
-    fn test_find_recursive_classes_self_referential() {
-        let mut classes = indexmap::IndexMap::new();
-        classes.insert(
-            "Node".to_string(),
-            mk_output_class(
-                "Node",
-                vec![("data", ty_int()), ("next", ty_optional(ty_class("Node")))],
-            ),
-        );
-        let recursive = find_recursive_classes(&classes);
-        assert_eq!(recursive.len(), 1);
-        assert!(recursive.contains("Node"));
-    }
-
-    #[test]
-    fn test_find_recursive_classes_mutual() {
-        let mut classes = indexmap::IndexMap::new();
-        classes.insert(
-            "A".to_string(),
-            mk_output_class("A", vec![("b", ty_class("B"))]),
-        );
-        classes.insert(
-            "B".to_string(),
-            mk_output_class("B", vec![("a", ty_class("A"))]),
-        );
-        let recursive = find_recursive_classes(&classes);
-        assert_eq!(recursive.len(), 2);
-        assert!(recursive.contains("A"));
-        assert!(recursive.contains("B"));
-    }
-
-    #[test]
-    fn test_find_recursive_classes_referencing_recursive() {
-        // LinkedList references Node, but LinkedList itself is not recursive
-        let mut classes = indexmap::IndexMap::new();
-        classes.insert(
-            "Node".to_string(),
-            mk_output_class(
-                "Node",
-                vec![("data", ty_int()), ("next", ty_optional(ty_class("Node")))],
-            ),
-        );
-        classes.insert(
-            "LinkedList".to_string(),
-            mk_output_class("LinkedList", vec![("head", ty_optional(ty_class("Node")))]),
-        );
-        let recursive = find_recursive_classes(&classes);
-        assert_eq!(recursive.len(), 1);
-        assert!(recursive.contains("Node"));
-        assert!(!recursive.contains("LinkedList"));
-    }
-
-    #[test]
-    fn test_find_recursive_classes_chain_no_cycle() {
-        let mut classes = indexmap::IndexMap::new();
-        classes.insert(
-            "A".to_string(),
-            mk_output_class("A", vec![("b", ty_class("B"))]),
-        );
-        classes.insert(
-            "B".to_string(),
-            mk_output_class("B", vec![("c", ty_class("C"))]),
-        );
-        classes.insert("C".to_string(), mk_output_class("C", vec![("x", ty_int())]));
-        let recursive = find_recursive_classes(&classes);
-        assert!(recursive.is_empty());
-    }
-
-    // ========================================================================
-    // Integration test: build_output_format detects recursive classes
-    // ========================================================================
-
-    #[test]
-    fn test_build_output_format_detects_self_referential() {
-        let class_defs = indexmap::IndexMap::from([(
-            "Node".to_string(),
-            ClassDefinition {
-                name: "Node".to_string(),
-                description: None,
-                alias: None,
-                fields: vec![
-                    ClassFieldDefinition {
-                        name: "data".to_string(),
-                        field_type: ty_int(),
-                        description: None,
-                        alias: None,
-                        skip: false,
-                    },
-                    ClassFieldDefinition {
-                        name: "next".to_string(),
-                        field_type: ty_optional(ty_class("Node")),
-                        description: None,
-                        alias: None,
-                        skip: false,
-                    },
-                ],
-            },
-        )]);
-
-        let ty = ty_class("Node");
-        let content = build_output_format(
-            &ty,
-            &class_defs,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-        );
-        assert!(content.recursive_classes.contains("Node"));
-    }
-
-    #[test]
-    fn test_build_output_format_detects_mutual_recursion() {
-        let class_defs = indexmap::IndexMap::from([
-            (
-                "Tree".to_string(),
-                ClassDefinition {
-                    name: "Tree".to_string(),
-                    description: None,
-                    alias: None,
-                    fields: vec![
-                        ClassFieldDefinition {
-                            name: "data".to_string(),
-                            field_type: ty_int(),
-                            description: None,
-                            alias: None,
-                            skip: false,
-                        },
-                        ClassFieldDefinition {
-                            name: "children".to_string(),
-                            field_type: ty_class("Forest"),
-                            description: None,
-                            alias: None,
-                            skip: false,
-                        },
-                    ],
-                },
-            ),
-            (
-                "Forest".to_string(),
-                ClassDefinition {
-                    name: "Forest".to_string(),
-                    description: None,
-                    alias: None,
-                    fields: vec![ClassFieldDefinition {
-                        name: "trees".to_string(),
-                        field_type: baml_type::Ty::List(
-                            Box::new(ty_class("Tree")),
-                            baml_type::TyAttr::default(),
-                        ),
-                        description: None,
-                        alias: None,
-                        skip: false,
-                    }],
-                },
-            ),
-        ]);
-
-        let ty = ty_class("Tree");
-        let content = build_output_format(
-            &ty,
-            &class_defs,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-        );
-        assert!(content.recursive_classes.contains("Tree"));
-        assert!(content.recursive_classes.contains("Forest"));
-    }
-
-    #[test]
-    fn test_build_output_format_full_pipeline_renders_hoisted() {
-        let class_defs = indexmap::IndexMap::from([
-            (
-                "Node".to_string(),
-                ClassDefinition {
-                    name: "Node".to_string(),
-                    description: None,
-                    alias: None,
-                    fields: vec![
-                        ClassFieldDefinition {
-                            name: "data".to_string(),
-                            field_type: ty_int(),
-                            description: None,
-                            alias: None,
-                            skip: false,
-                        },
-                        ClassFieldDefinition {
-                            name: "next".to_string(),
-                            field_type: ty_optional(ty_class("Node")),
-                            description: None,
-                            alias: None,
-                            skip: false,
-                        },
-                    ],
-                },
-            ),
-            (
-                "LinkedList".to_string(),
-                ClassDefinition {
-                    name: "LinkedList".to_string(),
-                    description: None,
-                    alias: None,
-                    fields: vec![
-                        ClassFieldDefinition {
-                            name: "head".to_string(),
-                            field_type: ty_optional(ty_class("Node")),
-                            description: None,
-                            alias: None,
-                            skip: false,
-                        },
-                        ClassFieldDefinition {
-                            name: "len".to_string(),
-                            field_type: ty_int(),
-                            description: None,
-                            alias: None,
-                            skip: false,
-                        },
-                    ],
-                },
-            ),
-        ]);
-
-        let ty = ty_class("LinkedList");
-        let content = build_output_format(
-            &ty,
-            &class_defs,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-        );
-        let rendered = content.render(&sys_llm::RenderOptions::default()).unwrap();
-
-        let rendered = rendered.unwrap();
-        // Node should be hoisted (defined at top, referenced by name)
-        assert!(rendered.contains("Node {"));
-        assert!(rendered.contains("head: Node or null,"));
-        // LinkedList should be inline (not hoisted)
-        assert!(!rendered.contains("LinkedList {"));
-    }
-
-    // ========================================================================
-    // Tarjan SCC unit tests
-    // ========================================================================
-
-    #[test]
-    fn test_tarjan_self_cycle() {
-        use std::collections::{HashMap, HashSet};
-        let mut graph: HashMap<&str, HashSet<&str>> = HashMap::new();
-        graph.insert("A", HashSet::from(["A"]));
-        let sccs = tarjan_scc(&graph);
-        assert_eq!(sccs.len(), 1);
-        assert_eq!(sccs[0], vec!["A"]);
-    }
-
-    #[test]
-    fn test_tarjan_multi_scc() {
-        use std::collections::{HashMap, HashSet};
-        let mut graph: HashMap<&str, HashSet<&str>> = HashMap::new();
-        graph.insert("A", HashSet::from(["B"]));
-        graph.insert("B", HashSet::from(["A", "C"]));
-        graph.insert("C", HashSet::from(["D"]));
-        graph.insert("D", HashSet::from(["C"]));
-        let sccs = tarjan_scc(&graph);
-        // Should have 2 SCCs: {A, B} and {C, D}
-        assert_eq!(sccs.len(), 2);
-        let mut scc_sets: Vec<HashSet<&str>> = sccs
-            .iter()
-            .map(|scc| scc.iter().copied().collect::<HashSet<&str>>())
-            .collect();
-        scc_sets.sort_by_key(std::collections::HashSet::len);
-        assert_eq!(scc_sets[0], HashSet::from(["C", "D"]));
-        assert_eq!(scc_sets[1], HashSet::from(["A", "B"]));
-    }
-
-    #[test]
-    fn test_tarjan_no_cycles() {
-        use std::collections::{HashMap, HashSet};
-        let mut graph: HashMap<&str, HashSet<&str>> = HashMap::new();
-        graph.insert("A", HashSet::from(["B"]));
-        graph.insert("B", HashSet::from(["C"]));
-        graph.insert("C", HashSet::new());
-        let sccs = tarjan_scc(&graph);
-        // All SCCs should be trivial (size 1)
-        assert_eq!(sccs.len(), 3);
-        for scc in &sccs {
-            assert_eq!(scc.len(), 1);
         }
     }
 }

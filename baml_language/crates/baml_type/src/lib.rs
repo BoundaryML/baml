@@ -14,11 +14,10 @@ use std::{
 pub use baml_base::{Literal, MediaKind, Name, Span};
 
 mod attr;
-mod convert;
 mod defs;
+pub mod simplify_sap;
 pub mod typetag;
 pub use attr::*;
-pub use convert::{convert_tir_ty, fqn_to_type_name, sanitize_for_runtime};
 pub use defs::*;
 
 /// A lightweight name type for class/enum/type-alias references.
@@ -30,9 +29,8 @@ pub use defs::*;
 pub struct TypeName {
     /// Short name: "Response", "User"
     pub name: Name,
-    /// Module path segments: empty for local types, ["http"] for baml.http.Response
-    // TODO(perf): module_path is unused by all post-TIR consumers. Could be simplified
-    // to just { name, display_name } in a follow-up to reduce TypeName from 72 to 48 bytes.
+    /// Module path segments: empty for local types, ["baml", "http"] for baml.http.Response.
+    /// Used by runtime maps (SysOpContext) to distinguish `baml.SomeType` from local `SomeType`.
     pub module_path: Vec<Name>,
     /// Pre-computed display string: "baml.http.Response" for builtins, "User" for locals.
     /// Does NOT participate in PartialEq/Hash.
@@ -46,6 +44,24 @@ impl TypeName {
             display_name: name.clone(),
             name,
             module_path: vec![],
+        }
+    }
+
+    /// Create a TypeName from a dotted path like `"baml.http.Response"`.
+    ///
+    /// The last segment becomes `name`, everything before it becomes `module_path`,
+    /// and `display_name` is the full dotted path.
+    pub fn from_dotted_path(path: &str) -> Self {
+        let segments: Vec<&str> = path.split('.').collect();
+        let name = Name::new(*segments.last().expect("path must be non-empty"));
+        let module_path = segments[..segments.len() - 1]
+            .iter()
+            .map(|s| Name::new(*s))
+            .collect();
+        Self {
+            display_name: Name::new(path),
+            name,
+            module_path,
         }
     }
 }
@@ -103,6 +119,9 @@ pub enum Ty {
     Literal(Literal, TyAttr),
     Class(TypeName, TyAttr),
     Enum(TypeName, TyAttr),
+    /// A specific enum variant — `Status.HttpError`.
+    /// Compiler-only: should not reach runtime.
+    EnumVariant(TypeName, Name, TyAttr),
     Optional(Box<Ty>, TyAttr),
     List(Box<Ty>, TyAttr),
     Map {
@@ -160,6 +179,11 @@ pub enum Ty {
     BuiltinUnknown {
         attr: TyAttr,
     },
+    /// A future handle — the result of `dispatch_future` before `await`.
+    ///
+    /// The inner type is the type the future resolves to upon `await`.
+    /// Compiler-only: should never reach runtime (futures are awaited in MIR).
+    Future(Box<Ty>, TyAttr),
 }
 
 // NOTE: `Unknown`, `Error`, and `Never` are intentionally excluded from this enum.
@@ -174,14 +198,10 @@ impl Ty {
     // --- TyAttr accessor ---
 
     /// Replace the TyAttr on this type, returning a new Ty with the given attr.
-    /// Short-circuits if the attr is default (avoids unnecessary cloning).
     ///
     /// Used during HIR lowering to apply SAP attributes (sap_in_progress) to the
     /// resolved type of generated stream_* class fields.
     pub fn with_attr(self, attr: TyAttr) -> Ty {
-        if attr.is_default() {
-            return self;
-        }
         match self {
             Ty::Int { .. } => Ty::Int { attr },
             Ty::Float { .. } => Ty::Float { attr },
@@ -194,6 +214,7 @@ impl Ty {
             Ty::Literal(lit, _) => Ty::Literal(lit, attr),
             Ty::Class(tn, _) => Ty::Class(tn, attr),
             Ty::Enum(tn, _) => Ty::Enum(tn, attr),
+            Ty::EnumVariant(tn, v, _) => Ty::EnumVariant(tn, v, attr),
             Ty::Optional(inner, _) => Ty::Optional(inner, attr),
             Ty::List(inner, _) => Ty::List(inner, attr),
             Ty::Map { key, value, .. } => Ty::Map { key, value, attr },
@@ -202,6 +223,7 @@ impl Ty {
             Ty::TypeAlias(tn, _) => Ty::TypeAlias(tn, attr),
             Ty::Function { params, ret, .. } => Ty::Function { params, ret, attr },
             Ty::WatchAccessor(inner, _) => Ty::WatchAccessor(inner, attr),
+            Ty::Future(inner, _) => Ty::Future(inner, attr),
         }
     }
 
@@ -221,12 +243,14 @@ impl Ty {
             | Ty::Literal(_, attr)
             | Ty::Class(_, attr)
             | Ty::Enum(_, attr)
+            | Ty::EnumVariant(_, _, attr)
             | Ty::Optional(_, attr)
             | Ty::List(_, attr)
             | Ty::Union(_, attr)
             | Ty::Opaque(_, attr)
             | Ty::TypeAlias(_, attr)
-            | Ty::WatchAccessor(_, attr) => attr,
+            | Ty::WatchAccessor(_, attr)
+            | Ty::Future(_, attr) => attr,
         }
     }
 
@@ -287,6 +311,25 @@ impl Ty {
     /// `Class(name)` with default attributes (local module path).
     pub fn class(name: &str) -> Self {
         Ty::Class(TypeName::local(name.into()), TyAttr::default())
+    }
+
+    /// `Class(name)` under the `"user"` package (matches compiler2 output for user-defined classes).
+    pub fn user_class(name: &str) -> Self {
+        Ty::Class(
+            TypeName {
+                display_name: Name::new(name),
+                name: Name::new(name),
+                module_path: vec![Name::new("user")],
+            },
+            TyAttr::default(),
+        )
+    }
+
+    /// `unknown` with default attributes.
+    pub fn unknown() -> Self {
+        Ty::BuiltinUnknown {
+            attr: TyAttr::default(),
+        }
     }
 
     // --- Opaque type constructors ---
@@ -452,6 +495,7 @@ impl Ty {
                 | Ty::Void { .. }
                 | Ty::WatchAccessor(..)
                 | Ty::BuiltinUnknown { .. }
+                | Ty::Future(..)
         )
     }
 
@@ -485,6 +529,9 @@ impl Ty {
                 }
                 ret.validate_runtime()
             }
+            Ty::Future(_, _) => {
+                Err("Future type should not reach runtime (must be awaited)".to_string())
+            }
             Ty::Int { .. }
             | Ty::Float { .. }
             | Ty::String { .. }
@@ -494,6 +541,7 @@ impl Ty {
             | Ty::Literal(..)
             | Ty::Class(..)
             | Ty::Enum(..)
+            | Ty::EnumVariant(..)
             | Ty::Opaque(..) => Ok(()),
         }
     }
@@ -516,6 +564,7 @@ impl fmt::Display for Ty {
             },
             Ty::Class(tn, _) => write!(f, "{tn}"),
             Ty::Enum(tn, _) => write!(f, "{tn}"),
+            Ty::EnumVariant(tn, variant, _) => write!(f, "{tn}.{variant}"),
             Ty::Opaque(tn, _) => write!(f, "{tn}"),
             Ty::TypeAlias(tn, _) => write!(f, "{tn}"),
             Ty::Optional(inner, _) => write!(f, "{inner}?"),
@@ -536,6 +585,7 @@ impl fmt::Display for Ty {
             Ty::Void { .. } => write!(f, "void"),
             Ty::WatchAccessor(inner, _) => write!(f, "{inner}.$watch"),
             Ty::BuiltinUnknown { .. } => write!(f, "unknown"),
+            Ty::Future(inner, _) => write!(f, "future<{inner}>"),
         }
     }
 }

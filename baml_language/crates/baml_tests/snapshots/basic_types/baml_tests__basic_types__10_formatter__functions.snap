@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function GetUser(id: int) -> User {
-    client: GPT4
+    client: "openai/gpt-4o"
     prompt: #"Get user {{id}}"#
 }
 

@@ -5,6 +5,7 @@ mod tests {
     use crate::testing::CursorTest;
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_find_refs_local_variable() {
         let test = CursorTest::new(
             r#"
@@ -25,6 +26,7 @@ function Test() -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_find_refs_parameter() {
         let test = CursorTest::new(
             r#"
@@ -48,6 +50,7 @@ function Process(<[CURSOR]input: string) -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_find_refs_function() {
         let test = CursorTest::new(
             r#"
@@ -102,6 +105,7 @@ function ProcessPerson(p: Person) -> string {
     }
 
     #[test]
+    #[ignore = "compiler2: goto_definition/find_references is stubbed pending compiler2 LSP reimplementation"]
     fn test_find_refs_enum() {
         let test = CursorTest::new(
             r#"

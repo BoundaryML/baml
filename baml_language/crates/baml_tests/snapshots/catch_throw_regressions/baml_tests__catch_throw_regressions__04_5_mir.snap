@@ -1,436 +1,280 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== MIR ===
-fn AlwaysThrowsStatus(n: int) -> Status {
+=== MIR2 ===
+fn user.AlwaysThrowsStatus(n: int) -> Status {
     // Locals:
-    let _0: Status // return
+    let _0: Status // _0 // return
     let _1: int // n // param
-    let _2: "http_error"
-    let _3: 404
 
     bb0: {
-        switch copy _1 [0: bb3, otherwise: bb4];
+        switch copy _1 [0: bb2, otherwise: bb1];
     }
 
     bb1: {
-        return;
+        throw const 404_i64;
     }
 
     bb2: {
-        goto -> bb1;
-    }
-
-    bb3: {
-        _2 = const "http_error";
-        throw copy _2;
-    }
-
-    bb4: {
-        _3 = const 404_i64;
-        throw copy _3;
-    }
-
-    bb5: {
-        _0 = const null;
-        goto -> bb2;
-    }
-
-    bb6: {
-        _0 = const null;
-        goto -> bb2;
+        throw const "http_error";
     }
 }
 
-fn ThrowsAllStatusVariants(n: int) -> Status {
+fn user.CatchAllStatusVariants(n: int) -> string {
     // Locals:
-    let _0: Status // return
-    let _1: int // n // param
-    let _2: Status
-    let _3: Status
-    let _4: Status
-    let _5: Status
-
-    bb0: {
-        switch copy _1 [1: bb3, 2: bb4, 3: bb5, otherwise: bb6];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-
-    bb3: {
-        _2 = const Status.HttpError;
-        throw copy _2;
-    }
-
-    bb4: {
-        _3 = const Status.IndexError;
-        throw copy _3;
-    }
-
-    bb5: {
-        _4 = const Status.AuthError;
-        throw copy _4;
-    }
-
-    bb6: {
-        _5 = const Status.SomeOtherError;
-        throw copy _5;
-    }
-
-    bb7: {
-        _0 = const null;
-        goto -> bb2;
-    }
-
-    bb8: {
-        _0 = const null;
-        goto -> bb2;
-    }
-
-    bb9: {
-        _0 = const null;
-        goto -> bb2;
-    }
-
-    bb10: {
-        _0 = const null;
-        goto -> bb2;
-    }
-}
-
-fn CatchAlwaysThrows(n: int) -> string {
-    // Locals:
-    let _0: string // return
+    let _0: string // _0 // return
     let _1: int // n // param
     let _2: unknown
-    let _3: unknown
-    let _4: unknown // e2
+    let _3: bool
+    let _4: bool
     let _5: bool
-    let _6: unknown // e
-    let _7: bool
-    let _8: (int) -> Status
-    let _9: int
+    let _6: bool
 
     bb0: {
-        _8 = const fn WrapperAlwaysThrows;
-        _9 = copy _1;
-        _0 = call copy _8(copy _9) -> [bb11, unwind: bb3];
+        _0 = call const fn user.ThrowsAllStatusVariants(copy _1) -> [bb10, unwind: bb1];
     }
 
     bb1: {
-        return;
+        _3 = copy _2 == const user.Status.HttpError;
+        branch copy _3 -> [bb9, bb2];
     }
 
     bb2: {
-        goto -> bb1;
+        _4 = copy _2 == const user.Status.IndexError;
+        branch copy _4 -> [bb8, bb3];
     }
 
     bb3: {
-        _6 = copy _2;
-        _7 = is_type(copy _2, String { attr: TyAttr(None) });
-        branch copy _7 -> [bb10, bb8];
+        _5 = copy _2 == const user.Status.AuthError;
+        branch copy _5 -> [bb7, bb4];
     }
 
     bb4: {
-        _4 = copy _3;
-        _5 = is_type(copy _3, Int { attr: TyAttr(None) });
-        branch copy _5 -> [bb7, bb5];
+        _6 = copy _2 == const user.Status.SomeOtherError;
+        branch copy _6 -> [bb6, bb5];
     }
 
     bb5: {
-        throw copy _3;
+        throw copy _2;
     }
 
     bb6: {
-        _0 = const "index!";
-        goto -> bb2;
+        _0 = const "other!";
+        goto -> bb11;
     }
 
     bb7: {
-        goto -> bb6;
+        _0 = const "auth!";
+        goto -> bb11;
     }
 
     bb8: {
-        _3 = copy _2;
-        goto -> bb4;
+        _0 = const "index!";
+        goto -> bb11;
     }
 
     bb9: {
         _0 = const "http!";
-        goto -> bb2;
+        goto -> bb11;
     }
 
     bb10: {
-        goto -> bb9;
+        goto -> bb11;
     }
 
     bb11: {
-        goto -> bb2;
-    }
-}
-
-fn RecA(n: int) -> string {
-    // Locals:
-    let _0: string // return
-    let _1: int // n // param
-    let _2: "boom"
-    let _3: (int) -> string
-    let _4: int
-
-    bb0: {
-        switch copy _1 [0: bb3, otherwise: bb4];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-
-    bb3: {
-        _2 = const "boom";
-        throw copy _2;
-    }
-
-    bb4: {
-        _3 = const fn RecB;
-        _4 = copy _1;
-        _0 = call copy _3(copy _4) -> [bb6];
-    }
-
-    bb5: {
-        _0 = const null;
-        goto -> bb2;
-    }
-
-    bb6: {
-        goto -> bb2;
-    }
-}
-
-fn WrapperAlwaysThrows(n: int) -> Status {
-    // Locals:
-    let _0: Status // return
-    let _1: int // n // param
-    let _2: (int) -> Status
-    let _3: int
-
-    bb0: {
-        _2 = const fn AlwaysThrowsStatus;
-        _3 = copy _1;
-        _0 = call copy _2(copy _3) -> [bb2];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-}
-
-fn UnreachableTailStillChecked() -> string {
-    // Locals:
-    let _0: string // return
-    let _1: void
-    let _2: "error"
-    let _3: 123 // x
-    let _4: int
-
-    bb0: {
-        _2 = const "error";
-        throw copy _2;
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        _1 = const null;
-        _3 = const 123_i64;
-        _4 = copy _3;
-        _0 = copy _4.0;
-        goto -> bb1;
-    }
-}
-
-fn RecB(n: int) -> string {
-    // Locals:
-    let _0: string // return
-    let _1: int // n // param
-    let _2: (int) -> string
-    let _3: int
-
-    bb0: {
-        _2 = const fn RecA;
-        _3 = copy _1;
-        _0 = call copy _2(copy _3) -> [bb2];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-}
-
-fn CatchAllStatusVariants(n: int) -> string {
-    // Locals:
-    let _0: string // return
-    let _1: int // n // param
-    let _2: unknown
-    let _3: unknown
-    let _4: unknown
-    let _5: unknown
-    let _6: unknown // e
-    let _7: bool
-    let _8: unknown // e
-    let _9: bool
-    let _10: unknown // e
-    let _11: bool
-    let _12: unknown // e
-    let _13: bool
-    let _14: (int) -> Status
-    let _15: int
-
-    bb0: {
-        _14 = const fn ThrowsAllStatusVariants;
-        _15 = copy _1;
-        _0 = call copy _14(copy _15) -> [bb15, unwind: bb3];
-    }
-
-    bb1: {
-        return;
-    }
-
-    bb2: {
-        goto -> bb1;
-    }
-
-    bb3: {
-        _12 = copy _2;
-        _13 = copy _2 == const Status.HttpError;
-        branch copy _13 -> [bb14, bb13];
-    }
-
-    bb4: {
-        _10 = copy _3;
-        _11 = copy _3 == const Status.IndexError;
-        branch copy _11 -> [bb12, bb11];
-    }
-
-    bb5: {
-        _8 = copy _4;
-        _9 = copy _4 == const Status.AuthError;
-        branch copy _9 -> [bb10, bb9];
-    }
-
-    bb6: {
-        _6 = copy _5;
-        _7 = copy _5 == const Status.SomeOtherError;
-        branch copy _7 -> [bb8, bb7];
-    }
-
-    bb7: {
-        throw copy _5;
-    }
-
-    bb8: {
-        _0 = const "other!";
-        goto -> bb2;
-    }
-
-    bb9: {
-        _5 = copy _4;
-        goto -> bb6;
-    }
-
-    bb10: {
-        _0 = const "auth!";
-        goto -> bb2;
-    }
-
-    bb11: {
-        _4 = copy _3;
-        goto -> bb5;
+        goto -> bb12;
     }
 
     bb12: {
-        _0 = const "index!";
-        goto -> bb2;
-    }
-
-    bb13: {
-        _3 = copy _2;
-        goto -> bb4;
-    }
-
-    bb14: {
-        _0 = const "http!";
-        goto -> bb2;
-    }
-
-    bb15: {
-        goto -> bb2;
+        return;
     }
 }
 
-fn CatchRecursiveThrow(n: int) -> string {
+fn user.CatchAlwaysThrows(n: int) -> string {
     // Locals:
-    let _0: string // return
+    let _0: string // _0 // return
     let _1: int // n // param
     let _2: unknown
-    let _3: unknown // e
+    let _3: bool
     let _4: bool
-    let _5: (int) -> string
-    let _6: int
 
     bb0: {
-        _5 = const fn RecB;
-        _6 = copy _1;
-        _0 = call copy _5(copy _6) -> [bb7, unwind: bb3];
+        _0 = call const fn user.WrapperAlwaysThrows(copy _1) -> [bb6, unwind: bb1];
     }
 
     bb1: {
-        return;
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _3 -> [bb5, bb2];
     }
 
     bb2: {
-        goto -> bb1;
+        _4 = is_type(copy _2, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb4, bb3];
     }
 
     bb3: {
-        _3 = copy _2;
-        _4 = is_type(copy _2, String { attr: TyAttr(None) });
-        branch copy _4 -> [bb6, bb4];
-    }
-
-    bb4: {
         throw copy _2;
     }
 
+    bb4: {
+        _0 = const "index!";
+        goto -> bb7;
+    }
+
     bb5: {
-        _0 = const "handled";
-        goto -> bb2;
+        _0 = const "http!";
+        goto -> bb7;
     }
 
     bb6: {
-        goto -> bb5;
+        goto -> bb7;
     }
 
     bb7: {
+        goto -> bb8;
+    }
+
+    bb8: {
+        return;
+    }
+}
+
+fn user.CatchRecursiveThrow(n: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // n // param
+    let _2: unknown
+    let _3: bool
+
+    bb0: {
+        _0 = call const fn user.RecB(copy _1) -> [bb4, unwind: bb1];
+    }
+
+    bb1: {
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _3 -> [bb3, bb2];
+    }
+
+    bb2: {
+        throw copy _2;
+    }
+
+    bb3: {
+        _0 = const "handled";
+        goto -> bb5;
+    }
+
+    bb4: {
+        goto -> bb5;
+    }
+
+    bb5: {
+        goto -> bb6;
+    }
+
+    bb6: {
+        return;
+    }
+}
+
+fn user.RecA(n: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // n // param
+
+    bb0: {
+        switch copy _1 [0: bb5, otherwise: bb1];
+    }
+
+    bb1: {
+        _0 = call const fn user.RecB(copy _1) -> [bb2];
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+
+    bb5: {
+        throw const "boom";
+    }
+}
+
+fn user.RecB(n: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int // n // param
+
+    bb0: {
+        _0 = call const fn user.RecA(copy _1) -> [bb1];
+    }
+
+    bb1: {
         goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.ThrowsAllStatusVariants(n: int) -> Status {
+    // Locals:
+    let _0: Status // _0 // return
+    let _1: int // n // param
+
+    bb0: {
+        switch copy _1 [1: bb4, 2: bb3, 3: bb2, otherwise: bb1];
+    }
+
+    bb1: {
+        throw const user.Status.SomeOtherError;
+    }
+
+    bb2: {
+        throw const user.Status.AuthError;
+    }
+
+    bb3: {
+        throw const user.Status.IndexError;
+    }
+
+    bb4: {
+        throw const user.Status.HttpError;
+    }
+}
+
+fn user.UnreachableTailStillChecked() -> string {
+    // Locals:
+    let _0: string // _0 // return
+
+    bb0: {
+        throw const "error";
+    }
+}
+
+fn user.WrapperAlwaysThrows(n: int) -> Status {
+    // Locals:
+    let _0: Status // _0 // return
+    let _1: int // n // param
+
+    bb0: {
+        _0 = call const fn user.AlwaysThrowsStatus(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
     }
 }

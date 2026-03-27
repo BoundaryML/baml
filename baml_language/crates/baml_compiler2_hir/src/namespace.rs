@@ -145,15 +145,14 @@ unsafe impl salsa::Update for NamespaceItems<'_> {
     }
 }
 
-/// Merges raw `file_symbol_contributions` for all files within a namespace.
-/// Raw = original AST items only, no PPIR expansion.
+/// Merges `file_symbol_contributions` for all files within a namespace.
 ///
 /// Files are sorted alphabetically by path for deterministic "first wins"
 /// ordering. Keyed by `NamespaceId` so Salsa caches per namespace. Uses
 /// `PartialEq` for early-cutoff: downstream queries only re-run when the
 /// merged symbol set actually changes.
 #[salsa::tracked(returns(ref))]
-pub fn raw_namespace_items<'db>(
+pub fn namespace_items<'db>(
     db: &'db dyn crate::Db,
     namespace_id: NamespaceId<'db>,
 ) -> NamespaceItems<'db> {
@@ -178,7 +177,7 @@ pub fn raw_namespace_items<'db>(
     let mut value_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
 
     for file in &matching_files {
-        let contributions = crate::raw_file_symbol_contributions(db, *file);
+        let contributions = crate::file_symbol_contributions(db, *file);
         for (name, contrib) in &contributions.types {
             type_defs.entry(name.clone()).or_default().push(*contrib);
         }
@@ -210,16 +209,23 @@ pub fn raw_namespace_items<'db>(
     for (name, contribs) in value_defs {
         values.insert(name.clone(), contribs[0].definition);
         if contribs.len() > 1 {
-            conflicts.push(NameConflict {
-                name,
-                entries: contribs
-                    .into_iter()
-                    .map(|c| ConflictEntry {
-                        definition: c.definition,
-                        name_span: c.name_span,
-                    })
-                    .collect(),
-            });
+            // Tests are function-scoped (identity is functionName/testName),
+            // so same-named tests for different functions are not conflicts.
+            let all_tests = contribs
+                .iter()
+                .all(|c| matches!(c.definition, Definition::Test(_)));
+            if !all_tests {
+                conflicts.push(NameConflict {
+                    name,
+                    entries: contribs
+                        .into_iter()
+                        .map(|c| ConflictEntry {
+                            definition: c.definition,
+                            name_span: c.name_span,
+                        })
+                        .collect(),
+                });
+            }
         }
     }
 

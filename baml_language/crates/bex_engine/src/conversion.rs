@@ -150,7 +150,7 @@ impl BexEngine {
                         .collect();
 
                 Ok(BexExternalValue::Instance {
-                    class_name: class.name.clone(),
+                    class_name: class.name.to_string(),
                     fields: fields?,
                 })
             }
@@ -173,7 +173,7 @@ impl BexEngine {
                             variant.index,
                         ),
                     })?;
-                let enum_name = enm.name.clone();
+                let enum_name = enm.name.to_string();
 
                 Ok(BexExternalValue::Variant {
                     enum_name,
@@ -193,13 +193,15 @@ impl BexEngine {
             Object::Future(_) => Err(EngineError::CannotConvert {
                 type_name: "future".to_string(),
             }),
-            Object::Resource(handle) => Ok(BexExternalValue::Resource(handle.clone())),
-            Object::Media(m) => Ok(BexExternalValue::Adt(BexExternalAdt::Media(m.clone()))),
-            Object::PromptAst(ast) => Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(
-                ast.clone(),
-            ))),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
+            Object::RustData(arc) => {
+                bex_external_types::try_convert_rust_data(arc).ok_or_else(|| {
+                    EngineError::CannotConvert {
+                        type_name: "rust_data".to_string(),
+                    }
+                })
+            }
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),
@@ -245,7 +247,7 @@ impl BexEngine {
                     .collect();
                 vm.alloc_map(values)
             }
-            BexExternalValue::Resource(handle) => vm.alloc_resource(handle),
+            BexExternalValue::RustData(data) => vm.alloc_rust_data(data),
             // Allocate instance by looking up class and converting fields
             BexExternalValue::Instance { class_name, fields } => {
                 let class_ptr = self
@@ -294,10 +296,14 @@ impl BexEngine {
             BexExternalValue::Union { value, .. } => {
                 self.convert_external_to_vm_value(vm, *value, guard)
             }
-            BexExternalValue::Adt(BexExternalAdt::Media(media)) => vm.alloc_media(media),
-            BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) => vm.alloc_prompt_ast(ast),
             BexExternalValue::Adt(BexExternalAdt::Collector(c)) => vm.alloc_collector(c),
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => vm.alloc_type(ty),
+            BexExternalValue::Adt(BexExternalAdt::PromptAst(_)) => {
+                panic!("PromptAst values cannot be converted to VM values yet")
+            }
+            BexExternalValue::Adt(BexExternalAdt::Media(_)) => {
+                panic!("Media values cannot be converted to VM values yet")
+            }
             BexExternalValue::FunctionRef { global_index } => {
                 let idx = bex_vm_types::GlobalIndex::from_raw(global_index);
                 assert!(
@@ -440,12 +446,6 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         (BexExternalValue::Variant { enum_name, .. }, Ty::Enum(tn, _)) => {
             enum_name.as_str() == tn.display_name.as_str()
         }
-        (BexExternalValue::Adt(BexExternalAdt::Media(_)), Ty::Media(_, _)) => true,
-        (BexExternalValue::Adt(BexExternalAdt::PromptAst(_)), ty)
-            if ty.is_opaque("baml.llm.PromptAst") =>
-        {
-            true
-        }
         (BexExternalValue::Adt(BexExternalAdt::Collector(_)), _) => false,
         (BexExternalValue::Adt(BexExternalAdt::Type(_)), ty)
             if ty.is_opaque("baml.reflect.Type") =>
@@ -504,7 +504,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     if let Object::Class(class) = class_obj {
                         members
                             .iter()
-                            .find(|m| matches!(m, Ty::Class(tn, _) if tn.display_name.as_str() == class.name.as_str()))
+                            .find(|m| matches!(m, Ty::Class(tn, _) if *tn == class.name))
                     } else {
                         None
                     }
@@ -514,7 +514,7 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     if let Object::Enum(enm) = enum_obj {
                         members
                             .iter()
-                            .find(|m| matches!(m, Ty::Enum(tn, _) if tn.display_name.as_str() == enm.name.as_str()))
+                            .find(|m| matches!(m, Ty::Enum(tn, _) if *tn == enm.name))
                     } else {
                         None
                     }
@@ -536,8 +536,6 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     }
                 }
                 Object::Map(_) => members.iter().find(|m| matches!(m, Ty::Map { .. })),
-                Object::Media(_) => members.iter().find(|m| matches!(m, Ty::Media(_, _))),
-                Object::PromptAst(_) => members.iter().find(|m| m.is_opaque("baml.llm.PromptAst")),
                 _ => None,
             }
         }
@@ -583,12 +581,11 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
                         entries,
                     }
                 }
-                Object::Resource(handle) => BexExternalValue::Resource(handle.clone()),
                 Object::Instance(instance) => {
                     // Get class name from the class object
                     let class_obj = vm.get_object(instance.class);
                     let class_name = match class_obj {
-                        Object::Class(class) => class.name.clone(),
+                        Object::Class(class) => class.name.to_string(),
                         _ => panic!("Instance class pointer doesn't point to a Class"),
                     };
 

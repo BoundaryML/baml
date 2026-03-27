@@ -3,9 +3,9 @@
 //! These types represent classes, enums, functions, and type aliases as they
 //! appear in the compiled schema.
 
-use baml_base::{Name, TyAttr};
+use baml_base::Name;
 
-use crate::{FieldAttr, Ty};
+use crate::{Ty, TyAttr};
 
 /// Top-level container for all schema definitions.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,7 +35,6 @@ pub struct FieldDef {
     pub description: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
-    pub field_attr: FieldAttr,
 }
 
 /// An enum definition with propagated attributes.

@@ -16,6 +16,7 @@ bex_vm_types = { workspace = true }
 sys_types = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
+log = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync", "macros" ] }
 tokio-util = { workspace = true }

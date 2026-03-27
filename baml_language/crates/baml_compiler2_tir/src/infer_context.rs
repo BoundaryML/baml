@@ -49,6 +49,8 @@ pub enum TirTypeError {
     VoidUsedAsValue,
     /// Expression is not callable (e.g. `42(1)` or `Foo(1)` where Foo is a class).
     NotCallable { ty: Ty },
+    /// Expression is not iterable (e.g. `for let i in 42 { ... }` where 42 is an int).
+    NotIterable { ty: Ty },
     /// Expression is not indexable (e.g. `true[0]`).
     NotIndexable { ty: Ty },
     /// Invalid operand types for a binary operator (e.g. `true + false`).
@@ -96,6 +98,8 @@ pub enum TirTypeError {
     },
     /// Declared throws contains extra types that never escape.
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
+    /// A type parameter could not be inferred at a call site.
+    CannotInferTypeParameter { name: Name },
 }
 
 impl fmt::Display for TirTypeError {
@@ -126,6 +130,9 @@ impl fmt::Display for TirTypeError {
             }
             TirTypeError::NotCallable { ty } => {
                 write!(f, "type `{ty}` is not callable")
+            }
+            TirTypeError::NotIterable { ty } => {
+                write!(f, "cannot iterate over type `{ty}`")
             }
             TirTypeError::NotIndexable { ty } => {
                 write!(f, "type `{ty}` is not indexable")
@@ -182,6 +189,9 @@ impl fmt::Display for TirTypeError {
                 "extraneous throws declaration: {}",
                 extra_types.join(", ")
             ),
+            TirTypeError::CannotInferTypeParameter { name } => {
+                write!(f, "cannot infer type parameter `{name}`")
+            }
         }
     }
 }
@@ -214,7 +224,7 @@ pub enum RelatedLocation<'db> {
 }
 
 /// Primary location for a diagnostic — either an expression, a statement,
-/// or a raw source span (for type annotations that lack an ExprId).
+/// or a raw source span (for type annotations that lack an `ExprId`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticLocation {
     Expr(ExprId),
@@ -236,7 +246,7 @@ pub struct TirDiagnostic<'db> {
     pub related: Vec<(RelatedLocation<'db>, &'static str)>,
 }
 
-impl<'db> TirDiagnostic<'db> {
+impl TirDiagnostic<'_> {
     /// Resolve this diagnostic's arena IDs to source ranges and produce a
     /// rendered diagnostic with a human-readable message and `TextRange`.
     ///

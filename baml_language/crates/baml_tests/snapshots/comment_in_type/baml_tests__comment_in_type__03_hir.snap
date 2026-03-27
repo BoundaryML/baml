@@ -1,35 +1,25 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== HIR ITEMS ===
-function FunctionWithComments.render_prompt(a: string, b: int) -> baml.llm.PromptAst {
-    baml.llm.render_prompt("FunctionWithComments", { "a": a, "b": b })
+=== HIR2 ===
+function user.CommentAfterArrow() -> string  [llm] {
+  baml.llm.call_llm_function(TestClient, "CommentAfterArrow", map {  })
 }
-
-function FunctionWithComments.build_request(a: string, b: int) -> baml.http.Request {
-    baml.llm.build_request("FunctionWithComments", { "a": a, "b": b })
+function user.CommentAfterArrow$build_request() -> baml.http.Request  [expr] {
+  baml.llm.build_request(TestClient, "CommentAfterArrow", map {  })
 }
-
-function CommentAfterArrow() -> string {
-    baml.llm.call_llm_function("CommentAfterArrow", {  })
+function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(TestClient, "CommentAfterArrow", map {  })
 }
-
-function CommentAfterArrow.render_prompt() -> baml.llm.PromptAst {
-    baml.llm.render_prompt("CommentAfterArrow", {  })
+function user.FunctionWithComments(a: string, b: int) -> string  [llm] {
+  baml.llm.call_llm_function(TestClient, "FunctionWithComments", map { "a": a, "b": b })
 }
-
-function CommentAfterArrow.build_request() -> baml.http.Request {
-    baml.llm.build_request("CommentAfterArrow", {  })
+function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http.Request  [expr] {
+  baml.llm.build_request(TestClient, "FunctionWithComments", map { "a": a, "b": b })
 }
-
-function FunctionWithComments(a: string, b: int) -> string {
-    baml.llm.call_llm_function("FunctionWithComments", { "a": a, "b": b })
+function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.PromptAst  [expr] {
+  baml.llm.render_prompt(TestClient, "FunctionWithComments", map { "a": a, "b": b })
 }
-
-function TestClient.resolve() -> baml.llm.PrimitiveClient {
-    baml.llm.build_primitive_client("TestClient", "baml-openai-chat", "system", ["system", "user", "assistant"], {  })
-}
-
-client TestClient {
-  provider: baml-openai-chat
+function user.TestClient$new() -> ?  [expr] {
+  baml.llm.PrimitiveClient { name: "TestClient", provider: "baml-openai-chat", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }

@@ -160,14 +160,6 @@ async fn nested_construction_dead_store() {
 
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
-        alloc_instance Outer
-        copy 0
-        alloc_instance Inner
-        copy 0
-        load_const 42
-        store_field .value
-        store_field .inner
-        store_var o
         load_const 42
         return
     }
@@ -441,7 +433,7 @@ async fn spread_before_named_fields() {
     }
 
     function main() -> Point {
-        call default_point
+        call user.default_point
         store_var _2
         alloc_instance Point
         copy 0
@@ -452,11 +444,11 @@ async fn spread_before_named_fields() {
         store_field .y
         copy 0
         load_var _2
-        load_field .z
+        load_field .2
         store_field .z
         copy 0
         load_var _2
-        load_field .w
+        load_field .3
         store_field .w
         return
     }
@@ -517,24 +509,24 @@ async fn spread_after_named_fields() {
     }
 
     function main() -> Point {
-        call default_point
+        call user.default_point
         store_var _2
         alloc_instance Point
         copy 0
         load_var _2
-        load_field .x
+        load_field .0
         store_field .x
         copy 0
         load_var _2
-        load_field .y
+        load_field .1
         store_field .y
         copy 0
         load_var _2
-        load_field .z
+        load_field .2
         store_field .z
         copy 0
         load_var _2
-        load_field .w
+        load_field .3
         store_field .w
         return
     }
@@ -582,26 +574,26 @@ async fn multiple_spreads() {
 
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> Point {
-        call x_one
+        call user.x_one
         pop 1
-        call xy_one
-        store_var _4
+        call user.xy_one
+        store_var _3
         alloc_instance Point
         copy 0
-        load_var _4
-        load_field .x
+        load_var _3
+        load_field .0
         store_field .x
         copy 0
-        load_var _4
-        load_field .y
+        load_var _3
+        load_field .1
         store_field .y
         copy 0
-        load_var _4
-        load_field .z
+        load_var _3
+        load_field .2
         store_field .z
         copy 0
-        load_var _4
-        load_field .w
+        load_var _3
+        load_field .3
         store_field .w
         return
     }
@@ -697,26 +689,8 @@ async fn spread_does_not_break_locals() {
     }
 
     function main() -> int {
-        call default_point
-        store_var _2
-        alloc_instance Point
-        copy 0
-        load_var _2
-        load_field .x
-        store_field .x
-        copy 0
-        load_var _2
-        load_field .y
-        store_field .y
-        copy 0
-        load_var _2
-        load_field .z
-        store_field .z
-        copy 0
-        load_var _2
-        load_field .w
-        store_field .w
-        store_var p
+        call user.default_point
+        pop 1
         load_const 0
         return
     }
@@ -918,7 +892,7 @@ async fn method_call() {
     );
 
     insta::assert_snapshot!(output.bytecode, @r"
-    function Number.add(self: Number, other: Number) -> Number {
+    function Number.add(self: null, other: Number) -> Number {
         alloc_instance Number
         copy 0
         load_var self
@@ -939,20 +913,8 @@ async fn method_call() {
         copy 0
         load_const 2
         store_field .value
-        call Number.add
+        call user.Number.add
         load_field .value
-        return
-    }
-
-    function stream_Number.add(self: stream_Number, other: Number) -> Number {
-        alloc_instance Number
-        copy 0
-        load_var self
-        load_field .value
-        load_var other
-        load_field .value
-        bin_op +
-        store_field .value
         return
     }
     ");
@@ -983,7 +945,7 @@ async fn mutable_self_method() {
     );
 
     insta::assert_snapshot!(output.bytecode, @r"
-    function Number.add(self: Number, other: Number) -> bool {
+    function Number.add(self: null, other: Number) -> bool {
         load_var self
         load_var self
         load_field .value
@@ -1006,22 +968,10 @@ async fn mutable_self_method() {
         copy 0
         load_const 2
         store_field .value
-        call Number.add
+        call user.Number.add
         pop 1
         load_var a
         load_field .value
-        return
-    }
-
-    function stream_Number.add(self: stream_Number, other: Number) -> bool {
-        load_var self
-        load_var self
-        load_field .value
-        load_var other
-        load_field .value
-        bin_op +
-        store_field .value
-        load_const true
         return
     }
     ");
