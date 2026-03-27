@@ -719,7 +719,7 @@ mod tests {
     ///                       └─ OtherScope "no" (8)
     /// ```
     /// Sequential edges within linear scopes: 1→2 (header's child)
-    /// No edges between branch arms (BranchGroup has non-linear children).
+    /// No edges between branch arms (`BranchGroup` has non-linear children).
     /// Within each arm: 3→4, 4→5, 6→7, 7→8 (single-child linear chains)
     fn build_if_else_with_headers() -> ControlFlowGraph {
         let mut graph = ControlFlowGraph::default();
@@ -895,8 +895,7 @@ mod tests {
         for (src, edges) in &result.edges_by_src {
             assert!(
                 result.nodes.contains_key(src),
-                "Edge source {} is not a valid node",
-                src
+                "Edge source {src} is not a valid node"
             );
             for edge in edges {
                 assert!(
@@ -910,7 +909,7 @@ mod tests {
     }
 
     /// Test with a more complex graph: sequential headers, then branch inside second header.
-    /// This catches edge propagation issues when BranchGroup has successors.
+    /// This catches edge propagation issues when `BranchGroup` has successors.
     ///
     /// ```text
     /// FunctionRoot (0)
@@ -922,7 +921,7 @@ mod tests {
     ///             └─ BranchArm "false" (6)
     ///        └─ OtherScope "done" (7)  ← successor after the if/else
     /// ```
-    /// Edges: 1→3 (sequential headers), 4→7 (BranchGroup to successor)
+    /// Edges: 1→3 (sequential headers), 4→7 (`BranchGroup` to successor)
     /// Within Header "Process": 4 and 7 are sequential children.
     #[test]
     fn viz_prep_successor_edges_propagated_to_arms() {
@@ -958,13 +957,11 @@ mod tests {
         // BranchGroup should now only have fan-out edges (to arms), not to successor
         assert!(
             !bg_edge_dsts.contains(&7),
-            "BranchGroup should NOT have edge to successor (7) after hoisting, got: {:?}",
-            bg_edge_dsts
+            "BranchGroup should NOT have edge to successor (7) after hoisting, got: {bg_edge_dsts:?}"
         );
         assert!(
             bg_edge_dsts.contains(&5) && bg_edge_dsts.contains(&6),
-            "BranchGroup should have fan-out edges to arms 5 and 6, got: {:?}",
-            bg_edge_dsts
+            "BranchGroup should have fan-out edges to arms 5 and 6, got: {bg_edge_dsts:?}"
         );
 
         // Each arm should have an edge to successor (7)
@@ -974,8 +971,7 @@ mod tests {
             .unwrap_or_default();
         assert!(
             arm_true_dsts.contains(&7),
-            "BranchArm 'true' should have edge to successor 7, got: {:?}",
-            arm_true_dsts
+            "BranchArm 'true' should have edge to successor 7, got: {arm_true_dsts:?}"
         );
 
         let arm_false_edges = result.edges_by_src.get(&NodeId::new(6));
@@ -984,8 +980,7 @@ mod tests {
             .unwrap_or_default();
         assert!(
             arm_false_dsts.contains(&7),
-            "BranchArm 'false' should have edge to successor 7, got: {:?}",
-            arm_false_dsts
+            "BranchArm 'false' should have edge to successor 7, got: {arm_false_dsts:?}"
         );
 
         // Arms should be reparented to Header "Process" (id=3)

@@ -45,7 +45,7 @@ pub struct FunctionSymbol {
     pub is_llm: bool,
     /// The LLM client name (if LLM function).
     pub client_name: Option<String>,
-    /// Whether this function is compiler-generated (render_prompt, build_request, resolve).
+    /// Whether this function is compiler-generated (`render_prompt`, `build_request`, `resolve`).
     pub is_sub_function: bool,
 }
 
@@ -82,8 +82,8 @@ pub fn list_functions(db: &ProjectDatabase) -> Vec<Symbol> {
 
 /// List user-facing functions with metadata for the playground.
 ///
-/// Extracts LLM metadata (client name, is_llm) from `declarative_meta` on the
-/// compiler2 `Function` item tree entry.
+/// Extracts LLM metadata (client name, `is_llm`) from `declarative_meta` on the
+/// compiler2 [`Function`](baml_compiler2_hir::item_tree::Function) item tree entry.
 pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol> {
     let pkg_id = PackageId::new(db, Name::new("user"));
     let pkg = package_items(db, pkg_id);
@@ -102,7 +102,7 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol>
                     if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(ref llm)) =
                         func.declarative_meta
                     {
-                        llm.client.as_ref().map(|n| n.to_string())
+                        llm.client.as_ref().map(std::string::ToString::to_string)
                     } else {
                         None
                     };
@@ -138,7 +138,7 @@ pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
                 let function_name = test
                     .function_refs
                     .first()
-                    .map(|n| n.to_string())
+                    .map(std::string::ToString::to_string)
                     .unwrap_or_default();
 
                 // args parsing is skipped in canary's alloc_test — always empty for now
@@ -182,8 +182,8 @@ pub fn list_generators(_db: &ProjectDatabase) -> Vec<Symbol> {
     Vec::new()
 }
 
-pub fn find_symbol(_db: &ProjectDatabase, _name: &str) -> Option<Symbol> {
-    find_symbol_locations(_db, _name).into_iter().next()
+pub fn find_symbol(db: &ProjectDatabase, name: &str) -> Option<Symbol> {
+    find_symbol_locations(db, name).into_iter().next()
 }
 
 pub fn find_symbol_locations(_db: &ProjectDatabase, _name: &str) -> Vec<Symbol> {

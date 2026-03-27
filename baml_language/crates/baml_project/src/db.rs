@@ -23,8 +23,8 @@ pub struct CursorContext {
     pub function_name: Option<String>,
     pub is_workflow: bool,
     pub workflow_memberships: Vec<String>,
-    /// Raw ExprId index — matched against node.metadata.sourceExpr on the TS side.
-    /// NOT a CFG NodeId. The TS side scans the cached graph for a node whose
+    /// Raw `ExprId` index — matched against `node.metadata.sourceExpr` on the TS side.
+    /// NOT a CFG `NodeId`. The TS side scans the cached graph for a node whose
     /// sourceExpr matches this value.
     pub source_expr_id: Option<u32>,
     /// Ordered list of expression IDs containing the cursor, from most
@@ -392,7 +392,7 @@ impl ProjectDatabase {
 
         for source_file in self.file_map.values().copied() {
             let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in index.item_tree.functions.iter() {
+            for (local_id, func_data) in &index.item_tree.functions {
                 let func_name = func_data.name.to_string();
                 if func_name != function_name {
                     continue;
@@ -441,6 +441,8 @@ impl ProjectDatabase {
     /// Given a file path and byte offset, return context about what entity
     /// the cursor is on — used by the playground for navigation.
     pub fn playground_cursor_context(&self, file_path: &str, byte_offset: u32) -> CursorContext {
+        use baml_db::baml_compiler_syntax::SyntaxKind;
+
         let empty = CursorContext {
             function_name: None,
             is_workflow: false,
@@ -451,21 +453,17 @@ impl ProjectDatabase {
         };
 
         // 1. Find the SourceFile matching file_path
-        let source_file = match self.find_source_file(file_path) {
-            Some(sf) => sf,
-            None => return empty,
+        let Some(source_file) = self.find_source_file(file_path) else {
+            return empty;
         };
 
         let offset = text_size::TextSize::from(byte_offset);
 
         // 2. Find CST token at offset
-        let token = match baml_lsp2_actions::utils::find_token_at_offset(self, source_file, offset)
-        {
-            Some(tok) => tok,
-            None => return empty,
+        let Some(token) = baml_lsp2_actions::utils::find_token_at_offset(self, source_file, offset)
+        else {
+            return empty;
         };
-
-        use baml_db::baml_compiler_syntax::SyntaxKind;
 
         // 3. Check if cursor is inside a HEADER_COMMENT node — these need
         //    special handling since their tokens don't resolve via name lookup.
@@ -626,7 +624,7 @@ impl ProjectDatabase {
         }
     }
 
-    /// Find a SourceFile by file path (matches by suffix to handle different path formats).
+    /// Find a [`SourceFile`] by file path (matches by suffix to handle different path formats).
     pub fn find_source_file(&self, file_path: &str) -> Option<SourceFile> {
         // Try exact match first
         let path = PathBuf::from(file_path);
@@ -638,11 +636,11 @@ impl ProjectDatabase {
             return Some(sf);
         }
         // Fallback: match by file name suffix (handles Monaco's relative paths)
-        for (&ref stored_path, &sf) in &self.file_map {
+        for (stored_path, sf) in &self.file_map {
             if stored_path.ends_with(file_path)
                 || file_path.ends_with(stored_path.to_string_lossy().as_ref())
             {
-                return Some(sf);
+                return Some(*sf);
             }
         }
         None
@@ -670,7 +668,7 @@ impl ProjectDatabase {
 
         // Match against item tree functions by span
         let item_tree = &index.item_tree;
-        for (local_id, func_data) in item_tree.functions.iter() {
+        for (local_id, func_data) in &item_tree.functions {
             if func_data.span == func_scope_range {
                 let func_loc =
                     baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
@@ -692,7 +690,7 @@ impl ProjectDatabase {
 
         for source_file in self.file_map.values().copied() {
             let index = baml_compiler2_ppir::file_semantic_index(self, source_file);
-            for (local_id, func_data) in index.item_tree.functions.iter() {
+            for (local_id, func_data) in &index.item_tree.functions {
                 let func_name = func_data.name.to_string();
                 if func_name == target_function_name {
                     continue; // Skip self
@@ -704,7 +702,7 @@ impl ProjectDatabase {
 
                 // Only workflow (Expr) functions can call other functions
                 if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                    if self.expr_body_calls_function(expr_body, target_function_name) {
+                    if Self::expr_body_calls_function(expr_body, target_function_name) {
                         memberships.push(func_name);
                     }
                 }
@@ -715,11 +713,7 @@ impl ProjectDatabase {
     }
 
     /// Check if an expression body contains a call to a function with the given name.
-    fn expr_body_calls_function(
-        &self,
-        body: &baml_compiler2_ast::ExprBody,
-        target_name: &str,
-    ) -> bool {
+    fn expr_body_calls_function(body: &baml_compiler2_ast::ExprBody, target_name: &str) -> bool {
         use baml_compiler2_ast::Expr;
         for (_id, expr) in body.exprs.iter() {
             if let Expr::Call { callee, .. } = expr {
@@ -734,10 +728,9 @@ impl ProjectDatabase {
         false
     }
 
-    /// O(1) lookup of an ExprId's span in the source map. Returns the raw
-    /// index and span length as a `(u32, TextSize)` pair for the candidate list.
+    /// O(1) lookup of an [`ExprId`](baml_compiler2_ast::ExprId)'s span in the source map. Returns
+    /// the raw index and span length as a `(u32, TextSize)` pair for the candidate list.
     fn expr_span_entry(
-        &self,
         source_map: &baml_compiler2_ast::AstSourceMap,
         expr_id: baml_compiler2_ast::ExprId,
     ) -> Option<(u32, text_size::TextSize)> {
@@ -768,28 +761,27 @@ impl ProjectDatabase {
         let scope_id = index.scope_at_offset(offset, None);
         let ancestors = index.ancestor_scopes(scope_id);
 
-        let func_scope_id = match ancestors.iter().find(|&&ancestor_id| {
+        let Some(func_scope_id) = ancestors.iter().find(|&&ancestor_id| {
             let scope = &index.scopes[ancestor_id.index() as usize];
             matches!(scope.kind, ScopeKind::Function)
-        }) {
-            Some(id) => id,
-            None => return (None, vec![]),
+        }) else {
+            return (None, vec![]);
         };
 
         let func_scope_range = index.scopes[func_scope_id.index() as usize].range;
 
         let item_tree = &index.item_tree;
-        for (local_id, func_data) in item_tree.functions.iter() {
+        for (local_id, func_data) in &item_tree.functions {
             if func_data.span != func_scope_range {
                 continue;
             }
 
             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(self, source_file, *local_id);
-            let source_map =
-                match baml_compiler2_hir::body::function_body_source_map(self, func_loc) {
-                    Some(sm) => sm,
-                    None => return (None, vec![]),
-                };
+            let Some(source_map) =
+                baml_compiler2_hir::body::function_body_source_map(self, func_loc)
+            else {
+                return (None, vec![]);
+            };
             let body = baml_compiler2_hir::body::function_body(self, func_loc);
             let expr_body = match body.as_ref() {
                 baml_compiler2_hir::body::FunctionBody::Expr(eb) => Some(eb),
@@ -798,6 +790,7 @@ impl ProjectDatabase {
 
             // Collect ALL expression spans containing the cursor.
             let mut containing: Vec<(u32, text_size::TextSize)> = Vec::new();
+            #[allow(clippy::cast_possible_truncation)] // arena indices never exceed u32
             for (idx, (_id, range)) in source_map.expr_spans.iter().enumerate() {
                 if range.contains(offset) || range.end() == offset {
                     containing.push((idx as u32, range.len()));
@@ -808,13 +801,15 @@ impl ProjectDatabase {
             // statement's "graph-relevant expression" into the candidate list.
             // This maps the whole `let x = Call(...)` or `return Obj {...}`
             // line to the expression the graph node uses as source_expr.
+            #[allow(clippy::cast_possible_truncation)] // arena indices never exceed u32
             if let Some(eb) = expr_body {
                 for (idx, (_id, range)) in source_map.stmt_spans.iter().enumerate() {
                     if !(range.contains(offset) || range.end() == offset) {
                         continue;
                     }
+                    let idx_u32 = idx as u32;
                     let stmt_id = la_arena::Idx::<baml_compiler2_ast::Stmt>::from_raw(
-                        la_arena::RawIdx::from_u32(idx as u32),
+                        la_arena::RawIdx::from_u32(idx_u32),
                     );
                     // Look up the expression the graph node uses as source_expr
                     // for this statement, and inject it into the candidate list.
@@ -822,18 +817,18 @@ impl ProjectDatabase {
                         baml_compiler2_ast::Stmt::HeaderComment { .. } => {
                             let tagged =
                                 baml_compiler2_visualization::control_flow::STMT_SOURCE_EXPR_TAG
-                                    | idx as u32;
+                                    | idx_u32;
                             Some((tagged, range.len()))
                         }
                         baml_compiler2_ast::Stmt::Let {
                             initializer: Some(init),
                             ..
-                        } => self.expr_span_entry(&source_map, *init),
+                        } => Self::expr_span_entry(&source_map, *init),
                         baml_compiler2_ast::Stmt::Return(Some(expr_id)) => {
-                            self.expr_span_entry(&source_map, *expr_id)
+                            Self::expr_span_entry(&source_map, *expr_id)
                         }
                         baml_compiler2_ast::Stmt::Expr(expr_id) => {
-                            self.expr_span_entry(&source_map, *expr_id)
+                            Self::expr_span_entry(&source_map, *expr_id)
                         }
                         _ => None,
                     };

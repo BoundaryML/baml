@@ -344,10 +344,10 @@ async fn handle_ws_in_message(
                 function_name,
                 graph: graph_json,
             };
-            if let Some(ws_msg) = to_ws_text(&msg) {
-                if sink.send(ws_msg).await.is_err() {
-                    tracing::warn!("Failed to send control flow graph result");
-                }
+            if let Some(ws_msg) = to_ws_text(&msg)
+                && sink.send(ws_msg).await.is_err()
+            {
+                tracing::warn!("Failed to send control flow graph result");
             }
         }
 
@@ -355,10 +355,10 @@ async fn handle_ws_in_message(
             let ctx = state.bex.playground_cursor_context(&file, line, column);
             let ctx_json = serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null);
             let msg = WsOutMessage::CursorContext { context: ctx_json };
-            if let Some(ws_msg) = to_ws_text(&msg) {
-                if sink.send(ws_msg).await.is_err() {
-                    tracing::warn!("Failed to send cursor context");
-                }
+            if let Some(ws_msg) = to_ws_text(&msg)
+                && sink.send(ws_msg).await.is_err()
+            {
+                tracing::warn!("Failed to send cursor context");
             }
         }
     }

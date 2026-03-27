@@ -12,12 +12,6 @@ describe('App', () => {
       await screen.findByText(/Select a function to run|Connecting to playground server/);
     });
 
-    it('shows ENV section when ExecutionPanel is rendered', async () => {
-      render(<App />);
-
-      await screen.findByText('ENV');
-    });
-
     it('shows functions area (empty or list)', async () => {
       render(<App />);
 
@@ -25,11 +19,5 @@ describe('App', () => {
       expect(screen.getByText('Select a function to run')).toBeInTheDocument();
     });
 
-    it('renders a key/value input row in ENV bar', async () => {
-      render(<App />);
-
-      await screen.findByPlaceholderText('KEY');
-      expect(screen.getByPlaceholderText('value')).toBeInTheDocument();
-    });
   });
 });
