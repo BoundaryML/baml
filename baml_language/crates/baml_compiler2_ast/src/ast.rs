@@ -13,14 +13,14 @@ use text_size::TextRange;
 // ── Attributes ──────────────────────────────────────────────────
 
 /// Raw attribute from CST — not yet validated.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawAttribute {
     pub name: Name,
     pub args: Vec<RawAttributeArg>,
     pub span: TextRange,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawAttributeArg {
     pub key: Option<Name>,
     pub value: String,
@@ -37,44 +37,138 @@ pub struct RawAttributeArg {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeExpr {
     /// Named type path: `User`, `baml.http.Request`
-    Path(Vec<Name>),
+    Path {
+        segments: Vec<Name>,
+        attrs: Vec<RawAttribute>,
+    },
     /// Primitive types
-    Int,
-    Float,
-    String,
-    Bool,
-    Null,
-    Never,
+    Int {
+        attrs: Vec<RawAttribute>,
+    },
+    Float {
+        attrs: Vec<RawAttribute>,
+    },
+    String {
+        attrs: Vec<RawAttribute>,
+    },
+    Bool {
+        attrs: Vec<RawAttribute>,
+    },
+    Null {
+        attrs: Vec<RawAttribute>,
+    },
+    Never {
+        attrs: Vec<RawAttribute>,
+    },
     /// Media types
-    Media(baml_base::MediaKind),
+    Media {
+        kind: baml_base::MediaKind,
+        attrs: Vec<RawAttribute>,
+    },
     /// T?
-    Optional(Box<TypeExpr>),
+    Optional {
+        inner: Box<TypeExpr>,
+        attrs: Vec<RawAttribute>,
+    },
     /// T[]
-    List(Box<TypeExpr>),
+    List {
+        inner: Box<TypeExpr>,
+        attrs: Vec<RawAttribute>,
+    },
     /// map<K, V>
     Map {
         key: Box<TypeExpr>,
         value: Box<TypeExpr>,
+        attrs: Vec<RawAttribute>,
     },
     /// A | B | C
-    Union(Vec<TypeExpr>),
+    Union {
+        variants: Vec<TypeExpr>,
+        attrs: Vec<RawAttribute>,
+    },
     /// Literal types in unions: `"user"`, `200`, `3.14`, `true`.
-    Literal(baml_base::Literal),
+    Literal {
+        value: baml_base::Literal,
+        attrs: Vec<RawAttribute>,
+    },
     /// Function type: (params) -> return
     Function {
         params: Vec<FunctionTypeParam>,
         ret: Box<TypeExpr>,
+        attrs: Vec<RawAttribute>,
     },
     /// The `unknown` keyword type
-    BuiltinUnknown,
+    BuiltinUnknown {
+        attrs: Vec<RawAttribute>,
+    },
     /// The `type` meta-type keyword
-    Type,
+    Type {
+        attrs: Vec<RawAttribute>,
+    },
     /// `$rust_type` — opaque Rust-managed state field type.
-    Rust,
+    Rust {
+        attrs: Vec<RawAttribute>,
+    },
     /// Error recovery sentinel
-    Error,
+    Error {
+        attrs: Vec<RawAttribute>,
+    },
     /// Unknown/missing type
-    Unknown,
+    Unknown {
+        attrs: Vec<RawAttribute>,
+    },
+}
+
+impl TypeExpr {
+    /// Access the type-level attributes on this type expression.
+    pub fn attrs(&self) -> &[RawAttribute] {
+        match self {
+            Self::Path { attrs, .. }
+            | Self::Int { attrs }
+            | Self::Float { attrs }
+            | Self::String { attrs }
+            | Self::Bool { attrs }
+            | Self::Null { attrs }
+            | Self::Never { attrs }
+            | Self::Media { attrs, .. }
+            | Self::Optional { attrs, .. }
+            | Self::List { attrs, .. }
+            | Self::Map { attrs, .. }
+            | Self::Union { attrs, .. }
+            | Self::Literal { attrs, .. }
+            | Self::Function { attrs, .. }
+            | Self::BuiltinUnknown { attrs }
+            | Self::Type { attrs }
+            | Self::Rust { attrs }
+            | Self::Error { attrs }
+            | Self::Unknown { attrs } => attrs,
+        }
+    }
+
+    /// Mutable access to the type-level attributes on this type expression.
+    pub fn attrs_mut(&mut self) -> &mut Vec<RawAttribute> {
+        match self {
+            Self::Path { attrs, .. }
+            | Self::Int { attrs }
+            | Self::Float { attrs }
+            | Self::String { attrs }
+            | Self::Bool { attrs }
+            | Self::Null { attrs }
+            | Self::Never { attrs }
+            | Self::Media { attrs, .. }
+            | Self::Optional { attrs, .. }
+            | Self::List { attrs, .. }
+            | Self::Map { attrs, .. }
+            | Self::Union { attrs, .. }
+            | Self::Literal { attrs, .. }
+            | Self::Function { attrs, .. }
+            | Self::BuiltinUnknown { attrs }
+            | Self::Type { attrs }
+            | Self::Rust { attrs }
+            | Self::Error { attrs }
+            | Self::Unknown { attrs } => attrs,
+        }
+    }
 }
 
 /// A parameter in a function type expression.

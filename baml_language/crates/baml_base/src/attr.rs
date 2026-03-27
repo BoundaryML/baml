@@ -12,7 +12,7 @@ use crate::core_types::Span;
 ///
 /// Used instead of `bool` for extensibility — future attributes may
 /// need additional states (e.g., `Inherited`, `Explicit`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub enum TyAttrValue {
     #[default]
     Unset,
@@ -43,6 +43,23 @@ pub struct TyAssert {
     pub span: Span,
 }
 
+// TODO: This Ord impl ignores `span`, which means two TyAsserts with
+// different source locations but the same func_idx compare as equal.
+// This is intentional for now — Span doesn't implement Ord (TextRange
+// from text-size lacks it) and span is diagnostic metadata, not semantic.
+// If ordering correctness matters here, Span will need a manual Ord impl.
+impl PartialOrd for TyAssert {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TyAssert {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.func_idx.cmp(&other.func_idx)
+    }
+}
+
 /// Attributes intrinsic to a type expression.
 ///
 /// Carried on every `Ty` variant from HIR through runtime.
@@ -50,7 +67,7 @@ pub struct TyAssert {
 ///
 /// BEP-006 v12 defines three binary (present/absent) SAP attributes
 /// that control how the schema-aligned parser handles each streaming state.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct TyAttr {
     /// `@sap.parse_without_null`: during parsing (both in-progress and done
     /// states), exclude `null` from the type's parse candidates.
@@ -67,4 +84,21 @@ pub struct TyAttr {
 
     /// Type-level assertions (`@assert`).
     pub asserts: Vec<TyAssert>,
+}
+
+impl TyAttr {
+    /// Return the canonical names of all attributes that are `Set`.
+    pub fn attr_names(&self) -> Vec<&'static str> {
+        let mut names = Vec::new();
+        if self.sap_parse_without_null == TyAttrValue::Set {
+            names.push("sap.parse_without_null");
+        }
+        if self.sap_pending_never == TyAttrValue::Set {
+            names.push("sap.pending_never");
+        }
+        if self.sap_in_progress_never == TyAttrValue::Set {
+            names.push("sap.in_progress_never");
+        }
+        names
+    }
 }

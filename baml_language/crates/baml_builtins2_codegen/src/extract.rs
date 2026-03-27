@@ -409,7 +409,7 @@ fn extract_throws(func: &FunctionDef) -> Vec<String> {
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
     match ty {
-        TypeExpr::Path(segments) => {
+        TypeExpr::Path { segments, .. } => {
             let path: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
             if path.len() >= 3 && (path[0] == "baml" || path[0] == "root") && path[1] == "errors" {
                 vec![path[2..].join(".")]
@@ -423,7 +423,9 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
                 ]
             }
         }
-        TypeExpr::Union(members) => members.iter().flat_map(extract_throw_categories).collect(),
+        TypeExpr::Union { variants, .. } => {
+            variants.iter().flat_map(extract_throw_categories).collect()
+        }
         _ => vec![],
     }
 }
@@ -461,14 +463,14 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     match ty {
-        TypeExpr::Int => BamlType::Int,
-        TypeExpr::Float => BamlType::Float,
-        TypeExpr::String => BamlType::String,
-        TypeExpr::Bool => BamlType::Bool,
-        TypeExpr::Null => BamlType::Null,
-        TypeExpr::Never => BamlType::Null,
+        TypeExpr::Int { .. } => BamlType::Int,
+        TypeExpr::Float { .. } => BamlType::Float,
+        TypeExpr::String { .. } => BamlType::String,
+        TypeExpr::Bool { .. } => BamlType::Bool,
+        TypeExpr::Null { .. } => BamlType::Null,
+        TypeExpr::Never { .. } => BamlType::Null,
 
-        TypeExpr::Media(kind) => {
+        TypeExpr::Media { kind, .. } => {
             // Map MediaKind to the class name string.
             let name = match kind {
                 baml_base::MediaKind::Image => "Image",
@@ -480,18 +482,20 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             BamlType::Media(name.to_string())
         }
 
-        TypeExpr::Optional(inner) => {
+        TypeExpr::Optional { inner, .. } => {
             BamlType::Optional(Box::new(type_expr_to_baml_type(inner, generics)))
         }
 
-        TypeExpr::List(inner) => BamlType::List(Box::new(type_expr_to_baml_type(inner, generics))),
+        TypeExpr::List { inner, .. } => {
+            BamlType::List(Box::new(type_expr_to_baml_type(inner, generics)))
+        }
 
-        TypeExpr::Map { key, value } => BamlType::Map(
+        TypeExpr::Map { key, value, .. } => BamlType::Map(
             Box::new(type_expr_to_baml_type(key, generics)),
             Box::new(type_expr_to_baml_type(value, generics)),
         ),
 
-        TypeExpr::Path(segments) => {
+        TypeExpr::Path { segments, .. } => {
             // Single-segment path may be a generic type param or a named type.
             if segments.len() == 1 {
                 let name = segments[0].as_str();
@@ -511,10 +515,10 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             }
         }
 
-        TypeExpr::Union(variants) => {
+        TypeExpr::Union { variants, .. } => {
             let non_null: Vec<_> = variants
                 .iter()
-                .filter(|v| !matches!(v, TypeExpr::Null))
+                .filter(|v| !matches!(v, TypeExpr::Null { .. }))
                 .collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
@@ -522,13 +526,13 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
                 BamlType::Named("union".to_string())
             }
         }
-        TypeExpr::Literal(_) => BamlType::Named("literal".to_string()),
+        TypeExpr::Literal { .. } => BamlType::Named("literal".to_string()),
         TypeExpr::Function { .. } => BamlType::Named("function".to_string()),
-        TypeExpr::BuiltinUnknown | TypeExpr::Unknown | TypeExpr::Error => {
+        TypeExpr::BuiltinUnknown { .. } | TypeExpr::Unknown { .. } | TypeExpr::Error { .. } => {
             BamlType::Named("unknown".to_string())
         }
-        TypeExpr::Type => BamlType::Named("type".to_string()),
-        TypeExpr::Rust => BamlType::RustType,
+        TypeExpr::Type { .. } => BamlType::Named("type".to_string()),
+        TypeExpr::Rust { .. } => BamlType::RustType,
     }
 }
 

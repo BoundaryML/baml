@@ -26,32 +26,32 @@ use salsa::{Event, EventKind, Setter};
 fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
     use baml_compiler2_ast::TypeExpr;
     match ty {
-        TypeExpr::Path(segments) => segments
+        TypeExpr::Path { segments, .. } => segments
             .iter()
             .map(|n| n.as_str())
             .collect::<Vec<_>>()
             .join("."),
-        TypeExpr::Int => "int".into(),
-        TypeExpr::Float => "float".into(),
-        TypeExpr::String => "string".into(),
-        TypeExpr::Bool => "bool".into(),
-        TypeExpr::Null => "null".into(),
-        TypeExpr::Never => "never".into(),
-        TypeExpr::Media(k) => format!("{:?}", k).to_lowercase(),
-        TypeExpr::Optional(inner) => format!("{}?", hir2_type_expr_to_string(inner)),
-        TypeExpr::List(inner) => format!("{}[]", hir2_type_expr_to_string(inner)),
-        TypeExpr::Map { key, value } => format!(
+        TypeExpr::Int { .. } => "int".into(),
+        TypeExpr::Float { .. } => "float".into(),
+        TypeExpr::String { .. } => "string".into(),
+        TypeExpr::Bool { .. } => "bool".into(),
+        TypeExpr::Null { .. } => "null".into(),
+        TypeExpr::Never { .. } => "never".into(),
+        TypeExpr::Media { kind, .. } => format!("{:?}", kind).to_lowercase(),
+        TypeExpr::Optional { inner, .. } => format!("{}?", hir2_type_expr_to_string(inner)),
+        TypeExpr::List { inner, .. } => format!("{}[]", hir2_type_expr_to_string(inner)),
+        TypeExpr::Map { key, value, .. } => format!(
             "map<{}, {}>",
             hir2_type_expr_to_string(key),
             hir2_type_expr_to_string(value)
         ),
-        TypeExpr::Union(members) => members
+        TypeExpr::Union { variants, .. } => variants
             .iter()
             .map(hir2_type_expr_to_string)
             .collect::<Vec<_>>()
             .join(" | "),
-        TypeExpr::Literal(lit) => lit.to_string(),
-        TypeExpr::Function { params, ret } => {
+        TypeExpr::Literal { value, .. } => value.to_string(),
+        TypeExpr::Function { params, ret, .. } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|p| {
@@ -63,11 +63,11 @@ fn hir2_type_expr_to_string(ty: &baml_compiler2_ast::TypeExpr) -> String {
                 .collect();
             format!("({}) -> {}", ps.join(", "), hir2_type_expr_to_string(ret))
         }
-        TypeExpr::BuiltinUnknown => "unknown".into(),
-        TypeExpr::Type => "type".into(),
-        TypeExpr::Rust => "$rust_type".into(),
-        TypeExpr::Error => "error".into(),
-        TypeExpr::Unknown => "?".into(),
+        TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
+        TypeExpr::Type { .. } => "type".into(),
+        TypeExpr::Rust { .. } => "$rust_type".into(),
+        TypeExpr::Error { .. } => "error".into(),
+        TypeExpr::Unknown { .. } => "?".into(),
     }
 }
 
@@ -2068,8 +2068,18 @@ impl CompilerRunner {
                                         let header = format!("  {kind_str} {fqn} {{");
                                         writeln!(output, "{header}").ok();
                                         output_annotated.push((header, status));
-                                        for (fname, fty) in &resolved.fields {
-                                            let line = format!("    {fname}: {fty}");
+                                        for (fname, fty, _fattrs) in &resolved.fields {
+                                            let attr_names = fty.attr().attr_names();
+                                            let line = if attr_names.is_empty() {
+                                                format!("    {fname}: {fty}")
+                                            } else {
+                                                let attrs_str = attr_names
+                                                    .iter()
+                                                    .map(|a| format!("@{a}"))
+                                                    .collect::<Vec<_>>()
+                                                    .join(" ");
+                                                format!("    {fname}: {fty} {attrs_str}")
+                                            };
                                             writeln!(output, "{line}").ok();
                                             output_annotated.push((line, status));
                                         }
@@ -2149,10 +2159,13 @@ impl CompilerRunner {
                 let mut expr_types: Vec<_> = Vec::new();
                 for (expr_id, owner_scope) in &index.expr_scopes {
                     if owner_scope.index() as usize == i {
-                        let ty = inference
-                            .expression_type(*expr_id)
-                            .cloned()
-                            .unwrap_or(Ty::Unknown);
+                        let ty =
+                            inference
+                                .expression_type(*expr_id)
+                                .cloned()
+                                .unwrap_or(Ty::Unknown {
+                                    attr: Default::default(),
+                                });
                         expr_types.push((*expr_id, ty));
                     }
                 }
@@ -2822,7 +2835,7 @@ impl CompilerRunner {
                                 "  {} fields (resolved):",
                                 resolved.fields.len()
                             )));
-                            for (fname, fty) in &resolved.fields {
+                            for (fname, fty, _fattrs) in &resolved.fields {
                                 detail.push(vec![
                                     DetailSpan::Code(format!("    {fname}")),
                                     DetailSpan::TypeAnnotation(format!(": {fty}")),

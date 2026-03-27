@@ -60,7 +60,10 @@ fn make_llm_companion(
 ) -> FunctionDef {
     let name = Name::new(format!("{}${}", parent.name, target));
     let return_type = SpannedTypeExpr {
-        expr: TypeExpr::Path(return_type_path.iter().map(Name::new).collect()),
+        expr: TypeExpr::Path {
+            segments: return_type_path.iter().map(Name::new).collect(),
+            attrs: vec![],
+        },
         span: parent.span,
     };
     let param_names: Vec<Name> = parent.params.iter().map(|p| p.name.clone()).collect();

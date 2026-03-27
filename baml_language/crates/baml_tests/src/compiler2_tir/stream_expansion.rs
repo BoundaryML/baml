@@ -307,3 +307,94 @@ class DynamicClass {
     );
     insta::assert_snapshot!(render_tir(&db, file));
 }
+
+// ── Bug 1: pending_default alias resolution ─────────────────────────────────
+
+#[test]
+fn type_alias_to_list_in_union_gets_correct_pending_default() {
+    // type Ints = int[] — in a union, pending_default should resolve the alias
+    // and return EmptyArray (not Null). This means the stream expansion should
+    // NOT prepend an extra null to the union.
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "\
+type Ints = int[]
+
+class WithAliasUnion {
+    data Ints | string
+}",
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn chained_alias_to_list_in_union() {
+    // A -> B -> int[] — chained aliases should also resolve correctly
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "\
+type IntList = int[]
+type MyList = IntList
+
+class WithChainedAlias {
+    data MyList | string
+}",
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn type_alias_to_map_in_union_gets_empty_map_default() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "\
+type Config = map<string, string>
+
+class WithMapAlias {
+    settings Config | int
+}",
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+// ── Bug 2: field attributes lost on $stream ─────────────────────────────────
+
+#[test]
+fn field_alias_preserved_on_stream_class() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class WithAlias {
+    bar string @alias("baz")
+    count int @alias("cnt")
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+#[test]
+fn field_description_preserved_stream_done_stripped() {
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        r#"
+class WithDesc {
+    name string @description("The name") @stream.done
+    age int @description("Age in years")
+}
+"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file));
+}
+
+// ── Bug 3: package-scoped keys ──────────────────────────────────────────────
+// Cross-package collision tests require multi-package test infrastructure.
+// Covered by manual verification: ensure @@stream.* attrs from builtins
+// don't leak into user types with the same name.
+// TODO: Add project-based test in projects/stream_crosspackage/ once
+// multi-package test support is available.

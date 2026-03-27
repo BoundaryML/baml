@@ -20,7 +20,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     lower_type_expr::{lower_type_expr_in_ns, qualify_def},
     throw_inference::{FunctionThrowSets, function_throw_sets},
-    ty::{QualifiedTypeName, Ty},
+    ty::{QualifiedTypeName, Ty, TyAttr},
 };
 
 // ── Data types ─────────────────────────────────────────────────────────────
@@ -206,9 +206,9 @@ impl ExportedType {
     /// Convert to a Ty (for type resolution results).
     pub fn to_ty(&self) -> Ty {
         match self {
-            ExportedType::Class { qtn, .. } => Ty::Class(qtn.clone()),
-            ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone()),
-            ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone()),
+            ExportedType::Class { qtn, .. } => Ty::Class(qtn.clone(), TyAttr::default()),
+            ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
+            ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
         }
     }
 }
@@ -248,7 +248,12 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             );
                             fields.push((field.name.clone(), field_ty));
                         } else {
-                            fields.push((field.name.clone(), Ty::Unknown));
+                            fields.push((
+                                field.name.clone(),
+                                Ty::Unknown {
+                                    attr: TyAttr::default(),
+                                },
+                            ));
                         }
                     }
 
@@ -270,7 +275,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                         let mut params = Vec::new();
                         for (param_name, param_te) in &sig.params {
                             let param_ty = if param_name.as_str() == "self"
-                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
+                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
                                 build_self_type_for_class(class_data, ns_path)
                             } else {
@@ -286,16 +291,21 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             params.push((param_name.clone(), param_ty));
                         }
 
-                        let return_type = sig.return_type.as_ref().map_or(Ty::Unknown, |te| {
-                            lower_type_expr_in_ns(
-                                db,
-                                te,
-                                pkg_items,
-                                &class_ns,
-                                &all_generic_params,
-                                &mut diags,
-                            )
-                        });
+                        let return_type = sig.return_type.as_ref().map_or(
+                            Ty::Unknown {
+                                attr: TyAttr::default(),
+                            },
+                            |te| {
+                                lower_type_expr_in_ns(
+                                    db,
+                                    te,
+                                    pkg_items,
+                                    &class_ns,
+                                    &all_generic_params,
+                                    &mut diags,
+                                )
+                            },
+                        );
 
                         let throws = sig.throws.as_ref().map(|te| {
                             lower_type_expr_in_ns(
@@ -351,7 +361,9 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                         .map(|te| {
                             lower_type_expr_in_ns(db, &te.expr, pkg_items, &ta_ns, &[], &mut diags)
                         })
-                        .unwrap_or(Ty::Unknown);
+                        .unwrap_or(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        });
                     let qtn = qualify_def(db, *def, name);
                     ExportedType::TypeAlias { qtn, resolved }
                 }
@@ -388,16 +400,21 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                 params.push((param_name.clone(), param_ty));
             }
 
-            let return_type = sig.return_type.as_ref().map_or(Ty::Unknown, |te| {
-                lower_type_expr_in_ns(
-                    db,
-                    te,
-                    pkg_items,
-                    &func_ns,
-                    &func_data.generic_params,
-                    &mut diags,
-                )
-            });
+            let return_type = sig.return_type.as_ref().map_or(
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+                |te| {
+                    lower_type_expr_in_ns(
+                        db,
+                        te,
+                        pkg_items,
+                        &func_ns,
+                        &func_data.generic_params,
+                        &mut diags,
+                    )
+                },
+            );
 
             let throws = sig.throws.as_ref().map(|te| {
                 lower_type_expr_in_ns(
@@ -446,12 +463,23 @@ fn build_self_type_for_class(
 ) -> Ty {
     // For known builtin containers, return the corresponding Ty variant
     match class_data.name.as_str() {
-        "Array" if class_data.generic_params.len() == 1 => {
-            Ty::List(Box::new(Ty::TypeVar(class_data.generic_params[0].clone())))
-        }
+        "Array" if class_data.generic_params.len() == 1 => Ty::List(
+            Box::new(Ty::TypeVar(
+                class_data.generic_params[0].clone(),
+                TyAttr::default(),
+            )),
+            TyAttr::default(),
+        ),
         "Map" if class_data.generic_params.len() == 2 => Ty::Map(
-            Box::new(Ty::TypeVar(class_data.generic_params[0].clone())),
-            Box::new(Ty::TypeVar(class_data.generic_params[1].clone())),
+            Box::new(Ty::TypeVar(
+                class_data.generic_params[0].clone(),
+                TyAttr::default(),
+            )),
+            Box::new(Ty::TypeVar(
+                class_data.generic_params[1].clone(),
+                TyAttr::default(),
+            )),
+            TyAttr::default(),
         ),
         _ => {
             let qtn = QualifiedTypeName::new_with_generic_params(
@@ -460,7 +488,7 @@ fn build_self_type_for_class(
                 class_data.name.clone(),
                 class_data.generic_params.clone(),
             );
-            Ty::Class(qtn)
+            Ty::Class(qtn, TyAttr::default())
         }
     }
 }
@@ -689,7 +717,12 @@ impl<'db> PackageResolutionContext<'db> {
                 );
                 fields.push((field.name.clone(), field_ty));
             } else {
-                fields.push((field.name.clone(), Ty::Unknown));
+                fields.push((
+                    field.name.clone(),
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                ));
             }
         }
         fields
@@ -736,9 +769,21 @@ impl<'db> PackageResolutionContext<'db> {
                 );
                 params.push((param_name.clone(), param_ty));
             }
-            let return_type = sig.return_type.as_ref().map_or(Ty::Unknown, |te| {
-                lower_type_expr_in_ns(db, te, self.own_items, &ns, &all_generic_params, &mut diags)
-            });
+            let return_type = sig.return_type.as_ref().map_or(
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+                |te| {
+                    lower_type_expr_in_ns(
+                        db,
+                        te,
+                        self.own_items,
+                        &ns,
+                        &all_generic_params,
+                        &mut diags,
+                    )
+                },
+            );
             let throws = sig.throws.as_ref().map(|te| {
                 lower_type_expr_in_ns(db, te, self.own_items, &ns, &all_generic_params, &mut diags)
             });
@@ -783,13 +828,19 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
             let data = &item_tree[loc.id(db)];
             data.name.clone()
         }
-        _ => return Ty::Unknown,
+        _ => {
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
     };
     match def {
-        Definition::Class(_) => Ty::Class(qualify_def(db, def, &name)),
-        Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name)),
-        Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, &name)),
-        _ => Ty::Unknown,
+        Definition::Class(_) => Ty::Class(qualify_def(db, def, &name), TyAttr::default()),
+        Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name), TyAttr::default()),
+        Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, &name), TyAttr::default()),
+        _ => Ty::Unknown {
+            attr: TyAttr::default(),
+        },
     }
 }
 
