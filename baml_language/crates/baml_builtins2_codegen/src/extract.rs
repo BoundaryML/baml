@@ -80,18 +80,14 @@ pub fn extract_native_builtins()
             continue;
         }
 
-        // Build the namespace prefix from the file's package and namespace slices.
-        // e.g. package="baml", namespace=["math"] → "baml.math"
-        //      package="baml", namespace=[]        → "baml"
-        //      package="env",  namespace=[]        → "env"
-        let namespace_prefix = if builtin_file.namespace.is_empty() {
+        // Build the namespace prefix from the file's package and path-derived namespace.
+        // e.g. package="baml", ns_path=["math"] → "baml.math"
+        //      package="baml", ns_path=[]        → "baml"
+        let ns_path = builtin_file.namespace_path();
+        let namespace_prefix = if ns_path.is_empty() {
             builtin_file.package.to_string()
         } else {
-            format!(
-                "{}.{}",
-                builtin_file.package,
-                builtin_file.namespace.join(".")
-            )
+            format!("{}.{}", builtin_file.package, ns_path.join("."))
         };
 
         for item in &items {
