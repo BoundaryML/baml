@@ -36,6 +36,7 @@ fn union_normalization_alias() {
       }
       !! 58..59: type mismatch: expected string, got user.A
     }
+    type user.A$stream = int | string
     ");
 }
 
@@ -191,6 +192,9 @@ fn calling_class_as_function() {
         return Foo(1) : unknown
       }
       !! 55..61: type `user.Foo` is not callable
+    }
+    class user.Foo$stream {
+      name: null | string
     }
     ");
 }
@@ -450,6 +454,14 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
         return x.name : string | string
       }
     }
+    class user.Cat$stream {
+      name: null | string
+      legs: null | int
+    }
+    class user.Dog$stream {
+      name: null | string
+      legs: null | int
+    }
     ");
 }
 
@@ -478,6 +490,14 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
         return x.whiskers : unknown
       }
       !! 115..126: unresolved member: user.Dog.whiskers
+    }
+    class user.Cat$stream {
+      name: null | string
+      whiskers: null | int
+    }
+    class user.Dog$stream {
+      name: null | string
+      tail: null | bool
     }
     ");
 }
@@ -508,6 +528,15 @@ function f(x: A | B | C) -> string { return x.name; }"#,
         return x.name : unknown
       }
       !! 111..118: unresolved member: user.C.name
+    }
+    class user.A$stream {
+      name: null | string
+    }
+    class user.B$stream {
+      name: null | string
+    }
+    class user.C$stream {
+      age: null | int
     }
     ");
 }
@@ -540,6 +569,15 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       !! 110..117: unresolved member: user.B.name
       !! 110..117: unresolved member: user.C.name
     }
+    class user.A$stream {
+      name: null | string
+    }
+    class user.B$stream {
+      age: null | string
+    }
+    class user.C$stream {
+      age: null | int
+    }
     ");
 }
 
@@ -566,6 +604,12 @@ function f(x: A | B) -> string { return x.value; }"#,
       }
       !! 86..94: type mismatch: expected string, got int | string
     }
+    class user.A$stream {
+      value: null | int
+    }
+    class user.B$stream {
+      value: null | string
+    }
     ");
 }
 
@@ -591,6 +635,12 @@ function f(x: A | B | null) -> string { return x.name; }"#,
         return x.name : unknown
       }
       !! 94..101: unresolved member: null.name
+    }
+    class user.A$stream {
+      name: null | string
+    }
+    class user.B$stream {
+      name: null | string
     }
     ");
 }

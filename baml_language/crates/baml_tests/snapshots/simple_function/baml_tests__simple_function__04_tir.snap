@@ -18,3 +18,7 @@ class user.User {
   name: string
   age: int
 }
+class user.User$stream {
+  name: null | string
+  age: null | int
+}

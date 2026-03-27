@@ -8,3 +8,9 @@ class user.Primitives {
   flag: bool
   score: float
 }
+class user.Primitives$stream {
+  name: null | string
+  count: null | int
+  flag: null | bool
+  score: null | float
+}

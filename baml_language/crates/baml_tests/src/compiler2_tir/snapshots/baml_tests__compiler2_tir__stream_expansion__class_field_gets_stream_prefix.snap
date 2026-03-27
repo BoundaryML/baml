@@ -8,3 +8,9 @@ class user.Inner {
 class user.Outer {
   inner: user.Inner
 }
+class user.Inner$stream {
+  value: null | string
+}
+class user.Outer$stream {
+  inner: null | user.Inner$stream
+}

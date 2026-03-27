@@ -36,3 +36,13 @@ function user.BadReturnType$build_request() -> baml.http.Request throws never {
   !! 777..897: unresolved name: GPT4
 }
 type user.BadAlias = map<string, int>
+class user.MalformedClass$stream {
+  bad_field: map<string, int>
+  good_field: map<string, int>
+  another_field: null | string
+}
+class user.NestedGenerics$stream {
+  nested: map<string, map<string, int>>
+  simple: map<string, int>
+}
+type user.BadAlias$stream = map<string, int>

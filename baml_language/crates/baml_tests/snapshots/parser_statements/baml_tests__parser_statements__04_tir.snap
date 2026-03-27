@@ -213,6 +213,10 @@ class user.Point {
   x: int
   y: int
 }
+class user.Point$stream {
+  x: null | int
+  y: null | int
+}
 function user.simple_while_loop() -> int throws never {
   { : never
     let i = 0 : 0 -> int

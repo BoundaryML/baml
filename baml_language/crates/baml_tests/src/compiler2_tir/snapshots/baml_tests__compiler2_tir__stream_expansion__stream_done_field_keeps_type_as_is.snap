@@ -6,3 +6,7 @@ class user.WithDone {
   name: string
   age: int
 }
+class user.WithDone$stream {
+  name: null | string
+  age: null | int
+}

@@ -37,7 +37,7 @@ fn user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request {
     bb0: {
         _3 = [];
         _2 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
-        _4 = { const "from_text": copy _1 };
+        _4 = { const "from_text": const null };
         _0 = call const fn baml.llm.build_request(copy _2, const "TypeBuilderFn", copy _4) -> [bb1];
     }
 
@@ -61,7 +61,7 @@ fn user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
     bb0: {
         _3 = [];
         _2 = baml.llm.Client { const "openai/gpt-4o-mini", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
-        _4 = { const "from_text": copy _1 };
+        _4 = { const "from_text": const null };
         _0 = call const fn baml.llm.render_prompt(copy _2, const "TypeBuilderFn", copy _4) -> [bb1];
     }
 

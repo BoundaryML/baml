@@ -5,3 +5,6 @@ source: crates/baml_tests/src/generated_tests.rs
 type user.type = unknown
   !! 182..186: unresolved type: Foo
 type user.Bar = unknown
+type user.type$stream = unknown
+  !! 182..186: unresolved type: Foo
+type user.Bar$stream = unknown

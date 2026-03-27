@@ -6,3 +6,7 @@ class user.TreeNode {
   value: string
   children: user.TreeNode[]
 }
+class user.TreeNode$stream {
+  value: null | string
+  children: user.TreeNode$stream[]
+}

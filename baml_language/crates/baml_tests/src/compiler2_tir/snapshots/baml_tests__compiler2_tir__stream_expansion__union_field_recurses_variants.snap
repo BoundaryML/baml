@@ -10,3 +10,11 @@ class user.WithUnions {
   with_class: user.Inner | string
   mixed: int | user.Inner
 }
+class user.Inner$stream {
+  value: null | string
+}
+class user.WithUnions$stream {
+  simple: null | int | string
+  with_class: null | user.Inner$stream | string
+  mixed: null | int | user.Inner$stream
+}

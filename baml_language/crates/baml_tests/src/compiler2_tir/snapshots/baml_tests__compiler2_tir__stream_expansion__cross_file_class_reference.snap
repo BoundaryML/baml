@@ -6,3 +6,7 @@ class user.Resume {
   name: string
   education: user.Education[]
 }
+class user.Resume$stream {
+  name: null | string
+  education: user.Education$stream[]
+}

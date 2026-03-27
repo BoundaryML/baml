@@ -9,3 +9,10 @@ class user.WithOptionals {
   name: string?
   inner: user.Inner?
 }
+class user.Inner$stream {
+  value: null | string
+}
+class user.WithOptionals$stream {
+  name: null | string
+  inner: null | user.Inner$stream
+}

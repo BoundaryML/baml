@@ -9,9 +9,21 @@ class user.Education {
 }
 enum user.Degree
 type user.EducationList = user.Education[]
+class user.Education$stream {
+  school: null | string
+  degree: null | user.Degree
+  year: null | int
+}
+type user.EducationList$stream = user.Education$stream[]
 class user.Resume {
   name: string
   education: user.Education[]
   highest_degree: user.Degree
   aliases: user.EducationList
+}
+class user.Resume$stream {
+  name: null | string
+  education: user.Education$stream[]
+  highest_degree: null | user.Degree
+  aliases: user.Education$stream[]
 }

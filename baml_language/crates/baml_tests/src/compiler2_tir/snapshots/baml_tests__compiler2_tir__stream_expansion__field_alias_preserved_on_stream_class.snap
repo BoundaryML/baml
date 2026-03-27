@@ -6,3 +6,7 @@ class user.WithAlias {
   bar: string @alias("baz")
   count: int @alias("cnt")
 }
+class user.WithAlias$stream {
+  bar: null | string @alias("baz")
+  count: null | int @alias("cnt")
+}

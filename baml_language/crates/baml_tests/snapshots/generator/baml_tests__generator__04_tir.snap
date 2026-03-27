@@ -18,3 +18,7 @@ function user.GetUser$build_request() -> baml.http.Request throws never {
   baml.llm.build_request(null, "GetUser", map {  }) : baml.http.Request
   !! 347..397: type mismatch: expected baml.llm.Client, got null
 }
+class user.MyClass$stream {
+  name: null | string
+  age: null | int
+}
