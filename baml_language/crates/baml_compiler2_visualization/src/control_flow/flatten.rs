@@ -842,10 +842,7 @@ mod tests {
         }
         for (src, edges) in &result.edges_by_src {
             for edge in edges {
-                eprintln!(
-                    "  Edge {}→{} label={:?}",
-                    src, edge.dst, edge.label
-                );
+                eprintln!("  Edge {}→{} label={:?}", src, edge.dst, edge.label);
             }
         }
         eprintln!("=== end ===\n");
@@ -955,7 +952,9 @@ mod tests {
         let arm_false = make_node(6, Some(4), "false", NodeType::BranchArm);
         let leaf_done = make_node(7, Some(3), "done", NodeType::OtherScope);
 
-        for n in [root, h_setup, leaf_x, h_process, bg, arm_true, arm_false, leaf_done] {
+        for n in [
+            root, h_setup, leaf_x, h_process, bg, arm_true, arm_false, leaf_done,
+        ] {
             graph.nodes.insert(n.id, n);
         }
 

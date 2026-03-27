@@ -98,14 +98,14 @@ pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol>
                     func.declarative_meta,
                     Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(_))
                 );
-                let client_name = if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(
-                    ref llm,
-                )) = func.declarative_meta
-                {
-                    llm.client.as_ref().map(|n| n.to_string())
-                } else {
-                    None
-                };
+                let client_name =
+                    if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(ref llm)) =
+                        func.declarative_meta
+                    {
+                        llm.client.as_ref().map(|n| n.to_string())
+                    } else {
+                        None
+                    };
 
                 // Sub-functions have names with '$' (e.g. render_prompt$MyFunc)
                 let is_sub_function = name.as_str().contains('$');

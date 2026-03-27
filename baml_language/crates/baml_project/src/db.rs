@@ -410,23 +410,22 @@ impl ProjectDatabase {
                 );
 
                 return if is_llm {
-                    let client_name = if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(
-                        ref llm,
-                    )) = func_data.declarative_meta
-                    {
-                        llm.client
-                            .as_ref()
-                            .map(|c: &baml_db::Name| c.to_string())
-                            .unwrap_or_else(|| "unknown".to_string())
-                    } else {
-                        "unknown".to_string()
-                    };
+                    let client_name =
+                        if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(ref llm)) =
+                            func_data.declarative_meta
+                        {
+                            llm.client
+                                .as_ref()
+                                .map(|c: &baml_db::Name| c.to_string())
+                                .unwrap_or_else(|| "unknown".to_string())
+                        } else {
+                            "unknown".to_string()
+                        };
                     Some(build_llm_control_flow_graph(function_name, &client_name))
                 } else {
                     match body.as_ref() {
                         baml_compiler2_hir::body::FunctionBody::Expr(expr_body) => {
-                            let graph =
-                                build_control_flow_graph_from_ast(function_name, expr_body);
+                            let graph = build_control_flow_graph_from_ast(function_name, expr_body);
                             Some(graph)
                         }
                         baml_compiler2_hir::body::FunctionBody::Builtin(_)
@@ -859,7 +858,6 @@ impl ProjectDatabase {
 
         (None, vec![])
     }
-
 }
 
 impl Default for ProjectDatabase {
