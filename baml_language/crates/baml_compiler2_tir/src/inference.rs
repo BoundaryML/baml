@@ -18,7 +18,7 @@ use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
     loc::{ClassLoc, FunctionLoc, LetLoc, TypeAliasLoc},
-    package::{PackageId, PackageItems, package_items},
+    package::{PackageId, PackageItems},
     scope::{ScopeId, ScopeKind},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -26,7 +26,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     builder::TypeInferenceBuilder,
     infer_context::{InferContext, TypeCheckDiagnostics},
-    ty::Ty,
+    ty::{Ty, TyAttr},
 };
 
 // ── Method Resolution ─────────────────────────────────────────────────────
@@ -256,7 +256,9 @@ pub fn infer_scope_types<'db>(
                                     &mut diags,
                                 )
                             })
-                            .unwrap_or(Ty::Unknown);
+                            .unwrap_or(Ty::Unknown {
+                                attr: TyAttr::default(),
+                            });
 
                         // Report unresolved type diagnostics for return type
                         if !diags.is_empty() {
@@ -291,7 +293,7 @@ pub fn infer_scope_types<'db>(
                         );
                         for (i, (param_name, param_te)) in sig.params.iter().enumerate() {
                             let param_ty = if param_name.as_str() == "self"
-                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
+                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
                                 // `self` parameter with no type annotation — infer from enclosing class
                                 enclosing_class_name
@@ -300,12 +302,15 @@ pub fn infer_scope_types<'db>(
                                         let mut ns_path = pkg_info.namespace_path.clone();
                                         ns_path.push(cn.clone());
                                         pkg_items.lookup_type(&ns_path).map(|def| {
-                                            Ty::Class(crate::lower_type_expr::qualify_def(
-                                                db, def, cn,
-                                            ))
+                                            Ty::Class(
+                                                crate::lower_type_expr::qualify_def(db, def, cn),
+                                                TyAttr::default(),
+                                            )
                                         })
                                     })
-                                    .unwrap_or(Ty::Unknown)
+                                    .unwrap_or(Ty::Unknown {
+                                        attr: TyAttr::default(),
+                                    })
                             } else {
                                 let mut param_diags = Vec::new();
                                 let ty = crate::lower_type_expr::lower_type_expr_in_ns(
@@ -430,7 +435,7 @@ pub fn detect_invalid_alias_cycles<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> std::collections::HashSet<crate::ty::QualifiedTypeName> {
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let aliases = collect_type_aliases(db, pkg_items);
     crate::normalize::find_invalid_alias_cycles(&aliases)
 }
@@ -443,7 +448,7 @@ pub fn detect_invalid_class_cycles<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> Vec<crate::normalize::ClassCycleInfo> {
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let aliases = collect_type_aliases(db, pkg_items);
     let class_fields = collect_class_fields(db, pkg_items);
     crate::normalize::find_invalid_class_cycles(&class_fields, &aliases)
@@ -461,7 +466,12 @@ fn collect_class_fields<'db>(
                 let resolved = resolve_class_fields(db, *loc);
                 let qualified =
                     crate::lower_type_expr::qualify_def(db, Definition::Class(*loc), name);
-                classes.insert(qualified, resolved.fields.clone());
+                let fields_without_attrs: Vec<(Name, crate::ty::Ty)> = resolved
+                    .fields
+                    .iter()
+                    .map(|(n, ty, _attrs)| (n.clone(), ty.clone()))
+                    .collect();
+                classes.insert(qualified, fields_without_attrs);
             }
         }
     }
@@ -473,7 +483,8 @@ fn collect_class_fields<'db>(
 /// Resolved class fields — `TypeExpr` resolved to `Ty` for each field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedClassFields {
-    pub fields: Vec<(Name, Ty)>,
+    /// (field name, resolved type, field-level attributes)
+    pub fields: Vec<(Name, Ty, Vec<baml_compiler2_ast::RawAttribute>)>,
     /// Type lowering diagnostics: (error, span of the type annotation).
     pub diagnostics: Vec<(crate::infer_context::TirTypeError, text_size::TextRange)>,
 }
@@ -536,7 +547,7 @@ pub fn resolve_class_fields<'db>(
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let class_data = &item_tree[class_loc.id(db)];
     let mut all_diags = Vec::new();
@@ -562,8 +573,10 @@ pub fn resolve_class_fields<'db>(
                     }
                     ty
                 })
-                .unwrap_or(Ty::Unknown);
-            (f.name.clone(), ty)
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            (f.name.clone(), ty, f.attributes.clone())
         })
         .collect();
 
@@ -585,7 +598,7 @@ pub fn resolve_type_alias<'db>(
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let alias_data = &item_tree[alias_loc.id(db)];
     let mut all_diags = Vec::new();
@@ -607,7 +620,9 @@ pub fn resolve_type_alias<'db>(
             }
             ty
         })
-        .unwrap_or(Ty::Unknown);
+        .unwrap_or(Ty::Unknown {
+            attr: TyAttr::default(),
+        });
 
     Arc::new(ResolvedTypeAlias {
         ty,

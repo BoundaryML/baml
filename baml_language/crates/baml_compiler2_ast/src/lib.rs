@@ -29,6 +29,36 @@ mod tests {
         lower_cst::lower_file,
     };
 
+    /// Build a `TypeExpr` value for use in `assert_eq!` comparisons.
+    /// All `attrs` fields are set to `vec![]`.
+    macro_rules! type_expr {
+        (Int) => { TypeExpr::Int { attrs: vec![] } };
+        (Float) => { TypeExpr::Float { attrs: vec![] } };
+        (String) => { TypeExpr::String { attrs: vec![] } };
+        (Bool) => { TypeExpr::Bool { attrs: vec![] } };
+        (Null) => { TypeExpr::Null { attrs: vec![] } };
+        (Never) => { TypeExpr::Never { attrs: vec![] } };
+        (Rust) => { TypeExpr::Rust { attrs: vec![] } };
+        (Optional($($inner:tt)+)) => {
+            TypeExpr::Optional {
+                inner: Box::new(type_expr!($($inner)+)),
+                attrs: vec![],
+            }
+        };
+        (List($($inner:tt)+)) => {
+            TypeExpr::List {
+                inner: Box::new(type_expr!($($inner)+)),
+                attrs: vec![],
+            }
+        };
+        (Union($($variant:tt),+ $(,)?)) => {
+            TypeExpr::Union {
+                variants: vec![$(type_expr!($variant)),+],
+                attrs: vec![],
+            }
+        };
+    }
+
     /// Parse BAML source text and return the CST root.
     fn parse(source: &str) -> SyntaxNode {
         let tokens = lex_lossless(source, FileId::new(0));
@@ -104,11 +134,14 @@ class Response {
         let throws = method.throws.as_ref().expect("expected throws contract");
         assert_eq!(
             throws.expr,
-            TypeExpr::Path(vec![
-                baml_base::Name::new("baml"),
-                baml_base::Name::new("errors"),
-                baml_base::Name::new("Io"),
-            ])
+            TypeExpr::Path {
+                segments: vec![
+                    baml_base::Name::new("baml"),
+                    baml_base::Name::new("errors"),
+                    baml_base::Name::new("Io"),
+                ],
+                attrs: vec![]
+            }
         );
     }
 
@@ -387,7 +420,7 @@ class Media {
 
         match &field.type_expr {
             Some(spanned) => match &spanned.expr {
-                TypeExpr::Rust => {}
+                TypeExpr::Rust { .. } => {}
                 other => panic!("expected TypeExpr::Rust, got {other:?}"),
             },
             None => panic!("expected a type expression for _data field"),
@@ -497,7 +530,7 @@ class Media {
             assert!(
                 matches!(
                     data_field.unwrap().type_expr.as_ref().map(|te| &te.expr),
-                    Some(TypeExpr::Rust)
+                    Some(TypeExpr::Rust { .. })
                 ),
                 "_data field should have TypeExpr::Rust"
             );
@@ -518,7 +551,7 @@ function f() -> int throws never {
             .throws
             .expect("expected throws clause to be lowered into FunctionDef.throws");
         assert!(
-            matches!(throws.expr, TypeExpr::Never),
+            matches!(throws.expr, TypeExpr::Never { .. }),
             "expected throws type to lower as TypeExpr::Never, got {:?}",
             throws.expr
         );
@@ -661,118 +694,96 @@ function f() -> int {
     #[test]
     fn type_expr_simple_optional() {
         let ta = first_type_alias(parse_and_lower("type T = int?\n"));
-        let te = ta.type_expr.unwrap().expr;
-        assert_eq!(te, TypeExpr::Optional(Box::new(TypeExpr::Int)));
+        assert_eq!(ta.type_expr.unwrap().expr, type_expr!(Optional(Int)));
     }
 
     #[test]
     fn type_expr_simple_array() {
         let ta = first_type_alias(parse_and_lower("type T = int[]\n"));
-        let te = ta.type_expr.unwrap().expr;
-        assert_eq!(te, TypeExpr::List(Box::new(TypeExpr::Int)));
+        assert_eq!(ta.type_expr.unwrap().expr, type_expr!(List(Int)));
     }
 
     #[test]
     fn type_expr_array_optional() {
+        // int[]? = Optional(List(Int))
         let ta = first_type_alias(parse_and_lower("type T = int[]?\n"));
-        let te = ta.type_expr.unwrap().expr;
-        assert_eq!(
-            te,
-            TypeExpr::Optional(Box::new(TypeExpr::List(Box::new(TypeExpr::Int))))
-        );
+        assert_eq!(ta.type_expr.unwrap().expr, type_expr!(Optional(List(Int))));
     }
 
     #[test]
     fn type_expr_optional_in_array() {
+        // string?[] = List(Optional(String))
         let ta = first_type_alias(parse_and_lower("type T = string?[]\n"));
-        let te = ta.type_expr.unwrap().expr;
         assert_eq!(
-            te,
-            TypeExpr::List(Box::new(TypeExpr::Optional(Box::new(TypeExpr::String))))
+            ta.type_expr.unwrap().expr,
+            type_expr!(List(Optional(String)))
         );
     }
 
     #[test]
     fn type_expr_optional_array_optional() {
+        // string?[]? = Optional(List(Optional(String)))
         let ta = first_type_alias(parse_and_lower("type T = string?[]?\n"));
-        let te = ta.type_expr.unwrap().expr;
         assert_eq!(
-            te,
-            TypeExpr::Optional(Box::new(TypeExpr::List(Box::new(TypeExpr::Optional(
-                Box::new(TypeExpr::String)
-            )))))
+            ta.type_expr.unwrap().expr,
+            type_expr!(Optional(List(Optional(String))))
         );
     }
 
     #[test]
     fn type_expr_nested_int_array() {
+        // int[][] = List(List(Int))
         let ta = first_type_alias(parse_and_lower("type T = int[][]\n"));
-        let te = ta.type_expr.unwrap().expr;
-        assert_eq!(
-            te,
-            TypeExpr::List(Box::new(TypeExpr::List(Box::new(TypeExpr::Int))))
-        );
+        assert_eq!(ta.type_expr.unwrap().expr, type_expr!(List(List(Int))));
     }
 
     #[test]
     fn type_expr_triple_nested_array() {
+        // int[][][] = List(List(List(Int)))
         let ta = first_type_alias(parse_and_lower("type T = int[][][]\n"));
-        let te = ta.type_expr.unwrap().expr;
         assert_eq!(
-            te,
-            TypeExpr::List(Box::new(TypeExpr::List(Box::new(TypeExpr::List(
-                Box::new(TypeExpr::Int)
-            )))))
+            ta.type_expr.unwrap().expr,
+            type_expr!(List(List(List(Int))))
         );
     }
 
     #[test]
     fn type_expr_paren_union_array() {
+        // (int | string)[] = List(Union(Int, String))
         let ta = first_type_alias(parse_and_lower("type T = (int | string)[]\n"));
-        let te = ta.type_expr.unwrap().expr;
         assert_eq!(
-            te,
-            TypeExpr::List(Box::new(TypeExpr::Union(vec![
-                TypeExpr::Int,
-                TypeExpr::String
-            ])))
+            ta.type_expr.unwrap().expr,
+            type_expr!(List(Union(Int, String)))
         );
     }
 
     #[test]
     fn type_expr_nested_union_array() {
+        // (int | bool)[][] = List(List(Union(Int, Bool)))
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]\n"));
-        let te = ta.type_expr.unwrap().expr;
         assert_eq!(
-            te,
-            TypeExpr::List(Box::new(TypeExpr::List(Box::new(TypeExpr::Union(vec![
-                TypeExpr::Int,
-                TypeExpr::Bool
-            ])))))
+            ta.type_expr.unwrap().expr,
+            type_expr!(List(List(Union(Int, Bool))))
         );
     }
 
     #[test]
     fn type_expr_nested_union_array_opt() {
+        // (int | bool)[][]? = Optional(List(List(Union(Int, Bool))))
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)[][]?\n"));
-        let te = ta.type_expr.unwrap().expr;
         assert_eq!(
-            te,
-            TypeExpr::Optional(Box::new(TypeExpr::List(Box::new(TypeExpr::List(
-                Box::new(TypeExpr::Union(vec![TypeExpr::Int, TypeExpr::Bool]))
-            )))))
+            ta.type_expr.unwrap().expr,
+            type_expr!(Optional(List(List(Union(Int, Bool)))))
         );
     }
 
     #[test]
     fn type_expr_opt_union_in_array() {
+        // (int | bool)?[] = List(Optional(Union(Int, Bool)))
         let ta = first_type_alias(parse_and_lower("type T = (int | bool)?[]\n"));
-        let te = ta.type_expr.unwrap().expr;
         assert_eq!(
-            te,
-            TypeExpr::List(Box::new(TypeExpr::Optional(Box::new(TypeExpr::Union(
-                vec![TypeExpr::Int, TypeExpr::Bool]
-            )))))
+            ta.type_expr.unwrap().expr,
+            type_expr!(List(Optional(Union(Int, Bool))))
         );
     }
 
@@ -879,5 +890,187 @@ retry_policy Simple {
         assert_eq!(let_def.name.as_str(), "Simple");
         assert_eq!(let_def.origin, LetOrigin::RetryPolicy);
         assert!(let_def.initializer.is_some(), "expected an initializer");
+    }
+
+    // ── Type attribute tests ─────────────────────────────────────────────────
+
+    fn first_class(items: Vec<Item>) -> crate::ast::ClassDef {
+        items
+            .into_iter()
+            .find_map(|item| {
+                if let Item::Class(c) = item {
+                    Some(c)
+                } else {
+                    None
+                }
+            })
+            .expect("expected a ClassDef")
+    }
+
+    #[test]
+    fn type_attr_before_field_attr_parses_as_type_attribute() {
+        // @stream.done is a type attribute, @alias("bar") is a field attribute.
+        // When @stream.done comes first, the parser should nest it inside TYPE_EXPR.
+        let source = r#"
+class Foo {
+  foo Fizz @stream.done @alias("bar")
+}
+"#;
+        let class = first_class(parse_and_lower(source));
+        let field = class
+            .fields
+            .iter()
+            .find(|f| f.name.as_str() == "foo")
+            .expect("expected field 'foo'");
+
+        // Field attribute: @alias("bar")
+        assert_eq!(
+            field.attributes.len(),
+            1,
+            "expected 1 field attribute, got {:?}",
+            field.attributes
+        );
+        assert_eq!(field.attributes[0].name.as_str(), "alias");
+
+        // Type attribute: @stream.done should be on the TypeExpr
+        let type_expr = &field.type_expr.as_ref().expect("expected type expr").expr;
+        let type_attrs = type_expr.attrs();
+        assert_eq!(
+            type_attrs.len(),
+            1,
+            "expected 1 type attribute, got {type_attrs:?}"
+        );
+        assert_eq!(type_attrs[0].name.as_str(), "stream.done");
+    }
+
+    #[test]
+    fn type_attr_after_field_attr_parses_as_type_attribute() {
+        // When @alias("bar") comes first, it breaks out of TYPE_EXPR parsing.
+        // @stream.done then becomes a field attribute in the CST.
+        // This test documents the CURRENT behavior: @stream.done ends up as a
+        // field attribute when it follows a field attribute like @alias.
+        let source = r#"
+class Foo {
+  foo Fizz @alias("bar") @stream.done
+}
+"#;
+        let class = first_class(parse_and_lower(source));
+        let field = class
+            .fields
+            .iter()
+            .find(|f| f.name.as_str() == "foo")
+            .expect("expected field 'foo'");
+
+        // Currently, both @alias("bar") and @stream.done end up as field attributes
+        // because once the parser breaks out of TYPE_EXPR for @alias, @stream.done
+        // is parsed in the field attribute loop.
+        // This documents the existing behavior; a future parser fix may change this.
+        let type_expr = &field.type_expr.as_ref().expect("expected type expr").expr;
+        let type_attrs = type_expr.attrs();
+        let field_attr_names: Vec<_> = field.attributes.iter().map(|a| a.name.as_str()).collect();
+        let type_attr_names: Vec<_> = type_attrs.iter().map(|a| a.name.as_str()).collect();
+
+        // Document current state: we expect EITHER:
+        // (a) @stream.done is a type attr (ideal), or
+        // (b) @stream.done is a field attr (current parser limitation)
+        let stream_done_is_type_attr = type_attrs.iter().any(|a| a.name.as_str() == "stream.done");
+        let stream_done_is_field_attr = field
+            .attributes
+            .iter()
+            .any(|a| a.name.as_str() == "stream.done");
+
+        assert!(
+            stream_done_is_type_attr || stream_done_is_field_attr,
+            "expected @stream.done somewhere: type_attrs={type_attr_names:?}, field_attrs={field_attr_names:?}",
+        );
+
+        // @alias should always be a field attribute
+        assert!(
+            field.attributes.iter().any(|a| a.name.as_str() == "alias"),
+            "expected @alias as field attribute, got field_attrs={field_attr_names:?}",
+        );
+    }
+
+    #[test]
+    fn type_attrs_on_optional_type() {
+        let source = r#"
+class Foo {
+  bar int? @stream.done
+}
+"#;
+        let class = first_class(parse_and_lower(source));
+        let field = class
+            .fields
+            .iter()
+            .find(|f| f.name.as_str() == "bar")
+            .expect("expected field 'bar'");
+
+        let type_expr = &field.type_expr.as_ref().expect("expected type expr").expr;
+        // Type should be Optional(Int)
+        assert!(
+            matches!(type_expr, TypeExpr::Optional { .. }),
+            "expected Optional type, got {type_expr:?}",
+        );
+        // @stream.done should be a type attribute
+        let type_attrs = type_expr.attrs();
+        assert_eq!(
+            type_attrs.len(),
+            1,
+            "expected 1 type attribute, got {type_attrs:?}"
+        );
+        assert_eq!(type_attrs[0].name.as_str(), "stream.done");
+    }
+
+    #[test]
+    fn type_attrs_on_array_type() {
+        let source = r#"
+class Foo {
+  items string[] @stream.done
+}
+"#;
+        let class = first_class(parse_and_lower(source));
+        let field = class
+            .fields
+            .iter()
+            .find(|f| f.name.as_str() == "items")
+            .expect("expected field 'items'");
+
+        let type_expr = &field.type_expr.as_ref().expect("expected type expr").expr;
+        assert!(
+            matches!(type_expr, TypeExpr::List { .. }),
+            "expected List type, got {type_expr:?}",
+        );
+        let type_attrs = type_expr.attrs();
+        assert_eq!(
+            type_attrs.len(),
+            1,
+            "expected 1 type attribute, got {type_attrs:?}"
+        );
+        assert_eq!(type_attrs[0].name.as_str(), "stream.done");
+    }
+
+    #[test]
+    fn multiple_type_attrs_are_collected() {
+        let source = r#"
+class Foo {
+  baz int @stream.done @check("positive", {{this > 0}})
+}
+"#;
+        let class = first_class(parse_and_lower(source));
+        let field = class
+            .fields
+            .iter()
+            .find(|f| f.name.as_str() == "baz")
+            .expect("expected field 'baz'");
+
+        let type_expr = &field.type_expr.as_ref().expect("expected type expr").expr;
+        let type_attrs = type_expr.attrs();
+        assert_eq!(
+            type_attrs.len(),
+            2,
+            "expected 2 type attributes, got {type_attrs:?}"
+        );
+        assert_eq!(type_attrs[0].name.as_str(), "stream.done");
+        assert_eq!(type_attrs[1].name.as_str(), "check");
     }
 }

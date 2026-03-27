@@ -258,6 +258,13 @@ impl UnionMemberParts {
             .find(|t| t.kind() == SyntaxKind::FLOAT_LITERAL)
             .map(|t| t.text().to_string())
     }
+
+    /// Get ATTRIBUTE child nodes from this union member.
+    pub fn attributes(&self) -> impl Iterator<Item = Attribute> + '_ {
+        self.child_nodes
+            .iter()
+            .filter_map(|n| Attribute::cast(n.clone()))
+    }
 }
 
 impl Default for UnionMemberParts {

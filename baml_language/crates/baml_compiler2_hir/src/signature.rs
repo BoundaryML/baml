@@ -62,7 +62,7 @@ fn function_signature_with_source_map<'db>(
                 .type_expr
                 .as_ref()
                 .map(|te| te.expr.clone())
-                .unwrap_or(TypeExpr::Unknown);
+                .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
             (p.name.clone(), type_expr)
         })
         .collect();

@@ -798,15 +798,17 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn type_expr_contains_rust(type_expr: &ast::TypeExpr) -> bool {
         match type_expr {
-            ast::TypeExpr::Rust => true,
-            ast::TypeExpr::Optional(inner) | ast::TypeExpr::List(inner) => {
+            ast::TypeExpr::Rust { .. } => true,
+            ast::TypeExpr::Optional { inner, .. } | ast::TypeExpr::List { inner, .. } => {
                 Self::type_expr_contains_rust(inner)
             }
-            ast::TypeExpr::Map { key, value } => {
+            ast::TypeExpr::Map { key, value, .. } => {
                 Self::type_expr_contains_rust(key) || Self::type_expr_contains_rust(value)
             }
-            ast::TypeExpr::Union(types) => types.iter().any(Self::type_expr_contains_rust),
-            ast::TypeExpr::Function { params, ret } => {
+            ast::TypeExpr::Union { variants, .. } => {
+                variants.iter().any(Self::type_expr_contains_rust)
+            }
+            ast::TypeExpr::Function { params, ret, .. } => {
                 params
                     .iter()
                     .any(|param| Self::type_expr_contains_rust(&param.ty))
@@ -818,7 +820,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn collect_invalid_builtin_throw_types(type_expr: &ast::TypeExpr, invalid: &mut Vec<String>) {
         match type_expr {
-            ast::TypeExpr::Path(segments) => {
+            ast::TypeExpr::Path { segments, .. } => {
                 let is_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
                     && segments[1].as_str() == "errors";
@@ -826,8 +828,8 @@ impl<'db> SemanticIndexBuilder<'db> {
                     invalid.push(Self::render_type_expr(type_expr));
                 }
             }
-            ast::TypeExpr::Union(types) => {
-                for ty in types {
+            ast::TypeExpr::Union { variants, .. } => {
+                for ty in variants {
                     Self::collect_invalid_builtin_throw_types(ty, invalid);
                 }
             }
@@ -837,32 +839,32 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn render_type_expr(type_expr: &ast::TypeExpr) -> String {
         match type_expr {
-            ast::TypeExpr::Path(segments) => segments
+            ast::TypeExpr::Path { segments, .. } => segments
                 .iter()
                 .map(Name::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
-            ast::TypeExpr::Int => "int".to_string(),
-            ast::TypeExpr::Float => "float".to_string(),
-            ast::TypeExpr::String => "string".to_string(),
-            ast::TypeExpr::Bool => "bool".to_string(),
-            ast::TypeExpr::Null => "null".to_string(),
-            ast::TypeExpr::Never => "never".to_string(),
-            ast::TypeExpr::Media(kind) => kind.to_string(),
-            ast::TypeExpr::Optional(inner) => format!("{}?", Self::render_type_expr(inner)),
-            ast::TypeExpr::List(inner) => format!("{}[]", Self::render_type_expr(inner)),
-            ast::TypeExpr::Map { key, value } => format!(
+            ast::TypeExpr::Int { .. } => "int".to_string(),
+            ast::TypeExpr::Float { .. } => "float".to_string(),
+            ast::TypeExpr::String { .. } => "string".to_string(),
+            ast::TypeExpr::Bool { .. } => "bool".to_string(),
+            ast::TypeExpr::Null { .. } => "null".to_string(),
+            ast::TypeExpr::Never { .. } => "never".to_string(),
+            ast::TypeExpr::Media { kind, .. } => kind.to_string(),
+            ast::TypeExpr::Optional { inner, .. } => format!("{}?", Self::render_type_expr(inner)),
+            ast::TypeExpr::List { inner, .. } => format!("{}[]", Self::render_type_expr(inner)),
+            ast::TypeExpr::Map { key, value, .. } => format!(
                 "map<{}, {}>",
                 Self::render_type_expr(key),
                 Self::render_type_expr(value)
             ),
-            ast::TypeExpr::Union(types) => types
+            ast::TypeExpr::Union { variants, .. } => variants
                 .iter()
                 .map(Self::render_type_expr)
                 .collect::<Vec<_>>()
                 .join(" | "),
-            ast::TypeExpr::Literal(literal) => literal.to_string(),
-            ast::TypeExpr::Function { params, ret } => format!(
+            ast::TypeExpr::Literal { value, .. } => value.to_string(),
+            ast::TypeExpr::Function { params, ret, .. } => format!(
                 "({}) -> {}",
                 params
                     .iter()
@@ -874,11 +876,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                     .join(", "),
                 Self::render_type_expr(ret)
             ),
-            ast::TypeExpr::BuiltinUnknown => "unknown".to_string(),
-            ast::TypeExpr::Type => "type".to_string(),
-            ast::TypeExpr::Rust => "$rust_type".to_string(),
-            ast::TypeExpr::Error => "<error>".to_string(),
-            ast::TypeExpr::Unknown => "<unknown>".to_string(),
+            ast::TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
+            ast::TypeExpr::Type { .. } => "type".to_string(),
+            ast::TypeExpr::Rust { .. } => "$rust_type".to_string(),
+            ast::TypeExpr::Error { .. } => "<error>".to_string(),
+            ast::TypeExpr::Unknown { .. } => "<unknown>".to_string(),
         }
     }
 }

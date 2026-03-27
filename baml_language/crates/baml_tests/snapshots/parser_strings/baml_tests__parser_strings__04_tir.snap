@@ -3,16 +3,16 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 class user.NestedQuotes {
-  single_in_double: string
-  double_in_single: string
+  single_in_double: string @alias("He said 'hello'")
+  double_in_single: string @alias
   She: unknown
   hello: "')
   escaped_in_escaped string @alias("
   The: unknown
   quote: unknown
   is: unknown
-  complex_nesting: string
-  json_like: string
+  complex_nesting: string @description("It's \"really\" 'complex'")
+  json_like: string @alias("{\"key\": \"value\"}")
 }
 function user.FormatMessage(name: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "FormatMessage", map { "name": name }) : string
@@ -27,10 +27,14 @@ function user.FormatMessage$build_request(name: string) -> baml.http.Request thr
   !! 428..553: unresolved name: GPT4
 }
 class user.RawStrings {
-  simple: string
-  with_quotes: string
-  multi_hash: string
-  multiline: string
+  simple: string @description(#"raw string"#)
+  with_quotes: string @description(#"contains "quotes" easily"#)
+  multi_hash: string @description(##"contains #"hash"# inside"##)
+  multiline: string @description(###"
+    This is a multiline
+    raw string with "quotes"
+    and #hashes#
+  "###)
 }
 function user.ProcessText(input: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "ProcessText", map { "input": input }) : string
@@ -45,11 +49,11 @@ function user.ProcessText$build_request(input: string) -> baml.http.Request thro
   !! 364..532: unresolved name: GPT4
 }
 class user.Messages {
-  greeting: string
-  empty: string
-  with_spaces: string
-  with_escapes: string
-  with_quotes: string
+  greeting: string @alias("hello")
+  empty: string @description("")
+  with_spaces: string @alias("hello world")
+  with_escapes: string @description("line1\nline2\ttab")
+  with_quotes: string @alias("She said \"hello\"")
 }
 function user.GetRole() -> "admin" | "user" | "guest" throws never {
   { : never
@@ -57,16 +61,16 @@ function user.GetRole() -> "admin" | "user" | "guest" throws never {
   }
 }
 class user.UnicodeStrings {
-  emoji_basic: string
-  emoji_multiple: string
-  emoji_in_text: string
-  chinese: string
-  arabic: string
-  japanese: string
-  russian: string
-  math_symbols: string
-  currency: string
-  arrows: string
-  zero_width: string
-  rtl_override: string
+  emoji_basic: string @alias("🎉")
+  emoji_multiple: string @alias("🎉🎊🎈")
+  emoji_in_text: string @description("Hello 👋 World 🌍")
+  chinese: string @alias("你好世界")
+  arabic: string @alias("مرحبا بالعالم")
+  japanese: string @alias("こんにちは世界")
+  russian: string @alias("Привет мир")
+  math_symbols: string @description("α + β = γ")
+  currency: string @alias("Price: €100 or $120 or ¥1000")
+  arrows: string @description("→ ← ↑ ↓ ⇒ ⇐")
+  zero_width: string @alias("Hello​World")
+  rtl_override: string @alias("‏Hello World‏")
 }

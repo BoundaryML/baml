@@ -188,16 +188,16 @@ class user.ColonFields {
   age: int
 }
 class user.SingleAttrField {
-  name: string
+  name: string @description("The user's name")
 }
 class user.MultiAttrField {
-  name: string
-  summary: string?
+  name: string @description("The user's name") @alias("user_name")
+  summary: string? @description("A summary") @alias("sum") @stream.done @stream.not_null
 }
 class user.LongAttrField {
-  name: string
-  data: map<string, int | string | bool>
-  config: map<string, map<string, int | string | bool | null>>
+  name: string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
+  data: map<string, int | string | bool> @description("complex data") @alias("payload") @stream.done
+  config: map<string, map<string, int | string | bool | null>> @description("deeply nested config structure for testing wrapping")
 }
 class user.LongFieldTypes {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
@@ -233,22 +233,22 @@ class user.TriviaClassBlock {
   name: string
 }
 class user.TriviaFieldAttrs {
-  name: string
+  name: string @description("the name")
 }
 class user.TriviaFieldAttrsBlock {
-  name: string
+  name: string @description("the name")
 }
 class user.TriviaLongFieldType {
-  data: map<string, int | string | bool | float | null>
+  data: map<string, int | string | bool | float | null> @description("a long description")
 }
 class user.TriviaLongFieldTypeBlock {
-  data: map<string, int | string | bool | float | null>
+  data: map<string, int | string | bool | float | null> @description("a long description")
 }
 class user.TriviaMultiAttr {
-  name: string
+  name: string @description("name") @alias("user_name") @stream.done
 }
 class user.TriviaMultiAttrBlock {
-  name: string
+  name: string @description("name") @alias("user_name") @stream.done
 }
 class user.A {
   x: int
@@ -257,15 +257,15 @@ class user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredChara
   x: int
 }
 class user.AttributeVariety {
-  a: string
-  b: string
-  c: string
+  a: string @skip
+  b: string @alias("alt_name")
+  c: string @description("desc")
   d: string
   e: string
   f: string
 }
 class user.ExtraWhitespace {
-  name: string
+  name: string @description("name") @alias("n")
   age: int
 }
 class user.ManyFields {
