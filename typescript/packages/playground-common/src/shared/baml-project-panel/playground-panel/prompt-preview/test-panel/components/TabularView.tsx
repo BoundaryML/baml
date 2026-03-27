@@ -14,7 +14,7 @@ import { TruncatedString } from '../../TruncatedString'
 import { testcaseObjectAtom, TestState } from '../../../atoms'
 import { type TestHistoryRun } from '../atoms'
 import { useRunBamlTests } from '../test-runner'
-import { getExplanation, getStatus, getTestStateResponse } from '../testStateUtils'
+import { getStatus, getTestStateResponse } from '../testStateUtils'
 import { ResponseViewType, tabularViewConfigAtom } from './atoms'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ParsedResponseRenderer } from './ParsedResponseRender'
@@ -89,17 +89,7 @@ const ResponseContent = ({
     <div className=''>
       {/* todo: render the failure if pretty or raw is selected. */}
       {responseViewType === 'parsed' && (
-        <>
-          <ParsedResponseRenderer response={getTestStateResponse(state) as TestResponseData | undefined} />
-
-          {/* Don't show the explanation for now. */}
-          {false && getExplanation(state) && (
-            <div className='flex flex-col gap-2 mt-2 text-xs text-muted-foreground/80'>
-              <div>BAML parser fixed the following issues:</div>
-              <pre>{getExplanation(state)}</pre>
-            </div>
-          )}
-        </>
+        <ParsedResponseRenderer response={getTestStateResponse(state) as TestResponseData | undefined} />
       )}
       {responseViewType === 'pretty' && typeof getTestStateResponse(state) === 'object' && (
         <MarkdownRenderer source={(getTestStateResponse(state) as TestResponseData)?.llm_response?.content || ''} />
