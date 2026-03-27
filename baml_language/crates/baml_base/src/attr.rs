@@ -43,6 +43,23 @@ pub struct TyAssert {
     pub span: Span,
 }
 
+// TODO: This Ord impl ignores `span`, which means two TyAsserts with
+// different source locations but the same func_idx compare as equal.
+// This is intentional for now — Span doesn't implement Ord (TextRange
+// from text-size lacks it) and span is diagnostic metadata, not semantic.
+// If ordering correctness matters here, Span will need a manual Ord impl.
+impl PartialOrd for TyAssert {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TyAssert {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.func_idx.cmp(&other.func_idx)
+    }
+}
+
 /// Attributes intrinsic to a type expression.
 ///
 /// Carried on every `Ty` variant from HIR through runtime.

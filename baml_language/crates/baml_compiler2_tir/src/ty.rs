@@ -385,7 +385,7 @@ impl Ty {
     /// Whether this type needs parentheses when a postfix modifier (`[]`, `?`)
     /// is applied. Unions must be grouped because postfix binds tighter than `|`.
     fn needs_postfix_parens(&self) -> bool {
-        matches!(self, Ty::Union(..))
+        matches!(self, Ty::Union(..) | Ty::Function { .. })
     }
 
     /// Format with parentheses if needed for postfix context.
