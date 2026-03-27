@@ -194,6 +194,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
                         });
                     let ctx = ExpandCtx {
                         package_name: &package_name,
+                        namespace_path: &pkg_info.namespace_path,
                         package_items,
                         all_package_items: &all_package_items,
                         block_attrs: &block_attrs,
@@ -280,6 +281,7 @@ pub fn ppir_expansion_items(db: &dyn Db, file: SourceFile) -> PpirExpansionItems
 
                 let ctx = ExpandCtx {
                     package_name: &package_name,
+                    namespace_path: &pkg_info.namespace_path,
                     package_items,
                     all_package_items: &all_package_items,
                     block_attrs: &block_attrs,

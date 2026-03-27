@@ -185,3 +185,21 @@ type user.MixedType = int | user.Education
 type user.OptionalAlias = user.Inner?
 type user.SimpleAlias = string
 type user.UnionAlias = int | user.Inner
+class user.foo.NsClass {
+  value: string
+}
+class user.foo.NsRefToTop {
+  inner: root.Inner
+  status: root.Status
+  items: root.Inner[]
+  alias_ref: root.ClassAlias
+}
+enum user.foo.NsEnum {Alpha, Beta}
+type user.foo.NsAlias = string | int
+class user.TopRefToNs {
+  ns_class: root.foo.NsClass
+  ns_enum: root.foo.NsEnum
+  ns_items: root.foo.NsClass[]
+  ns_map: map<string, root.foo.NsClass>
+  ns_alias: root.foo.NsAlias
+}

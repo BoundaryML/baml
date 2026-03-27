@@ -366,3 +366,38 @@ class user.Container$stream {
 }
 type user.Foo$stream = int | string
 type user.Bar$stream = user.Foo$stream | bool
+class user.foo.NsClass {
+  value: string
+}
+enum user.foo.NsEnum
+type user.foo.NsAlias = string | int
+class user.foo.NsRefToTop {
+  inner: user.Inner
+  status: user.Status
+  items: user.Inner[]
+  alias_ref: user.ClassAlias
+}
+class user.foo.NsClass$stream {
+  value: null | string
+}
+type user.foo.NsAlias$stream = string | int
+class user.foo.NsRefToTop$stream {
+  inner: null | user.Inner$stream
+  status: null | user.Status
+  items: user.Inner$stream[]
+  alias_ref: null | user.Inner$stream
+}
+class user.TopRefToNs {
+  ns_class: user.foo.NsClass
+  ns_enum: user.foo.NsEnum
+  ns_items: user.foo.NsClass[]
+  ns_map: map<string, user.foo.NsClass>
+  ns_alias: user.foo.NsAlias
+}
+class user.TopRefToNs$stream {
+  ns_class: null | user.foo.NsClass$stream
+  ns_enum: null | user.foo.NsEnum
+  ns_items: user.foo.NsClass$stream[]
+  ns_map: map<string, user.foo.NsClass$stream>
+  ns_alias: null | string | int
+}

@@ -197,7 +197,7 @@ function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: s
   }
 }
 class baml.llm.OrchestrationStep$stream {
-  primitive_client: null | baml.llm.PrimitiveClient
+  primitive_client: null | baml.llm.PrimitiveClient$stream
   delay_ms: null | int
 }
 class baml.llm.ExecutionResult$stream {
@@ -468,8 +468,8 @@ class baml.llm.RetryPolicy$stream {
 class baml.llm.Client$stream {
   name: null | string
   client_type: null | baml.llm.ClientType
-  sub_clients: baml.llm.Client[]
-  retry: null | baml.llm.RetryPolicy
+  sub_clients: baml.llm.Client$stream[]
+  retry: null | baml.llm.RetryPolicy$stream
   counter: null | int
 }
 class baml.llm.PrimitiveClientOptions$stream {
@@ -479,7 +479,7 @@ class baml.llm.PrimitiveClientOptions$stream {
   allowed_roles: string[] | null
   remap_roles: map<string, string> | null
   api_key: string | null
-  provider_options: baml.llm.AnthropicOptions | baml.llm.AzureOpenAiOptions | null
+  provider_options: baml.llm.AnthropicOptions$stream | baml.llm.AzureOpenAiOptions$stream | null
   headers: map<string, string>
   query_params: map<string, string>
   request_body: map<string, unknown>
@@ -494,7 +494,7 @@ class baml.llm.AnthropicOptions$stream {
 class baml.llm.PrimitiveClient$stream {
   name: null | string
   provider: null | string
-  options: null | baml.llm.PrimitiveClientOptions
+  options: null | baml.llm.PrimitiveClientOptions$stream
 }
 
 --- <builtin>/baml/ns_math/math.baml ---

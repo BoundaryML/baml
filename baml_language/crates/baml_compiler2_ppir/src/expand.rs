@@ -27,16 +27,28 @@ pub fn classify_type(package_items: &PackageItems<'_>, path: &[Name]) -> Option<
     })
 }
 
-/// Classify a type, falling back to cross-package lookup if the current package
-/// doesn't contain the path. For example, `["baml", "http", "Request"]` is
-/// looked up first in the current package, and if not found, the first segment
-/// is tried as a package name with the remainder as the intra-package path.
+/// Classify a type, falling back to `root.*` prefix handling, bare-name
+/// namespace lookup, and cross-package lookup.
 fn classify_type_cross_pkg(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<SymbolKind> {
-    // Try current package first
+    // 1. Try current package directly
     if let Some(kind) = classify_type(ctx.package_items, path) {
         return Some(kind);
     }
-    // Try interpreting the first segment as a foreign package name
+    // 2. Handle `root.*` prefix (root namespace of current package)
+    if path.len() >= 2 && path[0].as_str() == "root" {
+        if let Some(kind) = classify_type(ctx.package_items, &path[1..]) {
+            return Some(kind);
+        }
+    }
+    // 3. Bare name in current (non-root) namespace
+    if path.len() == 1 && !ctx.namespace_path.is_empty() {
+        let mut ns_qualified: Vec<Name> = ctx.namespace_path.to_vec();
+        ns_qualified.push(path[0].clone());
+        if let Some(kind) = classify_type(ctx.package_items, &ns_qualified) {
+            return Some(kind);
+        }
+    }
+    // 4. Try interpreting the first segment as a foreign package name
     if path.len() >= 2 {
         let pkg_name = &path[0];
         let rest = &path[1..];
@@ -47,11 +59,70 @@ fn classify_type_cross_pkg(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<SymbolK
     None
 }
 
+// ── Namespace-aware key resolution ──────────────────────────────────────────
+
+/// Resolve a path within a single package to its qualified key
+/// `[package_name, ...ns_path, item_name]`.
+fn resolve_in_package(
+    path: &[Name],
+    pkg_name: &Name,
+    pkg_items: &PackageItems<'_>,
+) -> Option<Vec<Name>> {
+    if path.is_empty() {
+        return None;
+    }
+    for split in (0..path.len()).rev() {
+        let ns_path = &path[..split];
+        let item_name = &path[split];
+        if let Some(ns) = pkg_items.namespaces.get(ns_path) {
+            if ns.types.contains_key(item_name) {
+                let mut key = vec![pkg_name.clone()];
+                key.extend_from_slice(ns_path);
+                key.push(item_name.clone());
+                return Some(key);
+            }
+        }
+    }
+    None
+}
+
+/// Resolve a PPIR type path to its qualified key `[package, ...ns, name]`.
+/// Handles direct lookup, `root.*` prefix, bare names in non-root namespaces,
+/// and cross-package references.
+fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<Vec<Name>> {
+    // 1. Direct lookup in current package
+    if let Some(key) = resolve_in_package(path, ctx.package_name, ctx.package_items) {
+        return Some(key);
+    }
+    // 2. Handle `root.*` prefix
+    if path.len() >= 2 && path[0].as_str() == "root" {
+        if let Some(key) = resolve_in_package(&path[1..], ctx.package_name, ctx.package_items) {
+            return Some(key);
+        }
+    }
+    // 3. Bare name in current (non-root) namespace
+    if path.len() == 1 && !ctx.namespace_path.is_empty() {
+        let mut ns_qualified: Vec<Name> = ctx.namespace_path.to_vec();
+        ns_qualified.push(path[0].clone());
+        if let Some(key) = resolve_in_package(&ns_qualified, ctx.package_name, ctx.package_items) {
+            return Some(key);
+        }
+    }
+    // 4. Cross-package (first segment = package name)
+    if path.len() >= 2 {
+        if let Some(foreign_items) = ctx.all_package_items.get(&path[0]) {
+            return resolve_in_package(&path[1..], &path[0], foreign_items);
+        }
+    }
+    None
+}
+
 // ── Context ──────────────────────────────────────────────────────────────────
 
 /// Shared context threaded through all stream-expansion functions.
 pub struct ExpandCtx<'ctx> {
     pub package_name: &'ctx Name,
+    pub namespace_path: &'ctx [Name],
     pub package_items: &'ctx PackageItems<'ctx>,
     /// All packages' items keyed by package name, for cross-package type resolution.
     pub all_package_items: &'ctx FxHashMap<Name, &'ctx PackageItems<'ctx>>,
@@ -103,10 +174,10 @@ fn pending_default(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> PendingDefau
             match classify_type_cross_pkg(path, ctx) {
                 Some(SymbolKind::TypeAlias) => {
                     if depth < MAX_ALIAS_DEPTH {
-                        let mut pkg_path = vec![ctx.package_name.clone()];
-                        pkg_path.extend_from_slice(path);
-                        if let Some(body) = ctx.alias_bodies.get(&pkg_path) {
-                            return pending_default(body, ctx, depth + 1);
+                        if let Some(key) = resolve_qualified_key(path, ctx) {
+                            if let Some(body) = ctx.alias_bodies.get(&key) {
+                                return pending_default(body, ctx, depth + 1);
+                            }
                         }
                     }
                     PendingDefault::Null // fallback if alias body not found or depth exceeded
@@ -306,14 +377,14 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                         // Merge @@stream.* block attrs, then resolve alias recursively
                         merge_block_attrs(path, ctx, &mut must_exist, &mut done);
                         if depth < MAX_ALIAS_DEPTH {
-                            let mut pkg_path = vec![ctx.package_name.clone()];
-                            pkg_path.extend_from_slice(path);
-                            if let Some(body) = ctx.alias_bodies.get(&pkg_path) {
-                                // Set merged attrs on the resolved body and recurse
-                                let mut resolved = body.clone();
-                                resolved.attrs_mut().stream_must_exist = must_exist;
-                                resolved.attrs_mut().stream_done = done;
-                                return stream_expand_inner(&resolved, ctx, depth + 1);
+                            if let Some(key) = resolve_qualified_key(path, ctx) {
+                                if let Some(body) = ctx.alias_bodies.get(&key) {
+                                    // Set merged attrs on the resolved body and recurse
+                                    let mut resolved = body.clone();
+                                    resolved.attrs_mut().stream_must_exist = must_exist;
+                                    resolved.attrs_mut().stream_done = done;
+                                    return stream_expand_inner(&resolved, ctx, depth + 1);
+                                }
                             }
                         }
                         // Fallback: treat like class (Name$stream)
@@ -439,26 +510,9 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
     (stream_type, sap_attrs)
 }
 
-/// Look up block attributes for a `PpirTy` path, using namespace-aware resolution
-/// that mirrors `PackageItems::lookup_type`.
+/// Look up block attributes for a `PpirTy` path, using namespace-aware resolution.
 pub fn lookup_block_attrs<'a>(path: &[Name], ctx: &'a ExpandCtx<'_>) -> Option<&'a Vec<Name>> {
-    if path.is_empty() {
-        return None;
-    }
-    // Mirror PackageItems::lookup_type: try progressively longer namespace prefixes.
-    for split in (0..path.len()).rev() {
-        let ns_path = &path[..split];
-        let item_name = &path[split];
-        if let Some(ns) = ctx.package_items.namespaces.get(ns_path) {
-            if ns.types.contains_key(item_name) {
-                let mut qualified = vec![ctx.package_name.clone()];
-                qualified.extend_from_slice(ns_path);
-                qualified.push(item_name.clone());
-                return ctx.block_attrs.get(&qualified);
-            }
-        }
-    }
-    None
+    resolve_qualified_key(path, ctx).and_then(|key| ctx.block_attrs.get(&key))
 }
 
 /// Merge `@@stream.must_exist` / `@@stream.done` block attributes.
