@@ -703,6 +703,7 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 ast::BinaryOp::Shl => "<<",
                 ast::BinaryOp::Shr => ">>",
                 ast::BinaryOp::Instanceof => "instanceof",
+                ast::BinaryOp::NullCoalesce => "??",
             };
             format!(
                 "{} {} {}",
@@ -718,17 +719,19 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
             };
             format!("{op_str}{}", render_expr_compact_ast(body, *expr))
         }
-        ast::Expr::FieldAccess { base, field } => {
-            format!("{}.{field}", render_expr_compact_ast(body, *base))
+        ast::Expr::FieldAccess { base, field, optional } => {
+            let op = if *optional { "?." } else { "." };
+            format!("{}{op}{field}", render_expr_compact_ast(body, *base))
         }
-        ast::Expr::Index { base, index } => {
+        ast::Expr::Index { base, index, optional } => {
+            let op = if *optional { "?[" } else { "[" };
             format!(
-                "{}[{}]",
+                "{}{op}{}]",
                 render_expr_compact_ast(body, *base),
                 render_expr_compact_ast(body, *index)
             )
         }
-        ast::Expr::Call { callee, args } => {
+        ast::Expr::Call { callee, args, .. } => {
             let callee_str = render_expr_compact_ast(body, *callee);
             let args_str: Vec<_> = args
                 .iter()

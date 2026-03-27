@@ -81,6 +81,7 @@ pub(crate) fn lower_config_value(
         return alloc(Expr::Call {
             callee,
             args: vec![arg],
+            optional: false,
         });
     }
 

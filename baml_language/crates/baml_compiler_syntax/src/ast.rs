@@ -2478,6 +2478,9 @@ impl BlockExpr {
                         | SyntaxKind::FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR
+                        | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
+                        | SyntaxKind::OPTIONAL_INDEX_EXPR
+                        | SyntaxKind::OPTIONAL_CALL_EXPR
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::ARRAY_LITERAL
                         | SyntaxKind::OBJECT_LITERAL

@@ -166,6 +166,10 @@ pub enum TokenKind {
     At,
     #[token("|")]
     Pipe,
+    #[token("??")]
+    QuestionQuestion,
+    #[token("?.")]
+    QuestionDot,
     #[token("?")]
     Question,
 
@@ -319,6 +323,8 @@ impl std::fmt::Display for TokenKind {
             TokenKind::AtAt => "'@@'",
             TokenKind::At => "'@'",
             TokenKind::Pipe => "'|'",
+            TokenKind::QuestionQuestion => "'??'",
+            TokenKind::QuestionDot => "'?.'",
             TokenKind::Question => "'?'",
 
             // Assignment operators
@@ -412,6 +418,90 @@ pub fn lex_lossless(input: &str, file_id: FileId) -> Vec<Token> {
                 ),
             ),
         });
+    }
+
+    // Fixup: `??` in type contexts should split into `?` + `?`.
+    // In expression context, `a ?? b` always has whitespace before `??`.
+    // In type context, `int??` has `??` immediately adjacent to the preceding token.
+    // Split `??` when it's directly adjacent to the previous token (no whitespace gap).
+    let mut i = 0;
+    while i < tokens.len() {
+        if tokens[i].kind == TokenKind::QuestionQuestion {
+            // Check if previous token ends exactly where this one starts (no whitespace)
+            let adjacent = i > 0 && tokens[i - 1].span.range.end() == tokens[i].span.range.start();
+            // Also check: prev token is not whitespace/newline (redundant but safe)
+            let prev_is_content = i > 0
+                && !matches!(
+                    tokens[i - 1].kind,
+                    TokenKind::Whitespace | TokenKind::Newline
+                );
+            if adjacent && prev_is_content {
+                let span = tokens[i].span;
+                let start = span.range.start();
+                let q1_span = Span::new(
+                    span.file_id,
+                    TextRange::new(start, start + TextSize::from(1)),
+                );
+                let q2_span = Span::new(
+                    span.file_id,
+                    TextRange::new(start + TextSize::from(1), span.range.end()),
+                );
+                tokens[i] = Token {
+                    kind: TokenKind::Question,
+                    text: "?".to_string(),
+                    span: q1_span,
+                };
+                tokens.insert(
+                    i + 1,
+                    Token {
+                        kind: TokenKind::Question,
+                        text: "?".to_string(),
+                        span: q2_span,
+                    },
+                );
+                i += 1; // skip the second Question we just inserted
+            }
+        }
+        i += 1;
+    }
+
+    // Fixup: `?.` followed by a digit should split into `?` + `.` per spec §4.1.
+    // This handles the ambiguity where `?.3` should not be treated as optional
+    // chaining followed by a number.
+    let mut i = 0;
+    while i < tokens.len() {
+        if tokens[i].kind == TokenKind::QuestionDot {
+            // Check if next token is an integer literal
+            let next_is_digit = tokens
+                .get(i + 1)
+                .map_or(false, |t| t.kind == TokenKind::IntegerLiteral);
+            if next_is_digit {
+                let span = tokens[i].span;
+                let start = span.range.start();
+                let q_span = Span::new(
+                    span.file_id,
+                    TextRange::new(start, start + TextSize::from(1)),
+                );
+                let d_span = Span::new(
+                    span.file_id,
+                    TextRange::new(start + TextSize::from(1), span.range.end()),
+                );
+                tokens[i] = Token {
+                    kind: TokenKind::Question,
+                    text: "?".to_string(),
+                    span: q_span,
+                };
+                tokens.insert(
+                    i + 1,
+                    Token {
+                        kind: TokenKind::Dot,
+                        text: ".".to_string(),
+                        span: d_span,
+                    },
+                );
+            }
+        }
+        i += 1;
     }
 
     tokens
@@ -923,5 +1013,81 @@ mod tests {
 
         // Verify lossless
         assert_eq!(reconstruct_source(&lex(source)), source);
+    }
+
+    #[test]
+    fn test_question_dot_token() {
+        // `?.` should lex as a single QuestionDot token
+        let tokens = lex_no_whitespace("x?.y");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Word,        // x
+                TokenKind::QuestionDot, // ?.
+                TokenKind::Word,        // y
+            ]
+        );
+        assert_eq!(reconstruct_source(&lex("x?.y")), "x?.y");
+    }
+
+    #[test]
+    fn test_question_question_token() {
+        // `??` should lex as a single QuestionQuestion token
+        let tokens = lex_no_whitespace("a ?? b");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Word,             // a
+                TokenKind::QuestionQuestion, // ??
+                TokenKind::Word,             // b
+            ]
+        );
+    }
+
+    #[test]
+    fn test_question_dot_digit_fixup() {
+        // `?.3` should lex as Question, Dot, IntegerLiteral per §4.1
+        let tokens = lex_no_whitespace("x?.3");
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Word,           // x
+                TokenKind::Question,       // ?
+                TokenKind::Dot,            // .
+                TokenKind::IntegerLiteral, // 3
+            ]
+        );
+        // Lossless
+        assert_eq!(reconstruct_source(&lex("x?.3")), "x?.3");
+    }
+
+    #[test]
+    fn test_question_in_type_annotation() {
+        // `string?` should still lex as Word + Question
+        let tokens = lex_no_whitespace("string?");
+        assert_eq!(
+            tokens,
+            vec![TokenKind::Word, TokenKind::Question]
+        );
+    }
+
+    #[test]
+    fn test_optional_chaining_complex() {
+        // `user?.profile?.name ?? "default"` should lex correctly
+        let tokens = lex_no_whitespace(r#"user?.profile?.name ?? "default""#);
+        assert_eq!(
+            tokens,
+            vec![
+                TokenKind::Word,             // user
+                TokenKind::QuestionDot,      // ?.
+                TokenKind::Word,             // profile
+                TokenKind::QuestionDot,      // ?.
+                TokenKind::Word,             // name
+                TokenKind::QuestionQuestion, // ??
+                TokenKind::Quote,            // "
+                TokenKind::Word,             // default
+                TokenKind::Quote,            // "
+            ]
+        );
     }
 }

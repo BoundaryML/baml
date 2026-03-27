@@ -466,7 +466,7 @@ fn collect_catch_binding_names(body: &ExprBody) -> HashSet<&str> {
 fn expr_to_path(expr_id: baml_compiler2_ast::ExprId, body: &ExprBody) -> Option<Vec<Name>> {
     match &body.exprs[expr_id] {
         Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
-        Expr::FieldAccess { base, field } => {
+        Expr::FieldAccess { base, field, .. } => {
             let mut base_path = expr_to_path(*base, body)?;
             base_path.push(field.clone());
             Some(base_path)

@@ -86,6 +86,8 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::AtAt => SyntaxKind::AT_AT,
         TokenKind::Pipe => SyntaxKind::PIPE,
         TokenKind::Question => SyntaxKind::QUESTION,
+        TokenKind::QuestionDot => SyntaxKind::QUESTION_DOT,
+        TokenKind::QuestionQuestion => SyntaxKind::QUESTION_QUESTION,
 
         // Assignment operators
         TokenKind::Equals => SyntaxKind::EQUALS,
@@ -296,6 +298,12 @@ impl<'a> Parser<'a> {
     /// Check if current token matches the given kind
     fn at(&self, kind: TokenKind) -> bool {
         self.current().map(|t| t.kind == kind).unwrap_or(false)
+    }
+
+    /// Check if the token after a `QuestionDot` matches the given kind.
+    /// Used for disambiguating `?.field` vs `?.[` vs `?.(`.
+    fn peek_after_question_dot(&self, kind: TokenKind) -> bool {
+        self.peek(1).map(|t| t.kind == kind).unwrap_or(false)
     }
 
     /// Check if current token matches the given kind (without skipping comments)
@@ -3383,6 +3391,38 @@ impl<'a> Parser<'a> {
                     self.error_unexpected_token(format!("Expected field name after {punct}"));
                 }
                 self.finish_node();
+            } else if op == TokenKind::QuestionDot {
+                // Optional chaining: ?. followed by field name, [, or (
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+
+                // Peek at what follows QuestionDot to decide the node kind
+                if self.peek_after_question_dot(TokenKind::LBracket) {
+                    // Optional index: a?.[expr]
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_INDEX_EXPR);
+                    self.bump(); // ?.
+                    self.bump(); // [
+                    self.parse_expr();
+                    self.expect(TokenKind::RBracket);
+                    self.finish_node();
+                } else if self.peek_after_question_dot(TokenKind::LParen) {
+                    // Optional call: f?.(args)
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_CALL_EXPR);
+                    self.bump(); // ?.
+                    self.parse_call_args();
+                    self.finish_node();
+                } else {
+                    // Optional field access: a?.field
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR);
+                    self.bump(); // ?.
+                    if self.at(TokenKind::Word) {
+                        self.bump();
+                    } else {
+                        self.error_unexpected_token(
+                            "Expected field name, '[', or '(' after '?.'".to_string(),
+                        );
+                    }
+                    self.finish_node();
+                }
             } else if op == TokenKind::LBrace {
                 // Object literal/constructor
                 // Check if we have a preceding expression (constructor name/expression)
@@ -4108,7 +4148,8 @@ impl<'a> Parser<'a> {
             And, AndAnd, AndEquals, Caret, CaretEquals, Equals, EqualsEquals, Greater,
             GreaterEquals, GreaterGreater, GreaterGreaterEquals, Instanceof, Less, LessEquals,
             LessLess, LessLessEquals, Minus, MinusEquals, NotEquals, OrOr, Percent, PercentEquals,
-            Pipe, PipeEquals, Plus, PlusEquals, Slash, SlashEquals, Star, StarEquals,
+            Pipe, PipeEquals, Plus, PlusEquals, QuestionQuestion, Slash, SlashEquals, Star,
+            StarEquals,
         };
 
         Some(match op {
@@ -4118,35 +4159,38 @@ impl<'a> Parser<'a> {
                 (2, 1)
             }
 
+            // Null coalescing (left associative, just above assignment)
+            QuestionQuestion => (3, 4),
+
             // Logical OR (left associative)
-            OrOr => (3, 4),
+            OrOr => (5, 6),
 
             // Logical AND (left associative)
-            AndAnd => (5, 6),
+            AndAnd => (7, 8),
 
             // Bitwise OR (left associative)
-            Pipe => (7, 8),
+            Pipe => (9, 10),
 
             // Bitwise XOR (left associative)
-            Caret => (9, 10),
+            Caret => (11, 12),
 
             // Bitwise AND (left associative)
-            And => (11, 12),
+            And => (13, 14),
 
             // Equality (left associative)
-            EqualsEquals | NotEquals => (13, 14),
+            EqualsEquals | NotEquals => (15, 16),
 
             // Comparison (left associative) - includes instanceof
-            Less | Greater | LessEquals | GreaterEquals | Instanceof => (15, 16),
+            Less | Greater | LessEquals | GreaterEquals | Instanceof => (17, 18),
 
             // Bitwise shift (left associative)
-            LessLess | GreaterGreater => (17, 18),
+            LessLess | GreaterGreater => (19, 20),
 
             // Addition/Subtraction (left associative)
-            Plus | Minus => (19, 20),
+            Plus | Minus => (21, 22),
 
             // Multiplication/Division/Modulo (left associative)
-            Star | Slash | Percent => (21, 22),
+            Star | Slash | Percent => (23, 24),
 
             _ => return None,
         })

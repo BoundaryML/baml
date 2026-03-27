@@ -306,7 +306,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                         })
                 }
             }
-            Expr::FieldAccess { base, field } => {
+            Expr::FieldAccess {
+                base,
+                field,
+                optional,
+            } => {
                 // Check for primitive-type static method access first:
                 // `image.from_url(...)` where `image` is a type name, not a value.
                 if let Some(ty) = self.try_primitive_static_access(expr_id, *base, field, body) {
@@ -316,7 +320,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     ty
                 } else {
                     let base_ty = self.infer_expr(*base, body);
-                    self.resolve_member(&base_ty, field, expr_id)
+                    if *optional {
+                        // Optional field access: unwrap Optional before resolving
+                        let unwrapped = match &base_ty {
+                            Ty::Optional(inner, _) => inner.as_ref().clone(),
+                            _ => base_ty,
+                        };
+                        self.resolve_member(&unwrapped, field, expr_id)
+                    } else {
+                        self.resolve_member(&base_ty, field, expr_id)
+                    }
                 }
             }
             Expr::Array { elements } => {
@@ -379,10 +392,23 @@ impl<'db> TypeInferenceBuilder<'db> {
                         attr: TyAttr::default(),
                     })
             }
-            Expr::Index { base, index } => {
+            Expr::Index {
+                base,
+                index,
+                optional,
+            } => {
                 let base_ty = self.infer_expr(*base, body);
                 self.infer_expr(*index, body);
-                match base_ty {
+                // For optional index, unwrap Optional before resolving element type
+                let resolved_base = if *optional {
+                    match &base_ty {
+                        Ty::Optional(inner, _) => inner.as_ref().clone(),
+                        _ => base_ty,
+                    }
+                } else {
+                    base_ty
+                };
+                match resolved_base {
                     Ty::List(elem_ty, _) | Ty::EvolvingList(elem_ty, _) => *elem_ty,
                     Ty::Map(_, val_ty, _) | Ty::EvolvingMap(_, val_ty, _) => *val_ty,
                     Ty::Unknown { attr: _ } | Ty::Error { attr: _ } => Ty::Unknown {
@@ -391,7 +417,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     _ => {
                         self.context.report_simple(
                             TirTypeError::NotIndexable {
-                                ty: base_ty.clone(),
+                                ty: resolved_base.clone(),
                             },
                             expr_id,
                         );
@@ -474,6 +500,17 @@ impl<'db> TypeInferenceBuilder<'db> {
                     params: param_tys,
                     ret: Box::new(ret_ty),
                     attr: TyAttr::default(),
+                }
+            }
+            Expr::OptionalChain { body: inner } => {
+                // The body is a chain of FieldAccess/Index/Call with optional flags.
+                // The chain can short-circuit to null if any optional node encounters null.
+                // Result type: wrap body type in Optional (unless already optional).
+                let inner_ty = self.infer_expr(*inner, body);
+                match &inner_ty {
+                    Ty::Optional(_, _) => inner_ty, // already optional
+                    Ty::Primitive(PrimitiveType::Null, _) => inner_ty,
+                    _ => Ty::Optional(Box::new(inner_ty), TyAttr::default()),
                 }
             }
             Expr::Missing => Ty::Unknown {
@@ -653,7 +690,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             // Call expressions: generic type inference + argument checking.
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 // Container mutation fast path (e.g. x.push(val) on EvolvingList)
                 if let Some(result_ty) =
                     self.try_container_method_call(expr_id, *callee, args, body)
@@ -1126,7 +1163,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let target_ty = self.infer_expr(*target, body);
                 let value_ty = self.infer_expr(*value, body);
                 let binary_op = Self::assign_op_to_binary_op(*op);
-                let result_ty = self.infer_binary_op(binary_op, &target_ty, &value_ty, *target);
+                // For compound assignment through optional chain (e.g. `user?.id += 1`),
+                // the operation only executes when the target is non-null, so unwrap
+                // the Optional wrapper for the binary op type check.
+                let op_ty = match &target_ty {
+                    Ty::Optional(inner, _) => inner.as_ref().clone(),
+                    _ => target_ty.clone(),
+                };
+                let result_ty = self.infer_binary_op(binary_op, &op_ty, &value_ty, *target);
                 // Re-record the value expression with the result type so the
                 // display shows the operation result, not the raw RHS literal.
                 self.record_expr_type(*value, result_ty);
@@ -1982,7 +2026,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_effective_throws_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 self.collect_effective_throws_from_expr(*callee, body, out);
                 for arg in args {
                     self.collect_effective_throws_from_expr(*arg, body, out);
@@ -2070,9 +2114,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::FieldAccess { base, .. } => {
                 self.collect_effective_throws_from_expr(*base, body, out);
             }
-            Expr::Index { base, index } => {
+            Expr::Index { base, index, .. } => {
                 self.collect_effective_throws_from_expr(*base, body, out);
                 self.collect_effective_throws_from_expr(*index, body, out);
+            }
+            Expr::OptionalChain { body: inner } => {
+                self.collect_effective_throws_from_expr(*inner, body, out);
             }
             Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
         }
@@ -2142,7 +2189,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_throw_facts_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
             }
-            Expr::Call { callee, args } => {
+            Expr::Call { callee, args, .. } => {
                 self.collect_throw_facts_from_expr(*callee, body, out);
                 for arg in args {
                     self.collect_throw_facts_from_expr(*arg, body, out);
@@ -2215,12 +2262,15 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             Expr::FieldAccess { base, .. } => self.collect_throw_facts_from_expr(*base, body, out),
-            Expr::Index { base, index } => {
+            Expr::Index { base, index, .. } => {
                 self.collect_throw_facts_from_expr(*base, body, out);
                 self.collect_throw_facts_from_expr(*index, body, out);
             }
             Expr::Catch { base, .. } => {
                 self.collect_throw_facts_from_expr(*base, body, out);
+            }
+            Expr::OptionalChain { body: inner } => {
+                self.collect_throw_facts_from_expr(*inner, body, out);
             }
             Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
         }
@@ -2323,7 +2373,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn expr_to_path_segments(expr_id: ExprId, body: &ExprBody) -> Option<Vec<Name>> {
         match &body.exprs[expr_id] {
             Expr::Path(segments) if !segments.is_empty() => Some(segments.clone()),
-            Expr::FieldAccess { base, field } => {
+            Expr::FieldAccess { base, field, .. } => {
                 let mut base_segments = Self::expr_to_path_segments(*base, body)?;
                 base_segments.push(field.clone());
                 Some(base_segments)
@@ -3130,7 +3180,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     segments.push(path_segments[0].clone());
                     break;
                 }
-                Expr::FieldAccess { base, field } => {
+                Expr::FieldAccess { base, field, .. } => {
                     segments.push(field.clone());
                     current = *base;
                 }
@@ -3583,7 +3633,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         // After AST lowering, method calls are always FieldAccess:
         //   x.push(val) → Call { callee: FieldAccess { base: Path(["x"]), field: "push" }, ... }
         let (base_id, local_name, method_name) = match &body.exprs[callee_id] {
-            Expr::FieldAccess { base, field } => {
+            Expr::FieldAccess { base, field, .. } => {
                 let name = self.expr_local_name(*base, body)?;
                 (*base, name, field.clone())
             }
@@ -3659,7 +3709,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         body: &ExprBody,
     ) -> bool {
         let (base_id, index_id) = match &body.exprs[target_id] {
-            Expr::Index { base, index } => (*base, *index),
+            Expr::Index { base, index, .. } => (*base, *index),
             _ => return false,
         };
 
@@ -3882,6 +3932,41 @@ impl<'db> TypeInferenceBuilder<'db> {
             | BinaryOp::BitXor
             | BinaryOp::Shl
             | BinaryOp::Shr => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+
+            // Null coalesce: lhs ?? rhs
+            // - T? ?? U → T | U (unwrap lhs, combine with rhs)
+            // - T? ?? T → T (non-nullable)
+            BinaryOp::NullCoalesce => {
+                let unwrapped_lhs = match lhs {
+                    Ty::Optional(inner, _) => inner.as_ref().clone(),
+                    _ => lhs.clone(),
+                };
+                // If both sides are the same type, return that type (non-nullable)
+                if unwrapped_lhs == *rhs {
+                    rhs.clone()
+                } else if matches!(rhs, Ty::Optional(_, _)) {
+                    // Both sides nullable: T? ?? U? → (T | U)?
+                    let unwrapped_rhs = match rhs {
+                        Ty::Optional(inner, _) => inner.as_ref().clone(),
+                        _ => rhs.clone(),
+                    };
+                    if unwrapped_lhs == unwrapped_rhs {
+                        Ty::Optional(Box::new(unwrapped_lhs), TyAttr::default())
+                    } else {
+                        Ty::Optional(Box::new(Ty::Union(vec![unwrapped_lhs, unwrapped_rhs], TyAttr::default())), TyAttr::default())
+                    }
+                } else {
+                    // T? ?? U where T != U → T | U
+                    // Common case: T? ?? T → T (handled above)
+                    // Other case: T? ?? U → T | U
+                    if matches!(lhs, Ty::Optional(_, _)) {
+                        Ty::Union(vec![unwrapped_lhs, rhs.clone()], TyAttr::default())
+                    } else {
+                        // Non-optional ?? value → just return lhs (shouldn't need ??)
+                        lhs.clone()
+                    }
+                }
+            }
         }
     }
 

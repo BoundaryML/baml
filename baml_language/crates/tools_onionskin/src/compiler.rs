@@ -447,6 +447,7 @@ fn binop_sym(op: &baml_compiler2_ast::BinaryOp) -> &'static str {
         BinaryOp::Shl => "<<",
         BinaryOp::Shr => ">>",
         BinaryOp::Instanceof => "instanceof",
+        BinaryOp::NullCoalesce => "??",
     }
 }
 
@@ -527,7 +528,7 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code(sym.into()));
             spans.extend(expr_desc_spans(*inner, body, inference));
         }
-        Expr::Call { callee, args } => {
+        Expr::Call { callee, args, .. } => {
             spans.extend(expr_desc_spans(*callee, body, inference));
             spans.push(DetailSpan::Code("(".into()));
             for (i, arg) in args.iter().enumerate() {
@@ -581,11 +582,11 @@ fn expr_desc_spans<'db>(
                 stmts.len()
             )));
         }
-        Expr::FieldAccess { base, field } => {
+        Expr::FieldAccess { base, field, .. } => {
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code(format!(".{field}")));
         }
-        Expr::Index { base, index } => {
+        Expr::Index { base, index, .. } => {
             spans.extend(expr_desc_spans(*base, body, inference));
             spans.push(DetailSpan::Code("[".into()));
             spans.extend(expr_desc_spans(*index, body, inference));
@@ -616,6 +617,9 @@ fn expr_desc_spans<'db>(
         }
         Expr::Lambda(_) => {
             spans.push(DetailSpan::Code("<lambda>".into()));
+        }
+        Expr::OptionalChain { body: inner } => {
+            spans.extend(expr_desc_spans(*inner, body, inference));
         }
         Expr::Missing => {
             spans.push(DetailSpan::Code("<missing>".into()));
@@ -1968,7 +1972,7 @@ impl CompilerRunner {
                 Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
                 Expr::Binary { op, .. } => format!("... {op:?} ..."),
                 Expr::Unary { op, expr: inner } => format!("{op:?} {}", expr_desc(*inner, body)),
-                Expr::Call { callee, args } => {
+                Expr::Call { callee, args, .. } => {
                     let callee_str = expr_desc(*callee, body);
                     format!("{callee_str}({})", if args.is_empty() { "" } else { "..." })
                 }
@@ -1984,9 +1988,10 @@ impl CompilerRunner {
                     let tail = if tail_expr.is_some() { " + tail" } else { "" };
                     format!("{{ {} stmts{tail} }}", stmts.len())
                 }
-                Expr::FieldAccess { base, field } => format!("{}.{field}", expr_desc(*base, body)),
+                Expr::FieldAccess { base, field, .. } => format!("{}.{field}", expr_desc(*base, body)),
                 Expr::Index { base, .. } => format!("{}[...]", expr_desc(*base, body)),
                 Expr::Lambda(_) => "<lambda>".into(),
+                Expr::OptionalChain { body: inner } => expr_desc(*inner, body),
                 Expr::Missing => "<missing>".into(),
             }
         }

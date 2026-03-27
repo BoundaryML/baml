@@ -359,6 +359,7 @@ pub enum Expr {
     Call {
         callee: ExprId,
         args: Vec<ExprId>,
+        optional: bool,
     },
     Object {
         type_name: Option<Name>,
@@ -381,10 +382,18 @@ pub enum Expr {
     FieldAccess {
         base: ExprId,
         field: Name,
+        optional: bool,
     },
     Index {
         base: ExprId,
         index: ExprId,
+        optional: bool,
+    },
+    /// Short-circuit boundary for optional chaining.
+    /// Wraps a chain of FieldAccess/Index/Call with optional=true nodes.
+    /// If any optional node encounters null, the entire chain evaluates to null.
+    OptionalChain {
+        body: ExprId,
     },
     /// Lambda expression: anonymous function in expression position.
     /// Reuses `FunctionDef` with synthetic name `"<anonymous function>"`.
@@ -534,6 +543,7 @@ pub enum BinaryOp {
     Shl,
     Shr,
     Instanceof,
+    NullCoalesce,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

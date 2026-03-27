@@ -71,7 +71,9 @@ pub enum SyntaxKind {
     AT,           // @
     AT_AT,        // @@
     PIPE,         // |
-    QUESTION,     // ?
+    QUESTION,          // ?
+    QUESTION_DOT,      // ?.
+    QUESTION_QUESTION, // ??
 
     // Assignment operators
     EQUALS,                 // =
@@ -206,6 +208,15 @@ pub enum SyntaxKind {
     ///   module item, or function reference
     /// - `FIELD_ACCESS_EXPR` is always a field/method access on a computed value
     FIELD_ACCESS_EXPR,
+    /// Optional field access: `a?.b`
+    /// Structure: `<base_expr> QUESTION_DOT WORD`
+    OPTIONAL_FIELD_ACCESS_EXPR,
+    /// Optional computed index: `a?.[expr]`
+    /// Structure: `<base_expr> QUESTION_DOT L_BRACKET <expr> R_BRACKET`
+    OPTIONAL_INDEX_EXPR,
+    /// Optional call: `f?.(args)`
+    /// Structure: `<base_expr> QUESTION_DOT L_PAREN <args> R_PAREN`
+    OPTIONAL_CALL_EXPR,
     /// Path expression with one or more dot-separated identifier segments.
     ///
     /// Examples:

@@ -1,0 +1,2146 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.Combined(user: User?, node: Node?, items: int[]?) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: User? // user // param
+    let _2: Node? // node // param
+    let _3: int[]? // items // param
+    let _4: string?
+    let _5: Address?
+    let _6: Profile?
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: bool
+    let _11: Node[]?
+    let _12: bool
+    let _13: bool
+    let _14: int | 0
+    let _15: int?
+    let _16: bool
+    let _17: bool
+    let _18: string | void // e3
+    let _19: string | void?
+    let _20: string?
+    let _21: Profile?
+    let _22: bool
+    let _23: bool
+    let _24: bool
+    let _25: void
+    let _26: int
+    let _27: Node
+    let _28: map<string, Node>?
+    let _29: bool
+    let _30: bool
+    let _31: "name"
+    let _32: bool
+    let _33: string
+    let _34: bool
+    let _35: Node?
+    let _36: Node
+    let _37: Node[]?
+    let _38: bool
+    let _39: bool
+    let _40: 0
+    let _41: bool
+    let _42: int?
+    let _43: bool
+    let _44: bool
+    let _45: Node?
+    let _46: bool
+    let _47: int
+    let _48: int?
+    let _49: bool
+    let _50: 0
+    let _51: bool
+    let _52: int?
+    let _53: Node?
+    let _54: bool
+    let _55: bool
+    let _56: Node
+    let _57: Node[]?
+    let _58: bool
+    let _59: bool
+    let _60: int | 0
+    let _61: int?
+    let _62: int[]?
+    let _63: Profile?
+    let _64: bool
+    let _65: bool
+    let _66: bool
+    let _67: 0
+    let _68: bool
+    let _69: Node
+    let _70: Node[]?
+    let _71: Node
+    let _72: map<string, Node>?
+    let _73: bool
+    let _74: bool
+    let _75: "first"
+    let _76: bool
+    let _77: bool
+    let _78: 0
+    let _79: map<string, Node>?
+    let _80: bool
+    let _81: bool
+    let _82: "counter"
+    let _83: int | 0
+    let _84: int?
+    let _85: bool
+    let _86: 0
+    let _87: bool
+    let _88: map<string, Node>?
+    let _89: bool
+    let _90: bool
+    let _91: "counter"
+    let _92: int
+    let _93: int?
+    let _94: bool
+    let _95: 0
+    let _96: bool
+    let _97: Node?
+    let _98: Node
+    let _99: Node[]?
+    let _100: bool
+    let _101: bool
+    let _102: int | 0
+    let _103: int?
+    let _104: bool
+    let _105: bool
+    let _106: bool
+    let _107: bool
+    let _108: int?
+    let _109: bool
+    let _110: bool
+
+    bb0: {
+        _7 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _7 -> [bb4, bb1];
+    }
+
+    bb1: {
+        _6 = copy _1.1;
+        _8 = is_type(copy _6, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _8 -> [bb4, bb2];
+    }
+
+    bb2: {
+        _5 = copy _6.1;
+        _9 = is_type(copy _5, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _9 -> [bb4, bb3];
+    }
+
+    bb3: {
+        _4 = copy _5.0;
+        goto -> bb5;
+    }
+
+    bb4: {
+        _4 = const null;
+        goto -> bb5;
+    }
+
+    bb5: {
+        _10 = is_type(copy _4, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _10 -> [bb6, bb7];
+    }
+
+    bb6: {
+        goto -> bb7;
+    }
+
+    bb7: {
+        _12 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _12 -> [bb15, bb8];
+    }
+
+    bb8: {
+        _11 = copy _2.2;
+        _13 = is_type(copy _11, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _13 -> [bb15, bb9];
+    }
+
+    bb9: {
+        _16 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _16 -> [bb11, bb10];
+    }
+
+    bb10: {
+        _15 = copy _2.0;
+        goto -> bb12;
+    }
+
+    bb11: {
+        _15 = const null;
+        goto -> bb12;
+    }
+
+    bb12: {
+        _14 = copy _15;
+        _17 = is_type(copy _15, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _17 -> [bb13, bb14];
+    }
+
+    bb13: {
+        _14 = const 0_i64;
+        goto -> bb14;
+    }
+
+    bb14: {
+        goto -> bb16;
+    }
+
+    bb15: {
+        goto -> bb16;
+    }
+
+    bb16: {
+        _22 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _22 -> [bb19, bb17];
+    }
+
+    bb17: {
+        _21 = copy _1.1;
+        _23 = is_type(copy _21, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _23 -> [bb19, bb18];
+    }
+
+    bb18: {
+        _20 = copy _21.0;
+        goto -> bb20;
+    }
+
+    bb19: {
+        _20 = const null;
+        goto -> bb20;
+    }
+
+    bb20: {
+        _19 = copy _20;
+        _24 = is_type(copy _20, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _24 -> [bb21, bb28];
+    }
+
+    bb21: {
+        _29 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _29 -> [bb26, bb22];
+    }
+
+    bb22: {
+        _28 = copy _2.3;
+        _30 = is_type(copy _28, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _30 -> [bb26, bb23];
+    }
+
+    bb23: {
+        _31 = const "name";
+        _27 = copy _28[_31];
+        _32 = is_type(copy _27, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _32 -> [bb26, bb24];
+    }
+
+    bb24: {
+        _26 = copy _27.0;
+        _33 = const "to_string";
+        _25 = copy _26[_33];
+        _19 = call copy _25() -> [bb25];
+    }
+
+    bb25: {
+        goto -> bb27;
+    }
+
+    bb26: {
+        _19 = const null;
+        goto -> bb27;
+    }
+
+    bb27: {
+        goto -> bb28;
+    }
+
+    bb28: {
+        _18 = copy _19;
+        _34 = is_type(copy _19, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _34 -> [bb29, bb30];
+    }
+
+    bb29: {
+        _18 = const "fallback";
+        goto -> bb30;
+    }
+
+    bb30: {
+        _38 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _38 -> [bb39, bb31];
+    }
+
+    bb31: {
+        _37 = copy _2.2;
+        _39 = is_type(copy _37, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _39 -> [bb39, bb32];
+    }
+
+    bb32: {
+        _40 = const 0_i64;
+        _36 = copy _37[_40];
+        _35 = copy _36.1;
+        _41 = is_type(copy _35, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _41 -> [bb39, bb33];
+    }
+
+    bb33: {
+        _43 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _43 -> [bb35, bb34];
+    }
+
+    bb34: {
+        _42 = copy _1.0;
+        goto -> bb36;
+    }
+
+    bb35: {
+        _42 = const null;
+        goto -> bb36;
+    }
+
+    bb36: {
+        _35.0 = copy _42;
+        _44 = is_type(copy _42, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _44 -> [bb37, bb38];
+    }
+
+    bb37: {
+        _35.0 = const 0_i64;
+        goto -> bb38;
+    }
+
+    bb38: {
+        goto -> bb40;
+    }
+
+    bb39: {
+        goto -> bb40;
+    }
+
+    bb40: {
+        _45 = copy _2;
+        _46 = is_type(copy _45, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _46 -> [bb47, bb41];
+    }
+
+    bb41: {
+        _49 = is_type(copy _3, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _49 -> [bb43, bb42];
+    }
+
+    bb42: {
+        _50 = const 0_i64;
+        _48 = copy _3[_50];
+        goto -> bb44;
+    }
+
+    bb43: {
+        _48 = const null;
+        goto -> bb44;
+    }
+
+    bb44: {
+        _47 = copy _48;
+        _51 = is_type(copy _48, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _51 -> [bb45, bb46];
+    }
+
+    bb45: {
+        _47 = const 1_i64;
+        goto -> bb46;
+    }
+
+    bb46: {
+        _45.0 = copy _45.0 + copy _47;
+        goto -> bb48;
+    }
+
+    bb47: {
+        goto -> bb48;
+    }
+
+    bb48: {
+        _54 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _54 -> [bb51, bb49];
+    }
+
+    bb49: {
+        _53 = copy _2.1;
+        _55 = is_type(copy _53, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _55 -> [bb51, bb50];
+    }
+
+    bb50: {
+        _52 = copy _53.0;
+        goto -> bb52;
+    }
+
+    bb51: {
+        _52 = const null;
+        goto -> bb52;
+    }
+
+    bb52: {
+        _58 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _58 -> [bb62, bb53];
+    }
+
+    bb53: {
+        _57 = copy _2.2;
+        _59 = is_type(copy _57, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _59 -> [bb62, bb54];
+    }
+
+    bb54: {
+        _64 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _64 -> [bb58, bb55];
+    }
+
+    bb55: {
+        _63 = copy _1.1;
+        _65 = is_type(copy _63, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _65 -> [bb58, bb56];
+    }
+
+    bb56: {
+        _62 = copy _63.2;
+        _66 = is_type(copy _62, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _66 -> [bb58, bb57];
+    }
+
+    bb57: {
+        _67 = const 0_i64;
+        _61 = copy _62[_67];
+        goto -> bb59;
+    }
+
+    bb58: {
+        _61 = const null;
+        goto -> bb59;
+    }
+
+    bb59: {
+        _60 = copy _61;
+        _68 = is_type(copy _61, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _68 -> [bb60, bb61];
+    }
+
+    bb60: {
+        _60 = const 0_i64;
+        goto -> bb61;
+    }
+
+    bb61: {
+        _56 = copy _57[_60];
+        goto -> bb63;
+    }
+
+    bb62: {
+        goto -> bb63;
+    }
+
+    bb63: {
+        _73 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _73 -> [bb68, bb64];
+    }
+
+    bb64: {
+        _72 = copy _2.3;
+        _74 = is_type(copy _72, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _74 -> [bb68, bb65];
+    }
+
+    bb65: {
+        _75 = const "first";
+        _71 = copy _72[_75];
+        _76 = is_type(copy _71, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _76 -> [bb68, bb66];
+    }
+
+    bb66: {
+        _70 = copy _71.2;
+        _77 = is_type(copy _70, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _77 -> [bb68, bb67];
+    }
+
+    bb67: {
+        _78 = const 0_i64;
+        _69 = copy _70[_78];
+        goto -> bb69;
+    }
+
+    bb68: {
+        goto -> bb69;
+    }
+
+    bb69: {
+        _80 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _80 -> [bb77, bb70];
+    }
+
+    bb70: {
+        _79 = copy _2.3;
+        _81 = is_type(copy _79, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _81 -> [bb77, bb71];
+    }
+
+    bb71: {
+        _82 = const "counter";
+        _85 = is_type(copy _3, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _85 -> [bb73, bb72];
+    }
+
+    bb72: {
+        _86 = const 0_i64;
+        _84 = copy _3[_86];
+        goto -> bb74;
+    }
+
+    bb73: {
+        _84 = const null;
+        goto -> bb74;
+    }
+
+    bb74: {
+        _83 = copy _84;
+        _87 = is_type(copy _84, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _87 -> [bb75, bb76];
+    }
+
+    bb75: {
+        _83 = const 0_i64;
+        goto -> bb76;
+    }
+
+    bb76: {
+        _79[_82].0 = copy _83 + const 1_i64;
+        goto -> bb78;
+    }
+
+    bb77: {
+        goto -> bb78;
+    }
+
+    bb78: {
+        _89 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _89 -> [bb86, bb79];
+    }
+
+    bb79: {
+        _88 = copy _2.3;
+        _90 = is_type(copy _88, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _90 -> [bb86, bb80];
+    }
+
+    bb80: {
+        _91 = const "counter";
+        _94 = is_type(copy _3, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _94 -> [bb82, bb81];
+    }
+
+    bb81: {
+        _95 = const 0_i64;
+        _93 = copy _3[_95];
+        goto -> bb83;
+    }
+
+    bb82: {
+        _93 = const null;
+        goto -> bb83;
+    }
+
+    bb83: {
+        _92 = copy _93;
+        _96 = is_type(copy _93, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _96 -> [bb84, bb85];
+    }
+
+    bb84: {
+        _92 = const 0_i64;
+        goto -> bb85;
+    }
+
+    bb85: {
+        _88[_91].0 = copy _88[_91].0 + copy _92;
+        goto -> bb87;
+    }
+
+    bb86: {
+        goto -> bb87;
+    }
+
+    bb87: {
+        _100 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _100 -> [bb102, bb88];
+    }
+
+    bb88: {
+        _99 = copy _2.2;
+        _101 = is_type(copy _99, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _101 -> [bb102, bb89];
+    }
+
+    bb89: {
+        _104 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _104 -> [bb91, bb90];
+    }
+
+    bb90: {
+        _103 = copy _2.0;
+        goto -> bb92;
+    }
+
+    bb91: {
+        _103 = const null;
+        goto -> bb92;
+    }
+
+    bb92: {
+        _102 = copy _103;
+        _105 = is_type(copy _103, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _105 -> [bb93, bb94];
+    }
+
+    bb93: {
+        _102 = const 0_i64;
+        goto -> bb94;
+    }
+
+    bb94: {
+        _98 = copy _99[_102];
+        _106 = is_type(copy _98, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _106 -> [bb102, bb95];
+    }
+
+    bb95: {
+        _97 = copy _98.1;
+        _107 = is_type(copy _97, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _107 -> [bb102, bb96];
+    }
+
+    bb96: {
+        _109 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _109 -> [bb98, bb97];
+    }
+
+    bb97: {
+        _108 = copy _2.0;
+        goto -> bb99;
+    }
+
+    bb98: {
+        _108 = const null;
+        goto -> bb99;
+    }
+
+    bb99: {
+        _97.0 = copy _108;
+        _110 = is_type(copy _108, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _110 -> [bb100, bb101];
+    }
+
+    bb100: {
+        _97.0 = const 0_i64;
+        goto -> bb101;
+    }
+
+    bb101: {
+        goto -> bb103;
+    }
+
+    bb102: {
+        goto -> bb103;
+    }
+
+    bb103: {
+        _0 = copy _18;
+        goto -> bb104;
+    }
+
+    bb104: {
+        return;
+    }
+}
+
+fn user.NullCoalescing(user: User?, fallback: string, count: int) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: User? // user // param
+    let _2: string // fallback // param
+    let _3: int // count // param
+    let _4: string // d1
+    let _5: string?
+    let _6: Profile?
+    let _7: bool
+    let _8: bool
+    let _9: bool
+    let _10: string?
+    let _11: string?
+    let _12: Profile?
+    let _13: bool
+    let _14: bool
+    let _15: bool
+    let _16: Address?
+    let _17: Profile?
+    let _18: bool
+    let _19: bool
+    let _20: bool
+    let _21: bool
+    let _22: string?
+    let _23: Profile?
+    let _24: bool
+    let _25: bool
+    let _26: bool
+    let _27: string?
+    let _28: Profile?
+    let _29: bool
+    let _30: bool
+    let _31: bool
+    let _32: Address?
+    let _33: Profile?
+    let _34: bool
+    let _35: bool
+    let _36: bool
+    let _37: int?
+    let _38: int[]?
+    let _39: Profile?
+    let _40: bool
+    let _41: bool
+    let _42: bool
+    let _43: 0
+    let _44: bool
+    let _45: string?
+    let _46: Profile?
+    let _47: bool
+    let _48: bool
+    let _49: bool
+    let _50: Profile?
+    let _51: bool
+    let _52: bool
+    let _53: string?
+    let _54: Address?
+    let _55: Profile?
+    let _56: bool
+    let _57: bool
+    let _58: bool
+    let _59: bool
+    let _60: string?
+    let _61: Profile?
+    let _62: bool
+    let _63: bool
+    let _64: bool
+    let _65: bool
+    let _66: string?
+    let _67: Profile?
+    let _68: bool
+    let _69: bool
+    let _70: bool
+    let _71: string?
+    let _72: Profile?
+    let _73: bool
+    let _74: bool
+
+    bb0: {
+        _7 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _7 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _6 = copy _1.1;
+        _8 = is_type(copy _6, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _8 -> [bb3, bb2];
+    }
+
+    bb2: {
+        _5 = copy _6.0;
+        goto -> bb4;
+    }
+
+    bb3: {
+        _5 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _4 = copy _5;
+        _9 = is_type(copy _5, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _9 -> [bb5, bb6];
+    }
+
+    bb5: {
+        _4 = const "Anonymous";
+        goto -> bb6;
+    }
+
+    bb6: {
+        _13 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _13 -> [bb9, bb7];
+    }
+
+    bb7: {
+        _12 = copy _1.1;
+        _14 = is_type(copy _12, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _14 -> [bb9, bb8];
+    }
+
+    bb8: {
+        _11 = copy _12.0;
+        goto -> bb10;
+    }
+
+    bb9: {
+        _11 = const null;
+        goto -> bb10;
+    }
+
+    bb10: {
+        _10 = copy _11;
+        _15 = is_type(copy _11, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _15 -> [bb11, bb17];
+    }
+
+    bb11: {
+        _18 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _18 -> [bb15, bb12];
+    }
+
+    bb12: {
+        _17 = copy _1.1;
+        _19 = is_type(copy _17, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _19 -> [bb15, bb13];
+    }
+
+    bb13: {
+        _16 = copy _17.1;
+        _20 = is_type(copy _16, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _20 -> [bb15, bb14];
+    }
+
+    bb14: {
+        _10 = copy _16.0;
+        goto -> bb16;
+    }
+
+    bb15: {
+        _10 = const null;
+        goto -> bb16;
+    }
+
+    bb16: {
+        goto -> bb17;
+    }
+
+    bb17: {
+        _21 = is_type(copy _10, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _21 -> [bb18, bb19];
+    }
+
+    bb18: {
+        goto -> bb19;
+    }
+
+    bb19: {
+        _24 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _24 -> [bb22, bb20];
+    }
+
+    bb20: {
+        _23 = copy _1.1;
+        _25 = is_type(copy _23, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _25 -> [bb22, bb21];
+    }
+
+    bb21: {
+        _22 = copy _23.0;
+        goto -> bb23;
+    }
+
+    bb22: {
+        _22 = const null;
+        goto -> bb23;
+    }
+
+    bb23: {
+        _26 = is_type(copy _22, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _26 -> [bb24, bb25];
+    }
+
+    bb24: {
+        goto -> bb25;
+    }
+
+    bb25: {
+        _29 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _29 -> [bb28, bb26];
+    }
+
+    bb26: {
+        _28 = copy _1.1;
+        _30 = is_type(copy _28, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _30 -> [bb28, bb27];
+    }
+
+    bb27: {
+        _27 = copy _28.0;
+        goto -> bb29;
+    }
+
+    bb28: {
+        _27 = const null;
+        goto -> bb29;
+    }
+
+    bb29: {
+        _31 = is_type(copy _27, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _31 -> [bb30, bb36];
+    }
+
+    bb30: {
+        _34 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _34 -> [bb34, bb31];
+    }
+
+    bb31: {
+        _33 = copy _1.1;
+        _35 = is_type(copy _33, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _35 -> [bb34, bb32];
+    }
+
+    bb32: {
+        _32 = copy _33.1;
+        _36 = is_type(copy _32, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _36 -> [bb34, bb33];
+    }
+
+    bb33: {
+        goto -> bb35;
+    }
+
+    bb34: {
+        goto -> bb35;
+    }
+
+    bb35: {
+        goto -> bb36;
+    }
+
+    bb36: {
+        _40 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _40 -> [bb40, bb37];
+    }
+
+    bb37: {
+        _39 = copy _1.1;
+        _41 = is_type(copy _39, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _41 -> [bb40, bb38];
+    }
+
+    bb38: {
+        _38 = copy _39.2;
+        _42 = is_type(copy _38, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _42 -> [bb40, bb39];
+    }
+
+    bb39: {
+        _43 = const 0_i64;
+        _37 = copy _38[_43];
+        goto -> bb41;
+    }
+
+    bb40: {
+        _37 = const null;
+        goto -> bb41;
+    }
+
+    bb41: {
+        _44 = is_type(copy _37, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _44 -> [bb42, bb43];
+    }
+
+    bb42: {
+        goto -> bb43;
+    }
+
+    bb43: {
+        _47 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _47 -> [bb46, bb44];
+    }
+
+    bb44: {
+        _46 = copy _1.1;
+        _48 = is_type(copy _46, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _48 -> [bb46, bb45];
+    }
+
+    bb45: {
+        _45 = copy _46.0;
+        goto -> bb47;
+    }
+
+    bb46: {
+        _45 = const null;
+        goto -> bb47;
+    }
+
+    bb47: {
+        _49 = is_type(copy _45, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _49 -> [bb48, bb49];
+    }
+
+    bb48: {
+        goto -> bb49;
+    }
+
+    bb49: {
+        _51 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _51 -> [bb59, bb50];
+    }
+
+    bb50: {
+        _50 = copy _1.1;
+        _52 = is_type(copy _50, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _52 -> [bb59, bb51];
+    }
+
+    bb51: {
+        _56 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _56 -> [bb55, bb52];
+    }
+
+    bb52: {
+        _55 = copy _1.1;
+        _57 = is_type(copy _55, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _57 -> [bb55, bb53];
+    }
+
+    bb53: {
+        _54 = copy _55.1;
+        _58 = is_type(copy _54, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _58 -> [bb55, bb54];
+    }
+
+    bb54: {
+        _53 = copy _54.0;
+        goto -> bb56;
+    }
+
+    bb55: {
+        _53 = const null;
+        goto -> bb56;
+    }
+
+    bb56: {
+        _50.0 = copy _53;
+        _59 = is_type(copy _53, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _59 -> [bb57, bb58];
+    }
+
+    bb57: {
+        _50.0 = const "no street";
+        goto -> bb58;
+    }
+
+    bb58: {
+        goto -> bb60;
+    }
+
+    bb59: {
+        goto -> bb60;
+    }
+
+    bb60: {
+        _62 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _62 -> [bb63, bb61];
+    }
+
+    bb61: {
+        _61 = copy _1.1;
+        _63 = is_type(copy _61, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _63 -> [bb63, bb62];
+    }
+
+    bb62: {
+        _60 = copy _61.0;
+        goto -> bb64;
+    }
+
+    bb63: {
+        _60 = const null;
+        goto -> bb64;
+    }
+
+    bb64: {
+        _64 = is_type(copy _60, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _64 -> [bb65, bb66];
+    }
+
+    bb65: {
+        goto -> bb66;
+    }
+
+    bb66: {
+        _65 = is_type(copy _3, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _65 -> [bb67, bb68];
+    }
+
+    bb67: {
+        goto -> bb68;
+    }
+
+    bb68: {
+        _68 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _68 -> [bb71, bb69];
+    }
+
+    bb69: {
+        _67 = copy _1.1;
+        _69 = is_type(copy _67, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _69 -> [bb71, bb70];
+    }
+
+    bb70: {
+        _66 = copy _67.0;
+        goto -> bb72;
+    }
+
+    bb71: {
+        _66 = const null;
+        goto -> bb72;
+    }
+
+    bb72: {
+        _70 = is_type(copy _66, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _70 -> [bb73, bb74];
+    }
+
+    bb73: {
+        goto -> bb74;
+    }
+
+    bb74: {
+        _73 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _73 -> [bb77, bb75];
+    }
+
+    bb75: {
+        _72 = copy _1.1;
+        _74 = is_type(copy _72, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _74 -> [bb77, bb76];
+    }
+
+    bb76: {
+        _71 = copy _72.0;
+        goto -> bb78;
+    }
+
+    bb77: {
+        _71 = const null;
+        goto -> bb78;
+    }
+
+    bb78: {
+        branch copy _71 -> [bb80, bb79];
+    }
+
+    bb79: {
+        goto -> bb80;
+    }
+
+    bb80: {
+        _0 = copy _4;
+        goto -> bb81;
+    }
+
+    bb81: {
+        return;
+    }
+}
+
+fn user.OptionalCall(callback: (int) -> string?, nonNullCb: (int) -> string, name: string?) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: (int) -> string? // callback // param
+    let _2: (int) -> string // nonNullCb // param
+    let _3: string? // name // param
+    let _4: string? // c1
+    let _5: bool
+    let _6: string?
+    let _7: bool
+    let _8: string
+    let _9: string?
+    let _10: bool
+    let _11: string
+    let _12: void? // c4
+    let _13: bool
+    let _14: string? // c5
+    let _15: bool
+    let _16: string?
+    let _17: bool
+
+    bb0: {
+        _5 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _5 -> [bb3, bb1];
+    }
+
+    bb1: {
+        _4 = call copy _1(const 42_i64) -> [bb2];
+    }
+
+    bb2: {
+        goto -> bb4;
+    }
+
+    bb3: {
+        _4 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        _7 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _7 -> [bb7, bb5];
+    }
+
+    bb5: {
+        _6 = call copy _1(const 42_i64) -> [bb6];
+    }
+
+    bb6: {
+        _8 = const "length";
+        goto -> bb8;
+    }
+
+    bb7: {
+        goto -> bb8;
+    }
+
+    bb8: {
+        _10 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _10 -> [bb11, bb9];
+    }
+
+    bb9: {
+        _9 = call copy _1(const 42_i64) -> [bb10];
+    }
+
+    bb10: {
+        goto -> bb12;
+    }
+
+    bb11: {
+        _9 = const null;
+        goto -> bb12;
+    }
+
+    bb12: {
+        _11 = const "length";
+        _13 = is_type(copy _3, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _13 -> [bb15, bb13];
+    }
+
+    bb13: {
+        _12 = call copy _3(const 42_i64) -> [bb14];
+    }
+
+    bb14: {
+        goto -> bb16;
+    }
+
+    bb15: {
+        _12 = const null;
+        goto -> bb16;
+    }
+
+    bb16: {
+        _15 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _15 -> [bb19, bb17];
+    }
+
+    bb17: {
+        _14 = call copy _2(const 42_i64) -> [bb18];
+    }
+
+    bb18: {
+        goto -> bb20;
+    }
+
+    bb19: {
+        _14 = const null;
+        goto -> bb20;
+    }
+
+    bb20: {
+        _16 = copy _4;
+        _0 = copy _16;
+        _17 = is_type(copy _16, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _17 -> [bb21, bb22];
+    }
+
+    bb21: {
+        _0 = const "default";
+        goto -> bb22;
+    }
+
+    bb22: {
+        goto -> bb23;
+    }
+
+    bb23: {
+        return;
+    }
+}
+
+fn user.OptionalChaining(user: User?, nonNullUser: User, node: Node?) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: User? // user // param
+    let _2: User // nonNullUser // param
+    let _3: Node? // node // param
+    let _4: bool
+    let _5: string? // a2
+    let _6: Profile?
+    let _7: bool
+    let _8: bool
+    let _9: Address?
+    let _10: Profile?
+    let _11: bool
+    let _12: bool
+    let _13: bool
+    let _14: Profile?
+    let _15: bool
+    let _16: Address?
+    let _17: Profile?
+    let _18: bool
+    let _19: bool
+    let _20: Profile?
+    let _21: bool
+    let _22: Profile?
+    let _23: bool
+    let _24: bool
+    let _25: Address?
+    let _26: Profile?
+    let _27: bool
+    let _28: bool
+    let _29: bool
+    let _30: bool
+    let _31: Profile?
+    let _32: bool
+    let _33: bool
+    let _34: Address?
+    let _35: Profile?
+    let _36: bool
+    let _37: bool
+    let _38: bool
+    let _39: User?
+    let _40: bool
+    let _41: string
+    let _42: User?
+    let _43: bool
+    let _44: string?
+    let _45: Profile?
+    let _46: bool
+    let _47: bool
+    let _48: string?
+    let _49: bool
+
+    bb0: {
+        _4 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _4 -> [bb2, bb1];
+    }
+
+    bb1: {
+        goto -> bb3;
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        _7 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _7 -> [bb6, bb4];
+    }
+
+    bb4: {
+        _6 = copy _1.1;
+        _8 = is_type(copy _6, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _8 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _5 = copy _6.0;
+        goto -> bb7;
+    }
+
+    bb6: {
+        _5 = const null;
+        goto -> bb7;
+    }
+
+    bb7: {
+        _11 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _11 -> [bb11, bb8];
+    }
+
+    bb8: {
+        _10 = copy _1.1;
+        _12 = is_type(copy _10, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _12 -> [bb11, bb9];
+    }
+
+    bb9: {
+        _9 = copy _10.1;
+        _13 = is_type(copy _9, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _13 -> [bb11, bb10];
+    }
+
+    bb10: {
+        goto -> bb12;
+    }
+
+    bb11: {
+        goto -> bb12;
+    }
+
+    bb12: {
+        _15 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _15 -> [bb14, bb13];
+    }
+
+    bb13: {
+        _14 = copy _1.1;
+        goto -> bb15;
+    }
+
+    bb14: {
+        goto -> bb15;
+    }
+
+    bb15: {
+        goto -> bb16;
+    }
+
+    bb16: {
+        _18 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _18 -> [bb19, bb17];
+    }
+
+    bb17: {
+        _17 = copy _1.1;
+        _19 = is_type(copy _17, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _19 -> [bb19, bb18];
+    }
+
+    bb18: {
+        _16 = copy _17.1;
+        goto -> bb20;
+    }
+
+    bb19: {
+        goto -> bb20;
+    }
+
+    bb20: {
+        _21 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _21 -> [bb22, bb21];
+    }
+
+    bb21: {
+        _20 = copy _1.1;
+        goto -> bb23;
+    }
+
+    bb22: {
+        _20 = const null;
+        goto -> bb23;
+    }
+
+    bb23: {
+        _23 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _23 -> [bb26, bb24];
+    }
+
+    bb24: {
+        _22 = copy _1.1;
+        _24 = is_type(copy _22, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _24 -> [bb26, bb25];
+    }
+
+    bb25: {
+        goto -> bb27;
+    }
+
+    bb26: {
+        goto -> bb27;
+    }
+
+    bb27: {
+        _27 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _27 -> [bb31, bb28];
+    }
+
+    bb28: {
+        _26 = copy _1.1;
+        _28 = is_type(copy _26, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _28 -> [bb31, bb29];
+    }
+
+    bb29: {
+        _25 = copy _26.1;
+        _29 = is_type(copy _25, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _29 -> [bb31, bb30];
+    }
+
+    bb30: {
+        goto -> bb32;
+    }
+
+    bb31: {
+        goto -> bb32;
+    }
+
+    bb32: {
+        _30 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _30 -> [bb34, bb33];
+    }
+
+    bb33: {
+        goto -> bb35;
+    }
+
+    bb34: {
+        goto -> bb35;
+    }
+
+    bb35: {
+        _32 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _32 -> [bb38, bb36];
+    }
+
+    bb36: {
+        _31 = copy _1.1;
+        _33 = is_type(copy _31, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _33 -> [bb38, bb37];
+    }
+
+    bb37: {
+        _31.0 = const "updated";
+        goto -> bb39;
+    }
+
+    bb38: {
+        goto -> bb39;
+    }
+
+    bb39: {
+        _36 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _36 -> [bb43, bb40];
+    }
+
+    bb40: {
+        _35 = copy _1.1;
+        _37 = is_type(copy _35, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _37 -> [bb43, bb41];
+    }
+
+    bb41: {
+        _34 = copy _35.1;
+        _38 = is_type(copy _34, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _38 -> [bb43, bb42];
+    }
+
+    bb42: {
+        _34.0 = const "123 Main St";
+        goto -> bb44;
+    }
+
+    bb43: {
+        goto -> bb44;
+    }
+
+    bb44: {
+        _39 = copy _1;
+        _40 = is_type(copy _39, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _40 -> [bb46, bb45];
+    }
+
+    bb45: {
+        _41 = const "name";
+        _39.1[_41] = const "updated2";
+        goto -> bb47;
+    }
+
+    bb46: {
+        goto -> bb47;
+    }
+
+    bb47: {
+        _42 = copy _1;
+        _43 = is_type(copy _42, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _43 -> [bb49, bb48];
+    }
+
+    bb48: {
+        _42.0 = copy _42.0 + const 1_i64;
+        goto -> bb50;
+    }
+
+    bb49: {
+        goto -> bb50;
+    }
+
+    bb50: {
+        _46 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _46 -> [bb53, bb51];
+    }
+
+    bb51: {
+        _45 = copy _1.1;
+        _47 = is_type(copy _45, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _47 -> [bb53, bb52];
+    }
+
+    bb52: {
+        _44 = copy _45.0;
+        goto -> bb54;
+    }
+
+    bb53: {
+        _44 = const null;
+        goto -> bb54;
+    }
+
+    bb54: {
+        _48 = copy _5;
+        _0 = copy _48;
+        _49 = is_type(copy _48, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _49 -> [bb55, bb56];
+    }
+
+    bb55: {
+        _0 = const "default";
+        goto -> bb56;
+    }
+
+    bb56: {
+        goto -> bb57;
+    }
+
+    bb57: {
+        return;
+    }
+}
+
+fn user.OptionalIndex(node: Node?, items: int[]?, lookup: map<string, int>?, nonNullItems: int[]) -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: Node? // node // param
+    let _2: int[]? // items // param
+    let _3: map<string, int>? // lookup // param
+    let _4: int[] // nonNullItems // param
+    let _5: int? // b1
+    let _6: bool
+    let _7: 0
+    let _8: Node[]?
+    let _9: bool
+    let _10: bool
+    let _11: 0
+    let _12: Node
+    let _13: Node[]?
+    let _14: bool
+    let _15: bool
+    let _16: 0
+    let _17: Node?
+    let _18: Node
+    let _19: Node[]?
+    let _20: bool
+    let _21: bool
+    let _22: 0
+    let _23: bool
+    let _24: bool
+    let _25: "total"
+    let _26: map<string, Node>?
+    let _27: bool
+    let _28: bool
+    let _29: "main"
+    let _30: Node
+    let _31: map<string, Node>?
+    let _32: bool
+    let _33: bool
+    let _34: "main"
+    let _35: Node[]?
+    let _36: bool
+    let _37: bool
+    let _38: 0
+    let _39: void // b9
+    let _40: void
+    let _41: int?
+    let _42: bool
+    let _43: 0
+    let _44: string
+    let _45: Node[]?
+    let _46: bool
+    let _47: bool
+    let _48: int
+    let _49: bool
+    let _50: Node[]?
+    let _51: bool
+    let _52: bool
+    let _53: int | 0
+    let _54: int?
+    let _55: bool
+    let _56: 0
+    let _57: bool
+    let _58: bool
+    let _59: 0
+    let _60: int[]?
+    let _61: bool
+    let _62: 0
+    let _63: Node[]?
+    let _64: bool
+    let _65: bool
+    let _66: 0
+    let _67: map<string, int>?
+    let _68: bool
+    let _69: "total"
+    let _70: map<string, Node>?
+    let _71: bool
+    let _72: bool
+    let _73: "main"
+    let _74: int[]?
+    let _75: bool
+    let _76: 0
+    let _77: map<string, int>?
+    let _78: bool
+    let _79: "total"
+    let _80: int?
+    let _81: bool
+    let _82: 0
+    let _83: int?
+    let _84: bool
+
+    bb0: {
+        _6 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _6 -> [bb2, bb1];
+    }
+
+    bb1: {
+        _7 = const 0_i64;
+        _5 = copy _2[_7];
+        goto -> bb3;
+    }
+
+    bb2: {
+        _5 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        _9 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _9 -> [bb6, bb4];
+    }
+
+    bb4: {
+        _8 = copy _1.2;
+        _10 = is_type(copy _8, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _10 -> [bb6, bb5];
+    }
+
+    bb5: {
+        _11 = const 0_i64;
+        goto -> bb7;
+    }
+
+    bb6: {
+        goto -> bb7;
+    }
+
+    bb7: {
+        _14 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _14 -> [bb10, bb8];
+    }
+
+    bb8: {
+        _13 = copy _1.2;
+        _15 = is_type(copy _13, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _15 -> [bb10, bb9];
+    }
+
+    bb9: {
+        _16 = const 0_i64;
+        _12 = copy _13[_16];
+        goto -> bb11;
+    }
+
+    bb10: {
+        goto -> bb11;
+    }
+
+    bb11: {
+        _20 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _20 -> [bb15, bb12];
+    }
+
+    bb12: {
+        _19 = copy _1.2;
+        _21 = is_type(copy _19, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _21 -> [bb15, bb13];
+    }
+
+    bb13: {
+        _22 = const 0_i64;
+        _18 = copy _19[_22];
+        _17 = copy _18.1;
+        _23 = is_type(copy _17, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _23 -> [bb15, bb14];
+    }
+
+    bb14: {
+        goto -> bb16;
+    }
+
+    bb15: {
+        goto -> bb16;
+    }
+
+    bb16: {
+        _24 = is_type(copy _3, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _24 -> [bb18, bb17];
+    }
+
+    bb17: {
+        _25 = const "total";
+        goto -> bb19;
+    }
+
+    bb18: {
+        goto -> bb19;
+    }
+
+    bb19: {
+        _27 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _27 -> [bb22, bb20];
+    }
+
+    bb20: {
+        _26 = copy _1.3;
+        _28 = is_type(copy _26, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _28 -> [bb22, bb21];
+    }
+
+    bb21: {
+        _29 = const "main";
+        goto -> bb23;
+    }
+
+    bb22: {
+        goto -> bb23;
+    }
+
+    bb23: {
+        _32 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _32 -> [bb26, bb24];
+    }
+
+    bb24: {
+        _31 = copy _1.3;
+        _33 = is_type(copy _31, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _33 -> [bb26, bb25];
+    }
+
+    bb25: {
+        _34 = const "main";
+        _30 = copy _31[_34];
+        goto -> bb27;
+    }
+
+    bb26: {
+        goto -> bb27;
+    }
+
+    bb27: {
+        _36 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _36 -> [bb29, bb28];
+    }
+
+    bb28: {
+        _35 = copy _1.2;
+        goto -> bb30;
+    }
+
+    bb29: {
+        _35 = const null;
+        goto -> bb30;
+    }
+
+    bb30: {
+        _37 = is_type(copy _35, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _37 -> [bb32, bb31];
+    }
+
+    bb31: {
+        _38 = const 0_i64;
+        goto -> bb33;
+    }
+
+    bb32: {
+        goto -> bb33;
+    }
+
+    bb33: {
+        _42 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _42 -> [bb35, bb34];
+    }
+
+    bb34: {
+        _43 = const 0_i64;
+        _41 = copy _2[_43];
+        goto -> bb36;
+    }
+
+    bb35: {
+        _41 = const null;
+        goto -> bb36;
+    }
+
+    bb36: {
+        _44 = const "to_string";
+        _40 = copy _41[_44];
+        _39 = call copy _40() -> [bb37];
+    }
+
+    bb37: {
+        _46 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _46 -> [bb41, bb38];
+    }
+
+    bb38: {
+        _45 = copy _1.2;
+        _47 = is_type(copy _45, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _47 -> [bb41, bb39];
+    }
+
+    bb39: {
+        _49 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _49 -> [bb41, bb40];
+    }
+
+    bb40: {
+        _48 = copy _1.0;
+        goto -> bb42;
+    }
+
+    bb41: {
+        goto -> bb42;
+    }
+
+    bb42: {
+        _51 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _51 -> [bb50, bb43];
+    }
+
+    bb43: {
+        _50 = copy _1.2;
+        _52 = is_type(copy _50, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _52 -> [bb50, bb44];
+    }
+
+    bb44: {
+        _55 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _55 -> [bb46, bb45];
+    }
+
+    bb45: {
+        _56 = const 0_i64;
+        _54 = copy _2[_56];
+        goto -> bb47;
+    }
+
+    bb46: {
+        _54 = const null;
+        goto -> bb47;
+    }
+
+    bb47: {
+        _53 = copy _54;
+        _57 = is_type(copy _54, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _57 -> [bb48, bb49];
+    }
+
+    bb48: {
+        _53 = const 0_i64;
+        goto -> bb49;
+    }
+
+    bb49: {
+        goto -> bb51;
+    }
+
+    bb50: {
+        goto -> bb51;
+    }
+
+    bb51: {
+        _58 = is_type(copy _4, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _58 -> [bb53, bb52];
+    }
+
+    bb52: {
+        _59 = const 0_i64;
+        goto -> bb54;
+    }
+
+    bb53: {
+        goto -> bb54;
+    }
+
+    bb54: {
+        _60 = copy _2;
+        _61 = is_type(copy _60, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _61 -> [bb56, bb55];
+    }
+
+    bb55: {
+        _62 = const 0_i64;
+        _60[_62] = const 42_i64;
+        goto -> bb57;
+    }
+
+    bb56: {
+        goto -> bb57;
+    }
+
+    bb57: {
+        _64 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _64 -> [bb60, bb58];
+    }
+
+    bb58: {
+        _63 = copy _1.2;
+        _65 = is_type(copy _63, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _65 -> [bb60, bb59];
+    }
+
+    bb59: {
+        _66 = const 0_i64;
+        _63[_66].0 = const 99_i64;
+        goto -> bb61;
+    }
+
+    bb60: {
+        goto -> bb61;
+    }
+
+    bb61: {
+        _67 = copy _3;
+        _68 = is_type(copy _67, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _68 -> [bb63, bb62];
+    }
+
+    bb62: {
+        _69 = const "total";
+        _67[_69] = const 100_i64;
+        goto -> bb64;
+    }
+
+    bb63: {
+        goto -> bb64;
+    }
+
+    bb64: {
+        _71 = is_type(copy _1, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _71 -> [bb67, bb65];
+    }
+
+    bb65: {
+        _70 = copy _1.3;
+        _72 = is_type(copy _70, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _72 -> [bb67, bb66];
+    }
+
+    bb66: {
+        _73 = const "main";
+        _70[_73].0 = const 50_i64;
+        goto -> bb68;
+    }
+
+    bb67: {
+        goto -> bb68;
+    }
+
+    bb68: {
+        _74 = copy _2;
+        _75 = is_type(copy _74, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _75 -> [bb70, bb69];
+    }
+
+    bb69: {
+        _76 = const 0_i64;
+        _74[_76] = copy _74[_76] + const 10_i64;
+        goto -> bb71;
+    }
+
+    bb70: {
+        goto -> bb71;
+    }
+
+    bb71: {
+        _77 = copy _3;
+        _78 = is_type(copy _77, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _78 -> [bb73, bb72];
+    }
+
+    bb72: {
+        _79 = const "total";
+        _77[_79] = copy _77[_79] + const 5_i64;
+        goto -> bb74;
+    }
+
+    bb73: {
+        goto -> bb74;
+    }
+
+    bb74: {
+        _81 = is_type(copy _2, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _81 -> [bb76, bb75];
+    }
+
+    bb75: {
+        _82 = const 0_i64;
+        _80 = copy _2[_82];
+        goto -> bb77;
+    }
+
+    bb76: {
+        _80 = const null;
+        goto -> bb77;
+    }
+
+    bb77: {
+        _83 = copy _5;
+        _0 = copy _83;
+        _84 = is_type(copy _83, Null { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _84 -> [bb78, bb79];
+    }
+
+    bb78: {
+        _0 = const 0_i64;
+        goto -> bb79;
+    }
+
+    bb79: {
+        goto -> bb80;
+    }
+
+    bb80: {
+        return;
+    }
+}

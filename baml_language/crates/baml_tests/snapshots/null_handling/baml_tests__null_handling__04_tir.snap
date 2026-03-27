@@ -1,0 +1,142 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+class user.Address {
+  street: string
+  zip: string?
+}
+class user.Profile {
+  name: string
+  address: user.Address?
+  scores: int[]?
+  settings: map<string, string>?
+}
+class user.User {
+  id: int
+  profile: user.Profile?
+}
+class user.Node {
+  value: int
+  next: user.Node?
+  children: user.Node[]?
+  labels: map<string, user.Node>?
+}
+function user.OptionalChaining(user: user.User?, nonNullUser: user.User, node: user.Node?) -> string throws never {
+  { : never
+    let a1 = user.id : int?
+    let a2 = user.profile.name : string?
+    let a3 = user.profile.address.street : string?
+    let a4 = user.profile.name : unknown?
+    let a5 = user.profile.address.street : unknown?
+    let a6 = user.profile.address.street : unknown?
+    let a7 = user.profile.name : unknown
+    let a8 = user.profile.name : string?
+    let a9 = user.profile.address.zip : string?
+    let a10 = nonNullUser.id : int?
+    user.profile.name = "updated" : "updated"
+    user.profile.address.street = "123 Main St" : "123 Main St"
+    user.profile.name = "updated2" : "updated2"
+    user.id Add= 1 : int
+    let a11 = user.profile.name Add "new_name" : string
+    return a2 NullCoalesce "default" : string | "default"
+  }
+  !! 1335..1339: unresolved member: user.Profile?.name
+  !! 1413..1420: unresolved member: user.Profile?.address
+  !! 1623..1629: unresolved member: user.Address?.street
+  !! 1744..1748: unresolved member: user.Profile?.name
+  !! 2314..2318: unresolved member: user.Profile?.name
+}
+function user.OptionalIndex(node: user.Node?, items: int[]?, lookup: map<string, int>?, nonNullItems: int[]) -> int throws never {
+  { : never
+    let b1 = items[0] : int?
+    let b2 = node.children[0] : user.Node?
+    let b3 = node.children[0].value : int?
+    let b4 = node.children[0].next.value : int?
+    let b5 = lookup["total"] : int?
+    let b6 = node.labels["main"] : user.Node?
+    let b7 = node.labels["main"].value : int?
+    let b8 = node.children[0] : user.Node?
+    let b9 = items[0].to_string() : unknown
+    let b10 = node.children[node.value] : user.Node?
+    let b11 = node.children[items[0] NullCoalesce 0] : user.Node?
+    let b12 = nonNullItems[0] : int?
+    items[0] = 42 : 42
+    node.children[0].value = 99 : 99
+    lookup["total"] = 100 : 100
+    node.labels["main"].value = 50 : 50
+    items[0] Add= 10 : int
+    lookup["total"] Add= 5 : int
+    let b13 = items[0] Add 77 : unknown
+    return b1 NullCoalesce 0 : int | 0
+  }
+  !! 3625..3634: unresolved member: int?.to_string
+  !! 4373..4388: operator `Add` cannot be applied to `int?` and `77`
+}
+function user.OptionalCall(callback: (int) -> string?, nonNullCb: (int) -> string, name: string?) -> string throws never {
+  { : never
+    let c1 = callback(42) : string?
+    let c2 = callback(42).length : unknown?
+    let c3 = callback(42).length : unknown
+    let c4 = name(42) : unknown?
+    let c5 = nonNullCb(42) : string?
+    return c1 NullCoalesce "default" : string | "default"
+  }
+  !! 4933..4939: unresolved member: string?.length
+  !! 5160..5166: unresolved member: string?.length
+  !! 5242..5252: type `string?` is not callable
+}
+function user.NullCoalescing(user: user.User?, fallback: string, count: int) -> string throws never {
+  { : never
+    let d1 = user.profile.name NullCoalesce "Anonymous" : string | "Anonymous" -> string
+    let d2 = user.profile.name NullCoalesce user.profile.address.street NullCoalesce "Unknown" : string | "Unknown" -> string
+    let d3 = user.profile.name NullCoalesce fallback : string
+    let d4 = user.profile.name NullCoalesce user.profile.address.zip : string?
+    let d5 = user.profile.scores[0] NullCoalesce 0 : int | 0 -> int
+    let d6 = user.profile.name NullCoalesce fallback : string
+    user.profile.name = user.profile.address.street NullCoalesce "no street" : string | "no street"
+    let d7 = user.profile.name NullCoalesce fallback : string
+    let d8 = count NullCoalesce 0 : int
+    let d9 = user.profile.name NullCoalesce null : string | null
+    let d10 = user.profile.name Or "Anonymous" : bool
+    return d1 : string
+  }
+}
+function user.Combined(user: user.User?, node: user.Node?, items: int[]?) -> string throws never {
+  { : never
+    let e1 = user.profile.address.street NullCoalesce "unknown" : string | "unknown" -> string
+    let e2 = node.children[node.value NullCoalesce 0] : user.Node?
+    let e3 = user.profile.name NullCoalesce node.labels["name"].value.to_string() NullCoalesce "fallback" : string | unknown | "fallback" -> string | unknown
+    node.children[0].next.value = user.id NullCoalesce 0 : int | 0
+    node.value Add= items[0] NullCoalesce 1 : int
+    let e4 = node.next.value Add 42 : unknown
+    let e5 = node.children[user.profile.scores[0] NullCoalesce 0].value : int?
+    let e6 = node.labels["first"].children[0].value : int?
+    node.labels["counter"].value = items[0] NullCoalesce 0 Add 1 : int
+    node.labels["counter"].value Add= items[0] NullCoalesce 0 : int
+    node.children[node.value NullCoalesce 0].next.value = node.value NullCoalesce 0 : int | 0
+    return e3 : string | unknown
+  }
+  !! 8142..8151: unresolved member: int.to_string
+  !! 8454..8476: operator `Add` cannot be applied to `int?` and `42`
+}
+class user.Address$stream {
+  street: null | string
+  zip: null | string
+}
+class user.Profile$stream {
+  name: null | string
+  address: null | user.Address$stream
+  scores: null | int[]
+  settings: null | map<string, string>
+}
+class user.User$stream {
+  id: null | int
+  profile: null | user.Profile$stream
+}
+class user.Node$stream {
+  value: null | int
+  next: null | user.Node$stream
+  children: null | user.Node$stream[]
+  labels: null | map<string, user.Node$stream>
+}

@@ -310,6 +310,7 @@ pub(crate) fn synthesize_llm_builtin_call(
             let ct_variant = alloc(Expr::FieldAccess {
                 base: ct_path,
                 field: Name::new("Primitive"),
+                optional: false,
             });
             let sub = alloc(Expr::Array { elements: vec![] });
             let retry = alloc(Expr::Null);
@@ -338,6 +339,7 @@ pub(crate) fn synthesize_llm_builtin_call(
     let call = alloc(Expr::Call {
         callee,
         args: vec![client_arg, fn_name_expr, args_map],
+        optional: false,
     });
 
     let body = ExprBody {
@@ -401,6 +403,7 @@ pub(crate) fn synthesize_llm_parse_call(
     let call = alloc(Expr::Call {
         callee,
         args: vec![fn_name_expr, json_expr],
+        optional: false,
     });
 
     let body = ExprBody {
@@ -875,6 +878,7 @@ fn synthesize_client_let(
     let client_type_expr = alloc(Expr::FieldAccess {
         base: client_type_path,
         field: Name::new(variant_name),
+        optional: false,
     });
 
     // sub_clients: [A, B, ...] for composites, [] for primitive

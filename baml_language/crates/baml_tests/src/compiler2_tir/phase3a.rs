@@ -359,12 +359,10 @@ fn if_without_else_let_binding() {
             { : 5
               5 : 5
             }
-        return y : void
-        0 : unknown
+        return y NullCoalesce 0 : void
       }
       !! 36..49: `if` without `else` cannot be used as a value; add an `else` branch
-      !! 58..59: `if` without `else` cannot be used as a value; add an `else` branch
-      !! 50..59: unreachable code: 1 statement(s) after diverging statement
+      !! 58..64: `if` without `else` cannot be used as a value; add an `else` branch
     }
     ");
 }

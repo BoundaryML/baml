@@ -1,0 +1,5 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== STRONG AST ERROR ===
+Expected token/node binary operator, but found QUESTION_QUESTION at null_handling.baml:88:15

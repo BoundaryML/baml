@@ -400,6 +400,11 @@ struct LoweringContext<'db> {
     // `lower_lambda` call after the body is lowered so it can extend the outer
     // MakeClosure with extra captures.
     transitive_captures_needed: Vec<Name>,
+
+    // Stack of null-exit blocks for optional chaining.
+    // When inside an OptionalChain, optional field accesses/indices/calls
+    // jump to the top block on this stack when they encounter null.
+    optional_chain_null_block: Vec<BlockId>,
 }
 
 impl<'db> LoweringContext<'db> {
@@ -630,6 +635,7 @@ impl<'db> LoweringContext<'db> {
             viz_context: VizContext::new(func_data.name.to_string()),
             pending_header: None,
             synthetic_name_counts: HashMap::new(),
+            optional_chain_null_block: Vec::new(),
         }
     }
 
@@ -782,6 +788,7 @@ impl<'db> LoweringContext<'db> {
             pending_lambdas: Vec::new(),
             capture_indices: None,
             transitive_captures_needed: Vec::new(),
+            optional_chain_null_block: Vec::new(),
         }
     }
 
@@ -1385,8 +1392,8 @@ impl LoweringContext<'_> {
                 self.lower_unary(expr_id, op, expr, dest);
             }
 
-            AstExpr::Call { callee, args } => {
-                self.lower_call(expr_id, callee, &args, dest);
+            AstExpr::Call { callee, args, optional, .. } => {
+                self.lower_call(expr_id, callee, &args, optional, dest);
             }
 
             AstExpr::Array { elements } => {
@@ -1411,12 +1418,12 @@ impl LoweringContext<'_> {
                 self.lower_object(expr_id, type_name.as_ref(), &fields, &spreads, dest);
             }
 
-            AstExpr::FieldAccess { base, field } => {
-                self.lower_field_access(expr_id, base, &field, dest);
+            AstExpr::FieldAccess { base, field, optional, .. } => {
+                self.lower_field_access(expr_id, base, &field, optional, dest);
             }
 
-            AstExpr::Index { base, index } => {
-                self.lower_index(expr_id, base, index, dest);
+            AstExpr::Index { base, index, optional, .. } => {
+                self.lower_index(expr_id, base, index, optional, dest);
             }
 
             AstExpr::Block { stmts, tail_expr } => {
@@ -1469,6 +1476,35 @@ impl LoweringContext<'_> {
 
             AstExpr::Lambda(func_def) => {
                 self.lower_lambda(&func_def, expr_id, dest);
+            }
+
+            AstExpr::OptionalChain { body } => {
+                // Create shared null-exit and join blocks for this chain
+                let bb_null = self.builder.create_block();
+                let bb_join = self.builder.create_block();
+
+                // Push null-exit block so optional accesses inside can find it
+                self.optional_chain_null_block.push(bb_null);
+
+                // Lower the body — optional field/index/call will emit null checks
+                self.lower_expr(body, dest.clone());
+
+                // Normal path: jump to join
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(bb_join);
+                }
+
+                // Null path: assign null to dest, jump to join
+                self.builder.set_current_block(bb_null);
+                self.builder.assign(
+                    dest,
+                    Rvalue::Use(Operand::Constant(Constant::Null)),
+                );
+                self.builder.goto(bb_join);
+
+                // Continue from join
+                self.builder.set_current_block(bb_join);
+                self.optional_chain_null_block.pop();
             }
 
             AstExpr::Missing => {
@@ -1651,6 +1687,8 @@ impl LoweringContext<'_> {
             AstBinaryOp::And | AstBinaryOp::Or => None,
             // Instanceof is not a simple binary op at MIR level
             AstBinaryOp::Instanceof => None,
+            // NullCoalesce handled separately in lower_binary
+            AstBinaryOp::NullCoalesce => None,
         }
     }
 
@@ -1681,6 +1719,38 @@ impl LoweringContext<'_> {
                         ty: check_ty,
                     },
                 );
+                return;
+            }
+            AstBinaryOp::NullCoalesce => {
+                // a ?? b: evaluate LHS, if null use RHS, otherwise keep LHS
+                let lhs_op = self.lower_to_operand(lhs);
+                self.builder.assign(dest.clone(), Rvalue::Use(lhs_op.clone()));
+
+                // Check: is_type(lhs, null)
+                let null_check_ty = Ty::Null { attr: TyAttr::default() };
+                let is_null_local = self.builder.temp(Ty::Bool { attr: TyAttr::default() });
+                self.builder.assign(
+                    Place::local(is_null_local),
+                    Rvalue::IsType { operand: lhs_op, ty: null_check_ty },
+                );
+
+                let bb_rhs = self.builder.create_block();
+                let bb_join = self.builder.create_block();
+
+                // If null → evaluate RHS; otherwise → keep LHS and skip
+                self.builder.branch(
+                    Operand::Copy(Place::Local(is_null_local)),
+                    bb_rhs,
+                    bb_join,
+                );
+
+                self.builder.set_current_block(bb_rhs);
+                self.lower_expr(rhs, dest);
+                if !self.builder.is_current_terminated() {
+                    self.builder.goto(bb_join);
+                }
+
+                self.builder.set_current_block(bb_join);
                 return;
             }
             _ => {}
@@ -1757,11 +1827,34 @@ impl LoweringContext<'_> {
         expr_id: AstExprId,
         callee: AstExprId,
         args: &[AstExprId],
+        optional: bool,
         dest: Place,
     ) {
+        // Optional call: null-guard the callee
+        if optional {
+            if let Some(&bb_null) = self.optional_chain_null_block.last() {
+                let callee_op = self.lower_to_operand(callee);
+                let is_null_local = self.builder.temp(Ty::Bool { attr: TyAttr::default() });
+                self.builder.assign(
+                    Place::local(is_null_local),
+                    Rvalue::IsType {
+                        operand: callee_op,
+                        ty: Ty::Null { attr: TyAttr::default() },
+                    },
+                );
+                let bb_ok = self.builder.create_block();
+                self.builder.branch(
+                    Operand::Copy(Place::Local(is_null_local)),
+                    bb_null,
+                    bb_ok,
+                );
+                self.builder.set_current_block(bb_ok);
+            }
+        }
+
         // Check if callee is a field access (potential watch method call)
         let callee_expr = self.body.exprs[callee].clone();
-        if let AstExpr::FieldAccess { base, field } = &callee_expr {
+        if let AstExpr::FieldAccess { base, field, .. } = &callee_expr {
             let field_name = field.clone();
             let base_id = *base;
             if field_name.as_str() == "options" || field_name.as_str() == "notify" {
@@ -2169,6 +2262,7 @@ impl LoweringContext<'_> {
         expr_id: AstExprId,
         base: AstExprId,
         field: &Name,
+        optional: bool,
         dest: Place,
     ) {
         // Check if TIR resolved this to a method or free function — if so, emit a function constant.
@@ -2234,13 +2328,35 @@ impl LoweringContext<'_> {
             // Base is a real value (non-Unknown type) — fall through to field projection
         }
 
-        // Regular field access
+        // Regular field access — evaluate base once
         let base_ty = self.expr_ty(base);
         let base_op = self.lower_to_operand(base);
+
+        // Optional field access: null-guard the base (after evaluating it once)
+        if optional {
+            if let Some(&bb_null) = self.optional_chain_null_block.last() {
+                let is_null_local = self.builder.temp(Ty::Bool { attr: TyAttr::default() });
+                self.builder.assign(
+                    Place::local(is_null_local),
+                    Rvalue::IsType {
+                        operand: base_op.clone(),
+                        ty: Ty::Null { attr: TyAttr::default() },
+                    },
+                );
+                let bb_ok = self.builder.create_block();
+                self.builder.branch(
+                    Operand::Copy(Place::Local(is_null_local)),
+                    bb_null,
+                    bb_ok,
+                );
+                self.builder.set_current_block(bb_ok);
+            }
+        }
         let field_str = field.to_string();
 
-        // Look up field index from class_fields
-        let field_idx = if let Ty::Class(ref tn, _) = base_ty {
+        // Look up field index from class_fields (unwrap Optional for `?.` access)
+        let lookup_ty = Self::unwrap_optional_ty(&base_ty);
+        let field_idx = if let Ty::Class(tn, _) = lookup_ty {
             self.class_fields
                 .get(tn)
                 .and_then(|fields| fields.get(&field_str))
@@ -2260,7 +2376,7 @@ impl LoweringContext<'_> {
                 })),
             );
         } else {
-            if let Ty::Class(ref tn, _) = base_ty {
+            if let Ty::Class(tn, _) = lookup_ty {
                 self.emit_panic_call(
                     &format!(
                         "internal compiler error: MIR failed to resolve field access \
@@ -2291,16 +2407,39 @@ impl LoweringContext<'_> {
         }
     }
 
-    fn lower_index(&mut self, _expr_id: AstExprId, base: AstExprId, index: AstExprId, dest: Place) {
+    fn lower_index(&mut self, _expr_id: AstExprId, base: AstExprId, index: AstExprId, optional: bool, dest: Place) {
         let base_ty = self.expr_ty(base);
         let base_op = self.lower_to_operand(base);
+
+        // Optional index: null-guard the base (after evaluating it once)
+        if optional {
+            if let Some(&bb_null) = self.optional_chain_null_block.last() {
+                let is_null_local = self.builder.temp(Ty::Bool { attr: TyAttr::default() });
+                self.builder.assign(
+                    Place::local(is_null_local),
+                    Rvalue::IsType {
+                        operand: base_op.clone(),
+                        ty: Ty::Null { attr: TyAttr::default() },
+                    },
+                );
+                let bb_ok = self.builder.create_block();
+                self.builder.branch(
+                    Operand::Copy(Place::Local(is_null_local)),
+                    bb_null,
+                    bb_ok,
+                );
+                self.builder.set_current_block(bb_ok);
+            }
+        }
+
         let index_op = self.lower_to_operand(index);
         let index_ty = self.expr_ty(index);
 
         let base_local = self.operand_to_local(base_op, base_ty.clone());
         let index_local = self.operand_to_local(index_op, index_ty);
 
-        let kind = if matches!(base_ty, Ty::List(..)) {
+        let lookup_ty = Self::unwrap_optional_ty(&base_ty);
+        let kind = if matches!(lookup_ty, Ty::List(..)) {
             IndexKind::Array
         } else {
             IndexKind::Map
@@ -2668,23 +2807,71 @@ impl LoweringContext<'_> {
             }
 
             AstStmt::Assign { target, value } => {
-                let place = self.lower_lvalue(target);
-                self.lower_expr(value, place);
+                let target_expr = self.body.exprs[target].clone();
+                if let AstExpr::OptionalChain { body } = &target_expr {
+                    let body = *body;
+                    let bb_null = self.builder.create_block();
+                    let bb_join = self.builder.create_block();
+                    self.optional_chain_null_block.push(bb_null);
+
+                    let place = self.lower_lvalue_optional(body);
+                    self.lower_expr(value, place);
+
+                    if !self.builder.is_current_terminated() {
+                        self.builder.goto(bb_join);
+                    }
+                    self.builder.set_current_block(bb_null);
+                    self.builder.goto(bb_join);
+                    self.builder.set_current_block(bb_join);
+                    self.optional_chain_null_block.pop();
+                } else {
+                    let place = self.lower_lvalue(target);
+                    self.lower_expr(value, place);
+                }
             }
 
             AstStmt::AssignOp { target, op, value } => {
-                let place = self.lower_lvalue(target);
-                let current = Operand::Copy(place.clone());
-                let rhs = self.lower_to_operand(value);
-                let mir_op = Self::convert_assign_op(op);
-                self.builder.assign(
-                    place,
-                    Rvalue::BinaryOp {
-                        op: mir_op,
-                        left: current,
-                        right: rhs,
-                    },
-                );
+                let target_expr = self.body.exprs[target].clone();
+                if let AstExpr::OptionalChain { body } = &target_expr {
+                    let body = *body;
+                    let bb_null = self.builder.create_block();
+                    let bb_join = self.builder.create_block();
+                    self.optional_chain_null_block.push(bb_null);
+
+                    let place = self.lower_lvalue_optional(body);
+                    let current = Operand::Copy(place.clone());
+                    let rhs = self.lower_to_operand(value);
+                    let mir_op = Self::convert_assign_op(op);
+                    self.builder.assign(
+                        place,
+                        Rvalue::BinaryOp {
+                            op: mir_op,
+                            left: current,
+                            right: rhs,
+                        },
+                    );
+
+                    if !self.builder.is_current_terminated() {
+                        self.builder.goto(bb_join);
+                    }
+                    self.builder.set_current_block(bb_null);
+                    self.builder.goto(bb_join);
+                    self.builder.set_current_block(bb_join);
+                    self.optional_chain_null_block.pop();
+                } else {
+                    let place = self.lower_lvalue(target);
+                    let current = Operand::Copy(place.clone());
+                    let rhs = self.lower_to_operand(value);
+                    let mir_op = Self::convert_assign_op(op);
+                    self.builder.assign(
+                        place,
+                        Rvalue::BinaryOp {
+                            op: mir_op,
+                            left: current,
+                            right: rhs,
+                        },
+                    );
+                }
             }
 
             AstStmt::Assert { condition } => {
@@ -2759,7 +2946,7 @@ impl LoweringContext<'_> {
                     Place::Local(temp)
                 }
             }
-            AstExpr::FieldAccess { base, field } => {
+            AstExpr::FieldAccess { base, field, .. } => {
                 let base_id = *base;
                 let field_name = field.clone();
                 let base_place = self.lower_lvalue(base_id);
@@ -2802,7 +2989,7 @@ impl LoweringContext<'_> {
                     kind: IndexKind::Map,
                 }
             }
-            AstExpr::Index { base, index } => {
+            AstExpr::Index { base, index, .. } => {
                 let base_id = *base;
                 let index_id = *index;
                 let base_place = self.lower_lvalue(base_id);
@@ -2826,6 +3013,163 @@ impl LoweringContext<'_> {
                 let temp = self.builder.temp(ty);
                 Place::Local(temp)
             }
+        }
+    }
+
+    /// Emit a null-check on `operand`, jumping to the top of `optional_chain_null_block`
+    /// if null. Continues in a new "ok" block if non-null.
+    fn emit_null_guard(&mut self, operand: Operand) {
+        if let Some(&bb_null) = self.optional_chain_null_block.last() {
+            let is_null_local = self.builder.temp(Ty::Bool { attr: TyAttr::default() });
+            self.builder.assign(
+                Place::local(is_null_local),
+                Rvalue::IsType {
+                    operand,
+                    ty: Ty::Null { attr: TyAttr::default() },
+                },
+            );
+            let bb_ok = self.builder.create_block();
+            self.builder.branch(
+                Operand::Copy(Place::Local(is_null_local)),
+                bb_null,
+                bb_ok,
+            );
+            self.builder.set_current_block(bb_ok);
+        }
+    }
+
+    /// Unwrap `Optional(T)` to `T`, or return the type as-is.
+    fn unwrap_optional_ty(ty: &Ty) -> &Ty {
+        match ty {
+            Ty::Optional(inner, _) => inner.as_ref(),
+            other => other,
+        }
+    }
+
+    /// Lower an lvalue expression that may contain optional accesses.
+    /// Unlike `lower_lvalue`, this evaluates bases as operands and emits
+    /// null-checks at each optional step (using `optional_chain_null_block`).
+    fn lower_lvalue_optional(&mut self, expr_id: AstExprId) -> Place {
+        let expr = self.body.exprs[expr_id].clone();
+        match &expr {
+            AstExpr::FieldAccess { base, field, optional } => {
+                let base_id = *base;
+                let field_name = field.clone();
+                let optional = *optional;
+
+                if optional {
+                    // Evaluate base as operand (triggers inner null checks via RHS lowering)
+                    let base_ty = self.expr_ty(base_id);
+                    let base_op = self.lower_to_operand(base_id);
+
+                    // Null-check the base
+                    self.emit_null_guard(base_op.clone());
+
+                    let base_local = self.operand_to_local(base_op, base_ty.clone());
+
+                    // Unwrap Optional for class field lookup
+                    let unwrapped_ty = Self::unwrap_optional_ty(&base_ty);
+                    let field_str = field_name.to_string();
+
+                    if let Ty::Class(tn, _) = unwrapped_ty {
+                        if let Some(fields) = self.class_fields.get(tn) {
+                            if let Some(&idx) = fields.get(&field_str) {
+                                return Place::Field {
+                                    base: Box::new(Place::Local(base_local)),
+                                    field: idx,
+                                };
+                            }
+                        }
+                    }
+                    // Dynamic map access for non-class types
+                    let key_local = self.builder.temp(Ty::String {
+                        attr: TyAttr::default(),
+                    });
+                    self.builder.assign(
+                        Place::local(key_local),
+                        Rvalue::Use(Operand::Constant(Constant::String(field_str))),
+                    );
+                    Place::Index {
+                        base: Box::new(Place::Local(base_local)),
+                        index: key_local,
+                        kind: IndexKind::Map,
+                    }
+                } else {
+                    // Non-optional field but might have optional bases — recurse
+                    let base_place = self.lower_lvalue_optional(base_id);
+                    let base_ty = self.expr_ty(base_id);
+                    let field_str = field_name.to_string();
+                    if let Ty::Class(ref tn, _) = base_ty {
+                        if let Some(fields) = self.class_fields.get(tn) {
+                            if let Some(&idx) = fields.get(&field_str) {
+                                return Place::Field {
+                                    base: Box::new(base_place),
+                                    field: idx,
+                                };
+                            }
+                        }
+                    }
+                    let key_local = self.builder.temp(Ty::String {
+                        attr: TyAttr::default(),
+                    });
+                    self.builder.assign(
+                        Place::local(key_local),
+                        Rvalue::Use(Operand::Constant(Constant::String(field_str))),
+                    );
+                    Place::Index {
+                        base: Box::new(base_place),
+                        index: key_local,
+                        kind: IndexKind::Map,
+                    }
+                }
+            }
+            AstExpr::Index { base, index, optional } => {
+                let base_id = *base;
+                let index_id = *index;
+                let optional = *optional;
+
+                if optional {
+                    let base_ty = self.expr_ty(base_id);
+                    let base_op = self.lower_to_operand(base_id);
+
+                    self.emit_null_guard(base_op.clone());
+
+                    let base_local = self.operand_to_local(base_op, base_ty.clone());
+                    let index_op = self.lower_to_operand(index_id);
+                    let index_ty = self.expr_ty(index_id);
+                    let index_local = self.operand_to_local(index_op, index_ty);
+
+                    let unwrapped_ty = Self::unwrap_optional_ty(&base_ty);
+                    let kind = if matches!(unwrapped_ty, Ty::List(..)) {
+                        IndexKind::Array
+                    } else {
+                        IndexKind::Map
+                    };
+                    Place::Index {
+                        base: Box::new(Place::Local(base_local)),
+                        index: index_local,
+                        kind,
+                    }
+                } else {
+                    let base_place = self.lower_lvalue_optional(base_id);
+                    let index_op = self.lower_to_operand(index_id);
+                    let base_ty = self.expr_ty(base_id);
+                    let index_ty = self.expr_ty(index_id);
+                    let index_local = self.operand_to_local(index_op, index_ty);
+                    let kind = if matches!(base_ty, Ty::List(..)) {
+                        IndexKind::Array
+                    } else {
+                        IndexKind::Map
+                    };
+                    Place::Index {
+                        base: Box::new(base_place),
+                        index: index_local,
+                        kind,
+                    }
+                }
+            }
+            // For Path and other base cases, delegate to regular lower_lvalue
+            _ => self.lower_lvalue(expr_id),
         }
     }
 }
