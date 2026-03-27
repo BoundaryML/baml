@@ -1,22 +1,22 @@
 //! Converting from [`baml_type`] types to SAP model types.
 
-use std::{
-    borrow::Cow,
-    collections::{HashMap, HashSet},
-};
+use std::borrow::Cow;
 
-use baml_type::{TyAttrValue, TypeName};
+use ::baml_type::{TyAttrValue, TypeName};
+use ::std::sync::Arc;
+use ::sys_types::{ClassDefinition, EnumDefinition};
+use indexmap::IndexMap;
 
 use crate::sap_model::{
-    self, AnnotatedTy, ArrayTy, AttrLiteral, BoolLiteralTy, BoolTy, FloatTy, IntLiteralTy, IntTy,
-    MapTy, MediaTy, NullTy, StringLiteralTy, StringTy, TyResolved, TyWithMeta, TypeAnnotations,
-    UnionTy,
+    self, AnnotatedEnumVariant, AnnotatedField, AnnotatedTy, ArrayTy, AttrLiteral, BoolLiteralTy,
+    BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy, MapTy, MediaTy, NullTy,
+    StringLiteralTy, StringTy, TyResolved, TyWithMeta, TypeAnnotations, TypeRefDb, UnionTy,
 };
 
 impl crate::sap_model::TypeIdent for TypeName {}
 
 #[derive(thiserror::Error, Debug)]
-pub enum ConvertError {
+pub enum ConvertError<'t> {
     #[error("Failed to parse float: {0}")]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error("Unknown media kind")]
@@ -24,153 +24,504 @@ pub enum ConvertError {
     #[error("Float literals cannot be parsed")]
     FloatLiteral,
     #[error("Non-parsable type: {0:?}")]
-    NonParsableType(Box<baml_type::Ty>),
+    NonParsableType(&'t baml_type::Ty),
+    #[error("Unknown class: {0}")]
+    UnknownClass(baml_type::TypeName),
+    #[error("Unknown enum: {0}")]
+    UnknownEnum(baml_type::TypeName),
+    #[error("Unknown type alias: {0}")]
+    UnknownTypeAlias(baml_type::TypeName),
+    #[error("Unknown name (could not determine if it was a class, enum, or type alias): {0}")]
+    UnknownName(baml_type::TypeName),
+    #[error("Could not add a type to the database as the name `{0}` is already present")]
+    AlreadyPresent(baml_type::TypeName),
+    #[error("Recursion depth exceeded for {0}")]
+    RecursionDepthExceeded(&'static str),
+    #[error("Unions must be flattened")]
+    UnflattenedUnion,
+    /// Something like `type A = B; type B = A;` is invalid.
+    #[error("Recursive type alias without indirection: {0}")]
+    DirectRecursiveTypeAlias(baml_type::TypeName),
+    #[error("Internal error (please report): {0}")]
+    InternalError(&'static str),
 }
 
-/// Simplify a type for SAP and then convert it to the SAP model.
-///
-/// Runs [`baml_type::simplify_sap::simplify`] as a pre-pass (flattening
-/// unions, deduplicating variants, distributing attrs, expanding aliases)
-/// and then converts the simplified type.
-pub fn simplify_and_convert(
-    ty: &baml_type::Ty,
-    aliases: &HashMap<TypeName, baml_type::Ty>,
-    recursive_aliases: &HashSet<TypeName>,
-) -> Result<AnnotatedTy<'static, TypeName>, ConvertError> {
-    let simplified = baml_type::simplify_sap::simplify(ty.clone(), aliases, recursive_aliases);
-    convert(&simplified)
+/// Contains stuff from [`sys_types::SysOpContext`] that we need for converting to the sap model.
+#[allow(clippy::struct_field_names)]
+pub struct TypeCtx {
+    class_definitions: Arc<IndexMap<baml_type::TypeName, ClassDefinition>>,
+    enum_definitions: Arc<IndexMap<baml_type::TypeName, EnumDefinition>>,
+    type_alias_definitions: Arc<IndexMap<baml_type::TypeName, baml_type::Ty>>,
 }
+impl TypeCtx {
+    /// ## Assumptions
+    /// - Unions should be flattened:
+    ///   - Union members cannot be unions
+    ///   - Union members cannot be optional
+    ///   - Union members cannot be type aliases which themselves resolve to unions (or optionals)
+    ///   - Same rules for the inner type of an optional type
+    /// - Type aliases should be flattened:
+    ///   - Type aliases cannot directly contain the name of another type alias (or itself)
+    ///   - example: `type A = int; type B = A;` is invalid (`B` should be updated to directly reference `int`)
+    ///   - Type aliases that contain a class or enum name *are* permitted.
+    pub fn new(
+        class_definitions: Arc<IndexMap<baml_type::TypeName, ClassDefinition>>,
+        enum_definitions: Arc<IndexMap<baml_type::TypeName, EnumDefinition>>,
+        type_alias_definitions: Arc<IndexMap<baml_type::TypeName, baml_type::Ty>>,
+    ) -> Self {
+        Self {
+            class_definitions,
+            enum_definitions,
+            type_alias_definitions,
+        }
+    }
 
-pub fn convert(ty: &baml_type::Ty) -> Result<AnnotatedTy<'static, TypeName>, ConvertError> {
-    let ty = match ty {
-        baml_type::Ty::Int { attr } => TyWithMeta::new(
-            sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::Float { attr } => TyWithMeta::new(
-            sap_model::Ty::Resolved(TyResolved::Float(FloatTy)),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::String { attr } => TyWithMeta::new(
-            sap_model::Ty::Resolved(TyResolved::String(StringTy)),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::Bool { attr } => TyWithMeta::new(
-            sap_model::Ty::Resolved(TyResolved::Bool(BoolTy)),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::Null { attr } => TyWithMeta::new(
-            sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::Media(media_kind, ty_attr) => {
-            let media_kind = match media_kind {
-                baml_type::MediaKind::Image => MediaTy::Image,
-                baml_type::MediaKind::Video => MediaTy::Video,
-                baml_type::MediaKind::Audio => MediaTy::Audio,
-                baml_type::MediaKind::Pdf => MediaTy::Pdf,
-                baml_type::MediaKind::Generic => return Err(ConvertError::UnknownMediaKind),
-            };
-            TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::Media(media_kind)),
-                convert_ty_attrs(ty_attr)?,
-            )
+    /// Constructs a full [`TypeRefDb`] from the given context with all types converted.
+    pub fn build_db(&self) -> Result<TypeRefDb<'_, TypeName>, ConvertError<'_>> {
+        let mut db = TypeRefDb::new();
+        for (name, cls) in self.class_definitions.iter() {
+            let cls = self.convert_class(name, cls)?;
+            db.try_add_inner(name.clone(), TyResolved::Class(cls))
+                .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
         }
-        baml_type::Ty::Literal(baml_type::Literal::Int(i), attr) => TyWithMeta::new(
-            sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::Literal(baml_type::Literal::Float(..), ..) => {
-            return Err(ConvertError::FloatLiteral);
+        for (name, enum_def) in self.enum_definitions.iter() {
+            let enum_def = Self::convert_enum(name, enum_def);
+            db.try_add_inner(name.clone(), TyResolved::Enum(enum_def))
+                .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
         }
-        baml_type::Ty::Literal(baml_type::Literal::String(s), attr) => TyWithMeta::new(
-            sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Owned(
-                s.clone(),
-            )))),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::Literal(baml_type::Literal::Bool(b), attr) => TyWithMeta::new(
-            sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::Class(type_name, attr) => TyWithMeta::new(
-            sap_model::Ty::Unresolved(type_name.clone()),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::Enum(type_name, attr) => TyWithMeta::new(
-            sap_model::Ty::Unresolved(type_name.clone()),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::Optional(ty, attr) => {
-            // becomes a union
-            let ty = convert(ty)?;
-            TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::Union(UnionTy {
-                    variants: vec![
-                        TyWithMeta::new(
-                            sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
-                            TypeAnnotations::default(),
-                        ),
-                        ty,
-                    ],
+        for (name, alias_ty) in self.type_alias_definitions.iter() {
+            let alias_ty = self.convert_type_alias(name, alias_ty, 0)?;
+            db.try_add_inner(name.clone(), alias_ty)
+                .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
+        }
+        Ok(db)
+    }
+
+    fn convert_class<'a>(
+        &'a self,
+        name: &baml_type::TypeName,
+        class_def: &'a ::sys_types::ClassDefinition,
+    ) -> Result<ClassTy<'a, TypeName>, ConvertError<'a>> {
+        let fields = class_def
+            .fields
+            .iter()
+            .filter_map(|field| {
+                let ::sys_types::ClassFieldDefinition {
+                    name,
+                    field_type,
+                    alias,
+                    skip,
+                    ..
+                } = &field;
+                if *skip {
+                    return None;
+                }
+                let ty = match self.convert_ty(field_type) {
+                    Ok(ty) => ty,
+                    Err(err) => return Some(Err(err)),
+                };
+                let (class_in_progress_field_missing, class_completed_field_missing) =
+                    match self.get_field_attrs(field_type, 0) {
+                        Ok(attrs) => attrs,
+                        Err(err) => return Some(Err(err)),
+                    };
+
+                let field = AnnotatedField {
+                    name: Cow::Borrowed(name),
+                    ty,
+                    class_in_progress_field_missing,
+                    class_completed_field_missing,
+                    aliases: alias.iter().map(Into::into).collect(),
+                };
+                Some(Ok(field))
+            })
+            .collect::<Result<_, _>>()?;
+        let class_ty = ClassTy {
+            name: name.clone(),
+            fields,
+        };
+        Ok(class_ty)
+    }
+
+    fn convert_enum<'a>(
+        name: &baml_type::TypeName,
+        enum_def: &'a ::sys_types::EnumDefinition,
+    ) -> EnumTy<'a, TypeName> {
+        let variants = enum_def
+            .variants
+            .iter()
+            .map(|variant| AnnotatedEnumVariant {
+                name: variant.name.as_str().into(),
+                aliases: variant.alias.iter().map(|a| a.as_str().into()).collect(),
+            })
+            .collect();
+
+        EnumTy {
+            name: name.clone(),
+            variants,
+        }
+    }
+
+    /// Converts a type alias declaration into a sap model type for inclusion in a [`TypeRefDb`].
+    ///
+    /// ## Arguments
+    /// - `name`: The name of the type alias. Not used in the output, only for error checking and reporting.
+    /// - `alias_ty`: The type alias declaration.
+    /// - `recursion_depth`: The current recursion depth. Used to prevent infinite recursion.
+    fn convert_type_alias<'a>(
+        &'a self,
+        name: &baml_type::TypeName,
+        alias_ty: &'a baml_type::Ty,
+        recursion_depth: usize,
+    ) -> Result<TyResolved<'a, TypeName>, ConvertError<'a>> {
+        if recursion_depth > 16 {
+            return Err(ConvertError::RecursionDepthExceeded("type alias"));
+        }
+
+        let converted = self.convert_ty(alias_ty)?;
+        let resolved = match converted.ty {
+            sap_model::Ty::Resolved(r) => r,
+            sap_model::Ty::ResolvedRef(..) => {
+                return Err(ConvertError::InternalError(concat!(
+                    file!(),
+                    ":",
+                    line!(),
+                    ": `DbBuilder::convert_ty` returned `sap_model::Ty::ResolvedRef`"
+                )));
+            }
+            sap_model::Ty::Unresolved(inner_name) => {
+                // I think this should usually already be resolved, but we can do our best here.
+                if inner_name == *name {
+                    return Err(ConvertError::RecursionDepthExceeded(
+                        "type alias due to self-reference without indirection",
+                    ));
+                }
+                if let Some(class_ty) = self.class_definitions.get(&inner_name) {
+                    return self
+                        .convert_class(&inner_name, class_ty)
+                        .map(TyResolved::Class);
+                }
+                if let Some(enum_ty) = self.enum_definitions.get(&inner_name) {
+                    return Ok(TyResolved::Enum(Self::convert_enum(&inner_name, enum_ty)));
+                }
+                if let Some(alias_ty) = self.type_alias_definitions.get(&inner_name) {
+                    return self.convert_type_alias(&inner_name, alias_ty, recursion_depth + 1);
+                }
+                return Err(ConvertError::UnknownName(inner_name));
+            }
+        };
+        Ok(resolved)
+    }
+
+    /// Converts a BAML type into a sap model type.
+    pub fn convert_ty<'a>(
+        &'a self,
+        ty: &'a baml_type::Ty,
+    ) -> Result<AnnotatedTy<'a, TypeName>, ConvertError<'a>> {
+        // TODO
+        // let simplified = ::baml_type::simplify_sap::simplify(ty, aliases, recursive_aliases)
+
+        let ty = match ty {
+            baml_type::Ty::Int { attr } => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
+                convert_ty_attrs(attr)?,
+            ),
+            baml_type::Ty::Float { attr } => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::Float(FloatTy)),
+                convert_ty_attrs(attr)?,
+            ),
+            baml_type::Ty::String { attr } => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::String(StringTy)),
+                convert_ty_attrs(attr)?,
+            ),
+            baml_type::Ty::Bool { attr } => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::Bool(BoolTy)),
+                convert_ty_attrs(attr)?,
+            ),
+            baml_type::Ty::Null { attr } => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
+                convert_ty_attrs(attr)?,
+            ),
+            baml_type::Ty::Media(media_kind, ty_attr) => {
+                let media_kind = match media_kind {
+                    baml_type::MediaKind::Image => MediaTy::Image,
+                    baml_type::MediaKind::Video => MediaTy::Video,
+                    baml_type::MediaKind::Audio => MediaTy::Audio,
+                    baml_type::MediaKind::Pdf => MediaTy::Pdf,
+                    baml_type::MediaKind::Generic => {
+                        return Err(ConvertError::UnknownMediaKind);
+                    }
+                };
+                TyWithMeta::new(
+                    sap_model::Ty::Resolved(TyResolved::Media(media_kind)),
+                    convert_ty_attrs(ty_attr)?,
+                )
+            }
+            baml_type::Ty::Literal(baml_type::Literal::Int(i), attr) => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::LiteralInt(IntLiteralTy(*i))),
+                convert_ty_attrs(attr)?,
+            ),
+            baml_type::Ty::Literal(baml_type::Literal::Float(..), ..) => {
+                return Err(ConvertError::FloatLiteral);
+            }
+            baml_type::Ty::Literal(baml_type::Literal::String(s), attr) => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::LiteralString(StringLiteralTy(Cow::Borrowed(
+                    s,
+                )))),
+                convert_ty_attrs(attr)?,
+            ),
+            baml_type::Ty::Literal(baml_type::Literal::Bool(b), attr) => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
+                convert_ty_attrs(attr)?,
+            ),
+            baml_type::Ty::Class(type_name, attr) => TyWithMeta::new(
+                // currently [`ClassDefinition`] does not have attributes attached to it.
+                // They will probably get lifted earlier in the conversion process, but if not then we would do it here.
+                sap_model::Ty::Unresolved(type_name.clone()),
+                convert_ty_attrs(attr)?,
+            ),
+            baml_type::Ty::Enum(type_name, attr) => TyWithMeta::new(
+                sap_model::Ty::Unresolved(type_name.clone()),
+                convert_ty_attrs(attr)?,
+            ),
+            baml_type::Ty::EnumVariant(type_name, variant, attr) => {
+                let enum_def = self
+                    .enum_definitions
+                    .get(type_name)
+                    .ok_or_else(|| ConvertError::UnknownEnum(type_name.clone()))?;
+                let variant_def = enum_def
+                    .variants
+                    .iter()
+                    .find(|v| v.name == AsRef::<str>::as_ref(variant))
+                    .ok_or(ConvertError::InternalError(
+                        "enum variant not found in enum definition",
+                    ))?;
+                let enum_variant_ty = EnumVariantTy {
+                    name: type_name.clone(),
+                    value: AnnotatedEnumVariant {
+                        name: variant_def.name.as_str().into(),
+                        aliases: variant_def
+                            .alias
+                            .iter()
+                            .map(|a| a.as_str().into())
+                            .collect(),
+                    },
+                };
+                TyWithMeta::new(
+                    sap_model::Ty::Resolved(TyResolved::EnumVariant(enum_variant_ty)),
+                    convert_ty_attrs(attr)?,
+                )
+            }
+            baml_type::Ty::Optional(ty, attr) => {
+                if self.is_union_like(ty) {
+                    return Err(ConvertError::UnflattenedUnion);
+                }
+                // becomes a union
+                let ty = self.convert_ty(ty)?;
+                TyWithMeta::new(
+                    sap_model::Ty::Resolved(TyResolved::Union(UnionTy {
+                        variants: vec![
+                            TyWithMeta::new(
+                                sap_model::Ty::Resolved(TyResolved::Null(NullTy)),
+                                TypeAnnotations::default(),
+                            ),
+                            ty,
+                        ],
+                    })),
+                    convert_ty_attrs(attr)?,
+                )
+            }
+            baml_type::Ty::List(ty, attr) => TyWithMeta::new(
+                sap_model::Ty::Resolved(TyResolved::Array(ArrayTy {
+                    ty: Box::new(self.convert_ty(ty)?),
                 })),
                 convert_ty_attrs(attr)?,
-            )
+            ),
+            baml_type::Ty::Map { key, value, attr } => {
+                let key = self.convert_ty(key)?;
+                let value = self.convert_ty(value)?;
+                TyWithMeta::new(
+                    sap_model::Ty::Resolved(TyResolved::Map(MapTy {
+                        key: Box::new(key),
+                        value: Box::new(value),
+                    })),
+                    convert_ty_attrs(attr)?,
+                )
+            }
+            baml_type::Ty::Union(items, ty_attr) => {
+                if items.iter().any(|ty| self.is_union_like(ty)) {
+                    return Err(ConvertError::UnflattenedUnion);
+                }
+                let items = items
+                    .iter()
+                    .map(|ty| self.convert_ty(ty))
+                    .collect::<Result<Vec<_>, _>>()?;
+                TyWithMeta::new(
+                    sap_model::Ty::Resolved(TyResolved::Union(UnionTy { variants: items })),
+                    convert_ty_attrs(ty_attr)?,
+                )
+            }
+            baml_type::Ty::TypeAlias(type_name, attr) => {
+                // if it hasn't already, we flatten type aliases:
+                // with `type A = B; type B = C; class C { ... }`,
+                // a type reference `name:A` becomes `name:C`
+                let mut attr = attr.clone();
+                let mut innermost_name = type_name;
+                loop {
+                    let Some(inner_ty) = self.type_alias_definitions.get(innermost_name) else {
+                        return Err(ConvertError::UnknownTypeAlias(innermost_name.clone()));
+                    };
+                    match inner_ty {
+                        baml_type::Ty::TypeAlias(name, inner_attr) => {
+                            if innermost_name == type_name {
+                                return Err(ConvertError::DirectRecursiveTypeAlias(
+                                    type_name.clone(),
+                                ));
+                            }
+                            attr = merge_ty_attrs(&attr, inner_attr);
+                            innermost_name = name;
+                        }
+                        baml_type::Ty::Class(name, inner_attr)
+                        | baml_type::Ty::Enum(name, inner_attr) => {
+                            attr = merge_ty_attrs(&attr, inner_attr);
+                            innermost_name = name;
+                            break;
+                        }
+                        unnamed => {
+                            attr = merge_ty_attrs(&attr, unnamed.attr());
+                            break;
+                        }
+                    }
+                }
+
+                TyWithMeta::new(
+                    sap_model::Ty::Unresolved(innermost_name.clone()),
+                    convert_ty_attrs(&attr)?,
+                )
+            }
+            unparsable @ (baml_type::Ty::Opaque(_, _)
+            | baml_type::Ty::Function { .. }
+            | baml_type::Ty::Void { .. }
+            | baml_type::Ty::WatchAccessor(_, _)
+            | baml_type::Ty::BuiltinUnknown { .. }
+            | baml_type::Ty::Future(_, _)) => {
+                return Err(ConvertError::NonParsableType(unparsable));
+            }
+        };
+        Ok(ty)
+    }
+
+    fn is_union_like(&self, ty: &baml_type::Ty) -> bool {
+        match ty {
+            baml_type::Ty::Union(..) | baml_type::Ty::Optional(..) => true,
+            baml_type::Ty::TypeAlias(name, ..) => self
+                .type_alias_definitions
+                .get(name)
+                .is_some_and(|ty| self.is_union_like(ty)),
+            _ => false,
         }
-        baml_type::Ty::List(ty, attr) => TyWithMeta::new(
-            sap_model::Ty::Resolved(TyResolved::Array(ArrayTy {
-                ty: Box::new(convert(ty)?),
-            })),
-            convert_ty_attrs(attr)?,
-        ),
-        baml_type::Ty::Map { key, value, attr } => {
-            let key = convert(key)?;
-            let value = convert(value)?;
-            TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::Map(MapTy {
-                    key: Box::new(key),
-                    value: Box::new(value),
-                })),
-                convert_ty_attrs(attr)?,
-            )
+    }
+
+    /// Outside of SAP, the SAP field attributes are treated as type attributes (since they can be attached to type declarations).
+    /// This function derives the SAP field attributes from the BAML type and attributes.
+    /// May need to recurse into named types.
+    ///
+    /// ## Returns
+    /// `(class_in_progress_field_missing, class_completed_field_missing)`
+    fn get_field_attrs<'a>(
+        &'a self,
+        field_type: &'a ::baml_type::Ty,
+        recursion_depth: usize,
+    ) -> Result<(AttrLiteral<'a, TypeName>, AttrLiteral<'a, TypeName>), ConvertError<'a>> {
+        if recursion_depth > 16 {
+            return Err(ConvertError::RecursionDepthExceeded(
+                "class field attribute derivation",
+            ));
         }
-        baml_type::Ty::Union(items, ty_attr) => {
-            let items = items
-                .iter()
-                .map(|ty| convert(ty))
-                .collect::<Result<Vec<_>, _>>()?;
-            TyWithMeta::new(
-                sap_model::Ty::Resolved(TyResolved::Union(UnionTy { variants: items })),
-                convert_ty_attrs(ty_attr)?,
-            )
+
+        let attrs = field_type.attr();
+        if matches!(attrs.sap_pending_never, TyAttrValue::Set) {
+            return Ok((AttrLiteral::Never, AttrLiteral::Never));
         }
-        baml_type::Ty::TypeAlias(type_name, attr) => TyWithMeta::new(
-            sap_model::Ty::Unresolved(type_name.clone()),
-            convert_ty_attrs(attr)?,
-        ),
-        unparsable @ (baml_type::Ty::Opaque(_, _)
-        | baml_type::Ty::Function { .. }
-        | baml_type::Ty::Void { .. }
-        | baml_type::Ty::WatchAccessor(_, _)
-        | baml_type::Ty::BuiltinUnknown { .. }
-        | baml_type::Ty::EnumVariant(_, _, _)
-        | baml_type::Ty::Future(_, _)) => {
-            return Err(ConvertError::NonParsableType(Box::new(unparsable.clone())));
-        }
-    };
-    Ok(ty)
+
+        let field_attrs = match field_type {
+            ::baml_type::Ty::Int { .. }
+            | ::baml_type::Ty::Float { .. }
+            | ::baml_type::Ty::String { .. }
+            | ::baml_type::Ty::Bool { .. }
+            | ::baml_type::Ty::Media(..)
+            | ::baml_type::Ty::Literal(..)
+            | ::baml_type::Ty::Class(..)
+            | ::baml_type::Ty::Enum(..)
+            | ::baml_type::Ty::EnumVariant(..) => (AttrLiteral::Never, AttrLiteral::Never),
+            ::baml_type::Ty::Null { .. } | ::baml_type::Ty::Optional(..) => {
+                (AttrLiteral::Null, AttrLiteral::Null)
+            }
+            ::baml_type::Ty::List(..) => (
+                AttrLiteral::Array(Vec::new()),
+                AttrLiteral::Array(Vec::new()),
+            ),
+            ::baml_type::Ty::Map { .. } => (
+                AttrLiteral::Map(IndexMap::new()),
+                AttrLiteral::Map(IndexMap::new()),
+            ),
+            ::baml_type::Ty::Union(members, ..) => members
+                .first()
+                .map(|first| self.get_field_attrs(first, recursion_depth + 1))
+                .transpose()?
+                .unwrap_or((AttrLiteral::Never, AttrLiteral::Never)),
+            ::baml_type::Ty::TypeAlias(name, ..) => {
+                let Some(alias_ty) = self.type_alias_definitions.get(name) else {
+                    return Err(ConvertError::UnknownTypeAlias(name.clone()));
+                };
+                self.get_field_attrs(alias_ty, recursion_depth + 1)?
+            }
+            unparsable @ (::baml_type::Ty::Opaque(_, _)
+            | ::baml_type::Ty::Function { .. }
+            | ::baml_type::Ty::Void { .. }
+            | ::baml_type::Ty::WatchAccessor(_, _)
+            | ::baml_type::Ty::BuiltinUnknown { .. }
+            | ::baml_type::Ty::Future(_, _)) => {
+                return Err(ConvertError::NonParsableType(unparsable));
+            }
+        };
+        Ok(field_attrs)
+    }
 }
 
-pub fn convert_ty_attrs(
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "Converting assertions will be done in a future PR."
+)]
+fn convert_ty_attrs(
     attrs: &baml_type::TyAttr,
-) -> Result<TypeAnnotations<'static, TypeName>, ConvertError> {
-    let in_progress = match attrs.sap_in_progress_never {
+) -> Result<TypeAnnotations<'static, TypeName>, ConvertError<'static>> {
+    let in_progress = match attrs.sap_pending_never {
         TyAttrValue::Set => Some(AttrLiteral::Never),
         TyAttrValue::Unset => None,
     };
+    let parse_without_null = attrs.sap_parse_without_null == TyAttrValue::Set;
+
     Ok(TypeAnnotations {
         in_progress,
-        parse_without_null: false, // TODO: parse_without_null
-        asserts: Vec::new(),       // TODO: assertions
+        parse_without_null,
+        asserts: Vec::new(), // TODO: assertions
     })
+}
+/// Merges two type attributes.
+/// May return one of the inputs if the output would be identical.
+fn merge_ty_attrs(outer: &baml_type::TyAttr, inner: &baml_type::TyAttr) -> baml_type::TyAttr {
+    baml_type::TyAttr {
+        sap_in_progress_never: outer.sap_in_progress_never.or(inner.sap_in_progress_never),
+        sap_parse_without_null: outer
+            .sap_parse_without_null
+            .or(inner.sap_parse_without_null),
+        sap_pending_never: outer.sap_pending_never.or(inner.sap_pending_never),
+        asserts: outer
+            .asserts
+            .iter()
+            .chain(inner.asserts.iter())
+            .cloned()
+            .collect(),
+    }
 }

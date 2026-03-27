@@ -11,9 +11,9 @@ use crate::{
     },
     jsonish::{self, CompletionState},
     sap_model::{
-        ArrayTy, AttrLiteral, BoolLiteralTy, BoolTy, ClassTy, EnumTy, FloatTy, IntLiteralTy, IntTy,
-        MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy,
-        TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, UnionTy,
+        ArrayTy, AttrLiteral, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy,
+        IntLiteralTy, IntTy, MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy,
+        StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, UnionTy,
     },
 };
 
@@ -90,6 +90,10 @@ where
             }
             TyResolvedRef::Enum(e) => EnumTy::try_cast(ctx, TyWithMeta::new(e, target.meta), value)
                 .map(|v| v.map_value(Into::into)),
+            TyResolvedRef::EnumVariant(e) => {
+                EnumVariantTy::try_cast(ctx, TyWithMeta::new(e, target.meta), value)
+                    .map(|v| v.map_value(Into::into))
+            }
             TyResolvedRef::Union(u) => {
                 UnionTy::try_cast(ctx, TyWithMeta::new(u, target.meta), value)
                     .map(|v| v.map_value(Into::into))
@@ -139,6 +143,20 @@ where
                     let ret = EnumTy::coerce_from_cow(
                         ctx,
                         TyWithMeta::new(enum_ty, target_meta),
+                        Cow::Owned(primitive),
+                        [],
+                    )?;
+                    match ret {
+                        Some(v) => v.map_value(BamlValue::Enum),
+                        None => return Ok(None),
+                    }
+                }
+                TyResolvedRef::EnumVariant(ev_ty) => {
+                    let primitive =
+                        jsonish::Value::String(primitive.clone(), CompletionState::Complete);
+                    let ret = EnumVariantTy::coerce_from_cow(
+                        ctx,
+                        TyWithMeta::new(ev_ty, target_meta),
                         Cow::Owned(primitive),
                         [],
                     )?;
@@ -262,6 +280,10 @@ where
                         }
                         TyResolvedRef::Enum(e) => {
                             EnumTy::coerce(ctx, TyWithMeta::new(e, target_meta), value)?
+                                .map(|v| v.map_value(BamlValue::Enum))
+                        }
+                        TyResolvedRef::EnumVariant(e) => {
+                            EnumVariantTy::coerce(ctx, TyWithMeta::new(e, target_meta), value)?
                                 .map(|v| v.map_value(BamlValue::Enum))
                         }
                         TyResolvedRef::Union(u) => {

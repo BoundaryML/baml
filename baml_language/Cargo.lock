@@ -1623,6 +1623,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strsim",
+ "sys_types",
  "thiserror 2.0.18",
  "unicode-normalization",
 ]

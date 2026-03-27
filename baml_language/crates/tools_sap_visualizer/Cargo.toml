@@ -8,6 +8,6 @@ name = "tools_sap_visualizer"
 path = "src/main.rs"
 
 [dependencies]
-bex_sap = { workspace = true }
+bex_sap = { workspace = true, features = ["manual_db"] }
 eframe = { workspace = true }
 serde_json = { workspace = true }
