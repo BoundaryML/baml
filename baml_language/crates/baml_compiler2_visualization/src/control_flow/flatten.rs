@@ -832,21 +832,6 @@ mod tests {
         let graph = build_if_else_with_headers();
         let result = prepare_control_flow_graph_for_visualization(&graph);
 
-        // Print full graph for debugging
-        eprintln!("\n=== Visualization-prepped graph ===");
-        for (id, node) in &result.nodes {
-            eprintln!(
-                "  Node {} ({:?}): label={:?}, parent={:?}, is_container={}",
-                id, node.node_type, node.label, node.parent_node_id, node.is_container
-            );
-        }
-        for (src, edges) in &result.edges_by_src {
-            for edge in edges {
-                eprintln!("  Edge {}→{} label={:?}", src, edge.dst, edge.label);
-            }
-        }
-        eprintln!("=== end ===\n");
-
         // FunctionRoot (id=0): has children → is_container=true
         assert!(
             result.nodes.get(&NodeId::new(0)).unwrap().is_container,
@@ -963,21 +948,6 @@ mod tests {
         add_edge(&mut graph, 4, 7); // BranchGroup → done (at Header "Process" level)
 
         let result = prepare_control_flow_graph_for_visualization(&graph);
-
-        // Print for debugging
-        eprintln!("\n=== Successor propagation test ===");
-        for (id, node) in &result.nodes {
-            eprintln!(
-                "  Node {} ({:?}): label={:?}, parent={:?}, is_container={}",
-                id, node.node_type, node.label, node.parent_node_id, node.is_container
-            );
-        }
-        for (src, edges) in &result.edges_by_src {
-            for edge in edges {
-                eprintln!("  Edge {}→{} label={:?}", src, edge.dst, edge.label);
-            }
-        }
-        eprintln!("=== end ===\n");
 
         // After hoisting: BranchGroup's successor edge (4→7) should be
         // removed from BranchGroup and COPIED to each arm.
