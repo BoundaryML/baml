@@ -1,8 +1,9 @@
-import { Handle, type NodeProps, Position } from '@xyflow/react';
+import { type NodeProps } from '@xyflow/react';
 import { GitBranch } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
 import { stateColors } from '../constants';
 import type { WorkflowNodeData } from '../types';
+import { NodeHandles } from './NodeHandles';
 
 export const DiamondNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
   const d = data as WorkflowNodeData;
@@ -11,7 +12,7 @@ export const DiamondNode: ComponentType<NodeProps> = memo(({ data, selected }) =
 
   return (
     <>
-      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <NodeHandles />
       <div
         style={{
           display: 'flex',
@@ -41,7 +42,6 @@ export const DiamondNode: ComponentType<NodeProps> = memo(({ data, selected }) =
           {d.label}
         </div>
       </div>
-      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
     </>
   );
 });

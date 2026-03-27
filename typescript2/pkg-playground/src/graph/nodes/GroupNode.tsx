@@ -1,7 +1,8 @@
-import { Handle, type NodeProps, Position } from '@xyflow/react';
+import { type NodeProps } from '@xyflow/react';
 import { type ComponentType, memo } from 'react';
 import { stateBorderColors } from '../constants';
 import type { WorkflowNodeData } from '../types';
+import { NodeHandles } from './NodeHandles';
 
 export const GroupNode: ComponentType<NodeProps> = memo(({ data, id, selected }) => {
   const d = data as WorkflowNodeData;
@@ -24,7 +25,7 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id, selected })
         transition: 'border-color 0.15s, box-shadow 0.15s',
       }}
     >
-      <Handle type="target" position={Position.Left} style={{ opacity: 0, pointerEvents: 'auto' }} />
+      <NodeHandles />
 
       {/* Group label */}
       <div
@@ -67,7 +68,6 @@ export const GroupNode: ComponentType<NodeProps> = memo(({ data, id, selected })
         )}
       </div>
 
-      <Handle type="source" position={Position.Right} style={{ opacity: 0, pointerEvents: 'auto' }} />
     </div>
   );
 });

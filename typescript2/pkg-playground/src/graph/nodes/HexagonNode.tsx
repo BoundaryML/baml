@@ -1,6 +1,7 @@
-import { Handle, type NodeProps, Position } from '@xyflow/react';
+import { type NodeProps } from '@xyflow/react';
 import { type ComponentType, memo } from 'react';
 import type { WorkflowNodeData } from '../types';
+import { NodeHandles } from './NodeHandles';
 
 export const HexagonNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
   const d = data as WorkflowNodeData;
@@ -9,7 +10,7 @@ export const HexagonNode: ComponentType<NodeProps> = memo(({ data, selected }) =
 
   return (
     <>
-      <Handle type="target" position={Position.Left} style={{ background: '#0ea5e9' }} />
+      <NodeHandles />
       <div
         style={{
           display: 'flex',
@@ -42,7 +43,6 @@ export const HexagonNode: ComponentType<NodeProps> = memo(({ data, selected }) =
           {d.label}
         </div>
       </div>
-      <Handle type="source" position={Position.Right} style={{ background: '#0ea5e9' }} />
     </>
   );
 });

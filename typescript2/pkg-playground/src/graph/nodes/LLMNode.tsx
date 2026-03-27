@@ -1,7 +1,8 @@
-import { Handle, type NodeProps, Position } from '@xyflow/react';
+import { type NodeProps } from '@xyflow/react';
 import { type ComponentType, memo } from 'react';
 import { stateColors } from '../constants';
 import type { WorkflowNodeData } from '../types';
+import { NodeHandles } from './NodeHandles';
 
 export const LLMNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
   const d = data as WorkflowNodeData;
@@ -10,7 +11,7 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
 
   return (
     <>
-      <Handle type="target" position={Position.Left} style={{ background: '#7c3aed' }} />
+      <NodeHandles />
       <div
         style={{
           display: 'flex',
@@ -48,7 +49,6 @@ export const LLMNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Right} style={{ background: '#7c3aed' }} />
     </>
   );
 });

@@ -170,6 +170,55 @@ export async function layoutGraph(
 
   extractPositions(layouted.children);
 
+  // ── Compute absolute positions for handle selection ─────────────────
+  const absPositions = new Map<string, { x: number; y: number; w: number; h: number }>();
+  for (const n of nodes) {
+    let absX = positionMap.get(n.id)?.x ?? 0;
+    let absY = positionMap.get(n.id)?.y ?? 0;
+    let cur = n;
+    while (cur.parentId) {
+      const parent = nodeById.get(cur.parentId);
+      if (!parent) break;
+      absX += positionMap.get(parent.id)?.x ?? 0;
+      absY += positionMap.get(parent.id)?.y ?? 0;
+      cur = parent;
+    }
+    const pos = positionMap.get(n.id);
+    absPositions.set(n.id, {
+      x: absX,
+      y: absY,
+      w: pos?.w ?? 0,
+      h: pos?.h ?? 0,
+    });
+  }
+
+  // ── Pick optimal handle direction per edge ────────────────────────
+  // Compare absolute center positions of source and target to determine
+  // whether the edge should exit/enter horizontally or vertically.
+  const laidEdges = edges.map((edge) => {
+    const srcPos = absPositions.get(edge.source);
+    const tgtPos = absPositions.get(edge.target);
+    if (!srcPos || !tgtPos) return edge;
+
+    const dx = (tgtPos.x + tgtPos.w / 2) - (srcPos.x + srcPos.w / 2);
+    const dy = (tgtPos.y + tgtPos.h / 2) - (srcPos.y + srcPos.h / 2);
+
+    let sourceHandle: string;
+    let targetHandle: string;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      // Predominantly horizontal
+      sourceHandle = dx >= 0 ? 'right-source' : 'left-source';
+      targetHandle = dx >= 0 ? 'left-target' : 'right-target';
+    } else {
+      // Predominantly vertical
+      sourceHandle = dy >= 0 ? 'bottom-source' : 'top-source';
+      targetHandle = dy >= 0 ? 'top-target' : 'bottom-target';
+    }
+
+    return { ...edge, sourceHandle, targetHandle };
+  });
+
   // Apply positions to nodes. Groups also get explicit width/height.
   const laidNodes = nodes.map((node) => {
     const pos = positionMap.get(node.id);
@@ -183,7 +232,5 @@ export async function layoutGraph(
     };
   });
 
-  // Edges are returned unchanged — ReactFlow renders them via
-  // getSmoothStepPath using the positioned node handles.
-  return { nodes: laidNodes, edges };
+  return { nodes: laidNodes, edges: laidEdges };
 }

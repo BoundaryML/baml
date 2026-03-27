@@ -1,7 +1,8 @@
-import { Handle, type NodeProps, Position } from '@xyflow/react';
+import { type NodeProps } from '@xyflow/react';
 import { type ComponentType, memo } from 'react';
 import { stateColors } from '../constants';
 import type { WorkflowNodeData } from '../types';
+import { NodeHandles } from './NodeHandles';
 
 const StateIcon = ({ state }: { state: string }) => {
   if (state === 'running') {
@@ -40,7 +41,7 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
 
   return (
     <>
-      <Handle type="target" position={Position.Left} style={{ background: '#555' }} />
+      <NodeHandles />
       <div
         style={{
           display: 'flex',
@@ -72,7 +73,6 @@ export const BaseNode: ComponentType<NodeProps> = memo(({ data, selected }) => {
           {d.label}
         </div>
       </div>
-      <Handle type="source" position={Position.Right} style={{ background: '#555' }} />
     </>
   );
 });
