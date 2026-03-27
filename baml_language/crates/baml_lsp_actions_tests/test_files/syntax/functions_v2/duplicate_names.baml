@@ -118,3 +118,16 @@ function Bar(a: string, b: int | bool) -> int {
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
+// Error: Duplicate function `Bar`
+//    ╭─[ functions_v2_duplicate_names.baml:6:10 ]
+//    │
+//  1 │ function Bar {
+//    │          ─┬─  
+//    │           ╰─── first defined as function here
+//    │ 
+//  6 │ function Bar(a: string, b: int | bool) -> int {
+//    │          ─┬─  
+//    │           ╰─── duplicate function definition
+//    │ 
+//    │ Note: Error code: E0011
+// ───╯

@@ -107,6 +107,19 @@ test TestMakePoem() {
 //     │ 
 //     │ Note: Error code: E0010
 // ────╯
+// Error: Name `OuterPyramid` defined 2 times as: function, test
+//     ╭─[ expr_expr_full.baml:54:6 ]
+//     │
+//  40 │ function OuterPyramid() -> string {
+//     │          ──────┬─────  
+//     │                ╰─────── first defined as function here
+//     │ 
+//  54 │ test OuterPyramid() {
+//     │      ──────┬─────  
+//     │            ╰─────── duplicate test definition
+//     │ 
+//     │ Note: Error code: E0011
+// ────╯
 // Error: remove parentheses from test name: `test OuterPyramid`
 //     ╭─[ expr_expr_full.baml:54:18 ]
 //     │

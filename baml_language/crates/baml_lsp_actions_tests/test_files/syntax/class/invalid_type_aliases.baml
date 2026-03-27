@@ -57,6 +57,19 @@ type Four = int | string | b
 
 //----
 //- diagnostics
+// Error: Name `One` defined 2 times as: class, type
+//    ╭─[ class_invalid_type_aliases.baml:6:6 ]
+//    │
+//  1 │ class One {
+//    │       ─┬─  
+//    │        ╰─── first defined as class here
+//    │ 
+//  6 │ type One = int
+//    │      ─┬─  
+//    │       ╰─── duplicate type definition
+//    │ 
+//    │ Note: Error code: E0011
+// ───╯
 // Error: Unknown keyword 'typpe'. Did you mean 'type'? Usage: type Name = expression
 //    ╭─[ class_invalid_type_aliases.baml:9:1 ]
 //    │

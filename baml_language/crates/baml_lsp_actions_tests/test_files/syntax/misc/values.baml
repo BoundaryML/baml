@@ -41,4 +41,16 @@ test Foo {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Name `Foo` defined 2 times as: function, test
+//     ╭─[ misc_values.baml:16:6 ]
+//     │
+//  11 │ function Foo(input: Input) -> string {
+//     │          ─┬─  
+//     │           ╰─── first defined as function here
+//     │ 
+//  16 │ test Foo {
+//     │      ─┬─  
+//     │       ╰─── duplicate test definition
+//     │ 
+//     │ Note: Error code: E0011
+// ────╯

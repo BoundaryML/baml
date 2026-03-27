@@ -86,6 +86,19 @@ function IfThenOnlyHeader2() -> int {
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
+// Error: Duplicate function `IfThenOnlyHeader2`
+//     ╭─[ headers_if_then_only_header.baml:33:10 ]
+//     │
+//  15 │ function IfThenOnlyHeader2() -> int {
+//     │          ────────┬────────  
+//     │                  ╰────────── first defined as function here
+//     │ 
+//  33 │ function IfThenOnlyHeader2() -> int {
+//     │          ────────┬────────  
+//     │                  ╰────────── duplicate function definition
+//     │ 
+//     │ Note: Error code: E0011
+// ────╯
 // Error: `if` without `else` cannot be used as a value; add an `else` branch
 //     ╭─[ headers_if_then_only_header.baml:40:12 ]
 //     │

@@ -38,6 +38,19 @@ test Foo {
 
 //----
 //- diagnostics
+// Error: Name `Foo` defined 2 times as: function, test
+//     ╭─[ misc_bad_syntax.baml:10:6 ]
+//     │
+//   5 │ function Foo(input: Input[]) -> string {
+//     │          ─┬─  
+//     │           ╰─── first defined as function here
+//     │ 
+//  10 │ test Foo {
+//     │      ─┬─  
+//     │       ╰─── duplicate test definition
+//     │ 
+//     │ Note: Error code: E0011
+// ────╯
 // Error: Expected identifier, found ','
 //     ╭─[ misc_bad_syntax.baml:15:7 ]
 //     │
