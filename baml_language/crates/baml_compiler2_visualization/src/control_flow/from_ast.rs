@@ -14,6 +14,17 @@ use super::{
     PathSegment, encode_segments, slugify,
 };
 
+/// Tag bit used to distinguish statement-based source IDs from expression-based ones.
+/// The cursor context code in `baml_project::db` uses the same tag when searching
+/// `stmt_spans` so both sides agree on the encoding.
+pub const STMT_SOURCE_EXPR_TAG: u32 = 1 << 31;
+
+/// Convert a `StmtId` to a `source_expr` value with the high bit set to
+/// distinguish it from expression-based IDs.
+fn stmt_id_to_source_expr(id: ast::StmtId) -> u32 {
+    STMT_SOURCE_EXPR_TAG | id.into_raw().into_u32()
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -143,13 +154,13 @@ impl<'a> AstGraphBuilder<'a> {
                 then_branch,
                 else_branch,
             } => {
-                self.visit_if(*condition, *then_branch, *else_branch);
+                self.visit_if(id, *condition, *then_branch, *else_branch);
             }
 
             ast::Expr::Match {
                 scrutinee, arms, ..
             } => {
-                self.visit_match(*scrutinee, arms);
+                self.visit_match(id, *scrutinee, arms);
             }
             ast::Expr::Catch { base, clauses } => {
                 self.visit_expr(*base);
@@ -163,6 +174,12 @@ impl<'a> AstGraphBuilder<'a> {
                 self.visit_expr(*value);
             }
 
+            ast::Expr::Call { .. } => {
+                // Emit an OtherScope node for function calls so they appear in the graph.
+                let label = render_expr_compact_ast(self.body, id);
+                self.emit_call_scope(id, &label);
+            }
+
             // All other expressions don't create graph nodes.
             _ => {}
         }
@@ -172,7 +189,7 @@ impl<'a> AstGraphBuilder<'a> {
         let stmt = self.body.stmts[id].clone();
         match &stmt {
             ast::Stmt::HeaderComment { name, level } => {
-                self.enter_header(name.as_ref(), *level);
+                self.enter_header(name.as_ref(), *level, id);
             }
 
             ast::Stmt::While {
@@ -210,7 +227,28 @@ impl<'a> AstGraphBuilder<'a> {
                 self.visit_expr(*value);
             }
 
-            // Return, Break, Continue, Assign, AssignOp, Assert, Missing — no graph nodes.
+            ast::Stmt::Return(Some(expr_id)) => {
+                let return_expr = self.body.exprs[*expr_id].clone();
+                match &return_expr {
+                    // Calls already produce their own graph node via visit_expr.
+                    ast::Expr::Call { .. } => {
+                        self.visit_expr(*expr_id);
+                    }
+                    // For other return values, emit a leaf node showing the
+                    // return path so branching returns are visible in the graph.
+                    _ => {
+                        let label =
+                            format!("return {}", render_expr_compact_ast(self.body, *expr_id));
+                        self.emit_return_leaf(*expr_id, &label);
+                    }
+                }
+            }
+
+            ast::Stmt::Assign { value, .. } | ast::Stmt::AssignOp { value, .. } => {
+                self.visit_expr(*value);
+            }
+
+            // Break, Continue, bare Return, Assert, Missing — no graph nodes.
             _ => {}
         }
     }
@@ -219,6 +257,7 @@ impl<'a> AstGraphBuilder<'a> {
 
     fn visit_if(
         &mut self,
+        if_expr: ast::ExprId,
         condition: ast::ExprId,
         then_branch: ast::ExprId,
         else_branch: Option<ast::ExprId>,
@@ -249,7 +288,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             label,
-            None, // source_expr: None for AST spike
+            Some(if_expr.into_raw().into_u32()),
             NodeType::BranchGroup,
         );
         self.graph.add_node(node);
@@ -318,7 +357,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             label,
-            None, // source_expr: None for AST spike
+            Some(body_expr.into_raw().into_u32()),
             NodeType::BranchArm,
         );
         self.graph.add_node(node);
@@ -363,7 +402,12 @@ impl<'a> AstGraphBuilder<'a> {
 
     // -- Match expressions --
 
-    fn visit_match(&mut self, scrutinee: ast::ExprId, arms: &[ast::MatchArmId]) {
+    fn visit_match(
+        &mut self,
+        match_expr: ast::ExprId,
+        scrutinee: ast::ExprId,
+        arms: &[ast::MatchArmId],
+    ) {
         let parent_depth = self.frames.len();
         let ordinal = {
             let frame = self
@@ -390,7 +434,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             label,
-            None,
+            Some(match_expr.into_raw().into_u32()),
             NodeType::BranchGroup,
         );
         self.graph.add_node(node);
@@ -442,7 +486,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             label,
-            None,
+            Some(condition.into_raw().into_u32()),
             NodeType::Loop,
         );
         self.graph.add_node(node);
@@ -457,7 +501,7 @@ impl<'a> AstGraphBuilder<'a> {
     // -- Headers --
 
     #[allow(clippy::cast_possible_truncation)]
-    fn enter_header(&mut self, title: &str, level: usize) {
+    fn enter_header(&mut self, title: &str, level: usize, stmt_id: ast::StmtId) {
         let level = (level as u8).max(1);
         self.pop_headers_to_level(level - 1);
 
@@ -478,12 +522,13 @@ impl<'a> AstGraphBuilder<'a> {
         let log_filter_key = self.build_log_filter_key(&segment);
         let node_id = self.graph.allocate_id();
         let parent_id = self.current_parent_id();
+        let source_expr = Some(stmt_id_to_source_expr(stmt_id));
         let node = Node::new(
             node_id,
             parent_id,
             log_filter_key,
             title.to_string(),
-            None,
+            source_expr,
             NodeType::HeaderContextEnter,
         );
         self.graph.add_node(node);
@@ -495,6 +540,73 @@ impl<'a> AstGraphBuilder<'a> {
             node_id,
             Some(segment),
         ));
+    }
+
+    // -- Call scope (leaf node — no recursion into the call's arguments) --
+
+    fn emit_call_scope(&mut self, call_expr: ast::ExprId, label: &str) {
+        let ordinal = {
+            let frame = self
+                .frames
+                .last_mut()
+                .expect("frame stack should not be empty");
+            frame.next_ordinal(&CounterKind::OtherScope)
+        };
+        let slug_base = slugify(label);
+        let slug = if slug_base.is_empty() {
+            format!("call-{ordinal}")
+        } else {
+            slug_base
+        };
+        let segment = PathSegment::OtherScope { slug, ordinal };
+        let log_filter_key = self.build_log_filter_key(&segment);
+        let node_id = self.graph.allocate_id();
+        let parent_id = self.current_parent_id();
+        let node = Node::new(
+            node_id,
+            parent_id,
+            log_filter_key,
+            label.to_string(),
+            Some(call_expr.into_raw().into_u32()),
+            NodeType::OtherScope,
+        );
+        self.graph.add_node(node);
+        let parent_index = self.current_parent_index();
+        self.register_child_with_parent(parent_index, node_id);
+        // Note: no frame push / recursion — call nodes are leaves.
+    }
+
+    // -- Return leaf (leaf node for return statements with non-call values) --
+
+    fn emit_return_leaf(&mut self, return_expr: ast::ExprId, label: &str) {
+        let ordinal = {
+            let frame = self
+                .frames
+                .last_mut()
+                .expect("frame stack should not be empty");
+            frame.next_ordinal(&CounterKind::OtherScope)
+        };
+        let slug_base = slugify(label);
+        let slug = if slug_base.is_empty() {
+            format!("return-{ordinal}")
+        } else {
+            slug_base
+        };
+        let segment = PathSegment::OtherScope { slug, ordinal };
+        let log_filter_key = self.build_log_filter_key(&segment);
+        let node_id = self.graph.allocate_id();
+        let parent_id = self.current_parent_id();
+        let node = Node::new(
+            node_id,
+            parent_id,
+            log_filter_key,
+            label.to_string(),
+            Some(return_expr.into_raw().into_u32()),
+            NodeType::OtherScope,
+        );
+        self.graph.add_node(node);
+        let parent_index = self.current_parent_index();
+        self.register_child_with_parent(parent_index, node_id);
     }
 
     // -- OtherScope --
@@ -525,7 +637,7 @@ impl<'a> AstGraphBuilder<'a> {
             parent_id,
             log_filter_key,
             node_label,
-            None,
+            Some(inner_expr.into_raw().into_u32()),
             NodeType::OtherScope,
         );
         self.graph.add_node(node);
@@ -636,6 +748,24 @@ fn render_expr_compact_ast(body: &ast::ExprBody, id: ast::ExprId) -> String {
                 write!(out, " {kind}(...)").unwrap();
             }
             out
+        }
+        ast::Expr::Object {
+            type_name, fields, ..
+        } => {
+            if let Some(name) = type_name {
+                format!("{name} {{ ... }}")
+            } else if fields.is_empty() {
+                "{ }".to_string()
+            } else {
+                "{ ... }".to_string()
+            }
+        }
+        ast::Expr::Array { elements } => {
+            if elements.is_empty() {
+                "[]".to_string()
+            } else {
+                "[...]".to_string()
+            }
         }
         _ => "...".to_string(),
     }
@@ -976,5 +1106,269 @@ mod tests {
             .find(|n| matches!(n.node_type, NodeType::OtherScope))
             .expect("should have OtherScope");
         assert_eq!(scope.label, "let x = ...");
+    }
+
+    #[test]
+    fn call_scope_has_source_expr() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let callee = exprs.alloc(ast::Expr::Path(vec!["Summarize".into()]));
+            let arg = exprs.alloc(ast::Expr::Path(vec!["text".into()]));
+            let call = exprs.alloc(ast::Expr::Call {
+                callee,
+                args: vec![arg],
+            });
+            Some(call)
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        assert_eq!(graph.nodes.len(), 2); // root + call
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::OtherScope))
+            .expect("should have OtherScope for call");
+        assert!(
+            call_node.source_expr.is_some(),
+            "call scope should have source_expr set"
+        );
+    }
+
+    #[test]
+    fn if_branch_group_has_source_expr() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let then_b = exprs.alloc(ast::Expr::Null);
+            let else_b = exprs.alloc(ast::Expr::Null);
+            Some(exprs.alloc(ast::Expr::If {
+                condition: cond,
+                then_branch: then_b,
+                else_branch: Some(else_b),
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let branch_group = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::BranchGroup))
+            .expect("should have BranchGroup");
+        assert!(
+            branch_group.source_expr.is_some(),
+            "BranchGroup should have source_expr pointing to the If expression"
+        );
+    }
+
+    #[test]
+    fn loop_has_source_expr() {
+        let body = make_ast_body(|exprs, stmts, _, _| {
+            let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let body_expr = exprs.alloc(ast::Expr::Null);
+            let while_stmt = stmts.alloc(ast::Stmt::While {
+                condition: cond,
+                body: body_expr,
+                after: None,
+                origin: ast::LoopOrigin::While,
+            });
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![while_stmt],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let loop_node = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::Loop))
+            .expect("should have Loop");
+        assert!(
+            loop_node.source_expr.is_some(),
+            "Loop should have source_expr pointing to the condition"
+        );
+    }
+
+    #[test]
+    fn header_has_tagged_source_expr() {
+        let body = make_ast_body(|exprs, stmts, _, _| {
+            let h = stmts.alloc(ast::Stmt::HeaderComment {
+                name: "Setup".into(),
+                level: 1,
+            });
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![h],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let header = graph
+            .nodes
+            .values()
+            .find(|n| matches!(n.node_type, NodeType::HeaderContextEnter))
+            .expect("should have header");
+        assert!(
+            header.source_expr.is_some(),
+            "Header should have a tagged source_expr for cursor matching"
+        );
+        let se = header.source_expr.unwrap();
+        assert!(
+            se & STMT_SOURCE_EXPR_TAG != 0,
+            "Header source_expr should have the STMT tag bit set"
+        );
+    }
+
+    #[test]
+    fn synthetic_else_has_no_source_expr() {
+        let body = make_ast_body(|exprs, _, _, _| {
+            let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let then_b = exprs.alloc(ast::Expr::Null);
+            Some(exprs.alloc(ast::Expr::If {
+                condition: cond,
+                then_branch: then_b,
+                else_branch: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let else_arm = graph
+            .nodes
+            .values()
+            .find(|n| n.label == "else")
+            .expect("should have synthetic else arm");
+        assert!(
+            else_arm.source_expr.is_none(),
+            "Synthetic else arm should not have source_expr"
+        );
+    }
+
+    #[test]
+    fn return_object_creates_leaf_node() {
+        let body = make_ast_body(|exprs, stmts, _, _| {
+            let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let obj = exprs.alloc(ast::Expr::Object {
+                type_name: Some("MyResponse".into()),
+                fields: vec![("ok".into(), field_val)],
+                spreads: vec![],
+            });
+            let ret = stmts.alloc(ast::Stmt::Return(Some(obj)));
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![ret],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        // Root + return leaf
+        assert_eq!(graph.nodes.len(), 2);
+        let ret_node = graph
+            .nodes
+            .values()
+            .find(|n| n.label.starts_with("return"))
+            .expect("should have return node");
+        assert!(matches!(ret_node.node_type, NodeType::OtherScope));
+        assert!(
+            ret_node.label.contains("MyResponse"),
+            "Return label should include the type name, got: {}",
+            ret_node.label
+        );
+        assert!(
+            ret_node.source_expr.is_some(),
+            "Return node should have source_expr"
+        );
+    }
+
+    #[test]
+    fn return_call_does_not_double_node() {
+        let body = make_ast_body(|exprs, stmts, _, _| {
+            let callee = exprs.alloc(ast::Expr::Path(vec!["Process".into()]));
+            let arg = exprs.alloc(ast::Expr::Path(vec!["input".into()]));
+            let call = exprs.alloc(ast::Expr::Call {
+                callee,
+                args: vec![arg],
+            });
+            let ret = stmts.alloc(ast::Stmt::Return(Some(call)));
+            Some(exprs.alloc(ast::Expr::Block {
+                stmts: vec![ret],
+                tail_expr: None,
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        // Root + call scope (no extra return node — calls are handled by visit_expr)
+        assert_eq!(graph.nodes.len(), 2);
+        let call_node = graph
+            .nodes
+            .values()
+            .find(|n| n.label.contains("Process"))
+            .expect("should have call node");
+        assert!(matches!(call_node.node_type, NodeType::OtherScope));
+    }
+
+    #[test]
+    fn return_in_if_branches_creates_two_nodes() {
+        let body = make_ast_body(|exprs, stmts, _, _| {
+            let cond = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+            let obj_true = exprs.alloc(ast::Expr::Object {
+                type_name: Some("Result".into()),
+                fields: vec![],
+                spreads: vec![],
+            });
+            let ret_true = stmts.alloc(ast::Stmt::Return(Some(obj_true)));
+            let then_b = exprs.alloc(ast::Expr::Block {
+                stmts: vec![ret_true],
+                tail_expr: None,
+            });
+
+            let err_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(false)));
+            let obj_false = exprs.alloc(ast::Expr::Object {
+                type_name: Some("Result".into()),
+                fields: vec![("err".into(), err_val)],
+                spreads: vec![],
+            });
+            let ret_false = stmts.alloc(ast::Stmt::Return(Some(obj_false)));
+            let else_b = exprs.alloc(ast::Expr::Block {
+                stmts: vec![ret_false],
+                tail_expr: None,
+            });
+
+            Some(exprs.alloc(ast::Expr::If {
+                condition: cond,
+                then_branch: then_b,
+                else_branch: Some(else_b),
+            }))
+        });
+        let graph = build_control_flow_graph_from_ast("Func", &body);
+        let return_nodes: Vec<_> = graph
+            .nodes
+            .values()
+            .filter(|n| n.label.starts_with("return"))
+            .collect();
+        assert_eq!(
+            return_nodes.len(),
+            2,
+            "Should have two return nodes (one per branch)"
+        );
+    }
+
+    #[test]
+    fn render_object_expr_compact() {
+        let mut exprs = Arena::new();
+        let stmts = Arena::new();
+        let patterns = Arena::new();
+        let match_arms = Arena::new();
+        let catch_arms = Arena::new();
+
+        let field_val = exprs.alloc(ast::Expr::Literal(ast::Literal::Bool(true)));
+        let obj = exprs.alloc(ast::Expr::Object {
+            type_name: Some("Resp".into()),
+            fields: vec![("ok".into(), field_val)],
+            spreads: vec![],
+        });
+
+        let body = ast::ExprBody {
+            exprs,
+            stmts,
+            patterns,
+            match_arms,
+            catch_arms,
+            type_annotations: Arena::new(),
+            root_expr: Some(obj),
+        };
+
+        let rendered = render_expr_compact_ast(&body, obj);
+        assert_eq!(rendered, "Resp { ... }");
     }
 }

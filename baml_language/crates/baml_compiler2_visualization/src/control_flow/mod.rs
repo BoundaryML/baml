@@ -8,8 +8,8 @@ mod from_ast;
 
 use std::{collections::HashMap, fmt};
 
-pub use flatten::flatten_control_flow_graph;
-pub use from_ast::build_control_flow_graph_from_ast;
+pub use flatten::{flatten_control_flow_graph, prepare_control_flow_graph_for_visualization};
+pub use from_ast::{STMT_SOURCE_EXPR_TAG, build_control_flow_graph_from_ast};
 use indexmap::IndexMap;
 
 // ---------------------------------------------------------------------------
@@ -17,7 +17,7 @@ use indexmap::IndexMap;
 // ---------------------------------------------------------------------------
 
 /// Opaque node identifier.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct NodeId(u32);
 
 impl NodeId {
@@ -37,7 +37,8 @@ impl fmt::Display for NodeId {
 }
 
 /// Segment of a log-filter key path.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PathSegment {
     FunctionRoot { ordinal: u16 },
     Header { slug: String, ordinal: u16 },
@@ -48,7 +49,8 @@ pub enum PathSegment {
 }
 
 /// The type of a visualization node.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum NodeType {
     FunctionRoot,
     HeaderContextEnter,
@@ -59,7 +61,8 @@ pub enum NodeType {
 }
 
 /// A node in the control flow visualization graph.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Node {
     pub id: NodeId,
     pub parent_node_id: Option<NodeId>,
@@ -72,6 +75,8 @@ pub struct Node {
     /// - AST builder: not yet set (always `None`)
     pub source_expr: Option<u32>,
     pub node_type: NodeType,
+    #[serde(default)]
+    pub is_container: bool,
 }
 
 impl Node {
@@ -90,6 +95,7 @@ impl Node {
             label: label.into(),
             source_expr,
             node_type,
+            is_container: false,
         }
     }
 
@@ -106,14 +112,17 @@ impl Node {
 }
 
 /// A directed edge in the visualization graph.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Edge {
     pub src: NodeId,
     pub dst: NodeId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 /// The control flow visualization graph.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ControlFlowGraph {
     pub nodes: IndexMap<NodeId, Node>,
     pub edges_by_src: IndexMap<NodeId, Vec<Edge>>,
@@ -151,7 +160,11 @@ impl GraphAccumulator {
     }
 
     pub fn add_edge(&mut self, src: NodeId, dst: NodeId) {
-        self.edges.push(Edge { src, dst });
+        self.edges.push(Edge {
+            src,
+            dst,
+            label: None,
+        });
     }
 
     pub fn finish(self) -> ControlFlowGraph {

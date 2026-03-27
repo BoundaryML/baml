@@ -21,6 +21,7 @@ workspace = true
 baml_base = { workspace = true }
 baml_builtins = { workspace = true }
 baml_compiler2_emit = { workspace = true }
+baml_compiler2_visualization = { workspace = true }
 baml_compiler_diagnostics = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }

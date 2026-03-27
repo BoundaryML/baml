@@ -2,12 +2,17 @@
 //!
 //! This module provides APIs for listing symbols (functions, classes, enums, etc.)
 //! in a BAML project.
-//!
-//! NOTE: This module is a stub pending full compiler2 HIR symbol listing API.
 
-use baml_db::Span;
+use baml_compiler2_hir::{
+    contributions::{Definition, DefinitionKind},
+    file_item_tree,
+    package::{PackageId, package_items},
+};
+use baml_db::Name;
 
-/// The kind of a symbol in a BAML project.
+use crate::db::ProjectDatabase;
+
+/// Symbol kind — locally defined since v1 HIR is removed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SymbolKind {
     Function,
@@ -26,100 +31,161 @@ pub enum SymbolKind {
 /// Information about a symbol in the project.
 #[derive(Debug, Clone)]
 pub struct Symbol {
-    /// The name of the symbol.
     pub name: String,
-    /// The kind of symbol.
     pub kind: SymbolKind,
-    /// The file path containing the symbol.
     pub file_path: std::path::PathBuf,
-    /// The span of the symbol in the source.
-    pub span: Span,
+    pub span: baml_db::Span,
 }
 
-use crate::ProjectDatabase;
+/// Extended function metadata for the playground.
+#[derive(Debug, Clone)]
+pub struct FunctionSymbol {
+    pub name: String,
+    /// Whether this is an LLM function (has `client`/`prompt` declarative body).
+    pub is_llm: bool,
+    /// The LLM client name (if LLM function).
+    pub client_name: Option<String>,
+    /// Whether this function is compiler-generated (`render_prompt`, `build_request`, `resolve`).
+    pub is_sub_function: bool,
+}
+
+/// Extended test metadata for the playground.
+#[derive(Debug, Clone)]
+pub struct TestSymbol {
+    pub name: String,
+    /// The first function this test targets.
+    pub function_name: String,
+    /// Test args serialized as a JSON string.
+    pub args_json: String,
+}
 
 /// List all functions in the project.
-///
-/// Returns all free functions in the "user" package by querying the compiler2 HIR.
-pub fn list_functions(db: &ProjectDatabase, _project: baml_workspace::Project) -> Vec<Symbol> {
-    use baml_compiler2_hir::{
-        contributions::DefinitionKind,
-        package::{PackageId, package_items},
-    };
-
-    let pkg_id = PackageId::new(db, baml_db::Name::new("user"));
-    let pkg_items = package_items(db, pkg_id);
-
-    let mut symbols = Vec::new();
-    for ns_items in pkg_items.namespaces.values() {
+pub fn list_functions(db: &ProjectDatabase) -> Vec<Symbol> {
+    let pkg_id = PackageId::new(db, Name::new("user"));
+    let pkg = package_items(db, pkg_id);
+    let mut result = Vec::new();
+    for ns_items in pkg.namespaces.values() {
         for (name, defn) in &ns_items.values {
-            if defn.kind() != DefinitionKind::Function {
-                continue;
+            if defn.kind() == DefinitionKind::Function {
+                result.push(Symbol {
+                    name: name.to_string(),
+                    kind: SymbolKind::Function,
+                    file_path: defn.file(db).path(db).clone(),
+                    span: baml_db::Span::default(),
+                });
             }
-            let file = defn.file(db);
-            symbols.push(Symbol {
-                name: name.to_string(),
-                kind: SymbolKind::Function,
-                file_path: file.path(db).clone(),
-                span: Span::default(),
-            });
         }
     }
-    symbols.sort_by(|a, b| a.name.cmp(&b.name));
-    symbols
+    result.sort_by(|a, b| a.name.cmp(&b.name));
+    result
 }
 
-/// List all classes in the project.
-pub fn list_classes(db: &ProjectDatabase, _project: baml_workspace::Project) -> Vec<Symbol> {
-    let _ = db;
+/// List user-facing functions with metadata for the playground.
+///
+/// Extracts LLM metadata (client name, `is_llm`) from `declarative_meta` on the
+/// compiler2 [`Function`](baml_compiler2_hir::item_tree::Function) item tree entry.
+pub fn list_functions_with_metadata(db: &ProjectDatabase) -> Vec<FunctionSymbol> {
+    let pkg_id = PackageId::new(db, Name::new("user"));
+    let pkg = package_items(db, pkg_id);
+    let mut result = Vec::new();
+    for ns_items in pkg.namespaces.values() {
+        for (name, defn) in &ns_items.values {
+            if let Definition::Function(func_loc) = defn {
+                let item_tree = file_item_tree(db, func_loc.file(db));
+                let func = &item_tree[func_loc.id(db)];
+
+                let is_llm = matches!(
+                    func.declarative_meta,
+                    Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(_))
+                );
+                let client_name =
+                    if let Some(baml_compiler2_ast::ast::DeclarativeMeta::Llm(ref llm)) =
+                        func.declarative_meta
+                    {
+                        llm.client.as_ref().map(std::string::ToString::to_string)
+                    } else {
+                        None
+                    };
+
+                // Sub-functions have names with '$' (e.g. render_prompt$MyFunc)
+                let is_sub_function = name.as_str().contains('$');
+
+                result.push(FunctionSymbol {
+                    name: name.to_string(),
+                    is_llm,
+                    client_name,
+                    is_sub_function,
+                });
+            }
+        }
+    }
+    result.sort_by(|a, b| a.name.cmp(&b.name));
+    result
+}
+
+/// List tests with full metadata for the playground.
+pub fn list_tests_with_metadata(db: &ProjectDatabase) -> Vec<TestSymbol> {
+    let pkg_id = PackageId::new(db, Name::new("user"));
+    let pkg = package_items(db, pkg_id);
+    let mut result = Vec::new();
+    for ns_items in pkg.namespaces.values() {
+        for (name, defn) in &ns_items.values {
+            if let Definition::Test(test_loc) = defn {
+                let item_tree = file_item_tree(db, test_loc.file(db));
+                let test = &item_tree[test_loc.id(db)];
+
+                // function_refs contains the function names this test targets
+                let function_name = test
+                    .function_refs
+                    .first()
+                    .map(std::string::ToString::to_string)
+                    .unwrap_or_default();
+
+                // args parsing is skipped in canary's alloc_test — always empty for now
+                let args_json = "{}".to_string();
+
+                result.push(TestSymbol {
+                    name: name.to_string(),
+                    function_name,
+                    args_json,
+                });
+            }
+        }
+    }
+    result.sort_by(|a, b| a.name.cmp(&b.name));
+    result
+}
+
+// --- Stubs for remaining symbol types (not yet ported to compiler2) ---
+
+pub fn list_classes(_db: &ProjectDatabase) -> Vec<Symbol> {
     Vec::new()
 }
 
-/// List all enums in the project.
-pub fn list_enums(db: &ProjectDatabase, _project: baml_workspace::Project) -> Vec<Symbol> {
-    let _ = db;
+pub fn list_enums(_db: &ProjectDatabase) -> Vec<Symbol> {
     Vec::new()
 }
 
-/// List all type aliases in the project.
-pub fn list_type_aliases(db: &ProjectDatabase, _project: baml_workspace::Project) -> Vec<Symbol> {
-    let _ = db;
+pub fn list_type_aliases(_db: &ProjectDatabase) -> Vec<Symbol> {
     Vec::new()
 }
 
-/// List all clients in the project.
-pub fn list_clients(db: &ProjectDatabase, _project: baml_workspace::Project) -> Vec<Symbol> {
-    let _ = db;
+pub fn list_clients(_db: &ProjectDatabase) -> Vec<Symbol> {
     Vec::new()
 }
 
-/// List all tests in the project.
-pub fn list_tests(db: &ProjectDatabase, _project: baml_workspace::Project) -> Vec<Symbol> {
-    let _ = db;
+pub fn list_tests(_db: &ProjectDatabase) -> Vec<Symbol> {
     Vec::new()
 }
 
-/// List all generators in the project.
-pub fn list_generators(db: &ProjectDatabase, _project: baml_workspace::Project) -> Vec<Symbol> {
-    let _ = db;
+pub fn list_generators(_db: &ProjectDatabase) -> Vec<Symbol> {
     Vec::new()
 }
 
-/// Find a symbol by name in the project.
-pub fn find_symbol(
-    db: &ProjectDatabase,
-    project: baml_workspace::Project,
-    name: &str,
-) -> Option<Symbol> {
-    find_symbol_locations(db, project, name).into_iter().next()
+pub fn find_symbol(db: &ProjectDatabase, name: &str) -> Option<Symbol> {
+    find_symbol_locations(db, name).into_iter().next()
 }
 
-/// Find all locations where a symbol with the given name is defined.
-pub fn find_symbol_locations(
-    db: &ProjectDatabase,
-    _project: baml_workspace::Project,
-    _name: &str,
-) -> Vec<Symbol> {
-    let _ = db;
+pub fn find_symbol_locations(_db: &ProjectDatabase, _name: &str) -> Vec<Symbol> {
     Vec::new()
 }

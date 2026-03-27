@@ -21,6 +21,8 @@ pub enum WsInMessage {
         #[serde(rename = "argsProto")]
         args_proto: String,
     },
+    #[serde(rename = "cancelCall")]
+    CancelCall { id: u64, project: String },
     #[serde(rename = "envVarResponse")]
     EnvVarResponse {
         id: u64,
@@ -29,6 +31,18 @@ pub enum WsInMessage {
     },
     #[serde(rename = "requestState")]
     RequestState,
+    #[serde(rename = "requestControlFlowGraph")]
+    RequestControlFlowGraph {
+        project: String,
+        #[serde(rename = "functionName")]
+        function_name: String,
+    },
+    #[serde(rename = "cursorPosition")]
+    CursorPosition {
+        file: String,
+        line: u32,
+        column: u32,
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +63,12 @@ pub enum WsOutMessage {
         result: String,
     },
     #[serde(rename = "callFunctionError")]
-    CallFunctionError { id: u64, error: String },
+    CallFunctionError {
+        id: u64,
+        error: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cancelled: Option<bool>,
+    },
     #[serde(rename = "envVarRequest")]
     EnvVarRequest { id: u64, variable: String },
     #[serde(rename = "fetchLogNew")]
@@ -78,5 +97,15 @@ pub enum WsOutMessage {
         response_body: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
+        #[serde(rename = "responseHeaders", skip_serializing_if = "Option::is_none")]
+        response_headers: Option<std::collections::HashMap<String, String>>,
     },
+    #[serde(rename = "controlFlowGraphResult")]
+    ControlFlowGraphResult {
+        #[serde(rename = "functionName")]
+        function_name: String,
+        graph: Option<serde_json::Value>,
+    },
+    #[serde(rename = "cursorContext")]
+    CursorContext { context: serde_json::Value },
 }

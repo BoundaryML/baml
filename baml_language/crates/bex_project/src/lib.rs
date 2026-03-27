@@ -73,7 +73,7 @@ pub fn new(
 }
 
 pub use bex_lsp::{
-    BexLsp, LspClientSenderTrait, LspError, PlaygroundNotification, PlaygroundSender,
-    ProjectDiagnostic, ProjectUpdate, new_lsp,
+    BexLsp, FunctionInfo, FunctionKind, LlmCapabilities, LspClientSenderTrait, LspError,
+    PlaygroundNotification, PlaygroundSender, ProjectDiagnostic, ProjectUpdate, TestInfo, new_lsp,
 };
 pub use fs::{BamlVFS, BulkReadFileSystem, DefaultBulkReadFileSystem, FsPath};

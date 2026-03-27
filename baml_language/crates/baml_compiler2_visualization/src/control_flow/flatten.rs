@@ -23,6 +23,140 @@ pub fn flatten_control_flow_graph(graph: &ControlFlowGraph) -> ControlFlowGraph 
     inline_branch_arms_and_scopes(&pass_two)
 }
 
+/// Produces a visualization-ready graph by:
+/// 1. Hoisting branch arms with labeled fan-out edges (adapted Pass 2)
+/// 2. Renaming `_` branch arm labels to `"default"`
+/// 3. Computing `is_container` for each node
+///
+/// Does NOT run Pass 1 (`remove_implicit_nodes`) or Pass 3
+/// (`inline_branch_arms_and_scopes`) — the playground needs all nodes
+/// visible and uses BranchArm/OtherScope as group containers.
+pub fn prepare_control_flow_graph_for_visualization(graph: &ControlFlowGraph) -> ControlFlowGraph {
+    struct BranchGroupInfo {
+        node_id: NodeId,
+        parent: Option<NodeId>,
+        depth: usize,
+        branch_children: Vec<NodeId>,
+        successors: Vec<NodeId>,
+    }
+
+    let mut graph = graph.clone();
+
+    // ── Step 1: Hoist branch arms with labeled fan-out edges ──────────
+    // Adapted from hoist_branch_arms — same deepest-first BranchGroup
+    // iteration, but fan-out edges carry the arm's label.
+
+    let children_map = build_children_map(&graph.nodes);
+    let mut groups: Vec<BranchGroupInfo> = Vec::new();
+    for (node_id, node) in &graph.nodes {
+        if node.node_type != NodeType::BranchGroup {
+            continue;
+        }
+        let branch_children: Vec<NodeId> = children_map
+            .get(node_id)
+            .map(|c| {
+                c.iter()
+                    .copied()
+                    .filter(|cid| {
+                        graph
+                            .nodes
+                            .get(cid)
+                            .is_some_and(|n| n.node_type == NodeType::BranchArm)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if branch_children.is_empty() {
+            continue;
+        }
+        let successors: Vec<NodeId> = graph
+            .edges_by_src
+            .get(node_id)
+            .map(|edges| edges.iter().map(|e| e.dst).collect())
+            .unwrap_or_default();
+        groups.push(BranchGroupInfo {
+            node_id: *node_id,
+            parent: node.parent_node_id,
+            depth: node_depth(*node_id, &graph.nodes),
+            branch_children,
+            successors,
+        });
+    }
+
+    // Process deepest groups first (handles nested conditionals)
+    groups.sort_by_key(|g| std::cmp::Reverse(g.depth));
+
+    for info in &groups {
+        // Remove BranchGroup's outgoing edges
+        graph.edges_by_src.shift_remove(&info.node_id);
+
+        // Copy BranchGroup's successors onto each arm (deduplicating)
+        for arm_id in &info.branch_children {
+            let entry = graph.edges_by_src.entry(*arm_id).or_default();
+            let mut existing: std::collections::HashSet<NodeId> =
+                entry.iter().map(|e| e.dst).collect();
+            for succ in &info.successors {
+                if existing.insert(*succ) {
+                    entry.push(Edge {
+                        src: *arm_id,
+                        dst: *succ,
+                        label: None,
+                    });
+                }
+            }
+        }
+
+        // Reparent each arm to the BranchGroup's parent
+        for arm_id in &info.branch_children {
+            if let Some(arm_node) = graph.nodes.get_mut(arm_id) {
+                arm_node.parent_node_id = info.parent;
+            }
+        }
+
+        // Create labeled fan-out edges BranchGroup → BranchArm
+        let mut fan_out_edges = Vec::new();
+        for arm_id in &info.branch_children {
+            let arm_label = graph.nodes.get(arm_id).map(|n| n.label.clone());
+            fan_out_edges.push(Edge {
+                src: info.node_id,
+                dst: *arm_id,
+                label: arm_label,
+            });
+        }
+        graph.edges_by_src.insert(info.node_id, fan_out_edges);
+    }
+
+    // ── Step 2: Rename "_" to "default" on BranchArm labels and edges ─
+    for node in graph.nodes.values_mut() {
+        if node.node_type == NodeType::BranchArm && node.label == "_" {
+            node.label = "default".to_string();
+        }
+    }
+    for edges in graph.edges_by_src.values_mut() {
+        for edge in edges.iter_mut() {
+            if edge.label.as_deref() == Some("_") {
+                edge.label = Some("default".to_string());
+            }
+        }
+    }
+
+    // ── Step 3: Compute is_container ─────────────────────────────────
+    // A node is a container if other nodes reference it as parent,
+    // UNLESS it's a BranchGroup (those are diamond dispatch points,
+    // not layout containers).
+    let parent_set: std::collections::HashSet<NodeId> = graph
+        .nodes
+        .values()
+        .filter_map(|n| n.parent_node_id)
+        .collect();
+    for node in graph.nodes.values_mut() {
+        node.is_container =
+            parent_set.contains(&node.id) && node.node_type != NodeType::BranchGroup;
+    }
+
+    graph
+}
+
 // ===========================================================================
 // Pass 1: Remove implicit nodes
 // ===========================================================================
@@ -197,6 +331,7 @@ fn hoist_branch_arms(graph: &ControlFlowGraph) -> ControlFlowGraph {
                         entry.push(Edge {
                             src: *child,
                             dst: *succ,
+                            label: None,
                         });
                     }
                 }
@@ -215,6 +350,7 @@ fn hoist_branch_arms(graph: &ControlFlowGraph) -> ControlFlowGraph {
             group_edges.push(Edge {
                 src: info.node_id,
                 dst: *child,
+                label: None,
             });
         }
         next.edges_by_src.insert(info.node_id, group_edges);
@@ -371,6 +507,7 @@ fn fan_out_outgoing_edges(graph: &mut ControlFlowGraph, exits: &[NodeId], outgoi
                 entry.push(Edge {
                     src: *exit,
                     dst: edge.dst,
+                    label: None,
                 });
             }
         }
@@ -445,6 +582,7 @@ mod tests {
             label: label.to_string(),
             source_expr: None,
             node_type,
+            is_container: false,
         }
     }
 
@@ -456,6 +594,7 @@ mod tests {
             .push(Edge {
                 src: NodeId::new(src),
                 dst: NodeId::new(dst),
+                label: None,
             });
     }
 
@@ -563,5 +702,321 @@ mod tests {
         graph.nodes.insert(root.id, root);
         let flattened = flatten_control_flow_graph(&graph);
         assert_eq!(1, flattened.nodes.len());
+    }
+
+    // -- Visualization prep tests --
+
+    /// Builds a graph mimicking `IfElseWithHeaders`:
+    /// ```text
+    /// FunctionRoot (0)
+    ///   └─ Header "Check flag" (1)
+    ///        └─ BranchGroup "if (flag)" (2)
+    ///             ├─ BranchArm "if (flag)" (3)
+    ///             │    └─ Header "True branch" (4)
+    ///             │         └─ OtherScope "yes" (5)
+    ///             └─ BranchArm "else" (6)
+    ///                  └─ Header "False branch" (7)
+    ///                       └─ OtherScope "no" (8)
+    /// ```
+    /// Sequential edges within linear scopes: 1→2 (header's child)
+    /// No edges between branch arms (`BranchGroup` has non-linear children).
+    /// Within each arm: 3→4, 4→5, 6→7, 7→8 (single-child linear chains)
+    fn build_if_else_with_headers() -> ControlFlowGraph {
+        let mut graph = ControlFlowGraph::default();
+
+        let root = Node::root(NodeId::new(0), "f|root:0", "IfElseWithHeaders");
+        let header_check = make_node(1, Some(0), "Check flag", NodeType::HeaderContextEnter);
+        let branch_group = make_node(2, Some(1), "if (flag)", NodeType::BranchGroup);
+        let arm_if = make_node(3, Some(2), "if (flag)", NodeType::BranchArm);
+        let header_true = make_node(4, Some(3), "True branch", NodeType::HeaderContextEnter);
+        let leaf_yes = make_node(5, Some(4), "yes", NodeType::OtherScope);
+        let arm_else = make_node(6, Some(2), "else", NodeType::BranchArm);
+        let header_false = make_node(7, Some(6), "False branch", NodeType::HeaderContextEnter);
+        let leaf_no = make_node(8, Some(7), "no", NodeType::OtherScope);
+
+        for n in [
+            root,
+            header_check,
+            branch_group,
+            arm_if,
+            header_true,
+            leaf_yes,
+            arm_else,
+            header_false,
+            leaf_no,
+        ] {
+            graph.nodes.insert(n.id, n);
+        }
+
+        // Sequential edges within linear scopes:
+        // Header "Check flag" has one child: BranchGroup
+        // (no edge needed — it's the first child, so no "prev")
+        // BranchArm "if" → Header "True"
+        // (no edge — single child)
+        // Header "True" → leaf "yes"
+        // (no edge — single child)
+        // Same for else arm.
+
+        // But let's add realistic edges that the AST builder would create
+        // if there were multiple children. For this test, the raw graph
+        // has NO edges — all structure is parent-child. This matches the
+        // actual AST builder output for simple single-child scopes.
+
+        graph
+    }
+
+    #[test]
+    fn viz_prep_reparents_arms_under_header() {
+        let graph = build_if_else_with_headers();
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+
+        // After hoisting, both BranchArms should be reparented to
+        // BranchGroup's parent (Header "Check flag", id=1)
+        let arm_if = result.nodes.get(&NodeId::new(3)).unwrap();
+        assert_eq!(
+            arm_if.parent_node_id,
+            Some(NodeId::new(1)),
+            "BranchArm 'if' should be reparented to Header (id=1)"
+        );
+
+        let arm_else = result.nodes.get(&NodeId::new(6)).unwrap();
+        assert_eq!(
+            arm_else.parent_node_id,
+            Some(NodeId::new(1)),
+            "BranchArm 'else' should be reparented to Header (id=1)"
+        );
+
+        // BranchGroup itself stays under the header
+        let bg = result.nodes.get(&NodeId::new(2)).unwrap();
+        assert_eq!(
+            bg.parent_node_id,
+            Some(NodeId::new(1)),
+            "BranchGroup should remain under Header (id=1)"
+        );
+    }
+
+    #[test]
+    fn viz_prep_creates_labeled_fan_out_edges() {
+        let graph = build_if_else_with_headers();
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+
+        // BranchGroup (id=2) should have fan-out edges to arms
+        let bg_edges = result
+            .edges_by_src
+            .get(&NodeId::new(2))
+            .expect("BranchGroup should have outgoing edges");
+
+        assert_eq!(bg_edges.len(), 2, "BranchGroup should have 2 fan-out edges");
+
+        // Check destinations and labels
+        let mut edges_sorted: Vec<_> = bg_edges.iter().collect();
+        edges_sorted.sort_by_key(|e| e.dst.raw());
+
+        assert_eq!(edges_sorted[0].dst, NodeId::new(3));
+        assert_eq!(
+            edges_sorted[0].label.as_deref(),
+            Some("if (flag)"),
+            "Fan-out edge to arm 'if' should carry arm label"
+        );
+
+        assert_eq!(edges_sorted[1].dst, NodeId::new(6));
+        assert_eq!(
+            edges_sorted[1].label.as_deref(),
+            Some("else"),
+            "Fan-out edge to arm 'else' should carry arm label"
+        );
+    }
+
+    #[test]
+    fn viz_prep_is_container_correct_for_headers() {
+        let graph = build_if_else_with_headers();
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+
+        // FunctionRoot (id=0): has children → is_container=true
+        assert!(
+            result.nodes.get(&NodeId::new(0)).unwrap().is_container,
+            "FunctionRoot should be a container"
+        );
+
+        // Header "Check flag" (id=1): has children (BranchGroup + reparented arms) → true
+        assert!(
+            result.nodes.get(&NodeId::new(1)).unwrap().is_container,
+            "Header 'Check flag' should be a container"
+        );
+
+        // BranchGroup (id=2): explicitly excluded → is_container=false
+        assert!(
+            !result.nodes.get(&NodeId::new(2)).unwrap().is_container,
+            "BranchGroup should NOT be a container (diamond dispatch)"
+        );
+
+        // BranchArm "if" (id=3): has child Header "True branch" → true
+        assert!(
+            result.nodes.get(&NodeId::new(3)).unwrap().is_container,
+            "BranchArm 'if' should be a container (has child header)"
+        );
+
+        // Header "True branch" (id=4): has child leaf → true
+        assert!(
+            result.nodes.get(&NodeId::new(4)).unwrap().is_container,
+            "Header 'True branch' should be a container (has child leaf)"
+        );
+
+        // Leaf "yes" (id=5): no children → false
+        assert!(
+            !result.nodes.get(&NodeId::new(5)).unwrap().is_container,
+            "Leaf 'yes' should NOT be a container"
+        );
+
+        // BranchArm "else" (id=6): has child Header "False branch" → true
+        assert!(
+            result.nodes.get(&NodeId::new(6)).unwrap().is_container,
+            "BranchArm 'else' should be a container (has child header)"
+        );
+
+        // Header "False branch" (id=7): has child leaf → true
+        assert!(
+            result.nodes.get(&NodeId::new(7)).unwrap().is_container,
+            "Header 'False branch' should be a container (has child leaf)"
+        );
+
+        // Leaf "no" (id=8): no children → false
+        assert!(
+            !result.nodes.get(&NodeId::new(8)).unwrap().is_container,
+            "Leaf 'no' should NOT be a container"
+        );
+    }
+
+    #[test]
+    fn viz_prep_all_edge_endpoints_are_valid_nodes() {
+        let graph = build_if_else_with_headers();
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+
+        for (src, edges) in &result.edges_by_src {
+            assert!(
+                result.nodes.contains_key(src),
+                "Edge source {src} is not a valid node"
+            );
+            for edge in edges {
+                assert!(
+                    result.nodes.contains_key(&edge.dst),
+                    "Edge destination {} (from source {}) is not a valid node",
+                    edge.dst,
+                    src
+                );
+            }
+        }
+    }
+
+    /// Test with a more complex graph: sequential headers, then branch inside second header.
+    /// This catches edge propagation issues when `BranchGroup` has successors.
+    ///
+    /// ```text
+    /// FunctionRoot (0)
+    ///   └─ Header "Setup" (1)
+    ///   │    └─ OtherScope "x = 1" (2)
+    ///   └─ Header "Process" (3)
+    ///        └─ BranchGroup "if (x)" (4)
+    ///             ├─ BranchArm "true" (5)
+    ///             └─ BranchArm "false" (6)
+    ///        └─ OtherScope "done" (7)  ← successor after the if/else
+    /// ```
+    /// Edges: 1→3 (sequential headers), 4→7 (`BranchGroup` to successor)
+    /// Within Header "Process": 4 and 7 are sequential children.
+    #[test]
+    fn viz_prep_successor_edges_propagated_to_arms() {
+        let mut graph = ControlFlowGraph::default();
+
+        let root = Node::root(NodeId::new(0), "f|root:0", "func");
+        let h_setup = make_node(1, Some(0), "Setup", NodeType::HeaderContextEnter);
+        let leaf_x = make_node(2, Some(1), "x = 1", NodeType::OtherScope);
+        let h_process = make_node(3, Some(0), "Process", NodeType::HeaderContextEnter);
+        let bg = make_node(4, Some(3), "if (x)", NodeType::BranchGroup);
+        let arm_true = make_node(5, Some(4), "true", NodeType::BranchArm);
+        let arm_false = make_node(6, Some(4), "false", NodeType::BranchArm);
+        let leaf_done = make_node(7, Some(3), "done", NodeType::OtherScope);
+
+        for n in [
+            root, h_setup, leaf_x, h_process, bg, arm_true, arm_false, leaf_done,
+        ] {
+            graph.nodes.insert(n.id, n);
+        }
+
+        // Sequential edges:
+        add_edge(&mut graph, 1, 3); // Setup → Process (at FunctionRoot level)
+        add_edge(&mut graph, 4, 7); // BranchGroup → done (at Header "Process" level)
+
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+
+        // After hoisting: BranchGroup's successor edge (4→7) should be
+        // removed from BranchGroup and COPIED to each arm.
+        let bg_edges = result.edges_by_src.get(&NodeId::new(4));
+        let bg_edge_dsts: Vec<u32> = bg_edges
+            .map(|es| es.iter().map(|e| e.dst.raw()).collect())
+            .unwrap_or_default();
+        // BranchGroup should now only have fan-out edges (to arms), not to successor
+        assert!(
+            !bg_edge_dsts.contains(&7),
+            "BranchGroup should NOT have edge to successor (7) after hoisting, got: {bg_edge_dsts:?}"
+        );
+        assert!(
+            bg_edge_dsts.contains(&5) && bg_edge_dsts.contains(&6),
+            "BranchGroup should have fan-out edges to arms 5 and 6, got: {bg_edge_dsts:?}"
+        );
+
+        // Each arm should have an edge to successor (7)
+        let arm_true_edges = result.edges_by_src.get(&NodeId::new(5));
+        let arm_true_dsts: Vec<u32> = arm_true_edges
+            .map(|es| es.iter().map(|e| e.dst.raw()).collect())
+            .unwrap_or_default();
+        assert!(
+            arm_true_dsts.contains(&7),
+            "BranchArm 'true' should have edge to successor 7, got: {arm_true_dsts:?}"
+        );
+
+        let arm_false_edges = result.edges_by_src.get(&NodeId::new(6));
+        let arm_false_dsts: Vec<u32> = arm_false_edges
+            .map(|es| es.iter().map(|e| e.dst.raw()).collect())
+            .unwrap_or_default();
+        assert!(
+            arm_false_dsts.contains(&7),
+            "BranchArm 'false' should have edge to successor 7, got: {arm_false_dsts:?}"
+        );
+
+        // Arms should be reparented to Header "Process" (id=3)
+        assert_eq!(
+            result.nodes.get(&NodeId::new(5)).unwrap().parent_node_id,
+            Some(NodeId::new(3)),
+        );
+        assert_eq!(
+            result.nodes.get(&NodeId::new(6)).unwrap().parent_node_id,
+            Some(NodeId::new(3)),
+        );
+
+        // Header "Process" should be a container (has BranchGroup + reparented arms + successor)
+        assert!(result.nodes.get(&NodeId::new(3)).unwrap().is_container);
+    }
+
+    #[test]
+    fn viz_prep_underscore_renamed_to_default() {
+        let mut graph = ControlFlowGraph::default();
+        let root = Node::root(NodeId::new(0), "f|root:0", "func");
+        let bg = make_node(1, Some(0), "match", NodeType::BranchGroup);
+        let arm1 = make_node(2, Some(1), "1", NodeType::BranchArm);
+        let arm_wildcard = make_node(3, Some(1), "_", NodeType::BranchArm);
+
+        for n in [root, bg, arm1, arm_wildcard] {
+            graph.nodes.insert(n.id, n);
+        }
+
+        let result = prepare_control_flow_graph_for_visualization(&graph);
+
+        // Node label should be renamed
+        assert_eq!(result.nodes.get(&NodeId::new(3)).unwrap().label, "default");
+
+        // Edge label should also be renamed
+        let bg_edges = result.edges_by_src.get(&NodeId::new(1)).unwrap();
+        let wildcard_edge = bg_edges.iter().find(|e| e.dst == NodeId::new(3)).unwrap();
+        assert_eq!(wildcard_edge.label.as_deref(), Some("default"));
     }
 }

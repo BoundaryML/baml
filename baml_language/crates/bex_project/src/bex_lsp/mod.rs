@@ -63,6 +63,39 @@ pub enum LspError {
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FunctionInfo {
+    pub name: String,
+    pub kind: FunctionKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<LlmCapabilities>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FunctionKind {
+    Llm,
+    Expr,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmCapabilities {
+    pub render_prompt: bool,
+    pub build_request: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_name: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestInfo {
+    pub name: String,
+    pub function_name: String,
+    pub args_json: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectDiagnostic {
     pub severity: &'static str,
     pub message: String,
@@ -72,7 +105,8 @@ pub struct ProjectDiagnostic {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
-    pub functions: Vec<String>,
+    pub functions: Vec<FunctionInfo>,
+    pub tests: Vec<TestInfo>,
     pub diagnostics: Vec<ProjectDiagnostic>,
 }
 
@@ -91,6 +125,13 @@ pub enum PlaygroundNotification {
         project: String,
         function_name: Option<String>,
     },
+    #[serde(rename_all = "camelCase")]
+    ControlFlowGraphResult {
+        function_name: String,
+        graph: Option<serde_json::Value>,
+    },
+    #[serde(rename_all = "camelCase")]
+    CursorContext { context: serde_json::Value },
 }
 
 pub trait PlaygroundSender: Send + Sync {
@@ -110,6 +151,34 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     ) -> Result<Box<dyn crate::Bex>, crate::RuntimeError>;
 
     fn request_playground_state(&self);
+
+    fn ast_control_flow_graph(
+        &self,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph>;
+
+    /// Request the control flow graph for a function.
+    ///
+    /// Builds the graph and sends it back via the playground notification
+    /// callback as a `PlaygroundNotification::ControlFlowGraphResult`.
+    fn request_control_flow_graph(&self, function_name: &str);
+
+    /// Get cursor context for playground navigation.
+    ///
+    /// Given a file path and position, returns context about what entity
+    /// the cursor is on — used to navigate the playground graph.
+    fn playground_cursor_context(
+        &self,
+        file_path: &str,
+        line: u32,
+        column: u32,
+    ) -> baml_project::CursorContext;
+
+    /// Compute cursor context and send it via the playground notification callback.
+    ///
+    /// Combines `playground_cursor_context` with notification dispatch — used by
+    /// the WASM bridge which cannot access the sender directly.
+    fn request_cursor_context(&self, file_path: &str, line: u32, column: u32);
 }
 
 pub use multi_project::{LspClientSenderTrait, new_lsp};
