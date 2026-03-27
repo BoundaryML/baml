@@ -34,7 +34,7 @@ async fn test_concurrent_calls_no_race() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -81,7 +81,7 @@ async fn test_concurrent_allocations_no_overlap() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -145,7 +145,7 @@ async fn test_heap_stats_during_concurrent_execution() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -206,7 +206,7 @@ async fn test_concurrent_string_allocations() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -267,7 +267,7 @@ async fn test_concurrent_array_allocations() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -336,7 +336,7 @@ async fn test_call_function_with_external_args() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),

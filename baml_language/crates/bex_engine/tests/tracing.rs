@@ -75,7 +75,7 @@ async fn trace_single_function() {
     let engine = std::sync::Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),
@@ -124,7 +124,7 @@ async fn trace_nested_expression_calls_no_child_spans() {
     let engine = std::sync::Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),
@@ -173,7 +173,7 @@ async fn trace_deeply_nested_expression_calls_no_child_spans() {
     let engine = std::sync::Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),
@@ -216,7 +216,7 @@ async fn trace_sibling_expression_calls_no_child_spans() {
     let engine = std::sync::Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),
@@ -251,7 +251,7 @@ async fn trace_captures_root_args() {
     let engine = std::sync::Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),
@@ -299,7 +299,7 @@ async fn trace_captures_root_result() {
     let engine = std::sync::Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),

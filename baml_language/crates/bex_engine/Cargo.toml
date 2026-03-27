@@ -13,19 +13,21 @@ bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 bex_vm = { workspace = true }
 bex_vm_types = { workspace = true }
+sys_ops = { workspace = true }
 sys_types = { workspace = true }
+async-trait = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = [ "sync", "macros" ] }
+tokio = { workspace = true, features = ["sync", "macros"] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
 web-time = { workspace = true }
 
 # Native-only: tokio runtime for spawning async tasks
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tokio = { workspace = true, features = [ "sync", "rt", "macros" ] }
+tokio = { workspace = true, features = ["sync", "rt", "macros"] }
 
 # WASM-only: wasm-bindgen-futures for spawning async tasks
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -35,20 +37,20 @@ wasm-bindgen-futures = { workspace = true }
 baml_builtins = { workspace = true }
 baml_tests = { workspace = true }
 sys_llm = { workspace = true }
-sys_native = { workspace = true, features = [ "bundle-http" ] }
+sys_native = { workspace = true, features = ["bundle-http"] }
 anyhow = { workspace = true }
 indexmap = { workspace = true }
 insta = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = [ "rt-multi-thread", "macros" ] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 wiremock = { workspace = true }
 
 [lints]
 workspace = true
 
 [features]
-default = [  ]
+default = []
 heap_debug = [
   "bex_vm/heap_debug",
   "bex_heap/heap_debug",

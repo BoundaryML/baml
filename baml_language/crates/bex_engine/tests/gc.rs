@@ -24,7 +24,7 @@ async fn test_handle_prevents_gc_collection() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),
@@ -65,7 +65,7 @@ async fn test_array_preserved_through_gc() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),
@@ -121,7 +121,7 @@ async fn test_gc_updates_forwarding_pointers() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),
@@ -169,7 +169,7 @@ async fn test_multiple_handles_survive_gc() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),
@@ -229,7 +229,7 @@ async fn test_primitive_returns_are_external_values() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .unwrap(),

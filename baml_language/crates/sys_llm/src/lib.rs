@@ -124,6 +124,8 @@ pub fn execute_parse_response_from_owned(
 
 #[cfg(test)]
 mod tests {
+    use ::baml_base::TyAttr;
+
     use super::execute_parse_response_from_owned;
     use crate::baml_std;
 
@@ -165,8 +167,8 @@ mod tests {
         let allowed = execute_parse_response_from_owned(
             &allow_client,
             response_stop,
-            &baml_type::Ty::String {
-                attr: baml_type::TyAttr::default(),
+            &::baml_type::Ty::String {
+                attr: TyAttr::default(),
             },
         );
         assert!(allowed.is_ok());
@@ -175,8 +177,8 @@ mod tests {
         let blocked = execute_parse_response_from_owned(
             &allow_client,
             response_length,
-            &baml_type::Ty::String {
-                attr: baml_type::TyAttr::default(),
+            &::baml_type::Ty::String {
+                attr: TyAttr::default(),
             },
         );
         assert!(blocked.is_err());
@@ -190,8 +192,8 @@ mod tests {
         let denied = execute_parse_response_from_owned(
             &deny_client,
             response_length,
-            &baml_type::Ty::String {
-                attr: baml_type::TyAttr::default(),
+            &::baml_type::Ty::String {
+                attr: TyAttr::default(),
             },
         );
         assert!(denied.is_err());

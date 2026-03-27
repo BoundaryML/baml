@@ -12,10 +12,8 @@ use std::{
 };
 
 use bex_heap::BexHeap;
-use sys_types::{
-    CallId, SysOpContext, SysOpOutput,
-    io::{self, owned},
-};
+use sys_ops::io::{self, owned};
+use sys_types::{CallId, SysOpContext, SysOpOutput};
 use tokio::sync::broadcast;
 
 use crate::playground_ws::WsOutMessage;

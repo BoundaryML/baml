@@ -18,7 +18,7 @@ async fn run(source: &str, entry: &str) -> Result<BexExternalValue, bex_engine::
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),

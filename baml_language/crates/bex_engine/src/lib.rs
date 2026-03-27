@@ -63,6 +63,7 @@ use std::{
     },
 };
 
+use async_trait::async_trait;
 pub use bex_events::HostSpanContext;
 use bex_events::{EventKind, FunctionEnd, FunctionEvent, FunctionStart, SpanContext};
 // Re-export event types for callers.
@@ -347,9 +348,9 @@ pub struct BexEngine {
     /// Resolved enum names for variant allocation (`IndexMap` preserves definition order)
     resolved_enum_names: indexmap::IndexMap<String, HeapPtr>,
     /// System operations provider.
-    sys_ops: std::sync::Arc<sys_types::SysOps>,
+    sys_ops: std::sync::Arc<sys_ops::SysOps>,
     /// Context passed to `sys_ops` that need engine-level information.
-    sys_op_ctx: sys_types::SysOpContext,
+    sys_op_ctx: sys_types::EngineSysOpContext,
     /// Optional event sink for persisting events (JSONL file, JS callback, etc.).
     /// If `None`, events are only stored in the `CollectorStore` for in-memory queries.
     event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
@@ -406,7 +407,7 @@ impl BexEngine {
     /// * `sys_ops` - System operations provider (use `sys_types_native::SysOps::native()` for default)
     pub fn new(
         bytecode_program: bex_vm_types::Program,
-        sys_ops: std::sync::Arc<sys_types::SysOps>,
+        sys_ops: std::sync::Arc<sys_ops::SysOps>,
         event_sink: Option<std::sync::Arc<dyn bex_events::EventSink>>,
     ) -> Result<Self, EngineError> {
         // Extract package_init_order before consuming bytecode_program.
@@ -536,11 +537,10 @@ impl BexEngine {
         let class_definitions = Self::extract_class_definitions(&resolved_class_names);
         let enum_definitions = Self::extract_enum_definitions(&resolved_enum_names);
 
-        let sys_op_ctx = sys_types::SysOpContext {
+        let sys_op_ctx = sys_types::EngineSysOpContext {
             llm_functions: Arc::new(llm_functions),
             function_global_indices: Arc::new(bytecode.function_global_indices),
             template_strings_macros: Arc::new(bytecode.template_strings_macros),
-            cancel: CancellationToken::new(),
             class_definitions: Arc::new(class_definitions),
             enum_definitions: Arc::new(enum_definitions),
             type_alias_definitions: Arc::new(bytecode.recursive_type_alias_defs),
@@ -1512,7 +1512,7 @@ impl BexEngine {
     /// A per-call context is created by cloning the shared `sys_op_ctx` with the
     /// call's cancellation token. This is O(1) since all fields are `Arc`-wrapped.
     fn execute_sys_op(
-        &self,
+        self: &Arc<Self>,
         op: SysOp,
         args: &[BexExternalValue],
         call_id: CallId,
@@ -1520,7 +1520,9 @@ impl BexEngine {
     ) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
-        let ctx = self.sys_op_ctx.with_cancel(cancel.clone());
+        let ctx = self
+            .sys_op_ctx
+            .to_op_context::<Box<dyn Send + Sync + 'static>>(cancel.clone(), self.clone());
         let result = fn_ptr(&self.heap, args, &ctx, call_id);
 
         match result {
@@ -1544,6 +1546,26 @@ impl BexEngine {
                 SysOpResult::Async(boxed)
             }
         }
+    }
+}
+
+#[async_trait]
+impl sys_types::VmSpawner for BexEngine {
+    async fn spawn_with_function(
+        self: Arc<Self>,
+        function_name: String,
+        args: Vec<BexExternalValue>,
+        cancel: CancellationToken,
+    ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+        self.call_function(
+            &function_name,
+            args,
+            FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .with_cancel_token(cancel)
+                .build(),
+        )
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn Send + Sync + 'static>)
     }
 }
 

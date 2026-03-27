@@ -6,10 +6,8 @@
 use std::sync::Arc;
 
 use js_sys::{Function, Object, Promise, Reflect};
-use sys_types::{
-    BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput,
-    io::{self, IoClassHttpResponse, IoNamespaceHttp},
-};
+use sys_ops::io::{self, IoClassHttpResponse, IoNamespaceHttp};
+use sys_types::{BexHeap, CallId, OpErrorKind, SysOpContext, SysOpOutput};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 

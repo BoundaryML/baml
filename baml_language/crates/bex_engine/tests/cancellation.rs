@@ -32,7 +32,7 @@ async fn cancel_before_call_returns_cancelled() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -74,7 +74,7 @@ async fn cancel_during_sleep_returns_promptly() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -150,7 +150,7 @@ async fn cancel_during_http_returns_promptly() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -214,7 +214,7 @@ async fn selective_cancellation_only_affects_target() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -293,7 +293,7 @@ async fn cancel_interrupts_sequential_sleeps() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -353,7 +353,7 @@ async fn non_cancelled_token_completes_normally() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),
@@ -388,7 +388,7 @@ async fn cancel_is_idempotent() {
     let engine = Arc::new(
         BexEngine::new(
             snapshot,
-            std::sync::Arc::new(sys_types::SysOps::native()),
+            std::sync::Arc::new(sys_native::SysOps::native()),
             None,
         )
         .expect("Failed to create engine"),

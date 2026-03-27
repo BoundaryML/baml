@@ -1341,6 +1341,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sys_native",
+ "sys_ops",
  "sys_types",
  "thiserror 2.0.18",
  "tokio",
@@ -1433,6 +1434,7 @@ dependencies = [
  "salsa",
  "syn 2.0.117",
  "sys_native",
+ "sys_ops",
  "sys_types",
  "tempfile",
  "text-size",
@@ -1493,6 +1495,7 @@ name = "bex_engine"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "async-trait",
  "baml_builtins",
  "baml_tests",
  "baml_type",
@@ -1508,6 +1511,7 @@ dependencies = [
  "serde_json",
  "sys_llm",
  "sys_native",
+ "sys_ops",
  "sys_types",
  "tempfile",
  "thiserror 2.0.18",
@@ -1594,6 +1598,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sys_ops",
  "sys_types",
  "text-size",
  "thiserror 2.0.18",
@@ -1831,6 +1836,7 @@ dependencies = [
  "prost",
  "serde",
  "serde_json",
+ "sys_ops",
  "sys_types",
  "thiserror 2.0.18",
  "tsify",
@@ -6731,12 +6737,13 @@ dependencies = [
  "bex_resource_types",
  "indexmap",
  "reqwest",
+ "sys_ops",
  "sys_types",
  "tokio",
 ]
 
 [[package]]
-name = "sys_types"
+name = "sys_ops"
 version = "0.0.0-beta"
 dependencies = [
  "baml_builtins",
@@ -6747,7 +6754,21 @@ dependencies = [
  "bex_heap",
  "bex_vm_types",
  "indexmap",
- "log",
+ "sys_llm",
+ "sys_types",
+ "tokio",
+]
+
+[[package]]
+name = "sys_types"
+version = "0.0.0-beta"
+dependencies = [
+ "async-trait",
+ "baml_type",
+ "bex_external_types",
+ "bex_heap",
+ "bex_vm_types",
+ "indexmap",
  "sys_llm",
  "thiserror 2.0.18",
  "tokio",

@@ -180,7 +180,7 @@ impl BamlWasmRuntime {
         let make_request_fn = callbacks.make_request();
         let playground_send_notification_fn = callbacks.playground_send_notification();
 
-        let sys_ops = sys_types::SysOpsBuilder::new()
+        let sys_ops = sys_ops::SysOpsBuilder::new()
             .with_http_instance(std::sync::Arc::new(wasm_http::WasmHttp::new(fetch_fn)))
             .with_env_instance(std::sync::Arc::new(wasm_env::WasmEnv::new(env_vars_fn)))
             .with_sys_instance(std::sync::Arc::new(wasm_sys::WasmSys::new()))

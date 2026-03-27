@@ -8,9 +8,9 @@ use std::collections::HashMap;
 
 use ::std::sync::Arc;
 
-/// Factory that creates [`sys_types::SysOps`] for a given project root.
+/// Factory that creates [`sys_ops::SysOps`] for a given project root.
 type SysOpFactory =
-    std::sync::Arc<dyn Fn(&vfs::VfsPath) -> std::sync::Arc<sys_types::SysOps> + Send + Sync>;
+    std::sync::Arc<dyn Fn(&vfs::VfsPath) -> std::sync::Arc<sys_ops::SysOps> + Send + Sync>;
 
 use crate::{
     RuntimeError,
