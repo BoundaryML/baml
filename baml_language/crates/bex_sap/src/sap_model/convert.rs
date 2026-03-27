@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 
 use ::baml_type::{TyAttrValue, TypeName};
-use ::std::sync::Arc;
+use ::std::{collections::HashMap, sync::Arc};
 use ::sys_types::{ClassDefinition, EnumDefinition};
 use indexmap::IndexMap;
 
@@ -47,28 +47,68 @@ pub enum ConvertError<'t> {
 }
 
 /// Contains stuff from [`sys_types::SysOpContext`] that we need for converting to the sap model.
+///
+/// ## Representation
+/// - Unions should be flattened:
+///   - Union members cannot be unions
+///   - Union members cannot be optional
+///   - Union members cannot be type aliases which themselves resolve to unions (or optionals)
+///   - Same rules for the inner type of an optional type
+/// - Type aliases should be flattened:
+///   - Type aliases cannot directly contain the name of another type alias (or itself)
+///   - example: `type A = int; type B = A;` is invalid (`B` should be updated to directly reference `int`)
+///   - Type aliases that contain a class or enum name *are* permitted.
+///
+/// A the `new` method calls [`baml_type::simplify_sap::simplify`] which should do all this
 #[allow(clippy::struct_field_names)]
 pub struct TypeCtx {
-    class_definitions: Arc<IndexMap<baml_type::TypeName, ClassDefinition>>,
+    class_definitions: IndexMap<baml_type::TypeName, ClassDefinition>,
     enum_definitions: Arc<IndexMap<baml_type::TypeName, EnumDefinition>>,
-    type_alias_definitions: Arc<IndexMap<baml_type::TypeName, baml_type::Ty>>,
+    type_alias_definitions: HashMap<baml_type::TypeName, baml_type::Ty>,
 }
 impl TypeCtx {
-    /// ## Assumptions
-    /// - Unions should be flattened:
-    ///   - Union members cannot be unions
-    ///   - Union members cannot be optional
-    ///   - Union members cannot be type aliases which themselves resolve to unions (or optionals)
-    ///   - Same rules for the inner type of an optional type
-    /// - Type aliases should be flattened:
-    ///   - Type aliases cannot directly contain the name of another type alias (or itself)
-    ///   - example: `type A = int; type B = A;` is invalid (`B` should be updated to directly reference `int`)
-    ///   - Type aliases that contain a class or enum name *are* permitted.
+    /// The reason `enum_definitions` is an `Arc` while the others aren't is that
+    /// we do transformations on the others (so we don't need arc) but we don't
+    /// need to transform `enum_definitions` so we can just share it.
     pub fn new(
-        class_definitions: Arc<IndexMap<baml_type::TypeName, ClassDefinition>>,
+        class_definitions: &IndexMap<baml_type::TypeName, ClassDefinition>,
         enum_definitions: Arc<IndexMap<baml_type::TypeName, EnumDefinition>>,
-        type_alias_definitions: Arc<IndexMap<baml_type::TypeName, baml_type::Ty>>,
+        type_alias_definitions: &HashMap<baml_type::TypeName, baml_type::Ty>,
     ) -> Self {
+        // todo: we can hold more of this by reference probably
+        let recursive_aliases = type_alias_definitions.keys().cloned().collect();
+        let type_alias_definitions = type_alias_definitions
+            .iter()
+            .map(|(k, v)| {
+                let v = ::baml_type::simplify_sap::simplify(
+                    v.clone(),
+                    type_alias_definitions,
+                    &recursive_aliases,
+                );
+                (k.clone(), v)
+            })
+            .collect();
+        let class_definitions = class_definitions
+            .iter()
+            .map(|(k, v)| {
+                let fields = v.fields.iter().map(|field| {
+                    let mut field = field.clone();
+                    field.field_type = ::baml_type::simplify_sap::simplify(
+                        field.field_type,
+                        &type_alias_definitions,
+                        &recursive_aliases,
+                    );
+                    field
+                });
+                let class = ClassDefinition {
+                    name: v.name.clone(),
+                    description: v.description.clone(),
+                    alias: v.alias.clone(),
+                    fields: fields.collect(),
+                };
+                (k.clone(), class)
+            })
+            .collect();
         Self {
             class_definitions,
             enum_definitions,
@@ -79,17 +119,17 @@ impl TypeCtx {
     /// Constructs a full [`TypeRefDb`] from the given context with all types converted.
     pub fn build_db(&self) -> Result<TypeRefDb<'_, TypeName>, ConvertError<'_>> {
         let mut db = TypeRefDb::new();
-        for (name, cls) in self.class_definitions.iter() {
+        for (name, cls) in &self.class_definitions {
             let cls = self.convert_class(name, cls)?;
             db.try_add_inner(name.clone(), TyResolved::Class(cls))
                 .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
         }
-        for (name, enum_def) in self.enum_definitions.iter() {
+        for (name, enum_def) in &*self.enum_definitions {
             let enum_def = Self::convert_enum(name, enum_def);
             db.try_add_inner(name.clone(), TyResolved::Enum(enum_def))
                 .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
         }
-        for (name, alias_ty) in self.type_alias_definitions.iter() {
+        for (name, alias_ty) in &self.type_alias_definitions {
             let alias_ty = self.convert_type_alias(name, alias_ty, 0)?;
             db.try_add_inner(name.clone(), alias_ty)
                 .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
@@ -218,9 +258,6 @@ impl TypeCtx {
         &'a self,
         ty: &'a baml_type::Ty,
     ) -> Result<AnnotatedTy<'a, TypeName>, ConvertError<'a>> {
-        // TODO
-        // let simplified = ::baml_type::simplify_sap::simplify(ty, aliases, recursive_aliases)
-
         let ty = match ty {
             baml_type::Ty::Int { attr } => TyWithMeta::new(
                 sap_model::Ty::Resolved(TyResolved::Int(IntTy)),
