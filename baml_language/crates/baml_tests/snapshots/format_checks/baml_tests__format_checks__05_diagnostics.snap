@@ -285,6 +285,28 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
+  [validation] Error: Name `ExtraWhitespace` defined 3 times as: class, enum, type
+     ╭─[ class_decls.baml:296:10 ]
+     │
+ 296 │ class    ExtraWhitespace    {
+     │          ───────┬───────  
+     │                 ╰───────── first defined as class here
+     │
+     ├─[ enum_decls.baml:211:9 ]
+     │
+ 211 │ enum    ExtraWhitespace    {
+     │         ───────┬───────  
+     │                ╰───────── duplicate enum definition
+     │
+     ├─[ type_alias_decls.baml:393:9 ]
+     │
+ 393 │ type    ExtraWhitespace    =    int   |   string   |   bool   |   float   |   null
+     │         ───────┬───────  
+     │                ╰───────── duplicate type definition
+     │ 
+     │ Note: Error code: E0011
+─────╯
+
   [type] Error: type mismatch: expected (x: int) -> (y: int) -> (z: int) -> (w: int) -> map<string, int | string | bool>, got 1
     ╭─[ function_decls.baml:73:5 ]
     │
@@ -801,4 +823,100 @@ source: crates/baml_tests/src/generated_tests.rs
      │                 ╰── duplicate binding definition
      │ 
      │ Note: Error code: E0012
+─────╯
+
+  [validation] Error: Name `ManyParams` defined 2 times as: function, template_string
+    ╭─[ function_decls.baml:23:10 ]
+    │
+ 23 │ function ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string {
+    │          ─────┬────  
+    │               ╰────── first defined as function here
+    │
+    ├─[ template_string_decls.baml:30:17 ]
+    │
+ 30 │ template_string ManyParams(first_parameter: string, second_parameter: string, third_parameter: int, fourth_parameter: bool) #"
+    │                 ─────┬────  
+    │                      ╰────── duplicate template_string definition
+    │ 
+    │ Note: Error code: E0011
+────╯
+
+  [validation] Error: Name `MultiParamTrivia` defined 2 times as: function, template_string
+     ╭─[ function_decls.baml:142:10 ]
+     │
+ 142 │ function MultiParamTrivia(
+     │          ────────┬───────  
+     │                  ╰───────── first defined as function here
+     │
+     ├─[ template_string_decls.baml:89:17 ]
+     │
+  89 │ template_string MultiParamTrivia(
+     │                 ────────┬───────  
+     │                         ╰───────── duplicate template_string definition
+     │ 
+     │ Note: Error code: E0011
+─────╯
+
+  [validation] Error: Name `MultiParamTriviaBlock` defined 2 times as: function, template_string
+     ╭─[ function_decls.baml:159:10 ]
+     │
+ 159 │ function MultiParamTriviaBlock(
+     │          ──────────┬──────────  
+     │                    ╰──────────── first defined as function here
+     │
+     ├─[ template_string_decls.baml:106:17 ]
+     │
+ 106 │ template_string MultiParamTriviaBlock(
+     │                 ──────────┬──────────  
+     │                           ╰──────────── duplicate template_string definition
+     │ 
+     │ Note: Error code: E0011
+─────╯
+
+  [validation] Error: Name `ConstrainedParams` defined 2 times as: function, template_string
+     ╭─[ function_decls.baml:85:10 ]
+     │
+  85 │ function ConstrainedParams(name: string, score: int @check({{ this > 0 }})) -> string {
+     │          ────────┬────────  
+     │                  ╰────────── first defined as function here
+     │
+     ├─[ template_string_decls.baml:151:17 ]
+     │
+ 151 │ template_string ConstrainedParams(value: int @check("positive", {{ this > 0 }}), name: string) #"
+     │                 ────────┬────────  
+     │                         ╰────────── duplicate template_string definition
+     │ 
+     │ Note: Error code: E0011
+─────╯
+
+  [validation] Error: Name `SixLongParams` defined 2 times as: function, template_string
+     ╭─[ function_decls.baml:37:10 ]
+     │
+  37 │ function SixLongParams(first_parameter_name: map<string, int>, second_parameter_name: (int | string)[], third_parameter_name: map<string, bool>, fourth_parameter_name: int, fifth_parameter_name: string, sixth_parameter_name: float) -> string {
+     │          ──────┬──────  
+     │                ╰──────── first defined as function here
+     │
+     ├─[ template_string_decls.baml:176:17 ]
+     │
+ 176 │ template_string SixLongParams(first_param: string, second_param: int, third_param: bool, fourth_param: float, fifth_param: string[], sixth_param: map<string, int>) #"
+     │                 ──────┬──────  
+     │                       ╰──────── duplicate template_string definition
+     │ 
+     │ Note: Error code: E0011
+─────╯
+
+  [validation] Error: Name `ExtraWhitespace` defined 2 times as: function, template_string
+     ╭─[ function_decls.baml:504:13 ]
+     │
+ 504 │ function    ExtraWhitespace   (   a   :   int   ,   b   :   int   )   ->   int   {
+     │             ───────┬───────  
+     │                    ╰───────── first defined as function here
+     │
+     ├─[ template_string_decls.baml:369:20 ]
+     │
+ 369 │ template_string    ExtraWhitespace   (   a   :   string   ,   b   :   int   )   #"
+     │                    ───────┬───────  
+     │                           ╰───────── duplicate template_string definition
+     │ 
+     │ Note: Error code: E0011
 ─────╯

@@ -1,0 +1,3 @@
+class Config {
+    key string
+}

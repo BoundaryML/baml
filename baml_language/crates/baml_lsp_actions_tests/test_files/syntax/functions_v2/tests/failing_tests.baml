@@ -127,4 +127,16 @@ test Bar {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Name `Bar` defined 2 times as: let, test
+//     ╭─[ functions_v2_tests_failing_tests.baml:77:6 ]
+//     │
+//   1 │ client<llm> Bar {
+//     │             ─┬─  
+//     │              ╰─── first defined as let here
+//     │ 
+//  77 │ test Bar {
+//     │      ─┬─  
+//     │       ╰─── duplicate test definition
+//     │ 
+//     │ Note: Error code: E0011
+// ────╯

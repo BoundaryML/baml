@@ -4,13 +4,66 @@
 //! lookup structure. This is the top-level cross-file query used by the TIR
 //! layer for name resolution.
 
-use baml_base::Name;
+use baml_base::{Name, Span};
+use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
 use rustc_hash::FxHashMap;
 
 use crate::{
     contributions::Definition,
     namespace::{NameConflict, NamespaceId, NamespaceItems, namespace_items},
 };
+
+/// A namespace name that shadows a root-level declaration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamespaceShadow<'db> {
+    /// The namespace name that shadows (e.g., "foo" from `ns_foo/`).
+    pub ns_name: Name,
+    /// The full namespace path (e.g., `["foo"]` or `["foo", "bar"]`).
+    pub ns_path: Vec<Name>,
+    /// The root-level definition being shadowed.
+    pub shadowed_def: Definition<'db>,
+}
+
+impl<'db> NamespaceShadow<'db> {
+    /// Convert to a `Diagnostic` warning with the shadowed definition's span.
+    pub fn to_diagnostic(&self, db: &'db dyn crate::Db) -> Diagnostic {
+        let def = self.shadowed_def;
+        let file = def.file(db);
+        let file_id = file.file_id(db);
+
+        // Look up the name span from file contributions.
+        let contribs = crate::file_symbol_contributions(db, file);
+        let name_span = contribs
+            .types
+            .iter()
+            .chain(contribs.values.iter())
+            .find(|(_, c)| c.definition == def)
+            .map(|(_, c)| c.name_span);
+
+        let message = format!(
+            "Namespace `{}` (from `ns_{}/`) shadows root-level {} `{}`",
+            self.ns_name,
+            self.ns_name,
+            def.kind_name(),
+            self.ns_name
+        );
+
+        let mut diag = Diagnostic::warning(DiagnosticId::NamespaceShadow, message);
+
+        if let Some(range) = name_span {
+            diag = diag.with_primary(
+                Span { file_id, range },
+                format!(
+                    "this {} is shadowed by namespace `{}`",
+                    def.kind_name(),
+                    self.ns_name
+                ),
+            );
+        }
+
+        diag.with_phase(DiagnosticPhase::Validation)
+    }
+}
 
 /// Interned package identity.
 #[salsa::interned]
@@ -19,10 +72,11 @@ pub struct PackageId<'db> {
 }
 
 /// Rare/optional data for `PackageItems`. Heap-allocated only when
-/// at least one conflict exists.
+/// at least one conflict or shadow exists.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageItemsExtra<'db> {
     pub conflicts: Vec<NameConflict<'db>>,
+    pub shadows: Vec<NamespaceShadow<'db>>,
 }
 
 /// All items across all namespaces within a package.
@@ -39,6 +93,13 @@ impl<'db> PackageItems<'db> {
         self.extra
             .as_ref()
             .map(|e| e.conflicts.as_slice())
+            .unwrap_or(&[])
+    }
+
+    pub fn shadows(&self) -> &[NamespaceShadow<'db>] {
+        self.extra
+            .as_ref()
+            .map(|e| e.shadows.as_slice())
             .unwrap_or(&[])
     }
 }
@@ -154,13 +215,37 @@ pub fn package_items<'db>(db: &'db dyn crate::Db, package_id: PackageId<'db>) ->
         namespaces.insert(ns_path, items.clone());
     }
 
+    // Detect namespace names that shadow root-level declarations.
+    let mut shadows: Vec<NamespaceShadow<'db>> = Vec::new();
+    if let Some(root_ns) = namespaces.get(&vec![] as &Vec<Name>) {
+        for ns_path in namespaces.keys() {
+            if ns_path.is_empty() {
+                continue;
+            }
+            let first_segment = &ns_path[0];
+            if let Some(def) = root_ns
+                .types
+                .get(first_segment)
+                .or_else(|| root_ns.values.get(first_segment))
+            {
+                shadows.push(NamespaceShadow {
+                    ns_name: first_segment.clone(),
+                    ns_path: ns_path.clone(),
+                    shadowed_def: *def,
+                });
+            }
+        }
+    }
+    shadows.sort_by(|a, b| a.ns_name.cmp(&b.ns_name));
+
     all_conflicts.sort_by(|a, b| a.name.cmp(&b.name));
 
-    let extra = if all_conflicts.is_empty() {
+    let extra = if all_conflicts.is_empty() && shadows.is_empty() {
         None
     } else {
         Some(Box::new(PackageItemsExtra {
             conflicts: all_conflicts,
+            shadows,
         }))
     };
 

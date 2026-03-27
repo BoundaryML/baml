@@ -5552,6 +5552,20 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0010
 ─────╯
 
+  [validation] Error: Duplicate type `Language`
+     ╭─[ rust.baml:203:10 ]
+     │
+  30 │             type Language = crate::BamlLanguage;
+     │                  ────┬───  
+     │                      ╰───── first defined as type here
+     │ 
+ 203 │     type Language = crate::BamlLanguage;
+     │          ────┬───  
+     │              ╰───── duplicate type definition
+     │ 
+     │ Note: Error code: E0011
+─────╯
+
   [type] Error: unresolved type: crate
      ╭─[ rust.baml:203:20 ]
      │

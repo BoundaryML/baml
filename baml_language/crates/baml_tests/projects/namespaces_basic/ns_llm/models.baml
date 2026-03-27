@@ -1,0 +1,10 @@
+// llm namespace: defines Response, references root.Config
+class Response {
+    text string
+    model string
+}
+
+// Cross-namespace reference back to root
+function MakeResponse(cfg: root.Config) -> Response {
+    Response { text: "ok", model: cfg.model }
+}

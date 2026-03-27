@@ -59,4 +59,20 @@ type A = int
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: Name `A` defined 3 times as: class, class, type
+//    ╭─[ class_duplicate_definitions.baml:5:7 ]
+//    │
+//  1 │ class A {
+//    │       ┬  
+//    │       ╰── first defined as class here
+//    │ 
+//  5 │ class A {
+//    │       ┬  
+//    │       ╰── duplicate class definition
+//    │ 
+//  9 │ type A = int
+//    │      ┬  
+//    │      ╰── duplicate type definition
+//    │ 
+//    │ Note: Error code: E0011
+// ───╯

@@ -3,114 +3,83 @@
 //! All sources live under `baml_std/` and are embedded at compile time via
 //! `include_str!` — no filesystem reads at runtime, works on both native and WASM.
 //!
-//! # Layout: folder tree = package
+//! # Layout: folder tree = package + ns_* subfolders = namespace
 //!
 //! Everything lives under `baml_std/baml/` → package **baml**.
-//! Sub-namespaces (env, llm, http, etc.) are expressed via the macro's namespace argument.
-//!
-//! Namespaces within the package are specified explicitly in the `builtin!` macro.
+//! Sub-namespaces (env, llm, http, etc.) are expressed via `ns_*` subdirectories
+//! on disk, and namespace is derived from path segments at runtime.
 //!
 //! # Virtual path
 //!
-//! Builtin virtual path is `<builtin>/<package>/<namespace...>/<filename>`. The HIR derives
+//! Builtin virtual path is `<builtin>/<package>/<relative_path>`. The HIR derives
 //! package and namespace from path segments (see `baml_compiler2_hir::file_package`).
 
-/// A builtin `.baml` file: package, namespace, filename, and embedded contents.
+/// A builtin `.baml` file: package, path within package, and embedded contents.
 pub struct BuiltinFile {
-    /// Package name (e.g. `"baml"`, `"env"`).
+    /// Package name (e.g. `"baml"`).
     pub package: &'static str,
-    /// Sub-namespace within the package (e.g. `&[]` for root, `&["env"]` for `baml.env`).
-    pub namespace: &'static [&'static str],
-    /// Filename only (e.g. `"containers.baml"`, `"env.baml"`).
-    pub filename: &'static str,
+    /// Relative path within the package directory (e.g. `"containers.baml"`,
+    /// `"ns_env/env.baml"`). Namespace is derived from `ns_*` segments.
+    pub relative_path: &'static str,
     /// File contents embedded at compile time via `include_str!`.
     pub contents: &'static str,
 }
 
 impl BuiltinFile {
     /// Build the virtual path for this builtin file.
+    /// e.g. `"<builtin>/baml/ns_env/env.baml"`.
     pub fn virtual_path(&self) -> String {
-        if self.namespace.is_empty() {
-            format!("<builtin>/{}/{}", self.package, self.filename)
-        } else {
-            format!(
-                "<builtin>/{}/{}/{}",
-                self.package,
-                self.namespace.join("/"),
-                self.filename
-            )
+        format!("<builtin>/{}/{}", self.package, self.relative_path)
+    }
+
+    /// Derive the namespace path from `ns_*` segments in `relative_path`.
+    /// e.g. `"ns_env/env.baml"` → `["env"]`, `"containers.baml"` → `[]`.
+    pub fn namespace_path(&self) -> Vec<&str> {
+        let segments: Vec<&str> = self.relative_path.split('/').collect();
+        if segments.len() <= 1 {
+            return vec![];
         }
+        // Exclude the filename (last segment), filter ns_* from intermediates
+        segments[..segments.len() - 1]
+            .iter()
+            .filter_map(|s| s.strip_prefix("ns_"))
+            .collect()
     }
 }
 
 /// Package name for the main std package (baml types and namespaces).
 pub const PACKAGE_BAML: &str = "baml";
 
-/// Single macro form: package (from `baml_std/$pkg/...`), namespace (root or `[ns, ...]`), filename, path.
-/// Path must follow `../baml_std/<package>/...` so the folder tree defines the package.
+/// Builtin registration macro: package, relative virtual path, filesystem include path.
 macro_rules! builtin {
-    ($pkg:literal, root, $filename:literal, $path:literal) => {
+    ($pkg:literal, $fs_path:literal) => {
         BuiltinFile {
             package: $pkg,
-            namespace: &[],
-            filename: $filename,
-            contents: include_str!($path),
-        }
-    };
-    ($pkg:literal, [$($ns:literal),+], $filename:literal, $path:literal) => {
-        BuiltinFile {
-            package: $pkg,
-            namespace: &[$($ns),+],
-            filename: $filename,
-            contents: include_str!($path),
+            relative_path: $fs_path,
+            contents: include_str!(concat!("../baml_std/baml/", $fs_path)),
         }
     };
 }
 
-/// All builtin `.baml` files, in registration order.
-///
-/// All builtins are in the `baml` package. Namespaces are explicit per entry.
+/// All builtin `.baml` files, in registration order. Namespaces derived from
+/// `ns_*` folder segments in `relative_path`.
 pub const ALL: &[BuiltinFile] = &[
-    // --- baml_std/baml/ ---
-    builtin!(
-        "baml",
-        root,
-        "containers.baml",
-        "../baml_std/baml/containers.baml"
-    ),
-    builtin!("baml", root, "core.baml", "../baml_std/baml/core.baml"),
-    builtin!(
-        "baml",
-        ["errors"],
-        "errors.baml",
-        "../baml_std/baml/errors.baml"
-    ),
-    builtin!("baml", root, "string.baml", "../baml_std/baml/string.baml"),
-    builtin!("baml", ["env"], "env.baml", "../baml_std/baml/env.baml"),
-    builtin!("baml", ["http"], "http.baml", "../baml_std/baml/http.baml"),
-    builtin!("baml", ["math"], "math.baml", "../baml_std/baml/math.baml"),
-    builtin!("baml", ["sys"], "sys.baml", "../baml_std/baml/sys.baml"),
-    builtin!("baml", ["fs"], "fs.baml", "../baml_std/baml/fs.baml"),
-    builtin!("baml", ["net"], "net.baml", "../baml_std/baml/net.baml"),
-    builtin!(
-        "baml",
-        ["media"],
-        "media.baml",
-        "../baml_std/baml/media.baml"
-    ),
-    builtin!(
-        "baml",
-        ["unstable"],
-        "unstable.baml",
-        "../baml_std/baml/unstable.baml"
-    ),
-    builtin!(
-        "baml",
-        ["llm"],
-        "llm_types.baml",
-        "../baml_std/baml/llm_types.baml"
-    ),
-    builtin!("baml", ["llm"], "llm.baml", "../baml_std/baml/llm.baml"),
+    // --- Root namespace (no ns_* prefix) ---
+    builtin!("baml", "containers.baml"),
+    builtin!("baml", "core.baml"),
+    builtin!("baml", "string.baml"),
+    // --- Namespaced (ns_* folders) ---
+    builtin!("baml", "ns_errors/errors.baml"),
+    builtin!("baml", "ns_env/env.baml"),
+    builtin!("baml", "ns_http/http.baml"),
+    builtin!("baml", "ns_math/math.baml"),
+    builtin!("baml", "ns_sys/sys.baml"),
+    builtin!("baml", "ns_fs/fs.baml"),
+    builtin!("baml", "ns_net/net.baml"),
+    builtin!("baml", "ns_media/media.baml"),
+    builtin!("baml", "ns_unstable/unstable.baml"),
+    builtin!("baml", "ns_llm/llm_types.baml"),
+    builtin!("baml", "ns_llm/llm.baml"),
     // // --- baml_std/env/ ---
-    // builtin!("env", root, "env.baml", "../baml_std/env/env.baml"),
+    // builtin!("env", "env.baml"),
 ];

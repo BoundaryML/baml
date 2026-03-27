@@ -1402,6 +1402,14 @@ fn baml.net.connect = builtin(io)
 
 fn baml.net.Socket.read = builtin(io)
 
+fn baml.sys.panic = builtin(io)
+
+fn baml.sys.shell = builtin(io)
+
+fn baml.sys.sleep = builtin(io)
+
+fn baml.unstable.string = builtin(vm)
+
 fn baml.String.charAt = builtin(vm)
 
 fn baml.String.endsWith = builtin(vm)
@@ -1429,11 +1437,3 @@ fn baml.String.toLowerCase = builtin(vm)
 fn baml.String.toUpperCase = builtin(vm)
 
 fn baml.String.trim = builtin(vm)
-
-fn baml.sys.panic = builtin(io)
-
-fn baml.sys.shell = builtin(io)
-
-fn baml.sys.sleep = builtin(io)
-
-fn baml.unstable.string = builtin(vm)

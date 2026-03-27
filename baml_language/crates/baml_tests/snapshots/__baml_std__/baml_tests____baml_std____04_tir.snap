@@ -13,7 +13,7 @@ class baml.Map {
 
 --- <builtin>/baml/core.baml ---
 
---- <builtin>/baml/env/env.baml ---
+--- <builtin>/baml/ns_env/env.baml ---
 function baml.env.get_or_panic(key: string) -> string throws never {
   { : "" | string
     let val = get(key) : string?
@@ -29,7 +29,7 @@ function baml.env.get_or_panic(key: string) -> string throws never {
   }
 }
 
---- <builtin>/baml/errors/errors.baml ---
+--- <builtin>/baml/ns_errors/errors.baml ---
 class baml.errors.InvalidArgument {
   message: string
 }
@@ -62,12 +62,12 @@ class baml.errors.HostPanic {
   message: string
 }
 
---- <builtin>/baml/fs/fs.baml ---
+--- <builtin>/baml/ns_fs/fs.baml ---
 class baml.fs.File {
   _handle: $rust_type
 }
 
---- <builtin>/baml/http/http.baml ---
+--- <builtin>/baml/ns_http/http.baml ---
 class baml.http.Request {
   method: string
   url: string
@@ -86,7 +86,7 @@ function baml.http.Response.ok(self: baml.http.Response) -> bool throws never {
   }
 }
 
---- <builtin>/baml/llm/llm.baml ---
+--- <builtin>/baml/ns_llm/llm.baml ---
 class baml.llm.OrchestrationStep {
   primitive_client: baml.llm.PrimitiveClient
   delay_ms: int
@@ -147,7 +147,7 @@ function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: s
   }
 }
 
---- <builtin>/baml/llm/llm_types.baml ---
+--- <builtin>/baml/ns_llm/llm_types.baml ---
 class baml.llm.PromptAst {
   _data: $rust_type
 }
@@ -391,9 +391,9 @@ class baml.llm.PrimitiveClient {
   options: baml.llm.PrimitiveClientOptions
 }
 
---- <builtin>/baml/math/math.baml ---
+--- <builtin>/baml/ns_math/math.baml ---
 
---- <builtin>/baml/media/media.baml ---
+--- <builtin>/baml/ns_media/media.baml ---
 class baml.media.Pdf {
   _data: $rust_type
 }
@@ -407,15 +407,15 @@ class baml.media.Image {
   _data: $rust_type
 }
 
---- <builtin>/baml/net/net.baml ---
+--- <builtin>/baml/ns_net/net.baml ---
 class baml.net.Socket {
   _handle: $rust_type
 }
 
+--- <builtin>/baml/ns_sys/sys.baml ---
+
+--- <builtin>/baml/ns_unstable/unstable.baml ---
+
 --- <builtin>/baml/string.baml ---
 class baml.String {
 }
-
---- <builtin>/baml/sys/sys.baml ---
-
---- <builtin>/baml/unstable/unstable.baml ---
