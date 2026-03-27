@@ -28,6 +28,8 @@ pub struct NativeBuiltin {
     pub pipeline: BuiltinPipeline,
     /// Error categories from `throws` clause (IO only). E.g. `["Io", "Timeout"]`.
     pub throws: Vec<String>,
+    /// Virtual path of the `.baml` source file (e.g. `"<builtin>/baml/ns_fs/fs.baml"`).
+    pub source_file: String,
 }
 
 impl NativeBuiltin {
@@ -120,4 +122,6 @@ pub struct NativeClassDef {
     pub generic_params: Vec<String>,
     /// Fields in declaration order.
     pub fields: Vec<NativeClassField>,
+    /// Virtual path of the `.baml` source file (e.g. `"<builtin>/baml/ns_fs/fs.baml"`).
+    pub source_file: String,
 }

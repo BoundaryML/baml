@@ -97,11 +97,12 @@ pub fn extract_native_builtins()
                         class_def,
                         &namespace_prefix,
                         &cst_root,
+                        &path,
                         &mut vm_builtins,
                         &mut io_builtins,
                     );
                     if let Some(class_def_record) =
-                        extract_class_fields(class_def, &namespace_prefix)
+                        extract_class_fields(class_def, &namespace_prefix, &path)
                     {
                         class_defs.push(class_def_record);
                     }
@@ -111,6 +112,7 @@ pub fn extract_native_builtins()
                         func_def,
                         &namespace_prefix,
                         &cst_root,
+                        &path,
                         &mut vm_builtins,
                         &mut io_builtins,
                     );
@@ -137,6 +139,7 @@ fn extract_from_class(
     class_def: &ClassDef,
     namespace_prefix: &str,
     cst_root: &SyntaxNode,
+    source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
 ) {
@@ -245,6 +248,7 @@ fn extract_from_class(
             vm_usage,
             pipeline,
             throws,
+            source_file: source_file.to_string(),
         };
 
         match pipeline {
@@ -258,7 +262,7 @@ fn extract_from_class(
 ///
 /// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String)
 /// since they don't use `Object::Instance`.
-fn extract_class_fields(class_def: &ClassDef, namespace_prefix: &str) -> Option<NativeClassDef> {
+fn extract_class_fields(class_def: &ClassDef, namespace_prefix: &str, source_file: &str) -> Option<NativeClassDef> {
     let class_name = class_def.name.as_str();
 
     // Skip classes with dedicated Object variants — they are not Instance-based.
@@ -301,6 +305,7 @@ fn extract_class_fields(class_def: &ClassDef, namespace_prefix: &str) -> Option<
         namespace_prefix: namespace_prefix.to_string(),
         generic_params,
         fields,
+        source_file: source_file.to_string(),
     })
 }
 
@@ -309,6 +314,7 @@ fn extract_from_free_function(
     func_def: &FunctionDef,
     namespace_prefix: &str,
     cst_root: &SyntaxNode,
+    source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
 ) {
@@ -376,6 +382,7 @@ fn extract_from_free_function(
         vm_usage,
         pipeline,
         throws,
+        source_file: source_file.to_string(),
     };
 
     match pipeline {
@@ -782,6 +789,7 @@ mod tests {
             vm_usage: VmUsage::None,
             pipeline: BuiltinPipeline::Io,
             throws: vec![],
+            source_file: String::new(),
         };
         assert_eq!(make("baml.fs.open").sys_op_variant_name(), "BamlFsOpen");
         assert_eq!(

@@ -607,6 +607,7 @@ fn emit_view_struct(
     let name = &cd.name;
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
 
+    writeln!(out, "        /// Generated from `{}`", cd.source_file).unwrap();
     writeln!(out, "        pub struct {name}<'a> {{").unwrap();
     out.push_str("            cls: BexClass<'a>,\n");
     out.push_str("        }\n\n");
@@ -705,6 +706,7 @@ fn emit_owned_struct(
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
 
     // Struct definition
+    writeln!(out, "        /// Generated from `{}`", cd.source_file).unwrap();
     writeln!(out, "        pub struct {name} {{").unwrap();
     for field in &cd.fields {
         let rust_ty = owned_rust_type(&field.field_type, class_ns_map);
@@ -794,6 +796,9 @@ fn emit_one_class_trait(
     let trait_name = class_trait_name(ns, class_name);
     let dispatch_fn = format!("__dispatch_{ns}_{}", class_name.to_lowercase());
 
+    if let Some(first) = methods.first() {
+        writeln!(out, "/// Generated from `{}`", first.source_file).unwrap();
+    }
     writeln!(out, "pub trait {trait_name} {{").unwrap();
 
     // Clean methods
