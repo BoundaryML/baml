@@ -14,3 +14,6 @@ function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Reques
 class user.Resume {
   name: string
 }
+class user.Resume$stream {
+  name: null | string
+}

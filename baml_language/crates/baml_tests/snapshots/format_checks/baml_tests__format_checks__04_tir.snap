@@ -173,6 +173,36 @@ function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<s
   !! 6392..6467: unresolved member: string.len
   !! 6493..6516: unresolved member: string.len
 }
+class user.ChainUser$stream {
+  name: null | string
+  profile: null | user.ChainProfile$stream
+  tags: string[]
+  scores: int[][]
+}
+class user.ChainProfile$stream {
+  bio: null | string
+  settings: null | user.ChainSettings$stream
+  items: user.ChainItem$stream[]
+}
+class user.ChainSettings$stream {
+  theme: null | string
+  notifications: null | bool
+  preferences: null | user.ChainPreferences$stream
+}
+class user.ChainPreferences$stream {
+  color: null | string
+  font: null | string
+  size: null | int
+}
+class user.ChainItem$stream {
+  label: null | string
+  value: null | int
+  metadata: null | user.ChainMetadata$stream
+}
+class user.ChainMetadata$stream {
+  created_at: null | string
+  tags: string[]
+}
 class user.EmptyClass {
 }
 class user.SingleField {
@@ -319,6 +349,144 @@ class user.DeepLevel2 {
 }
 class user.DeepLevel3 {
   data: string
+  nested: map<string, map<string, int>>
+}
+class user.EmptyClass$stream {
+}
+class user.SingleField$stream {
+  name: null | string
+}
+class user.MultiField$stream {
+  name: null | string
+  age: null | int
+  active: null | bool
+}
+class user.ColonFields$stream {
+  name: null | string
+  age: null | int
+}
+class user.SingleAttrField$stream {
+  name: null | string @description("The user's name")
+}
+class user.MultiAttrField$stream {
+  name: null | string @description("The user's name") @alias("user_name")
+  summary: null | string @description("A summary") @alias("sum")
+}
+class user.LongAttrField$stream {
+  name: null | string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
+  data: map<string, int | string | bool> @description("complex data") @alias("payload")
+  config: map<string, map<string, int | string | bool | null>> @description("deeply nested config structure for testing wrapping")
+}
+class user.LongFieldTypes$stream {
+  very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
+  another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
+  callback_field: unknown
+  deeply_nested: null | (int | string | bool | float | null)[]
+}
+class user.TypeVariety$stream {
+  simple: null | string
+  optional: null | string
+  array: int[]
+  nested_array: int[][]
+  union_type: null | int | string
+  optional_union: null | int | string
+  union_array: (int | string)[]
+  generic: map<string, int>
+  complex_generic: map<string, int | string | bool>
+  deep_generic: map<string, map<string, int[]>>
+  fn_type: unknown
+  paren_union_array: (int | string | bool)[]
+  triple_nested: map<string, map<string, map<string, int>>>
+}
+class user.DynamicClass$stream {
+  name: null | string
+}
+class user.MultiBlockAttr$stream {
+  name: null | string
+}
+class user.TriviaClass$stream {
+  name: null | string
+}
+class user.TriviaClassBlock$stream {
+  name: null | string
+}
+class user.TriviaFieldAttrs$stream {
+  name: null | string @description("the name")
+}
+class user.TriviaFieldAttrsBlock$stream {
+  name: null | string @description("the name")
+}
+class user.TriviaLongFieldType$stream {
+  data: map<string, int | string | bool | float | null> @description("a long description")
+}
+class user.TriviaLongFieldTypeBlock$stream {
+  data: map<string, int | string | bool | float | null> @description("a long description")
+}
+class user.TriviaMultiAttr$stream {
+  name: null | string @description("name") @alias("user_name")
+}
+class user.TriviaMultiAttrBlock$stream {
+  name: null | string @description("name") @alias("user_name")
+}
+class user.A$stream {
+  x: null | int
+}
+class user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself$stream {
+  x: null | int
+}
+class user.AttributeVariety$stream {
+  a: null | string @skip
+  b: null | string @alias("alt_name")
+  c: null | string @description("desc")
+  d: null | string
+  e: null | string
+  f: null | string
+}
+class user.ExtraWhitespace$stream {
+  name: null | string @description("name") @alias("n")
+  age: null | int
+}
+class user.ManyFields$stream {
+  field1: null | int
+  field2: null | int
+  field3: null | int
+  field4: null | int
+  field5: null | int
+  field6: null | int
+  field7: null | int
+  field8: null | int
+  field9: null | int
+  field10: null | int
+}
+class user.Outer$stream {
+  inner: null | user.InnerNested$stream
+  list: user.InnerNested$stream[]
+  optional: null | user.InnerNested$stream
+  mapping: map<string, user.InnerNested$stream>
+}
+class user.InnerNested$stream {
+  value: null | int
+}
+class user.WithMethod$stream {
+  name: null | string
+}
+class user.WithLongMethod$stream {
+  name: null | string
+}
+class user.DeepOuter$stream {
+  level1: null | user.DeepLevel1$stream
+}
+class user.DeepLevel1$stream {
+  level2: null | user.DeepLevel2$stream
+  items: user.DeepLevel2$stream[]
+  mapping: map<string, user.DeepLevel2$stream>
+}
+class user.DeepLevel2$stream {
+  level3: null | user.DeepLevel3$stream
+  value: int | string | bool | float | null
+}
+class user.DeepLevel3$stream {
+  data: null | string
   nested: map<string, map<string, int>>
 }
 function user.BasicClient$new() -> ? throws never {
@@ -1367,6 +1535,13 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 8388..8393: operator `Mul` cannot be applied to `int` and `bool`
   !! 8400..8405: operator `Mul` cannot be applied to `bool` and `int`
 }
+class user.MatchSuccess$stream {
+  data: null | string
+}
+class user.MatchFailure$stream {
+  reason: null | string
+}
+type user.MatchResult$stream = user.MatchSuccess$stream | user.MatchFailure$stream
 class user.OtherPoint {
   x: int
   y: int
@@ -1491,6 +1666,19 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
     a Add b : int
   }
 }
+class user.OtherPoint$stream {
+  x: null | int
+  y: null | int
+}
+class user.OtherVec$stream {
+  p: null | user.OtherPoint$stream
+  q: null | user.OtherPoint$stream
+}
+class user.OtherTriple$stream {
+  a: null | user.OtherVec$stream
+  b: null | user.OtherVec$stream
+  c: null | user.OtherVec$stream
+}
 type user.SimpleAlias = int
 type user.AliasChain = user.SimpleAlias
 type user.Name = string
@@ -1559,3 +1747,71 @@ type user.TriviaArray = int[]
 type user.TriviaParen = (int | string)[]
 type user.T = int
 type user.ExtraWhitespace = int | string | bool | float | null
+type user.SimpleAlias$stream = int
+type user.AliasChain$stream = user.SimpleAlias$stream
+type user.Name$stream = string
+type user.Role$stream = "user" | "assistant" | "system"
+type user.HttpOk$stream = 200
+type user.AlwaysTrue$stream = true
+type user.SuccessCode$stream = 200 | 201 | 204
+type user.MixedLiterals$stream = 200 | "success" | true
+type user.MaybeInt$stream = null | int
+type user.IntList$stream = int[]
+type user.Matrix$stream = int[][]
+type user.StringMap$stream = map<string, int>
+type user.ComplexMap$stream = map<string, int | string | bool>
+type user.NestedMap$stream = map<string, map<string, int[]>>
+type user.ParenUnion$stream = (int | string)[]
+type user.OptionalUnion$stream = null | int | string
+type user.Json$stream = int | float | string | bool | null | user.Json$stream[] | map<string, user.Json$stream>
+type user.IntToInt$stream = unknown
+type user.BinaryOp$stream = unknown
+type user.UnnamedParams$stream = unknown
+type user.Producer$stream = unknown
+type user.Curried$stream = unknown
+type user.ComplexFn$stream = unknown
+type user.UnionParamFn$stream = unknown
+type user.FnFactory$stream = unknown
+type user.LongUnion$stream = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima"
+type user.WideUnion$stream = int | string | bool | float | null | int[] | string[] | bool[] | map<string, int> | map<string, string>
+type user.ThisIsAnExtremelyLongTypeAliasNameThatDefinitelyExceedsLimit$stream = int | string | bool | float | null
+type user.VeryLongNamePlusLongUnion$stream = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
+type user.DeepGeneric$stream = map<string, map<string, map<string, map<string, int | string | bool | float | null>>>>
+type user.DeepFnType$stream = unknown
+type user.LongParamFn$stream = unknown
+type user.NestedParenUnion$stream = (int | string | bool | float)[]
+type user.DeepParenUnion$stream = null | (int | string | bool | float | null | int[])[]
+type user.Tree$stream = string | map<string, user.Tree$stream> | user.Tree$stream[] | map<string, map<string, user.Tree$stream | string | int | null>>
+type user.OptionalArray$stream = (null | int)[]
+type user.ArrayOptional$stream = null | int[]
+type user.DoubleOptional$stream = null | null | int
+type user.DoubleArray$stream = int[][]
+type user.ComplexPostfix$stream = (null | int | string)[][]
+type user.DeepPostfix$stream = null | (null | int | string | bool | float)[][]
+type user.Constrained$stream = int
+type user.ConstrainedLong$stream = map<string, int | string | bool>
+class user.TypeAliasSuccess$stream {
+  data: null | string
+}
+class user.TypeAliasFailure$stream {
+  reason: null | string
+}
+type user.Result$stream = user.TypeAliasSuccess$stream | user.TypeAliasFailure$stream
+type user.MaybeResult$stream = null | user.Result$stream
+type user.TriviaAlias$stream = int
+type user.TriviaAliasBlock$stream = int
+type user.TriviaUnion$stream = int | string | bool
+type user.TriviaUnionBlock$stream = int | string | bool
+type user.TriviaLongUnion$stream = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
+type user.TriviaLongUnionBlock$stream = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
+type user.TriviaGeneric$stream = map<string, int>
+type user.TriviaGenericBlock$stream = map<string, int>
+type user.TriviaDeepGeneric$stream = map<string, map<string, map<string, int | string>>>
+type user.TriviaFnType$stream = unknown
+type user.TriviaFnTypeBlock$stream = unknown
+type user.TriviaLongFnType$stream = unknown
+type user.TriviaOptional$stream = null | int
+type user.TriviaArray$stream = int[]
+type user.TriviaParen$stream = (int | string)[]
+type user.T$stream = int
+type user.ExtraWhitespace$stream = int | string | bool | float | null

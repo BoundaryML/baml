@@ -5,3 +5,6 @@ expression: "render_tir(&db, file)"
 class user.DynamicClass {
   name: string
 }
+class user.DynamicClass$stream {
+  name: null | string
+}

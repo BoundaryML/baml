@@ -14,6 +14,18 @@ class user.FieldAttributes {
 class user.ClassAttributes {
   name: string
 }
+class user.FieldAttributes$stream {
+  money: null | int @description("In USD")
+  currency: null | string @alias("currency_code")
+  name: null | string @skip
+  summary: null | string
+  details: null | string
+  state: null | string
+  multiple: null | string @description("Multiple attributes") @alias("multiple_alias")
+}
+class user.ClassAttributes$stream {
+  name: null | string
+}
 function user.GetUser(id: int) -> user.User throws never {
   baml.llm.call_llm_function<T>(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "GetUser", map { "id": id }) : user.User
 }
@@ -75,3 +87,18 @@ type user.MixedList = (int | string)[]
 type user.MixedMap = map<string, int | string>
 type user.UnionOfArrays = int[] | string[]
 type user.ReallyLongMapType = map<string, "fieopwaiwjepfoiwajpoweijf" | int | string | bool | float | int[] | string[] | map<string, int | string> | map<string, map<string, int | string>> | map<string, map<string, map<string, int | string>>> | map<string, map<string, map<string, map<string, int | string>>>>>
+class user.User$stream {
+  id: null | int
+  name: null | string
+  email: null | string
+}
+type user.Role$stream = "user" | "assistant" | "system"
+type user.OptionalRole$stream = null | "admin"
+type user.RoleList$stream = "reader"[]
+type user.OptionalRoleList$stream = null | "writer"[]
+type user.OptionalCode$stream = null | 200
+type user.OptionalFlag$stream = null | true
+type user.MixedList$stream = (int | string)[]
+type user.MixedMap$stream = map<string, int | string>
+type user.UnionOfArrays$stream = int[] | string[]
+type user.ReallyLongMapType$stream = map<string, "fieopwaiwjepfoiwajpoweijf" | int | string | bool | float | int[] | string[] | map<string, int | string> | map<string, map<string, int | string>> | map<string, map<string, map<string, int | string>>> | map<string, map<string, map<string, map<string, int | string>>>>>

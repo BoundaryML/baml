@@ -307,7 +307,7 @@ fn user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
     let _2: map<string, unknown>
 
     bb0: {
-        _2 = { const "text": copy _1 };
+        _2 = { const "text": const null };
         _0 = call const fn baml.llm.build_request(const null, const "LLMAnalyze", copy _2) -> [bb1];
     }
 
@@ -327,7 +327,7 @@ fn user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst {
     let _2: map<string, unknown>
 
     bb0: {
-        _2 = { const "text": copy _1 };
+        _2 = { const "text": const null };
         _0 = call const fn baml.llm.render_prompt(const null, const "LLMAnalyze", copy _2) -> [bb1];
     }
 

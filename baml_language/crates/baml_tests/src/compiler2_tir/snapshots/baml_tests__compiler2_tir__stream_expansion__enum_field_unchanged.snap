@@ -5,3 +5,6 @@ expression: "render_tir(&db, file)"
 class user.WithEnum {
   status: user.Status
 }
+class user.WithEnum$stream {
+  status: null | user.Status
+}

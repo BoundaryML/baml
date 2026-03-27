@@ -16,7 +16,15 @@ class user.http.Response {
   status: int
   body: string
 }
+class user.http.Response$stream {
+  status: null | int
+  body: null | string
+}
 class user.llm.Response {
   text: string
   tokens: int
+}
+class user.llm.Response$stream {
+  text: null | string
+  tokens: null | int
 }

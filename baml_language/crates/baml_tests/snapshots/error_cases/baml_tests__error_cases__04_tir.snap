@@ -31,3 +31,6 @@ function user.Broken.MixedLiteralAndTyped(x: int) -> string throws never {
         "mixed" : "mixed"
   }
 }
+class user.Broken$stream {
+  field: null | int
+}

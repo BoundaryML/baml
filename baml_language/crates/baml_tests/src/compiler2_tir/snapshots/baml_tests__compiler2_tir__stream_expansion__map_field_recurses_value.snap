@@ -9,3 +9,10 @@ class user.WithMaps {
   simple: map<string, int>
   complex: map<string, user.Inner>
 }
+class user.Inner$stream {
+  value: null | string
+}
+class user.WithMaps$stream {
+  simple: map<string, int>
+  complex: map<string, user.Inner$stream>
+}

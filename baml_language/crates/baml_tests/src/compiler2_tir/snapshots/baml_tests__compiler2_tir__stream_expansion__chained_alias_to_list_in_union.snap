@@ -7,3 +7,8 @@ type user.MyList = user.IntList
 class user.WithChainedAlias {
   data: user.MyList | string
 }
+type user.IntList$stream = int[]
+type user.MyList$stream = user.IntList$stream
+class user.WithChainedAlias$stream {
+  data: user.MyList$stream | string
+}

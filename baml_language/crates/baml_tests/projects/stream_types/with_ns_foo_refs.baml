@@ -1,0 +1,9 @@
+// Root namespace referencing ns_foo types
+
+class TopRefToNs {
+  ns_class root.foo.NsClass
+  ns_enum root.foo.NsEnum
+  ns_items root.foo.NsClass[]
+  ns_map map<string, root.foo.NsClass>
+  ns_alias root.foo.NsAlias
+}
