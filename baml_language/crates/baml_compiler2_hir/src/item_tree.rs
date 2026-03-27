@@ -54,6 +54,7 @@ pub struct FunctionParam {
 pub struct ClassField {
     pub name: Name,
     pub type_expr: Option<ast::SpannedTypeExpr>,
+    pub attributes: Vec<ast::RawAttribute>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -269,6 +270,7 @@ impl ItemTree {
             .map(|f| ClassField {
                 name: f.name.clone(),
                 type_expr: f.type_expr.clone(),
+                attributes: f.attributes.clone(),
             })
             .collect();
         self.classes.insert(

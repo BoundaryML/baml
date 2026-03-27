@@ -3,13 +3,13 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 class user.StringTorture {
-  raw1: string
-  raw2: string
-  raw3: string
-  emoji: string
-  rtl: string
-  zalgo: string
-  long: string
+  raw1: string @description(#"She said "Hello""#)
+  raw2: string @description(##"This has #"nested"# raw strings"##)
+  raw3: string @description(###"Even ##"more #"nesting"#"## here"###)
+  emoji: string @alias("🎉🎊🎈")
+  rtl: string @alias("مرحبا بالعالم")
+  zalgo: string @alias("ẗ̤̈ë̤̈ẍ̤̈ẗ̤̈")
+  long: string @alias("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 }
 class user.Level5 {
   value: string
@@ -37,5003 +37,5003 @@ function user.ComplexType() -> map<string, map<string, map<string, int[]?>>> thr
   }
 }
 class user.User1 {
-  name: string
-  email: string
+  name: string @alias("user_1_name")
+  email: string @description("Email for user 1")
   age: int
 }
 class user.User2 {
-  name: string
-  email: string
+  name: string @alias("user_2_name")
+  email: string @description("Email for user 2")
   age: int
 }
 class user.User3 {
-  name: string
-  email: string
+  name: string @alias("user_3_name")
+  email: string @description("Email for user 3")
   age: int
 }
 class user.User4 {
-  name: string
-  email: string
+  name: string @alias("user_4_name")
+  email: string @description("Email for user 4")
   age: int
 }
 class user.User5 {
-  name: string
-  email: string
+  name: string @alias("user_5_name")
+  email: string @description("Email for user 5")
   age: int
 }
 class user.User6 {
-  name: string
-  email: string
+  name: string @alias("user_6_name")
+  email: string @description("Email for user 6")
   age: int
 }
 class user.User7 {
-  name: string
-  email: string
+  name: string @alias("user_7_name")
+  email: string @description("Email for user 7")
   age: int
 }
 class user.User8 {
-  name: string
-  email: string
+  name: string @alias("user_8_name")
+  email: string @description("Email for user 8")
   age: int
 }
 class user.User9 {
-  name: string
-  email: string
+  name: string @alias("user_9_name")
+  email: string @description("Email for user 9")
   age: int
 }
 class user.User10 {
-  name: string
-  email: string
+  name: string @alias("user_10_name")
+  email: string @description("Email for user 10")
   age: int
 }
 class user.User11 {
-  name: string
-  email: string
+  name: string @alias("user_11_name")
+  email: string @description("Email for user 11")
   age: int
 }
 class user.User12 {
-  name: string
-  email: string
+  name: string @alias("user_12_name")
+  email: string @description("Email for user 12")
   age: int
 }
 class user.User13 {
-  name: string
-  email: string
+  name: string @alias("user_13_name")
+  email: string @description("Email for user 13")
   age: int
 }
 class user.User14 {
-  name: string
-  email: string
+  name: string @alias("user_14_name")
+  email: string @description("Email for user 14")
   age: int
 }
 class user.User15 {
-  name: string
-  email: string
+  name: string @alias("user_15_name")
+  email: string @description("Email for user 15")
   age: int
 }
 class user.User16 {
-  name: string
-  email: string
+  name: string @alias("user_16_name")
+  email: string @description("Email for user 16")
   age: int
 }
 class user.User17 {
-  name: string
-  email: string
+  name: string @alias("user_17_name")
+  email: string @description("Email for user 17")
   age: int
 }
 class user.User18 {
-  name: string
-  email: string
+  name: string @alias("user_18_name")
+  email: string @description("Email for user 18")
   age: int
 }
 class user.User19 {
-  name: string
-  email: string
+  name: string @alias("user_19_name")
+  email: string @description("Email for user 19")
   age: int
 }
 class user.User20 {
-  name: string
-  email: string
+  name: string @alias("user_20_name")
+  email: string @description("Email for user 20")
   age: int
 }
 class user.User21 {
-  name: string
-  email: string
+  name: string @alias("user_21_name")
+  email: string @description("Email for user 21")
   age: int
 }
 class user.User22 {
-  name: string
-  email: string
+  name: string @alias("user_22_name")
+  email: string @description("Email for user 22")
   age: int
 }
 class user.User23 {
-  name: string
-  email: string
+  name: string @alias("user_23_name")
+  email: string @description("Email for user 23")
   age: int
 }
 class user.User24 {
-  name: string
-  email: string
+  name: string @alias("user_24_name")
+  email: string @description("Email for user 24")
   age: int
 }
 class user.User25 {
-  name: string
-  email: string
+  name: string @alias("user_25_name")
+  email: string @description("Email for user 25")
   age: int
 }
 class user.User26 {
-  name: string
-  email: string
+  name: string @alias("user_26_name")
+  email: string @description("Email for user 26")
   age: int
 }
 class user.User27 {
-  name: string
-  email: string
+  name: string @alias("user_27_name")
+  email: string @description("Email for user 27")
   age: int
 }
 class user.User28 {
-  name: string
-  email: string
+  name: string @alias("user_28_name")
+  email: string @description("Email for user 28")
   age: int
 }
 class user.User29 {
-  name: string
-  email: string
+  name: string @alias("user_29_name")
+  email: string @description("Email for user 29")
   age: int
 }
 class user.User30 {
-  name: string
-  email: string
+  name: string @alias("user_30_name")
+  email: string @description("Email for user 30")
   age: int
 }
 class user.User31 {
-  name: string
-  email: string
+  name: string @alias("user_31_name")
+  email: string @description("Email for user 31")
   age: int
 }
 class user.User32 {
-  name: string
-  email: string
+  name: string @alias("user_32_name")
+  email: string @description("Email for user 32")
   age: int
 }
 class user.User33 {
-  name: string
-  email: string
+  name: string @alias("user_33_name")
+  email: string @description("Email for user 33")
   age: int
 }
 class user.User34 {
-  name: string
-  email: string
+  name: string @alias("user_34_name")
+  email: string @description("Email for user 34")
   age: int
 }
 class user.User35 {
-  name: string
-  email: string
+  name: string @alias("user_35_name")
+  email: string @description("Email for user 35")
   age: int
 }
 class user.User36 {
-  name: string
-  email: string
+  name: string @alias("user_36_name")
+  email: string @description("Email for user 36")
   age: int
 }
 class user.User37 {
-  name: string
-  email: string
+  name: string @alias("user_37_name")
+  email: string @description("Email for user 37")
   age: int
 }
 class user.User38 {
-  name: string
-  email: string
+  name: string @alias("user_38_name")
+  email: string @description("Email for user 38")
   age: int
 }
 class user.User39 {
-  name: string
-  email: string
+  name: string @alias("user_39_name")
+  email: string @description("Email for user 39")
   age: int
 }
 class user.User40 {
-  name: string
-  email: string
+  name: string @alias("user_40_name")
+  email: string @description("Email for user 40")
   age: int
 }
 class user.User41 {
-  name: string
-  email: string
+  name: string @alias("user_41_name")
+  email: string @description("Email for user 41")
   age: int
 }
 class user.User42 {
-  name: string
-  email: string
+  name: string @alias("user_42_name")
+  email: string @description("Email for user 42")
   age: int
 }
 class user.User43 {
-  name: string
-  email: string
+  name: string @alias("user_43_name")
+  email: string @description("Email for user 43")
   age: int
 }
 class user.User44 {
-  name: string
-  email: string
+  name: string @alias("user_44_name")
+  email: string @description("Email for user 44")
   age: int
 }
 class user.User45 {
-  name: string
-  email: string
+  name: string @alias("user_45_name")
+  email: string @description("Email for user 45")
   age: int
 }
 class user.User46 {
-  name: string
-  email: string
+  name: string @alias("user_46_name")
+  email: string @description("Email for user 46")
   age: int
 }
 class user.User47 {
-  name: string
-  email: string
+  name: string @alias("user_47_name")
+  email: string @description("Email for user 47")
   age: int
 }
 class user.User48 {
-  name: string
-  email: string
+  name: string @alias("user_48_name")
+  email: string @description("Email for user 48")
   age: int
 }
 class user.User49 {
-  name: string
-  email: string
+  name: string @alias("user_49_name")
+  email: string @description("Email for user 49")
   age: int
 }
 class user.User50 {
-  name: string
-  email: string
+  name: string @alias("user_50_name")
+  email: string @description("Email for user 50")
   age: int
 }
 class user.User51 {
-  name: string
-  email: string
+  name: string @alias("user_51_name")
+  email: string @description("Email for user 51")
   age: int
 }
 class user.User52 {
-  name: string
-  email: string
+  name: string @alias("user_52_name")
+  email: string @description("Email for user 52")
   age: int
 }
 class user.User53 {
-  name: string
-  email: string
+  name: string @alias("user_53_name")
+  email: string @description("Email for user 53")
   age: int
 }
 class user.User54 {
-  name: string
-  email: string
+  name: string @alias("user_54_name")
+  email: string @description("Email for user 54")
   age: int
 }
 class user.User55 {
-  name: string
-  email: string
+  name: string @alias("user_55_name")
+  email: string @description("Email for user 55")
   age: int
 }
 class user.User56 {
-  name: string
-  email: string
+  name: string @alias("user_56_name")
+  email: string @description("Email for user 56")
   age: int
 }
 class user.User57 {
-  name: string
-  email: string
+  name: string @alias("user_57_name")
+  email: string @description("Email for user 57")
   age: int
 }
 class user.User58 {
-  name: string
-  email: string
+  name: string @alias("user_58_name")
+  email: string @description("Email for user 58")
   age: int
 }
 class user.User59 {
-  name: string
-  email: string
+  name: string @alias("user_59_name")
+  email: string @description("Email for user 59")
   age: int
 }
 class user.User60 {
-  name: string
-  email: string
+  name: string @alias("user_60_name")
+  email: string @description("Email for user 60")
   age: int
 }
 class user.User61 {
-  name: string
-  email: string
+  name: string @alias("user_61_name")
+  email: string @description("Email for user 61")
   age: int
 }
 class user.User62 {
-  name: string
-  email: string
+  name: string @alias("user_62_name")
+  email: string @description("Email for user 62")
   age: int
 }
 class user.User63 {
-  name: string
-  email: string
+  name: string @alias("user_63_name")
+  email: string @description("Email for user 63")
   age: int
 }
 class user.User64 {
-  name: string
-  email: string
+  name: string @alias("user_64_name")
+  email: string @description("Email for user 64")
   age: int
 }
 class user.User65 {
-  name: string
-  email: string
+  name: string @alias("user_65_name")
+  email: string @description("Email for user 65")
   age: int
 }
 class user.User66 {
-  name: string
-  email: string
+  name: string @alias("user_66_name")
+  email: string @description("Email for user 66")
   age: int
 }
 class user.User67 {
-  name: string
-  email: string
+  name: string @alias("user_67_name")
+  email: string @description("Email for user 67")
   age: int
 }
 class user.User68 {
-  name: string
-  email: string
+  name: string @alias("user_68_name")
+  email: string @description("Email for user 68")
   age: int
 }
 class user.User69 {
-  name: string
-  email: string
+  name: string @alias("user_69_name")
+  email: string @description("Email for user 69")
   age: int
 }
 class user.User70 {
-  name: string
-  email: string
+  name: string @alias("user_70_name")
+  email: string @description("Email for user 70")
   age: int
 }
 class user.User71 {
-  name: string
-  email: string
+  name: string @alias("user_71_name")
+  email: string @description("Email for user 71")
   age: int
 }
 class user.User72 {
-  name: string
-  email: string
+  name: string @alias("user_72_name")
+  email: string @description("Email for user 72")
   age: int
 }
 class user.User73 {
-  name: string
-  email: string
+  name: string @alias("user_73_name")
+  email: string @description("Email for user 73")
   age: int
 }
 class user.User74 {
-  name: string
-  email: string
+  name: string @alias("user_74_name")
+  email: string @description("Email for user 74")
   age: int
 }
 class user.User75 {
-  name: string
-  email: string
+  name: string @alias("user_75_name")
+  email: string @description("Email for user 75")
   age: int
 }
 class user.User76 {
-  name: string
-  email: string
+  name: string @alias("user_76_name")
+  email: string @description("Email for user 76")
   age: int
 }
 class user.User77 {
-  name: string
-  email: string
+  name: string @alias("user_77_name")
+  email: string @description("Email for user 77")
   age: int
 }
 class user.User78 {
-  name: string
-  email: string
+  name: string @alias("user_78_name")
+  email: string @description("Email for user 78")
   age: int
 }
 class user.User79 {
-  name: string
-  email: string
+  name: string @alias("user_79_name")
+  email: string @description("Email for user 79")
   age: int
 }
 class user.User80 {
-  name: string
-  email: string
+  name: string @alias("user_80_name")
+  email: string @description("Email for user 80")
   age: int
 }
 class user.User81 {
-  name: string
-  email: string
+  name: string @alias("user_81_name")
+  email: string @description("Email for user 81")
   age: int
 }
 class user.User82 {
-  name: string
-  email: string
+  name: string @alias("user_82_name")
+  email: string @description("Email for user 82")
   age: int
 }
 class user.User83 {
-  name: string
-  email: string
+  name: string @alias("user_83_name")
+  email: string @description("Email for user 83")
   age: int
 }
 class user.User84 {
-  name: string
-  email: string
+  name: string @alias("user_84_name")
+  email: string @description("Email for user 84")
   age: int
 }
 class user.User85 {
-  name: string
-  email: string
+  name: string @alias("user_85_name")
+  email: string @description("Email for user 85")
   age: int
 }
 class user.User86 {
-  name: string
-  email: string
+  name: string @alias("user_86_name")
+  email: string @description("Email for user 86")
   age: int
 }
 class user.User87 {
-  name: string
-  email: string
+  name: string @alias("user_87_name")
+  email: string @description("Email for user 87")
   age: int
 }
 class user.User88 {
-  name: string
-  email: string
+  name: string @alias("user_88_name")
+  email: string @description("Email for user 88")
   age: int
 }
 class user.User89 {
-  name: string
-  email: string
+  name: string @alias("user_89_name")
+  email: string @description("Email for user 89")
   age: int
 }
 class user.User90 {
-  name: string
-  email: string
+  name: string @alias("user_90_name")
+  email: string @description("Email for user 90")
   age: int
 }
 class user.User91 {
-  name: string
-  email: string
+  name: string @alias("user_91_name")
+  email: string @description("Email for user 91")
   age: int
 }
 class user.User92 {
-  name: string
-  email: string
+  name: string @alias("user_92_name")
+  email: string @description("Email for user 92")
   age: int
 }
 class user.User93 {
-  name: string
-  email: string
+  name: string @alias("user_93_name")
+  email: string @description("Email for user 93")
   age: int
 }
 class user.User94 {
-  name: string
-  email: string
+  name: string @alias("user_94_name")
+  email: string @description("Email for user 94")
   age: int
 }
 class user.User95 {
-  name: string
-  email: string
+  name: string @alias("user_95_name")
+  email: string @description("Email for user 95")
   age: int
 }
 class user.User96 {
-  name: string
-  email: string
+  name: string @alias("user_96_name")
+  email: string @description("Email for user 96")
   age: int
 }
 class user.User97 {
-  name: string
-  email: string
+  name: string @alias("user_97_name")
+  email: string @description("Email for user 97")
   age: int
 }
 class user.User98 {
-  name: string
-  email: string
+  name: string @alias("user_98_name")
+  email: string @description("Email for user 98")
   age: int
 }
 class user.User99 {
-  name: string
-  email: string
+  name: string @alias("user_99_name")
+  email: string @description("Email for user 99")
   age: int
 }
 class user.User100 {
-  name: string
-  email: string
+  name: string @alias("user_100_name")
+  email: string @description("Email for user 100")
   age: int
 }
 class user.User101 {
-  name: string
-  email: string
+  name: string @alias("user_101_name")
+  email: string @description("Email for user 101")
   age: int
 }
 class user.User102 {
-  name: string
-  email: string
+  name: string @alias("user_102_name")
+  email: string @description("Email for user 102")
   age: int
 }
 class user.User103 {
-  name: string
-  email: string
+  name: string @alias("user_103_name")
+  email: string @description("Email for user 103")
   age: int
 }
 class user.User104 {
-  name: string
-  email: string
+  name: string @alias("user_104_name")
+  email: string @description("Email for user 104")
   age: int
 }
 class user.User105 {
-  name: string
-  email: string
+  name: string @alias("user_105_name")
+  email: string @description("Email for user 105")
   age: int
 }
 class user.User106 {
-  name: string
-  email: string
+  name: string @alias("user_106_name")
+  email: string @description("Email for user 106")
   age: int
 }
 class user.User107 {
-  name: string
-  email: string
+  name: string @alias("user_107_name")
+  email: string @description("Email for user 107")
   age: int
 }
 class user.User108 {
-  name: string
-  email: string
+  name: string @alias("user_108_name")
+  email: string @description("Email for user 108")
   age: int
 }
 class user.User109 {
-  name: string
-  email: string
+  name: string @alias("user_109_name")
+  email: string @description("Email for user 109")
   age: int
 }
 class user.User110 {
-  name: string
-  email: string
+  name: string @alias("user_110_name")
+  email: string @description("Email for user 110")
   age: int
 }
 class user.User111 {
-  name: string
-  email: string
+  name: string @alias("user_111_name")
+  email: string @description("Email for user 111")
   age: int
 }
 class user.User112 {
-  name: string
-  email: string
+  name: string @alias("user_112_name")
+  email: string @description("Email for user 112")
   age: int
 }
 class user.User113 {
-  name: string
-  email: string
+  name: string @alias("user_113_name")
+  email: string @description("Email for user 113")
   age: int
 }
 class user.User114 {
-  name: string
-  email: string
+  name: string @alias("user_114_name")
+  email: string @description("Email for user 114")
   age: int
 }
 class user.User115 {
-  name: string
-  email: string
+  name: string @alias("user_115_name")
+  email: string @description("Email for user 115")
   age: int
 }
 class user.User116 {
-  name: string
-  email: string
+  name: string @alias("user_116_name")
+  email: string @description("Email for user 116")
   age: int
 }
 class user.User117 {
-  name: string
-  email: string
+  name: string @alias("user_117_name")
+  email: string @description("Email for user 117")
   age: int
 }
 class user.User118 {
-  name: string
-  email: string
+  name: string @alias("user_118_name")
+  email: string @description("Email for user 118")
   age: int
 }
 class user.User119 {
-  name: string
-  email: string
+  name: string @alias("user_119_name")
+  email: string @description("Email for user 119")
   age: int
 }
 class user.User120 {
-  name: string
-  email: string
+  name: string @alias("user_120_name")
+  email: string @description("Email for user 120")
   age: int
 }
 class user.User121 {
-  name: string
-  email: string
+  name: string @alias("user_121_name")
+  email: string @description("Email for user 121")
   age: int
 }
 class user.User122 {
-  name: string
-  email: string
+  name: string @alias("user_122_name")
+  email: string @description("Email for user 122")
   age: int
 }
 class user.User123 {
-  name: string
-  email: string
+  name: string @alias("user_123_name")
+  email: string @description("Email for user 123")
   age: int
 }
 class user.User124 {
-  name: string
-  email: string
+  name: string @alias("user_124_name")
+  email: string @description("Email for user 124")
   age: int
 }
 class user.User125 {
-  name: string
-  email: string
+  name: string @alias("user_125_name")
+  email: string @description("Email for user 125")
   age: int
 }
 class user.User126 {
-  name: string
-  email: string
+  name: string @alias("user_126_name")
+  email: string @description("Email for user 126")
   age: int
 }
 class user.User127 {
-  name: string
-  email: string
+  name: string @alias("user_127_name")
+  email: string @description("Email for user 127")
   age: int
 }
 class user.User128 {
-  name: string
-  email: string
+  name: string @alias("user_128_name")
+  email: string @description("Email for user 128")
   age: int
 }
 class user.User129 {
-  name: string
-  email: string
+  name: string @alias("user_129_name")
+  email: string @description("Email for user 129")
   age: int
 }
 class user.User130 {
-  name: string
-  email: string
+  name: string @alias("user_130_name")
+  email: string @description("Email for user 130")
   age: int
 }
 class user.User131 {
-  name: string
-  email: string
+  name: string @alias("user_131_name")
+  email: string @description("Email for user 131")
   age: int
 }
 class user.User132 {
-  name: string
-  email: string
+  name: string @alias("user_132_name")
+  email: string @description("Email for user 132")
   age: int
 }
 class user.User133 {
-  name: string
-  email: string
+  name: string @alias("user_133_name")
+  email: string @description("Email for user 133")
   age: int
 }
 class user.User134 {
-  name: string
-  email: string
+  name: string @alias("user_134_name")
+  email: string @description("Email for user 134")
   age: int
 }
 class user.User135 {
-  name: string
-  email: string
+  name: string @alias("user_135_name")
+  email: string @description("Email for user 135")
   age: int
 }
 class user.User136 {
-  name: string
-  email: string
+  name: string @alias("user_136_name")
+  email: string @description("Email for user 136")
   age: int
 }
 class user.User137 {
-  name: string
-  email: string
+  name: string @alias("user_137_name")
+  email: string @description("Email for user 137")
   age: int
 }
 class user.User138 {
-  name: string
-  email: string
+  name: string @alias("user_138_name")
+  email: string @description("Email for user 138")
   age: int
 }
 class user.User139 {
-  name: string
-  email: string
+  name: string @alias("user_139_name")
+  email: string @description("Email for user 139")
   age: int
 }
 class user.User140 {
-  name: string
-  email: string
+  name: string @alias("user_140_name")
+  email: string @description("Email for user 140")
   age: int
 }
 class user.User141 {
-  name: string
-  email: string
+  name: string @alias("user_141_name")
+  email: string @description("Email for user 141")
   age: int
 }
 class user.User142 {
-  name: string
-  email: string
+  name: string @alias("user_142_name")
+  email: string @description("Email for user 142")
   age: int
 }
 class user.User143 {
-  name: string
-  email: string
+  name: string @alias("user_143_name")
+  email: string @description("Email for user 143")
   age: int
 }
 class user.User144 {
-  name: string
-  email: string
+  name: string @alias("user_144_name")
+  email: string @description("Email for user 144")
   age: int
 }
 class user.User145 {
-  name: string
-  email: string
+  name: string @alias("user_145_name")
+  email: string @description("Email for user 145")
   age: int
 }
 class user.User146 {
-  name: string
-  email: string
+  name: string @alias("user_146_name")
+  email: string @description("Email for user 146")
   age: int
 }
 class user.User147 {
-  name: string
-  email: string
+  name: string @alias("user_147_name")
+  email: string @description("Email for user 147")
   age: int
 }
 class user.User148 {
-  name: string
-  email: string
+  name: string @alias("user_148_name")
+  email: string @description("Email for user 148")
   age: int
 }
 class user.User149 {
-  name: string
-  email: string
+  name: string @alias("user_149_name")
+  email: string @description("Email for user 149")
   age: int
 }
 class user.User150 {
-  name: string
-  email: string
+  name: string @alias("user_150_name")
+  email: string @description("Email for user 150")
   age: int
 }
 class user.User151 {
-  name: string
-  email: string
+  name: string @alias("user_151_name")
+  email: string @description("Email for user 151")
   age: int
 }
 class user.User152 {
-  name: string
-  email: string
+  name: string @alias("user_152_name")
+  email: string @description("Email for user 152")
   age: int
 }
 class user.User153 {
-  name: string
-  email: string
+  name: string @alias("user_153_name")
+  email: string @description("Email for user 153")
   age: int
 }
 class user.User154 {
-  name: string
-  email: string
+  name: string @alias("user_154_name")
+  email: string @description("Email for user 154")
   age: int
 }
 class user.User155 {
-  name: string
-  email: string
+  name: string @alias("user_155_name")
+  email: string @description("Email for user 155")
   age: int
 }
 class user.User156 {
-  name: string
-  email: string
+  name: string @alias("user_156_name")
+  email: string @description("Email for user 156")
   age: int
 }
 class user.User157 {
-  name: string
-  email: string
+  name: string @alias("user_157_name")
+  email: string @description("Email for user 157")
   age: int
 }
 class user.User158 {
-  name: string
-  email: string
+  name: string @alias("user_158_name")
+  email: string @description("Email for user 158")
   age: int
 }
 class user.User159 {
-  name: string
-  email: string
+  name: string @alias("user_159_name")
+  email: string @description("Email for user 159")
   age: int
 }
 class user.User160 {
-  name: string
-  email: string
+  name: string @alias("user_160_name")
+  email: string @description("Email for user 160")
   age: int
 }
 class user.User161 {
-  name: string
-  email: string
+  name: string @alias("user_161_name")
+  email: string @description("Email for user 161")
   age: int
 }
 class user.User162 {
-  name: string
-  email: string
+  name: string @alias("user_162_name")
+  email: string @description("Email for user 162")
   age: int
 }
 class user.User163 {
-  name: string
-  email: string
+  name: string @alias("user_163_name")
+  email: string @description("Email for user 163")
   age: int
 }
 class user.User164 {
-  name: string
-  email: string
+  name: string @alias("user_164_name")
+  email: string @description("Email for user 164")
   age: int
 }
 class user.User165 {
-  name: string
-  email: string
+  name: string @alias("user_165_name")
+  email: string @description("Email for user 165")
   age: int
 }
 class user.User166 {
-  name: string
-  email: string
+  name: string @alias("user_166_name")
+  email: string @description("Email for user 166")
   age: int
 }
 class user.User167 {
-  name: string
-  email: string
+  name: string @alias("user_167_name")
+  email: string @description("Email for user 167")
   age: int
 }
 class user.User168 {
-  name: string
-  email: string
+  name: string @alias("user_168_name")
+  email: string @description("Email for user 168")
   age: int
 }
 class user.User169 {
-  name: string
-  email: string
+  name: string @alias("user_169_name")
+  email: string @description("Email for user 169")
   age: int
 }
 class user.User170 {
-  name: string
-  email: string
+  name: string @alias("user_170_name")
+  email: string @description("Email for user 170")
   age: int
 }
 class user.User171 {
-  name: string
-  email: string
+  name: string @alias("user_171_name")
+  email: string @description("Email for user 171")
   age: int
 }
 class user.User172 {
-  name: string
-  email: string
+  name: string @alias("user_172_name")
+  email: string @description("Email for user 172")
   age: int
 }
 class user.User173 {
-  name: string
-  email: string
+  name: string @alias("user_173_name")
+  email: string @description("Email for user 173")
   age: int
 }
 class user.User174 {
-  name: string
-  email: string
+  name: string @alias("user_174_name")
+  email: string @description("Email for user 174")
   age: int
 }
 class user.User175 {
-  name: string
-  email: string
+  name: string @alias("user_175_name")
+  email: string @description("Email for user 175")
   age: int
 }
 class user.User176 {
-  name: string
-  email: string
+  name: string @alias("user_176_name")
+  email: string @description("Email for user 176")
   age: int
 }
 class user.User177 {
-  name: string
-  email: string
+  name: string @alias("user_177_name")
+  email: string @description("Email for user 177")
   age: int
 }
 class user.User178 {
-  name: string
-  email: string
+  name: string @alias("user_178_name")
+  email: string @description("Email for user 178")
   age: int
 }
 class user.User179 {
-  name: string
-  email: string
+  name: string @alias("user_179_name")
+  email: string @description("Email for user 179")
   age: int
 }
 class user.User180 {
-  name: string
-  email: string
+  name: string @alias("user_180_name")
+  email: string @description("Email for user 180")
   age: int
 }
 class user.User181 {
-  name: string
-  email: string
+  name: string @alias("user_181_name")
+  email: string @description("Email for user 181")
   age: int
 }
 class user.User182 {
-  name: string
-  email: string
+  name: string @alias("user_182_name")
+  email: string @description("Email for user 182")
   age: int
 }
 class user.User183 {
-  name: string
-  email: string
+  name: string @alias("user_183_name")
+  email: string @description("Email for user 183")
   age: int
 }
 class user.User184 {
-  name: string
-  email: string
+  name: string @alias("user_184_name")
+  email: string @description("Email for user 184")
   age: int
 }
 class user.User185 {
-  name: string
-  email: string
+  name: string @alias("user_185_name")
+  email: string @description("Email for user 185")
   age: int
 }
 class user.User186 {
-  name: string
-  email: string
+  name: string @alias("user_186_name")
+  email: string @description("Email for user 186")
   age: int
 }
 class user.User187 {
-  name: string
-  email: string
+  name: string @alias("user_187_name")
+  email: string @description("Email for user 187")
   age: int
 }
 class user.User188 {
-  name: string
-  email: string
+  name: string @alias("user_188_name")
+  email: string @description("Email for user 188")
   age: int
 }
 class user.User189 {
-  name: string
-  email: string
+  name: string @alias("user_189_name")
+  email: string @description("Email for user 189")
   age: int
 }
 class user.User190 {
-  name: string
-  email: string
+  name: string @alias("user_190_name")
+  email: string @description("Email for user 190")
   age: int
 }
 class user.User191 {
-  name: string
-  email: string
+  name: string @alias("user_191_name")
+  email: string @description("Email for user 191")
   age: int
 }
 class user.User192 {
-  name: string
-  email: string
+  name: string @alias("user_192_name")
+  email: string @description("Email for user 192")
   age: int
 }
 class user.User193 {
-  name: string
-  email: string
+  name: string @alias("user_193_name")
+  email: string @description("Email for user 193")
   age: int
 }
 class user.User194 {
-  name: string
-  email: string
+  name: string @alias("user_194_name")
+  email: string @description("Email for user 194")
   age: int
 }
 class user.User195 {
-  name: string
-  email: string
+  name: string @alias("user_195_name")
+  email: string @description("Email for user 195")
   age: int
 }
 class user.User196 {
-  name: string
-  email: string
+  name: string @alias("user_196_name")
+  email: string @description("Email for user 196")
   age: int
 }
 class user.User197 {
-  name: string
-  email: string
+  name: string @alias("user_197_name")
+  email: string @description("Email for user 197")
   age: int
 }
 class user.User198 {
-  name: string
-  email: string
+  name: string @alias("user_198_name")
+  email: string @description("Email for user 198")
   age: int
 }
 class user.User199 {
-  name: string
-  email: string
+  name: string @alias("user_199_name")
+  email: string @description("Email for user 199")
   age: int
 }
 class user.User200 {
-  name: string
-  email: string
+  name: string @alias("user_200_name")
+  email: string @description("Email for user 200")
   age: int
 }
 class user.User201 {
-  name: string
-  email: string
+  name: string @alias("user_201_name")
+  email: string @description("Email for user 201")
   age: int
 }
 class user.User202 {
-  name: string
-  email: string
+  name: string @alias("user_202_name")
+  email: string @description("Email for user 202")
   age: int
 }
 class user.User203 {
-  name: string
-  email: string
+  name: string @alias("user_203_name")
+  email: string @description("Email for user 203")
   age: int
 }
 class user.User204 {
-  name: string
-  email: string
+  name: string @alias("user_204_name")
+  email: string @description("Email for user 204")
   age: int
 }
 class user.User205 {
-  name: string
-  email: string
+  name: string @alias("user_205_name")
+  email: string @description("Email for user 205")
   age: int
 }
 class user.User206 {
-  name: string
-  email: string
+  name: string @alias("user_206_name")
+  email: string @description("Email for user 206")
   age: int
 }
 class user.User207 {
-  name: string
-  email: string
+  name: string @alias("user_207_name")
+  email: string @description("Email for user 207")
   age: int
 }
 class user.User208 {
-  name: string
-  email: string
+  name: string @alias("user_208_name")
+  email: string @description("Email for user 208")
   age: int
 }
 class user.User209 {
-  name: string
-  email: string
+  name: string @alias("user_209_name")
+  email: string @description("Email for user 209")
   age: int
 }
 class user.User210 {
-  name: string
-  email: string
+  name: string @alias("user_210_name")
+  email: string @description("Email for user 210")
   age: int
 }
 class user.User211 {
-  name: string
-  email: string
+  name: string @alias("user_211_name")
+  email: string @description("Email for user 211")
   age: int
 }
 class user.User212 {
-  name: string
-  email: string
+  name: string @alias("user_212_name")
+  email: string @description("Email for user 212")
   age: int
 }
 class user.User213 {
-  name: string
-  email: string
+  name: string @alias("user_213_name")
+  email: string @description("Email for user 213")
   age: int
 }
 class user.User214 {
-  name: string
-  email: string
+  name: string @alias("user_214_name")
+  email: string @description("Email for user 214")
   age: int
 }
 class user.User215 {
-  name: string
-  email: string
+  name: string @alias("user_215_name")
+  email: string @description("Email for user 215")
   age: int
 }
 class user.User216 {
-  name: string
-  email: string
+  name: string @alias("user_216_name")
+  email: string @description("Email for user 216")
   age: int
 }
 class user.User217 {
-  name: string
-  email: string
+  name: string @alias("user_217_name")
+  email: string @description("Email for user 217")
   age: int
 }
 class user.User218 {
-  name: string
-  email: string
+  name: string @alias("user_218_name")
+  email: string @description("Email for user 218")
   age: int
 }
 class user.User219 {
-  name: string
-  email: string
+  name: string @alias("user_219_name")
+  email: string @description("Email for user 219")
   age: int
 }
 class user.User220 {
-  name: string
-  email: string
+  name: string @alias("user_220_name")
+  email: string @description("Email for user 220")
   age: int
 }
 class user.User221 {
-  name: string
-  email: string
+  name: string @alias("user_221_name")
+  email: string @description("Email for user 221")
   age: int
 }
 class user.User222 {
-  name: string
-  email: string
+  name: string @alias("user_222_name")
+  email: string @description("Email for user 222")
   age: int
 }
 class user.User223 {
-  name: string
-  email: string
+  name: string @alias("user_223_name")
+  email: string @description("Email for user 223")
   age: int
 }
 class user.User224 {
-  name: string
-  email: string
+  name: string @alias("user_224_name")
+  email: string @description("Email for user 224")
   age: int
 }
 class user.User225 {
-  name: string
-  email: string
+  name: string @alias("user_225_name")
+  email: string @description("Email for user 225")
   age: int
 }
 class user.User226 {
-  name: string
-  email: string
+  name: string @alias("user_226_name")
+  email: string @description("Email for user 226")
   age: int
 }
 class user.User227 {
-  name: string
-  email: string
+  name: string @alias("user_227_name")
+  email: string @description("Email for user 227")
   age: int
 }
 class user.User228 {
-  name: string
-  email: string
+  name: string @alias("user_228_name")
+  email: string @description("Email for user 228")
   age: int
 }
 class user.User229 {
-  name: string
-  email: string
+  name: string @alias("user_229_name")
+  email: string @description("Email for user 229")
   age: int
 }
 class user.User230 {
-  name: string
-  email: string
+  name: string @alias("user_230_name")
+  email: string @description("Email for user 230")
   age: int
 }
 class user.User231 {
-  name: string
-  email: string
+  name: string @alias("user_231_name")
+  email: string @description("Email for user 231")
   age: int
 }
 class user.User232 {
-  name: string
-  email: string
+  name: string @alias("user_232_name")
+  email: string @description("Email for user 232")
   age: int
 }
 class user.User233 {
-  name: string
-  email: string
+  name: string @alias("user_233_name")
+  email: string @description("Email for user 233")
   age: int
 }
 class user.User234 {
-  name: string
-  email: string
+  name: string @alias("user_234_name")
+  email: string @description("Email for user 234")
   age: int
 }
 class user.User235 {
-  name: string
-  email: string
+  name: string @alias("user_235_name")
+  email: string @description("Email for user 235")
   age: int
 }
 class user.User236 {
-  name: string
-  email: string
+  name: string @alias("user_236_name")
+  email: string @description("Email for user 236")
   age: int
 }
 class user.User237 {
-  name: string
-  email: string
+  name: string @alias("user_237_name")
+  email: string @description("Email for user 237")
   age: int
 }
 class user.User238 {
-  name: string
-  email: string
+  name: string @alias("user_238_name")
+  email: string @description("Email for user 238")
   age: int
 }
 class user.User239 {
-  name: string
-  email: string
+  name: string @alias("user_239_name")
+  email: string @description("Email for user 239")
   age: int
 }
 class user.User240 {
-  name: string
-  email: string
+  name: string @alias("user_240_name")
+  email: string @description("Email for user 240")
   age: int
 }
 class user.User241 {
-  name: string
-  email: string
+  name: string @alias("user_241_name")
+  email: string @description("Email for user 241")
   age: int
 }
 class user.User242 {
-  name: string
-  email: string
+  name: string @alias("user_242_name")
+  email: string @description("Email for user 242")
   age: int
 }
 class user.User243 {
-  name: string
-  email: string
+  name: string @alias("user_243_name")
+  email: string @description("Email for user 243")
   age: int
 }
 class user.User244 {
-  name: string
-  email: string
+  name: string @alias("user_244_name")
+  email: string @description("Email for user 244")
   age: int
 }
 class user.User245 {
-  name: string
-  email: string
+  name: string @alias("user_245_name")
+  email: string @description("Email for user 245")
   age: int
 }
 class user.User246 {
-  name: string
-  email: string
+  name: string @alias("user_246_name")
+  email: string @description("Email for user 246")
   age: int
 }
 class user.User247 {
-  name: string
-  email: string
+  name: string @alias("user_247_name")
+  email: string @description("Email for user 247")
   age: int
 }
 class user.User248 {
-  name: string
-  email: string
+  name: string @alias("user_248_name")
+  email: string @description("Email for user 248")
   age: int
 }
 class user.User249 {
-  name: string
-  email: string
+  name: string @alias("user_249_name")
+  email: string @description("Email for user 249")
   age: int
 }
 class user.User250 {
-  name: string
-  email: string
+  name: string @alias("user_250_name")
+  email: string @description("Email for user 250")
   age: int
 }
 class user.User251 {
-  name: string
-  email: string
+  name: string @alias("user_251_name")
+  email: string @description("Email for user 251")
   age: int
 }
 class user.User252 {
-  name: string
-  email: string
+  name: string @alias("user_252_name")
+  email: string @description("Email for user 252")
   age: int
 }
 class user.User253 {
-  name: string
-  email: string
+  name: string @alias("user_253_name")
+  email: string @description("Email for user 253")
   age: int
 }
 class user.User254 {
-  name: string
-  email: string
+  name: string @alias("user_254_name")
+  email: string @description("Email for user 254")
   age: int
 }
 class user.User255 {
-  name: string
-  email: string
+  name: string @alias("user_255_name")
+  email: string @description("Email for user 255")
   age: int
 }
 class user.User256 {
-  name: string
-  email: string
+  name: string @alias("user_256_name")
+  email: string @description("Email for user 256")
   age: int
 }
 class user.User257 {
-  name: string
-  email: string
+  name: string @alias("user_257_name")
+  email: string @description("Email for user 257")
   age: int
 }
 class user.User258 {
-  name: string
-  email: string
+  name: string @alias("user_258_name")
+  email: string @description("Email for user 258")
   age: int
 }
 class user.User259 {
-  name: string
-  email: string
+  name: string @alias("user_259_name")
+  email: string @description("Email for user 259")
   age: int
 }
 class user.User260 {
-  name: string
-  email: string
+  name: string @alias("user_260_name")
+  email: string @description("Email for user 260")
   age: int
 }
 class user.User261 {
-  name: string
-  email: string
+  name: string @alias("user_261_name")
+  email: string @description("Email for user 261")
   age: int
 }
 class user.User262 {
-  name: string
-  email: string
+  name: string @alias("user_262_name")
+  email: string @description("Email for user 262")
   age: int
 }
 class user.User263 {
-  name: string
-  email: string
+  name: string @alias("user_263_name")
+  email: string @description("Email for user 263")
   age: int
 }
 class user.User264 {
-  name: string
-  email: string
+  name: string @alias("user_264_name")
+  email: string @description("Email for user 264")
   age: int
 }
 class user.User265 {
-  name: string
-  email: string
+  name: string @alias("user_265_name")
+  email: string @description("Email for user 265")
   age: int
 }
 class user.User266 {
-  name: string
-  email: string
+  name: string @alias("user_266_name")
+  email: string @description("Email for user 266")
   age: int
 }
 class user.User267 {
-  name: string
-  email: string
+  name: string @alias("user_267_name")
+  email: string @description("Email for user 267")
   age: int
 }
 class user.User268 {
-  name: string
-  email: string
+  name: string @alias("user_268_name")
+  email: string @description("Email for user 268")
   age: int
 }
 class user.User269 {
-  name: string
-  email: string
+  name: string @alias("user_269_name")
+  email: string @description("Email for user 269")
   age: int
 }
 class user.User270 {
-  name: string
-  email: string
+  name: string @alias("user_270_name")
+  email: string @description("Email for user 270")
   age: int
 }
 class user.User271 {
-  name: string
-  email: string
+  name: string @alias("user_271_name")
+  email: string @description("Email for user 271")
   age: int
 }
 class user.User272 {
-  name: string
-  email: string
+  name: string @alias("user_272_name")
+  email: string @description("Email for user 272")
   age: int
 }
 class user.User273 {
-  name: string
-  email: string
+  name: string @alias("user_273_name")
+  email: string @description("Email for user 273")
   age: int
 }
 class user.User274 {
-  name: string
-  email: string
+  name: string @alias("user_274_name")
+  email: string @description("Email for user 274")
   age: int
 }
 class user.User275 {
-  name: string
-  email: string
+  name: string @alias("user_275_name")
+  email: string @description("Email for user 275")
   age: int
 }
 class user.User276 {
-  name: string
-  email: string
+  name: string @alias("user_276_name")
+  email: string @description("Email for user 276")
   age: int
 }
 class user.User277 {
-  name: string
-  email: string
+  name: string @alias("user_277_name")
+  email: string @description("Email for user 277")
   age: int
 }
 class user.User278 {
-  name: string
-  email: string
+  name: string @alias("user_278_name")
+  email: string @description("Email for user 278")
   age: int
 }
 class user.User279 {
-  name: string
-  email: string
+  name: string @alias("user_279_name")
+  email: string @description("Email for user 279")
   age: int
 }
 class user.User280 {
-  name: string
-  email: string
+  name: string @alias("user_280_name")
+  email: string @description("Email for user 280")
   age: int
 }
 class user.User281 {
-  name: string
-  email: string
+  name: string @alias("user_281_name")
+  email: string @description("Email for user 281")
   age: int
 }
 class user.User282 {
-  name: string
-  email: string
+  name: string @alias("user_282_name")
+  email: string @description("Email for user 282")
   age: int
 }
 class user.User283 {
-  name: string
-  email: string
+  name: string @alias("user_283_name")
+  email: string @description("Email for user 283")
   age: int
 }
 class user.User284 {
-  name: string
-  email: string
+  name: string @alias("user_284_name")
+  email: string @description("Email for user 284")
   age: int
 }
 class user.User285 {
-  name: string
-  email: string
+  name: string @alias("user_285_name")
+  email: string @description("Email for user 285")
   age: int
 }
 class user.User286 {
-  name: string
-  email: string
+  name: string @alias("user_286_name")
+  email: string @description("Email for user 286")
   age: int
 }
 class user.User287 {
-  name: string
-  email: string
+  name: string @alias("user_287_name")
+  email: string @description("Email for user 287")
   age: int
 }
 class user.User288 {
-  name: string
-  email: string
+  name: string @alias("user_288_name")
+  email: string @description("Email for user 288")
   age: int
 }
 class user.User289 {
-  name: string
-  email: string
+  name: string @alias("user_289_name")
+  email: string @description("Email for user 289")
   age: int
 }
 class user.User290 {
-  name: string
-  email: string
+  name: string @alias("user_290_name")
+  email: string @description("Email for user 290")
   age: int
 }
 class user.User291 {
-  name: string
-  email: string
+  name: string @alias("user_291_name")
+  email: string @description("Email for user 291")
   age: int
 }
 class user.User292 {
-  name: string
-  email: string
+  name: string @alias("user_292_name")
+  email: string @description("Email for user 292")
   age: int
 }
 class user.User293 {
-  name: string
-  email: string
+  name: string @alias("user_293_name")
+  email: string @description("Email for user 293")
   age: int
 }
 class user.User294 {
-  name: string
-  email: string
+  name: string @alias("user_294_name")
+  email: string @description("Email for user 294")
   age: int
 }
 class user.User295 {
-  name: string
-  email: string
+  name: string @alias("user_295_name")
+  email: string @description("Email for user 295")
   age: int
 }
 class user.User296 {
-  name: string
-  email: string
+  name: string @alias("user_296_name")
+  email: string @description("Email for user 296")
   age: int
 }
 class user.User297 {
-  name: string
-  email: string
+  name: string @alias("user_297_name")
+  email: string @description("Email for user 297")
   age: int
 }
 class user.User298 {
-  name: string
-  email: string
+  name: string @alias("user_298_name")
+  email: string @description("Email for user 298")
   age: int
 }
 class user.User299 {
-  name: string
-  email: string
+  name: string @alias("user_299_name")
+  email: string @description("Email for user 299")
   age: int
 }
 class user.User300 {
-  name: string
-  email: string
+  name: string @alias("user_300_name")
+  email: string @description("Email for user 300")
   age: int
 }
 class user.User301 {
-  name: string
-  email: string
+  name: string @alias("user_301_name")
+  email: string @description("Email for user 301")
   age: int
 }
 class user.User302 {
-  name: string
-  email: string
+  name: string @alias("user_302_name")
+  email: string @description("Email for user 302")
   age: int
 }
 class user.User303 {
-  name: string
-  email: string
+  name: string @alias("user_303_name")
+  email: string @description("Email for user 303")
   age: int
 }
 class user.User304 {
-  name: string
-  email: string
+  name: string @alias("user_304_name")
+  email: string @description("Email for user 304")
   age: int
 }
 class user.User305 {
-  name: string
-  email: string
+  name: string @alias("user_305_name")
+  email: string @description("Email for user 305")
   age: int
 }
 class user.User306 {
-  name: string
-  email: string
+  name: string @alias("user_306_name")
+  email: string @description("Email for user 306")
   age: int
 }
 class user.User307 {
-  name: string
-  email: string
+  name: string @alias("user_307_name")
+  email: string @description("Email for user 307")
   age: int
 }
 class user.User308 {
-  name: string
-  email: string
+  name: string @alias("user_308_name")
+  email: string @description("Email for user 308")
   age: int
 }
 class user.User309 {
-  name: string
-  email: string
+  name: string @alias("user_309_name")
+  email: string @description("Email for user 309")
   age: int
 }
 class user.User310 {
-  name: string
-  email: string
+  name: string @alias("user_310_name")
+  email: string @description("Email for user 310")
   age: int
 }
 class user.User311 {
-  name: string
-  email: string
+  name: string @alias("user_311_name")
+  email: string @description("Email for user 311")
   age: int
 }
 class user.User312 {
-  name: string
-  email: string
+  name: string @alias("user_312_name")
+  email: string @description("Email for user 312")
   age: int
 }
 class user.User313 {
-  name: string
-  email: string
+  name: string @alias("user_313_name")
+  email: string @description("Email for user 313")
   age: int
 }
 class user.User314 {
-  name: string
-  email: string
+  name: string @alias("user_314_name")
+  email: string @description("Email for user 314")
   age: int
 }
 class user.User315 {
-  name: string
-  email: string
+  name: string @alias("user_315_name")
+  email: string @description("Email for user 315")
   age: int
 }
 class user.User316 {
-  name: string
-  email: string
+  name: string @alias("user_316_name")
+  email: string @description("Email for user 316")
   age: int
 }
 class user.User317 {
-  name: string
-  email: string
+  name: string @alias("user_317_name")
+  email: string @description("Email for user 317")
   age: int
 }
 class user.User318 {
-  name: string
-  email: string
+  name: string @alias("user_318_name")
+  email: string @description("Email for user 318")
   age: int
 }
 class user.User319 {
-  name: string
-  email: string
+  name: string @alias("user_319_name")
+  email: string @description("Email for user 319")
   age: int
 }
 class user.User320 {
-  name: string
-  email: string
+  name: string @alias("user_320_name")
+  email: string @description("Email for user 320")
   age: int
 }
 class user.User321 {
-  name: string
-  email: string
+  name: string @alias("user_321_name")
+  email: string @description("Email for user 321")
   age: int
 }
 class user.User322 {
-  name: string
-  email: string
+  name: string @alias("user_322_name")
+  email: string @description("Email for user 322")
   age: int
 }
 class user.User323 {
-  name: string
-  email: string
+  name: string @alias("user_323_name")
+  email: string @description("Email for user 323")
   age: int
 }
 class user.User324 {
-  name: string
-  email: string
+  name: string @alias("user_324_name")
+  email: string @description("Email for user 324")
   age: int
 }
 class user.User325 {
-  name: string
-  email: string
+  name: string @alias("user_325_name")
+  email: string @description("Email for user 325")
   age: int
 }
 class user.User326 {
-  name: string
-  email: string
+  name: string @alias("user_326_name")
+  email: string @description("Email for user 326")
   age: int
 }
 class user.User327 {
-  name: string
-  email: string
+  name: string @alias("user_327_name")
+  email: string @description("Email for user 327")
   age: int
 }
 class user.User328 {
-  name: string
-  email: string
+  name: string @alias("user_328_name")
+  email: string @description("Email for user 328")
   age: int
 }
 class user.User329 {
-  name: string
-  email: string
+  name: string @alias("user_329_name")
+  email: string @description("Email for user 329")
   age: int
 }
 class user.User330 {
-  name: string
-  email: string
+  name: string @alias("user_330_name")
+  email: string @description("Email for user 330")
   age: int
 }
 class user.User331 {
-  name: string
-  email: string
+  name: string @alias("user_331_name")
+  email: string @description("Email for user 331")
   age: int
 }
 class user.User332 {
-  name: string
-  email: string
+  name: string @alias("user_332_name")
+  email: string @description("Email for user 332")
   age: int
 }
 class user.User333 {
-  name: string
-  email: string
+  name: string @alias("user_333_name")
+  email: string @description("Email for user 333")
   age: int
 }
 class user.User334 {
-  name: string
-  email: string
+  name: string @alias("user_334_name")
+  email: string @description("Email for user 334")
   age: int
 }
 class user.User335 {
-  name: string
-  email: string
+  name: string @alias("user_335_name")
+  email: string @description("Email for user 335")
   age: int
 }
 class user.User336 {
-  name: string
-  email: string
+  name: string @alias("user_336_name")
+  email: string @description("Email for user 336")
   age: int
 }
 class user.User337 {
-  name: string
-  email: string
+  name: string @alias("user_337_name")
+  email: string @description("Email for user 337")
   age: int
 }
 class user.User338 {
-  name: string
-  email: string
+  name: string @alias("user_338_name")
+  email: string @description("Email for user 338")
   age: int
 }
 class user.User339 {
-  name: string
-  email: string
+  name: string @alias("user_339_name")
+  email: string @description("Email for user 339")
   age: int
 }
 class user.User340 {
-  name: string
-  email: string
+  name: string @alias("user_340_name")
+  email: string @description("Email for user 340")
   age: int
 }
 class user.User341 {
-  name: string
-  email: string
+  name: string @alias("user_341_name")
+  email: string @description("Email for user 341")
   age: int
 }
 class user.User342 {
-  name: string
-  email: string
+  name: string @alias("user_342_name")
+  email: string @description("Email for user 342")
   age: int
 }
 class user.User343 {
-  name: string
-  email: string
+  name: string @alias("user_343_name")
+  email: string @description("Email for user 343")
   age: int
 }
 class user.User344 {
-  name: string
-  email: string
+  name: string @alias("user_344_name")
+  email: string @description("Email for user 344")
   age: int
 }
 class user.User345 {
-  name: string
-  email: string
+  name: string @alias("user_345_name")
+  email: string @description("Email for user 345")
   age: int
 }
 class user.User346 {
-  name: string
-  email: string
+  name: string @alias("user_346_name")
+  email: string @description("Email for user 346")
   age: int
 }
 class user.User347 {
-  name: string
-  email: string
+  name: string @alias("user_347_name")
+  email: string @description("Email for user 347")
   age: int
 }
 class user.User348 {
-  name: string
-  email: string
+  name: string @alias("user_348_name")
+  email: string @description("Email for user 348")
   age: int
 }
 class user.User349 {
-  name: string
-  email: string
+  name: string @alias("user_349_name")
+  email: string @description("Email for user 349")
   age: int
 }
 class user.User350 {
-  name: string
-  email: string
+  name: string @alias("user_350_name")
+  email: string @description("Email for user 350")
   age: int
 }
 class user.User351 {
-  name: string
-  email: string
+  name: string @alias("user_351_name")
+  email: string @description("Email for user 351")
   age: int
 }
 class user.User352 {
-  name: string
-  email: string
+  name: string @alias("user_352_name")
+  email: string @description("Email for user 352")
   age: int
 }
 class user.User353 {
-  name: string
-  email: string
+  name: string @alias("user_353_name")
+  email: string @description("Email for user 353")
   age: int
 }
 class user.User354 {
-  name: string
-  email: string
+  name: string @alias("user_354_name")
+  email: string @description("Email for user 354")
   age: int
 }
 class user.User355 {
-  name: string
-  email: string
+  name: string @alias("user_355_name")
+  email: string @description("Email for user 355")
   age: int
 }
 class user.User356 {
-  name: string
-  email: string
+  name: string @alias("user_356_name")
+  email: string @description("Email for user 356")
   age: int
 }
 class user.User357 {
-  name: string
-  email: string
+  name: string @alias("user_357_name")
+  email: string @description("Email for user 357")
   age: int
 }
 class user.User358 {
-  name: string
-  email: string
+  name: string @alias("user_358_name")
+  email: string @description("Email for user 358")
   age: int
 }
 class user.User359 {
-  name: string
-  email: string
+  name: string @alias("user_359_name")
+  email: string @description("Email for user 359")
   age: int
 }
 class user.User360 {
-  name: string
-  email: string
+  name: string @alias("user_360_name")
+  email: string @description("Email for user 360")
   age: int
 }
 class user.User361 {
-  name: string
-  email: string
+  name: string @alias("user_361_name")
+  email: string @description("Email for user 361")
   age: int
 }
 class user.User362 {
-  name: string
-  email: string
+  name: string @alias("user_362_name")
+  email: string @description("Email for user 362")
   age: int
 }
 class user.User363 {
-  name: string
-  email: string
+  name: string @alias("user_363_name")
+  email: string @description("Email for user 363")
   age: int
 }
 class user.User364 {
-  name: string
-  email: string
+  name: string @alias("user_364_name")
+  email: string @description("Email for user 364")
   age: int
 }
 class user.User365 {
-  name: string
-  email: string
+  name: string @alias("user_365_name")
+  email: string @description("Email for user 365")
   age: int
 }
 class user.User366 {
-  name: string
-  email: string
+  name: string @alias("user_366_name")
+  email: string @description("Email for user 366")
   age: int
 }
 class user.User367 {
-  name: string
-  email: string
+  name: string @alias("user_367_name")
+  email: string @description("Email for user 367")
   age: int
 }
 class user.User368 {
-  name: string
-  email: string
+  name: string @alias("user_368_name")
+  email: string @description("Email for user 368")
   age: int
 }
 class user.User369 {
-  name: string
-  email: string
+  name: string @alias("user_369_name")
+  email: string @description("Email for user 369")
   age: int
 }
 class user.User370 {
-  name: string
-  email: string
+  name: string @alias("user_370_name")
+  email: string @description("Email for user 370")
   age: int
 }
 class user.User371 {
-  name: string
-  email: string
+  name: string @alias("user_371_name")
+  email: string @description("Email for user 371")
   age: int
 }
 class user.User372 {
-  name: string
-  email: string
+  name: string @alias("user_372_name")
+  email: string @description("Email for user 372")
   age: int
 }
 class user.User373 {
-  name: string
-  email: string
+  name: string @alias("user_373_name")
+  email: string @description("Email for user 373")
   age: int
 }
 class user.User374 {
-  name: string
-  email: string
+  name: string @alias("user_374_name")
+  email: string @description("Email for user 374")
   age: int
 }
 class user.User375 {
-  name: string
-  email: string
+  name: string @alias("user_375_name")
+  email: string @description("Email for user 375")
   age: int
 }
 class user.User376 {
-  name: string
-  email: string
+  name: string @alias("user_376_name")
+  email: string @description("Email for user 376")
   age: int
 }
 class user.User377 {
-  name: string
-  email: string
+  name: string @alias("user_377_name")
+  email: string @description("Email for user 377")
   age: int
 }
 class user.User378 {
-  name: string
-  email: string
+  name: string @alias("user_378_name")
+  email: string @description("Email for user 378")
   age: int
 }
 class user.User379 {
-  name: string
-  email: string
+  name: string @alias("user_379_name")
+  email: string @description("Email for user 379")
   age: int
 }
 class user.User380 {
-  name: string
-  email: string
+  name: string @alias("user_380_name")
+  email: string @description("Email for user 380")
   age: int
 }
 class user.User381 {
-  name: string
-  email: string
+  name: string @alias("user_381_name")
+  email: string @description("Email for user 381")
   age: int
 }
 class user.User382 {
-  name: string
-  email: string
+  name: string @alias("user_382_name")
+  email: string @description("Email for user 382")
   age: int
 }
 class user.User383 {
-  name: string
-  email: string
+  name: string @alias("user_383_name")
+  email: string @description("Email for user 383")
   age: int
 }
 class user.User384 {
-  name: string
-  email: string
+  name: string @alias("user_384_name")
+  email: string @description("Email for user 384")
   age: int
 }
 class user.User385 {
-  name: string
-  email: string
+  name: string @alias("user_385_name")
+  email: string @description("Email for user 385")
   age: int
 }
 class user.User386 {
-  name: string
-  email: string
+  name: string @alias("user_386_name")
+  email: string @description("Email for user 386")
   age: int
 }
 class user.User387 {
-  name: string
-  email: string
+  name: string @alias("user_387_name")
+  email: string @description("Email for user 387")
   age: int
 }
 class user.User388 {
-  name: string
-  email: string
+  name: string @alias("user_388_name")
+  email: string @description("Email for user 388")
   age: int
 }
 class user.User389 {
-  name: string
-  email: string
+  name: string @alias("user_389_name")
+  email: string @description("Email for user 389")
   age: int
 }
 class user.User390 {
-  name: string
-  email: string
+  name: string @alias("user_390_name")
+  email: string @description("Email for user 390")
   age: int
 }
 class user.User391 {
-  name: string
-  email: string
+  name: string @alias("user_391_name")
+  email: string @description("Email for user 391")
   age: int
 }
 class user.User392 {
-  name: string
-  email: string
+  name: string @alias("user_392_name")
+  email: string @description("Email for user 392")
   age: int
 }
 class user.User393 {
-  name: string
-  email: string
+  name: string @alias("user_393_name")
+  email: string @description("Email for user 393")
   age: int
 }
 class user.User394 {
-  name: string
-  email: string
+  name: string @alias("user_394_name")
+  email: string @description("Email for user 394")
   age: int
 }
 class user.User395 {
-  name: string
-  email: string
+  name: string @alias("user_395_name")
+  email: string @description("Email for user 395")
   age: int
 }
 class user.User396 {
-  name: string
-  email: string
+  name: string @alias("user_396_name")
+  email: string @description("Email for user 396")
   age: int
 }
 class user.User397 {
-  name: string
-  email: string
+  name: string @alias("user_397_name")
+  email: string @description("Email for user 397")
   age: int
 }
 class user.User398 {
-  name: string
-  email: string
+  name: string @alias("user_398_name")
+  email: string @description("Email for user 398")
   age: int
 }
 class user.User399 {
-  name: string
-  email: string
+  name: string @alias("user_399_name")
+  email: string @description("Email for user 399")
   age: int
 }
 class user.User400 {
-  name: string
-  email: string
+  name: string @alias("user_400_name")
+  email: string @description("Email for user 400")
   age: int
 }
 class user.User401 {
-  name: string
-  email: string
+  name: string @alias("user_401_name")
+  email: string @description("Email for user 401")
   age: int
 }
 class user.User402 {
-  name: string
-  email: string
+  name: string @alias("user_402_name")
+  email: string @description("Email for user 402")
   age: int
 }
 class user.User403 {
-  name: string
-  email: string
+  name: string @alias("user_403_name")
+  email: string @description("Email for user 403")
   age: int
 }
 class user.User404 {
-  name: string
-  email: string
+  name: string @alias("user_404_name")
+  email: string @description("Email for user 404")
   age: int
 }
 class user.User405 {
-  name: string
-  email: string
+  name: string @alias("user_405_name")
+  email: string @description("Email for user 405")
   age: int
 }
 class user.User406 {
-  name: string
-  email: string
+  name: string @alias("user_406_name")
+  email: string @description("Email for user 406")
   age: int
 }
 class user.User407 {
-  name: string
-  email: string
+  name: string @alias("user_407_name")
+  email: string @description("Email for user 407")
   age: int
 }
 class user.User408 {
-  name: string
-  email: string
+  name: string @alias("user_408_name")
+  email: string @description("Email for user 408")
   age: int
 }
 class user.User409 {
-  name: string
-  email: string
+  name: string @alias("user_409_name")
+  email: string @description("Email for user 409")
   age: int
 }
 class user.User410 {
-  name: string
-  email: string
+  name: string @alias("user_410_name")
+  email: string @description("Email for user 410")
   age: int
 }
 class user.User411 {
-  name: string
-  email: string
+  name: string @alias("user_411_name")
+  email: string @description("Email for user 411")
   age: int
 }
 class user.User412 {
-  name: string
-  email: string
+  name: string @alias("user_412_name")
+  email: string @description("Email for user 412")
   age: int
 }
 class user.User413 {
-  name: string
-  email: string
+  name: string @alias("user_413_name")
+  email: string @description("Email for user 413")
   age: int
 }
 class user.User414 {
-  name: string
-  email: string
+  name: string @alias("user_414_name")
+  email: string @description("Email for user 414")
   age: int
 }
 class user.User415 {
-  name: string
-  email: string
+  name: string @alias("user_415_name")
+  email: string @description("Email for user 415")
   age: int
 }
 class user.User416 {
-  name: string
-  email: string
+  name: string @alias("user_416_name")
+  email: string @description("Email for user 416")
   age: int
 }
 class user.User417 {
-  name: string
-  email: string
+  name: string @alias("user_417_name")
+  email: string @description("Email for user 417")
   age: int
 }
 class user.User418 {
-  name: string
-  email: string
+  name: string @alias("user_418_name")
+  email: string @description("Email for user 418")
   age: int
 }
 class user.User419 {
-  name: string
-  email: string
+  name: string @alias("user_419_name")
+  email: string @description("Email for user 419")
   age: int
 }
 class user.User420 {
-  name: string
-  email: string
+  name: string @alias("user_420_name")
+  email: string @description("Email for user 420")
   age: int
 }
 class user.User421 {
-  name: string
-  email: string
+  name: string @alias("user_421_name")
+  email: string @description("Email for user 421")
   age: int
 }
 class user.User422 {
-  name: string
-  email: string
+  name: string @alias("user_422_name")
+  email: string @description("Email for user 422")
   age: int
 }
 class user.User423 {
-  name: string
-  email: string
+  name: string @alias("user_423_name")
+  email: string @description("Email for user 423")
   age: int
 }
 class user.User424 {
-  name: string
-  email: string
+  name: string @alias("user_424_name")
+  email: string @description("Email for user 424")
   age: int
 }
 class user.User425 {
-  name: string
-  email: string
+  name: string @alias("user_425_name")
+  email: string @description("Email for user 425")
   age: int
 }
 class user.User426 {
-  name: string
-  email: string
+  name: string @alias("user_426_name")
+  email: string @description("Email for user 426")
   age: int
 }
 class user.User427 {
-  name: string
-  email: string
+  name: string @alias("user_427_name")
+  email: string @description("Email for user 427")
   age: int
 }
 class user.User428 {
-  name: string
-  email: string
+  name: string @alias("user_428_name")
+  email: string @description("Email for user 428")
   age: int
 }
 class user.User429 {
-  name: string
-  email: string
+  name: string @alias("user_429_name")
+  email: string @description("Email for user 429")
   age: int
 }
 class user.User430 {
-  name: string
-  email: string
+  name: string @alias("user_430_name")
+  email: string @description("Email for user 430")
   age: int
 }
 class user.User431 {
-  name: string
-  email: string
+  name: string @alias("user_431_name")
+  email: string @description("Email for user 431")
   age: int
 }
 class user.User432 {
-  name: string
-  email: string
+  name: string @alias("user_432_name")
+  email: string @description("Email for user 432")
   age: int
 }
 class user.User433 {
-  name: string
-  email: string
+  name: string @alias("user_433_name")
+  email: string @description("Email for user 433")
   age: int
 }
 class user.User434 {
-  name: string
-  email: string
+  name: string @alias("user_434_name")
+  email: string @description("Email for user 434")
   age: int
 }
 class user.User435 {
-  name: string
-  email: string
+  name: string @alias("user_435_name")
+  email: string @description("Email for user 435")
   age: int
 }
 class user.User436 {
-  name: string
-  email: string
+  name: string @alias("user_436_name")
+  email: string @description("Email for user 436")
   age: int
 }
 class user.User437 {
-  name: string
-  email: string
+  name: string @alias("user_437_name")
+  email: string @description("Email for user 437")
   age: int
 }
 class user.User438 {
-  name: string
-  email: string
+  name: string @alias("user_438_name")
+  email: string @description("Email for user 438")
   age: int
 }
 class user.User439 {
-  name: string
-  email: string
+  name: string @alias("user_439_name")
+  email: string @description("Email for user 439")
   age: int
 }
 class user.User440 {
-  name: string
-  email: string
+  name: string @alias("user_440_name")
+  email: string @description("Email for user 440")
   age: int
 }
 class user.User441 {
-  name: string
-  email: string
+  name: string @alias("user_441_name")
+  email: string @description("Email for user 441")
   age: int
 }
 class user.User442 {
-  name: string
-  email: string
+  name: string @alias("user_442_name")
+  email: string @description("Email for user 442")
   age: int
 }
 class user.User443 {
-  name: string
-  email: string
+  name: string @alias("user_443_name")
+  email: string @description("Email for user 443")
   age: int
 }
 class user.User444 {
-  name: string
-  email: string
+  name: string @alias("user_444_name")
+  email: string @description("Email for user 444")
   age: int
 }
 class user.User445 {
-  name: string
-  email: string
+  name: string @alias("user_445_name")
+  email: string @description("Email for user 445")
   age: int
 }
 class user.User446 {
-  name: string
-  email: string
+  name: string @alias("user_446_name")
+  email: string @description("Email for user 446")
   age: int
 }
 class user.User447 {
-  name: string
-  email: string
+  name: string @alias("user_447_name")
+  email: string @description("Email for user 447")
   age: int
 }
 class user.User448 {
-  name: string
-  email: string
+  name: string @alias("user_448_name")
+  email: string @description("Email for user 448")
   age: int
 }
 class user.User449 {
-  name: string
-  email: string
+  name: string @alias("user_449_name")
+  email: string @description("Email for user 449")
   age: int
 }
 class user.User450 {
-  name: string
-  email: string
+  name: string @alias("user_450_name")
+  email: string @description("Email for user 450")
   age: int
 }
 class user.User451 {
-  name: string
-  email: string
+  name: string @alias("user_451_name")
+  email: string @description("Email for user 451")
   age: int
 }
 class user.User452 {
-  name: string
-  email: string
+  name: string @alias("user_452_name")
+  email: string @description("Email for user 452")
   age: int
 }
 class user.User453 {
-  name: string
-  email: string
+  name: string @alias("user_453_name")
+  email: string @description("Email for user 453")
   age: int
 }
 class user.User454 {
-  name: string
-  email: string
+  name: string @alias("user_454_name")
+  email: string @description("Email for user 454")
   age: int
 }
 class user.User455 {
-  name: string
-  email: string
+  name: string @alias("user_455_name")
+  email: string @description("Email for user 455")
   age: int
 }
 class user.User456 {
-  name: string
-  email: string
+  name: string @alias("user_456_name")
+  email: string @description("Email for user 456")
   age: int
 }
 class user.User457 {
-  name: string
-  email: string
+  name: string @alias("user_457_name")
+  email: string @description("Email for user 457")
   age: int
 }
 class user.User458 {
-  name: string
-  email: string
+  name: string @alias("user_458_name")
+  email: string @description("Email for user 458")
   age: int
 }
 class user.User459 {
-  name: string
-  email: string
+  name: string @alias("user_459_name")
+  email: string @description("Email for user 459")
   age: int
 }
 class user.User460 {
-  name: string
-  email: string
+  name: string @alias("user_460_name")
+  email: string @description("Email for user 460")
   age: int
 }
 class user.User461 {
-  name: string
-  email: string
+  name: string @alias("user_461_name")
+  email: string @description("Email for user 461")
   age: int
 }
 class user.User462 {
-  name: string
-  email: string
+  name: string @alias("user_462_name")
+  email: string @description("Email for user 462")
   age: int
 }
 class user.User463 {
-  name: string
-  email: string
+  name: string @alias("user_463_name")
+  email: string @description("Email for user 463")
   age: int
 }
 class user.User464 {
-  name: string
-  email: string
+  name: string @alias("user_464_name")
+  email: string @description("Email for user 464")
   age: int
 }
 class user.User465 {
-  name: string
-  email: string
+  name: string @alias("user_465_name")
+  email: string @description("Email for user 465")
   age: int
 }
 class user.User466 {
-  name: string
-  email: string
+  name: string @alias("user_466_name")
+  email: string @description("Email for user 466")
   age: int
 }
 class user.User467 {
-  name: string
-  email: string
+  name: string @alias("user_467_name")
+  email: string @description("Email for user 467")
   age: int
 }
 class user.User468 {
-  name: string
-  email: string
+  name: string @alias("user_468_name")
+  email: string @description("Email for user 468")
   age: int
 }
 class user.User469 {
-  name: string
-  email: string
+  name: string @alias("user_469_name")
+  email: string @description("Email for user 469")
   age: int
 }
 class user.User470 {
-  name: string
-  email: string
+  name: string @alias("user_470_name")
+  email: string @description("Email for user 470")
   age: int
 }
 class user.User471 {
-  name: string
-  email: string
+  name: string @alias("user_471_name")
+  email: string @description("Email for user 471")
   age: int
 }
 class user.User472 {
-  name: string
-  email: string
+  name: string @alias("user_472_name")
+  email: string @description("Email for user 472")
   age: int
 }
 class user.User473 {
-  name: string
-  email: string
+  name: string @alias("user_473_name")
+  email: string @description("Email for user 473")
   age: int
 }
 class user.User474 {
-  name: string
-  email: string
+  name: string @alias("user_474_name")
+  email: string @description("Email for user 474")
   age: int
 }
 class user.User475 {
-  name: string
-  email: string
+  name: string @alias("user_475_name")
+  email: string @description("Email for user 475")
   age: int
 }
 class user.User476 {
-  name: string
-  email: string
+  name: string @alias("user_476_name")
+  email: string @description("Email for user 476")
   age: int
 }
 class user.User477 {
-  name: string
-  email: string
+  name: string @alias("user_477_name")
+  email: string @description("Email for user 477")
   age: int
 }
 class user.User478 {
-  name: string
-  email: string
+  name: string @alias("user_478_name")
+  email: string @description("Email for user 478")
   age: int
 }
 class user.User479 {
-  name: string
-  email: string
+  name: string @alias("user_479_name")
+  email: string @description("Email for user 479")
   age: int
 }
 class user.User480 {
-  name: string
-  email: string
+  name: string @alias("user_480_name")
+  email: string @description("Email for user 480")
   age: int
 }
 class user.User481 {
-  name: string
-  email: string
+  name: string @alias("user_481_name")
+  email: string @description("Email for user 481")
   age: int
 }
 class user.User482 {
-  name: string
-  email: string
+  name: string @alias("user_482_name")
+  email: string @description("Email for user 482")
   age: int
 }
 class user.User483 {
-  name: string
-  email: string
+  name: string @alias("user_483_name")
+  email: string @description("Email for user 483")
   age: int
 }
 class user.User484 {
-  name: string
-  email: string
+  name: string @alias("user_484_name")
+  email: string @description("Email for user 484")
   age: int
 }
 class user.User485 {
-  name: string
-  email: string
+  name: string @alias("user_485_name")
+  email: string @description("Email for user 485")
   age: int
 }
 class user.User486 {
-  name: string
-  email: string
+  name: string @alias("user_486_name")
+  email: string @description("Email for user 486")
   age: int
 }
 class user.User487 {
-  name: string
-  email: string
+  name: string @alias("user_487_name")
+  email: string @description("Email for user 487")
   age: int
 }
 class user.User488 {
-  name: string
-  email: string
+  name: string @alias("user_488_name")
+  email: string @description("Email for user 488")
   age: int
 }
 class user.User489 {
-  name: string
-  email: string
+  name: string @alias("user_489_name")
+  email: string @description("Email for user 489")
   age: int
 }
 class user.User490 {
-  name: string
-  email: string
+  name: string @alias("user_490_name")
+  email: string @description("Email for user 490")
   age: int
 }
 class user.User491 {
-  name: string
-  email: string
+  name: string @alias("user_491_name")
+  email: string @description("Email for user 491")
   age: int
 }
 class user.User492 {
-  name: string
-  email: string
+  name: string @alias("user_492_name")
+  email: string @description("Email for user 492")
   age: int
 }
 class user.User493 {
-  name: string
-  email: string
+  name: string @alias("user_493_name")
+  email: string @description("Email for user 493")
   age: int
 }
 class user.User494 {
-  name: string
-  email: string
+  name: string @alias("user_494_name")
+  email: string @description("Email for user 494")
   age: int
 }
 class user.User495 {
-  name: string
-  email: string
+  name: string @alias("user_495_name")
+  email: string @description("Email for user 495")
   age: int
 }
 class user.User496 {
-  name: string
-  email: string
+  name: string @alias("user_496_name")
+  email: string @description("Email for user 496")
   age: int
 }
 class user.User497 {
-  name: string
-  email: string
+  name: string @alias("user_497_name")
+  email: string @description("Email for user 497")
   age: int
 }
 class user.User498 {
-  name: string
-  email: string
+  name: string @alias("user_498_name")
+  email: string @description("Email for user 498")
   age: int
 }
 class user.User499 {
-  name: string
-  email: string
+  name: string @alias("user_499_name")
+  email: string @description("Email for user 499")
   age: int
 }
 class user.User500 {
-  name: string
-  email: string
+  name: string @alias("user_500_name")
+  email: string @description("Email for user 500")
   age: int
 }
 class user.User501 {
-  name: string
-  email: string
+  name: string @alias("user_501_name")
+  email: string @description("Email for user 501")
   age: int
 }
 class user.User502 {
-  name: string
-  email: string
+  name: string @alias("user_502_name")
+  email: string @description("Email for user 502")
   age: int
 }
 class user.User503 {
-  name: string
-  email: string
+  name: string @alias("user_503_name")
+  email: string @description("Email for user 503")
   age: int
 }
 class user.User504 {
-  name: string
-  email: string
+  name: string @alias("user_504_name")
+  email: string @description("Email for user 504")
   age: int
 }
 class user.User505 {
-  name: string
-  email: string
+  name: string @alias("user_505_name")
+  email: string @description("Email for user 505")
   age: int
 }
 class user.User506 {
-  name: string
-  email: string
+  name: string @alias("user_506_name")
+  email: string @description("Email for user 506")
   age: int
 }
 class user.User507 {
-  name: string
-  email: string
+  name: string @alias("user_507_name")
+  email: string @description("Email for user 507")
   age: int
 }
 class user.User508 {
-  name: string
-  email: string
+  name: string @alias("user_508_name")
+  email: string @description("Email for user 508")
   age: int
 }
 class user.User509 {
-  name: string
-  email: string
+  name: string @alias("user_509_name")
+  email: string @description("Email for user 509")
   age: int
 }
 class user.User510 {
-  name: string
-  email: string
+  name: string @alias("user_510_name")
+  email: string @description("Email for user 510")
   age: int
 }
 class user.User511 {
-  name: string
-  email: string
+  name: string @alias("user_511_name")
+  email: string @description("Email for user 511")
   age: int
 }
 class user.User512 {
-  name: string
-  email: string
+  name: string @alias("user_512_name")
+  email: string @description("Email for user 512")
   age: int
 }
 class user.User513 {
-  name: string
-  email: string
+  name: string @alias("user_513_name")
+  email: string @description("Email for user 513")
   age: int
 }
 class user.User514 {
-  name: string
-  email: string
+  name: string @alias("user_514_name")
+  email: string @description("Email for user 514")
   age: int
 }
 class user.User515 {
-  name: string
-  email: string
+  name: string @alias("user_515_name")
+  email: string @description("Email for user 515")
   age: int
 }
 class user.User516 {
-  name: string
-  email: string
+  name: string @alias("user_516_name")
+  email: string @description("Email for user 516")
   age: int
 }
 class user.User517 {
-  name: string
-  email: string
+  name: string @alias("user_517_name")
+  email: string @description("Email for user 517")
   age: int
 }
 class user.User518 {
-  name: string
-  email: string
+  name: string @alias("user_518_name")
+  email: string @description("Email for user 518")
   age: int
 }
 class user.User519 {
-  name: string
-  email: string
+  name: string @alias("user_519_name")
+  email: string @description("Email for user 519")
   age: int
 }
 class user.User520 {
-  name: string
-  email: string
+  name: string @alias("user_520_name")
+  email: string @description("Email for user 520")
   age: int
 }
 class user.User521 {
-  name: string
-  email: string
+  name: string @alias("user_521_name")
+  email: string @description("Email for user 521")
   age: int
 }
 class user.User522 {
-  name: string
-  email: string
+  name: string @alias("user_522_name")
+  email: string @description("Email for user 522")
   age: int
 }
 class user.User523 {
-  name: string
-  email: string
+  name: string @alias("user_523_name")
+  email: string @description("Email for user 523")
   age: int
 }
 class user.User524 {
-  name: string
-  email: string
+  name: string @alias("user_524_name")
+  email: string @description("Email for user 524")
   age: int
 }
 class user.User525 {
-  name: string
-  email: string
+  name: string @alias("user_525_name")
+  email: string @description("Email for user 525")
   age: int
 }
 class user.User526 {
-  name: string
-  email: string
+  name: string @alias("user_526_name")
+  email: string @description("Email for user 526")
   age: int
 }
 class user.User527 {
-  name: string
-  email: string
+  name: string @alias("user_527_name")
+  email: string @description("Email for user 527")
   age: int
 }
 class user.User528 {
-  name: string
-  email: string
+  name: string @alias("user_528_name")
+  email: string @description("Email for user 528")
   age: int
 }
 class user.User529 {
-  name: string
-  email: string
+  name: string @alias("user_529_name")
+  email: string @description("Email for user 529")
   age: int
 }
 class user.User530 {
-  name: string
-  email: string
+  name: string @alias("user_530_name")
+  email: string @description("Email for user 530")
   age: int
 }
 class user.User531 {
-  name: string
-  email: string
+  name: string @alias("user_531_name")
+  email: string @description("Email for user 531")
   age: int
 }
 class user.User532 {
-  name: string
-  email: string
+  name: string @alias("user_532_name")
+  email: string @description("Email for user 532")
   age: int
 }
 class user.User533 {
-  name: string
-  email: string
+  name: string @alias("user_533_name")
+  email: string @description("Email for user 533")
   age: int
 }
 class user.User534 {
-  name: string
-  email: string
+  name: string @alias("user_534_name")
+  email: string @description("Email for user 534")
   age: int
 }
 class user.User535 {
-  name: string
-  email: string
+  name: string @alias("user_535_name")
+  email: string @description("Email for user 535")
   age: int
 }
 class user.User536 {
-  name: string
-  email: string
+  name: string @alias("user_536_name")
+  email: string @description("Email for user 536")
   age: int
 }
 class user.User537 {
-  name: string
-  email: string
+  name: string @alias("user_537_name")
+  email: string @description("Email for user 537")
   age: int
 }
 class user.User538 {
-  name: string
-  email: string
+  name: string @alias("user_538_name")
+  email: string @description("Email for user 538")
   age: int
 }
 class user.User539 {
-  name: string
-  email: string
+  name: string @alias("user_539_name")
+  email: string @description("Email for user 539")
   age: int
 }
 class user.User540 {
-  name: string
-  email: string
+  name: string @alias("user_540_name")
+  email: string @description("Email for user 540")
   age: int
 }
 class user.User541 {
-  name: string
-  email: string
+  name: string @alias("user_541_name")
+  email: string @description("Email for user 541")
   age: int
 }
 class user.User542 {
-  name: string
-  email: string
+  name: string @alias("user_542_name")
+  email: string @description("Email for user 542")
   age: int
 }
 class user.User543 {
-  name: string
-  email: string
+  name: string @alias("user_543_name")
+  email: string @description("Email for user 543")
   age: int
 }
 class user.User544 {
-  name: string
-  email: string
+  name: string @alias("user_544_name")
+  email: string @description("Email for user 544")
   age: int
 }
 class user.User545 {
-  name: string
-  email: string
+  name: string @alias("user_545_name")
+  email: string @description("Email for user 545")
   age: int
 }
 class user.User546 {
-  name: string
-  email: string
+  name: string @alias("user_546_name")
+  email: string @description("Email for user 546")
   age: int
 }
 class user.User547 {
-  name: string
-  email: string
+  name: string @alias("user_547_name")
+  email: string @description("Email for user 547")
   age: int
 }
 class user.User548 {
-  name: string
-  email: string
+  name: string @alias("user_548_name")
+  email: string @description("Email for user 548")
   age: int
 }
 class user.User549 {
-  name: string
-  email: string
+  name: string @alias("user_549_name")
+  email: string @description("Email for user 549")
   age: int
 }
 class user.User550 {
-  name: string
-  email: string
+  name: string @alias("user_550_name")
+  email: string @description("Email for user 550")
   age: int
 }
 class user.User551 {
-  name: string
-  email: string
+  name: string @alias("user_551_name")
+  email: string @description("Email for user 551")
   age: int
 }
 class user.User552 {
-  name: string
-  email: string
+  name: string @alias("user_552_name")
+  email: string @description("Email for user 552")
   age: int
 }
 class user.User553 {
-  name: string
-  email: string
+  name: string @alias("user_553_name")
+  email: string @description("Email for user 553")
   age: int
 }
 class user.User554 {
-  name: string
-  email: string
+  name: string @alias("user_554_name")
+  email: string @description("Email for user 554")
   age: int
 }
 class user.User555 {
-  name: string
-  email: string
+  name: string @alias("user_555_name")
+  email: string @description("Email for user 555")
   age: int
 }
 class user.User556 {
-  name: string
-  email: string
+  name: string @alias("user_556_name")
+  email: string @description("Email for user 556")
   age: int
 }
 class user.User557 {
-  name: string
-  email: string
+  name: string @alias("user_557_name")
+  email: string @description("Email for user 557")
   age: int
 }
 class user.User558 {
-  name: string
-  email: string
+  name: string @alias("user_558_name")
+  email: string @description("Email for user 558")
   age: int
 }
 class user.User559 {
-  name: string
-  email: string
+  name: string @alias("user_559_name")
+  email: string @description("Email for user 559")
   age: int
 }
 class user.User560 {
-  name: string
-  email: string
+  name: string @alias("user_560_name")
+  email: string @description("Email for user 560")
   age: int
 }
 class user.User561 {
-  name: string
-  email: string
+  name: string @alias("user_561_name")
+  email: string @description("Email for user 561")
   age: int
 }
 class user.User562 {
-  name: string
-  email: string
+  name: string @alias("user_562_name")
+  email: string @description("Email for user 562")
   age: int
 }
 class user.User563 {
-  name: string
-  email: string
+  name: string @alias("user_563_name")
+  email: string @description("Email for user 563")
   age: int
 }
 class user.User564 {
-  name: string
-  email: string
+  name: string @alias("user_564_name")
+  email: string @description("Email for user 564")
   age: int
 }
 class user.User565 {
-  name: string
-  email: string
+  name: string @alias("user_565_name")
+  email: string @description("Email for user 565")
   age: int
 }
 class user.User566 {
-  name: string
-  email: string
+  name: string @alias("user_566_name")
+  email: string @description("Email for user 566")
   age: int
 }
 class user.User567 {
-  name: string
-  email: string
+  name: string @alias("user_567_name")
+  email: string @description("Email for user 567")
   age: int
 }
 class user.User568 {
-  name: string
-  email: string
+  name: string @alias("user_568_name")
+  email: string @description("Email for user 568")
   age: int
 }
 class user.User569 {
-  name: string
-  email: string
+  name: string @alias("user_569_name")
+  email: string @description("Email for user 569")
   age: int
 }
 class user.User570 {
-  name: string
-  email: string
+  name: string @alias("user_570_name")
+  email: string @description("Email for user 570")
   age: int
 }
 class user.User571 {
-  name: string
-  email: string
+  name: string @alias("user_571_name")
+  email: string @description("Email for user 571")
   age: int
 }
 class user.User572 {
-  name: string
-  email: string
+  name: string @alias("user_572_name")
+  email: string @description("Email for user 572")
   age: int
 }
 class user.User573 {
-  name: string
-  email: string
+  name: string @alias("user_573_name")
+  email: string @description("Email for user 573")
   age: int
 }
 class user.User574 {
-  name: string
-  email: string
+  name: string @alias("user_574_name")
+  email: string @description("Email for user 574")
   age: int
 }
 class user.User575 {
-  name: string
-  email: string
+  name: string @alias("user_575_name")
+  email: string @description("Email for user 575")
   age: int
 }
 class user.User576 {
-  name: string
-  email: string
+  name: string @alias("user_576_name")
+  email: string @description("Email for user 576")
   age: int
 }
 class user.User577 {
-  name: string
-  email: string
+  name: string @alias("user_577_name")
+  email: string @description("Email for user 577")
   age: int
 }
 class user.User578 {
-  name: string
-  email: string
+  name: string @alias("user_578_name")
+  email: string @description("Email for user 578")
   age: int
 }
 class user.User579 {
-  name: string
-  email: string
+  name: string @alias("user_579_name")
+  email: string @description("Email for user 579")
   age: int
 }
 class user.User580 {
-  name: string
-  email: string
+  name: string @alias("user_580_name")
+  email: string @description("Email for user 580")
   age: int
 }
 class user.User581 {
-  name: string
-  email: string
+  name: string @alias("user_581_name")
+  email: string @description("Email for user 581")
   age: int
 }
 class user.User582 {
-  name: string
-  email: string
+  name: string @alias("user_582_name")
+  email: string @description("Email for user 582")
   age: int
 }
 class user.User583 {
-  name: string
-  email: string
+  name: string @alias("user_583_name")
+  email: string @description("Email for user 583")
   age: int
 }
 class user.User584 {
-  name: string
-  email: string
+  name: string @alias("user_584_name")
+  email: string @description("Email for user 584")
   age: int
 }
 class user.User585 {
-  name: string
-  email: string
+  name: string @alias("user_585_name")
+  email: string @description("Email for user 585")
   age: int
 }
 class user.User586 {
-  name: string
-  email: string
+  name: string @alias("user_586_name")
+  email: string @description("Email for user 586")
   age: int
 }
 class user.User587 {
-  name: string
-  email: string
+  name: string @alias("user_587_name")
+  email: string @description("Email for user 587")
   age: int
 }
 class user.User588 {
-  name: string
-  email: string
+  name: string @alias("user_588_name")
+  email: string @description("Email for user 588")
   age: int
 }
 class user.User589 {
-  name: string
-  email: string
+  name: string @alias("user_589_name")
+  email: string @description("Email for user 589")
   age: int
 }
 class user.User590 {
-  name: string
-  email: string
+  name: string @alias("user_590_name")
+  email: string @description("Email for user 590")
   age: int
 }
 class user.User591 {
-  name: string
-  email: string
+  name: string @alias("user_591_name")
+  email: string @description("Email for user 591")
   age: int
 }
 class user.User592 {
-  name: string
-  email: string
+  name: string @alias("user_592_name")
+  email: string @description("Email for user 592")
   age: int
 }
 class user.User593 {
-  name: string
-  email: string
+  name: string @alias("user_593_name")
+  email: string @description("Email for user 593")
   age: int
 }
 class user.User594 {
-  name: string
-  email: string
+  name: string @alias("user_594_name")
+  email: string @description("Email for user 594")
   age: int
 }
 class user.User595 {
-  name: string
-  email: string
+  name: string @alias("user_595_name")
+  email: string @description("Email for user 595")
   age: int
 }
 class user.User596 {
-  name: string
-  email: string
+  name: string @alias("user_596_name")
+  email: string @description("Email for user 596")
   age: int
 }
 class user.User597 {
-  name: string
-  email: string
+  name: string @alias("user_597_name")
+  email: string @description("Email for user 597")
   age: int
 }
 class user.User598 {
-  name: string
-  email: string
+  name: string @alias("user_598_name")
+  email: string @description("Email for user 598")
   age: int
 }
 class user.User599 {
-  name: string
-  email: string
+  name: string @alias("user_599_name")
+  email: string @description("Email for user 599")
   age: int
 }
 class user.User600 {
-  name: string
-  email: string
+  name: string @alias("user_600_name")
+  email: string @description("Email for user 600")
   age: int
 }
 class user.User601 {
-  name: string
-  email: string
+  name: string @alias("user_601_name")
+  email: string @description("Email for user 601")
   age: int
 }
 class user.User602 {
-  name: string
-  email: string
+  name: string @alias("user_602_name")
+  email: string @description("Email for user 602")
   age: int
 }
 class user.User603 {
-  name: string
-  email: string
+  name: string @alias("user_603_name")
+  email: string @description("Email for user 603")
   age: int
 }
 class user.User604 {
-  name: string
-  email: string
+  name: string @alias("user_604_name")
+  email: string @description("Email for user 604")
   age: int
 }
 class user.User605 {
-  name: string
-  email: string
+  name: string @alias("user_605_name")
+  email: string @description("Email for user 605")
   age: int
 }
 class user.User606 {
-  name: string
-  email: string
+  name: string @alias("user_606_name")
+  email: string @description("Email for user 606")
   age: int
 }
 class user.User607 {
-  name: string
-  email: string
+  name: string @alias("user_607_name")
+  email: string @description("Email for user 607")
   age: int
 }
 class user.User608 {
-  name: string
-  email: string
+  name: string @alias("user_608_name")
+  email: string @description("Email for user 608")
   age: int
 }
 class user.User609 {
-  name: string
-  email: string
+  name: string @alias("user_609_name")
+  email: string @description("Email for user 609")
   age: int
 }
 class user.User610 {
-  name: string
-  email: string
+  name: string @alias("user_610_name")
+  email: string @description("Email for user 610")
   age: int
 }
 class user.User611 {
-  name: string
-  email: string
+  name: string @alias("user_611_name")
+  email: string @description("Email for user 611")
   age: int
 }
 class user.User612 {
-  name: string
-  email: string
+  name: string @alias("user_612_name")
+  email: string @description("Email for user 612")
   age: int
 }
 class user.User613 {
-  name: string
-  email: string
+  name: string @alias("user_613_name")
+  email: string @description("Email for user 613")
   age: int
 }
 class user.User614 {
-  name: string
-  email: string
+  name: string @alias("user_614_name")
+  email: string @description("Email for user 614")
   age: int
 }
 class user.User615 {
-  name: string
-  email: string
+  name: string @alias("user_615_name")
+  email: string @description("Email for user 615")
   age: int
 }
 class user.User616 {
-  name: string
-  email: string
+  name: string @alias("user_616_name")
+  email: string @description("Email for user 616")
   age: int
 }
 class user.User617 {
-  name: string
-  email: string
+  name: string @alias("user_617_name")
+  email: string @description("Email for user 617")
   age: int
 }
 class user.User618 {
-  name: string
-  email: string
+  name: string @alias("user_618_name")
+  email: string @description("Email for user 618")
   age: int
 }
 class user.User619 {
-  name: string
-  email: string
+  name: string @alias("user_619_name")
+  email: string @description("Email for user 619")
   age: int
 }
 class user.User620 {
-  name: string
-  email: string
+  name: string @alias("user_620_name")
+  email: string @description("Email for user 620")
   age: int
 }
 class user.User621 {
-  name: string
-  email: string
+  name: string @alias("user_621_name")
+  email: string @description("Email for user 621")
   age: int
 }
 class user.User622 {
-  name: string
-  email: string
+  name: string @alias("user_622_name")
+  email: string @description("Email for user 622")
   age: int
 }
 class user.User623 {
-  name: string
-  email: string
+  name: string @alias("user_623_name")
+  email: string @description("Email for user 623")
   age: int
 }
 class user.User624 {
-  name: string
-  email: string
+  name: string @alias("user_624_name")
+  email: string @description("Email for user 624")
   age: int
 }
 class user.User625 {
-  name: string
-  email: string
+  name: string @alias("user_625_name")
+  email: string @description("Email for user 625")
   age: int
 }
 class user.User626 {
-  name: string
-  email: string
+  name: string @alias("user_626_name")
+  email: string @description("Email for user 626")
   age: int
 }
 class user.User627 {
-  name: string
-  email: string
+  name: string @alias("user_627_name")
+  email: string @description("Email for user 627")
   age: int
 }
 class user.User628 {
-  name: string
-  email: string
+  name: string @alias("user_628_name")
+  email: string @description("Email for user 628")
   age: int
 }
 class user.User629 {
-  name: string
-  email: string
+  name: string @alias("user_629_name")
+  email: string @description("Email for user 629")
   age: int
 }
 class user.User630 {
-  name: string
-  email: string
+  name: string @alias("user_630_name")
+  email: string @description("Email for user 630")
   age: int
 }
 class user.User631 {
-  name: string
-  email: string
+  name: string @alias("user_631_name")
+  email: string @description("Email for user 631")
   age: int
 }
 class user.User632 {
-  name: string
-  email: string
+  name: string @alias("user_632_name")
+  email: string @description("Email for user 632")
   age: int
 }
 class user.User633 {
-  name: string
-  email: string
+  name: string @alias("user_633_name")
+  email: string @description("Email for user 633")
   age: int
 }
 class user.User634 {
-  name: string
-  email: string
+  name: string @alias("user_634_name")
+  email: string @description("Email for user 634")
   age: int
 }
 class user.User635 {
-  name: string
-  email: string
+  name: string @alias("user_635_name")
+  email: string @description("Email for user 635")
   age: int
 }
 class user.User636 {
-  name: string
-  email: string
+  name: string @alias("user_636_name")
+  email: string @description("Email for user 636")
   age: int
 }
 class user.User637 {
-  name: string
-  email: string
+  name: string @alias("user_637_name")
+  email: string @description("Email for user 637")
   age: int
 }
 class user.User638 {
-  name: string
-  email: string
+  name: string @alias("user_638_name")
+  email: string @description("Email for user 638")
   age: int
 }
 class user.User639 {
-  name: string
-  email: string
+  name: string @alias("user_639_name")
+  email: string @description("Email for user 639")
   age: int
 }
 class user.User640 {
-  name: string
-  email: string
+  name: string @alias("user_640_name")
+  email: string @description("Email for user 640")
   age: int
 }
 class user.User641 {
-  name: string
-  email: string
+  name: string @alias("user_641_name")
+  email: string @description("Email for user 641")
   age: int
 }
 class user.User642 {
-  name: string
-  email: string
+  name: string @alias("user_642_name")
+  email: string @description("Email for user 642")
   age: int
 }
 class user.User643 {
-  name: string
-  email: string
+  name: string @alias("user_643_name")
+  email: string @description("Email for user 643")
   age: int
 }
 class user.User644 {
-  name: string
-  email: string
+  name: string @alias("user_644_name")
+  email: string @description("Email for user 644")
   age: int
 }
 class user.User645 {
-  name: string
-  email: string
+  name: string @alias("user_645_name")
+  email: string @description("Email for user 645")
   age: int
 }
 class user.User646 {
-  name: string
-  email: string
+  name: string @alias("user_646_name")
+  email: string @description("Email for user 646")
   age: int
 }
 class user.User647 {
-  name: string
-  email: string
+  name: string @alias("user_647_name")
+  email: string @description("Email for user 647")
   age: int
 }
 class user.User648 {
-  name: string
-  email: string
+  name: string @alias("user_648_name")
+  email: string @description("Email for user 648")
   age: int
 }
 class user.User649 {
-  name: string
-  email: string
+  name: string @alias("user_649_name")
+  email: string @description("Email for user 649")
   age: int
 }
 class user.User650 {
-  name: string
-  email: string
+  name: string @alias("user_650_name")
+  email: string @description("Email for user 650")
   age: int
 }
 class user.User651 {
-  name: string
-  email: string
+  name: string @alias("user_651_name")
+  email: string @description("Email for user 651")
   age: int
 }
 class user.User652 {
-  name: string
-  email: string
+  name: string @alias("user_652_name")
+  email: string @description("Email for user 652")
   age: int
 }
 class user.User653 {
-  name: string
-  email: string
+  name: string @alias("user_653_name")
+  email: string @description("Email for user 653")
   age: int
 }
 class user.User654 {
-  name: string
-  email: string
+  name: string @alias("user_654_name")
+  email: string @description("Email for user 654")
   age: int
 }
 class user.User655 {
-  name: string
-  email: string
+  name: string @alias("user_655_name")
+  email: string @description("Email for user 655")
   age: int
 }
 class user.User656 {
-  name: string
-  email: string
+  name: string @alias("user_656_name")
+  email: string @description("Email for user 656")
   age: int
 }
 class user.User657 {
-  name: string
-  email: string
+  name: string @alias("user_657_name")
+  email: string @description("Email for user 657")
   age: int
 }
 class user.User658 {
-  name: string
-  email: string
+  name: string @alias("user_658_name")
+  email: string @description("Email for user 658")
   age: int
 }
 class user.User659 {
-  name: string
-  email: string
+  name: string @alias("user_659_name")
+  email: string @description("Email for user 659")
   age: int
 }
 class user.User660 {
-  name: string
-  email: string
+  name: string @alias("user_660_name")
+  email: string @description("Email for user 660")
   age: int
 }
 class user.User661 {
-  name: string
-  email: string
+  name: string @alias("user_661_name")
+  email: string @description("Email for user 661")
   age: int
 }
 class user.User662 {
-  name: string
-  email: string
+  name: string @alias("user_662_name")
+  email: string @description("Email for user 662")
   age: int
 }
 class user.User663 {
-  name: string
-  email: string
+  name: string @alias("user_663_name")
+  email: string @description("Email for user 663")
   age: int
 }
 class user.User664 {
-  name: string
-  email: string
+  name: string @alias("user_664_name")
+  email: string @description("Email for user 664")
   age: int
 }
 class user.User665 {
-  name: string
-  email: string
+  name: string @alias("user_665_name")
+  email: string @description("Email for user 665")
   age: int
 }
 class user.User666 {
-  name: string
-  email: string
+  name: string @alias("user_666_name")
+  email: string @description("Email for user 666")
   age: int
 }
 class user.User667 {
-  name: string
-  email: string
+  name: string @alias("user_667_name")
+  email: string @description("Email for user 667")
   age: int
 }
 class user.User668 {
-  name: string
-  email: string
+  name: string @alias("user_668_name")
+  email: string @description("Email for user 668")
   age: int
 }
 class user.User669 {
-  name: string
-  email: string
+  name: string @alias("user_669_name")
+  email: string @description("Email for user 669")
   age: int
 }
 class user.User670 {
-  name: string
-  email: string
+  name: string @alias("user_670_name")
+  email: string @description("Email for user 670")
   age: int
 }
 class user.User671 {
-  name: string
-  email: string
+  name: string @alias("user_671_name")
+  email: string @description("Email for user 671")
   age: int
 }
 class user.User672 {
-  name: string
-  email: string
+  name: string @alias("user_672_name")
+  email: string @description("Email for user 672")
   age: int
 }
 class user.User673 {
-  name: string
-  email: string
+  name: string @alias("user_673_name")
+  email: string @description("Email for user 673")
   age: int
 }
 class user.User674 {
-  name: string
-  email: string
+  name: string @alias("user_674_name")
+  email: string @description("Email for user 674")
   age: int
 }
 class user.User675 {
-  name: string
-  email: string
+  name: string @alias("user_675_name")
+  email: string @description("Email for user 675")
   age: int
 }
 class user.User676 {
-  name: string
-  email: string
+  name: string @alias("user_676_name")
+  email: string @description("Email for user 676")
   age: int
 }
 class user.User677 {
-  name: string
-  email: string
+  name: string @alias("user_677_name")
+  email: string @description("Email for user 677")
   age: int
 }
 class user.User678 {
-  name: string
-  email: string
+  name: string @alias("user_678_name")
+  email: string @description("Email for user 678")
   age: int
 }
 class user.User679 {
-  name: string
-  email: string
+  name: string @alias("user_679_name")
+  email: string @description("Email for user 679")
   age: int
 }
 class user.User680 {
-  name: string
-  email: string
+  name: string @alias("user_680_name")
+  email: string @description("Email for user 680")
   age: int
 }
 class user.User681 {
-  name: string
-  email: string
+  name: string @alias("user_681_name")
+  email: string @description("Email for user 681")
   age: int
 }
 class user.User682 {
-  name: string
-  email: string
+  name: string @alias("user_682_name")
+  email: string @description("Email for user 682")
   age: int
 }
 class user.User683 {
-  name: string
-  email: string
+  name: string @alias("user_683_name")
+  email: string @description("Email for user 683")
   age: int
 }
 class user.User684 {
-  name: string
-  email: string
+  name: string @alias("user_684_name")
+  email: string @description("Email for user 684")
   age: int
 }
 class user.User685 {
-  name: string
-  email: string
+  name: string @alias("user_685_name")
+  email: string @description("Email for user 685")
   age: int
 }
 class user.User686 {
-  name: string
-  email: string
+  name: string @alias("user_686_name")
+  email: string @description("Email for user 686")
   age: int
 }
 class user.User687 {
-  name: string
-  email: string
+  name: string @alias("user_687_name")
+  email: string @description("Email for user 687")
   age: int
 }
 class user.User688 {
-  name: string
-  email: string
+  name: string @alias("user_688_name")
+  email: string @description("Email for user 688")
   age: int
 }
 class user.User689 {
-  name: string
-  email: string
+  name: string @alias("user_689_name")
+  email: string @description("Email for user 689")
   age: int
 }
 class user.User690 {
-  name: string
-  email: string
+  name: string @alias("user_690_name")
+  email: string @description("Email for user 690")
   age: int
 }
 class user.User691 {
-  name: string
-  email: string
+  name: string @alias("user_691_name")
+  email: string @description("Email for user 691")
   age: int
 }
 class user.User692 {
-  name: string
-  email: string
+  name: string @alias("user_692_name")
+  email: string @description("Email for user 692")
   age: int
 }
 class user.User693 {
-  name: string
-  email: string
+  name: string @alias("user_693_name")
+  email: string @description("Email for user 693")
   age: int
 }
 class user.User694 {
-  name: string
-  email: string
+  name: string @alias("user_694_name")
+  email: string @description("Email for user 694")
   age: int
 }
 class user.User695 {
-  name: string
-  email: string
+  name: string @alias("user_695_name")
+  email: string @description("Email for user 695")
   age: int
 }
 class user.User696 {
-  name: string
-  email: string
+  name: string @alias("user_696_name")
+  email: string @description("Email for user 696")
   age: int
 }
 class user.User697 {
-  name: string
-  email: string
+  name: string @alias("user_697_name")
+  email: string @description("Email for user 697")
   age: int
 }
 class user.User698 {
-  name: string
-  email: string
+  name: string @alias("user_698_name")
+  email: string @description("Email for user 698")
   age: int
 }
 class user.User699 {
-  name: string
-  email: string
+  name: string @alias("user_699_name")
+  email: string @description("Email for user 699")
   age: int
 }
 class user.User700 {
-  name: string
-  email: string
+  name: string @alias("user_700_name")
+  email: string @description("Email for user 700")
   age: int
 }
 class user.User701 {
-  name: string
-  email: string
+  name: string @alias("user_701_name")
+  email: string @description("Email for user 701")
   age: int
 }
 class user.User702 {
-  name: string
-  email: string
+  name: string @alias("user_702_name")
+  email: string @description("Email for user 702")
   age: int
 }
 class user.User703 {
-  name: string
-  email: string
+  name: string @alias("user_703_name")
+  email: string @description("Email for user 703")
   age: int
 }
 class user.User704 {
-  name: string
-  email: string
+  name: string @alias("user_704_name")
+  email: string @description("Email for user 704")
   age: int
 }
 class user.User705 {
-  name: string
-  email: string
+  name: string @alias("user_705_name")
+  email: string @description("Email for user 705")
   age: int
 }
 class user.User706 {
-  name: string
-  email: string
+  name: string @alias("user_706_name")
+  email: string @description("Email for user 706")
   age: int
 }
 class user.User707 {
-  name: string
-  email: string
+  name: string @alias("user_707_name")
+  email: string @description("Email for user 707")
   age: int
 }
 class user.User708 {
-  name: string
-  email: string
+  name: string @alias("user_708_name")
+  email: string @description("Email for user 708")
   age: int
 }
 class user.User709 {
-  name: string
-  email: string
+  name: string @alias("user_709_name")
+  email: string @description("Email for user 709")
   age: int
 }
 class user.User710 {
-  name: string
-  email: string
+  name: string @alias("user_710_name")
+  email: string @description("Email for user 710")
   age: int
 }
 class user.User711 {
-  name: string
-  email: string
+  name: string @alias("user_711_name")
+  email: string @description("Email for user 711")
   age: int
 }
 class user.User712 {
-  name: string
-  email: string
+  name: string @alias("user_712_name")
+  email: string @description("Email for user 712")
   age: int
 }
 class user.User713 {
-  name: string
-  email: string
+  name: string @alias("user_713_name")
+  email: string @description("Email for user 713")
   age: int
 }
 class user.User714 {
-  name: string
-  email: string
+  name: string @alias("user_714_name")
+  email: string @description("Email for user 714")
   age: int
 }
 class user.User715 {
-  name: string
-  email: string
+  name: string @alias("user_715_name")
+  email: string @description("Email for user 715")
   age: int
 }
 class user.User716 {
-  name: string
-  email: string
+  name: string @alias("user_716_name")
+  email: string @description("Email for user 716")
   age: int
 }
 class user.User717 {
-  name: string
-  email: string
+  name: string @alias("user_717_name")
+  email: string @description("Email for user 717")
   age: int
 }
 class user.User718 {
-  name: string
-  email: string
+  name: string @alias("user_718_name")
+  email: string @description("Email for user 718")
   age: int
 }
 class user.User719 {
-  name: string
-  email: string
+  name: string @alias("user_719_name")
+  email: string @description("Email for user 719")
   age: int
 }
 class user.User720 {
-  name: string
-  email: string
+  name: string @alias("user_720_name")
+  email: string @description("Email for user 720")
   age: int
 }
 class user.User721 {
-  name: string
-  email: string
+  name: string @alias("user_721_name")
+  email: string @description("Email for user 721")
   age: int
 }
 class user.User722 {
-  name: string
-  email: string
+  name: string @alias("user_722_name")
+  email: string @description("Email for user 722")
   age: int
 }
 class user.User723 {
-  name: string
-  email: string
+  name: string @alias("user_723_name")
+  email: string @description("Email for user 723")
   age: int
 }
 class user.User724 {
-  name: string
-  email: string
+  name: string @alias("user_724_name")
+  email: string @description("Email for user 724")
   age: int
 }
 class user.User725 {
-  name: string
-  email: string
+  name: string @alias("user_725_name")
+  email: string @description("Email for user 725")
   age: int
 }
 class user.User726 {
-  name: string
-  email: string
+  name: string @alias("user_726_name")
+  email: string @description("Email for user 726")
   age: int
 }
 class user.User727 {
-  name: string
-  email: string
+  name: string @alias("user_727_name")
+  email: string @description("Email for user 727")
   age: int
 }
 class user.User728 {
-  name: string
-  email: string
+  name: string @alias("user_728_name")
+  email: string @description("Email for user 728")
   age: int
 }
 class user.User729 {
-  name: string
-  email: string
+  name: string @alias("user_729_name")
+  email: string @description("Email for user 729")
   age: int
 }
 class user.User730 {
-  name: string
-  email: string
+  name: string @alias("user_730_name")
+  email: string @description("Email for user 730")
   age: int
 }
 class user.User731 {
-  name: string
-  email: string
+  name: string @alias("user_731_name")
+  email: string @description("Email for user 731")
   age: int
 }
 class user.User732 {
-  name: string
-  email: string
+  name: string @alias("user_732_name")
+  email: string @description("Email for user 732")
   age: int
 }
 class user.User733 {
-  name: string
-  email: string
+  name: string @alias("user_733_name")
+  email: string @description("Email for user 733")
   age: int
 }
 class user.User734 {
-  name: string
-  email: string
+  name: string @alias("user_734_name")
+  email: string @description("Email for user 734")
   age: int
 }
 class user.User735 {
-  name: string
-  email: string
+  name: string @alias("user_735_name")
+  email: string @description("Email for user 735")
   age: int
 }
 class user.User736 {
-  name: string
-  email: string
+  name: string @alias("user_736_name")
+  email: string @description("Email for user 736")
   age: int
 }
 class user.User737 {
-  name: string
-  email: string
+  name: string @alias("user_737_name")
+  email: string @description("Email for user 737")
   age: int
 }
 class user.User738 {
-  name: string
-  email: string
+  name: string @alias("user_738_name")
+  email: string @description("Email for user 738")
   age: int
 }
 class user.User739 {
-  name: string
-  email: string
+  name: string @alias("user_739_name")
+  email: string @description("Email for user 739")
   age: int
 }
 class user.User740 {
-  name: string
-  email: string
+  name: string @alias("user_740_name")
+  email: string @description("Email for user 740")
   age: int
 }
 class user.User741 {
-  name: string
-  email: string
+  name: string @alias("user_741_name")
+  email: string @description("Email for user 741")
   age: int
 }
 class user.User742 {
-  name: string
-  email: string
+  name: string @alias("user_742_name")
+  email: string @description("Email for user 742")
   age: int
 }
 class user.User743 {
-  name: string
-  email: string
+  name: string @alias("user_743_name")
+  email: string @description("Email for user 743")
   age: int
 }
 class user.User744 {
-  name: string
-  email: string
+  name: string @alias("user_744_name")
+  email: string @description("Email for user 744")
   age: int
 }
 class user.User745 {
-  name: string
-  email: string
+  name: string @alias("user_745_name")
+  email: string @description("Email for user 745")
   age: int
 }
 class user.User746 {
-  name: string
-  email: string
+  name: string @alias("user_746_name")
+  email: string @description("Email for user 746")
   age: int
 }
 class user.User747 {
-  name: string
-  email: string
+  name: string @alias("user_747_name")
+  email: string @description("Email for user 747")
   age: int
 }
 class user.User748 {
-  name: string
-  email: string
+  name: string @alias("user_748_name")
+  email: string @description("Email for user 748")
   age: int
 }
 class user.User749 {
-  name: string
-  email: string
+  name: string @alias("user_749_name")
+  email: string @description("Email for user 749")
   age: int
 }
 class user.User750 {
-  name: string
-  email: string
+  name: string @alias("user_750_name")
+  email: string @description("Email for user 750")
   age: int
 }
 class user.User751 {
-  name: string
-  email: string
+  name: string @alias("user_751_name")
+  email: string @description("Email for user 751")
   age: int
 }
 class user.User752 {
-  name: string
-  email: string
+  name: string @alias("user_752_name")
+  email: string @description("Email for user 752")
   age: int
 }
 class user.User753 {
-  name: string
-  email: string
+  name: string @alias("user_753_name")
+  email: string @description("Email for user 753")
   age: int
 }
 class user.User754 {
-  name: string
-  email: string
+  name: string @alias("user_754_name")
+  email: string @description("Email for user 754")
   age: int
 }
 class user.User755 {
-  name: string
-  email: string
+  name: string @alias("user_755_name")
+  email: string @description("Email for user 755")
   age: int
 }
 class user.User756 {
-  name: string
-  email: string
+  name: string @alias("user_756_name")
+  email: string @description("Email for user 756")
   age: int
 }
 class user.User757 {
-  name: string
-  email: string
+  name: string @alias("user_757_name")
+  email: string @description("Email for user 757")
   age: int
 }
 class user.User758 {
-  name: string
-  email: string
+  name: string @alias("user_758_name")
+  email: string @description("Email for user 758")
   age: int
 }
 class user.User759 {
-  name: string
-  email: string
+  name: string @alias("user_759_name")
+  email: string @description("Email for user 759")
   age: int
 }
 class user.User760 {
-  name: string
-  email: string
+  name: string @alias("user_760_name")
+  email: string @description("Email for user 760")
   age: int
 }
 class user.User761 {
-  name: string
-  email: string
+  name: string @alias("user_761_name")
+  email: string @description("Email for user 761")
   age: int
 }
 class user.User762 {
-  name: string
-  email: string
+  name: string @alias("user_762_name")
+  email: string @description("Email for user 762")
   age: int
 }
 class user.User763 {
-  name: string
-  email: string
+  name: string @alias("user_763_name")
+  email: string @description("Email for user 763")
   age: int
 }
 class user.User764 {
-  name: string
-  email: string
+  name: string @alias("user_764_name")
+  email: string @description("Email for user 764")
   age: int
 }
 class user.User765 {
-  name: string
-  email: string
+  name: string @alias("user_765_name")
+  email: string @description("Email for user 765")
   age: int
 }
 class user.User766 {
-  name: string
-  email: string
+  name: string @alias("user_766_name")
+  email: string @description("Email for user 766")
   age: int
 }
 class user.User767 {
-  name: string
-  email: string
+  name: string @alias("user_767_name")
+  email: string @description("Email for user 767")
   age: int
 }
 class user.User768 {
-  name: string
-  email: string
+  name: string @alias("user_768_name")
+  email: string @description("Email for user 768")
   age: int
 }
 class user.User769 {
-  name: string
-  email: string
+  name: string @alias("user_769_name")
+  email: string @description("Email for user 769")
   age: int
 }
 class user.User770 {
-  name: string
-  email: string
+  name: string @alias("user_770_name")
+  email: string @description("Email for user 770")
   age: int
 }
 class user.User771 {
-  name: string
-  email: string
+  name: string @alias("user_771_name")
+  email: string @description("Email for user 771")
   age: int
 }
 class user.User772 {
-  name: string
-  email: string
+  name: string @alias("user_772_name")
+  email: string @description("Email for user 772")
   age: int
 }
 class user.User773 {
-  name: string
-  email: string
+  name: string @alias("user_773_name")
+  email: string @description("Email for user 773")
   age: int
 }
 class user.User774 {
-  name: string
-  email: string
+  name: string @alias("user_774_name")
+  email: string @description("Email for user 774")
   age: int
 }
 class user.User775 {
-  name: string
-  email: string
+  name: string @alias("user_775_name")
+  email: string @description("Email for user 775")
   age: int
 }
 class user.User776 {
-  name: string
-  email: string
+  name: string @alias("user_776_name")
+  email: string @description("Email for user 776")
   age: int
 }
 class user.User777 {
-  name: string
-  email: string
+  name: string @alias("user_777_name")
+  email: string @description("Email for user 777")
   age: int
 }
 class user.User778 {
-  name: string
-  email: string
+  name: string @alias("user_778_name")
+  email: string @description("Email for user 778")
   age: int
 }
 class user.User779 {
-  name: string
-  email: string
+  name: string @alias("user_779_name")
+  email: string @description("Email for user 779")
   age: int
 }
 class user.User780 {
-  name: string
-  email: string
+  name: string @alias("user_780_name")
+  email: string @description("Email for user 780")
   age: int
 }
 class user.User781 {
-  name: string
-  email: string
+  name: string @alias("user_781_name")
+  email: string @description("Email for user 781")
   age: int
 }
 class user.User782 {
-  name: string
-  email: string
+  name: string @alias("user_782_name")
+  email: string @description("Email for user 782")
   age: int
 }
 class user.User783 {
-  name: string
-  email: string
+  name: string @alias("user_783_name")
+  email: string @description("Email for user 783")
   age: int
 }
 class user.User784 {
-  name: string
-  email: string
+  name: string @alias("user_784_name")
+  email: string @description("Email for user 784")
   age: int
 }
 class user.User785 {
-  name: string
-  email: string
+  name: string @alias("user_785_name")
+  email: string @description("Email for user 785")
   age: int
 }
 class user.User786 {
-  name: string
-  email: string
+  name: string @alias("user_786_name")
+  email: string @description("Email for user 786")
   age: int
 }
 class user.User787 {
-  name: string
-  email: string
+  name: string @alias("user_787_name")
+  email: string @description("Email for user 787")
   age: int
 }
 class user.User788 {
-  name: string
-  email: string
+  name: string @alias("user_788_name")
+  email: string @description("Email for user 788")
   age: int
 }
 class user.User789 {
-  name: string
-  email: string
+  name: string @alias("user_789_name")
+  email: string @description("Email for user 789")
   age: int
 }
 class user.User790 {
-  name: string
-  email: string
+  name: string @alias("user_790_name")
+  email: string @description("Email for user 790")
   age: int
 }
 class user.User791 {
-  name: string
-  email: string
+  name: string @alias("user_791_name")
+  email: string @description("Email for user 791")
   age: int
 }
 class user.User792 {
-  name: string
-  email: string
+  name: string @alias("user_792_name")
+  email: string @description("Email for user 792")
   age: int
 }
 class user.User793 {
-  name: string
-  email: string
+  name: string @alias("user_793_name")
+  email: string @description("Email for user 793")
   age: int
 }
 class user.User794 {
-  name: string
-  email: string
+  name: string @alias("user_794_name")
+  email: string @description("Email for user 794")
   age: int
 }
 class user.User795 {
-  name: string
-  email: string
+  name: string @alias("user_795_name")
+  email: string @description("Email for user 795")
   age: int
 }
 class user.User796 {
-  name: string
-  email: string
+  name: string @alias("user_796_name")
+  email: string @description("Email for user 796")
   age: int
 }
 class user.User797 {
-  name: string
-  email: string
+  name: string @alias("user_797_name")
+  email: string @description("Email for user 797")
   age: int
 }
 class user.User798 {
-  name: string
-  email: string
+  name: string @alias("user_798_name")
+  email: string @description("Email for user 798")
   age: int
 }
 class user.User799 {
-  name: string
-  email: string
+  name: string @alias("user_799_name")
+  email: string @description("Email for user 799")
   age: int
 }
 class user.User800 {
-  name: string
-  email: string
+  name: string @alias("user_800_name")
+  email: string @description("Email for user 800")
   age: int
 }
 class user.User801 {
-  name: string
-  email: string
+  name: string @alias("user_801_name")
+  email: string @description("Email for user 801")
   age: int
 }
 class user.User802 {
-  name: string
-  email: string
+  name: string @alias("user_802_name")
+  email: string @description("Email for user 802")
   age: int
 }
 class user.User803 {
-  name: string
-  email: string
+  name: string @alias("user_803_name")
+  email: string @description("Email for user 803")
   age: int
 }
 class user.User804 {
-  name: string
-  email: string
+  name: string @alias("user_804_name")
+  email: string @description("Email for user 804")
   age: int
 }
 class user.User805 {
-  name: string
-  email: string
+  name: string @alias("user_805_name")
+  email: string @description("Email for user 805")
   age: int
 }
 class user.User806 {
-  name: string
-  email: string
+  name: string @alias("user_806_name")
+  email: string @description("Email for user 806")
   age: int
 }
 class user.User807 {
-  name: string
-  email: string
+  name: string @alias("user_807_name")
+  email: string @description("Email for user 807")
   age: int
 }
 class user.User808 {
-  name: string
-  email: string
+  name: string @alias("user_808_name")
+  email: string @description("Email for user 808")
   age: int
 }
 class user.User809 {
-  name: string
-  email: string
+  name: string @alias("user_809_name")
+  email: string @description("Email for user 809")
   age: int
 }
 class user.User810 {
-  name: string
-  email: string
+  name: string @alias("user_810_name")
+  email: string @description("Email for user 810")
   age: int
 }
 class user.User811 {
-  name: string
-  email: string
+  name: string @alias("user_811_name")
+  email: string @description("Email for user 811")
   age: int
 }
 class user.User812 {
-  name: string
-  email: string
+  name: string @alias("user_812_name")
+  email: string @description("Email for user 812")
   age: int
 }
 class user.User813 {
-  name: string
-  email: string
+  name: string @alias("user_813_name")
+  email: string @description("Email for user 813")
   age: int
 }
 class user.User814 {
-  name: string
-  email: string
+  name: string @alias("user_814_name")
+  email: string @description("Email for user 814")
   age: int
 }
 class user.User815 {
-  name: string
-  email: string
+  name: string @alias("user_815_name")
+  email: string @description("Email for user 815")
   age: int
 }
 class user.User816 {
-  name: string
-  email: string
+  name: string @alias("user_816_name")
+  email: string @description("Email for user 816")
   age: int
 }
 class user.User817 {
-  name: string
-  email: string
+  name: string @alias("user_817_name")
+  email: string @description("Email for user 817")
   age: int
 }
 class user.User818 {
-  name: string
-  email: string
+  name: string @alias("user_818_name")
+  email: string @description("Email for user 818")
   age: int
 }
 class user.User819 {
-  name: string
-  email: string
+  name: string @alias("user_819_name")
+  email: string @description("Email for user 819")
   age: int
 }
 class user.User820 {
-  name: string
-  email: string
+  name: string @alias("user_820_name")
+  email: string @description("Email for user 820")
   age: int
 }
 class user.User821 {
-  name: string
-  email: string
+  name: string @alias("user_821_name")
+  email: string @description("Email for user 821")
   age: int
 }
 class user.User822 {
-  name: string
-  email: string
+  name: string @alias("user_822_name")
+  email: string @description("Email for user 822")
   age: int
 }
 class user.User823 {
-  name: string
-  email: string
+  name: string @alias("user_823_name")
+  email: string @description("Email for user 823")
   age: int
 }
 class user.User824 {
-  name: string
-  email: string
+  name: string @alias("user_824_name")
+  email: string @description("Email for user 824")
   age: int
 }
 class user.User825 {
-  name: string
-  email: string
+  name: string @alias("user_825_name")
+  email: string @description("Email for user 825")
   age: int
 }
 class user.User826 {
-  name: string
-  email: string
+  name: string @alias("user_826_name")
+  email: string @description("Email for user 826")
   age: int
 }
 class user.User827 {
-  name: string
-  email: string
+  name: string @alias("user_827_name")
+  email: string @description("Email for user 827")
   age: int
 }
 class user.User828 {
-  name: string
-  email: string
+  name: string @alias("user_828_name")
+  email: string @description("Email for user 828")
   age: int
 }
 class user.User829 {
-  name: string
-  email: string
+  name: string @alias("user_829_name")
+  email: string @description("Email for user 829")
   age: int
 }
 class user.User830 {
-  name: string
-  email: string
+  name: string @alias("user_830_name")
+  email: string @description("Email for user 830")
   age: int
 }
 class user.User831 {
-  name: string
-  email: string
+  name: string @alias("user_831_name")
+  email: string @description("Email for user 831")
   age: int
 }
 class user.User832 {
-  name: string
-  email: string
+  name: string @alias("user_832_name")
+  email: string @description("Email for user 832")
   age: int
 }
 class user.User833 {
-  name: string
-  email: string
+  name: string @alias("user_833_name")
+  email: string @description("Email for user 833")
   age: int
 }
 class user.User834 {
-  name: string
-  email: string
+  name: string @alias("user_834_name")
+  email: string @description("Email for user 834")
   age: int
 }
 class user.User835 {
-  name: string
-  email: string
+  name: string @alias("user_835_name")
+  email: string @description("Email for user 835")
   age: int
 }
 class user.User836 {
-  name: string
-  email: string
+  name: string @alias("user_836_name")
+  email: string @description("Email for user 836")
   age: int
 }
 class user.User837 {
-  name: string
-  email: string
+  name: string @alias("user_837_name")
+  email: string @description("Email for user 837")
   age: int
 }
 class user.User838 {
-  name: string
-  email: string
+  name: string @alias("user_838_name")
+  email: string @description("Email for user 838")
   age: int
 }
 class user.User839 {
-  name: string
-  email: string
+  name: string @alias("user_839_name")
+  email: string @description("Email for user 839")
   age: int
 }
 class user.User840 {
-  name: string
-  email: string
+  name: string @alias("user_840_name")
+  email: string @description("Email for user 840")
   age: int
 }
 class user.User841 {
-  name: string
-  email: string
+  name: string @alias("user_841_name")
+  email: string @description("Email for user 841")
   age: int
 }
 class user.User842 {
-  name: string
-  email: string
+  name: string @alias("user_842_name")
+  email: string @description("Email for user 842")
   age: int
 }
 class user.User843 {
-  name: string
-  email: string
+  name: string @alias("user_843_name")
+  email: string @description("Email for user 843")
   age: int
 }
 class user.User844 {
-  name: string
-  email: string
+  name: string @alias("user_844_name")
+  email: string @description("Email for user 844")
   age: int
 }
 class user.User845 {
-  name: string
-  email: string
+  name: string @alias("user_845_name")
+  email: string @description("Email for user 845")
   age: int
 }
 class user.User846 {
-  name: string
-  email: string
+  name: string @alias("user_846_name")
+  email: string @description("Email for user 846")
   age: int
 }
 class user.User847 {
-  name: string
-  email: string
+  name: string @alias("user_847_name")
+  email: string @description("Email for user 847")
   age: int
 }
 class user.User848 {
-  name: string
-  email: string
+  name: string @alias("user_848_name")
+  email: string @description("Email for user 848")
   age: int
 }
 class user.User849 {
-  name: string
-  email: string
+  name: string @alias("user_849_name")
+  email: string @description("Email for user 849")
   age: int
 }
 class user.User850 {
-  name: string
-  email: string
+  name: string @alias("user_850_name")
+  email: string @description("Email for user 850")
   age: int
 }
 class user.User851 {
-  name: string
-  email: string
+  name: string @alias("user_851_name")
+  email: string @description("Email for user 851")
   age: int
 }
 class user.User852 {
-  name: string
-  email: string
+  name: string @alias("user_852_name")
+  email: string @description("Email for user 852")
   age: int
 }
 class user.User853 {
-  name: string
-  email: string
+  name: string @alias("user_853_name")
+  email: string @description("Email for user 853")
   age: int
 }
 class user.User854 {
-  name: string
-  email: string
+  name: string @alias("user_854_name")
+  email: string @description("Email for user 854")
   age: int
 }
 class user.User855 {
-  name: string
-  email: string
+  name: string @alias("user_855_name")
+  email: string @description("Email for user 855")
   age: int
 }
 class user.User856 {
-  name: string
-  email: string
+  name: string @alias("user_856_name")
+  email: string @description("Email for user 856")
   age: int
 }
 class user.User857 {
-  name: string
-  email: string
+  name: string @alias("user_857_name")
+  email: string @description("Email for user 857")
   age: int
 }
 class user.User858 {
-  name: string
-  email: string
+  name: string @alias("user_858_name")
+  email: string @description("Email for user 858")
   age: int
 }
 class user.User859 {
-  name: string
-  email: string
+  name: string @alias("user_859_name")
+  email: string @description("Email for user 859")
   age: int
 }
 class user.User860 {
-  name: string
-  email: string
+  name: string @alias("user_860_name")
+  email: string @description("Email for user 860")
   age: int
 }
 class user.User861 {
-  name: string
-  email: string
+  name: string @alias("user_861_name")
+  email: string @description("Email for user 861")
   age: int
 }
 class user.User862 {
-  name: string
-  email: string
+  name: string @alias("user_862_name")
+  email: string @description("Email for user 862")
   age: int
 }
 class user.User863 {
-  name: string
-  email: string
+  name: string @alias("user_863_name")
+  email: string @description("Email for user 863")
   age: int
 }
 class user.User864 {
-  name: string
-  email: string
+  name: string @alias("user_864_name")
+  email: string @description("Email for user 864")
   age: int
 }
 class user.User865 {
-  name: string
-  email: string
+  name: string @alias("user_865_name")
+  email: string @description("Email for user 865")
   age: int
 }
 class user.User866 {
-  name: string
-  email: string
+  name: string @alias("user_866_name")
+  email: string @description("Email for user 866")
   age: int
 }
 class user.User867 {
-  name: string
-  email: string
+  name: string @alias("user_867_name")
+  email: string @description("Email for user 867")
   age: int
 }
 class user.User868 {
-  name: string
-  email: string
+  name: string @alias("user_868_name")
+  email: string @description("Email for user 868")
   age: int
 }
 class user.User869 {
-  name: string
-  email: string
+  name: string @alias("user_869_name")
+  email: string @description("Email for user 869")
   age: int
 }
 class user.User870 {
-  name: string
-  email: string
+  name: string @alias("user_870_name")
+  email: string @description("Email for user 870")
   age: int
 }
 class user.User871 {
-  name: string
-  email: string
+  name: string @alias("user_871_name")
+  email: string @description("Email for user 871")
   age: int
 }
 class user.User872 {
-  name: string
-  email: string
+  name: string @alias("user_872_name")
+  email: string @description("Email for user 872")
   age: int
 }
 class user.User873 {
-  name: string
-  email: string
+  name: string @alias("user_873_name")
+  email: string @description("Email for user 873")
   age: int
 }
 class user.User874 {
-  name: string
-  email: string
+  name: string @alias("user_874_name")
+  email: string @description("Email for user 874")
   age: int
 }
 class user.User875 {
-  name: string
-  email: string
+  name: string @alias("user_875_name")
+  email: string @description("Email for user 875")
   age: int
 }
 class user.User876 {
-  name: string
-  email: string
+  name: string @alias("user_876_name")
+  email: string @description("Email for user 876")
   age: int
 }
 class user.User877 {
-  name: string
-  email: string
+  name: string @alias("user_877_name")
+  email: string @description("Email for user 877")
   age: int
 }
 class user.User878 {
-  name: string
-  email: string
+  name: string @alias("user_878_name")
+  email: string @description("Email for user 878")
   age: int
 }
 class user.User879 {
-  name: string
-  email: string
+  name: string @alias("user_879_name")
+  email: string @description("Email for user 879")
   age: int
 }
 class user.User880 {
-  name: string
-  email: string
+  name: string @alias("user_880_name")
+  email: string @description("Email for user 880")
   age: int
 }
 class user.User881 {
-  name: string
-  email: string
+  name: string @alias("user_881_name")
+  email: string @description("Email for user 881")
   age: int
 }
 class user.User882 {
-  name: string
-  email: string
+  name: string @alias("user_882_name")
+  email: string @description("Email for user 882")
   age: int
 }
 class user.User883 {
-  name: string
-  email: string
+  name: string @alias("user_883_name")
+  email: string @description("Email for user 883")
   age: int
 }
 class user.User884 {
-  name: string
-  email: string
+  name: string @alias("user_884_name")
+  email: string @description("Email for user 884")
   age: int
 }
 class user.User885 {
-  name: string
-  email: string
+  name: string @alias("user_885_name")
+  email: string @description("Email for user 885")
   age: int
 }
 class user.User886 {
-  name: string
-  email: string
+  name: string @alias("user_886_name")
+  email: string @description("Email for user 886")
   age: int
 }
 class user.User887 {
-  name: string
-  email: string
+  name: string @alias("user_887_name")
+  email: string @description("Email for user 887")
   age: int
 }
 class user.User888 {
-  name: string
-  email: string
+  name: string @alias("user_888_name")
+  email: string @description("Email for user 888")
   age: int
 }
 class user.User889 {
-  name: string
-  email: string
+  name: string @alias("user_889_name")
+  email: string @description("Email for user 889")
   age: int
 }
 class user.User890 {
-  name: string
-  email: string
+  name: string @alias("user_890_name")
+  email: string @description("Email for user 890")
   age: int
 }
 class user.User891 {
-  name: string
-  email: string
+  name: string @alias("user_891_name")
+  email: string @description("Email for user 891")
   age: int
 }
 class user.User892 {
-  name: string
-  email: string
+  name: string @alias("user_892_name")
+  email: string @description("Email for user 892")
   age: int
 }
 class user.User893 {
-  name: string
-  email: string
+  name: string @alias("user_893_name")
+  email: string @description("Email for user 893")
   age: int
 }
 class user.User894 {
-  name: string
-  email: string
+  name: string @alias("user_894_name")
+  email: string @description("Email for user 894")
   age: int
 }
 class user.User895 {
-  name: string
-  email: string
+  name: string @alias("user_895_name")
+  email: string @description("Email for user 895")
   age: int
 }
 class user.User896 {
-  name: string
-  email: string
+  name: string @alias("user_896_name")
+  email: string @description("Email for user 896")
   age: int
 }
 class user.User897 {
-  name: string
-  email: string
+  name: string @alias("user_897_name")
+  email: string @description("Email for user 897")
   age: int
 }
 class user.User898 {
-  name: string
-  email: string
+  name: string @alias("user_898_name")
+  email: string @description("Email for user 898")
   age: int
 }
 class user.User899 {
-  name: string
-  email: string
+  name: string @alias("user_899_name")
+  email: string @description("Email for user 899")
   age: int
 }
 class user.User900 {
-  name: string
-  email: string
+  name: string @alias("user_900_name")
+  email: string @description("Email for user 900")
   age: int
 }
 class user.User901 {
-  name: string
-  email: string
+  name: string @alias("user_901_name")
+  email: string @description("Email for user 901")
   age: int
 }
 class user.User902 {
-  name: string
-  email: string
+  name: string @alias("user_902_name")
+  email: string @description("Email for user 902")
   age: int
 }
 class user.User903 {
-  name: string
-  email: string
+  name: string @alias("user_903_name")
+  email: string @description("Email for user 903")
   age: int
 }
 class user.User904 {
-  name: string
-  email: string
+  name: string @alias("user_904_name")
+  email: string @description("Email for user 904")
   age: int
 }
 class user.User905 {
-  name: string
-  email: string
+  name: string @alias("user_905_name")
+  email: string @description("Email for user 905")
   age: int
 }
 class user.User906 {
-  name: string
-  email: string
+  name: string @alias("user_906_name")
+  email: string @description("Email for user 906")
   age: int
 }
 class user.User907 {
-  name: string
-  email: string
+  name: string @alias("user_907_name")
+  email: string @description("Email for user 907")
   age: int
 }
 class user.User908 {
-  name: string
-  email: string
+  name: string @alias("user_908_name")
+  email: string @description("Email for user 908")
   age: int
 }
 class user.User909 {
-  name: string
-  email: string
+  name: string @alias("user_909_name")
+  email: string @description("Email for user 909")
   age: int
 }
 class user.User910 {
-  name: string
-  email: string
+  name: string @alias("user_910_name")
+  email: string @description("Email for user 910")
   age: int
 }
 class user.User911 {
-  name: string
-  email: string
+  name: string @alias("user_911_name")
+  email: string @description("Email for user 911")
   age: int
 }
 class user.User912 {
-  name: string
-  email: string
+  name: string @alias("user_912_name")
+  email: string @description("Email for user 912")
   age: int
 }
 class user.User913 {
-  name: string
-  email: string
+  name: string @alias("user_913_name")
+  email: string @description("Email for user 913")
   age: int
 }
 class user.User914 {
-  name: string
-  email: string
+  name: string @alias("user_914_name")
+  email: string @description("Email for user 914")
   age: int
 }
 class user.User915 {
-  name: string
-  email: string
+  name: string @alias("user_915_name")
+  email: string @description("Email for user 915")
   age: int
 }
 class user.User916 {
-  name: string
-  email: string
+  name: string @alias("user_916_name")
+  email: string @description("Email for user 916")
   age: int
 }
 class user.User917 {
-  name: string
-  email: string
+  name: string @alias("user_917_name")
+  email: string @description("Email for user 917")
   age: int
 }
 class user.User918 {
-  name: string
-  email: string
+  name: string @alias("user_918_name")
+  email: string @description("Email for user 918")
   age: int
 }
 class user.User919 {
-  name: string
-  email: string
+  name: string @alias("user_919_name")
+  email: string @description("Email for user 919")
   age: int
 }
 class user.User920 {
-  name: string
-  email: string
+  name: string @alias("user_920_name")
+  email: string @description("Email for user 920")
   age: int
 }
 class user.User921 {
-  name: string
-  email: string
+  name: string @alias("user_921_name")
+  email: string @description("Email for user 921")
   age: int
 }
 class user.User922 {
-  name: string
-  email: string
+  name: string @alias("user_922_name")
+  email: string @description("Email for user 922")
   age: int
 }
 class user.User923 {
-  name: string
-  email: string
+  name: string @alias("user_923_name")
+  email: string @description("Email for user 923")
   age: int
 }
 class user.User924 {
-  name: string
-  email: string
+  name: string @alias("user_924_name")
+  email: string @description("Email for user 924")
   age: int
 }
 class user.User925 {
-  name: string
-  email: string
+  name: string @alias("user_925_name")
+  email: string @description("Email for user 925")
   age: int
 }
 class user.User926 {
-  name: string
-  email: string
+  name: string @alias("user_926_name")
+  email: string @description("Email for user 926")
   age: int
 }
 class user.User927 {
-  name: string
-  email: string
+  name: string @alias("user_927_name")
+  email: string @description("Email for user 927")
   age: int
 }
 class user.User928 {
-  name: string
-  email: string
+  name: string @alias("user_928_name")
+  email: string @description("Email for user 928")
   age: int
 }
 class user.User929 {
-  name: string
-  email: string
+  name: string @alias("user_929_name")
+  email: string @description("Email for user 929")
   age: int
 }
 class user.User930 {
-  name: string
-  email: string
+  name: string @alias("user_930_name")
+  email: string @description("Email for user 930")
   age: int
 }
 class user.User931 {
-  name: string
-  email: string
+  name: string @alias("user_931_name")
+  email: string @description("Email for user 931")
   age: int
 }
 class user.User932 {
-  name: string
-  email: string
+  name: string @alias("user_932_name")
+  email: string @description("Email for user 932")
   age: int
 }
 class user.User933 {
-  name: string
-  email: string
+  name: string @alias("user_933_name")
+  email: string @description("Email for user 933")
   age: int
 }
 class user.User934 {
-  name: string
-  email: string
+  name: string @alias("user_934_name")
+  email: string @description("Email for user 934")
   age: int
 }
 class user.User935 {
-  name: string
-  email: string
+  name: string @alias("user_935_name")
+  email: string @description("Email for user 935")
   age: int
 }
 class user.User936 {
-  name: string
-  email: string
+  name: string @alias("user_936_name")
+  email: string @description("Email for user 936")
   age: int
 }
 class user.User937 {
-  name: string
-  email: string
+  name: string @alias("user_937_name")
+  email: string @description("Email for user 937")
   age: int
 }
 class user.User938 {
-  name: string
-  email: string
+  name: string @alias("user_938_name")
+  email: string @description("Email for user 938")
   age: int
 }
 class user.User939 {
-  name: string
-  email: string
+  name: string @alias("user_939_name")
+  email: string @description("Email for user 939")
   age: int
 }
 class user.User940 {
-  name: string
-  email: string
+  name: string @alias("user_940_name")
+  email: string @description("Email for user 940")
   age: int
 }
 class user.User941 {
-  name: string
-  email: string
+  name: string @alias("user_941_name")
+  email: string @description("Email for user 941")
   age: int
 }
 class user.User942 {
-  name: string
-  email: string
+  name: string @alias("user_942_name")
+  email: string @description("Email for user 942")
   age: int
 }
 class user.User943 {
-  name: string
-  email: string
+  name: string @alias("user_943_name")
+  email: string @description("Email for user 943")
   age: int
 }
 class user.User944 {
-  name: string
-  email: string
+  name: string @alias("user_944_name")
+  email: string @description("Email for user 944")
   age: int
 }
 class user.User945 {
-  name: string
-  email: string
+  name: string @alias("user_945_name")
+  email: string @description("Email for user 945")
   age: int
 }
 class user.User946 {
-  name: string
-  email: string
+  name: string @alias("user_946_name")
+  email: string @description("Email for user 946")
   age: int
 }
 class user.User947 {
-  name: string
-  email: string
+  name: string @alias("user_947_name")
+  email: string @description("Email for user 947")
   age: int
 }
 class user.User948 {
-  name: string
-  email: string
+  name: string @alias("user_948_name")
+  email: string @description("Email for user 948")
   age: int
 }
 class user.User949 {
-  name: string
-  email: string
+  name: string @alias("user_949_name")
+  email: string @description("Email for user 949")
   age: int
 }
 class user.User950 {
-  name: string
-  email: string
+  name: string @alias("user_950_name")
+  email: string @description("Email for user 950")
   age: int
 }
 class user.User951 {
-  name: string
-  email: string
+  name: string @alias("user_951_name")
+  email: string @description("Email for user 951")
   age: int
 }
 class user.User952 {
-  name: string
-  email: string
+  name: string @alias("user_952_name")
+  email: string @description("Email for user 952")
   age: int
 }
 class user.User953 {
-  name: string
-  email: string
+  name: string @alias("user_953_name")
+  email: string @description("Email for user 953")
   age: int
 }
 class user.User954 {
-  name: string
-  email: string
+  name: string @alias("user_954_name")
+  email: string @description("Email for user 954")
   age: int
 }
 class user.User955 {
-  name: string
-  email: string
+  name: string @alias("user_955_name")
+  email: string @description("Email for user 955")
   age: int
 }
 class user.User956 {
-  name: string
-  email: string
+  name: string @alias("user_956_name")
+  email: string @description("Email for user 956")
   age: int
 }
 class user.User957 {
-  name: string
-  email: string
+  name: string @alias("user_957_name")
+  email: string @description("Email for user 957")
   age: int
 }
 class user.User958 {
-  name: string
-  email: string
+  name: string @alias("user_958_name")
+  email: string @description("Email for user 958")
   age: int
 }
 class user.User959 {
-  name: string
-  email: string
+  name: string @alias("user_959_name")
+  email: string @description("Email for user 959")
   age: int
 }
 class user.User960 {
-  name: string
-  email: string
+  name: string @alias("user_960_name")
+  email: string @description("Email for user 960")
   age: int
 }
 class user.User961 {
-  name: string
-  email: string
+  name: string @alias("user_961_name")
+  email: string @description("Email for user 961")
   age: int
 }
 class user.User962 {
-  name: string
-  email: string
+  name: string @alias("user_962_name")
+  email: string @description("Email for user 962")
   age: int
 }
 class user.User963 {
-  name: string
-  email: string
+  name: string @alias("user_963_name")
+  email: string @description("Email for user 963")
   age: int
 }
 class user.User964 {
-  name: string
-  email: string
+  name: string @alias("user_964_name")
+  email: string @description("Email for user 964")
   age: int
 }
 class user.User965 {
-  name: string
-  email: string
+  name: string @alias("user_965_name")
+  email: string @description("Email for user 965")
   age: int
 }
 class user.User966 {
-  name: string
-  email: string
+  name: string @alias("user_966_name")
+  email: string @description("Email for user 966")
   age: int
 }
 class user.User967 {
-  name: string
-  email: string
+  name: string @alias("user_967_name")
+  email: string @description("Email for user 967")
   age: int
 }
 class user.User968 {
-  name: string
-  email: string
+  name: string @alias("user_968_name")
+  email: string @description("Email for user 968")
   age: int
 }
 class user.User969 {
-  name: string
-  email: string
+  name: string @alias("user_969_name")
+  email: string @description("Email for user 969")
   age: int
 }
 class user.User970 {
-  name: string
-  email: string
+  name: string @alias("user_970_name")
+  email: string @description("Email for user 970")
   age: int
 }
 class user.User971 {
-  name: string
-  email: string
+  name: string @alias("user_971_name")
+  email: string @description("Email for user 971")
   age: int
 }
 class user.User972 {
-  name: string
-  email: string
+  name: string @alias("user_972_name")
+  email: string @description("Email for user 972")
   age: int
 }
 class user.User973 {
-  name: string
-  email: string
+  name: string @alias("user_973_name")
+  email: string @description("Email for user 973")
   age: int
 }
 class user.User974 {
-  name: string
-  email: string
+  name: string @alias("user_974_name")
+  email: string @description("Email for user 974")
   age: int
 }
 class user.User975 {
-  name: string
-  email: string
+  name: string @alias("user_975_name")
+  email: string @description("Email for user 975")
   age: int
 }
 class user.User976 {
-  name: string
-  email: string
+  name: string @alias("user_976_name")
+  email: string @description("Email for user 976")
   age: int
 }
 class user.User977 {
-  name: string
-  email: string
+  name: string @alias("user_977_name")
+  email: string @description("Email for user 977")
   age: int
 }
 class user.User978 {
-  name: string
-  email: string
+  name: string @alias("user_978_name")
+  email: string @description("Email for user 978")
   age: int
 }
 class user.User979 {
-  name: string
-  email: string
+  name: string @alias("user_979_name")
+  email: string @description("Email for user 979")
   age: int
 }
 class user.User980 {
-  name: string
-  email: string
+  name: string @alias("user_980_name")
+  email: string @description("Email for user 980")
   age: int
 }
 class user.User981 {
-  name: string
-  email: string
+  name: string @alias("user_981_name")
+  email: string @description("Email for user 981")
   age: int
 }
 class user.User982 {
-  name: string
-  email: string
+  name: string @alias("user_982_name")
+  email: string @description("Email for user 982")
   age: int
 }
 class user.User983 {
-  name: string
-  email: string
+  name: string @alias("user_983_name")
+  email: string @description("Email for user 983")
   age: int
 }
 class user.User984 {
-  name: string
-  email: string
+  name: string @alias("user_984_name")
+  email: string @description("Email for user 984")
   age: int
 }
 class user.User985 {
-  name: string
-  email: string
+  name: string @alias("user_985_name")
+  email: string @description("Email for user 985")
   age: int
 }
 class user.User986 {
-  name: string
-  email: string
+  name: string @alias("user_986_name")
+  email: string @description("Email for user 986")
   age: int
 }
 class user.User987 {
-  name: string
-  email: string
+  name: string @alias("user_987_name")
+  email: string @description("Email for user 987")
   age: int
 }
 class user.User988 {
-  name: string
-  email: string
+  name: string @alias("user_988_name")
+  email: string @description("Email for user 988")
   age: int
 }
 class user.User989 {
-  name: string
-  email: string
+  name: string @alias("user_989_name")
+  email: string @description("Email for user 989")
   age: int
 }
 class user.User990 {
-  name: string
-  email: string
+  name: string @alias("user_990_name")
+  email: string @description("Email for user 990")
   age: int
 }
 class user.User991 {
-  name: string
-  email: string
+  name: string @alias("user_991_name")
+  email: string @description("Email for user 991")
   age: int
 }
 class user.User992 {
-  name: string
-  email: string
+  name: string @alias("user_992_name")
+  email: string @description("Email for user 992")
   age: int
 }
 class user.User993 {
-  name: string
-  email: string
+  name: string @alias("user_993_name")
+  email: string @description("Email for user 993")
   age: int
 }
 class user.User994 {
-  name: string
-  email: string
+  name: string @alias("user_994_name")
+  email: string @description("Email for user 994")
   age: int
 }
 class user.User995 {
-  name: string
-  email: string
+  name: string @alias("user_995_name")
+  email: string @description("Email for user 995")
   age: int
 }
 class user.User996 {
-  name: string
-  email: string
+  name: string @alias("user_996_name")
+  email: string @description("Email for user 996")
   age: int
 }
 class user.User997 {
-  name: string
-  email: string
+  name: string @alias("user_997_name")
+  email: string @description("Email for user 997")
   age: int
 }
 class user.User998 {
-  name: string
-  email: string
+  name: string @alias("user_998_name")
+  email: string @description("Email for user 998")
   age: int
 }
 class user.User999 {
-  name: string
-  email: string
+  name: string @alias("user_999_name")
+  email: string @description("Email for user 999")
   age: int
 }
 class user.User1000 {
-  name: string
-  email: string
+  name: string @alias("user_1000_name")
+  email: string @description("Email for user 1000")
   age: int
 }
 enum user.Status1

@@ -11,7 +11,7 @@ class user.HasDuplicateField {
   name: int
 }
 class user.HasDuplicateFieldAttr {
-  name: string
+  name: string @alias("n") @description("Name") @alias("nm")
 }
 enum user.HasDuplicateVariant
 enum user.HasDuplicateEnumAttr

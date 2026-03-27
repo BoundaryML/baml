@@ -19,7 +19,8 @@ class user.Partial {
   field1: unknown
   field2: unknown
   field3: string
-  field4: string
+  field4: string @alias(// Unclosed attribute
+  field5)
   string: unknown
 }
 function user.NextFunction() -> string throws never {
@@ -30,8 +31,9 @@ function user.NextFunction() -> string throws never {
 enum user.VALUE1
 enum user.ValidEnum
 class user.Test {
-  field1: string
-  field2: string
+  field1: string @alias("closed string")
+  field2: string @alias("unclosed string
+  field3 string @alias(")
   another: unknown
   string: ")  // Should still parse this
 }"

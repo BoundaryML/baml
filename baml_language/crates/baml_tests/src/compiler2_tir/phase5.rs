@@ -490,9 +490,20 @@ fn rust_type_field_lowers_to_rust_type() {
 
     // Lower $rust_type — should produce Ty::RustType
     let mut diags = Vec::new();
-    let ty = lower_type_expr(&db, &TypeExpr::Rust, items, &[], &mut diags);
+    let ty = lower_type_expr(
+        &db,
+        &TypeExpr::Rust { attrs: vec![] },
+        items,
+        &[],
+        &mut diags,
+    );
 
-    assert_eq!(ty, baml_compiler2_tir::ty::Ty::RustType);
+    assert_eq!(
+        ty,
+        baml_compiler2_tir::ty::Ty::RustType {
+            attr: Default::default()
+        }
+    );
     assert!(diags.is_empty(), "No diagnostics expected for $rust_type");
 }
 
@@ -541,7 +552,10 @@ fn cross_namespace_type_resolution_via_root() {
     let segments = vec![Name::new("root"), Name::new("llm"), Name::new("Response")];
     let ty = lower_type_expr_in_ns(
         &db,
-        &baml_compiler2_ast::TypeExpr::Path(segments),
+        &baml_compiler2_ast::TypeExpr::Path {
+            segments,
+            attrs: vec![],
+        },
         pkg_items,
         &[], // root namespace context
         &[],
@@ -553,7 +567,7 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
         "root.llm.Response should not resolve to Unknown"
     );
 
@@ -563,7 +577,10 @@ fn cross_namespace_type_resolution_via_root() {
     let pkg_info = file_package(&db, ns_file);
     let ty = lower_type_expr_in_ns(
         &db,
-        &baml_compiler2_ast::TypeExpr::Path(segments),
+        &baml_compiler2_ast::TypeExpr::Path {
+            segments,
+            attrs: vec![],
+        },
         pkg_items,
         &pkg_info.namespace_path, // ["llm"] namespace context
         &[],
@@ -575,7 +592,7 @@ fn cross_namespace_type_resolution_via_root() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
         "root.Config should not resolve to Unknown from llm namespace"
     );
 }
@@ -599,7 +616,10 @@ fn same_namespace_resolution_no_prefix() {
     let segments = vec![Name::new("LLMConfig")];
     let ty = lower_type_expr_in_ns(
         &db,
-        &baml_compiler2_ast::TypeExpr::Path(segments),
+        &baml_compiler2_ast::TypeExpr::Path {
+            segments,
+            attrs: vec![],
+        },
         pkg_items,
         &[Name::new("llm")], // llm namespace context
         &[],
@@ -611,7 +631,7 @@ fn same_namespace_resolution_no_prefix() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
         "LLMConfig should not resolve to Unknown within same namespace"
     );
 }
@@ -651,7 +671,10 @@ fn nested_namespace_resolution() {
     ];
     let ty = lower_type_expr_in_ns(
         &db,
-        &baml_compiler2_ast::TypeExpr::Path(segments),
+        &baml_compiler2_ast::TypeExpr::Path {
+            segments,
+            attrs: vec![],
+        },
         pkg_items,
         &[],
         &[],
@@ -663,7 +686,7 @@ fn nested_namespace_resolution() {
         diags
     );
     assert!(
-        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown),
+        !matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
         "root.llm.openai.OpenAIClient should not resolve to Unknown"
     );
 }

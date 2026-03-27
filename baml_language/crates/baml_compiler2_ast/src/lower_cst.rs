@@ -1104,7 +1104,7 @@ fn lower_attributes_from_node(node: &SyntaxNode) -> Vec<RawAttribute> {
 }
 
 /// Lower a single field attribute (single @).
-fn lower_attribute(attr: &ast::Attribute) -> Option<RawAttribute> {
+pub(crate) fn lower_attribute(attr: &ast::Attribute) -> Option<RawAttribute> {
     let name_token = attr.name()?;
     let attr_name = attr
         .full_name()
