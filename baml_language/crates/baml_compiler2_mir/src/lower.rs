@@ -786,12 +786,19 @@ impl<'db> LoweringContext<'db> {
     /// Used for `TypedBinding` patterns where TIR may not have populated the
     /// bindings map (e.g. catch arm and match arm patterns).
     fn resolve_type_annotation(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Ty {
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr;
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package);
         let pkg_items = package_items(self.db, pkg_id);
         let mut diags = Vec::new();
-        let tir_ty = lower_type_expr(self.db, ty_expr, pkg_items, &[], &mut diags);
+        let tir_ty = lower_type_expr_in_ns(
+            self.db,
+            ty_expr,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &[],
+            &mut diags,
+        );
         convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
     }
 }
@@ -800,7 +807,7 @@ impl<'db> LoweringContext<'db> {
 
 impl LoweringContext<'_> {
     fn lower_function_body(&mut self) -> MirFunction {
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr;
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
 
         let func_loc = self
             .func_loc
@@ -817,7 +824,14 @@ impl LoweringContext<'_> {
             .as_ref()
             .map(|te| {
                 let mut diags = Vec::new();
-                let tir_ty = lower_type_expr(self.db, te, pkg_items, &[], &mut diags);
+                let tir_ty = lower_type_expr_in_ns(
+                    self.db,
+                    te,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &[],
+                    &mut diags,
+                );
                 convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
             })
             .unwrap_or(Ty::Null {
@@ -855,20 +869,35 @@ impl LoweringContext<'_> {
                 enclosing_class_name
                     .as_ref()
                     .and_then(|cn| {
-                        pkg_items.lookup_type(&[], cn).map(|def| {
-                            let tir_ty = baml_compiler2_tir::ty::Ty::Class(
-                                baml_compiler2_tir::lower_type_expr::qualify_def(self.db, def, cn),
-                                baml_compiler2_tir::ty::TyAttr::default(),
-                            );
-                            convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
-                        })
+                        pkg_items
+                            .lookup_type(&pkg_info.namespace_path, cn)
+                            .map(|def| {
+                                let tir_ty = baml_compiler2_tir::ty::Ty::Class(
+                                    baml_compiler2_tir::lower_type_expr::qualify_def(
+                                        self.db, def, cn,
+                                    ),
+                                    baml_compiler2_tir::ty::TyAttr::default(),
+                                );
+                                convert_tir2_ty(
+                                    &tir_ty,
+                                    &self.type_aliases,
+                                    &self.recursive_aliases,
+                                )
+                            })
                     })
                     .unwrap_or(Ty::Null {
                         attr: TyAttr::default(),
                     })
             } else {
                 let mut diags = Vec::new();
-                let tir_ty = lower_type_expr(self.db, param_te, pkg_items, &[], &mut diags);
+                let tir_ty = lower_type_expr_in_ns(
+                    self.db,
+                    param_te,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &[],
+                    &mut diags,
+                );
                 convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
             };
             let local = self

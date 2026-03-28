@@ -2,9 +2,9 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
-fn user.llm.UseConfig(cfg: Config) -> void {
+fn user.llm.UseConfig(cfg: Config) -> llm.Response {
     // Locals:
-    let _0: void // _0 // return
+    let _0: llm.Response // _0 // return
     let _1: Config // cfg // param
     let _2: string
 

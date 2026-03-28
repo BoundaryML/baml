@@ -133,7 +133,7 @@ function baml.fs.open(path: string) -> void {
 
 function baml.http.Response.ok(self: null) -> bool {
     load_var self
-    load_field .0
+    load_field .status_code
     load_const 200
     cmp_op >=
     store_var _2
@@ -142,7 +142,7 @@ function baml.http.Response.ok(self: null) -> bool {
     load_var _2
     pop_jump_if_false L0
     load_var self
-    load_field .0
+    load_field .status_code
     load_const 300
     cmp_op <
     store_var _0
@@ -173,7 +173,7 @@ function baml.llm.Client.build_attempt(self: null) -> void[] {
 
 function baml.llm.Client.build_attempt_with_state(self: null, planner_state: void) -> void[] {
     load_var self
-    load_field .1
+    load_field .client_type
     discriminant
     copy 0
     load_const ClientType.Primitive
@@ -193,7 +193,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
   L1:
     pop 1
     load_var self
-    load_field .2
+    load_field .sub_clients
     call baml.Array.length
     load_const 0
     cmp_op ==
@@ -202,13 +202,13 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
 
   L2:
     load_var self
-    load_field .0
+    load_field .name
     store_var _32
     load_var self
-    load_field .4
+    load_field .counter
     store_var _33
     load_var self
-    load_field .2
+    load_field .sub_clients
     call baml.Array.length
     store_var _34
     load_var planner_state
@@ -218,7 +218,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
     call baml.llm.PlannerState.rr_pick_index
     store_var idx
     load_var self
-    load_field .2
+    load_field .sub_clients
     load_var idx
     load_array_element
     load_var planner_state
@@ -233,7 +233,7 @@ function baml.llm.Client.build_attempt_with_state(self: null, planner_state: voi
     alloc_array 0
     store_var steps
     load_var self
-    load_field .2
+    load_field .sub_clients
     store_var _12
     load_const 0
     store_var __for_idx
@@ -319,11 +319,11 @@ function baml.llm.Client.build_plan(self: null) -> void[] {
 
 function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) -> void[] {
     load_var self
-    load_field .3
+    load_field .retry
     store_var _3
     load_var _3
-    pop 1
-    load_const false
+    load_const baml.llm.RetryPolicy
+    cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
@@ -446,11 +446,11 @@ function baml.llm.Client.build_plan_with_state(self: null, planner_state: void) 
 
 function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: int) -> void {
     load_var self
-    load_field .3
+    load_field .retry
     store_var _4
     load_var _4
-    pop 1
-    load_const false
+    load_const baml.llm.RetryPolicy
+    cmp_op instanceof
     pop_jump_if_false L0
     jump L1
 
@@ -558,7 +558,7 @@ function baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: 
 
 function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms: int) -> void {
     load_var self
-    load_field .1
+    load_field .client_type
     discriminant
     copy 0
     load_const ClientType.Primitive
@@ -578,20 +578,20 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
   L1:
     pop 1
     load_var self
-    load_field .4
+    load_field .counter
     store_var _57
     load_var self
-    load_field .2
+    load_field .sub_clients
     call baml.Array.length
     store_var _58
     load_var self
     load_var self
-    load_field .4
+    load_field .counter
     load_const 1
     bin_op +
-    store_field .4
+    store_field .counter
     load_var self
-    load_field .2
+    load_field .sub_clients
     load_var _57
     load_var _58
     bin_op %
@@ -603,7 +603,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
 
   L2:
     load_var self
-    load_field .2
+    load_field .sub_clients
     store_var _46
     load_const 0
     store_var __for_idx
@@ -652,9 +652,9 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     store_var primitive
     load_var primitive
     load_var context
-    load_field .0
+    load_field .jinja_string
     load_var context
-    load_field .1
+    load_field .args
     dispatch_future baml.llm.PrimitiveClient.render_prompt
     await
     store_var prompt
@@ -688,7 +688,7 @@ function baml.llm.Client.execute_once(self: null, context: void, active_delay_ms
     await
     store_var body
     load_var context
-    load_field .2
+    load_field .function_name
     dispatch_future baml.llm.get_return_type
     await
     store_var return_type
@@ -724,7 +724,7 @@ function baml.llm.Client.get_constructor(self: null) -> () -> void {
 
 function baml.llm.Client.to_primitive_client(self: null) -> void {
     load_var self
-    load_field .0
+    load_field .name
     load_const "/"
     call baml.String.includes
     pop_jump_if_false L0
@@ -742,7 +742,7 @@ function baml.llm.Client.to_primitive_client(self: null) -> void {
     copy 0
     load_const "Invalid short hand name: "
     load_var self
-    load_field .0
+    load_field .name
     bin_op +
     store_field .message
     throw
@@ -752,7 +752,7 @@ function baml.llm.PlannerState.rr_local_offset(self: null, client_name: string) 
     load_const 0
     store_var offset
     load_var self
-    load_field .0
+    load_field .rr_client_names
     store_var _4
     load_const 0
     store_var __for_idx
@@ -795,7 +795,7 @@ function baml.llm.PlannerState.rr_pick_index(self: null, client_name: string, co
     call baml.llm.PlannerState.rr_local_offset
     store_var local_offset
     load_var self
-    load_field .0
+    load_field .rr_client_names
     load_var client_name
     call baml.Array.push
     pop 1
