@@ -3,7 +3,10 @@
 use std::borrow::Cow;
 
 use ::baml_type::{TyAttrValue, TypeName};
-use ::std::{collections::HashMap, sync::Arc};
+use ::std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use ::sys_types::{ClassDefinition, EnumDefinition};
 use indexmap::IndexMap;
 
@@ -65,6 +68,7 @@ pub struct TypeCtx {
     class_definitions: IndexMap<baml_type::TypeName, ClassDefinition>,
     enum_definitions: Arc<IndexMap<baml_type::TypeName, EnumDefinition>>,
     type_alias_definitions: HashMap<baml_type::TypeName, baml_type::Ty>,
+    sap_parseable: HashMap<TypeName, bool>,
 }
 impl TypeCtx {
     /// The reason `enum_definitions` is an `Arc` while the others aren't is that
@@ -88,7 +92,7 @@ impl TypeCtx {
                 (k.clone(), v)
             })
             .collect();
-        let class_definitions = class_definitions
+        let class_definitions: IndexMap<baml_type::TypeName, ClassDefinition> = class_definitions
             .iter()
             .map(|(k, v)| {
                 let fields = v.fields.iter().map(|field| {
@@ -109,10 +113,37 @@ impl TypeCtx {
                 (k.clone(), class)
             })
             .collect();
+        // Recursively check which named types are SAP-parsable.
+        // Types can be recursive (e.g. `class Tree { children: Tree[] }`), so we
+        // track which names are currently being checked. If we encounter a name
+        // already on the stack, we optimistically treat it as parsable — the
+        // recursion itself is fine, only structurally unparsable leaves cause a
+        // type to be non-parsable.
+        let mut sap_parseable: HashMap<TypeName, bool> = HashMap::new();
+        let all_names: Vec<TypeName> = class_definitions
+            .keys()
+            .chain(enum_definitions.keys())
+            .chain(type_alias_definitions.keys())
+            .cloned()
+            .collect();
+
+        let mut checking = HashSet::new();
+        for name in &all_names {
+            check_parseable(
+                name,
+                &class_definitions,
+                &type_alias_definitions,
+                &enum_definitions,
+                &mut sap_parseable,
+                &mut checking,
+            );
+        }
+
         Self {
             class_definitions,
             enum_definitions,
             type_alias_definitions,
+            sap_parseable,
         }
     }
 
@@ -120,6 +151,9 @@ impl TypeCtx {
     pub fn build_db(&self) -> Result<TypeRefDb<'_, TypeName>, ConvertError<'_>> {
         let mut db = TypeRefDb::new();
         for (name, cls) in &self.class_definitions {
+            if self.sap_parseable.get(name).is_some_and(|v| !v) {
+                continue;
+            }
             let cls = self.convert_class(name, cls)?;
             db.try_add_inner(name.clone(), TyResolved::Class(cls))
                 .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
@@ -130,6 +164,9 @@ impl TypeCtx {
                 .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
         }
         for (name, alias_ty) in &self.type_alias_definitions {
+            if self.sap_parseable.get(name).is_some_and(|v| !v) {
+                continue;
+            }
             let alias_ty = self.convert_type_alias(name, alias_ty, 0)?;
             db.try_add_inner(name.clone(), alias_ty)
                 .map_err(|_| ConvertError::AlreadyPresent(name.clone()))?;
@@ -311,12 +348,17 @@ impl TypeCtx {
                 sap_model::Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b))),
                 convert_ty_attrs(attr)?,
             ),
-            baml_type::Ty::Class(type_name, attr) => TyWithMeta::new(
-                // currently [`ClassDefinition`] does not have attributes attached to it.
-                // They will probably get lifted earlier in the conversion process, but if not then we would do it here.
-                sap_model::Ty::Unresolved(type_name.clone()),
-                convert_ty_attrs(attr)?,
-            ),
+            baml_type::Ty::Class(type_name, attr) => {
+                if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
+                    return Err(ConvertError::NonParsableType(ty));
+                }
+                TyWithMeta::new(
+                    // currently [`ClassDefinition`] does not have attributes attached to it.
+                    // They will probably get lifted earlier in the conversion process, but if not then we would do it here.
+                    sap_model::Ty::Unresolved(type_name.clone()),
+                    convert_ty_attrs(attr)?,
+                )
+            }
             baml_type::Ty::Enum(type_name, attr) => TyWithMeta::new(
                 sap_model::Ty::Unresolved(type_name.clone()),
                 convert_ty_attrs(attr)?,
@@ -399,6 +441,9 @@ impl TypeCtx {
                 )
             }
             baml_type::Ty::TypeAlias(type_name, attr) => {
+                if self.sap_parseable.get(type_name).is_some_and(|v| !v) {
+                    return Err(ConvertError::NonParsableType(ty));
+                }
                 // if it hasn't already, we flatten type aliases:
                 // with `type A = B; type B = C; class C { ... }`,
                 // a type reference `name:A` becomes `name:C`
@@ -560,5 +605,100 @@ fn merge_ty_attrs(outer: &baml_type::TyAttr, inner: &baml_type::TyAttr) -> baml_
             .chain(inner.asserts.iter())
             .cloned()
             .collect(),
+    }
+}
+
+fn check_parseable(
+    name: &TypeName,
+    class_definitions: &IndexMap<TypeName, ClassDefinition>,
+    type_alias_definitions: &HashMap<TypeName, baml_type::Ty>,
+    enum_definitions: &IndexMap<TypeName, EnumDefinition>,
+    cache: &mut HashMap<TypeName, bool>,
+    checking: &mut HashSet<TypeName>,
+) -> bool {
+    if let Some(&result) = cache.get(name) {
+        return result;
+    }
+    // Recursive type — assume parsable to break the cycle.
+    if !checking.insert(name.clone()) {
+        return true;
+    }
+
+    let result = if let Some(class_def) = class_definitions.get(name) {
+        // A class is parsable if all its non-skipped fields are parsable.
+        class_def.fields.iter().filter(|f| !f.skip).all(|field| {
+            match is_sap_parseable(&field.field_type) {
+                Err(()) => false,
+                Ok(deps) => deps.iter().all(|dep| {
+                    check_parseable(
+                        dep,
+                        class_definitions,
+                        type_alias_definitions,
+                        enum_definitions,
+                        cache,
+                        checking,
+                    )
+                }),
+            }
+        })
+    } else if enum_definitions.contains_key(name) {
+        // Enums are always parsable.
+        true
+    } else if let Some(alias_ty) = type_alias_definitions.get(name) {
+        match is_sap_parseable(alias_ty) {
+            Err(()) => false,
+            Ok(deps) => deps.iter().all(|dep| {
+                check_parseable(
+                    dep,
+                    class_definitions,
+                    type_alias_definitions,
+                    enum_definitions,
+                    cache,
+                    checking,
+                )
+            }),
+        }
+    } else {
+        // Unknown name — not parsable.
+        false
+    };
+
+    checking.remove(name);
+    cache.insert(name.clone(), result);
+    result
+}
+
+fn is_sap_parseable(ty: &baml_type::Ty) -> Result<Vec<TypeName>, ()> {
+    match ty {
+        baml_type::Ty::Int { .. }
+        | baml_type::Ty::Float { .. }
+        | baml_type::Ty::String { .. }
+        | baml_type::Ty::Bool { .. }
+        | baml_type::Ty::Null { .. }
+        | baml_type::Ty::Literal(..) => Ok(Vec::new()),
+        baml_type::Ty::Media(..) => Err(()),
+        baml_type::Ty::Class(name, _) => Ok(vec![name.clone()]),
+        baml_type::Ty::Enum(..) | baml_type::Ty::EnumVariant(..) => Ok(Vec::new()),
+        baml_type::Ty::Optional(inner, _) => is_sap_parseable(inner),
+        baml_type::Ty::List(inner, _) => is_sap_parseable(inner),
+        baml_type::Ty::Map { key, value, .. } => {
+            let keys = is_sap_parseable(key)?;
+            let values = is_sap_parseable(value)?;
+            Ok(keys.into_iter().chain(values).collect())
+        }
+        baml_type::Ty::Union(members, _) => {
+            let mut names = Vec::new();
+            for member in members {
+                names.extend(is_sap_parseable(member)?);
+            }
+            Ok(names)
+        }
+        baml_type::Ty::TypeAlias(name, _) => Ok(vec![name.clone()]),
+        baml_type::Ty::Opaque(..)
+        | baml_type::Ty::Function { .. }
+        | baml_type::Ty::Void { .. }
+        | baml_type::Ty::WatchAccessor(..)
+        | baml_type::Ty::BuiltinUnknown { .. }
+        | baml_type::Ty::Future(..) => Err(()),
     }
 }
