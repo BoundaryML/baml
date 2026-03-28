@@ -44,38 +44,38 @@ function test_multiple_classes(x: Foo | Bar | Baz) -> string {
 //----
 //- diagnostics
 // Error: unresolved member: user.Bar.field
-//     ╭─[ expr_instanceof_narrowing.baml:13:15 ]
+//     ╭─[ expr_instanceof_narrowing.baml:13:18 ]
 //     │
 //  13 │         return x.field;
-//     │               ────┬───  
-//     │                   ╰───── unresolved member: user.Bar.field
+//     │                  ──┬──  
+//     │                    ╰──── unresolved member: user.Bar.field
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: null.field
-//     ╭─[ expr_instanceof_narrowing.baml:23:15 ]
+//     ╭─[ expr_instanceof_narrowing.baml:23:18 ]
 //     │
 //  23 │         return x.field;
-//     │               ────┬───  
-//     │                   ╰───── unresolved member: null.field
+//     │                  ──┬──  
+//     │                    ╰──── unresolved member: null.field
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.Bar.field
-//     ╭─[ expr_instanceof_narrowing.baml:36:15 ]
+//     ╭─[ expr_instanceof_narrowing.baml:36:18 ]
 //     │
 //  36 │         return x.field;
-//     │               ────┬───  
-//     │                   ╰───── unresolved member: user.Bar.field
+//     │                  ──┬──  
+//     │                    ╰──── unresolved member: user.Bar.field
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.Bar.field
-//     ╭─[ expr_instanceof_narrowing.baml:38:15 ]
+//     ╭─[ expr_instanceof_narrowing.baml:38:18 ]
 //     │
 //  38 │         return x.field;
-//     │               ────┬───  
-//     │                   ╰───── unresolved member: user.Bar.field
+//     │                  ──┬──  
+//     │                    ╰──── unresolved member: user.Bar.field
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
