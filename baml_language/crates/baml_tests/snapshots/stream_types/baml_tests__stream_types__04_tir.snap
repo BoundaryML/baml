@@ -385,7 +385,7 @@ class user.foo.NsRefToTop$stream {
   inner: null | user.Inner$stream
   status: null | user.Status
   items: user.Inner$stream[]
-  alias_ref: null | user.Inner$stream
+  alias_ref: null | unknown
 }
 class user.TopRefToNs {
   ns_class: user.foo.NsClass

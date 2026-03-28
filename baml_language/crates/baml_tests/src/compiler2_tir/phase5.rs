@@ -692,7 +692,6 @@ fn nested_namespace_resolution() {
 }
 
 #[test]
-#[ignore] // Passes after Phase 3 removes bare fallback
 fn bare_name_cross_namespace_rejected() {
     // Config is in root, but ns_context is ["llm"] — bare "Config" should not resolve
     use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
@@ -726,7 +725,6 @@ fn bare_name_cross_namespace_rejected() {
 }
 
 #[test]
-#[ignore] // Passes after Phase 3
 fn multi_segment_bare_path_rejected() {
     // "ns2.MyClass" from ns1 without root. prefix should fail
     use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;

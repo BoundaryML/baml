@@ -11,10 +11,11 @@ class user.Config$stream {
 class user.llm.Response {
   text: string
 }
-function user.llm.UseConfig(cfg: user.Config) -> user.llm.Response throws never {
+function user.llm.UseConfig(cfg: unknown) -> user.llm.Response throws never {
   { : user.llm.Response
     Response { text: cfg.key } : user.llm.Response
   }
+  !! 187..198: unresolved type: Config. Did you mean `root.Config`?
 }
 class user.llm.Response$stream {
   text: null | string

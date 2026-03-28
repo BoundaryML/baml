@@ -58,10 +58,7 @@ pub fn lower_type_expr_in_ns(
             let resolved = if !ns_context.is_empty() {
                 let ns: Vec<baml_base::Name> =
                     ns_context.iter().chain(seg_ns.iter()).cloned().collect();
-                package_items.lookup_type(&ns, item).or_else(|| {
-                    // Bare fallback — resolve in root namespace with segments as path
-                    package_items.lookup_type(seg_ns, item)
-                })
+                package_items.lookup_type(&ns, item)
             } else {
                 package_items.lookup_type(seg_ns, item)
             };
@@ -105,13 +102,35 @@ pub fn lower_type_expr_in_ns(
                         return Ty::TypeVar(segments[0].clone(), TyAttr::default());
                     }
                 }
-                let name = segments
+                let name_str = segments
                     .iter()
                     .map(smol_str::SmolStr::as_str)
                     .collect::<Vec<_>>()
                     .join(".");
+                // Scan all namespaces for the item name to build "did you mean" suggestions.
+                // Only do this for single-segment bare names — multi-segment paths already
+                // encode the intended namespace.
+                let mut suggestions = Vec::new();
+                if segments.len() == 1 {
+                    for (ns_path, ns_items) in &package_items.namespaces {
+                        if ns_items.types.contains_key(item) {
+                            if ns_path.is_empty() {
+                                suggestions.push(format!("root.{item}"));
+                            } else {
+                                let ns_str = ns_path
+                                    .iter()
+                                    .map(smol_str::SmolStr::as_str)
+                                    .collect::<Vec<_>>()
+                                    .join(".");
+                                suggestions.push(format!("root.{ns_str}.{item}"));
+                            }
+                        }
+                    }
+                    suggestions.sort();
+                }
                 diagnostics.push(TirTypeError::UnresolvedType {
-                    name: baml_base::Name::new(&name),
+                    name: baml_base::Name::new(&name_str),
+                    suggestions,
                 });
                 Ty::Unknown {
                     attr: TyAttr::default(),
