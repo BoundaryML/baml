@@ -158,8 +158,8 @@ fn user.HeadersAroundExpressions() -> string {
 fn user.HeadersInComplexNesting() -> string {
     // Locals:
     let _0: string // _0 // return
-    let _1: string | "else value" // result
-    let _2: string | "else value" // inner
+    let _1: string // result
+    let _2: string // inner
     let _3: string // deep
 
     bb0: {

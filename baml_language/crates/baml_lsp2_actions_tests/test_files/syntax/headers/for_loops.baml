@@ -27,12 +27,4 @@ function ForLoopWithHeaders() -> int {
 
 //----
 //- diagnostics
-// Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `2`
-//    ╭─[ headers_for_loops.baml:9:25 ]
-//    │
-//  9 │         let processed = item * 2;
-//    │                         ────┬───  
-//    │                             ╰───── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `2`
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// <no-diagnostics-expected>

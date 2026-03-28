@@ -16,15 +16,7 @@ function ForInLoop() -> int {
 
 //----
 //- diagnostics
-// Error: operator `Add` cannot be applied to `int` and `1 | 2 | 3`
-//     ╭─[ for_loops.baml:12:11 ]
-//     │
-//  12 │     sum = sum + x;
-//     │           ───┬───  
-//     │              ╰───── operator `Add` cannot be applied to `int` and `1 | 2 | 3`
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+// <no-diagnostics-expected>
 //
 //- semantic_tokens
 // for_loops.baml:1:1 (keyword) len=8 "function"

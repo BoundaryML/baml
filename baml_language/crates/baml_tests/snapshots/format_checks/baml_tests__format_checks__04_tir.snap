@@ -785,7 +785,7 @@ function user.DeeplyNestedBody(a: int, b: int, c: int) -> int throws never {
   }
 }
 function user.ManyNestedExprs(items: int[]) -> int throws never {
-  { : unknown
+  { : int
     let a = items[0] : int
     let b = items[1] : int
     let c = : int
@@ -797,20 +797,19 @@ function user.ManyNestedExprs(items: int[]) -> int throws never {
         { : int
           b : int
         }
-    let d = : 1 | int
+    let d = : 1 | int -> int
       match (c : int) : 1 | int
         0 =>
           1 : 1
         _ =>
           c Mul 2 : int
-    let e = : unknown
-      { : unknown
-        let inner = d Add a : unknown
-        inner Mul inner : unknown
+    let e = : int
+      { : int
+        let inner = d Add a : int
+        inner Mul inner : int
       }
-    e Add d Add c Add b Add a : unknown
+    e Add d Add c Add b Add a : int
   }
-  !! 10192..10197: operator `Add` cannot be applied to `1 | int` and `int`
 }
 function user.NestedLoops(matrix: int[][]) -> int throws never {
   { : never
@@ -1019,13 +1018,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
       }
     for x in [1, 2, 3, 4, 5]
       { : void
-        result Add= x : unknown
+        result Add= x : int
       }
     for i in [1, 2, 3]
       { : void
         for j in [4, 5, 6]
           { : void
-            result Add= i Mul j : unknown
+            result Add= i Mul j : int
           }
       }
     { : void
@@ -1116,7 +1115,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           { : void
             for k in [7, 8, 9]
               { : void
-                result Add= i Mul j Mul k : unknown
+                result Add= i Mul j Mul k : int
               }
           }
       }
@@ -1145,7 +1144,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
         for j in [10, 20, 30, 40, 50]
           { : void
             let val = : int
-              match (i Mul j : unknown) : int
+              match (i Mul j : int) : int
                 0 =>
                   { : never
                     break
@@ -1173,7 +1172,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
                   let lvl4 = 0 : 0 -> int
                   while lvl4 Lt 2
                     { : void
-                      result Add= lvl1 Add lvl2 Add lvl3 Add lvl4 : unknown
+                      result Add= lvl1 Add lvl2 Add lvl3 Add lvl4 : int
                       lvl4 Add= 1 : int
                     }
                 }
@@ -1195,22 +1194,22 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
       { : void
         for j in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
           { : void
-            let computation = : unknown | 0
-              if (i Mul j Gt 500 And i Add j Lt 100 : bool) : unknown | 0
-                { : unknown
-                  match (i Mod 3 : unknown) : unknown
+            let computation = : int | 0 -> int
+              if (i Mul j Gt 500 And i Add j Lt 100 : bool) : int | 0
+                { : int
+                  match (i Mod 3 : int) : int
                     0 =>
-                      i Mul j Add result : unknown
+                      i Mul j Add result : int
                     1 =>
-                      i Mul j Sub result : unknown
+                      i Mul j Sub result : int
                     _ =>
-                      i Mul j : unknown
+                      i Mul j : int
                 }
               else
                 { : 0
                   0 : 0
                 }
-            result Add= computation : unknown
+            result Add= computation : int
           }
       }
     while a Lt 10
@@ -1242,20 +1241,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
     let another_extremely_long_variable_name = a Mul a Add result Mul result Add a Mul result Add a Add result Add a Mul a Mul a Add result Mul result Mul result Add a Mul result Mul a Add result Mul a Mul result : int
     return result : int
   }
-  !! 2013..2019: operator `Add` cannot be applied to `int` and `1 | 2 | 3 | 4 | 5`
-  !! 2158..2163: operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
-  !! 11405..11410: operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
-  !! 12049..12054: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `10 | 20 | 30 | 40 | 50`
   !! 12080..12107: unreachable code: 1 statement(s) after diverging statement
   !! 12187..12217: unreachable code: 1 statement(s) after diverging statement
-  !! 12644..12655: operator `Add` cannot be applied to `int` and `1 | 2`
-  !! 13267..13272: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-  !! 13282..13287: operator `Add` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-  !! 13320..13325: operator `Mod` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `3`
-  !! 13354..13359: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-  !! 13395..13400: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-  !! 13436..13441: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-  !! 13526..13532: operator `Add` cannot be applied to `int` and `unknown | 0`
 }
 function user.AssertStmts(x: int, y: int) -> int throws never {
   { : int
@@ -1423,10 +1410,10 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
     match (s : user.MatchStatus) : "this arm has many long enum variant names that together push past the limit easily"
       MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending =>
         "this arm has many..." : "this arm has many long enum variant names that together push past the limit easily"
-    match (x : int) : "this is the true branch with a very long string" | "this is the false branch also very long" | "short"
+    match (x : int) : string | "short"
       0 =>
-        { : "this is the true branch with a very long string" | "this is the false branch also very long"
-          let result = : "this is the true branch with a very long string" | "this is the false branch also very long"
+        { : string
+          let result = : "this is the true branch with a very long string" | "this is the false branch also very long" -> string
             if (b : bool) : "this is the true branch with a very long string" | "this is the false branch also very long"
               { : "this is the true branch with a very long string"
                 "this is the true ..." : "this is the true branch with a very long string"
@@ -1435,7 +1422,7 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
               { : "this is the false branch also very long"
                 "this is the false..." : "this is the false branch also very long"
               }
-          result : "this is the true branch with a very long string" | "this is the false branch also very long"
+          result : string
         }
       _ =>
         "short" : "short"

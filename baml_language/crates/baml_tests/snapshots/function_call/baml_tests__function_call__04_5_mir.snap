@@ -5,8 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
 fn user.array_length() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: 1 | 2 | 3[] // array
-    let _2: 1 | 2 | 3[]
+    let _1: int[] // array
+    let _2: int[]
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];

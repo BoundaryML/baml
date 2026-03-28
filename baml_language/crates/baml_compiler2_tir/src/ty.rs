@@ -282,6 +282,39 @@ pub enum Freshness {
 /// Re-export `baml_base::Literal` as `LiteralValue` for backward compatibility.
 pub type LiteralValue = baml_base::Literal;
 
+/// Flatten, deduplicate, and collapse a vec of widened types into a single `Ty`.
+///
+/// After `widen_fresh()` has run on each union member, multiple members may
+/// have widened to the same primitive (e.g. `[Literal(1,Fresh), Literal(2,Fresh)]`
+/// both become `Primitive(Int)`). This helper deduplicates and collapses:
+/// - Flattens nested unions one level
+/// - Deduplicates by `PartialEq`
+/// - Unwraps singletons
+fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
+    let mut members: Vec<Ty> = Vec::new();
+    for ty in types {
+        match ty {
+            Ty::Union(inner, _) => {
+                for m in inner {
+                    if !members.contains(&m) {
+                        members.push(m);
+                    }
+                }
+            }
+            _ => {
+                if !members.contains(&ty) {
+                    members.push(ty);
+                }
+            }
+        }
+    }
+    match members.len() {
+        0 => Ty::Never { attr },
+        1 => members.into_iter().next().unwrap(),
+        _ => Ty::Union(members, attr),
+    }
+}
+
 impl Ty {
     /// Access the `TyAttr` on this type.
     pub fn attr(&self) -> &TyAttr {
@@ -343,12 +376,26 @@ impl Ty {
     ///
     /// Called at mutable binding sites (`let` without annotation).
     /// Regular (non-fresh) literals pass through unchanged.
+    ///
+    /// Recurses into `Union`, `List`, `Map`, and `Optional` so that compound
+    /// types like `(1 | 2 | 3)[]` widen to `int[]` at unannotated bindings.
     #[must_use]
     pub fn widen_fresh(self) -> Ty {
         match self {
             Ty::Literal(lit, Freshness::Fresh, attr) => {
                 Ty::Primitive(PrimitiveType::from_literal(&lit), attr)
             }
+            Ty::Union(members, attr) => {
+                let widened: Vec<Ty> = members.into_iter().map(Ty::widen_fresh).collect();
+                dedup_and_collapse(widened, attr)
+            }
+            Ty::List(inner, attr) => Ty::List(Box::new((*inner).widen_fresh()), attr),
+            Ty::Map(k, v, attr) => Ty::Map(
+                Box::new((*k).widen_fresh()),
+                Box::new((*v).widen_fresh()),
+                attr,
+            ),
+            Ty::Optional(inner, attr) => Ty::Optional(Box::new((*inner).widen_fresh()), attr),
             other => other,
         }
     }

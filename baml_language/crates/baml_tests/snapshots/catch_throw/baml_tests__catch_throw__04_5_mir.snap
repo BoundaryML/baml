@@ -311,7 +311,7 @@ fn user.NestedCatch(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: string | "inner caught" // inner
+    let _2: string // inner
     let _3: unknown
     let _4: unknown
 

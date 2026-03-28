@@ -3644,13 +3644,36 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// String concatenation is only valid for `Add`; other arithmetic ops on
     /// strings are invalid and return `Unknown` (triggering an error upstream).
     fn infer_arithmetic(op: baml_compiler2_ast::BinaryOp, lhs: &Ty, rhs: &Ty) -> Ty {
-        let base_ty = |ty: &Ty| -> Option<PrimitiveType> {
+        fn promote(a: PrimitiveType, b: &PrimitiveType) -> Option<PrimitiveType> {
+            if a == *b {
+                return Some(a);
+            }
+            match (&a, &b) {
+                (PrimitiveType::Int, PrimitiveType::Float)
+                | (PrimitiveType::Float, PrimitiveType::Int) => Some(PrimitiveType::Float),
+                _ => None,
+            }
+        }
+
+        fn base_ty(ty: &Ty) -> Option<PrimitiveType> {
             match ty {
                 Ty::Primitive(p, _) => Some(p.clone()),
                 Ty::Literal(lit, _, _) => Some(PrimitiveType::from_literal(lit)),
+                Ty::Union(members, _) => {
+                    let mut result: Option<PrimitiveType> = None;
+                    for m in members {
+                        let p = base_ty(m)?;
+                        result = Some(match result {
+                            None => p,
+                            Some(existing) => promote(existing, &p)?,
+                        });
+                    }
+                    result
+                }
                 _ => None,
             }
-        };
+        }
+
         match (base_ty(lhs), base_ty(rhs)) {
             (Some(PrimitiveType::Float), _) | (_, Some(PrimitiveType::Float)) => {
                 Ty::Primitive(PrimitiveType::Float, TyAttr::default())

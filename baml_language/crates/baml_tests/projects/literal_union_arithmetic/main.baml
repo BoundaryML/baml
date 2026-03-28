@@ -1,0 +1,33 @@
+function ifElseAdd() -> int {
+  1 + if (true) { 2 } else { 3 }
+}
+
+function matchAdd(x: int) -> int {
+  match (x) {
+    1 => 10,
+    2 => 20,
+    _ => 0
+  } + 1
+}
+
+function bothSidesUnion() -> int {
+  (if (true) { 1 } else { 2 }) + (if (false) { 3 } else { 4 })
+}
+
+function subtractUnion() -> int {
+  100 - if (true) { 7 } else { 3 }
+}
+
+function loopMatchAccum() -> int {
+  let sum = 0;
+  let i = 0;
+  while (i < 3) {
+    sum = sum + match (i) {
+      0 => 10,
+      1 => 20,
+      _ => 30
+    };
+    i = i + 1;
+  }
+  return sum;
+}

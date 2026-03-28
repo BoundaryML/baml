@@ -958,7 +958,6 @@ async fn match_union_with_duplicates() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "compiler2: literal union type arithmetic fails - operator cannot be applied to literal union"]
 async fn match_as_expression_in_arithmetic() {
     let output = baml_test!(
         r#"
@@ -2485,7 +2484,6 @@ async fn match_computed_discriminant() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "compiler2: literal union type arithmetic fails - match result in loop arithmetic"]
 async fn match_in_loop() {
     let output = baml_test!(
         r#"
@@ -2527,37 +2525,37 @@ async fn match_in_loop() {
 
       L2:
         load_var sum
-        store_var _10
+        store_var _5
         load_var i
         jump_table [L7, L6, L5, L4], default L3
 
       L3:
         load_const 50
-        store_var _11
+        store_var _6
         jump L8
 
-      L4:
+      L4: 3
         load_const 40
-        store_var _11
+        store_var _6
         jump L8
 
-      L5:
+      L5: 2
         load_const 30
-        store_var _11
+        store_var _6
         jump L8
 
-      L6:
+      L6: 1
         load_const 20
-        store_var _11
+        store_var _6
         jump L8
 
-      L7:
+      L7: 0
         load_const 10
-        store_var _11
+        store_var _6
 
       L8:
-        load_var _10
-        load_var _11
+        load_var _5
+        load_var _6
         bin_op +
         store_var sum
         load_var i
