@@ -46,12 +46,12 @@ function Nested() -> int {
 
 //----
 //- diagnostics
-// Error: type mismatch: expected 1 | 2 | 3, got string
+// Error: type mismatch: expected int, got string
 //    ╭─[ loops_break.baml:6:14 ]
 //    │
 //  6 │     res.push("hi");
 //    │              ──┬─  
-//    │                ╰─── type mismatch: expected 1 | 2 | 3, got string
+//    │                ╰─── type mismatch: expected int, got string
 //    │ 
 //    │ Note: Error code: E0001
 // ───╯

@@ -1543,4 +1543,59 @@ mod tests {
             "map<string, int> (evolving)"
         );
     }
+
+    // ── Literal-union subtype tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_union_of_int_literals_subtype_of_int() {
+        let aliases = HashMap::new();
+        let sub = Ty::Union(
+            vec![
+                Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
+                Ty::Literal(LiteralValue::Int(2), Freshness::Fresh, TyAttr::default()),
+                Ty::Literal(LiteralValue::Int(3), Freshness::Fresh, TyAttr::default()),
+            ],
+            TyAttr::default(),
+        );
+        let sup = Ty::Primitive(PrimitiveType::Int, TyAttr::default());
+        assert!(is_subtype_of(&sub, &sup, &aliases));
+    }
+
+    #[test]
+    fn test_list_of_literal_union_subtype_of_list_int() {
+        let aliases = HashMap::new();
+        let sub = Ty::List(
+            Box::new(Ty::Union(
+                vec![
+                    Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
+                    Ty::Literal(LiteralValue::Int(2), Freshness::Fresh, TyAttr::default()),
+                ],
+                TyAttr::default(),
+            )),
+            TyAttr::default(),
+        );
+        let sup = Ty::List(
+            Box::new(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+            TyAttr::default(),
+        );
+        assert!(is_subtype_of(&sub, &sup, &aliases));
+    }
+
+    #[test]
+    fn test_union_of_int_and_float_literals_subtype_of_float() {
+        let aliases = HashMap::new();
+        let sub = Ty::Union(
+            vec![
+                Ty::Literal(LiteralValue::Int(1), Freshness::Fresh, TyAttr::default()),
+                Ty::Literal(
+                    LiteralValue::Float("2.0".to_string()),
+                    Freshness::Fresh,
+                    TyAttr::default(),
+                ),
+            ],
+            TyAttr::default(),
+        );
+        let sup = Ty::Primitive(PrimitiveType::Float, TyAttr::default());
+        assert!(is_subtype_of(&sub, &sup, &aliases));
+    }
 }

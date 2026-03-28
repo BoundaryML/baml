@@ -288,16 +288,6 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: operator `Add` cannot be applied to `1 | int` and `int`
-     ╭─[ function_decls.baml:414:21 ]
-     │
- 414 │         let inner = d + a;
-     │                     ──┬──  
-     │                       ╰──── operator `Add` cannot be applied to `1 | int` and `int`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
   [type] Error: unresolved name: GPT4
      ╭─[ function_decls.baml:457:2 ]
      │
@@ -401,26 +391,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │             
      │             Note: Error code: E0012
 ─────╯
-
-  [type] Error: operator `Add` cannot be applied to `int` and `1 | 2 | 3 | 4 | 5`
-    ╭─[ loop_stmts.baml:87:9 ]
-    │
- 87 │         result += x;
-    │         ───┬──  
-    │            ╰──── operator `Add` cannot be applied to `int` and `1 | 2 | 3 | 4 | 5`
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
-    ╭─[ loop_stmts.baml:93:23 ]
-    │
- 93 │             result += i * j;
-    │                       ──┬──  
-    │                         ╰──── operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
-    │ 
-    │ Note: Error code: E0001
-────╯
 
   [hir] Error: Duplicate binding `item` in `LoopStmts`
      ╭─[ loop_stmts.baml:151:6 ]
@@ -532,26 +502,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │           Note: Error code: E0012
 ─────╯
 
-  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
-     ╭─[ loop_stmts.baml:375:27 ]
-     │
- 375 │                 result += i * j * k;
-     │                           ──┬──  
-     │                             ╰──── operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `10 | 20 | 30 | 40 | 50`
-     ╭─[ loop_stmts.baml:401:30 ]
-     │
- 401 │             let val = match (i * j) {
-     │                              ──┬──  
-     │                                ╰──── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `10 | 20 | 30 | 40 | 50`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
   [type] Error: unreachable code: 1 statement(s) after diverging statement
      ╭─[ loop_stmts.baml:402:23 ]
      │
@@ -572,86 +522,6 @@ source: crates/baml_tests/src/generated_tests.rs
      │ ╰─────────────────────────────────── unreachable code: 1 statement(s) after diverging statement
      │     
      │     Note: Error code: E0001
-─────╯
-
-  [type] Error: operator `Add` cannot be applied to `int` and `1 | 2`
-     ╭─[ loop_stmts.baml:423:31 ]
-     │
- 423 │                     result += lvl1 + lvl2 + lvl3 + lvl4;
-     │                               ─────┬─────  
-     │                                    ╰─────── operator `Add` cannot be applied to `int` and `1 | 2`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-     ╭─[ loop_stmts.baml:441:35 ]
-     │
- 441 │             let computation = if (i * j > 500 && i + j < 100) {
-     │                                   ──┬──  
-     │                                     ╰──── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: operator `Add` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-     ╭─[ loop_stmts.baml:441:50 ]
-     │
- 441 │             let computation = if (i * j > 500 && i + j < 100) {
-     │                                                  ──┬──  
-     │                                                    ╰──── operator `Add` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: operator `Mod` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `3`
-     ╭─[ loop_stmts.baml:442:24 ]
-     │
- 442 │                 match (i % 3) {
-     │                        ──┬──  
-     │                          ╰──── operator `Mod` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `3`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-     ╭─[ loop_stmts.baml:443:26 ]
-     │
- 443 │                     0 => i * j + result,
-     │                          ──┬──  
-     │                            ╰──── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-     ╭─[ loop_stmts.baml:444:26 ]
-     │
- 444 │                     1 => i * j - result,
-     │                          ──┬──  
-     │                            ╰──── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-     ╭─[ loop_stmts.baml:445:26 ]
-     │
- 445 │                     _ => i * j
-     │                          ──┬──  
-     │                            ╰──── operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-     │ 
-     │ Note: Error code: E0001
-─────╯
-
-  [type] Error: operator `Add` cannot be applied to `int` and `unknown | 0`
-     ╭─[ loop_stmts.baml:450:13 ]
-     │
- 450 │             result += computation;
-     │             ───┬──  
-     │                ╰──── operator `Add` cannot be applied to `int` and `unknown | 0`
-     │ 
-     │ Note: Error code: E0001
 ─────╯
 
   [hir] Error: Duplicate binding `very_long_variable_name_for_testing_wrapping` in `LoopStmts`

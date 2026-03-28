@@ -792,10 +792,14 @@ async fn if_else_logical_and() {
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const true
+        store_var _1
+        load_const true
         pop_jump_if_false L0
+        load_const true
+        store_var _1
 
       L0:
-        load_const true
+        load_var _1
         pop_jump_if_false L1
         jump L2
 
@@ -827,21 +831,28 @@ async fn if_else_logical_or() {
     insta::assert_snapshot!(output.bytecode, @r"
     function main() -> int {
         load_const false
+        store_var _1
+        load_const false
         pop_jump_if_false L0
+        jump L1
 
       L0:
         load_const true
-        pop_jump_if_false L1
-        jump L2
+        store_var _1
 
       L1:
-        load_const 0
+        load_var _1
+        pop_jump_if_false L2
         jump L3
 
       L2:
-        load_const 1
+        load_const 0
+        jump L4
 
       L3:
+        load_const 1
+
+      L4:
         return
     }
     ");
@@ -854,7 +865,6 @@ async fn if_else_logical_or() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "compiler2: literal union type arithmetic fails (Add cannot be applied to 1 and 2|3)"]
 async fn if_else_in_arithmetic() {
     let output = baml_test!(
         "
@@ -872,16 +882,16 @@ async fn if_else_in_arithmetic() {
 
       L0:
         load_const 3
-        store_var _2
+        store_var _1
         jump L2
 
       L1:
         load_const 2
-        store_var _2
+        store_var _1
 
       L2:
         load_const 1
-        load_var _2
+        load_var _1
         bin_op +
         return
     }
@@ -911,9 +921,16 @@ async fn if_else_as_function_arg() {
     function main() -> int {
         load_const false
         pop_jump_if_false L0
+        jump L1
 
       L0:
         load_const 20
+        jump L2
+
+      L1:
+        load_const 10
+
+      L2:
         call user.identity
         return
     }
@@ -963,7 +980,6 @@ async fn if_else_assigned_then_passed_to_call() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: literal union type arithmetic fails (Add cannot be applied to 1|2 and 3|4)"]
 async fn parenthesized_if_else_in_arithmetic() {
     let output = baml_test!(
         "
@@ -995,16 +1011,16 @@ async fn parenthesized_if_else_in_arithmetic() {
 
       L3:
         load_const 4
-        store_var _3
+        store_var _2
         jump L5
 
       L4:
         load_const 3
-        store_var _3
+        store_var _2
 
       L5:
         load_var _1
-        load_var _3
+        load_var _2
         bin_op +
         return
     }
@@ -1014,7 +1030,6 @@ async fn parenthesized_if_else_in_arithmetic() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: literal union type arithmetic fails (Add cannot be applied to 1|2 and 3|4)"]
 async fn chained_if_else_in_arithmetic() {
     let output = baml_test!(
         "
@@ -1046,16 +1061,16 @@ async fn chained_if_else_in_arithmetic() {
 
       L3:
         load_const 4
-        store_var _3
+        store_var _2
         jump L5
 
       L4:
         load_const 3
-        store_var _3
+        store_var _2
 
       L5:
         load_var _1
-        load_var _3
+        load_var _2
         bin_op +
         return
     }
