@@ -5,8 +5,7 @@ class Response {
     text: string
 }
 
-// Root-level types are accessible from child namespaces without root. prefix.
-// Config resolves via fallback to the root namespace.
-function UseConfig(cfg: Config) -> Response {
+// Cross-namespace references require explicit root. prefix.
+function UseConfig(cfg: root.Config) -> Response {
     Response { text: cfg.key }
 }

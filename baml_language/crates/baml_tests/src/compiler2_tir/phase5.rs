@@ -690,3 +690,70 @@ fn nested_namespace_resolution() {
         "root.llm.openai.OpenAIClient should not resolve to Unknown"
     );
 }
+
+#[test]
+#[ignore] // Passes after Phase 3 removes bare fallback
+fn bare_name_cross_namespace_rejected() {
+    // Config is in root, but ns_context is ["llm"] — bare "Config" should not resolve
+    use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+    let mut db = make_db();
+    let _root_file = db.add_file("main.baml", "class Config { key string }");
+    let _ns_file = db.add_file("ns_llm/models.baml", "class Response { text string }");
+
+    let pkg_id = PackageId::new(&db, Name::new("user"));
+    let pkg_items = package_items(&db, pkg_id);
+
+    let segments = vec![Name::new("Config")];
+    let ns_context = vec![Name::new("llm")];
+    let mut diags = Vec::new();
+    let ty = lower_type_expr_in_ns(
+        &db,
+        &baml_compiler2_ast::TypeExpr::Path {
+            segments,
+            attrs: vec![],
+        },
+        pkg_items,
+        &ns_context,
+        &[],
+        &mut diags,
+    );
+    assert!(
+        matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        "bare Config from ns_llm should not resolve"
+    );
+    assert!(!diags.is_empty(), "should emit UnresolvedType diagnostic");
+}
+
+#[test]
+#[ignore] // Passes after Phase 3
+fn multi_segment_bare_path_rejected() {
+    // "ns2.MyClass" from ns1 without root. prefix should fail
+    use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+    let mut db = make_db();
+    let _f1 = db.add_file("ns_ns1/a.baml", "class Foo { x int }");
+    let _f2 = db.add_file("ns_ns2/b.baml", "class MyClass { y string }");
+
+    let pkg_id = PackageId::new(&db, Name::new("user"));
+    let pkg_items = package_items(&db, pkg_id);
+
+    let segments = vec![Name::new("ns2"), Name::new("MyClass")];
+    let ns_context = vec![Name::new("ns1")];
+    let mut diags = Vec::new();
+    let ty = lower_type_expr_in_ns(
+        &db,
+        &baml_compiler2_ast::TypeExpr::Path {
+            segments,
+            attrs: vec![],
+        },
+        pkg_items,
+        &ns_context,
+        &[],
+        &mut diags,
+    );
+    assert!(
+        matches!(ty, baml_compiler2_tir::ty::Ty::Unknown { .. }),
+        "ns2.MyClass from ns1 should not resolve without root. prefix"
+    );
+}

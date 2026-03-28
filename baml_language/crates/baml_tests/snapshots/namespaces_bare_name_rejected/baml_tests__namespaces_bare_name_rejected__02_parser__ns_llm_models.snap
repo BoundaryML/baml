@@ -20,9 +20,7 @@ SOURCE_FILE
       PARAMETER
         WORD "cfg"
         COLON ":"
-        TYPE_EXPR "root.Config"
-          WORD "root"
-          DOT "."
+        TYPE_EXPR "Config"
           WORD "Config"
       R_PAREN ")"
     ARROW "->"
