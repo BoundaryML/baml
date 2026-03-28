@@ -287,40 +287,17 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
     for block in &body.blocks {
         for stmt in &block.statements {
             if let crate::StatementKind::Assign { destination, .. } = &stmt.kind {
-                // Walk the place to find the root local being defined.
-                let mut place = destination;
-                loop {
-                    match place {
-                        Place::Local(l) => {
-                            defs[l.0] += 1;
-                            break;
-                        }
-                        Place::Field { base, .. } => place = base,
-                        Place::Index { base, .. } => place = base,
-                    }
-                }
+                defs[destination.base_local().0] += 1;
             }
         }
-        // Call destinations also count as definitions.
-        //
-        // NOTE: DispatchFuture::future and Await::destination also write to
-        // places, but are intentionally omitted here. The current lowering
-        // never reuses a local across both an Assign statement and an async
-        // terminator, so the miscount is harmless today. If that invariant
-        // changes, these terminators should be handled here (as they already
-        // are in eliminate_dead_locals below).
-        if let Some(Terminator::Call { destination, .. }) = &block.terminator {
-            let mut place = destination;
-            loop {
-                match place {
-                    Place::Local(l) => {
-                        defs[l.0] += 1;
-                        break;
-                    }
-                    Place::Field { base, .. } => place = base,
-                    Place::Index { base, .. } => place = base,
-                }
-            }
+        // Terminator destinations also count as definitions.
+        if let Some(dest) = match &block.terminator {
+            Some(Terminator::Call { destination, .. }) => Some(destination),
+            Some(Terminator::DispatchFuture { future, .. }) => Some(future),
+            Some(Terminator::Await { destination, .. }) => Some(destination),
+            _ => None,
+        } {
+            defs[dest.base_local().0] += 1;
         }
     }
 

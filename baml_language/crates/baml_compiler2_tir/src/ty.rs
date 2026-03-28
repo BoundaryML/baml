@@ -290,7 +290,7 @@ pub type LiteralValue = baml_base::Literal;
 /// - Flattens nested unions one level
 /// - Deduplicates by `PartialEq`
 /// - Unwraps singletons
-fn dedup_and_collapse(types: Vec<Ty>) -> Ty {
+fn dedup_and_collapse(types: Vec<Ty>, attr: TyAttr) -> Ty {
     let mut members: Vec<Ty> = Vec::new();
     for ty in types {
         match ty {
@@ -309,11 +309,9 @@ fn dedup_and_collapse(types: Vec<Ty>) -> Ty {
         }
     }
     match members.len() {
-        0 => Ty::Never {
-            attr: TyAttr::default(),
-        },
+        0 => Ty::Never { attr },
         1 => members.into_iter().next().unwrap(),
-        _ => Ty::Union(members, TyAttr::default()),
+        _ => Ty::Union(members, attr),
     }
 }
 
@@ -387,14 +385,9 @@ impl Ty {
             Ty::Literal(lit, Freshness::Fresh, attr) => {
                 Ty::Primitive(PrimitiveType::from_literal(&lit), attr)
             }
-            Ty::Union(members, _attr) => {
-                // _attr is intentionally dropped: in the TIR layer, lower_type_expr
-                // always produces TyAttr::default() on every Ty variant (it does not
-                // read TypeExpr::attrs). Non-default TyAttr values (sap_* flags,
-                // @assert) only exist downstream in the MIR/VIR layer, which does
-                // not call widen_fresh. So _attr is always default() here.
+            Ty::Union(members, attr) => {
                 let widened: Vec<Ty> = members.into_iter().map(Ty::widen_fresh).collect();
-                dedup_and_collapse(widened)
+                dedup_and_collapse(widened, attr)
             }
             Ty::List(inner, attr) => Ty::List(Box::new((*inner).widen_fresh()), attr),
             Ty::Map(k, v, attr) => Ty::Map(
