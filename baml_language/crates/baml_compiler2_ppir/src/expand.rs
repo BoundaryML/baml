@@ -68,56 +68,63 @@ fn classify_type_cross_pkg(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<SymbolK
 // ── Namespace-aware key resolution ──────────────────────────────────────────
 
 /// Resolve a path within a single package to its qualified key
-/// `[package_name, ...ns_path, item_name]`.
+/// `[package_name, ...namespace, item_name]`.
 fn resolve_in_package(
-    path: &[Name],
+    namespace: &[Name],
+    item: &Name,
     pkg_name: &Name,
     pkg_items: &PackageItems<'_>,
 ) -> Option<Vec<Name>> {
-    if path.is_empty() {
-        return None;
-    }
-    for split in (0..path.len()).rev() {
-        let ns_path = &path[..split];
-        let item_name = &path[split];
-        if let Some(ns) = pkg_items.namespaces.get(ns_path) {
-            if ns.types.contains_key(item_name) {
-                let mut key = vec![pkg_name.clone()];
-                key.extend_from_slice(ns_path);
-                key.push(item_name.clone());
-                return Some(key);
-            }
-        }
-    }
-    None
+    pkg_items.lookup_type(namespace, item).map(|_| {
+        let mut key = vec![pkg_name.clone()];
+        key.extend_from_slice(namespace);
+        key.push(item.clone());
+        key
+    })
 }
 
 /// Resolve a PPIR type path to its qualified key `[package, ...ns, name]`.
 /// Handles direct lookup, `root.*` prefix, bare names in non-root namespaces,
 /// and cross-package references.
 fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<Vec<Name>> {
+    if path.is_empty() {
+        return None;
+    }
+    let item = path.last().unwrap();
     // 1. Direct lookup in current package
-    if let Some(key) = resolve_in_package(path, ctx.package_name, ctx.package_items) {
+    let ns = &path[..path.len() - 1];
+    if let Some(key) = resolve_in_package(ns, item, ctx.package_name, ctx.package_items) {
         return Some(key);
     }
     // 2. Handle `root.*` prefix
     if path.len() >= 2 && path[0].as_str() == "root" {
-        if let Some(key) = resolve_in_package(&path[1..], ctx.package_name, ctx.package_items) {
+        let after_root = &path[1..];
+        let root_item = after_root.last().unwrap();
+        let root_ns = &after_root[..after_root.len() - 1];
+        if let Some(key) =
+            resolve_in_package(root_ns, root_item, ctx.package_name, ctx.package_items)
+        {
             return Some(key);
         }
     }
     // 3. Bare name in current (non-root) namespace
     if path.len() == 1 && !ctx.namespace_path.is_empty() {
-        let mut ns_qualified: Vec<Name> = ctx.namespace_path.to_vec();
-        ns_qualified.push(path[0].clone());
-        if let Some(key) = resolve_in_package(&ns_qualified, ctx.package_name, ctx.package_items) {
+        if let Some(key) = resolve_in_package(
+            ctx.namespace_path,
+            item,
+            ctx.package_name,
+            ctx.package_items,
+        ) {
             return Some(key);
         }
     }
     // 4. Cross-package (first segment = package name)
     if path.len() >= 2 {
         if let Some(foreign_items) = ctx.all_package_items.get(&path[0]) {
-            return resolve_in_package(&path[1..], &path[0], foreign_items);
+            let after_pkg = &path[1..];
+            let pkg_item = after_pkg.last().unwrap();
+            let pkg_ns = &after_pkg[..after_pkg.len() - 1];
+            return resolve_in_package(pkg_ns, pkg_item, &path[0], foreign_items);
         }
     }
     None
