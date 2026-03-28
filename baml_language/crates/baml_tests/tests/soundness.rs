@@ -41,7 +41,6 @@ async fn call_result_immediate_right_operand_subtraction() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: literal union type arithmetic fails - operator cannot be applied to literal union (if-else result)"]
 async fn phi_like_right_operand_subtraction() {
     let output = baml_test!(
         r#"
@@ -61,16 +60,16 @@ async fn phi_like_right_operand_subtraction() {
 
       L0:
         load_const 3
-        store_var _2
+        store_var _1
         jump L2
 
       L1:
         load_const 7
-        store_var _2
+        store_var _1
 
       L2:
         load_const 100
-        load_var _2
+        load_var _1
         bin_op -
         return
     }

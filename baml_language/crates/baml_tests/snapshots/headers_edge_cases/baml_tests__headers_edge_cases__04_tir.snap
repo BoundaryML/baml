@@ -45,12 +45,12 @@ function user.HeadersAndComments() -> string throws never {
   }
 }
 function user.HeadersInComplexNesting() -> string throws never {
-  { : string | "else value"
+  { : string
     // [1] Main Function
-    let result = : string | "else value"
-      { : string | "else value"
+    let result = : string
+      { : string
         // [2] Inside Block Expression
-        let inner = : string | "else value"
+        let inner = : string | "else value" -> string
           if (true : true) : string | "else value"
             { : string
               // [3] Inside If True
@@ -68,10 +68,10 @@ function user.HeadersInComplexNesting() -> string throws never {
               "else value" : "else value"
             }
         // [2] Back to Block Level
-        inner : string | "else value"
+        inner : string
       }
     // [1] Back to Function Level
-    result : string | "else value"
+    result : string
   }
 }
 function user.HeadersWithSpecialChars() -> string throws never {

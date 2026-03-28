@@ -77,8 +77,8 @@ function user.MultipleCatchArms(x: int) -> string throws never {
   }
 }
 function user.NestedCatch(x: int) -> string throws never {
-  { : string | "inner caught"
-    let inner = : string | "inner caught"
+  { : string
+    let inner = : string | "inner caught" -> string
       catch (MayFail(x) : string) : string | "inner caught"
         catch (e)
           _ =>
@@ -86,7 +86,7 @@ function user.NestedCatch(x: int) -> string throws never {
     catch (AlsoMayFail(x) : string) : unknown
       catch (e)
         _ =>
-          inner : string | "inner caught"
+          inner : string
   }
 }
 function user.CatchAndRethrow(x: int) -> string throws never {

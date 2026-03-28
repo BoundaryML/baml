@@ -275,6 +275,51 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
     set
 }
 
+/// Count definition sites (assignments) for each local across all blocks.
+///
+/// A local is "single-definition" if it appears as an assignment destination
+/// in exactly one statement. Locals defined in multiple branches (e.g., a temp
+/// that is assigned in both arms of an if-else) have a count > 1 and must not
+/// be constant-propagated.
+fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
+    let mut defs = vec![0usize; body.locals.len()];
+
+    for block in &body.blocks {
+        for stmt in &block.statements {
+            if let crate::StatementKind::Assign { destination, .. } = &stmt.kind {
+                // Walk the place to find the root local being defined.
+                let mut place = destination;
+                loop {
+                    match place {
+                        Place::Local(l) => {
+                            defs[l.0] += 1;
+                            break;
+                        }
+                        Place::Field { base, .. } => place = base,
+                        Place::Index { base, .. } => place = base,
+                    }
+                }
+            }
+        }
+        // Call destinations also count as definitions.
+        if let Some(Terminator::Call { destination, .. }) = &block.terminator {
+            let mut place = destination;
+            loop {
+                match place {
+                    Place::Local(l) => {
+                        defs[l.0] += 1;
+                        break;
+                    }
+                    Place::Field { base, .. } => place = base,
+                    Place::Index { base, .. } => place = base,
+                }
+            }
+        }
+    }
+
+    defs
+}
+
 fn count_local_uses(body: &MirFunctionBody) -> Vec<usize> {
     let mut uses = vec![0usize; body.locals.len()];
 
@@ -436,6 +481,7 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
 fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
     // Build substitution map: Local -> replacement Operand
     let uses = count_local_uses(body);
+    let defs = count_local_defs(body);
     // Locals used as the `index` field of a `Place::Index` cannot be replaced
     // with constants — that field is typed `Local`, not `Operand`. Collect them
     // so we can exclude them from constant inlining below.
@@ -448,8 +494,13 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
     // SAFETY: Only propagate unnamed locals (compiler temporaries from
     // lower_to_operand / builder.temp()). Named locals (user variables from
     // AstStmt::Let) can be reassigned via AstStmt::Assign or AstStmt::AssignOp,
-    // making propagation unsound. Unnamed temps are always fresh single-definition
-    // locals, so this is safe.
+    // making propagation unsound.
+    //
+    // We additionally require defs[dest] == 1 to guard against phi-like temps
+    // that are assigned in multiple branches (e.g., the result temp of an
+    // if-else used directly as an arithmetic operand). Such temps have a
+    // single use-site but two definition-sites; propagating the last-seen
+    // constant would silently use the wrong branch value.
     for block in &body.blocks {
         for stmt in &block.statements {
             if let crate::StatementKind::Assign {
@@ -462,6 +513,11 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                     continue;
                 }
 
+                // Skip locals with multiple definition sites (phi-like).
+                if defs[dest.0] != 1 {
+                    continue;
+                }
+
                 match operand {
                     Operand::Copy(Place::Local(src)) if src.0 >= 1 && src.0 <= arity => {
                         // Copy of param — substitute
@@ -470,9 +526,9 @@ fn propagate_copies(body: &mut MirFunctionBody, arity: usize) {
                     Operand::Constant(c)
                         if uses[dest.0] == 1 && !used_as_place_index.contains(dest) =>
                     {
-                        // Single-use constant — inline. Skip locals that appear
-                        // as a Place::Index index, since that position can only
-                        // hold a Local, not a Constant.
+                        // Single-use, single-definition constant — inline. Skip
+                        // locals that appear as a Place::Index index, since that
+                        // position can only hold a Local, not a Constant.
                         subst.insert(*dest, Operand::Constant(c.clone()));
                     }
                     _ => {}

@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.array_length() -> int throws never {
   { : never
-    let array = [1, 2, 3] : (1 | 2 | 3)[]
+    let array = [1, 2, 3] : (1 | 2 | 3)[] -> int[]
     return baml.Array.length(array) : int
   }
   !! 70..95: expected 0 argument(s), got 1
