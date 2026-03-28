@@ -531,11 +531,15 @@ impl<'db> PackageResolutionContext<'db> {
             }
         }
 
-        // Try unqualified path
-        if let Some(result) = self.resolve_type_in_own_then_deps(db, &path[..path.len() - 1], item)
-        {
-            return Some(result);
+        // When ns_context is empty, try unqualified path (same-namespace for root files)
+        if ns_context.is_empty() {
+            if let Some(result) =
+                self.resolve_type_in_own_then_deps(db, &path[..path.len() - 1], item)
+            {
+                return Some(result);
+            }
         }
+        // No bare fallback from non-root namespaces — cross-namespace requires explicit qualification
 
         // Try package-prefixed path (first segment is package name)
         if path.len() >= 2 {
@@ -578,7 +582,7 @@ impl<'db> PackageResolutionContext<'db> {
     /// Resolve a function/value by path. Returns the Definition for own-package values.
     pub fn resolve_value(
         &self,
-        _db: &'db dyn crate::Db,
+        db: &'db dyn crate::Db,
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<(ResolvedSource, Definition<'db>)> {
@@ -593,7 +597,32 @@ impl<'db> PackageResolutionContext<'db> {
                 return Some(result);
             }
         }
-        self.resolve_value_in_own(&path[..path.len() - 1], item)
+        // When ns_context is empty, try unqualified path (same-namespace for root files)
+        if ns_context.is_empty() {
+            if let Some(result) = self.resolve_value_in_own(&path[..path.len() - 1], item) {
+                return Some(result);
+            }
+        }
+        // No bare fallback from non-root namespaces — cross-namespace requires explicit qualification
+        // root.* prefix handling (parity with resolve_type)
+        if path.len() >= 2 {
+            if path[0].as_str() == "root" {
+                if let Some(def) = self.own_items.lookup_value(&path[1..path.len() - 1], item) {
+                    return Some((ResolvedSource::Item, def));
+                }
+            }
+            // dep-prefixed search (parity with resolve_type)
+            for (dep_name, _dep_iface) in &self.dep_interfaces {
+                if &path[0] == dep_name {
+                    let dep_pkg_id = PackageId::new(db, dep_name.clone());
+                    let dep_items = package_items(db, dep_pkg_id);
+                    if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
+                        return Some((ResolvedSource::Builtin, def));
+                    }
+                }
+            }
+        }
+        None
     }
 
     fn resolve_value_in_own(
