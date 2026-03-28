@@ -1319,12 +1319,12 @@ impl LoweringContext {
 
     fn lower_path_expr(&mut self, node: &SyntaxNode) -> ExprId {
         // PATH_EXPR contains WORD (or keyword-as-ident) tokens joined by DOTs.
-        let mut segments = Vec::new();
+        let mut segments: Vec<(Name, TextRange)> = Vec::new();
 
         for elem in node.children_with_tokens() {
             if let rowan::NodeOrToken::Token(token) = elem {
                 if is_ident_token(token.kind()) {
-                    segments.push(Name::new(token.text()));
+                    segments.push((Name::new(token.text()), token.text_range()));
                 }
             }
         }
@@ -1335,7 +1335,7 @@ impl LoweringContext {
 
         // Check if single segment is a literal keyword
         if segments.len() == 1 {
-            match segments[0].as_str() {
+            match segments[0].0.as_str() {
                 "true" => {
                     return self.alloc_expr(Expr::Literal(Literal::Bool(true)), node.text_range());
                 }
@@ -1351,15 +1351,19 @@ impl LoweringContext {
         //   Color.Red  → FieldAccess { base: Path(["Color"]), field: "Red" }
         //   a.b.c      → FieldAccess { base: FieldAccess { base: Path(["a"]), field: "b" }, field: "c" }
         // After this, Path is always single-segment (a bare identifier).
-        let mut base = self.alloc_expr(Expr::Path(vec![segments[0].clone()]), node.text_range());
-        for seg in &segments[1..] {
-            base = self.alloc_expr(
+        let mut base = self.alloc_expr(Expr::Path(vec![segments[0].0.clone()]), node.text_range());
+        for (seg, seg_range) in &segments[1..] {
+            let id = self.alloc_expr(
                 Expr::FieldAccess {
                     base,
                     field: seg.clone(),
                 },
                 node.text_range(),
             );
+            self.source_map
+                .field_access_member_spans
+                .insert(id, *seg_range);
+            base = id;
         }
         base
     }
@@ -1367,6 +1371,7 @@ impl LoweringContext {
     fn lower_field_access_expr(&mut self, node: &SyntaxNode) -> ExprId {
         let mut base = None;
         let mut field = None;
+        let mut field_range = None;
 
         for elem in node.children_with_tokens() {
             match elem {
@@ -1378,6 +1383,7 @@ impl LoweringContext {
                 rowan::NodeOrToken::Token(token) => {
                     if is_ident_token(token.kind()) && base.is_some() {
                         field = Some(Name::new(token.text()));
+                        field_range = Some(token.text_range());
                     }
                 }
             }
@@ -1386,7 +1392,11 @@ impl LoweringContext {
         let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()));
         let field = field.unwrap_or_else(|| Name::new("_"));
 
-        self.alloc_expr(Expr::FieldAccess { base, field }, node.text_range())
+        let id = self.alloc_expr(Expr::FieldAccess { base, field }, node.text_range());
+        if let Some(range) = field_range {
+            self.source_map.field_access_member_spans.insert(id, range);
+        }
+        id
     }
 
     fn lower_env_access_expr(&mut self, node: &SyntaxNode) -> ExprId {

@@ -24,7 +24,8 @@
 
 use baml_base::SourceFile;
 use baml_compiler2_hir::{
-    contributions::DefinitionKind, file_item_tree, file_symbol_contributions,
+    contributions::DefinitionKind, file_item_tree, file_item_tree_source_map,
+    file_symbol_contributions,
 };
 use text_size::TextRange;
 
@@ -63,6 +64,7 @@ pub struct OutlineItem {
 pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
     let contribs = file_symbol_contributions(db, file);
     let item_tree = file_item_tree(db, file);
+    let source_map = file_item_tree_source_map(db, file);
 
     let mut items: Vec<OutlineItem> = Vec::new();
 
@@ -73,15 +75,18 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
         let children = match contrib.definition {
             Definition::Class(class_loc) => {
                 let class = &item_tree[class_loc.id(db)];
+                let field_spans = source_map.class_field_spans.get(&class_loc.id(db));
 
                 let mut child_items: Vec<OutlineItem> = Vec::new();
 
-                // Class fields — no per-field span in the item tree yet.
-                for field in &class.fields {
+                // Class fields — use real name spans from the source map.
+                for (i, field) in class.fields.iter().enumerate() {
                     child_items.push(OutlineItem {
                         name: field.name.to_string(),
                         kind: DefinitionKind::Field,
-                        name_span: TextRange::empty(TextRange::default().start()),
+                        name_span: field_spans
+                            .and_then(|spans| spans.get(i).copied())
+                            .unwrap_or_else(|| TextRange::empty(TextRange::default().start())),
                         children: Vec::new(),
                     });
                 }
@@ -102,14 +107,18 @@ pub fn file_outline(db: &dyn Db, file: SourceFile) -> Vec<OutlineItem> {
 
             Definition::Enum(enum_loc) => {
                 let enum_def = &item_tree[enum_loc.id(db)];
+                let variant_spans = source_map.enum_variant_spans.get(&enum_loc.id(db));
 
                 enum_def
                     .variants
                     .iter()
-                    .map(|v| OutlineItem {
+                    .enumerate()
+                    .map(|(i, v)| OutlineItem {
                         name: v.name.to_string(),
                         kind: DefinitionKind::Variant,
-                        name_span: TextRange::empty(TextRange::default().start()),
+                        name_span: variant_spans
+                            .and_then(|spans| spans.get(i).copied())
+                            .unwrap_or_else(|| TextRange::empty(TextRange::default().start())),
                         children: Vec::new(),
                     })
                     .collect()

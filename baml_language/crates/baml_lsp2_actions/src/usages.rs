@@ -24,7 +24,7 @@ use baml_compiler2_ast::{Expr, ExprBody};
 use baml_compiler2_hir::{body::FunctionBody, loc::FunctionLoc, scope::ScopeKind};
 use baml_compiler2_tir::resolve::{ResolvedName, resolve_name_at};
 use rowan::NodeOrToken;
-use text_size::TextSize;
+use text_size::{TextRange, TextSize};
 
 use crate::{Db, definition::Location, utils};
 
@@ -72,7 +72,11 @@ pub fn usages_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Vec<Locatio
             definition_site: None,
             ..
         }
-        | ResolvedName::Unknown => Vec::new(),
+        | ResolvedName::Unknown => {
+            // Try field-definition usages: if cursor is on a class field definition,
+            // find all field access and constructor field sites.
+            find_field_definition_usages(db, file, offset, &name_text)
+        }
     }
 }
 
@@ -270,6 +274,198 @@ fn same_local_definition(a: &ResolvedName<'_>, b: &ResolvedName<'_>) -> bool {
         ) => site_a == site_b,
         _ => false,
     }
+}
+
+// ── field definition usages ───────────────────────────────────────────────────
+
+/// When cursor is on a class field definition, find all usage sites.
+///
+/// Uses text pre-filter + `ScopeInference` confirmation pattern:
+/// 1. Check that cursor is on a class field definition (Class scope).
+/// 2. Collect all source files.
+/// 3. For each file, scan function scopes for `FieldAccess` and Object constructor
+///    expressions that reference the same field of the same class.
+fn find_field_definition_usages(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    field_name_text: &str,
+) -> Vec<Location> {
+    use baml_compiler2_tir::ty::Ty;
+
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let scope_id = index.scope_at_offset(offset, None);
+    let scope = &index.scopes[scope_id.index() as usize];
+
+    // Only handle cursor on class field definitions
+    if !matches!(scope.kind, ScopeKind::Class) {
+        return Vec::new();
+    }
+    let class_name = match &scope.name {
+        Some(n) => n.clone(),
+        None => return Vec::new(),
+    };
+
+    // Find the ClassLoc for this class
+    let class_entry = item_tree.classes.iter().find(|(_, c)| c.name == class_name);
+    let Some((class_local_id, class_data)) = class_entry else {
+        return Vec::new();
+    };
+
+    // Verify the cursor is actually on this field
+    let field_match = class_data
+        .fields
+        .iter()
+        .any(|f| f.name.as_str() == field_name_text);
+    if !field_match {
+        return Vec::new();
+    }
+
+    let class_loc = baml_compiler2_hir::loc::ClassLoc::new(db, file, *class_local_id);
+
+    // Collect all source files
+    let source_files = collect_source_files(db, file);
+
+    let mut results = Vec::new();
+
+    for sf in source_files {
+        // Text pre-filter
+        let text = sf.text(db);
+        if !text.contains(field_name_text) {
+            continue;
+        }
+
+        let sf_index = baml_compiler2_hir::file_semantic_index(db, sf);
+        let sf_item_tree = baml_compiler2_hir::file_item_tree(db, sf);
+
+        // Scan each function scope in the file
+        for (scope_idx, scope) in sf_index.scopes.iter().enumerate() {
+            if !matches!(scope.kind, ScopeKind::Function) {
+                continue;
+            }
+
+            // Find matching function in item tree
+            let func_entry = sf_item_tree
+                .functions
+                .iter()
+                .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name));
+            let Some((func_local_id, _)) = func_entry else {
+                continue;
+            };
+
+            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, sf, *func_local_id);
+            let body = baml_compiler2_hir::body::function_body(db, func_loc);
+            let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+                continue;
+            };
+
+            let Some(source_map) = baml_compiler2_hir::body::function_body_source_map(db, func_loc)
+            else {
+                continue;
+            };
+
+            #[allow(clippy::cast_possible_truncation)]
+            let file_scope_id = baml_compiler2_hir::scope::FileScopeId::new(scope_idx as u32);
+            let scope_id_salsa = sf_index.scope_ids[file_scope_id.index() as usize];
+            let inference = baml_compiler2_tir::inference::infer_scope_types(db, scope_id_salsa);
+
+            // FieldAccess sites: scan resolutions for matching Field
+            for (expr_id, resolution) in inference.iter_resolutions() {
+                use baml_compiler2_tir::inference::MemberResolution;
+                if let MemberResolution::Field {
+                    class_loc: res_class_loc,
+                    field_name,
+                } = resolution
+                {
+                    if *res_class_loc == class_loc && field_name.as_str() == field_name_text {
+                        // Get field name range from the FieldAccess expression span
+                        let expr_span = source_map.expr_span(*expr_id);
+                        // Extract just the field name portion (after the last dot)
+                        let start: usize = expr_span.start().into();
+                        let end: usize = expr_span.end().into();
+                        if end <= text.len() {
+                            let expr_text = &text[start..end];
+                            if let Some(dot_offset) = expr_text.rfind(field_name_text) {
+                                let field_start = start + dot_offset;
+                                let field_end = field_start + field_name_text.len();
+                                #[allow(clippy::cast_possible_truncation)]
+                                let field_range = TextRange::new(
+                                    TextSize::from(field_start as u32),
+                                    TextSize::from(field_end as u32),
+                                );
+                                results.push(Location {
+                                    file: sf,
+                                    range: field_range,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Object constructor field sites: scan Object expressions
+            for (expr_id, expr) in expr_body.exprs.iter() {
+                if let Expr::Object { fields, .. } = expr {
+                    // Check if any field key matches
+                    let has_matching_key = fields
+                        .iter()
+                        .any(|(name, _)| name.as_str() == field_name_text);
+                    if !has_matching_key {
+                        continue;
+                    }
+
+                    // Check if the Object type matches our target class
+                    let Some(obj_ty) = inference.expression_type(expr_id) else {
+                        continue;
+                    };
+                    let Ty::Class(qtn, _) = obj_ty else {
+                        continue;
+                    };
+
+                    // Resolve QualifiedTypeName to ClassLoc and compare
+                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, sf);
+                    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package);
+                    let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+                    let Some(def) = pkg_items.lookup_type_any_ns(qtn.name()) else {
+                        continue;
+                    };
+                    let baml_compiler2_hir::contributions::Definition::Class(obj_class_loc) = def
+                    else {
+                        continue;
+                    };
+                    if obj_class_loc != class_loc {
+                        continue;
+                    }
+
+                    // Find the field key token in the CST
+                    let obj_span = source_map.expr_span(expr_id);
+                    let root = baml_compiler_parser::syntax_tree(db, sf);
+                    for node_or_token in root.descendants_with_tokens() {
+                        let rowan::NodeOrToken::Token(tok) = node_or_token else {
+                            continue;
+                        };
+                        if tok.kind() != SyntaxKind::WORD {
+                            continue;
+                        }
+                        if tok.text() != field_name_text {
+                            continue;
+                        }
+                        let tok_range = tok.text_range();
+                        if obj_span.contains(tok_range.start()) {
+                            results.push(Location {
+                                file: sf,
+                                range: tok_range,
+                            });
+                            break; // Only one match per Object expression
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    results
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────

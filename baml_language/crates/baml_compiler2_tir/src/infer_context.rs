@@ -228,6 +228,8 @@ pub enum RelatedLocation<'db> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticLocation {
     Expr(ExprId),
+    /// The member-name portion of a `FieldAccess` expression (after the dot).
+    ExprMember(ExprId),
     Stmt(StmtId),
     TypeAnnot(TypeAnnotId),
     Span(TextRange),
@@ -257,6 +259,9 @@ impl TirDiagnostic<'_> {
             DiagnosticLocation::Expr(id) => {
                 source_map.map(|sm| sm.expr_span(*id)).unwrap_or_default()
             }
+            DiagnosticLocation::ExprMember(id) => source_map
+                .map(|sm| sm.field_access_member_span(*id))
+                .unwrap_or_default(),
             DiagnosticLocation::Stmt(id) => {
                 source_map.map(|sm| sm.stmt_span(*id)).unwrap_or_default()
             }
@@ -361,6 +366,29 @@ impl<'db> InferContext<'db> {
     /// Convenience: report an error with no related locations.
     pub fn report_simple(&self, error: TirTypeError, at: ExprId) {
         self.report(error, at, Vec::new());
+    }
+
+    /// Report a type error at the member-name portion of a `FieldAccess` expression.
+    pub fn report_at_member(
+        &self,
+        error: TirTypeError,
+        at: ExprId,
+        related: Vec<(RelatedLocation<'db>, &'static str)>,
+    ) {
+        self.diagnostics
+            .borrow_mut()
+            .diagnostics
+            .push(TirDiagnostic {
+                error,
+                severity: DiagnosticSeverity::Error,
+                primary: DiagnosticLocation::ExprMember(at),
+                related,
+            });
+    }
+
+    /// Convenience: report at member with no related locations.
+    pub fn report_at_member_simple(&self, error: TirTypeError, at: ExprId) {
+        self.report_at_member(error, at, Vec::new());
     }
 
     /// Report a type error at a type annotation location.

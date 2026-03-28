@@ -54,74 +54,74 @@ function fo() -> int {
 //----
 //- diagnostics
 // Error: unresolved member: user.Color.get_re
-//     ╭─[ class.baml:44:18 ]
+//     ╭─[ class.baml:44:29 ]
 //     │
 //  44 │   let first_red = colors[0].get_re();
-//     │                  ────────┬────────  
-//     │                          ╰────────── unresolved member: user.Color.get_re
+//     │                             ───┬──  
+//     │                                ╰──── unresolved member: user.Color.get_re
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.Color.gree
-//     ╭─[ class.baml:45:21 ]
+//     ╭─[ class.baml:45:32 ]
 //     │
 //  45 │   let second_green = colors[1].gree;
-//     │                     ───────┬───────  
-//     │                            ╰───────── unresolved member: user.Color.gree
+//     │                                ──┬─  
+//     │                                  ╰─── unresolved member: user.Color.gree
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.Color.re
-//     ╭─[ class.baml:47:12 ]
+//     ╭─[ class.baml:47:23 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
-//     │            ──────┬──────  
-//     │                  ╰──────── unresolved member: user.Color.re
+//     │                       ─┬  
+//     │                        ╰── unresolved member: user.Color.re
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.Color.gree
-//     ╭─[ class.baml:47:27 ]
+//     ╭─[ class.baml:47:38 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
-//     │                           ───────┬───────  
-//     │                                  ╰───────── unresolved member: user.Color.gree
+//     │                                      ──┬─  
+//     │                                        ╰─── unresolved member: user.Color.gree
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.Color.blu
-//     ╭─[ class.baml:47:44 ]
+//     ╭─[ class.baml:47:55 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
-//     │                                            ───────┬──────  
-//     │                                                   ╰──────── unresolved member: user.Color.blu
+//     │                                                       ─┬─  
+//     │                                                        ╰─── unresolved member: user.Color.blu
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.Color.get_re
-//     ╭─[ class.baml:49:17 ]
+//     ╭─[ class.baml:49:27 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
-//     │                 ────────┬───────  
-//     │                         ╰───────── unresolved member: user.Color.get_re
+//     │                           ───┬──  
+//     │                              ╰──── unresolved member: user.Color.get_re
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.Color.get_gree
-//     ╭─[ class.baml:49:36 ]
+//     ╭─[ class.baml:49:47 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
-//     │                                    ─────────┬─────────  
-//     │                                             ╰─────────── unresolved member: user.Color.get_gree
+//     │                                               ────┬───  
+//     │                                                   ╰───── unresolved member: user.Color.get_gree
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.Color.get_blu
-//     ╭─[ class.baml:49:58 ]
+//     ╭─[ class.baml:49:69 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
-//     │                                                          ─────────┬────────  
-//     │                                                                   ╰────────── unresolved member: user.Color.get_blu
+//     │                                                                     ───┬───  
+//     │                                                                        ╰───── unresolved member: user.Color.get_blu
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

@@ -33,7 +33,7 @@ pub use builder::SemanticIndexBuilder;
 
 use crate::{
     contributions::FileSymbolContributions,
-    item_tree::ItemTree,
+    item_tree::{ItemTree, ItemTreeSourceMap},
     semantic_index::{FileSemanticIndex, ScopeBindings},
 };
 
@@ -126,6 +126,14 @@ pub fn file_symbol_contributions(
 pub fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
+}
+
+/// Returns the item tree source map for a file (clones the Arc — O(1)).
+///
+/// Not tracked — the source map is cached via `file_semantic_index`.
+pub fn file_item_tree_source_map(db: &dyn Db, file: SourceFile) -> Arc<ItemTreeSourceMap> {
+    let index = file_semantic_index(db, file);
+    Arc::clone(&index.item_tree_source_map)
 }
 
 /// Returns the `ScopeBindings` for a given scope.

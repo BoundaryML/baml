@@ -17,7 +17,7 @@ use baml_compiler2_ast::{ExprId, PatId};
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
-    loc::{ClassLoc, FunctionLoc, LetLoc, TypeAliasLoc},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, LetLoc, TypeAliasLoc},
     package::{PackageId, PackageItems},
     scope::{ScopeId, ScopeKind},
 };
@@ -29,30 +29,32 @@ use crate::{
     ty::{Ty, TyAttr},
 };
 
-// ── Method Resolution ─────────────────────────────────────────────────────
+// ── Member Resolution ─────────────────────────────────────────────────────
 
 /// Records what a field-access expression resolved to during type inference.
 ///
 /// Stored per-ExprId alongside the `Ty`, so MIR can emit the correct
-/// `Constant::Function(QualifiedName)` without re-doing resolution.
+/// `Constant::Function(QualifiedName)` without re-doing resolution, and so
+/// LSP can navigate to the definition of the accessed member.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MethodResolution<'db> {
+pub enum MemberResolution<'db> {
+    /// A class field access (e.g. `p.name`).
+    Field {
+        class_loc: ClassLoc<'db>,
+        field_name: Name,
+    },
+    /// An enum variant access (e.g. `Status.Active`).
+    Variant {
+        enum_loc: EnumLoc<'db>,
+        variant_name: Name,
+    },
     /// A free item accessed via a package/namespace path.
     /// e.g. `env.get` → package="env", namespace=[], name="get"
-    Free {
-        package: Name,
-        namespace: Vec<Name>,
-        name: Name,
-        func_loc: FunctionLoc<'db>,
-    },
+    Free { func_loc: FunctionLoc<'db> },
     /// A method on a class (user-defined or builtin).
     /// e.g. `arr.length` → package="baml", namespace=[], class="Array", name="length"
     /// e.g. `baz.Greeting` → package="user", namespace=[], class="Baz", name="Greeting"
     Method {
-        package: Name,
-        namespace: Vec<Name>,
-        class: Name,
-        name: Name,
         class_loc: ClassLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
@@ -75,10 +77,11 @@ pub struct ScopeInference<'db> {
     /// May differ from the initializer expression type (e.g. `let x = 1` has
     /// expression type `Literal(1, Fresh)` but binding type `int`).
     bindings: FxHashMap<PatId, Ty>,
-    /// Method resolutions: for field-access expressions that resolved to a
-    /// method or free function, records the structural path (package, namespace,
-    /// class, name) so MIR can emit the correct `QualifiedName`.
-    resolutions: FxHashMap<ExprId, MethodResolution<'db>>,
+    /// Member resolutions: for field-access expressions that resolved to a
+    /// class field, enum variant, method, or free function — records the
+    /// structural path so MIR can emit the correct `QualifiedName` and LSP
+    /// can navigate to the definition.
+    resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
     /// Match expressions that the exhaustiveness checker determined cover all cases.
     exhaustive_matches: FxHashSet<ExprId>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
@@ -133,13 +136,13 @@ impl<'db> ScopeInference<'db> {
         self.bindings.iter()
     }
 
-    /// Look up the method resolution for an expression in this scope.
-    pub fn resolution(&self, expr_id: ExprId) -> Option<&MethodResolution<'db>> {
+    /// Look up the member resolution for an expression in this scope.
+    pub fn resolution(&self, expr_id: ExprId) -> Option<&MemberResolution<'db>> {
         self.resolutions.get(&expr_id)
     }
 
-    /// Iterate over all (`ExprId`, `MethodResolution`) pairs for this scope.
-    pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MethodResolution<'db>)> {
+    /// Iterate over all (`ExprId`, `MemberResolution`) pairs for this scope.
+    pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
         self.resolutions.iter()
     }
 

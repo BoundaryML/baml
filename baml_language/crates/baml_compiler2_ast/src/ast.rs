@@ -6,6 +6,8 @@
 //! CST `Option` handling in one layer so everything downstream gets clean
 //! typed data and can be constructed directly in tests without parsing.
 
+use std::collections::HashMap;
+
 use baml_base::Name;
 use la_arena::{Arena, Idx};
 use text_size::TextRange;
@@ -225,6 +227,8 @@ pub struct AstSourceMap {
     pub match_arm_spans: Arena<TextRange>,
     pub type_annotation_spans: Arena<TextRange>,
     pub catch_arm_spans: Arena<TextRange>,
+    /// For `FieldAccess` expressions, the span of just the member name (after the dot).
+    pub field_access_member_spans: HashMap<ExprId, TextRange>,
 }
 
 impl AstSourceMap {
@@ -236,6 +240,7 @@ impl AstSourceMap {
             match_arm_spans: Arena::new(),
             type_annotation_spans: Arena::new(),
             catch_arm_spans: Arena::new(),
+            field_access_member_spans: HashMap::new(),
         }
     }
 
@@ -260,6 +265,15 @@ impl AstSourceMap {
             .nth(raw as usize)
             .map(|(_, &span)| span)
             .unwrap_or_default()
+    }
+
+    /// Look up the member-name span for a `FieldAccess` expression.
+    /// Returns the full expression span as fallback if no member span was recorded.
+    pub fn field_access_member_span(&self, id: ExprId) -> TextRange {
+        self.field_access_member_spans
+            .get(&id)
+            .copied()
+            .unwrap_or_else(|| self.expr_span(id))
     }
 
     /// Look up the source span of a pattern by its `PatId`.

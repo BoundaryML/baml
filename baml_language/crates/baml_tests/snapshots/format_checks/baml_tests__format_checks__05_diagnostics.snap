@@ -3,138 +3,121 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unresolved member: string.len
-    ╭─[ chain_expr.baml:83:6 ]
+    ╭─[ chain_expr.baml:86:15 ]
     │
- 83 │ ╭─▶     ;
-    ┆ ┆   
- 86 │ ├─▶     user.name.len();
-    │ │                          
-    │ ╰────────────────────────── unresolved member: string.len
-    │     
-    │     Note: Error code: E0001
+ 86 │     user.name.len();
+    │               ─┬─  
+    │                ╰─── unresolved member: string.len
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [type] Error: unresolved member: user.ChainItem[].len
-    ╭─[ chain_expr.baml:86:21 ]
+    ╭─[ chain_expr.baml:87:11 ]
     │
- 86 │ ╭─▶     user.name.len();
- 87 │ ├─▶     items.len();
-    │ │                      
-    │ ╰────────────────────── unresolved member: user.ChainItem[].len
-    │     
-    │     Note: Error code: E0001
+ 87 │     items.len();
+    │           ─┬─  
+    │            ╰─── unresolved member: user.ChainItem[].len
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [type] Error: unresolved member: user.ChainItem[].get
-    ╭─[ chain_expr.baml:87:17 ]
+    ╭─[ chain_expr.baml:90:24 ]
     │
- 87 │ ╭─▶     items.len();
-    ┆ ┆   
- 90 │ ├─▶     user.profile.items.get(0);
-    │ │                                    
-    │ ╰──────────────────────────────────── unresolved member: user.ChainItem[].get
-    │     
-    │     Note: Error code: E0001
+ 90 │     user.profile.items.get(0);
+    │                        ─┬─  
+    │                         ╰─── unresolved member: user.ChainItem[].get
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [type] Error: unresolved member: user.ChainItem[].get
-    ╭─[ chain_expr.baml:90:31 ]
+    ╭─[ chain_expr.baml:98:5 ]
     │
- 90 │ ╭─▶     user.profile.items.get(0);
-    ┆ ┆   
- 98 │ ├─▶     get // 6 method trailing
-    │ │                                  
-    │ ╰────────────────────────────────── unresolved member: user.ChainItem[].get
-    │     
-    │     Note: Error code: E0001
+ 98 │     get // 6 method trailing
+    │     ─┬─  
+    │      ╰─── unresolved member: user.ChainItem[].get
+    │ 
+    │ Note: Error code: E0001
 ────╯
 
   [type] Error: unresolved member: user.ChainItem[].get
-     ╭─[ chain_expr.baml:104:6 ]
+     ╭─[ chain_expr.baml:112:5 ]
      │
- 104 │ ╭─▶     ;
-     ┆ ┆   
- 112 │ ├─▶     get /* 6 method trailing */
-     │ │                                     
-     │ ╰───────────────────────────────────── unresolved member: user.ChainItem[].get
-     │     
-     │     Note: Error code: E0001
+ 112 │     get /* 6 method trailing */
+     │     ─┬─  
+     │      ╰─── unresolved member: user.ChainItem[].get
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: string.len
-     ╭─[ chain_expr.baml:146:6 ]
+     ╭─[ chain_expr.baml:149:15 ]
      │
- 146 │ ╭─▶     ;
-     ┆ ┆   
- 149 │ ├─▶     user.name.len().to_string();
-     │ │                                      
-     │ ╰────────────────────────────────────── unresolved member: string.len
-     │     
-     │     Note: Error code: E0001
+ 149 │     user.name.len().to_string();
+     │               ─┬─  
+     │                ╰─── unresolved member: string.len
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: string.len
-     ╭─[ chain_expr.baml:149:33 ]
+     ╭─[ chain_expr.baml:152:45 ]
      │
- 149 │ ╭─▶     user.name.len().to_string();
-     ┆ ┆   
- 152 │ ├─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                                          
-     │ ╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── unresolved member: string.len
-     │     
-     │     Note: Error code: E0001
+ 152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
+     │                                             ─┬─  
+     │                                              ╰─── unresolved member: string.len
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: string.len
-     ╭─[ chain_expr.baml:152:117 ]
+     ╭─[ chain_expr.baml:155:44 ]
      │
- 152 │ ╭─▶     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 155 │ ├─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     │ │                                                                                                       
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────── unresolved member: string.len
-     │     
-     │     Note: Error code: E0001
+ 155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
+     │                                            ─┬─  
+     │                                             ╰─── unresolved member: string.len
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: user.ChainItem[].get
-     ╭─[ chain_expr.baml:155:98 ]
-     │
- 155 │ ╭─▶     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
-     ┆ ┆   
- 158 │ ├─▶     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │ │                                                                                                                                   
-     │ ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── unresolved member: user.ChainItem[].get
-     │     
-     │     Note: Error code: E0001
-─────╯
-
-  [type] Error: unresolved member: user.ChainItem[].len
-     ╭─[ chain_expr.baml:158:28 ]
+     ╭─[ chain_expr.baml:158:24 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                            ───────────┬──────────  
-     │                                       ╰──────────── unresolved member: user.ChainItem[].len
+     │                        ─┬─  
+     │                         ╰─── unresolved member: user.ChainItem[].get
      │ 
      │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: user.ChainItem[].len
-     ╭─[ chain_expr.baml:158:58 ]
+     ╭─[ chain_expr.baml:158:47 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                                                          ───────────┬───────────  
-     │                                                                     ╰───────────── unresolved member: user.ChainItem[].len
+     │                                               ─┬─  
+     │                                                ╰─── unresolved member: user.ChainItem[].len
      │ 
      │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: user.ChainItem[].len
-     ╭─[ chain_expr.baml:158:89 ]
+     ╭─[ chain_expr.baml:158:78 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
-     │                                                                                         ───────────┬───────────  
-     │                                                                                                    ╰───────────── unresolved member: user.ChainItem[].len
+     │                                                                              ─┬─  
+     │                                                                               ╰─── unresolved member: user.ChainItem[].len
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].len
+     ╭─[ chain_expr.baml:158:109 ]
+     │
+ 158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
+     │                                                                                                             ─┬─  
+     │                                                                                                              ╰─── unresolved member: user.ChainItem[].len
      │ 
      │ Note: Error code: E0001
 ─────╯
@@ -152,125 +135,113 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: unresolved member: user.ChainItem[].len
-     ╭─[ chain_expr.baml:161:32 ]
+     ╭─[ chain_expr.baml:161:52 ]
      │
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     │                                ───────────┬───────────  
-     │                                           ╰───────────── unresolved member: user.ChainItem[].len
+     │                                                    ─┬─  
+     │                                                     ╰─── unresolved member: user.ChainItem[].len
      │ 
      │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: string.len
-     ╭─[ chain_expr.baml:161:103 ]
+     ╭─[ chain_expr.baml:180:5 ]
      │
- 161 │ ╭─▶     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
-     ┆ ┆   
- 180 │ ├─▶     len // 17 trailing
-     │ │                            
-     │ ╰──────────────────────────── unresolved member: string.len
-     │     
-     │     Note: Error code: E0001
+ 180 │     len // 17 trailing
+     │     ─┬─  
+     │      ╰─── unresolved member: string.len
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: string.len
-     ╭─[ chain_expr.baml:193:6 ]
+     ╭─[ chain_expr.baml:212:5 ]
      │
- 193 │ ╭─▶     ;
-     ┆ ┆   
- 212 │ ├─▶     len /* 17 trailing */
-     │ │                               
-     │ ╰─────────────────────────────── unresolved member: string.len
-     │     
-     │     Note: Error code: E0001
+ 212 │     len /* 17 trailing */
+     │     ─┬─  
+     │      ╰─── unresolved member: string.len
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: user.ChainItem[].get
-     ╭─[ chain_expr.baml:225:6 ]
+     ╭─[ chain_expr.baml:238:5 ]
      │
- 225 │ ╭─▶     ;
-     ┆ ┆   
- 238 │ ├─▶     get // 11 trailing
-     │ │                            
-     │ ╰──────────────────────────── unresolved member: user.ChainItem[].get
-     │     
-     │     Note: Error code: E0001
+ 238 │     get // 11 trailing
+     │     ─┬─  
+     │      ╰─── unresolved member: user.ChainItem[].get
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: user.ChainItem[].len
-     ╭─[ chain_expr.baml:239:6 ]
-     │
- 239 │ ╭─▶     ( // 12 trailing
-     ┆ ┆   
- 241 │ ├─▶     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     │ │                                                                                    
-     │ ╰──────────────────────────────────────────────────────────────────────────────────── unresolved member: user.ChainItem[].len
-     │     
-     │     Note: Error code: E0001
-─────╯
-
-  [type] Error: unresolved member: user.ChainItem[].len
-     ╭─[ chain_expr.baml:241:35 ]
+     ╭─[ chain_expr.baml:241:24 ]
      │
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
-     │                                   ───────────┬───────────  
-     │                                              ╰───────────── unresolved member: user.ChainItem[].len
+     │                        ─┬─  
+     │                         ╰─── unresolved member: user.ChainItem[].len
+     │ 
+     │ Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved member: user.ChainItem[].len
+     ╭─[ chain_expr.baml:241:55 ]
+     │
+ 241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
+     │                                                       ─┬─  
+     │                                                        ╰─── unresolved member: user.ChainItem[].len
      │ 
      │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: int[][].len
-     ╭─[ chain_expr.baml:251:17 ]
+     ╭─[ chain_expr.baml:251:29 ]
      │
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     │                 ───────┬───────  
-     │                        ╰───────── unresolved member: int[][].len
+     │                             ─┬─  
+     │                              ╰─── unresolved member: int[][].len
      │ 
      │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: int[].len
-     ╭─[ chain_expr.baml:251:40 ]
+     ╭─[ chain_expr.baml:251:55 ]
      │
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
-     │                                        ─────────┬────────  
-     │                                                 ╰────────── unresolved member: int[].len
+     │                                                       ─┬─  
+     │                                                        ╰─── unresolved member: int[].len
      │ 
      │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: user.ChainItem[].get
-     ╭─[ chain_expr.baml:255:20 ]
+     ╭─[ chain_expr.baml:256:15 ]
      │
- 255 │ ╭─▶     items  [  0  ];
- 256 │ ├─▶     items  .  get  (  0  );
-     │ │                                 
-     │ ╰───────────────────────────────── unresolved member: user.ChainItem[].get
-     │     
-     │     Note: Error code: E0001
+ 256 │     items  .  get  (  0  );
+     │               ─┬─  
+     │                ╰─── unresolved member: user.ChainItem[].get
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: string.len
-     ╭─[ chain_expr.baml:256:28 ]
+     ╭─[ chain_expr.baml:259:18 ]
      │
- 256 │ ╭─▶     items  .  get  (  0  );
-     ┆ ┆   
- 259 │ ├─▶     user.tags[0].len();
-     │ │                             
-     │ ╰───────────────────────────── unresolved member: string.len
-     │     
-     │     Note: Error code: E0001
+ 259 │     user.tags[0].len();
+     │                  ─┬─  
+     │                   ╰─── unresolved member: string.len
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved member: string.len
-     ╭─[ chain_expr.baml:260:23 ]
+     ╭─[ chain_expr.baml:261:20 ]
      │
- 260 │ ╭─▶     user.scores[0][0];
- 261 │ ├─▶     items[0].label.len();
-     │ │                               
-     │ ╰─────────────────────────────── unresolved member: string.len
-     │     
-     │     Note: Error code: E0001
+ 261 │     items[0].label.len();
+     │                    ─┬─  
+     │                     ╰─── unresolved member: string.len
+     │ 
+     │ Note: Error code: E0001
 ─────╯
 
   [type] Error: unresolved name: MyRetryPolicy

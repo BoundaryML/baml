@@ -40,32 +40,29 @@ function BadFunction2(i: string) -> bool {
 //----
 //- diagnostics
 // Error: unresolved member: int.$watch
-//    ╭─[ expr_watch_when.baml:2:20 ]
+//    ╭─[ expr_watch_when.baml:3:5 ]
 //    │
-//  2 │ ╭─▶   watch let x = 10;
-//  3 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
-//    │ │                                                                  
-//    │ ╰────────────────────────────────────────────────────────────────── unresolved member: int.$watch
-//    │     
-//    │     Note: Error code: E0001
+//  3 │   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
+//    │     ───┬──  
+//    │        ╰──── unresolved member: int.$watch
+//    │ 
+//    │ Note: Error code: E0001
 // ───╯
 // Error: unresolved member: int.$watch
-//    ╭─[ expr_watch_when.baml:3:61 ]
+//    ╭─[ expr_watch_when.baml:4:5 ]
 //    │
-//  3 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: GoodFunction });
-//  4 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
-//    │ │                                                                  
-//    │ ╰────────────────────────────────────────────────────────────────── unresolved member: int.$watch
-//    │     
-//    │     Note: Error code: E0001
+//  4 │   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
+//    │     ───┬──  
+//    │        ╰──── unresolved member: int.$watch
+//    │ 
+//    │ Note: Error code: E0001
 // ───╯
 // Error: unresolved member: int.$watch
-//    ╭─[ expr_watch_when.baml:4:61 ]
+//    ╭─[ expr_watch_when.baml:5:5 ]
 //    │
-//  4 │ ╭─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction1 });
-//  5 │ ├─▶   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
-//    │ │                                                                  
-//    │ ╰────────────────────────────────────────────────────────────────── unresolved member: int.$watch
-//    │     
-//    │     Note: Error code: E0001
+//  5 │   x.$watch.options(baml.WatchOptions{ when: BadFunction2 });
+//    │     ───┬──  
+//    │        ╰──── unresolved member: int.$watch
+//    │ 
+//    │ Note: Error code: E0001
 // ───╯

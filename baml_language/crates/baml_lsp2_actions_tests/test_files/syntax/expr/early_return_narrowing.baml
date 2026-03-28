@@ -92,39 +92,38 @@ function test_diverging_if_with_plain_else(x: int?) -> int {
 //----
 //- diagnostics
 // Error: unresolved member: user.NarrowBar.field
-//     ╭─[ expr_early_return_narrowing.baml:35:11 ]
+//     ╭─[ expr_early_return_narrowing.baml:35:14 ]
 //     │
 //  35 │     return x.field;
-//     │           ────┬───  
-//     │               ╰───── unresolved member: user.NarrowBar.field
+//     │              ──┬──  
+//     │                ╰──── unresolved member: user.NarrowBar.field
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.NarrowBar.field
-//     ╭─[ expr_early_return_narrowing.baml:66:11 ]
+//     ╭─[ expr_early_return_narrowing.baml:66:14 ]
 //     │
 //  66 │     return x.field;
-//     │           ────┬───  
-//     │               ╰───── unresolved member: user.NarrowBar.field
+//     │              ──┬──  
+//     │                ╰──── unresolved member: user.NarrowBar.field
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.NarrowBar.field
-//     ╭─[ expr_early_return_narrowing.baml:72:11 ]
+//     ╭─[ expr_early_return_narrowing.baml:72:14 ]
 //     │
 //  72 │     return x.field;
-//     │           ────┬───  
-//     │               ╰───── unresolved member: user.NarrowBar.field
+//     │              ──┬──  
+//     │                ╰──── unresolved member: user.NarrowBar.field
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
 // Error: unresolved member: user.NarrowFoo.other
-//     ╭─[ expr_early_return_narrowing.baml:73:4 ]
+//     ╭─[ expr_early_return_narrowing.baml:74:5 ]
 //     │
-//  73 │ ╭─▶   }
-//  74 │ ├─▶   x.other
-//     │ │               
-//     │ ╰─────────────── unresolved member: user.NarrowFoo.other
-//     │     
-//     │     Note: Error code: E0001
+//  74 │   x.other
+//     │     ──┬──  
+//     │       ╰──── unresolved member: user.NarrowFoo.other
+//     │ 
+//     │ Note: Error code: E0001
 // ────╯

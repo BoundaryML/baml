@@ -13,7 +13,7 @@ use text_size::{TextRange, TextSize};
 use crate::{
     contributions::FileSymbolContributions,
     diagnostic::Hir2Diagnostic,
-    item_tree::ItemTree,
+    item_tree::{ItemTree, ItemTreeSourceMap},
     scope::{FileScopeId, Scope, ScopeId},
 };
 
@@ -99,6 +99,9 @@ pub struct FileSemanticIndex<'db> {
 
     /// Per-file item tree — maps `LocalItemId` to item data.
     pub item_tree: Arc<ItemTree>,
+
+    /// Source map for item tree — field/variant name spans.
+    pub item_tree_source_map: Arc<ItemTreeSourceMap>,
 
     /// Names this file contributes to its package namespace.
     pub symbol_contributions: Arc<FileSymbolContributions<'db>>,

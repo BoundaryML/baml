@@ -260,32 +260,42 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
     }
 }
 
-/// Convert a `MethodResolution` (from TIR) into an `ItemRef` (for MIR).
-fn resolution_to_item_ref(res: &baml_compiler2_tir::inference::MethodResolution<'_>) -> ItemRef {
-    use baml_compiler2_tir::inference::MethodResolution;
+/// Convert a `MemberResolution` (from TIR) into an `ItemRef` (for MIR).
+///
+/// Only `Method` and `Free` variants are callable — callers must guard against
+/// `Field` and `Variant` variants before calling this function.
+fn resolution_to_item_ref(
+    db: &dyn crate::Db,
+    res: &baml_compiler2_tir::inference::MemberResolution<'_>,
+) -> Option<ItemRef> {
+    use baml_compiler2_tir::inference::MemberResolution;
     match res {
-        MethodResolution::Free {
-            package,
-            namespace,
-            name,
-            ..
-        } => ItemRef::Free {
-            package: package.clone(),
-            namespace: namespace.clone(),
-            name: name.clone(),
-        },
-        MethodResolution::Method {
-            package,
-            namespace,
-            class,
-            name,
-            ..
-        } => ItemRef::Method {
-            package: package.clone(),
-            namespace: namespace.clone(),
-            class: class.clone(),
-            name: name.clone(),
-        },
+        MemberResolution::Free { func_loc } => {
+            let pkg_info = file_package(db, func_loc.file(db));
+            let item_tree = file_item_tree(db, func_loc.file(db));
+            let func_data = &item_tree[func_loc.id(db)];
+            Some(ItemRef::Free {
+                package: pkg_info.package,
+                namespace: pkg_info.namespace_path,
+                name: func_data.name.clone(),
+            })
+        }
+        MemberResolution::Method {
+            class_loc,
+            func_loc,
+        } => {
+            let pkg_info = file_package(db, class_loc.file(db));
+            let item_tree = file_item_tree(db, class_loc.file(db));
+            let class_data = &item_tree[class_loc.id(db)];
+            let func_data = &item_tree[func_loc.id(db)];
+            Some(ItemRef::Method {
+                package: pkg_info.package,
+                namespace: pkg_info.namespace_path,
+                class: class_data.name.clone(),
+                name: func_data.name.clone(),
+            })
+        }
+        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
     }
 }
 
@@ -325,8 +335,8 @@ struct LoweringContext<'db> {
     // Eagerly aggregated type maps from all scopes in the function
     expr_types: FxHashMap<AstExprId, Tir2Ty>,
     pat_types: FxHashMap<AstPatId, Tir2Ty>,
-    // Method resolutions from TIR: ExprId → MethodResolution
-    resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MethodResolution<'db>>,
+    // Member resolutions from TIR: ExprId → MemberResolution
+    resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MemberResolution<'db>>,
     // Match expressions that TIR determined are exhaustive
     exhaustive_matches: rustc_hash::FxHashSet<AstExprId>,
 
@@ -441,7 +451,7 @@ impl<'db> LoweringContext<'db> {
         let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
             AstExprId,
-            baml_compiler2_tir::inference::MethodResolution<'db>,
+            baml_compiler2_tir::inference::MemberResolution<'db>,
         > = FxHashMap::default();
         let mut exhaustive_matches: rustc_hash::FxHashSet<AstExprId> =
             rustc_hash::FxHashSet::default();
@@ -452,7 +462,7 @@ impl<'db> LoweringContext<'db> {
              pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
              resolutions: &mut FxHashMap<
                 AstExprId,
-                baml_compiler2_tir::inference::MethodResolution<'db>,
+                baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
              exhaustive_matches: &mut rustc_hash::FxHashSet<AstExprId>| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
@@ -615,7 +625,7 @@ impl<'db> LoweringContext<'db> {
         let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
             AstExprId,
-            baml_compiler2_tir::inference::MethodResolution<'db>,
+            baml_compiler2_tir::inference::MemberResolution<'db>,
         > = FxHashMap::default();
         let mut exhaustive_matches: rustc_hash::FxHashSet<AstExprId> =
             rustc_hash::FxHashSet::default();
@@ -626,7 +636,7 @@ impl<'db> LoweringContext<'db> {
              pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
              resolutions: &mut FxHashMap<
                 AstExprId,
-                baml_compiler2_tir::inference::MethodResolution<'db>,
+                baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
              exhaustive_matches: &mut rustc_hash::FxHashSet<AstExprId>| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
@@ -1100,12 +1110,21 @@ impl<'db> LoweringContext<'db> {
         // Multi-segment paths (e.g. baml.llm.render_prompt) — check TIR resolution first
         if segments.len() > 1 {
             if let Some(resolution) = self.resolutions.get(&expr_id).cloned() {
-                let item = resolution_to_item_ref(&resolution);
-                self.builder.assign(
-                    dest,
-                    Rvalue::Use(Operand::Constant(Constant::Function(item))),
-                );
-                return;
+                use baml_compiler2_tir::inference::MemberResolution;
+                match &resolution {
+                    MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
+                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                            self.builder.assign(
+                                dest,
+                                Rvalue::Use(Operand::Constant(Constant::Function(item))),
+                            );
+                            return;
+                        }
+                    }
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                        // Not a callable — fall through to null placeholder
+                    }
+                }
             }
             self.builder
                 .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
@@ -1340,11 +1359,18 @@ impl LoweringContext<'_> {
             }
         }
 
-        // Check if callee is a method call (FieldAccess with a MethodResolution).
+        // Check if callee is a method call (FieldAccess with a MemberResolution::Method/Free).
+        // Field and Variant resolutions are not callable — treat them like unresolved accesses.
         // If the base is a real value (not a package namespace), prepend it as self.
         let (callee_operand, arg_operands) = if let AstExpr::FieldAccess { base, .. } = &callee_expr
         {
-            if self.resolutions.contains_key(&callee) {
+            if self.resolutions.get(&callee).is_some_and(|r| {
+                use baml_compiler2_tir::inference::MemberResolution;
+                matches!(
+                    r,
+                    MemberResolution::Method { .. } | MemberResolution::Free { .. }
+                )
+            }) {
                 // Check if base is a value receiver or a package path.
                 // Package paths have Unknown type in TIR (baml, baml.Array, etc.)
                 let base_is_value = self
@@ -1434,10 +1460,11 @@ impl LoweringContext<'_> {
                 }
             } else {
                 // Multi-segment: check TIR resolution
-                use baml_compiler2_tir::inference::MethodResolution;
-                self.resolutions.get(&callee).map(|res| match res {
-                    MethodResolution::Free { func_loc, .. } => *func_loc,
-                    MethodResolution::Method { func_loc, .. } => *func_loc,
+                use baml_compiler2_tir::inference::MemberResolution;
+                self.resolutions.get(&callee).and_then(|res| match res {
+                    MemberResolution::Free { func_loc } => Some(*func_loc),
+                    MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
                 })
             };
             if let Some(fl) = func_loc {
@@ -1450,11 +1477,12 @@ impl LoweringContext<'_> {
 
         // ── NEW: FieldAccess callee (e.g. f.read, sock.recv) ──────────────────
         if let AstExpr::FieldAccess { .. } = &self.body.exprs[callee] {
-            use baml_compiler2_tir::inference::MethodResolution;
+            use baml_compiler2_tir::inference::MemberResolution;
             if let Some(resolution) = self.resolutions.get(&callee) {
                 let func_loc = match resolution {
-                    MethodResolution::Method { func_loc, .. } => Some(*func_loc),
-                    MethodResolution::Free { func_loc, .. } => Some(*func_loc),
+                    MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                    MemberResolution::Free { func_loc } => Some(*func_loc),
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
                 };
                 if let Some(fl) = func_loc {
                     let body = function_body(self.db, fl);
@@ -1700,14 +1728,24 @@ impl LoweringContext<'_> {
         field: &Name,
         dest: Place,
     ) {
-        // Check if TIR resolved this to a method — if so, emit a function constant
+        // Check if TIR resolved this to a method or free function — if so, emit a function constant.
+        // Field and Variant resolutions fall through to the existing lowering paths below.
         if let Some(resolution) = self.resolutions.get(&expr_id).cloned() {
-            let item = resolution_to_item_ref(&resolution);
-            self.builder.assign(
-                dest,
-                Rvalue::Use(Operand::Constant(Constant::Function(item))),
-            );
-            return;
+            use baml_compiler2_tir::inference::MemberResolution;
+            match &resolution {
+                MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
+                    if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                        self.builder.assign(
+                            dest,
+                            Rvalue::Use(Operand::Constant(Constant::Function(item))),
+                        );
+                        return;
+                    }
+                }
+                MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                    // Fall through — handled by the existing field/enum-variant lowering below
+                }
+            }
         }
 
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
@@ -1777,12 +1815,16 @@ impl LoweringContext<'_> {
             );
         } else {
             if let Ty::Class(ref tn, _) = base_ty {
-                panic!(
-                    "internal compiler error: MIR failed to resolve field access \
-                     .{} against class definition '{}' (module_path: {:?}). \
-                     This class should be in class_fields but isn't.",
-                    field_str, tn.name, tn.module_path,
+                self.emit_panic_call(
+                    &format!(
+                        "internal compiler error: MIR failed to resolve field access \
+                         .{} against class definition '{}' (module_path: {:?}). \
+                         This class should be in class_fields but isn't.",
+                        field_str, tn.name, tn.module_path,
+                    ),
+                    expr_id,
                 );
+                return;
             }
             // Dynamic map access — only valid for map types, unknown, etc.
             let key_local = self.builder.temp(Ty::String {
@@ -2277,12 +2319,20 @@ impl LoweringContext<'_> {
                             };
                         }
                     }
-                    panic!(
-                        "internal compiler error: MIR failed to resolve field access \
-                         .{} against class definition '{}' (module_path: {:?}). \
-                         This class should be in class_fields but isn't.",
-                        field_name, tn.name, tn.module_path,
+                    self.emit_panic_call(
+                        &format!(
+                            "internal compiler error: MIR failed to resolve field access \
+                             .{} against class definition '{}' (module_path: {:?}). \
+                             This class should be in class_fields but isn't.",
+                            field_name, tn.name, tn.module_path,
+                        ),
+                        base_id,
                     );
+                    // Dead code after panic — return a dummy place
+                    let dead = self.builder.temp(Ty::Null {
+                        attr: TyAttr::default(),
+                    });
+                    return Place::Local(dead);
                 }
                 // Dynamic map access — only valid for map types, unknown, etc.
                 let key_local = self.builder.temp(Ty::String {
