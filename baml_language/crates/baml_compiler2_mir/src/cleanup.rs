@@ -302,6 +302,13 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
             }
         }
         // Call destinations also count as definitions.
+        //
+        // NOTE: DispatchFuture::future and Await::destination also write to
+        // places, but are intentionally omitted here. The current lowering
+        // never reuses a local across both an Assign statement and an async
+        // terminator, so the miscount is harmless today. If that invariant
+        // changes, these terminators should be handled here (as they already
+        // are in eliminate_dead_locals below).
         if let Some(Terminator::Call { destination, .. }) = &block.terminator {
             let mut place = destination;
             loop {

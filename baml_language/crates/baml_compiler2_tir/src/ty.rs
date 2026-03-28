@@ -388,6 +388,11 @@ impl Ty {
                 Ty::Primitive(PrimitiveType::from_literal(&lit), attr)
             }
             Ty::Union(members, _attr) => {
+                // _attr is intentionally dropped: in the TIR layer, lower_type_expr
+                // always produces TyAttr::default() on every Ty variant (it does not
+                // read TypeExpr::attrs). Non-default TyAttr values (sap_* flags,
+                // @assert) only exist downstream in the MIR/VIR layer, which does
+                // not call widen_fresh. So _attr is always default() here.
                 let widened: Vec<Ty> = members.into_iter().map(Ty::widen_fresh).collect();
                 dedup_and_collapse(widened)
             }
