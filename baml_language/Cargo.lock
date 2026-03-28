@@ -1317,33 +1317,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "baml_lsp_actions"
-version = "0.0.0-beta"
-dependencies = [
- "baml_db",
- "baml_project",
- "rowan 0.16.1",
- "smol_str 0.3.6",
- "text-size",
- "tracing",
-]
-
-[[package]]
-name = "baml_lsp_actions_tests"
-version = "0.0.0-beta"
-dependencies = [
- "baml_compiler_diagnostics",
- "baml_lsp_actions",
- "baml_project",
- "prettyplease",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
- "text-size",
- "walkdir",
-]
-
-[[package]]
 name = "baml_lsp_server"
 version = "0.0.0-beta"
 dependencies = [

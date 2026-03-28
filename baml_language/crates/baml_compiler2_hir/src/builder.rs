@@ -44,6 +44,7 @@ pub struct SemanticIndexBuilder<'db> {
     expr_scopes: Vec<(ast::ExprId, FileScopeId)>,
 
     item_tree: ItemTree,
+    item_tree_source_map: crate::item_tree::ItemTreeSourceMap,
     type_contributions: Vec<(Name, Contribution<'db>)>,
     value_contributions: Vec<(Name, Contribution<'db>)>,
     diagnostics: Vec<Hir2Diagnostic>,
@@ -60,6 +61,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             class_depth: 0,
             expr_scopes: Vec::new(),
             item_tree: ItemTree::new(),
+            item_tree_source_map: crate::item_tree::ItemTreeSourceMap::default(),
             type_contributions: Vec::new(),
             value_contributions: Vec::new(),
             diagnostics: Vec::new(),
@@ -129,6 +131,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             scope_bindings: self.scope_bindings,
             scope_ids,
             item_tree: Arc::new(self.item_tree),
+            item_tree_source_map: Arc::new(self.item_tree_source_map),
             symbol_contributions: Arc::new(FileSymbolContributions {
                 types: self.type_contributions,
                 values: self.value_contributions,
@@ -349,6 +352,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_function(&mut self, f: &ast::FunctionDef) -> LocalItemId<FunctionMarker> {
         let local_id = self.item_tree.alloc_function(f);
+        ItemTree::collect_function_span(&mut self.item_tree_source_map, local_id, f);
         let loc = FunctionLoc::new(self.db, self.file, local_id);
 
         // Only contribute as a top-level symbol if not inside a class.
@@ -382,6 +386,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_class(&mut self, c: &ast::ClassDef) {
         let local_id = self.item_tree.alloc_class(c);
+        ItemTree::collect_class_spans(&mut self.item_tree_source_map, local_id, c);
         let loc = ClassLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             c.name.clone(),
@@ -428,6 +433,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_enum(&mut self, e: &ast::EnumDef) {
         let local_id = self.item_tree.alloc_enum(e);
+        ItemTree::collect_enum_spans(&mut self.item_tree_source_map, local_id, e);
         let loc = EnumLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             e.name.clone(),

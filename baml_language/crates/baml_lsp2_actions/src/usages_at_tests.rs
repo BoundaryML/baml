@@ -165,12 +165,9 @@ function SetName(p: Person, n: string) -> Person {
         );
 
         let usages = test.find_all_usages();
-        // Field usages are not yet tracked (cursor is on a field definition,
-        // which is not a WORD token that resolves via resolve_name_at).
-        // TODO: once implemented, assert !usages.is_empty()
         assert!(
-            usages.is_empty(),
-            "Field usages are not yet implemented, found: {:?}",
+            usages.len() >= 2,
+            "Should find at least 2 usages of 'name' (field access + constructor), found: {:?}",
             usages
                 .iter()
                 .map(|l| test.format_location_with_name(l))

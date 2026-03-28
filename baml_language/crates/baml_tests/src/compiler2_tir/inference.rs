@@ -80,10 +80,72 @@ fn unresolved_field() {
       { : never
         return x.missing : unknown
       }
-      !! 63..73: unresolved member: user.Foo.missing
+      !! 66..73: unresolved member: user.Foo.missing
     }
     class user.Foo$stream {
       name: null | string
+    }
+    ");
+}
+
+#[test]
+fn unresolved_field_chained_access() {
+    // Test: in `data.inner.foo`, if `inner` doesn't exist on the class,
+    // the squiggly should only cover "inner", not "data.inner".
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "\
+class Data {
+  name string
+}
+function f(data: Data) -> string {
+  return data.inner.foo;
+}",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    class user.Data {
+      name: string
+    }
+    function user.f(data: user.Data) -> string throws never {
+      { : never
+        return data.inner.foo : unknown
+      }
+      !! 78..83: unresolved member: user.Data.inner
+    }
+    class user.Data$stream {
+      name: null | string
+    }
+    ");
+}
+
+#[test]
+fn unresolved_field_span_should_narrow_to_member() {
+    // Regression test: the diagnostic span for an unresolved member should cover
+    // only the member name ("feelin"), not the entire expression ("user.Sentiment.feelin").
+    let mut db = make_db();
+    let file = db.add_file(
+        "test.baml",
+        "\
+class Sentiment {
+  feeling string
+}
+function f(s: Sentiment) -> string {
+  return s.feelin;
+}",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r"
+    class user.Sentiment {
+      feeling: string
+    }
+    function user.f(s: user.Sentiment) -> string throws never {
+      { : never
+        return s.feelin : unknown
+      }
+      !! 85..91: unresolved member: user.Sentiment.feelin
+    }
+    class user.Sentiment$stream {
+      feeling: null | string
     }
     ");
 }

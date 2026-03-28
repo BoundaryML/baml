@@ -92,10 +92,11 @@ pub struct TypeInferenceBuilder<'db> {
     /// Binding types: the type a variable is bound to (may differ from the
     /// initializer expression type due to widening or annotation).
     bindings: FxHashMap<PatId, Ty>,
-    /// Method resolutions: for field-access expressions that resolved to a
-    /// method or free function, records the structural path so MIR can emit
-    /// the correct `QualifiedName` without re-doing resolution.
-    resolutions: FxHashMap<ExprId, crate::inference::MethodResolution<'db>>,
+    /// Member resolutions: for field-access expressions that resolved to a
+    /// class field, enum variant, method, or free function — records the
+    /// structural path so MIR can emit the correct `QualifiedName` and LSP
+    /// can navigate to the definition.
+    resolutions: FxHashMap<ExprId, crate::inference::MemberResolution<'db>>,
     /// Resolution context: own `PackageItems` + dependency `PackageInterfaces`.
     res_ctx: &'db PackageResolutionContext<'db>,
     /// Convenience: own package items (from `res_ctx`).
@@ -180,7 +181,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> (
         FxHashMap<ExprId, Ty>,
         FxHashMap<PatId, Ty>,
-        FxHashMap<ExprId, crate::inference::MethodResolution<'db>>,
+        FxHashMap<ExprId, crate::inference::MemberResolution<'db>>,
         FxHashSet<ExprId>,
         TypeCheckDiagnostics<'db>,
     ) {
@@ -2190,17 +2191,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             let item_tree_for_func = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
             let func_data_for_sig = &item_tree_for_func[func_loc.id(db)];
             let generic_params = &func_data_for_sig.generic_params;
-            let member = path.last().unwrap();
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db));
-            let ns_context = pkg_info.namespace_path.clone();
+            let ns_context = pkg_info.namespace_path;
             self.resolutions.insert(
                 expr_id,
-                crate::inference::MethodResolution::Free {
-                    package: pkg_info.package,
-                    namespace: pkg_info.namespace_path,
-                    name: member.clone(),
-                    func_loc,
-                },
+                crate::inference::MemberResolution::Free { func_loc },
             );
             let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
             let mut diags = Vec::new();
@@ -2380,6 +2375,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Check class fields
                 let class_fields = self.lookup_class_fields(class_name);
                 if let Some(field_ty) = class_fields.get(member) {
+                    // Store field resolution for LSP navigation
+                    if let Some(class_loc) = self.resolve_class_loc(class_name) {
+                        self.resolutions.insert(
+                            at,
+                            crate::inference::MemberResolution::Field {
+                                class_loc,
+                                field_name: member.clone(),
+                            },
+                        );
+                    }
                     return field_ty.clone();
                 }
 
@@ -2388,18 +2393,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some((ty, class_loc, func_loc)) =
                     self.lookup_class_method(class_name, member)
                 {
-                    let db = self.context.db();
-                    let pkg_info =
-                        baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
-                    let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-                    let class_data = &item_tree[class_loc.id(db)];
                     self.resolutions.insert(
                         at,
-                        crate::inference::MethodResolution::Method {
-                            package: pkg_info.package,
-                            namespace: pkg_info.namespace_path,
-                            class: class_data.name.clone(),
-                            name: member.clone(),
+                        crate::inference::MemberResolution::Method {
                             class_loc,
                             func_loc,
                         },
@@ -2414,7 +2410,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let related = class_def
                     .map(|def| vec![(RelatedLocation::Item(def), "class defined here")])
                     .unwrap_or_default();
-                self.context.report(
+                self.context.report_at_member(
                     TirTypeError::UnresolvedMember {
                         base_type: base_ty.clone(),
                         member: member.clone(),
@@ -2430,6 +2426,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Validate that the variant exists
                 let variants = self.lookup_enum_variants(enum_name);
                 if variants.contains(member) {
+                    // Store variant resolution for LSP navigation
+                    if let Some(enum_loc) = self.resolve_enum_loc(enum_name) {
+                        self.resolutions.insert(
+                            at,
+                            crate::inference::MemberResolution::Variant {
+                                enum_loc,
+                                variant_name: member.clone(),
+                            },
+                        );
+                    }
                     return Ty::EnumVariant(enum_name.clone(), member.clone(), TyAttr::default());
                 }
 
@@ -2440,7 +2446,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let related = enum_def
                     .map(|def| vec![(RelatedLocation::Item(def), "enum defined here")])
                     .unwrap_or_default();
-                self.context.report(
+                self.context.report_at_member(
                     TirTypeError::UnresolvedMember {
                         base_type: base_ty.clone(),
                         member: member.clone(),
@@ -2456,7 +2462,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Bridge: int[] → Array<int> — resolve via builtin Array class.
                 self.resolve_builtin_member(&["Array"], &[element_ty.as_ref().clone()], member, at)
                     .unwrap_or_else(|| {
-                        self.context.report_simple(
+                        self.context.report_at_member_simple(
                             TirTypeError::UnresolvedMember {
                                 base_type: base_ty.clone(),
                                 member: member.clone(),
@@ -2477,7 +2483,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     at,
                 )
                 .unwrap_or_else(|| {
-                    self.context.report_simple(
+                    self.context.report_at_member_simple(
                         TirTypeError::UnresolvedMember {
                             base_type: base_ty.clone(),
                             member: member.clone(),
@@ -2494,7 +2500,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Bridge: string / "literal" → String class
                 self.resolve_builtin_member(&["String"], &[], member, at)
                     .unwrap_or_else(|| {
-                        self.context.report_simple(
+                        self.context.report_at_member_simple(
                             TirTypeError::UnresolvedMember {
                                 base_type: base_ty.clone(),
                                 member: member.clone(),
@@ -2516,7 +2522,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Bridge: each media primitive → its own builtin class in baml.media
                 self.resolve_builtin_member(p.builtin_class_path(), &[], member, at)
                     .unwrap_or_else(|| {
-                        self.context.report_simple(
+                        self.context.report_at_member_simple(
                             TirTypeError::UnresolvedMember {
                                 base_type: base_ty.clone(),
                                 member: member.clone(),
@@ -2552,7 +2558,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     // Report an error for each member that's missing the field
                     for (member_ty, result) in &resolved {
                         if result.is_none() {
-                            self.context.report_simple(
+                            self.context.report_at_member_simple(
                                 TirTypeError::UnresolvedMember {
                                     base_type: member_ty.clone(),
                                     member: member.clone(),
@@ -2586,7 +2592,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             _ => {
                 // Other types (other primitives, etc.) — no members
-                self.context.report_simple(
+                self.context.report_at_member_simple(
                     TirTypeError::UnresolvedMember {
                         base_type: base_ty.clone(),
                         member: member.clone(),
@@ -2721,12 +2727,45 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.res_ctx.items_for_package(db, class_pkg)
     }
 
+    /// Resolve a `QualifiedTypeName` to a `ClassLoc` via `package_items` lookup.
+    fn resolve_class_loc(
+        &self,
+        qtn: &crate::ty::QualifiedTypeName,
+    ) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
+        let short = Self::unqualify(qtn);
+        let pkg_items = self.resolve_class_pkg_items(qtn.package())?;
+        match pkg_items.lookup_type_any_ns(&short)? {
+            Definition::Class(class_loc) => Some(class_loc),
+            _ => None,
+        }
+    }
+
+    /// Resolve a `QualifiedTypeName` to an `EnumLoc` via `package_items` lookup.
+    fn resolve_enum_loc(
+        &self,
+        qtn: &crate::ty::QualifiedTypeName,
+    ) -> Option<baml_compiler2_hir::loc::EnumLoc<'db>> {
+        let db = self.context.db();
+        let short = Self::unqualify(qtn);
+        let items = if *qtn.package() == self.package_id.name(db) {
+            self.package_items
+        } else {
+            self.res_ctx.items_for_package(db, qtn.package())?
+        };
+        let mut lookup_path: Vec<Name> = qtn.namespace().clone();
+        lookup_path.push(short);
+        match items.lookup_type(&lookup_path)? {
+            Definition::Enum(enum_loc) => Some(enum_loc),
+            _ => None,
+        }
+    }
+
     /// Look up a class method by name from the item tree.
     ///
     /// Methods are stored on the `Class` entry directly (not in the package
     /// namespace), so we resolve the class, iterate its method IDs, and match
     /// by name. Returns the method type along with the class and function locs
-    /// so callers can record a `MethodResolution`.
+    /// so callers can record a `MemberResolution`.
     fn lookup_class_method(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
@@ -3021,7 +3060,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// 5. Falls back to checking class fields.
     ///
     /// Returns `None` if the class or member is not found.
-    /// Wrapper around `resolve_builtin_method` that also stores a `MethodResolution`
+    /// Wrapper around `resolve_builtin_method` that also stores a `MemberResolution`
     /// when the result is a method (not a field).
     fn resolve_builtin_member(
         &mut self,
@@ -3037,18 +3076,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 class_loc,
                 func_loc,
             } => {
-                let db = self.context.db();
-                let pkg_info =
-                    baml_compiler2_hir::file_package::file_package(db, class_loc.file(db));
-                let item_tree = baml_compiler2_ppir::file_item_tree(db, class_loc.file(db));
-                let class_data = &item_tree[class_loc.id(db)];
                 self.resolutions.insert(
                     at,
-                    crate::inference::MethodResolution::Method {
-                        package: pkg_info.package,
-                        namespace: pkg_info.namespace_path,
-                        class: class_data.name.clone(),
-                        name: member_name.clone(),
+                    crate::inference::MemberResolution::Method {
                         class_loc,
                         func_loc,
                     },
@@ -3345,7 +3375,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     );
                 }
 
-                // Record a MethodResolution so MIR emits a proper method call
+                // Record a MemberResolution so MIR emits a proper method call
                 // instead of a dynamic map lookup.
                 let effective_elem = match &local_ty {
                     Ty::EvolvingList(e, _) | Ty::List(e, _) => e.as_ref().clone(),

@@ -348,6 +348,7 @@ pub(crate) fn synthesize_llm_builtin_call(
         match_arm_spans: Arena::new(),
         type_annotation_spans: Arena::new(),
         catch_arm_spans: Arena::new(),
+        field_access_member_spans: std::collections::HashMap::new(),
     };
 
     (body, source_map)
@@ -617,6 +618,7 @@ fn synthesize_retry_policy_let(node: &SyntaxNode) -> Option<Item> {
         match_arm_spans: la_arena::Arena::new(),
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
+        field_access_member_spans: std::collections::HashMap::new(),
     };
 
     Some(Item::Let(LetDef {
@@ -831,6 +833,7 @@ fn synthesize_client_let(
         match_arm_spans: la_arena::Arena::new(),
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
+        field_access_member_spans: std::collections::HashMap::new(),
     };
 
     Item::Let(LetDef {
@@ -1046,6 +1049,7 @@ fn synthesize_client_new_companion(
         match_arm_spans: la_arena::Arena::new(),
         type_annotation_spans: la_arena::Arena::new(),
         catch_arm_spans: la_arena::Arena::new(),
+        field_access_member_spans: std::collections::HashMap::new(),
     };
 
     let func_name = format!("{client_name}$new");

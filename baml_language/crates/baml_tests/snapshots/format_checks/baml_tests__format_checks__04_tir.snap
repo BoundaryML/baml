@@ -148,30 +148,30 @@ function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<s
     baml.env.get_or_panic("DATABASE_URL") : string
     user.name : string
   }
-  !! 1809..1862: unresolved member: string.len
-  !! 1865..1879: unresolved member: user.ChainItem[].len
-  !! 1882..1949: unresolved member: user.ChainItem[].get
-  !! 1953..2143: unresolved member: user.ChainItem[].get
-  !! 2309..2508: unresolved member: user.ChainItem[].get
-  !! 3397..3449: unresolved member: string.len
-  !! 3464..3580: unresolved member: string.len
-  !! 3649..3769: unresolved member: string.len
-  !! 3820..3898: unresolved member: user.ChainItem[].get
-  !! 3899..3921: unresolved member: user.ChainItem[].len
-  !! 3929..3952: unresolved member: user.ChainItem[].len
-  !! 3960..3983: unresolved member: user.ChainItem[].len
+  !! 1859..1862: unresolved member: string.len
+  !! 1876..1879: unresolved member: user.ChainItem[].len
+  !! 1946..1949: unresolved member: user.ChainItem[].get
+  !! 2140..2143: unresolved member: user.ChainItem[].get
+  !! 2505..2508: unresolved member: user.ChainItem[].get
+  !! 3446..3449: unresolved member: string.len
+  !! 3577..3580: unresolved member: string.len
+  !! 3766..3769: unresolved member: string.len
+  !! 3895..3898: unresolved member: user.ChainItem[].get
+  !! 3918..3921: unresolved member: user.ChainItem[].len
+  !! 3949..3952: unresolved member: user.ChainItem[].len
+  !! 3980..3983: unresolved member: user.ChainItem[].len
   !! 3997..4155: expected 2 argument(s), got 3
-  !! 4085..4108: unresolved member: user.ChainItem[].len
-  !! 4156..4569: unresolved member: string.len
-  !! 4846..5308: unresolved member: string.len
-  !! 5624..5900: unresolved member: user.ChainItem[].get
-  !! 5921..5981: unresolved member: user.ChainItem[].len
-  !! 5989..6012: unresolved member: user.ChainItem[].len
-  !! 6234..6249: unresolved member: int[][].len
-  !! 6257..6275: unresolved member: int[].len
-  !! 6364..6382: unresolved member: user.ChainItem[].get
-  !! 6392..6467: unresolved member: string.len
-  !! 6493..6516: unresolved member: string.len
+  !! 4105..4108: unresolved member: user.ChainItem[].len
+  !! 4566..4569: unresolved member: string.len
+  !! 5305..5308: unresolved member: string.len
+  !! 5897..5900: unresolved member: user.ChainItem[].get
+  !! 5978..5981: unresolved member: user.ChainItem[].len
+  !! 6009..6012: unresolved member: user.ChainItem[].len
+  !! 6246..6249: unresolved member: int[][].len
+  !! 6272..6275: unresolved member: int[].len
+  !! 6379..6382: unresolved member: user.ChainItem[].get
+  !! 6464..6467: unresolved member: string.len
+  !! 6513..6516: unresolved member: string.len
 }
 class user.ChainUser$stream {
   name: null | string

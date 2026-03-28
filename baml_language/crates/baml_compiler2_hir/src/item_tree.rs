@@ -178,6 +178,24 @@ pub struct Let {
     pub name_span: TextRange,
 }
 
+// ── ItemTreeSourceMap ─────────────────────────────────────────────────────────
+
+/// Parallel source map for `ItemTree` — stores name spans that are
+/// deliberately excluded from the semantic `ItemTree` to avoid polluting
+/// Salsa's early-cutoff comparisons with position data.
+///
+/// Follows the same body/signature source-map pattern used by
+/// `function_body` / `function_body_source_map`.
+#[derive(Debug, Clone, Default)]
+pub struct ItemTreeSourceMap {
+    /// `name_span` for each class's fields, parallel to `Class::fields`.
+    pub class_field_spans: FxHashMap<LocalItemId<ClassMarker>, Vec<TextRange>>,
+    /// `name_span` for each enum's variants, parallel to `Enum::variants`.
+    pub enum_variant_spans: FxHashMap<LocalItemId<EnumMarker>, Vec<TextRange>>,
+    /// `name_span` for each function.
+    pub function_name_spans: FxHashMap<LocalItemId<FunctionMarker>, TextRange>,
+}
+
 // ── ItemTree ─────────────────────────────────────────────────────────────────
 
 /// Position-independent item storage for a single file.
@@ -313,6 +331,37 @@ impl ItemTree {
             },
         );
         id
+    }
+
+    /// Populate source map spans for a class that was allocated via `alloc_class`.
+    pub fn collect_class_spans(
+        source_map: &mut ItemTreeSourceMap,
+        id: LocalItemId<ClassMarker>,
+        class_def: &ast::ClassDef,
+    ) {
+        let spans: Vec<TextRange> = class_def.fields.iter().map(|f| f.name_span).collect();
+        source_map.class_field_spans.insert(id, spans);
+    }
+
+    /// Populate source map name span for a function.
+    pub fn collect_function_span(
+        source_map: &mut ItemTreeSourceMap,
+        id: LocalItemId<FunctionMarker>,
+        func_def: &ast::FunctionDef,
+    ) {
+        source_map
+            .function_name_spans
+            .insert(id, func_def.name_span);
+    }
+
+    /// Populate source map spans for an enum that was allocated via `alloc_enum`.
+    pub fn collect_enum_spans(
+        source_map: &mut ItemTreeSourceMap,
+        id: LocalItemId<EnumMarker>,
+        enum_def: &ast::EnumDef,
+    ) {
+        let spans: Vec<TextRange> = enum_def.variants.iter().map(|v| v.name_span).collect();
+        source_map.enum_variant_spans.insert(id, spans);
     }
 
     pub fn alloc_type_alias(&mut self, ta: &ast::TypeAliasDef) -> LocalItemId<TypeAliasMarker> {

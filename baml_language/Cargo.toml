@@ -49,7 +49,6 @@ sys_types = { path = "crates/sys_types" }
 sys_native = { path = "crates/sys_native" }
 baml_db = { path = "crates/baml_db" }
 baml_fmt = { path = "crates/baml_fmt" }
-baml_lsp_actions = { path = "crates/baml_lsp_actions" }
 baml_lsp2_actions = { path = "crates/baml_lsp2_actions" }
 baml_lsp_server = { path = "crates/baml_lsp_server" }
 baml_lsp_types = { path = "crates/baml_lsp_types" }

@@ -89,7 +89,10 @@ pub fn definition_at(db: &dyn Db, file: SourceFile, offset: TextSize) -> Option<
             definition_site: None,
             ..
         }
-        | baml_compiler2_tir::resolve::ResolvedName::Unknown => None,
+        | baml_compiler2_tir::resolve::ResolvedName::Unknown => {
+            // Fallback: try member resolution (field access, enum variant, constructor field, method)
+            resolve_member_at(db, file, offset, name_text)
+        }
     }
 }
 
@@ -151,4 +154,286 @@ fn local_definition_location(
             Some(Location { file, range })
         }
     }
+}
+
+// ── resolve_member_at ─────────────────────────────────────────────────────────
+
+/// Fallback resolution for member access positions where `resolve_name_at`
+/// returns `Unknown` — field access, enum variants, constructor fields, methods.
+fn resolve_member_at(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    token_text: &str,
+) -> Option<Location> {
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
+    let item_tree = baml_compiler2_hir::file_item_tree(db, file);
+    let scope_id = index.scope_at_offset(offset, None);
+    let scope = &index.scopes[scope_id.index() as usize];
+
+    match scope.kind {
+        // ── Cursor on a field/variant definition ──────────────────────
+        baml_compiler2_hir::scope::ScopeKind::Class => {
+            resolve_field_definition(db, file, &item_tree, scope.name.as_ref(), token_text)
+        }
+        baml_compiler2_hir::scope::ScopeKind::Enum => {
+            resolve_variant_definition(db, file, &item_tree, scope.name.as_ref(), token_text)
+        }
+
+        // ── Cursor in a function body ─────────────────────────────────
+        _ => {
+            // Walk ancestors to find enclosing function scope
+            let enclosing_func_scope =
+                index
+                    .ancestor_scopes(scope_id)
+                    .into_iter()
+                    .find(|ancestor_id| {
+                        matches!(
+                            index.scopes[ancestor_id.index() as usize].kind,
+                            baml_compiler2_hir::scope::ScopeKind::Function
+                        )
+                    })?;
+
+            let func_scope = &index.scopes[enclosing_func_scope.index() as usize];
+
+            // Find the matching function in the item tree
+            let (func_local_id, _) = item_tree.functions.iter().find(|(_, f)| {
+                f.span == func_scope.range && func_scope.name.as_ref() == Some(&f.name)
+            })?;
+            let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *func_local_id);
+
+            // Get inference, body, source map
+            let func_scope_id = index.scope_ids[enclosing_func_scope.index() as usize];
+            let inference = baml_compiler2_tir::inference::infer_scope_types(db, func_scope_id);
+            let body = baml_compiler2_hir::body::function_body(db, func_loc);
+            let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() else {
+                return None;
+            };
+            let source_map = baml_compiler2_hir::body::function_body_source_map(db, func_loc)?;
+
+            // Try FieldAccess path first
+            if let Some(loc) = resolve_field_access_at(
+                db,
+                file,
+                offset,
+                token_text,
+                expr_body,
+                &source_map,
+                inference,
+            ) {
+                return Some(loc);
+            }
+
+            // Try Object constructor field path
+            resolve_constructor_field_at(
+                db,
+                file,
+                offset,
+                token_text,
+                expr_body,
+                &source_map,
+                inference,
+            )
+        }
+    }
+}
+
+/// Cursor is on a class field definition (e.g. `name string` inside a class body).
+fn resolve_field_definition(
+    db: &dyn Db,
+    file: SourceFile,
+    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    class_name: Option<&Name>,
+    token_text: &str,
+) -> Option<Location> {
+    let class_name = class_name?;
+    let source_map = baml_compiler2_hir::file_item_tree_source_map(db, file);
+    for (class_id, class) in &item_tree.classes {
+        if class.name == *class_name {
+            let field_spans = source_map.class_field_spans.get(class_id)?;
+            for (i, field) in class.fields.iter().enumerate() {
+                if field.name.as_str() == token_text {
+                    return Some(Location {
+                        file,
+                        range: field_spans[i],
+                    });
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Cursor is on an enum variant definition (e.g. `Active` inside an enum body).
+fn resolve_variant_definition(
+    db: &dyn Db,
+    file: SourceFile,
+    item_tree: &baml_compiler2_hir::item_tree::ItemTree,
+    enum_name: Option<&Name>,
+    token_text: &str,
+) -> Option<Location> {
+    let enum_name = enum_name?;
+    let source_map = baml_compiler2_hir::file_item_tree_source_map(db, file);
+    for (enum_id, enum_def) in &item_tree.enums {
+        if enum_def.name == *enum_name {
+            let variant_spans = source_map.enum_variant_spans.get(enum_id)?;
+            for (i, variant) in enum_def.variants.iter().enumerate() {
+                if variant.name.as_str() == token_text {
+                    return Some(Location {
+                        file,
+                        range: variant_spans[i],
+                    });
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Cursor is on a `FieldAccess` expression (e.g. `p.name`, `Status.Active`, `s.Celebrate()`).
+fn resolve_field_access_at(
+    db: &dyn Db,
+    _file: SourceFile,
+    offset: TextSize,
+    token_text: &str,
+    expr_body: &baml_compiler2_ast::ExprBody,
+    source_map: &baml_compiler2_ast::AstSourceMap,
+    inference: &baml_compiler2_tir::inference::ScopeInference<'_>,
+) -> Option<Location> {
+    use baml_compiler2_ast::Expr;
+    use baml_compiler2_tir::inference::MemberResolution;
+
+    // Find the FieldAccess expr whose span contains the cursor and field name matches.
+    // Pick smallest (innermost) span for nested chains like a.b.c.
+    let mut best: Option<(baml_compiler2_ast::ExprId, TextRange)> = None;
+    for (expr_id, expr) in expr_body.exprs.iter() {
+        if let Expr::FieldAccess { field, .. } = expr {
+            if field.as_str() != token_text {
+                continue;
+            }
+            let span = source_map.expr_span(expr_id);
+            if !span.contains(offset) && span.end() != offset {
+                continue;
+            }
+            if best.is_none_or(|(_, prev_span)| span.len() < prev_span.len()) {
+                best = Some((expr_id, span));
+            }
+        }
+    }
+
+    let (expr_id, _) = best?;
+    match inference.resolution(expr_id)? {
+        MemberResolution::Field {
+            class_loc,
+            field_name,
+        } => {
+            let target_file = class_loc.file(db);
+            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
+            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
+            let class = &target_item_tree[class_loc.id(db)];
+            let field_idx = class.fields.iter().position(|f| f.name == *field_name)?;
+            let field_spans = target_source_map.class_field_spans.get(&class_loc.id(db))?;
+            Some(Location {
+                file: target_file,
+                range: field_spans[field_idx],
+            })
+        }
+        MemberResolution::Variant {
+            enum_loc,
+            variant_name,
+        } => {
+            let target_file = enum_loc.file(db);
+            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
+            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
+            let enum_def = &target_item_tree[enum_loc.id(db)];
+            let variant_idx = enum_def
+                .variants
+                .iter()
+                .position(|v| v.name == *variant_name)?;
+            let variant_spans = target_source_map.enum_variant_spans.get(&enum_loc.id(db))?;
+            Some(Location {
+                file: target_file,
+                range: variant_spans[variant_idx],
+            })
+        }
+        MemberResolution::Free { func_loc } => {
+            let def = baml_compiler2_hir::contributions::Definition::Function(*func_loc);
+            let (def_file, range) = utils::definition_span(db, def)?;
+            Some(Location {
+                file: def_file,
+                range,
+            })
+        }
+        MemberResolution::Method { func_loc, .. } => {
+            // Methods are not in FileSymbolContributions — use ItemTreeSourceMap.
+            let target_file = func_loc.file(db);
+            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
+            let name_range = target_source_map
+                .function_name_spans
+                .get(&func_loc.id(db))?;
+            Some(Location {
+                file: target_file,
+                range: *name_range,
+            })
+        }
+    }
+}
+
+/// Cursor is on a constructor literal field (e.g. `data:` in `Success { data: "..." }`).
+fn resolve_constructor_field_at(
+    db: &dyn Db,
+    file: SourceFile,
+    offset: TextSize,
+    token_text: &str,
+    expr_body: &baml_compiler2_ast::ExprBody,
+    source_map: &baml_compiler2_ast::AstSourceMap,
+    inference: &baml_compiler2_tir::inference::ScopeInference<'_>,
+) -> Option<Location> {
+    use baml_compiler2_ast::Expr;
+    use baml_compiler2_tir::ty::Ty;
+
+    for (expr_id, expr) in expr_body.exprs.iter() {
+        if let Expr::Object { fields, .. } = expr {
+            let span = source_map.expr_span(expr_id);
+            if !span.contains(offset) && span.end() != offset {
+                continue;
+            }
+
+            // Check if cursor token matches any field key name
+            let _matching_field = fields
+                .iter()
+                .find(|(name, _)| name.as_str() == token_text)?;
+
+            // Get the Object's type
+            let obj_ty = inference.expression_type(expr_id)?;
+            let Ty::Class(qtn, _) = obj_ty else {
+                return None;
+            };
+
+            // Resolve QualifiedTypeName → ClassLoc
+            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
+            let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package);
+            let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
+            let def = pkg_items.lookup_type_any_ns(qtn.name())?;
+            let baml_compiler2_hir::contributions::Definition::Class(class_loc) = def else {
+                return None;
+            };
+
+            // Look up field name_span in ItemTreeSourceMap
+            let target_file = class_loc.file(db);
+            let target_item_tree = baml_compiler2_hir::file_item_tree(db, target_file);
+            let target_source_map = baml_compiler2_hir::file_item_tree_source_map(db, target_file);
+            let class = &target_item_tree[class_loc.id(db)];
+            let field_idx = class
+                .fields
+                .iter()
+                .position(|f| f.name.as_str() == token_text)?;
+            let field_spans = target_source_map.class_field_spans.get(&class_loc.id(db))?;
+            return Some(Location {
+                file: target_file,
+                range: field_spans[field_idx],
+            });
+        }
+    }
+    None
 }

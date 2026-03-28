@@ -489,7 +489,7 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
       { : never
         return x.whiskers : unknown
       }
-      !! 115..126: unresolved member: user.Dog.whiskers
+      !! 118..126: unresolved member: user.Dog.whiskers
     }
     class user.Cat$stream {
       name: null | string
@@ -527,7 +527,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       { : never
         return x.name : unknown
       }
-      !! 111..118: unresolved member: user.C.name
+      !! 114..118: unresolved member: user.C.name
     }
     class user.A$stream {
       name: null | string
@@ -566,8 +566,8 @@ function f(x: A | B | C) -> string { return x.name; }"#,
       { : never
         return x.name : unknown
       }
-      !! 110..117: unresolved member: user.B.name
-      !! 110..117: unresolved member: user.C.name
+      !! 113..117: unresolved member: user.B.name
+      !! 113..117: unresolved member: user.C.name
     }
     class user.A$stream {
       name: null | string
@@ -634,7 +634,7 @@ function f(x: A | B | null) -> string { return x.name; }"#,
       { : never
         return x.name : unknown
       }
-      !! 94..101: unresolved member: null.name
+      !! 97..101: unresolved member: null.name
     }
     class user.A$stream {
       name: null | string
