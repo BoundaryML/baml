@@ -134,24 +134,13 @@ unsafe impl salsa::Update for PackageItems<'_> {
 }
 
 impl<'db> PackageItems<'db> {
-    /// Look up a type by path segments (e.g., `["llm", "render_prompt"]`).
+    /// Look up a type by explicit namespace and item name.
     ///
-    /// Tries progressively longer namespace prefixes: for path `["a", "B"]`,
-    /// first tries namespace `["a"]` + name `"B"`, then namespace `[]` + name `"a"`.
-    pub fn lookup_type(&self, path: &[Name]) -> Option<Definition<'db>> {
-        if path.is_empty() {
-            return None;
-        }
-        for split in (0..path.len()).rev() {
-            let ns_path = &path[..split];
-            let item_name = &path[split];
-            if let Some(ns) = self.namespaces.get(ns_path) {
-                if let Some(def) = ns.types.get(item_name) {
-                    return Some(*def);
-                }
-            }
-        }
-        None
+    /// Single hash lookup — no split-loop ambiguity.
+    /// `namespace` is the namespace path (e.g. `["llm"]` or `[]` for root).
+    /// `item` is the unqualified item name (e.g. `"Response"`).
+    pub fn lookup_type(&self, namespace: &[Name], item: &Name) -> Option<Definition<'db>> {
+        self.namespaces.get(namespace)?.types.get(item).copied()
     }
 
     /// Look up a type by short name, searching across ALL namespaces.
@@ -167,21 +156,11 @@ impl<'db> PackageItems<'db> {
         None
     }
 
-    /// Look up a value by path segments.
-    pub fn lookup_value(&self, path: &[Name]) -> Option<Definition<'db>> {
-        if path.is_empty() {
-            return None;
-        }
-        for split in (0..path.len()).rev() {
-            let ns_path = &path[..split];
-            let item_name = &path[split];
-            if let Some(ns) = self.namespaces.get(ns_path) {
-                if let Some(def) = ns.values.get(item_name) {
-                    return Some(*def);
-                }
-            }
-        }
-        None
+    /// Look up a value by explicit namespace and item name.
+    ///
+    /// Single hash lookup — no split-loop ambiguity.
+    pub fn lookup_value(&self, namespace: &[Name], item: &Name) -> Option<Definition<'db>> {
+        self.namespaces.get(namespace)?.values.get(item).copied()
     }
 }
 

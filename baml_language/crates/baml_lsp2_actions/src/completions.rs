@@ -464,9 +464,8 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
             let pkg_info_name = qn.package().as_str();
             let pkg_id = PackageId::new(db, Name::new(pkg_info_name));
             let pkg = package_items(db, pkg_id);
-            let path = qn.to_path_in_package();
 
-            let class_def = pkg.lookup_type(&path);
+            let class_def = pkg.lookup_type(qn.namespace(), qn.name());
             let Some(Definition::Class(class_loc)) = class_def else {
                 return Vec::new();
             };
@@ -502,9 +501,8 @@ fn completions_for_ty_members(db: &dyn Db, ty: &Ty) -> Vec<Completion> {
             // Find the enum and return its variants.
             let pkg_id = PackageId::new(db, Name::new(qn.package().as_str()));
             let pkg = package_items(db, pkg_id);
-            let path = qn.to_path_in_package();
 
-            let enum_def = pkg.lookup_type(&path);
+            let enum_def = pkg.lookup_type(qn.namespace(), qn.name());
             let Some(Definition::Enum(enum_loc)) = enum_def else {
                 return Vec::new();
             };

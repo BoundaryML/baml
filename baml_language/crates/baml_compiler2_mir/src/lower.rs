@@ -855,7 +855,7 @@ impl LoweringContext<'_> {
                 enclosing_class_name
                     .as_ref()
                     .and_then(|cn| {
-                        pkg_items.lookup_type(std::slice::from_ref(cn)).map(|def| {
+                        pkg_items.lookup_type(&[], cn).map(|def| {
                             let tir_ty = baml_compiler2_tir::ty::Ty::Class(
                                 baml_compiler2_tir::lower_type_expr::qualify_def(self.db, def, cn),
                                 baml_compiler2_tir::ty::TyAttr::default(),

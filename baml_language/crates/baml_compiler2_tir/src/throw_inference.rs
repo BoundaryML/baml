@@ -343,7 +343,7 @@ fn throw_fact_from_expr<'db>(
             type_name: Some(name),
             ..
         } => {
-            if let Some(def) = pkg_items.lookup_type(std::slice::from_ref(name)) {
+            if let Some(def) = pkg_items.lookup_type(&[], name) {
                 match def {
                     Definition::Class(_) => {
                         Ty::Class(qualify_def(db, def, name), TyAttr::default())
@@ -395,9 +395,10 @@ fn resolve_path_to_ty<'db>(
     if segments.len() >= 2 {
         let enum_path = &segments[..segments.len() - 1];
         let variant = &segments[segments.len() - 1];
-        if let Some(def) = pkg_items.lookup_type(enum_path) {
+        let enum_name = enum_path.last().expect("enum_path is non-empty");
+        let enum_ns = &enum_path[..enum_path.len() - 1];
+        if let Some(def) = pkg_items.lookup_type(enum_ns, enum_name) {
             if let Definition::Enum(_) = def {
-                let enum_name = &enum_path[enum_path.len() - 1];
                 let qtn = qualify_def(db, def, enum_name);
                 return Ty::EnumVariant(qtn, variant.clone(), TyAttr::default());
             }
@@ -406,8 +407,8 @@ fn resolve_path_to_ty<'db>(
 
     // Try the full path as a type lookup (handles namespaced types and
     // single-segment names).
-    if let Some(def) = pkg_items.lookup_type(segments) {
-        let name = segments.last().unwrap();
+    let name = segments.last().expect("segments is non-empty");
+    if let Some(def) = pkg_items.lookup_type(&segments[..segments.len() - 1], name) {
         return match def {
             Definition::Class(_) => Ty::Class(qualify_def(db, def, name), TyAttr::default()),
             Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),

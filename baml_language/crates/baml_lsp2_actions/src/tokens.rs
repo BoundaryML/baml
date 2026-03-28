@@ -406,7 +406,7 @@ fn resolve_type_name(db: &dyn Db, file: SourceFile, name: &str) -> SemanticToken
     let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
     let name_obj = baml_base::Name::new(name);
 
-    match pkg_items.lookup_type(&[name_obj]) {
+    match pkg_items.lookup_type(&[], &name_obj) {
         Some(Definition::Class(_)) => SemanticTokenType::Class,
         Some(Definition::Enum(_)) => SemanticTokenType::Enum,
         Some(Definition::TypeAlias(_)) => SemanticTokenType::Type,

@@ -302,9 +302,8 @@ pub fn infer_scope_types<'db>(
                                 enclosing_class_name
                                     .as_ref()
                                     .and_then(|cn| {
-                                        let mut ns_path = pkg_info.namespace_path.clone();
-                                        ns_path.push(cn.clone());
-                                        pkg_items.lookup_type(&ns_path).map(|def| {
+                                        let ns_path = &pkg_info.namespace_path;
+                                        pkg_items.lookup_type(ns_path, cn).map(|def| {
                                             Ty::Class(
                                                 crate::lower_type_expr::qualify_def(db, def, cn),
                                                 TyAttr::default(),

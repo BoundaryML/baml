@@ -51,16 +51,19 @@ pub fn lower_type_expr_in_ns(
 ) -> Ty {
     match type_expr {
         TypeExpr::Path { segments, .. } => {
+            let item = segments.last().expect("non-empty path");
+            let seg_ns = &segments[..segments.len() - 1];
             // When we have a namespace context, try the qualified path first.
-            // e.g. for ns_context=["fs"], segments=["File"], try ["fs", "File"].
+            // e.g. for ns_context=["fs"], segments=["File"], try namespace ["fs"] item "File".
             let resolved = if !ns_context.is_empty() {
-                let qualified: Vec<baml_base::Name> =
-                    ns_context.iter().chain(segments.iter()).cloned().collect();
-                package_items
-                    .lookup_type(&qualified)
-                    .or_else(|| package_items.lookup_type(segments))
+                let ns: Vec<baml_base::Name> =
+                    ns_context.iter().chain(seg_ns.iter()).cloned().collect();
+                package_items.lookup_type(&ns, item).or_else(|| {
+                    // Bare fallback — resolve in root namespace with segments as path
+                    package_items.lookup_type(seg_ns, item)
+                })
             } else {
-                package_items.lookup_type(segments)
+                package_items.lookup_type(seg_ns, item)
             };
             // Cross-package fallback: if not found in the current package and
             // the first segment is a known package name, look in that package
@@ -69,11 +72,11 @@ pub fn lower_type_expr_in_ns(
             let resolved = resolved.or_else(|| {
                 if segments.len() >= 2 {
                     if segments[0].as_str() == "root" {
-                        package_items.lookup_type(&segments[1..])
+                        package_items.lookup_type(&segments[1..segments.len() - 1], item)
                     } else {
                         let pkg_id = PackageId::new(db, segments[0].clone());
                         let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-                        pkg.lookup_type(&segments[1..])
+                        pkg.lookup_type(&segments[1..segments.len() - 1], item)
                     }
                 } else {
                     None

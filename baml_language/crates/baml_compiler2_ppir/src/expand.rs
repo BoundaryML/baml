@@ -19,12 +19,18 @@ pub enum SymbolKind {
 }
 
 pub fn classify_type(package_items: &PackageItems<'_>, path: &[Name]) -> Option<SymbolKind> {
-    package_items.lookup_type(path).and_then(|def| match def {
-        Definition::Class(_) => Some(SymbolKind::Class),
-        Definition::Enum(_) => Some(SymbolKind::Enum),
-        Definition::TypeAlias(_) => Some(SymbolKind::TypeAlias),
-        _ => None,
-    })
+    if path.is_empty() {
+        return None;
+    }
+    let item = path.last().unwrap();
+    package_items
+        .lookup_type(&path[..path.len() - 1], item)
+        .and_then(|def| match def {
+            Definition::Class(_) => Some(SymbolKind::Class),
+            Definition::Enum(_) => Some(SymbolKind::Enum),
+            Definition::TypeAlias(_) => Some(SymbolKind::TypeAlias),
+            _ => None,
+        })
 }
 
 /// Classify a type, falling back to `root.*` prefix handling, bare-name

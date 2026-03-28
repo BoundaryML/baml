@@ -149,38 +149,16 @@ unsafe impl salsa::Update for PackageResolutionContext<'_> {
 // ── PackageInterface lookup helpers ────────────────────────────────────────
 
 impl PackageInterface {
-    /// Look up a type by path, using the same namespace-prefix-split logic as `PackageItems`.
-    pub fn lookup_type(&self, path: &[Name]) -> Option<&ExportedType> {
-        if path.is_empty() {
-            return None;
-        }
-        for split in (0..path.len()).rev() {
-            let ns_path = &path[..split];
-            let name = &path[split];
-            if let Some(ns) = self.types.get(ns_path) {
-                if let Some(exported) = ns.get(name) {
-                    return Some(exported);
-                }
-            }
-        }
-        None
+    /// Look up a type by explicit namespace and item name.
+    ///
+    /// Single hash lookup — no split-loop ambiguity.
+    pub fn lookup_type(&self, namespace: &[Name], item: &Name) -> Option<&ExportedType> {
+        self.types.get(namespace)?.get(item)
     }
 
-    /// Look up a function by path.
-    pub fn lookup_function(&self, path: &[Name]) -> Option<&ExportedFunction> {
-        if path.is_empty() {
-            return None;
-        }
-        for split in (0..path.len()).rev() {
-            let ns_path = &path[..split];
-            let name = &path[split];
-            if let Some(ns) = self.functions.get(ns_path) {
-                if let Some(exported) = ns.get(name) {
-                    return Some(exported);
-                }
-            }
-        }
-        None
+    /// Look up a function by explicit namespace and item name.
+    pub fn lookup_function(&self, namespace: &[Name], item: &Name) -> Option<&ExportedFunction> {
+        self.functions.get(namespace)?.get(item)
     }
 
     /// Look up a type by short name across all namespaces.
@@ -550,31 +528,36 @@ impl<'db> PackageResolutionContext<'db> {
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<(ResolvedSource, Ty)> {
+        let item = path.last()?;
         // Try namespace-qualified path first
         if !ns_context.is_empty() {
-            let mut qualified = ns_context.to_vec();
-            qualified.extend_from_slice(path);
-            if let Some(result) = self.resolve_type_in_own_then_deps(db, &qualified) {
+            let ns: Vec<_> = ns_context
+                .iter()
+                .chain(path[..path.len() - 1].iter())
+                .cloned()
+                .collect();
+            if let Some(result) = self.resolve_type_in_own_then_deps(db, &ns, item) {
                 return Some(result);
             }
         }
 
         // Try unqualified path
-        if let Some(result) = self.resolve_type_in_own_then_deps(db, path) {
+        if let Some(result) = self.resolve_type_in_own_then_deps(db, &path[..path.len() - 1], item)
+        {
             return Some(result);
         }
 
         // Try package-prefixed path (first segment is package name)
         if path.len() >= 2 {
             if path[0].as_str() == "root" {
-                if let Some(def) = self.own_items.lookup_type(&path[1..]) {
+                if let Some(def) = self.own_items.lookup_type(&path[1..path.len() - 1], item) {
                     let ty = def_to_ty(db, def);
                     return Some((ResolvedSource::Item, ty));
                 }
             }
             for (dep_name, dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
-                    if let Some(exported) = dep_iface.lookup_type(&path[1..]) {
+                    if let Some(exported) = dep_iface.lookup_type(&path[1..path.len() - 1], item) {
                         return Some((ResolvedSource::Builtin, exported.to_ty()));
                     }
                 }
@@ -587,14 +570,15 @@ impl<'db> PackageResolutionContext<'db> {
     fn resolve_type_in_own_then_deps(
         &self,
         db: &'db dyn crate::Db,
-        path: &[Name],
+        namespace: &[Name],
+        item: &Name,
     ) -> Option<(ResolvedSource, Ty)> {
-        if let Some(def) = self.own_items.lookup_type(path) {
+        if let Some(def) = self.own_items.lookup_type(namespace, item) {
             let ty = def_to_ty(db, def);
             return Some((ResolvedSource::Item, ty));
         }
         for (_dep_name, dep_iface) in &self.dep_interfaces {
-            if let Some(exported) = dep_iface.lookup_type(path) {
+            if let Some(exported) = dep_iface.lookup_type(namespace, item) {
                 return Some((ResolvedSource::Builtin, exported.to_ty()));
             }
         }
@@ -608,18 +592,26 @@ impl<'db> PackageResolutionContext<'db> {
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<(ResolvedSource, Definition<'db>)> {
+        let item = path.last()?;
         if !ns_context.is_empty() {
-            let mut qualified = ns_context.to_vec();
-            qualified.extend_from_slice(path);
-            if let Some(result) = self.resolve_value_in_own(&qualified) {
+            let ns: Vec<_> = ns_context
+                .iter()
+                .chain(path[..path.len() - 1].iter())
+                .cloned()
+                .collect();
+            if let Some(result) = self.resolve_value_in_own(&ns, item) {
                 return Some(result);
             }
         }
-        self.resolve_value_in_own(path)
+        self.resolve_value_in_own(&path[..path.len() - 1], item)
     }
 
-    fn resolve_value_in_own(&self, path: &[Name]) -> Option<(ResolvedSource, Definition<'db>)> {
-        if let Some(def) = self.own_items.lookup_value(path) {
+    fn resolve_value_in_own(
+        &self,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<(ResolvedSource, Definition<'db>)> {
+        if let Some(def) = self.own_items.lookup_value(namespace, item) {
             return Some((ResolvedSource::Item, def));
         }
         None

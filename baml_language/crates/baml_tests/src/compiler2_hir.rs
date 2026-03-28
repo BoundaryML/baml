@@ -117,18 +117,54 @@ mod tests {
         let pkg_id = PackageId::new(&db, Name::new("user"));
         let items = package_items(&db, pkg_id);
 
-        let point_path = vec![Name::new("Point")];
-        let dir_path = vec![Name::new("Dir")];
-        let missing_path = vec![Name::new("Missing")];
-
         assert!(
-            items.lookup_type(&point_path).is_some(),
+            items.lookup_type(&[], &Name::new("Point")).is_some(),
             "Point should resolve"
         );
-        assert!(items.lookup_type(&dir_path).is_some(), "Dir should resolve");
         assert!(
-            items.lookup_type(&missing_path).is_none(),
+            items.lookup_type(&[], &Name::new("Dir")).is_some(),
+            "Dir should resolve"
+        );
+        assert!(
+            items.lookup_type(&[], &Name::new("Missing")).is_none(),
             "Missing should not resolve"
+        );
+    }
+
+    /// The new (namespace, item) API correctly handles namespace-qualified lookups.
+    #[test]
+    fn lookup_type_namespace_item_api() {
+        let mut db = make_db();
+        let _f1 = db.add_file("main.baml", "class Config { key string }");
+        let _f2 = db.add_file("ns_llm/models.baml", "class Response { text string }");
+
+        let pkg_id = PackageId::new(&db, Name::new("user"));
+        let pkg_items = package_items(&db, pkg_id);
+
+        // Response is only in ["llm"] namespace
+        let response_name = Name::new("Response");
+        assert!(
+            pkg_items
+                .lookup_type(&[Name::new("llm")], &response_name)
+                .is_some(),
+            "lookup_type(['llm'], 'Response') should find it"
+        );
+        assert!(
+            pkg_items.lookup_type(&[], &response_name).is_none(),
+            "lookup_type([], 'Response') should not find it in root"
+        );
+
+        // Config is only in root namespace
+        let config_name = Name::new("Config");
+        assert!(
+            pkg_items.lookup_type(&[], &config_name).is_some(),
+            "lookup_type([], 'Config') should find it in root"
+        );
+        assert!(
+            pkg_items
+                .lookup_type(&[Name::new("llm")], &config_name)
+                .is_none(),
+            "lookup_type(['llm'], 'Config') should not find it in llm namespace"
         );
     }
 
@@ -340,7 +376,7 @@ mod tests {
         assert_eq!(items.conflicts()[0].name, Name::new("Dup"));
 
         // Resolution still works (first wins)
-        let resolved = items.lookup_type(&[Name::new("Dup")]);
+        let resolved = items.lookup_type(&[], &Name::new("Dup"));
         assert!(resolved.is_some());
     }
 
