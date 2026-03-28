@@ -160,16 +160,6 @@ impl PackageInterface {
     pub fn lookup_function(&self, namespace: &[Name], item: &Name) -> Option<&ExportedFunction> {
         self.functions.get(namespace)?.get(item)
     }
-
-    /// Look up a type by short name across all namespaces.
-    pub fn lookup_type_any_ns(&self, name: &Name) -> Option<&ExportedType> {
-        for ns in self.types.values() {
-            if let Some(exported) = ns.get(name) {
-                return Some(exported);
-            }
-        }
-        None
-    }
 }
 
 impl ExportedType {
@@ -630,9 +620,8 @@ impl<'db> PackageResolutionContext<'db> {
             self.lookup_own_class_fields(db, class_name)
         } else {
             for (_dep_name, dep_iface) in &self.dep_interfaces {
-                let short = unqualify(class_name);
                 if let Some(ExportedType::Class { fields, .. }) =
-                    dep_iface.lookup_type_any_ns(&short)
+                    dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
                     return fields.clone();
                 }
@@ -653,12 +642,11 @@ impl<'db> PackageResolutionContext<'db> {
             self.lookup_own_class_method(db, class_name, method_name)
         } else {
             for (_dep_name, dep_iface) in &self.dep_interfaces {
-                let short = unqualify(class_name);
                 if let Some(ExportedType::Class {
                     methods,
                     generic_params,
                     ..
-                }) = dep_iface.lookup_type_any_ns(&short)
+                }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
                     if let Some(method) = methods.iter().find(|m| &m.name == method_name) {
                         return Some(ResolvedMethod {
@@ -685,8 +673,10 @@ impl<'db> PackageResolutionContext<'db> {
         db: &'db dyn crate::Db,
         class_name: &QualifiedTypeName,
     ) -> Vec<(Name, Ty)> {
-        let short = unqualify(class_name);
-        let Some(def) = self.own_items.lookup_type_any_ns(&short) else {
+        let Some(def) = self
+            .own_items
+            .lookup_type(class_name.namespace(), class_name.name())
+        else {
             return Vec::new();
         };
         let Definition::Class(class_loc) = def else {
@@ -726,8 +716,9 @@ impl<'db> PackageResolutionContext<'db> {
         class_name: &QualifiedTypeName,
         method_name: &Name,
     ) -> Option<ResolvedMethod> {
-        let short = unqualify(class_name);
-        let def = self.own_items.lookup_type_any_ns(&short)?;
+        let def = self
+            .own_items
+            .lookup_type(class_name.namespace(), class_name.name())?;
         let Definition::Class(class_loc) = def else {
             return None;
         };
@@ -834,8 +825,4 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
             attr: TyAttr::default(),
         },
     }
-}
-
-fn unqualify(qtn: &QualifiedTypeName) -> Name {
-    qtn.name().clone()
 }

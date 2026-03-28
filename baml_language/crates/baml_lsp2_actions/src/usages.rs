@@ -424,10 +424,10 @@ fn find_field_definition_usages(
                     };
 
                     // Resolve QualifiedTypeName to ClassLoc and compare
-                    let pkg_info = baml_compiler2_hir::file_package::file_package(db, sf);
-                    let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package);
+                    let pkg_id =
+                        baml_compiler2_hir::package::PackageId::new(db, qtn.package().clone());
                     let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
-                    let Some(def) = pkg_items.lookup_type_any_ns(qtn.name()) else {
+                    let Some(def) = pkg_items.lookup_type(qtn.namespace(), qtn.name()) else {
                         continue;
                     };
                     let baml_compiler2_hir::contributions::Definition::Class(obj_class_loc) = def

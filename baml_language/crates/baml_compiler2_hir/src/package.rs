@@ -143,19 +143,6 @@ impl<'db> PackageItems<'db> {
         self.namespaces.get(namespace)?.types.get(item).copied()
     }
 
-    /// Look up a type by short name, searching across ALL namespaces.
-    ///
-    /// Use when the caller only has a short name (e.g. `"File"`) without
-    /// knowing which namespace it lives in. Returns the first match found.
-    pub fn lookup_type_any_ns(&self, name: &Name) -> Option<Definition<'db>> {
-        for ns in self.namespaces.values() {
-            if let Some(def) = ns.types.get(name) {
-                return Some(*def);
-            }
-        }
-        None
-    }
-
     /// Look up a value by explicit namespace and item name.
     ///
     /// Single hash lookup — no split-loop ambiguity.

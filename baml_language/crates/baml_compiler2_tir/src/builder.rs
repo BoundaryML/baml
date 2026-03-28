@@ -2062,11 +2062,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Extract the short name from a qualified type name for package item lookups.
-    fn unqualify(qn: &crate::ty::QualifiedTypeName) -> Name {
-        qn.name().clone()
-    }
-
     fn infer_literal(lit: &baml_base::Literal) -> Ty {
         Ty::Literal(lit.clone(), Freshness::Fresh, TyAttr::default())
     }
@@ -2390,8 +2385,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 // Known class but member not found — error
-                let short = Self::unqualify(class_name);
-                let class_def = self.package_items.lookup_type(&[], &short);
+                let class_def = self
+                    .package_items
+                    .lookup_type(class_name.namespace(), class_name.name());
                 let related = class_def
                     .map(|def| vec![(RelatedLocation::Item(def), "class defined here")])
                     .unwrap_or_default();
@@ -2425,8 +2421,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
 
                 // Known enum but variant not found — error
-                let short_enum = Self::unqualify(enum_name);
-                let enum_def = self.package_items.lookup_type(&[], &short_enum);
+                let enum_def = self
+                    .package_items
+                    .lookup_type(enum_name.namespace(), enum_name.name());
                 let related = enum_def
                     .map(|def| vec![(RelatedLocation::Item(def), "enum defined here")])
                     .unwrap_or_default();
@@ -2659,11 +2656,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         class_name: &crate::ty::QualifiedTypeName,
     ) -> FxHashMap<Name, Ty> {
         let mut result = FxHashMap::default();
-        let short = Self::unqualify(class_name);
         let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
             return result;
         };
-        if let Some(Definition::Class(class_loc)) = pkg_items_for_class.lookup_type_any_ns(&short) {
+        if let Some(Definition::Class(class_loc)) =
+            pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())
+        {
             let file = class_loc.file(self.context.db());
             let ns_context =
                 baml_compiler2_hir::file_package::file_package(self.context.db(), file)
@@ -2716,9 +2714,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         qtn: &crate::ty::QualifiedTypeName,
     ) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
-        let short = Self::unqualify(qtn);
         let pkg_items = self.resolve_class_pkg_items(qtn.package())?;
-        match pkg_items.lookup_type_any_ns(&short)? {
+        match pkg_items.lookup_type(qtn.namespace(), qtn.name())? {
             Definition::Class(class_loc) => Some(class_loc),
             _ => None,
         }
@@ -2756,9 +2753,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         baml_compiler2_hir::loc::ClassLoc<'db>,
         baml_compiler2_hir::loc::FunctionLoc<'db>,
     )> {
-        let short = Self::unqualify(class_name);
         let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package())?;
-        let def = pkg_items_for_class.lookup_type_any_ns(&short)?;
+        let def = pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())?;
         let Definition::Class(class_loc) = def else {
             return None;
         };
