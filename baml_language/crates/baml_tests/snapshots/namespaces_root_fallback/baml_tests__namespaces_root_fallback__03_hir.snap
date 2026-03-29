@@ -8,6 +8,6 @@ class user.Config {
 class user.llm.Response {
   text: string
 }
-function user.llm.UseConfig(cfg: user.llm.Config) -> user.llm.Response  [expr] {
+function user.llm.UseConfig(cfg: root.Config) -> user.llm.Response  [expr] {
   {  } user.llm.Response { text: cfg.key }
 }

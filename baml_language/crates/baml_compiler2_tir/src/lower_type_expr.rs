@@ -51,16 +51,16 @@ pub fn lower_type_expr_in_ns(
 ) -> Ty {
     match type_expr {
         TypeExpr::Path { segments, .. } => {
+            let item = segments.last().expect("non-empty path");
+            let seg_ns = &segments[..segments.len() - 1];
             // When we have a namespace context, try the qualified path first.
-            // e.g. for ns_context=["fs"], segments=["File"], try ["fs", "File"].
+            // e.g. for ns_context=["fs"], segments=["File"], try namespace ["fs"] item "File".
             let resolved = if !ns_context.is_empty() {
-                let qualified: Vec<baml_base::Name> =
-                    ns_context.iter().chain(segments.iter()).cloned().collect();
-                package_items
-                    .lookup_type(&qualified)
-                    .or_else(|| package_items.lookup_type(segments))
+                let ns: Vec<baml_base::Name> =
+                    ns_context.iter().chain(seg_ns.iter()).cloned().collect();
+                package_items.lookup_type(&ns, item)
             } else {
-                package_items.lookup_type(segments)
+                package_items.lookup_type(seg_ns, item)
             };
             // Cross-package fallback: if not found in the current package and
             // the first segment is a known package name, look in that package
@@ -69,11 +69,11 @@ pub fn lower_type_expr_in_ns(
             let resolved = resolved.or_else(|| {
                 if segments.len() >= 2 {
                     if segments[0].as_str() == "root" {
-                        package_items.lookup_type(&segments[1..])
+                        package_items.lookup_type(&segments[1..segments.len() - 1], item)
                     } else {
                         let pkg_id = PackageId::new(db, segments[0].clone());
                         let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-                        pkg.lookup_type(&segments[1..])
+                        pkg.lookup_type(&segments[1..segments.len() - 1], item)
                     }
                 } else {
                     None
@@ -102,13 +102,35 @@ pub fn lower_type_expr_in_ns(
                         return Ty::TypeVar(segments[0].clone(), TyAttr::default());
                     }
                 }
-                let name = segments
+                let name_str = segments
                     .iter()
                     .map(smol_str::SmolStr::as_str)
                     .collect::<Vec<_>>()
                     .join(".");
+                // Scan all namespaces for the item name to build "did you mean" suggestions.
+                // Only do this for single-segment bare names — multi-segment paths already
+                // encode the intended namespace.
+                let mut suggestions = Vec::new();
+                if segments.len() == 1 {
+                    for (ns_path, ns_items) in &package_items.namespaces {
+                        if ns_items.types.contains_key(item) {
+                            if ns_path.is_empty() {
+                                suggestions.push(format!("root.{item}"));
+                            } else {
+                                let ns_str = ns_path
+                                    .iter()
+                                    .map(smol_str::SmolStr::as_str)
+                                    .collect::<Vec<_>>()
+                                    .join(".");
+                                suggestions.push(format!("root.{ns_str}.{item}"));
+                            }
+                        }
+                    }
+                    suggestions.sort();
+                }
                 diagnostics.push(TirTypeError::UnresolvedType {
-                    name: baml_base::Name::new(&name),
+                    name: baml_base::Name::new(&name_str),
+                    suggestions,
                 });
                 Ty::Unknown {
                     attr: TyAttr::default(),

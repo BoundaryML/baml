@@ -149,48 +149,16 @@ unsafe impl salsa::Update for PackageResolutionContext<'_> {
 // ── PackageInterface lookup helpers ────────────────────────────────────────
 
 impl PackageInterface {
-    /// Look up a type by path, using the same namespace-prefix-split logic as `PackageItems`.
-    pub fn lookup_type(&self, path: &[Name]) -> Option<&ExportedType> {
-        if path.is_empty() {
-            return None;
-        }
-        for split in (0..path.len()).rev() {
-            let ns_path = &path[..split];
-            let name = &path[split];
-            if let Some(ns) = self.types.get(ns_path) {
-                if let Some(exported) = ns.get(name) {
-                    return Some(exported);
-                }
-            }
-        }
-        None
+    /// Look up a type by explicit namespace and item name.
+    ///
+    /// Single hash lookup — no split-loop ambiguity.
+    pub fn lookup_type(&self, namespace: &[Name], item: &Name) -> Option<&ExportedType> {
+        self.types.get(namespace)?.get(item)
     }
 
-    /// Look up a function by path.
-    pub fn lookup_function(&self, path: &[Name]) -> Option<&ExportedFunction> {
-        if path.is_empty() {
-            return None;
-        }
-        for split in (0..path.len()).rev() {
-            let ns_path = &path[..split];
-            let name = &path[split];
-            if let Some(ns) = self.functions.get(ns_path) {
-                if let Some(exported) = ns.get(name) {
-                    return Some(exported);
-                }
-            }
-        }
-        None
-    }
-
-    /// Look up a type by short name across all namespaces.
-    pub fn lookup_type_any_ns(&self, name: &Name) -> Option<&ExportedType> {
-        for ns in self.types.values() {
-            if let Some(exported) = ns.get(name) {
-                return Some(exported);
-            }
-        }
-        None
+    /// Look up a function by explicit namespace and item name.
+    pub fn lookup_function(&self, namespace: &[Name], item: &Name) -> Option<&ExportedFunction> {
+        self.functions.get(namespace)?.get(item)
     }
 }
 
@@ -550,31 +518,40 @@ impl<'db> PackageResolutionContext<'db> {
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<(ResolvedSource, Ty)> {
+        let item = path.last()?;
         // Try namespace-qualified path first
         if !ns_context.is_empty() {
-            let mut qualified = ns_context.to_vec();
-            qualified.extend_from_slice(path);
-            if let Some(result) = self.resolve_type_in_own_then_deps(db, &qualified) {
+            let ns: Vec<_> = ns_context
+                .iter()
+                .chain(path[..path.len() - 1].iter())
+                .cloned()
+                .collect();
+            if let Some(result) = self.resolve_type_in_own_then_deps(db, &ns, item) {
                 return Some(result);
             }
         }
 
-        // Try unqualified path
-        if let Some(result) = self.resolve_type_in_own_then_deps(db, path) {
-            return Some(result);
+        // When ns_context is empty, try unqualified path (same-namespace for root files)
+        if ns_context.is_empty() {
+            if let Some(result) =
+                self.resolve_type_in_own_then_deps(db, &path[..path.len() - 1], item)
+            {
+                return Some(result);
+            }
         }
+        // No bare fallback from non-root namespaces — cross-namespace requires explicit qualification
 
         // Try package-prefixed path (first segment is package name)
         if path.len() >= 2 {
             if path[0].as_str() == "root" {
-                if let Some(def) = self.own_items.lookup_type(&path[1..]) {
+                if let Some(def) = self.own_items.lookup_type(&path[1..path.len() - 1], item) {
                     let ty = def_to_ty(db, def);
                     return Some((ResolvedSource::Item, ty));
                 }
             }
             for (dep_name, dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
-                    if let Some(exported) = dep_iface.lookup_type(&path[1..]) {
+                    if let Some(exported) = dep_iface.lookup_type(&path[1..path.len() - 1], item) {
                         return Some((ResolvedSource::Builtin, exported.to_ty()));
                     }
                 }
@@ -587,14 +564,15 @@ impl<'db> PackageResolutionContext<'db> {
     fn resolve_type_in_own_then_deps(
         &self,
         db: &'db dyn crate::Db,
-        path: &[Name],
+        namespace: &[Name],
+        item: &Name,
     ) -> Option<(ResolvedSource, Ty)> {
-        if let Some(def) = self.own_items.lookup_type(path) {
+        if let Some(def) = self.own_items.lookup_type(namespace, item) {
             let ty = def_to_ty(db, def);
             return Some((ResolvedSource::Item, ty));
         }
         for (_dep_name, dep_iface) in &self.dep_interfaces {
-            if let Some(exported) = dep_iface.lookup_type(path) {
+            if let Some(exported) = dep_iface.lookup_type(namespace, item) {
                 return Some((ResolvedSource::Builtin, exported.to_ty()));
             }
         }
@@ -604,22 +582,55 @@ impl<'db> PackageResolutionContext<'db> {
     /// Resolve a function/value by path. Returns the Definition for own-package values.
     pub fn resolve_value(
         &self,
-        _db: &'db dyn crate::Db,
+        db: &'db dyn crate::Db,
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<(ResolvedSource, Definition<'db>)> {
+        let item = path.last()?;
         if !ns_context.is_empty() {
-            let mut qualified = ns_context.to_vec();
-            qualified.extend_from_slice(path);
-            if let Some(result) = self.resolve_value_in_own(&qualified) {
+            let ns: Vec<_> = ns_context
+                .iter()
+                .chain(path[..path.len() - 1].iter())
+                .cloned()
+                .collect();
+            if let Some(result) = self.resolve_value_in_own(&ns, item) {
                 return Some(result);
             }
         }
-        self.resolve_value_in_own(path)
+        // When ns_context is empty, try unqualified path (same-namespace for root files)
+        if ns_context.is_empty() {
+            if let Some(result) = self.resolve_value_in_own(&path[..path.len() - 1], item) {
+                return Some(result);
+            }
+        }
+        // No bare fallback from non-root namespaces — cross-namespace requires explicit qualification
+        // root.* prefix handling (parity with resolve_type)
+        if path.len() >= 2 {
+            if path[0].as_str() == "root" {
+                if let Some(def) = self.own_items.lookup_value(&path[1..path.len() - 1], item) {
+                    return Some((ResolvedSource::Item, def));
+                }
+            }
+            // dep-prefixed search (parity with resolve_type)
+            for (dep_name, _dep_iface) in &self.dep_interfaces {
+                if &path[0] == dep_name {
+                    let dep_pkg_id = PackageId::new(db, dep_name.clone());
+                    let dep_items = package_items(db, dep_pkg_id);
+                    if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
+                        return Some((ResolvedSource::Builtin, def));
+                    }
+                }
+            }
+        }
+        None
     }
 
-    fn resolve_value_in_own(&self, path: &[Name]) -> Option<(ResolvedSource, Definition<'db>)> {
-        if let Some(def) = self.own_items.lookup_value(path) {
+    fn resolve_value_in_own(
+        &self,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<(ResolvedSource, Definition<'db>)> {
+        if let Some(def) = self.own_items.lookup_value(namespace, item) {
             return Some((ResolvedSource::Item, def));
         }
         None
@@ -637,10 +648,12 @@ impl<'db> PackageResolutionContext<'db> {
         if class_pkg.as_str() == self.own_package_name.as_str() {
             self.lookup_own_class_fields(db, class_name)
         } else {
-            for (_dep_name, dep_iface) in &self.dep_interfaces {
-                let short = unqualify(class_name);
+            for (dep_name, dep_iface) in &self.dep_interfaces {
+                if dep_name != class_pkg {
+                    continue;
+                }
                 if let Some(ExportedType::Class { fields, .. }) =
-                    dep_iface.lookup_type_any_ns(&short)
+                    dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
                     return fields.clone();
                 }
@@ -660,13 +673,15 @@ impl<'db> PackageResolutionContext<'db> {
         if class_pkg.as_str() == self.own_package_name.as_str() {
             self.lookup_own_class_method(db, class_name, method_name)
         } else {
-            for (_dep_name, dep_iface) in &self.dep_interfaces {
-                let short = unqualify(class_name);
+            for (dep_name, dep_iface) in &self.dep_interfaces {
+                if dep_name != class_pkg {
+                    continue;
+                }
                 if let Some(ExportedType::Class {
                     methods,
                     generic_params,
                     ..
-                }) = dep_iface.lookup_type_any_ns(&short)
+                }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
                     if let Some(method) = methods.iter().find(|m| &m.name == method_name) {
                         return Some(ResolvedMethod {
@@ -693,8 +708,10 @@ impl<'db> PackageResolutionContext<'db> {
         db: &'db dyn crate::Db,
         class_name: &QualifiedTypeName,
     ) -> Vec<(Name, Ty)> {
-        let short = unqualify(class_name);
-        let Some(def) = self.own_items.lookup_type_any_ns(&short) else {
+        let Some(def) = self
+            .own_items
+            .lookup_type(class_name.namespace(), class_name.name())
+        else {
             return Vec::new();
         };
         let Definition::Class(class_loc) = def else {
@@ -734,8 +751,9 @@ impl<'db> PackageResolutionContext<'db> {
         class_name: &QualifiedTypeName,
         method_name: &Name,
     ) -> Option<ResolvedMethod> {
-        let short = unqualify(class_name);
-        let def = self.own_items.lookup_type_any_ns(&short)?;
+        let def = self
+            .own_items
+            .lookup_type(class_name.namespace(), class_name.name())?;
         let Definition::Class(class_loc) = def else {
             return None;
         };
@@ -842,8 +860,4 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
             attr: TyAttr::default(),
         },
     }
-}
-
-fn unqualify(qtn: &QualifiedTypeName) -> Name {
-    qtn.name().clone()
 }

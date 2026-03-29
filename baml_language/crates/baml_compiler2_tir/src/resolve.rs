@@ -87,36 +87,39 @@ pub fn resolve_name_at<'db>(
             }
         }
 
-        // At File/Package scope, check package_items via PackageResolutionContext
+        // At File/Package scope, resolve through PRC
         if matches!(scope.kind, ScopeKind::File | ScopeKind::Package) {
             let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
             let pkg_id = PackageId::new(db, pkg_info.package.clone());
             let res_ctx = crate::package_interface::package_resolution_context(db, pkg_id);
-            let pkg_items = res_ctx.own_items;
 
-            // Build the lookup path: [namespace_path..., name].
-            // For files with non-empty namespace_path (e.g. ["llm"]),
-            // this resolves bare names only within that namespace.
-            // For root namespace files (namespace_path == []), this is
-            // equivalent to the previous [name] lookup.
-            let mut full_path: Vec<Name> = pkg_info.namespace_path.clone();
-            full_path.push(name.clone());
-
-            if let Some(def) = pkg_items.lookup_value(&full_path) {
-                return ResolvedName::Item(def);
+            let name_path = std::slice::from_ref(name);
+            if let Some((source, def)) =
+                res_ctx.resolve_value(db, name_path, &pkg_info.namespace_path)
+            {
+                return match source {
+                    crate::package_interface::ResolvedSource::Item => ResolvedName::Item(def),
+                    crate::package_interface::ResolvedSource::Builtin => ResolvedName::Builtin(def),
+                };
             }
-            if let Some(def) = pkg_items.lookup_type(&full_path) {
-                return ResolvedName::Item(def);
-            }
-
-            // Check declared dependencies (e.g. `baml` builtins) via res_ctx.
-            for (dep_name, _) in &res_ctx.dep_interfaces {
-                if let Some(dep_items) = res_ctx.items_for_package(db, dep_name) {
-                    if let Some(def) = dep_items.lookup_value(std::slice::from_ref(name)) {
-                        return ResolvedName::Builtin(def);
-                    }
-                    if let Some(def) = dep_items.lookup_type(std::slice::from_ref(name)) {
-                        return ResolvedName::Builtin(def);
+            // For types, resolve_type returns Ty — we need Definition, so fall back to direct lookup
+            if let Some((_source, _ty)) =
+                res_ctx.resolve_type(db, name_path, &pkg_info.namespace_path)
+            {
+                let pkg_items = res_ctx.own_items;
+                if let Some(def) = pkg_items.lookup_type(&pkg_info.namespace_path, name) {
+                    return ResolvedName::Item(def);
+                }
+                // The type was found in deps — search deps.
+                // Dep builtins are in the root namespace (&[]).
+                for (dep_name, _) in &res_ctx.dep_interfaces {
+                    if let Some(dep_items) = res_ctx.items_for_package(db, dep_name) {
+                        if let Some(def) = dep_items
+                            .lookup_type(&pkg_info.namespace_path, name)
+                            .or_else(|| dep_items.lookup_type(&[], name))
+                        {
+                            return ResolvedName::Builtin(def);
+                        }
                     }
                 }
             }
@@ -165,11 +168,15 @@ pub fn resolve_path_at<'db>(
     };
 
     let after_pkg = &segments[1..];
-
-    if let Some(def) = pkg_items.lookup_value(after_pkg) {
+    // The path already includes namespace segments, so look up directly.
+    let item = after_pkg
+        .last()
+        .expect("multi-segment path has elements after pkg prefix");
+    let ns = &after_pkg[..after_pkg.len() - 1];
+    if let Some(def) = pkg_items.lookup_value(ns, item) {
         return ResolvedName::Builtin(def);
     }
-    if let Some(def) = pkg_items.lookup_type(after_pkg) {
+    if let Some(def) = pkg_items.lookup_type(ns, item) {
         return ResolvedName::Builtin(def);
     }
 

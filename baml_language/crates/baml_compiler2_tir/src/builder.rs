@@ -367,7 +367,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .as_ref()
                     .and_then(|n| {
                         self.package_items
-                            .lookup_type(std::slice::from_ref(n))
+                            .lookup_type(&self.ns_context, n)
                             .map(|def| {
                                 Ty::Class(
                                     crate::lower_type_expr::qualify_def(self.context.db(), def, n),
@@ -1355,10 +1355,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::Null => BTreeSet::from(["null".to_string()]),
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
-                // Use the qualified name from scrutinee_ty when available,
-                // so the case string matches required_match_cases output.
+                // Use the qualified name from scrutinee_ty when the pattern's
+                // enum_name matches (bare or namespace-qualified). For
+                // `root.Status.Ok`, enum_name is "root.Status" — strip the
+                // `root.` prefix and compare against the QTN's ns+name path.
                 let qualified_enum = match scrutinee_ty {
-                    Ty::Enum(qtn, _) if qtn.name() == enum_name => qtn.to_string(),
+                    Ty::Enum(qtn, _) if Self::enum_name_matches(enum_name, qtn) => qtn.to_string(),
                     _ => enum_name.to_string(),
                 };
                 BTreeSet::from([format!("{qualified_enum}.{variant}")])
@@ -1471,14 +1473,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
                 if let Ty::Enum(qn, _) = scrutinee_ty {
-                    if qn.name() == enum_name {
+                    if Self::enum_name_matches(enum_name, qn) {
                         return Ty::EnumVariant(qn.clone(), variant.clone(), TyAttr::default());
                     }
                 }
-                if let Some(def) = self
-                    .package_items
-                    .lookup_type(std::slice::from_ref(enum_name))
-                {
+                if let Some(def) = self.package_items.lookup_type(&self.ns_context, enum_name) {
                     if matches!(def, Definition::Enum(_)) {
                         return Ty::EnumVariant(
                             crate::lower_type_expr::qualify_def(self.context.db(), def, enum_name),
@@ -1532,8 +1531,37 @@ impl<'db> TypeInferenceBuilder<'db> {
             "int" | "float" | "string" | "bool" | "null" | "image" | "audio" | "video" | "pdf"
         ) || self
             .package_items
-            .lookup_type(std::slice::from_ref(name))
+            .lookup_type(&self.ns_context, name)
             .is_some()
+    }
+
+    /// Check if a pattern's `enum_name` (which may be dotted like `"root.Status"` or
+    /// `"root.llm.Status"`) refers to the same enum as a `QualifiedTypeName`.
+    fn enum_name_matches(enum_name: &Name, qtn: &crate::ty::QualifiedTypeName) -> bool {
+        // Bare name match: "Status" == qtn.name()
+        if qtn.name() == enum_name {
+            return true;
+        }
+        // Dotted name: split on "." and compare
+        let parts: Vec<&str> = enum_name.as_str().split('.').collect();
+        if parts.len() < 2 {
+            return false;
+        }
+        let name = parts[parts.len() - 1];
+        let path = &parts[..parts.len() - 1];
+        // Strip leading "root" if present
+        let ns_parts = if path.first() == Some(&"root") {
+            &path[1..]
+        } else {
+            path
+        };
+        // Compare namespace and name
+        name == qtn.name().as_str()
+            && ns_parts.len() == qtn.namespace().len()
+            && ns_parts
+                .iter()
+                .zip(qtn.namespace().iter())
+                .all(|(a, b): (&&str, &Name)| *a == b.as_str())
     }
 
     fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
@@ -1636,8 +1664,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
                 let matches_variant = match throw_fact {
-                    Ty::EnumVariant(qn, v, _) => qn.name() == enum_name && v == variant,
-                    Ty::Enum(qn, _) => qn.name() == enum_name,
+                    Ty::EnumVariant(qn, v, _) => {
+                        Self::enum_name_matches(enum_name, qn) && v == variant
+                    }
+                    Ty::Enum(qn, _) => Self::enum_name_matches(enum_name, qn),
                     _ => false,
                 };
                 if matches_variant {
@@ -2070,11 +2100,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Extract the short name from a qualified type name for package item lookups.
-    fn unqualify(qn: &crate::ty::QualifiedTypeName) -> Name {
-        qn.name().clone()
-    }
-
     fn infer_literal(lit: &baml_base::Literal) -> Ty {
         Ty::Literal(lit.clone(), Freshness::Fresh, TyAttr::default())
     }
@@ -2083,12 +2108,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         if segments.len() == 1 {
             let name = &segments[0];
             let ty = self.infer_single_name(name);
-            let ns_name: Vec<Name> = self
-                .ns_context
-                .iter()
-                .chain(std::iter::once(name))
-                .cloned()
-                .collect();
             // Namespace shorthands like `env`, `sys`, `http` etc. can appear as
             // the base of a FieldAccess expression (e.g. `env.get("KEY")`), where
             // the parent will route them to the `"baml"` package.  Don't emit
@@ -2110,8 +2129,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             );
             if matches!(ty, Ty::Unknown { .. })
                 && !self.locals.contains_key(name)
-                && self.package_items.lookup_value(&ns_name).is_none()
-                && self.package_items.lookup_type(&ns_name).is_none()
+                && self
+                    .package_items
+                    .lookup_value(&self.ns_context, name)
+                    .is_none()
+                && self
+                    .package_items
+                    .lookup_type(&self.ns_context, name)
+                    .is_none()
                 && !is_baml_ns_shorthand
             {
                 self.context
@@ -2185,7 +2210,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         // Try as a value (function) in a nested namespace
-        let lookup_val = pkg_items.lookup_value(path);
+        let item = path.last().expect("non-empty path");
+        let lookup_val = pkg_items.lookup_value(&path[..path.len() - 1], item);
         if let Some(Definition::Function(func_loc)) = lookup_val {
             let db = self.context.db();
             let item_tree_for_func = baml_compiler2_ppir::file_item_tree(db, func_loc.file(db));
@@ -2240,9 +2266,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
 
         // Try as a type (class/enum)
-        if let Some(def) = pkg_items.lookup_type(path) {
+        if let Some(def) = pkg_items.lookup_type(&path[..path.len() - 1], item) {
             let db = self.context.db();
-            let name = path.last().unwrap();
+            let name = item;
             match def {
                 Definition::Class(_) => {
                     let class_qtn = crate::lower_type_expr::qualify_def(db, def, name);
@@ -2271,14 +2297,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 other => other.clone(),
             };
         }
-        // Build namespace-qualified lookup path.
-        let lookup_path: Vec<Name> = self
-            .ns_context
-            .iter()
-            .chain(std::iter::once(name))
-            .cloned()
-            .collect();
-        if let Some(def) = self.package_items.lookup_value(&lookup_path) {
+        if let Some(def) = self.package_items.lookup_value(&self.ns_context, name) {
             match def {
                 Definition::Function(func_loc) => {
                     // Get function signature to build the function type
@@ -2336,7 +2355,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     attr: TyAttr::default(),
                 },
             }
-        } else if let Some(def) = self.package_items.lookup_type(&lookup_path) {
+        } else if let Some(def) = self.package_items.lookup_type(&self.ns_context, name) {
             let db = self.context.db();
             match def {
                 Definition::Class(_) => Ty::Class(
@@ -2406,7 +2425,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Known class but member not found — error
                 let class_def = self
                     .package_items
-                    .lookup_type(&[Self::unqualify(class_name)]);
+                    .lookup_type(class_name.namespace(), class_name.name());
                 let related = class_def
                     .map(|def| vec![(RelatedLocation::Item(def), "class defined here")])
                     .unwrap_or_default();
@@ -2442,7 +2461,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Known enum but variant not found — error
                 let enum_def = self
                     .package_items
-                    .lookup_type(&[Self::unqualify(enum_name)]);
+                    .lookup_type(enum_name.namespace(), enum_name.name());
                 let related = enum_def
                     .map(|def| vec![(RelatedLocation::Item(def), "enum defined here")])
                     .unwrap_or_default();
@@ -2675,11 +2694,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         class_name: &crate::ty::QualifiedTypeName,
     ) -> FxHashMap<Name, Ty> {
         let mut result = FxHashMap::default();
-        let short = Self::unqualify(class_name);
         let Some(pkg_items_for_class) = self.resolve_class_pkg_items(class_name.package()) else {
             return result;
         };
-        if let Some(Definition::Class(class_loc)) = pkg_items_for_class.lookup_type_any_ns(&short) {
+        if let Some(Definition::Class(class_loc)) =
+            pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())
+        {
             let file = class_loc.file(self.context.db());
             let ns_context =
                 baml_compiler2_hir::file_package::file_package(self.context.db(), file)
@@ -2732,9 +2752,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         &self,
         qtn: &crate::ty::QualifiedTypeName,
     ) -> Option<baml_compiler2_hir::loc::ClassLoc<'db>> {
-        let short = Self::unqualify(qtn);
         let pkg_items = self.resolve_class_pkg_items(qtn.package())?;
-        match pkg_items.lookup_type_any_ns(&short)? {
+        match pkg_items.lookup_type(qtn.namespace(), qtn.name())? {
             Definition::Class(class_loc) => Some(class_loc),
             _ => None,
         }
@@ -2746,15 +2765,12 @@ impl<'db> TypeInferenceBuilder<'db> {
         qtn: &crate::ty::QualifiedTypeName,
     ) -> Option<baml_compiler2_hir::loc::EnumLoc<'db>> {
         let db = self.context.db();
-        let short = Self::unqualify(qtn);
         let items = if *qtn.package() == self.package_id.name(db) {
             self.package_items
         } else {
             self.res_ctx.items_for_package(db, qtn.package())?
         };
-        let mut lookup_path: Vec<Name> = qtn.namespace().clone();
-        lookup_path.push(short);
-        match items.lookup_type(&lookup_path)? {
+        match items.lookup_type(qtn.namespace(), qtn.name())? {
             Definition::Enum(enum_loc) => Some(enum_loc),
             _ => None,
         }
@@ -2775,9 +2791,8 @@ impl<'db> TypeInferenceBuilder<'db> {
         baml_compiler2_hir::loc::ClassLoc<'db>,
         baml_compiler2_hir::loc::FunctionLoc<'db>,
     )> {
-        let short = Self::unqualify(class_name);
         let pkg_items_for_class = self.resolve_class_pkg_items(class_name.package())?;
-        let def = pkg_items_for_class.lookup_type_any_ns(&short)?;
+        let def = pkg_items_for_class.lookup_type(class_name.namespace(), class_name.name())?;
         let Definition::Class(class_loc) = def else {
             return None;
         };
@@ -2972,17 +2987,14 @@ impl<'db> TypeInferenceBuilder<'db> {
         // When there is a non-empty item_path, try class/enum member resolution
         // first (e.g. `baml.Array.length` → Array class, then method "length").
         if !item_path.is_empty() {
-            if let Some(def) = pkg_items.lookup_type(item_path) {
+            let item_name = item_path.last().expect("non-empty item_path");
+            if let Some(def) = pkg_items.lookup_type(&item_path[..item_path.len() - 1], item_name) {
                 match def {
                     Definition::Class(_class_loc) => {
                         if first.as_str() == "root"
                             || first.as_str() == self.package_id.name(db).as_str()
                         {
-                            let class_qtn = crate::lower_type_expr::qualify_def(
-                                db,
-                                def,
-                                item_path.last().unwrap(),
-                            );
+                            let class_qtn = crate::lower_type_expr::qualify_def(db, def, item_name);
                             let base_ty = Ty::Class(class_qtn, TyAttr::default());
                             return Some(self.resolve_member(&base_ty, member, at));
                         }
@@ -2991,18 +3003,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                         return self
                             .resolve_builtin_member(&class_path, &[], member, at)
                             .or_else(|| {
-                                let class_qtn = crate::lower_type_expr::qualify_def(
-                                    db,
-                                    def,
-                                    item_path.last().unwrap(),
-                                );
+                                let class_qtn =
+                                    crate::lower_type_expr::qualify_def(db, def, item_name);
                                 let base_ty = Ty::Class(class_qtn, TyAttr::default());
                                 Some(self.resolve_member(&base_ty, member, at))
                             });
                     }
                     Definition::Enum(_) => {
-                        let enum_qtn =
-                            crate::lower_type_expr::qualify_def(db, def, item_path.last().unwrap());
+                        let enum_qtn = crate::lower_type_expr::qualify_def(db, def, item_name);
                         let base_ty = Ty::Enum(enum_qtn, TyAttr::default());
                         return Some(self.resolve_member(&base_ty, member, at));
                     }
@@ -3102,7 +3110,8 @@ impl<'db> TypeInferenceBuilder<'db> {
 
         // Look up the class by path (e.g. &["Array"] or &["media", "Image"]).
         let path: Vec<Name> = class_path.iter().map(baml_base::Name::new).collect();
-        let def = baml_items.lookup_type(&path)?;
+        let item = path.last().expect("non-empty class_path");
+        let def = baml_items.lookup_type(&path[..path.len() - 1], item)?;
         let baml_compiler2_hir::contributions::Definition::Class(class_loc) = def else {
             return None;
         };
@@ -3270,7 +3279,6 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// not just the current file's package.
     fn lookup_enum_variants(&self, enum_name: &crate::ty::QualifiedTypeName) -> Vec<Name> {
         let db = self.context.db();
-        let short = Self::unqualify(enum_name);
 
         // Resolve the package that owns the enum via res_ctx.
         let items = if *enum_name.package() == self.package_id.name(db) {
@@ -3282,10 +3290,9 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
         };
 
-        // Build the lookup path: namespace segments + enum name.
-        let mut lookup_path: Vec<Name> = enum_name.namespace().clone();
-        lookup_path.push(short);
-        if let Some(Definition::Enum(enum_loc)) = items.lookup_type(&lookup_path) {
+        if let Some(Definition::Enum(enum_loc)) =
+            items.lookup_type(enum_name.namespace(), enum_name.name())
+        {
             let file = enum_loc.file(db);
             let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
             let enum_data = &item_tree[enum_loc.id(db)];

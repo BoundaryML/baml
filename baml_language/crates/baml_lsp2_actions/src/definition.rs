@@ -382,7 +382,7 @@ fn resolve_field_access_at(
 /// Cursor is on a constructor literal field (e.g. `data:` in `Success { data: "..." }`).
 fn resolve_constructor_field_at(
     db: &dyn Db,
-    file: SourceFile,
+    _file: SourceFile,
     offset: TextSize,
     token_text: &str,
     expr_body: &baml_compiler2_ast::ExprBody,
@@ -411,10 +411,9 @@ fn resolve_constructor_field_at(
             };
 
             // Resolve QualifiedTypeName → ClassLoc
-            let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-            let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_info.package);
+            let pkg_id = baml_compiler2_hir::package::PackageId::new(db, qtn.package().clone());
             let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
-            let def = pkg_items.lookup_type_any_ns(qtn.name())?;
+            let def = pkg_items.lookup_type(qtn.namespace(), qtn.name())?;
             let baml_compiler2_hir::contributions::Definition::Class(class_loc) = def else {
                 return None;
             };

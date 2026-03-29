@@ -100,10 +100,10 @@ fn baml.fs.File.read = builtin(io)
 
 fn baml.http.fetch = builtin(io)
 
-fn baml.http.Response.ok(self: null) -> bool {
+fn baml.http.Response.ok(self: baml.http.Response) -> bool {
     // Locals:
     let _0: bool // _0 // return
-    let _1: null // self // param
+    let _1: baml.http.Response // self // param
     let _2: bool
     let _3: int
     let _4: int
@@ -134,10 +134,10 @@ fn baml.http.send = builtin(io)
 
 fn baml.http.Response.text = builtin(io)
 
-fn baml.llm.build_request(client: void, function_name: string, args: map<string, unknown>) -> baml.http.Request {
+fn baml.llm.build_request(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
-    let _1: void // client // param
+    let _1: baml.llm.Client // client // param
     let _2: string // function_name // param
     let _3: map<string, unknown> // args // param
     let _4: baml.llm.PrimitiveClient // primitive_client
@@ -173,18 +173,18 @@ fn baml.llm.build_request(client: void, function_name: string, args: map<string,
     }
 }
 
-fn baml.llm.call_llm_function(client: void, function_name: string, args: map<string, unknown>) -> void {
+fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: void // client // param
+    let _1: baml.llm.Client // client // param
     let _2: string // function_name // param
     let _3: map<string, unknown> // args // param
     let _4: string // jinja_string
     let _5: future<string>
-    let _6: void // context
+    let _6: baml.llm.ExecutionContext // context
     let _7: string
     let _8: void // result
-    let _9: void
+    let _9: baml.llm.ExecutionContext
 
     bb0: {
         _5 = dispatch_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
@@ -211,10 +211,10 @@ fn baml.llm.call_llm_function(client: void, function_name: string, args: map<str
     }
 }
 
-fn baml.llm.render_prompt(client: void, function_name: string, args: map<string, unknown>) -> void {
+fn baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
     // Locals:
-    let _0: void // _0 // return
-    let _1: void // client // param
+    let _0: baml.llm.PromptAst // _0 // return
+    let _1: baml.llm.Client // client // param
     let _2: string // function_name // param
     let _3: map<string, unknown> // args // param
     let _4: string // jinja_string
@@ -226,7 +226,7 @@ fn baml.llm.render_prompt(client: void, function_name: string, args: map<string,
     let _10: future<baml.llm.PromptAst>
     let _11: baml.llm.PrimitiveClient
     let _12: baml.llm.PromptAst
-    let _13: future<void>
+    let _13: future<baml.llm.PromptAst>
 
     bb0: {
         _5 = dispatch_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
@@ -269,10 +269,10 @@ fn baml.llm.render_prompt(client: void, function_name: string, args: map<string,
     }
 }
 
-fn baml.llm.PlannerState.rr_local_offset(self: null, client_name: string) -> int {
+fn baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, client_name: string) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: null // self // param
+    let _1: baml.llm.PlannerState // self // param
     let _2: string // client_name // param
     let _3: int // offset
     let _4: string[]
@@ -333,10 +333,10 @@ fn baml.llm.PlannerState.rr_local_offset(self: null, client_name: string) -> int
     }
 }
 
-fn baml.llm.PlannerState.rr_pick_index(self: null, client_name: string, counter: int, sub_client_count: int) -> int {
+fn baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name: string, counter: int, sub_client_count: int) -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: null // self // param
+    let _1: baml.llm.PlannerState // self // param
     let _2: string // client_name // param
     let _3: int // counter // param
     let _4: int // sub_client_count // param
@@ -367,13 +367,13 @@ fn baml.llm.PlannerState.rr_pick_index(self: null, client_name: string, counter:
     }
 }
 
-fn baml.llm.Client.build_attempt(self: null) -> void[] {
+fn baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     // Locals:
-    let _0: void[] // _0 // return
-    let _1: null // self // param
-    let _2: void // planner_state
+    let _0: baml.llm.OrchestrationStep[] // _0 // return
+    let _1: baml.llm.Client // self // param
+    let _2: baml.llm.PlannerState // planner_state
     let _3: void[]
-    let _4: void
+    let _4: baml.llm.PlannerState
 
     bb0: {
         _3 = [];
@@ -391,18 +391,18 @@ fn baml.llm.Client.build_attempt(self: null) -> void[] {
     }
 }
 
-fn baml.llm.Client.build_attempt_with_state(self: null, planner_state: void) -> void[] {
+fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     // Locals:
-    let _0: void[] // _0 // return
-    let _1: null // self // param
-    let _2: void // planner_state // param
+    let _0: baml.llm.OrchestrationStep[] // _0 // return
+    let _1: baml.llm.Client // self // param
+    let _2: baml.llm.PlannerState // planner_state // param
     let _3: baml.llm.ClientType
     let _4: int
     let _5: () -> baml.llm.PrimitiveClient // resolve_fn
     let _6: future<() -> baml.llm.PrimitiveClient>
     let _7: baml.llm.PrimitiveClient // primitive
     let _8: () -> baml.llm.PrimitiveClient
-    let _9: void
+    let _9: baml.llm.OrchestrationStep
     let _10: baml.llm.PrimitiveClient
     let _11: baml.llm.OrchestrationStep[] // steps
     let _12: baml.llm.Client[]
@@ -575,13 +575,13 @@ fn baml.llm.Client.build_attempt_with_state(self: null, planner_state: void) -> 
     }
 }
 
-fn baml.llm.Client.build_plan(self: null) -> void[] {
+fn baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     // Locals:
-    let _0: void[] // _0 // return
-    let _1: null // self // param
-    let _2: void // planner_state
+    let _0: baml.llm.OrchestrationStep[] // _0 // return
+    let _1: baml.llm.Client // self // param
+    let _2: baml.llm.PlannerState // planner_state
     let _3: void[]
-    let _4: void
+    let _4: baml.llm.PlannerState
 
     bb0: {
         _3 = [];
@@ -599,14 +599,14 @@ fn baml.llm.Client.build_plan(self: null) -> void[] {
     }
 }
 
-fn baml.llm.Client.build_plan_with_state(self: null, planner_state: void) -> void[] {
+fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] {
     // Locals:
-    let _0: void[] // _0 // return
-    let _1: null // self // param
-    let _2: void // planner_state // param
+    let _0: baml.llm.OrchestrationStep[] // _0 // return
+    let _1: baml.llm.Client // self // param
+    let _2: baml.llm.PlannerState // planner_state // param
     let _3: baml.llm.RetryPolicy?
     let _4: bool
-    let _5: void // r
+    let _5: baml.llm.RetryPolicy // r
     let _6: baml.llm.OrchestrationStep[] // result
     let _7: float // current_delay
     let _8: int
@@ -640,7 +640,7 @@ fn baml.llm.Client.build_plan_with_state(self: null, planner_state: void) -> voi
     let _36: baml.llm.OrchestrationStep // step
     let _37: null
     let _38: baml.llm.OrchestrationStep[]
-    let _39: void
+    let _39: baml.llm.OrchestrationStep
     let _40: baml.llm.PrimitiveClient
     let _41: baml.llm.OrchestrationStep
     let _42: int
@@ -648,7 +648,7 @@ fn baml.llm.Client.build_plan_with_state(self: null, planner_state: void) -> voi
 
     bb0: {
         _3 = copy _1.3;
-        _4 = is_type(copy _3, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        _4 = is_type(copy _3, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _4 -> [bb5, bb1];
     }
 
@@ -793,15 +793,15 @@ fn baml.llm.Client.build_plan_with_state(self: null, planner_state: void) -> voi
 
 fn baml.llm.PrimitiveClient.build_request = builtin(io)
 
-fn baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: int) -> void {
+fn baml.llm.Client.execute(self: baml.llm.Client, context: baml.llm.ExecutionContext, inherited_delay_ms: int) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: null // self // param
-    let _2: void // context // param
+    let _1: baml.llm.Client // self // param
+    let _2: baml.llm.ExecutionContext // context // param
     let _3: int // inherited_delay_ms // param
     let _4: baml.llm.RetryPolicy?
     let _5: bool
-    let _6: void // r
+    let _6: baml.llm.RetryPolicy // r
     let _7: float // current_delay
     let _8: int
     let _9: baml.llm.RetryPolicy
@@ -838,7 +838,7 @@ fn baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: int) -
 
     bb0: {
         _4 = copy _1.3;
-        _5 = is_type(copy _4, Void { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        _5 = is_type(copy _4, Class(TypeName { name: "RetryPolicy", module_path: ["baml", "llm"], display_name: "baml.llm.RetryPolicy" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _5 -> [bb6, bb1];
     }
 
@@ -980,11 +980,11 @@ fn baml.llm.Client.execute(self: null, context: void, inherited_delay_ms: int) -
     }
 }
 
-fn baml.llm.Client.execute_once(self: null, context: void, active_delay_ms: int) -> void {
+fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.ExecutionContext, active_delay_ms: int) -> void {
     // Locals:
     let _0: void // _0 // return
-    let _1: null // self // param
-    let _2: void // context // param
+    let _1: baml.llm.Client // self // param
+    let _2: baml.llm.ExecutionContext // context // param
     let _3: int // active_delay_ms // param
     let _4: baml.llm.ClientType
     let _5: int
@@ -1285,10 +1285,10 @@ fn baml.llm.PrimitiveClient.render_prompt = builtin(io)
 
 fn baml.llm.PrimitiveClient.specialize_prompt = builtin(io)
 
-fn baml.llm.Client.to_primitive_client(self: null) -> void {
+fn baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.PrimitiveClient {
     // Locals:
-    let _0: void // _0 // return
-    let _1: null // self // param
+    let _0: baml.llm.PrimitiveClient // _0 // return
+    let _1: baml.llm.Client // self // param
     let _2: bool
     let _3: string
     let _4: void

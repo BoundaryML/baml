@@ -191,7 +191,7 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
 function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws never {
   { : T
     let jinja_string = get_jinja_template(function_name) : string
-    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : unknown
+    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
     let result = client.execute<T>(context, 0) : T
     result : T
   }
@@ -245,18 +245,18 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
 }
 function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
-    let planner_state = PlannerState { rr_client_names: [] } : unknown
+    let planner_state = PlannerState { rr_client_names: [] } : baml.llm.PlannerState
     self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
 function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
-  { : unknown[] | baml.llm.OrchestrationStep[] | never[]
-    match (self.client_type : baml.llm.ClientType) : unknown[] | baml.llm.OrchestrationStep[] | never[]
+  { : baml.llm.OrchestrationStep[] | never[]
+    match (self.client_type : baml.llm.ClientType) : baml.llm.OrchestrationStep[] | never[]
       ClientType.Primitive =>
-        { : unknown[]
+        { : baml.llm.OrchestrationStep[]
           let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
           let primitive = resolve_fn() : baml.llm.PrimitiveClient
-          [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }] : unknown[]
+          [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }] : baml.llm.OrchestrationStep[]
         }
       ClientType.Fallback =>
         { : baml.llm.OrchestrationStep[]
@@ -286,7 +286,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
 }
 function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
-    let planner_state = PlannerState { rr_client_names: [] } : unknown
+    let planner_state = PlannerState { rr_client_names: [] } : baml.llm.PlannerState
     self.build_plan_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }

@@ -65,7 +65,10 @@ pub enum TirTypeError {
         operand: Ty,
     },
     /// A type name in a type annotation could not be resolved.
-    UnresolvedType { name: Name },
+    UnresolvedType {
+        name: Name,
+        suggestions: Vec<String>,
+    },
     /// Wrong number of arguments in a function call.
     ArgumentCountMismatch { expected: usize, got: usize },
     /// Function body ends without returning a value.
@@ -146,8 +149,22 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidUnaryOp { op, operand } => {
                 write!(f, "operator `{op:?}` cannot be applied to `{operand}`")
             }
-            TirTypeError::UnresolvedType { name } => {
-                write!(f, "unresolved type: {name}")
+            TirTypeError::UnresolvedType { name, suggestions } => {
+                if suggestions.is_empty() {
+                    write!(f, "unresolved type: {name}")
+                } else if suggestions.len() == 1 {
+                    write!(
+                        f,
+                        "unresolved type: {name}. Did you mean `{}`?",
+                        suggestions[0]
+                    )
+                } else {
+                    write!(
+                        f,
+                        "unresolved type: {name}. Did you mean one of these: `{}`?",
+                        suggestions.join("`, `")
+                    )
+                }
             }
             TirTypeError::ArgumentCountMismatch { expected, got } => {
                 write!(f, "expected {expected} argument(s), got {got}")

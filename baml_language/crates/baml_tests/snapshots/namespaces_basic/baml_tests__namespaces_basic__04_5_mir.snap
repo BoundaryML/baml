@@ -19,9 +19,9 @@ fn user.GetResponse(cfg: Config) -> llm.Response {
     }
 }
 
-fn user.llm.MakeResponse(cfg: Config) -> void {
+fn user.llm.MakeResponse(cfg: Config) -> llm.Response {
     // Locals:
-    let _0: void // _0 // return
+    let _0: llm.Response // _0 // return
     let _1: Config // cfg // param
     let _2: string
 

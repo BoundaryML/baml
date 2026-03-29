@@ -19,12 +19,18 @@ pub enum SymbolKind {
 }
 
 pub fn classify_type(package_items: &PackageItems<'_>, path: &[Name]) -> Option<SymbolKind> {
-    package_items.lookup_type(path).and_then(|def| match def {
-        Definition::Class(_) => Some(SymbolKind::Class),
-        Definition::Enum(_) => Some(SymbolKind::Enum),
-        Definition::TypeAlias(_) => Some(SymbolKind::TypeAlias),
-        _ => None,
-    })
+    if path.is_empty() {
+        return None;
+    }
+    let item = path.last().unwrap();
+    package_items
+        .lookup_type(&path[..path.len() - 1], item)
+        .and_then(|def| match def {
+            Definition::Class(_) => Some(SymbolKind::Class),
+            Definition::Enum(_) => Some(SymbolKind::Enum),
+            Definition::TypeAlias(_) => Some(SymbolKind::TypeAlias),
+            _ => None,
+        })
 }
 
 /// Classify a type, falling back to `root.*` prefix handling, bare-name
@@ -62,59 +68,110 @@ fn classify_type_cross_pkg(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<SymbolK
 // ── Namespace-aware key resolution ──────────────────────────────────────────
 
 /// Resolve a path within a single package to its qualified key
-/// `[package_name, ...ns_path, item_name]`.
+/// `[package_name, ...namespace, item_name]`.
 fn resolve_in_package(
-    path: &[Name],
+    namespace: &[Name],
+    item: &Name,
     pkg_name: &Name,
     pkg_items: &PackageItems<'_>,
 ) -> Option<Vec<Name>> {
-    if path.is_empty() {
-        return None;
-    }
-    for split in (0..path.len()).rev() {
-        let ns_path = &path[..split];
-        let item_name = &path[split];
-        if let Some(ns) = pkg_items.namespaces.get(ns_path) {
-            if ns.types.contains_key(item_name) {
-                let mut key = vec![pkg_name.clone()];
-                key.extend_from_slice(ns_path);
-                key.push(item_name.clone());
-                return Some(key);
-            }
-        }
-    }
-    None
+    pkg_items.lookup_type(namespace, item).map(|_| {
+        let mut key = vec![pkg_name.clone()];
+        key.extend_from_slice(namespace);
+        key.push(item.clone());
+        key
+    })
 }
 
 /// Resolve a PPIR type path to its qualified key `[package, ...ns, name]`.
 /// Handles direct lookup, `root.*` prefix, bare names in non-root namespaces,
 /// and cross-package references.
 fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<Vec<Name>> {
+    if path.is_empty() {
+        return None;
+    }
+    let item = path.last().unwrap();
     // 1. Direct lookup in current package
-    if let Some(key) = resolve_in_package(path, ctx.package_name, ctx.package_items) {
+    let ns = &path[..path.len() - 1];
+    if let Some(key) = resolve_in_package(ns, item, ctx.package_name, ctx.package_items) {
         return Some(key);
     }
     // 2. Handle `root.*` prefix
     if path.len() >= 2 && path[0].as_str() == "root" {
-        if let Some(key) = resolve_in_package(&path[1..], ctx.package_name, ctx.package_items) {
+        let after_root = &path[1..];
+        let root_item = after_root.last().unwrap();
+        let root_ns = &after_root[..after_root.len() - 1];
+        if let Some(key) =
+            resolve_in_package(root_ns, root_item, ctx.package_name, ctx.package_items)
+        {
             return Some(key);
         }
     }
     // 3. Bare name in current (non-root) namespace
     if path.len() == 1 && !ctx.namespace_path.is_empty() {
-        let mut ns_qualified: Vec<Name> = ctx.namespace_path.to_vec();
-        ns_qualified.push(path[0].clone());
-        if let Some(key) = resolve_in_package(&ns_qualified, ctx.package_name, ctx.package_items) {
+        if let Some(key) = resolve_in_package(
+            ctx.namespace_path,
+            item,
+            ctx.package_name,
+            ctx.package_items,
+        ) {
             return Some(key);
         }
     }
     // 4. Cross-package (first segment = package name)
     if path.len() >= 2 {
         if let Some(foreign_items) = ctx.all_package_items.get(&path[0]) {
-            return resolve_in_package(&path[1..], &path[0], foreign_items);
+            let after_pkg = &path[1..];
+            let pkg_item = after_pkg.last().unwrap();
+            let pkg_ns = &after_pkg[..after_pkg.len() - 1];
+            return resolve_in_package(pkg_ns, pkg_item, &path[0], foreign_items);
         }
     }
     None
+}
+
+/// When a type alias in one namespace resolves to a type in a different
+/// namespace, the resulting `Named` path (and paths inside unions/lists/etc.)
+/// must be qualified so that `lower_type_expr_in_ns` can find them from the
+/// caller's namespace. Prepends `root.` to single-segment `Named` paths when
+/// the alias namespace differs from the caller namespace.
+fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> PpirTy {
+    if alias_ns == caller_ns {
+        return ty;
+    }
+    match ty {
+        PpirTy::Named { path, attrs } if path.len() == 1 && path[0].as_str() != "root" => {
+            let mut qualified = Vec::with_capacity(alias_ns.len() + 2);
+            qualified.push(SmolStr::from("root"));
+            qualified.extend(alias_ns.iter().cloned());
+            qualified.extend(path);
+            PpirTy::Named {
+                path: qualified,
+                attrs,
+            }
+        }
+        PpirTy::Union { variants, attrs } => PpirTy::Union {
+            variants: variants
+                .into_iter()
+                .map(|v| requalify_for_caller(v, alias_ns, caller_ns))
+                .collect(),
+            attrs,
+        },
+        PpirTy::List { inner, attrs } => PpirTy::List {
+            inner: Box::new(requalify_for_caller(*inner, alias_ns, caller_ns)),
+            attrs,
+        },
+        PpirTy::Optional { inner, attrs } => PpirTy::Optional {
+            inner: Box::new(requalify_for_caller(*inner, alias_ns, caller_ns)),
+            attrs,
+        },
+        PpirTy::Map { key, value, attrs } => PpirTy::Map {
+            key: Box::new(requalify_for_caller(*key, alias_ns, caller_ns)),
+            value: Box::new(requalify_for_caller(*value, alias_ns, caller_ns)),
+            attrs,
+        },
+        other => other,
+    }
 }
 
 // ── Context ──────────────────────────────────────────────────────────────────
@@ -379,11 +436,32 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                         if depth < MAX_ALIAS_DEPTH {
                             if let Some(key) = resolve_qualified_key(path, ctx) {
                                 if let Some(body) = ctx.alias_bodies.get(&key) {
-                                    // Set merged attrs on the resolved body and recurse
+                                    // The alias body's paths are relative to the alias
+                                    // definition's namespace (key = [pkg, ...ns, name]).
+                                    // Recurse with the alias's namespace so that
+                                    // classify_type / resolve_qualified_key resolve
+                                    // the body's bare names correctly.
+                                    let alias_ns = key[1..key.len() - 1].to_vec();
+                                    let alias_ctx = ExpandCtx {
+                                        namespace_path: &alias_ns,
+                                        ..*ctx
+                                    };
                                     let mut resolved = body.clone();
                                     resolved.attrs_mut().stream_must_exist = must_exist;
                                     resolved.attrs_mut().stream_done = done;
-                                    return stream_expand_inner(&resolved, ctx, depth + 1);
+                                    let (result_ty, sap) =
+                                        stream_expand_inner(&resolved, &alias_ctx, depth + 1);
+                                    // The result's Named paths are relative to alias_ns.
+                                    // If the caller is in a different namespace, qualify
+                                    // them so lower_type_expr_in_ns can resolve them.
+                                    return (
+                                        requalify_for_caller(
+                                            result_ty,
+                                            &alias_ns,
+                                            ctx.namespace_path,
+                                        ),
+                                        sap,
+                                    );
                                 }
                             }
                         }

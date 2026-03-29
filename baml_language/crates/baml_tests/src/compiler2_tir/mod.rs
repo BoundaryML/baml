@@ -745,9 +745,7 @@ pub(crate) mod support {
                                 let parent = &index.scopes[parent_idx.index() as usize];
                                 if matches!(parent.kind, ScopeKind::Class) {
                                     parent.name.as_ref().and_then(|cn| {
-                                        let mut ns_path = ns.to_vec();
-                                        ns_path.push(cn.clone());
-                                        pkg_items.lookup_type(&ns_path).map(|def| {
+                                        pkg_items.lookup_type(ns, cn).map(|def| {
                                             baml_compiler2_tir::ty::Ty::Class(
                                                 baml_compiler2_tir::lower_type_expr::qualify_def(
                                                     db, def, cn,

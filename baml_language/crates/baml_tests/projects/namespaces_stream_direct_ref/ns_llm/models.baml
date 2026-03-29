@@ -1,0 +1,25 @@
+// llm namespace types for cross-namespace $stream references.
+
+class Config {
+    model string
+}
+
+class Response {
+    text string
+}
+
+// Bare $stream from same namespace
+function LlmUsesOwnStream(r: Response$stream) -> string {
+    r.text
+}
+
+// Qualified $stream from root namespace
+function LlmUsesRootStream(c: root.Config$stream) -> string {
+    c.key
+}
+
+// Class with cross-namespace $stream fields
+class LlmWithStreamFields {
+    own_stream Response$stream
+    root_stream root.Config$stream
+}
