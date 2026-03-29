@@ -1,0 +1,148 @@
+// ── Chained map: two-step transform ───────────────────────────────
+function test_chained_map() -> int[] {
+    let items: int[] = [1, 2, 3]
+    let step1: int[] = items.map((x) -> { x * 10 })
+    step1.map((x) -> { x + 1 })
+}
+
+// ── Map over strings to ints ──────────────────────────────────────
+function test_map_string_to_int() -> int[] {
+    let words: string[] = ["hello", "world"]
+    words.map((w: string) -> int { w.length() })
+}
+
+// ── Lambda returning a lambda (higher-order return) ───────────────
+function test_higher_order_return() -> int {
+    let make_adder = (n: int) -> {
+        let adder = (x: int) -> int { x + n }
+        adder
+    }
+    let add5 = make_adder(5)
+    add5(37)
+}
+
+// Lambda calling another lambda
+function test_lambda_calling_lambda() -> int {
+    let double = (x: int) -> int { x * 2 }
+    let apply_twice = (f: (int) -> int, x: int) -> int {
+        f(f(x))
+    }
+    apply_twice(double, 3)
+}
+
+// ── Capture across two nesting levels ────────────────────────────
+function test_deep_capture() -> int {
+    let a = 1
+    let f = (b: int) -> {
+        let g = (c: int) -> int {
+            a + b + c  // captures a from grandparent, b from parent
+        }
+        g(100)
+    }
+    f(10) // 1 + 10 + 100 = 111
+}
+
+// ── Generic identity used at multiple types ──────────────────────
+function test_generic_multi_instantiation() -> int {
+    let id = <T>(x: T) -> T { x }
+    let a: int = id(42)
+    let b: string = id("hello")
+    a
+}
+
+// ── Lambda with match expression in body ─────────────────────────
+function test_lambda_with_match() -> string {
+    let describe = (n: int) -> string {
+        match (n) {
+            0 => "zero"
+            1 => "one"
+            _ => "many"
+        }
+    }
+    describe(1)
+}
+
+// ── Lambda with if/else expression body ──────────────────────────
+function test_lambda_with_if() -> string {
+    let classify = (n: int) -> string {
+        if (n < 0) { "negative" }
+        else if (n == 0) { "zero" }
+        else { "positive" }
+    }
+    classify(-5)
+}
+
+// ── Map with captured variable in lambda ─────────────────────────
+function test_map_with_capture() -> int[] {
+    let items: int[] = [1, 2, 3]
+    let factor = 10
+    items.map((x) -> { x * factor })
+}
+
+// ── Nested map: map inside a map callback ────────────────────────
+function test_nested_map() -> int[] {
+    let matrix: int[][] = [[1, 2], [3, 4]]
+    // Flatten-map: for each row, map and collect
+    matrix.map((row: int[]) -> {
+        row.map((x) -> { x * x })
+    })
+}
+
+// ── Map with multi-statement lambda body ─────────────────────────
+function test_map_multi_statement() -> int[] {
+    let items: int[] = [1, 2, 3]
+    items.map((x) -> {
+        let doubled = x * 2
+        let offset = 100
+        doubled + offset
+    })
+}
+
+// ── Map.map with two-param lambda ────────────────────────────────
+function test_map_entries() -> string[] {
+    let m: map<string, int> = {"a": 1, "b": 2}
+    m.map((k: string, v: int) -> string {
+        k
+    })
+}
+
+// ── Map.map_values ───────────────────────────────────────────────
+function test_map_values_transform() -> int[] {
+    let m: map<string, int> = {"x": 10, "y": 20}
+    m.map_values((v) -> { v * 2 })
+}
+
+// ── Map.map_keys ─────────────────────────────────────────────────
+function test_map_keys_transform() -> string[] {
+    let m: map<string, int> = {"hello": 1}
+    m.map_keys((k) -> { k })
+}
+
+// ── Lambda assigned then passed ──────────────────────────────────
+function test_lambda_variable_then_pass() -> int[] {
+    let items: int[] = [10, 20, 30]
+    let halve = (x: int) -> int { x / 2 }
+    items.map(halve)
+}
+
+// ── Shadowing: lambda param shadows outer variable ───────────────
+function test_shadowing() -> int[] {
+    let x = 999
+    let items: int[] = [1, 2, 3]
+    items.map((x) -> { x + 1 }) // x here is the lambda param, not 999
+}
+
+// ── Immediately-invoked lambda expression ────────────────────────
+function test_iife() -> int {
+    let result = ((x: int) -> int { x * x })(7) // 49
+    result
+}
+
+// ── Lambda with optional return type ─────────────────────────────
+function test_optional_return() -> int? {
+    let maybe = (x: int) -> int? {
+        if (x > 0) { x }
+        else { null }
+    }
+    maybe(-1)
+}

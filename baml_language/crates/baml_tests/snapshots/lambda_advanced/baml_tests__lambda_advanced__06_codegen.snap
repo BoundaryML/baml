@@ -1,0 +1,230 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.test_chained_map() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    store_var items
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_deep_capture() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_generic_multi_instantiation() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_higher_order_return() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_iife() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_lambda_calling_lambda() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_lambda_variable_then_pass() -> int[] {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_lambda_with_if() -> string {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_lambda_with_match() -> string {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_map_entries() -> string[] {
+    load_const 1
+    load_const 2
+    load_const "a"
+    load_const "b"
+    alloc_map 2
+    store_var m
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_map_keys_transform() -> string[] {
+    load_const 1
+    load_const "hello"
+    alloc_map 1
+    store_var m
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_map_multi_statement() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    store_var items
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_map_string_to_int() -> int[] {
+    load_const "hello"
+    load_const "world"
+    alloc_array 2
+    store_var words
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_map_values_transform() -> int[] {
+    load_const 10
+    load_const 20
+    load_const "x"
+    load_const "y"
+    alloc_map 2
+    store_var m
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_map_with_capture() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    store_var items
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_nested_map() -> int[] {
+    load_const 1
+    load_const 2
+    alloc_array 2
+    load_const 3
+    load_const 4
+    alloc_array 2
+    alloc_array 2
+    store_var matrix
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_optional_return() -> int? {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_shadowing() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    store_var items
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}

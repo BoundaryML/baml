@@ -1,0 +1,58 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.test_chained_map() -> int[]  [expr] {
+  { let items: int[] = [1, 2, 3]; let step1: int[] = items.map((x) -> { {  } x Mul 10 }) } step1.map((x) -> { {  } x Add 1 })
+}
+function user.test_deep_capture() -> int  [expr] {
+  { let a = 1; let f = (b: int) -> { { let g = (c: int) -> int { {  } a Add b Add c } } g(100) } } f(10)
+}
+function user.test_generic_multi_instantiation() -> int  [expr] {
+  { let id = <T>(x: T) -> T { {  } x }; let a: int = id(42); let b: string = id("hello") } a
+}
+function user.test_higher_order_return() -> int  [expr] {
+  { let make_adder = (n: int) -> { { let adder = (x: int) -> int { {  } x Add n } } adder }; let add5 = make_adder(5) } add5(37)
+}
+function user.test_iife() -> int  [expr] {
+  { let result = (x: int) -> int { {  } x Mul x }(7) } result
+}
+function user.test_lambda_calling_lambda() -> int  [expr] {
+  { let double = (x: int) -> int { {  } x Mul 2 }; let apply_twice = (f: (int) -> int, x: int) -> int { {  } f(f(x)) } } apply_twice(double, 3)
+}
+function user.test_lambda_variable_then_pass() -> int[]  [expr] {
+  { let items: int[] = [10, 20, 30]; let halve = (x: int) -> int { {  } x Div 2 } } items.map(halve)
+}
+function user.test_lambda_with_if() -> string  [expr] {
+  { let classify = (n: int) -> string { {  } if (n Lt 0) {  } "negative" else if (n Eq 0) {  } "zero" else {  } "positive" } } classify(Neg 5)
+}
+function user.test_lambda_with_match() -> string  [expr] {
+  { let describe = (n: int) -> string { {  } match (n) { 0 => "zero", 1 => "one", _ => "many" } } } describe(1)
+}
+function user.test_map_entries() -> string[]  [expr] {
+  { let m: map<string, int> = map { "a": 1, "b": 2 } } m.map((k: string, v: int) -> string { {  } k })
+}
+function user.test_map_keys_transform() -> string[]  [expr] {
+  { let m: map<string, int> = map { "hello": 1 } } m.map_keys((k) -> { {  } k })
+}
+function user.test_map_multi_statement() -> int[]  [expr] {
+  { let items: int[] = [1, 2, 3] } items.map((x) -> { { let doubled = x Mul 2; let offset = 100 } doubled Add offset })
+}
+function user.test_map_string_to_int() -> int[]  [expr] {
+  { let words: string[] = ["hello", "world"] } words.map((w: string) -> int { {  } w.length() })
+}
+function user.test_map_values_transform() -> int[]  [expr] {
+  { let m: map<string, int> = map { "x": 10, "y": 20 } } m.map_values((v) -> { {  } v Mul 2 })
+}
+function user.test_map_with_capture() -> int[]  [expr] {
+  { let items: int[] = [1, 2, 3]; let factor = 10 } items.map((x) -> { {  } x Mul factor })
+}
+function user.test_nested_map() -> int[]  [expr] {
+  { let matrix: int[][] = [[1, 2], [3, 4]] } matrix.map((row: int[]) -> { {  } row.map((x) -> { {  } x Mul x }) })
+}
+function user.test_optional_return() -> int?  [expr] {
+  { let maybe = (x: int) -> int? { {  } if (x Gt 0) {  } x else {  } null } } maybe(Neg 1)
+}
+function user.test_shadowing() -> int[]  [expr] {
+  { let x = 999; let items: int[] = [1, 2, 3] } items.map((x) -> { {  } x Add 1 })
+}

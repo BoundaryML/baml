@@ -1,0 +1,271 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.test_chained_map() -> int[] throws never {
+  { : int[]
+    let items = [1, 2, 3] : int -> int[]
+    let step1 = items.map<U>((x) -> { ... }) : int[]
+    step1.map<U>((x) -> { ... }) : int[]
+      (x) -> { ... } : (x: int) -> int
+        {
+          x Add 1
+        }
+  }
+}
+lambda user.test_chained_map {
+}
+lambda user.test_chained_map {
+}
+function user.test_map_string_to_int() -> int[] throws never {
+  { : int[]
+    let words = ["hello", "world"] : int -> string[]
+    words.map<U>((w: string) -> int { ... }) : int[]
+      (w: string) -> int { ... } : (w: string) -> int
+        {
+          w.length()
+        }
+  }
+}
+lambda user.test_map_string_to_int {
+}
+function user.test_higher_order_return() -> int throws never {
+  { : int
+    let make_adder = : (n: int) -> (x: int) -> int
+      (n: int) -> { ... } : (n: int) -> (x: int) -> int
+        {
+          let adder = ...
+            (x: int) -> int { ... }
+              {
+                x Add n
+              }
+          adder
+        }
+    let add5 = make_adder(5) : (x: int) -> int
+    add5(37) : int
+  }
+}
+lambda user.test_higher_order_return {
+}
+lambda user.test_higher_order_return {
+}
+function user.test_lambda_calling_lambda() -> int throws never {
+  { : int
+    let double = : (int) -> int -> (x: int) -> int
+      (x: int) -> int { ... } : (int) -> int
+        {
+          x Mul 2
+        }
+    let apply_twice = : (f: (int) -> int, x: int) -> int
+      (f: (int) -> int, x: int) -> int { ... } : (f: (int) -> int, x: int) -> int
+        {
+          f(f(x))
+        }
+    apply_twice(double, 3) : int
+  }
+}
+lambda user.test_lambda_calling_lambda {
+}
+lambda user.test_lambda_calling_lambda {
+}
+function user.test_deep_capture() -> int throws never {
+  { : int
+    let a = 1 : (c: int) -> int
+    let f = : (b: int) -> int
+      (b: int) -> { ... } : (b: int) -> int
+        {
+          let g = ...
+            (c: int) -> int { ... }
+              {
+                a Add b Add c
+              }
+          g(100)
+        }
+    f(10) : int
+  }
+}
+lambda user.test_deep_capture {
+}
+lambda user.test_deep_capture {
+}
+function user.test_generic_multi_instantiation() -> int throws never {
+  { : int | 42
+    let id = : (x: T) -> T
+      <T>(x: T) -> T { ... } : (x: T) -> T
+        {
+          x
+        }
+    let a = id<T>(42) : int | 42
+    let b = id<T>("hello") : string | "hello"
+    a : int | 42
+  }
+}
+lambda user.test_generic_multi_instantiation {
+}
+function user.test_lambda_with_match() -> string throws never {
+  { : "zero" | "one" | "many"
+    let describe = : (n: int) -> "zero" | "one" | "many"
+      (n: int) -> string { ... } : (n: int) -> "zero" | "one" | "many"
+        {
+          match (n) { 0 => "zero", 1 => "one", _ => "many" }
+        }
+    describe(1) : "zero" | "one" | "many"
+  }
+}
+lambda user.test_lambda_with_match {
+}
+function user.test_lambda_with_if() -> string throws never {
+  { : "negative" | "zero" | "positive"
+    let classify = : (n: int) -> "negative" | "zero" | "positive"
+      (n: int) -> string { ... } : (n: int) -> "negative" | "zero" | "positive"
+        {
+          if (n Lt 0)
+            {
+              "negative"
+            }
+          else
+            if (n Eq 0)
+              {
+                "zero"
+              }
+            else
+              {
+                "positive"
+              }
+        }
+    classify(Neg 5) : "negative" | "zero" | "positive"
+  }
+}
+lambda user.test_lambda_with_if {
+}
+function user.test_map_with_capture() -> int[] throws never {
+  { : int[]
+    let items = [1, 2, 3] : int -> int[]
+    let factor = 10 : 10 -> int
+    items.map<U>((x) -> { ... }) : int[]
+      (x) -> { ... } : (x: int) -> int
+        {
+          x Mul factor
+        }
+  }
+}
+lambda user.test_map_with_capture {
+}
+function user.test_nested_map() -> int[] throws never {
+  { : (int | int[])[]
+    let matrix = [[1, 2], [3, 4]] : int[][]
+    matrix.map<U>((row: int[]) -> { ... }) : (int | int[])[]
+      (row: int[]) -> { ... } : (row: int[]) -> int[]
+        {
+          row.map((x) -> { ... })
+        }
+  }
+}
+lambda user.test_nested_map {
+}
+lambda user.test_nested_map {
+}
+function user.test_map_multi_statement() -> int[] throws never {
+  { : int[]
+    let items = [1, 2, 3] : 100 -> int
+    items.map((x) -> { ... }) : int[]
+      (x) -> { ... } : (x: int) -> int
+        {
+          let doubled = x Mul 2
+          let offset = 100
+          doubled Add offset
+        }
+  }
+}
+lambda user.test_map_multi_statement {
+}
+function user.test_map_entries() -> string[] throws never {
+  { : string[]
+    let m = map { "a": 1, "b": 2 } : map<string, int>
+    m.map<U>((k: string, v: int) -> string { ... }) : string[]
+      (k: string, v: int) -> string { ... } : (k: string, v: int) -> string
+        {
+          k
+        }
+  }
+}
+lambda user.test_map_entries {
+}
+function user.test_map_values_transform() -> int[] throws never {
+  { : int[]
+    let m = map { "x": 10, "y": 20 } : map<string, int>
+    m.map_values<U>((v) -> { ... }) : int[]
+      (v) -> { ... } : (v: int) -> int
+        {
+          v Mul 2
+        }
+  }
+}
+lambda user.test_map_values_transform {
+}
+function user.test_map_keys_transform() -> string[] throws never {
+  { : string[]
+    let m = map { "hello": 1 } : map<string, int>
+    m.map_keys<U>((k) -> { ... }) : string[]
+      (k) -> { ... } : (k: string) -> string
+        {
+          k
+        }
+  }
+}
+lambda user.test_map_keys_transform {
+}
+function user.test_lambda_variable_then_pass() -> int[] throws never {
+  { : int[]
+    let items = [10, 20, 30] : int -> int[]
+    let halve = : (x: int) -> int
+      (x: int) -> int { ... } : (x: int) -> int
+        {
+          x Div 2
+        }
+    items.map<U>(halve) : int[]
+  }
+}
+lambda user.test_lambda_variable_then_pass {
+}
+function user.test_shadowing() -> int[] throws never {
+  { : int[]
+    let x = 999 : int
+    let items = [1, 2, 3] : int[]
+    items.map<U>((x) -> { ... }) : int[]
+      (x) -> { ... } : (x: int) -> int
+        {
+          x Add 1
+        }
+  }
+}
+lambda user.test_shadowing {
+}
+function user.test_iife() -> int throws never {
+  { : int
+    let result = (x: int) -> int { ... }(7) : int
+    result : int
+  }
+}
+lambda user.test_iife {
+}
+function user.test_optional_return() -> int? throws never {
+  { : int | null
+    let maybe = : (x: int) -> int | null
+      (x: int) -> int? { ... } : (x: int) -> int | null
+        {
+          if (x Gt 0)
+            {
+              x
+            }
+          else
+            {
+              null
+            }
+        }
+    maybe(Neg 1) : int | null
+  }
+  !! 5257..5266: type mismatch: expected int?, got int | null
+}
+lambda user.test_optional_return {
+}
