@@ -2,4 +2,12 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-No errors found.
+  [type] Error: cannot infer type of lambda parameter `x` — add a type annotation or provide context
+     ╭─[ lambda_advanced.baml:297:4 ]
+     │
+ 297 │             _ => 1
+     │    ────────┬───────  
+     │            ╰───────── cannot infer type of lambda parameter `x` — add a type annotation or provide context
+     │ 
+     │ Note: Error code: E0001
+─────╯

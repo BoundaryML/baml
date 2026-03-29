@@ -1,7 +1,7 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.test_branch_return_unification() -> string {
+function user.test_apply_twice_inferred() -> int {
     load_const "lambda expressions are not yet supported"
     call baml.sys.panic
     pop 1
@@ -11,7 +11,22 @@ function user.test_branch_return_unification() -> string {
     unreachable
 }
 
-function user.test_capture_lambda() -> int {
+function user.test_capture_in_map_inferred() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    store_var items
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_capture_lambda_inferred() -> int {
     load_const "lambda expressions are not yet supported"
     call baml.sys.panic
     pop 1
@@ -36,17 +51,7 @@ function user.test_chained_map() -> int[] {
     unreachable
 }
 
-function user.test_compose() -> int[] {
-    load_const "lambda expressions are not yet supported"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
-}
-
-function user.test_covariance_return() -> int[] {
+function user.test_compose_inferred() -> int[] {
     load_const 1
     load_const 2
     load_const 3
@@ -71,7 +76,52 @@ function user.test_deep_capture() -> int {
     unreachable
 }
 
+function user.test_deep_capture_inferred() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_fully_inferred_map() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    store_var items
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_generic_apply_inferred() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
 function user.test_generic_multi_instantiation() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_higher_order_inferred() -> int {
     load_const "lambda expressions are not yet supported"
     call baml.sys.panic
     pop 1
@@ -101,6 +151,16 @@ function user.test_iife() -> int {
     unreachable
 }
 
+function user.test_iife_inferred() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
 function user.test_lambda_calling_lambda() -> int {
     load_const "lambda expressions are not yet supported"
     call baml.sys.panic
@@ -111,7 +171,7 @@ function user.test_lambda_calling_lambda() -> int {
     unreachable
 }
 
-function user.test_lambda_in_match() -> int {
+function user.test_lambda_in_match_inferred() -> int {
     load_const "double"
     load_const "double"
     cmp_op ==
@@ -177,7 +237,38 @@ function user.test_lambda_with_match() -> string {
     unreachable
 }
 
+function user.test_literal_return_inference() -> int[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    store_var items
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
 function user.test_map_entries() -> string[] {
+    load_const 1
+    load_const 2
+    load_const "a"
+    load_const "b"
+    alloc_map 2
+    store_var m
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_map_entries_inferred() -> string[] {
     load_const 1
     load_const 2
     load_const "a"
@@ -222,7 +313,7 @@ function user.test_map_multi_statement() -> int[] {
     unreachable
 }
 
-function user.test_map_optional() -> int[] {
+function user.test_map_optional_inferred() -> int[] {
     load_const 1
     load_const null
     load_const 3
@@ -242,6 +333,37 @@ function user.test_map_string_to_int() -> int[] {
     load_const "world"
     alloc_array 2
     store_var words
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_map_type_change_inferred() -> string[] {
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    store_var nums
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_map_values_fully_inferred() -> string[] {
+    load_const 10
+    load_const 20
+    load_const "x"
+    load_const "y"
+    alloc_map 2
+    store_var m
     load_const "lambda expressions are not yet supported"
     call baml.sys.panic
     pop 1
@@ -273,31 +395,6 @@ function user.test_map_with_capture() -> int[] {
     load_const 3
     alloc_array 3
     store_var items
-    load_const "lambda expressions are not yet supported"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
-}
-
-function user.test_map_with_index_capture() -> int[] {
-    load_const 10
-    load_const 20
-    load_const 30
-    alloc_array 3
-    store_var items
-    load_const "lambda expressions are not yet supported"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
-}
-
-function user.test_nested_generic() -> int {
     load_const "lambda expressions are not yet supported"
     call baml.sys.panic
     pop 1
@@ -350,22 +447,12 @@ function user.test_shadowing() -> string {
     unreachable
 }
 
-function user.test_two_transforms() -> int {
-    load_const "lambda expressions are not yet supported"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
-}
-
-function user.test_type_changing_chain() -> string {
+function user.test_shadowing_inferred() -> int[] {
     load_const 1
     load_const 2
     load_const 3
     alloc_array 3
-    store_var nums
+    store_var items
     load_const "lambda expressions are not yet supported"
     call baml.sys.panic
     pop 1
@@ -375,7 +462,17 @@ function user.test_type_changing_chain() -> string {
     unreachable
 }
 
-function user.test_void_lambda() -> int {
+function user.test_two_transforms_inferred() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.test_void_lambda_inferred() -> int {
     load_const "lambda expressions are not yet supported"
     call baml.sys.panic
     pop 1
