@@ -682,31 +682,50 @@ impl<'db> TypeInferenceBuilder<'db> {
                             crate::generics::infer_bindings(ret, expected, &mut bindings);
                         }
 
-                        // Phase 1: forward-infer from arguments (high priority, overrides)
-                        for ((_, param_ty), arg) in effective_params.iter().zip(args.iter()) {
+                        // Phase 1: forward-infer from arguments (high priority, overrides).
+                        // Two-pass: first process non-lambda args to bind type vars,
+                        // then process lambda args with resolved bindings. This allows
+                        // `apply((x) -> { x * 2 }, 21)` to bind T=int from `21` before
+                        // checking the lambda against `(T) -> U`.
+                        let param_arg_pairs: Vec<_> =
+                            effective_params.iter().zip(args.iter()).collect();
+
+                        // Pass 1: non-lambda arguments — bind type variables
+                        for ((_, param_ty), arg) in &param_arg_pairs {
+                            if matches!(&body.exprs[**arg], Expr::Lambda(_)) {
+                                continue;
+                            }
                             let substituted = crate::generics::substitute_ty(param_ty, &bindings);
                             let arg_ty = if !crate::generics::contains_typevar(&substituted) {
-                                // Fully concrete — use contextual typing
-                                self.check_expr(*arg, body, &substituted)
+                                self.check_expr(**arg, body, &substituted)
+                            } else {
+                                self.infer_expr(**arg, body)
+                            };
+                            crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                        }
+
+                        // Pass 2: lambda arguments — type vars now resolved from pass 1
+                        for ((_, param_ty), arg) in &param_arg_pairs {
+                            if !matches!(&body.exprs[**arg], Expr::Lambda(_)) {
+                                continue;
+                            }
+                            let substituted = crate::generics::substitute_ty(param_ty, &bindings);
+                            let arg_ty = if !crate::generics::contains_typevar(&substituted) {
+                                self.check_expr(**arg, body, &substituted)
                             } else if let Ty::Function {
                                 params: fn_params, ..
                             } = &substituted
                             {
-                                // Partially-resolved function type: check if all param
-                                // types are concrete even though return may have type vars.
-                                // This enables `map(items, (x) -> { x * 2 })` where the
-                                // expected type is `(int) -> U`.
                                 let all_params_concrete = fn_params
                                     .iter()
                                     .all(|(_, t)| !crate::generics::contains_typevar(t));
                                 if all_params_concrete {
-                                    self.check_expr(*arg, body, &substituted)
+                                    self.check_expr(**arg, body, &substituted)
                                 } else {
-                                    self.infer_expr(*arg, body)
+                                    self.infer_expr(**arg, body)
                                 }
                             } else {
-                                // TypeVar not yet resolved — just infer
-                                self.infer_expr(*arg, body)
+                                self.infer_expr(**arg, body)
                             };
                             crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
                         }

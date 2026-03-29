@@ -281,6 +281,18 @@ function test_void_lambda_inferred() -> int {
     count
 }
 
+function test_void_lambda_inferred_captures() -> int {
+    let inc = () -> {
+        let count = 0
+        let inc = () -> { count += 1; count };
+        inc
+    }();
+    inc()
+    inc()
+    inc()
+}
+
+
 // ── Lambda capturing another lambda ──────────────────────────────
 function test_capture_lambda_inferred() -> int {
     let multiply = (a: int, b: int) -> { a * b }

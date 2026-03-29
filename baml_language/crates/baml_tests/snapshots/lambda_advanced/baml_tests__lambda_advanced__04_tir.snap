@@ -404,19 +404,18 @@ lambda user.test_deep_capture_inferred {
 lambda user.test_deep_capture_inferred {
 }
 function user.test_generic_apply_inferred() -> int throws never {
-  { : int | unknown
-    let apply = : unknown -> (f: (T) -> U, x: T) -> U
-      <T, U>(f: (T) -> U, x: T) -> U { ... } : unknown
+  { : int | 42
+    let apply = : 21 -> (f: (T) -> U, x: T) -> U
+      <T, U>(f: (T) -> U, x: T) -> U { ... } : 21
         {
           f(x)
         }
-    apply((x) -> { ... }, 21) : int | unknown
-      (x) -> { ... } : (x: unknown) -> unknown
+    apply((x) -> { ... }, 21) : int | 42
+      (x) -> { ... } : (x: 21) -> 42
         {
           x Mul 2
         }
   }
-  !! 8764..8780: cannot infer type of lambda parameter `x` — add a type annotation or provide context
 }
 lambda user.test_generic_apply_inferred {
 }
@@ -502,6 +501,18 @@ function user.test_void_lambda_inferred() -> int throws never {
   }
 }
 lambda user.test_void_lambda_inferred {
+}
+function user.test_void_lambda_inferred_captures() -> int throws never {
+  { : int
+    let inc = () -> { ... }() : () -> int
+    inc() : int
+    inc() : int
+    inc() : int
+  }
+}
+lambda user.test_void_lambda_inferred_captures {
+}
+lambda user.test_void_lambda_inferred_captures {
 }
 function user.test_capture_lambda_inferred() -> int throws never {
   { : int

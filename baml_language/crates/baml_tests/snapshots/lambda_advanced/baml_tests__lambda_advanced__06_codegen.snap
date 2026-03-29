@@ -481,3 +481,13 @@ function user.test_void_lambda_inferred() -> int {
   L0:
     unreachable
 }
+
+function user.test_void_lambda_inferred_captures() -> int {
+    load_const "lambda expressions are not yet supported"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}

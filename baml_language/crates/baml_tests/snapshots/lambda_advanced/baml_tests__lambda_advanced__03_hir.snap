@@ -110,3 +110,6 @@ function user.test_two_transforms_inferred() -> int  [expr] {
 function user.test_void_lambda_inferred() -> int  [expr] {
   { let count = 0; let inc = () -> { { count Add= 1 } }; inc(); inc() } count
 }
+function user.test_void_lambda_inferred_captures() -> int  [expr] {
+  { let inc = () -> { { let count = 0; let inc = () -> { { count Add= 1 } count } } inc }(); inc(); inc() } inc()
+}

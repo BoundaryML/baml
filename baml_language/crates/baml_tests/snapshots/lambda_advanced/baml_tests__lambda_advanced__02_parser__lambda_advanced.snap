@@ -2287,6 +2287,76 @@ SOURCE_FILE
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
+    WORD "test_void_lambda_inferred_captures"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "inc"
+          EQUALS "="
+          CALL_EXPR
+            LAMBDA_EXPR
+              PARAMETER_LIST "()"
+                L_PAREN "("
+                R_PAREN ")"
+              ARROW "->"
+              BLOCK_EXPR
+                L_BRACE "{"
+                LET_STMT "let count = 0"
+                  KW_LET "let"
+                  WORD "count"
+                  EQUALS "="
+                  INTEGER_LITERAL "0"
+                LET_STMT
+                  KW_LET "let"
+                  WORD "inc"
+                  EQUALS "="
+                  LAMBDA_EXPR
+                    PARAMETER_LIST "()"
+                      L_PAREN "("
+                      R_PAREN ")"
+                    ARROW "->"
+                    BLOCK_EXPR
+                      L_BRACE "{"
+                      BINARY_EXPR "count += 1"
+                        WORD "count"
+                        PLUS_EQUALS "+="
+                        INTEGER_LITERAL "1"
+                      SEMICOLON ";"
+                      WORD "count"
+                      R_BRACE "}"
+                  SEMICOLON ";"
+                WORD "inc"
+                R_BRACE "}"
+            CALL_ARGS "()"
+              L_PAREN "("
+              R_PAREN ")"
+          SEMICOLON ";"
+        CALL_EXPR
+          WORD "inc"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        CALL_EXPR
+          WORD "inc"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        CALL_EXPR
+          WORD "inc"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
     WORD "test_capture_lambda_inferred"
     PARAMETER_LIST "()"
       L_PAREN "("

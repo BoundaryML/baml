@@ -581,3 +581,17 @@ fn user.test_void_lambda_inferred() -> int {
         unreachable;
     }
 }
+
+fn user.test_void_lambda_inferred_captures() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
