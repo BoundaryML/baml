@@ -21,13 +21,3 @@ source: crates/baml_tests/src/generated_tests.rs
     │ 
     │ Note: Error code: E0001
 ────╯
-
-  [parse] Error: Expected type annotation, found ')'
-    ╭─[ lambda_basic.baml:22:17 ]
-    │
- 22 │     items.map((x) -> { x * 2 })
-    │                 ┬  
-    │                 ╰── Expected type annotation, found ')'
-    │ 
-    │ Note: Error code: E0010
-────╯

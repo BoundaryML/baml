@@ -1,5 +1,5 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== PARSER ERROR ===
-[UnexpectedToken { expected: "type annotation", found: "')'", span: Span { file_id: FileId(0), range: 571..572 } }]
+=== STRONG AST ERROR ===
+Expected token/node of kind PAREN_EXPR, but found BINARY_EXPR at lambda_basic.baml:28:12

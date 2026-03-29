@@ -24,16 +24,6 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0001
 ───╯
 
-  [parse] Error: Expected type annotation, found ')'
-   ╭─[ lambda_errors.baml:9:17 ]
-   │
- 9 │     let bad = (x) -> { x * 2 }
-   │                 ┬  
-   │                 ╰── Expected type annotation, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
   [type] Error: unresolved member: int[].map
     ╭─[ lambda_errors.baml:16:11 ]
     │
@@ -62,26 +52,6 @@ source: crates/baml_tests/src/generated_tests.rs
     │                      ╰───────── cannot infer type of lambda parameter `y` — add a type annotation or provide context
     │ 
     │ Note: Error code: E0001
-────╯
-
-  [parse] Error: Expected type annotation, found ','
-    ╭─[ lambda_errors.baml:16:17 ]
-    │
- 16 │     items.map((x, y) -> { x })
-    │                 ┬  
-    │                 ╰── Expected type annotation, found ','
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected type annotation, found ')'
-    ╭─[ lambda_errors.baml:16:20 ]
-    │
- 16 │     items.map((x, y) -> { x })
-    │                    ┬  
-    │                    ╰── Expected type annotation, found ')'
-    │ 
-    │ Note: Error code: E0010
 ────╯
 
   [type] Error: unresolved member: int[].map

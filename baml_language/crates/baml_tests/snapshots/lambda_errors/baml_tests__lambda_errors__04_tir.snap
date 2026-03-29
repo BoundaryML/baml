@@ -4,7 +4,11 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.test_return_mismatch() -> int throws never {
   { : 0
-    let bad = <lambda> : (x: int) -> int
+    let bad = : (x: int) -> int
+      (x: int) -> string { ... } : (x: int) -> int
+        {
+          x Mul 2
+        }
     0 : 0
   }
   !! 95..148: type mismatch: expected string, got int
@@ -13,7 +17,11 @@ lambda user.test_return_mismatch {
 }
 function user.test_no_annotation_no_context() -> int throws never {
   { : 0
-    let bad = <lambda> : (x: unknown) -> unknown
+    let bad = : (x: unknown) -> unknown
+      (x) -> { ... } : (x: unknown) -> unknown
+        {
+          x Mul 2
+        }
     0 : 0
   }
   !! 277..294: cannot infer type of lambda parameter `x` — add a type annotation or provide context
@@ -23,7 +31,7 @@ lambda user.test_no_annotation_no_context {
 function user.test_arity_mismatch() -> int[] throws never {
   { : unknown
     let items = [1, 2, 3] : int[]
-    items.map(<lambda>) : unknown
+    items.map((x, y) -> { ... }) : unknown
   }
   !! 460..463: unresolved member: int[].map
   !! 464..479: cannot infer type of lambda parameter `x` — add a type annotation or provide context
@@ -34,7 +42,7 @@ lambda user.test_arity_mismatch {
 function user.test_param_type_mismatch() -> int[] throws never {
   { : unknown
     let items = [1, 2, 3] : int[]
-    items.map(<lambda>) : unknown
+    items.map((x: string) -> { ... }) : unknown
   }
   !! 617..620: unresolved member: int[].map
 }

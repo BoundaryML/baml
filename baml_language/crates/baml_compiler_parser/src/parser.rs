@@ -2503,7 +2503,8 @@ impl<'a> Parser<'a> {
             }
 
             // Parameter list: (x: int, y: string) or (x, y) or ()
-            p.parse_parameter_list();
+            // Lambda params have optional type annotations (unlike function params)
+            p.parse_lambda_parameter_list();
 
             // Arrow is required
             if !p.eat(TokenKind::Arrow) {
@@ -2528,6 +2529,43 @@ impl<'a> Parser<'a> {
                 p.parse_block_expr();
             } else {
                 p.error_unexpected_token("lambda body '{'".to_string());
+            }
+        });
+    }
+
+    /// Parse a lambda parameter list where type annotations are optional.
+    fn parse_lambda_parameter_list(&mut self) {
+        self.with_node(SyntaxKind::PARAMETER_LIST, |p| {
+            p.expect(TokenKind::LParen);
+
+            if !p.at(TokenKind::RParen) {
+                p.parse_lambda_parameter();
+
+                while p.eat(TokenKind::Comma) {
+                    if p.at(TokenKind::RParen) {
+                        break; // Trailing comma
+                    }
+                    p.parse_lambda_parameter();
+                }
+            }
+
+            p.expect(TokenKind::RParen);
+        });
+    }
+
+    /// Parse a single lambda parameter with an optional type annotation.
+    fn parse_lambda_parameter(&mut self) {
+        self.with_node(SyntaxKind::PARAMETER, |p| {
+            // Parameter name
+            if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("parameter name".to_string());
+            }
+
+            // Optional type annotation: "name: type"
+            if p.eat(TokenKind::Colon) {
+                p.parse_type();
             }
         });
     }
