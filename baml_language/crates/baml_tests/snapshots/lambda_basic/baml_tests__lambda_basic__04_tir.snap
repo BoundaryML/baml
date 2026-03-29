@@ -3,59 +3,60 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
 function user.test_annotated() -> int throws never {
-  { : unknown
-    let double = <lambda> : unknown
-    double(21) : unknown
+  { : int
+    let double = <lambda> : (x: int) -> int
+    double(21) : int
   }
 }
 lambda user.test_annotated {
 }
 function user.test_inferred_return() -> int throws never {
-  { : unknown
-    let double = <lambda> : unknown
-    double(21) : unknown
+  { : int
+    let double = <lambda> : (x: int) -> int
+    double(21) : int
   }
 }
 lambda user.test_inferred_return {
 }
 function user.test_zero_param() -> int throws never {
-  { : unknown
-    let constant = <lambda> : unknown
-    constant() : unknown
+  { : 42
+    let constant = <lambda> : () -> 42
+    constant() : 42
   }
 }
 lambda user.test_zero_param {
 }
 function user.test_map_inferred() -> int[] throws never {
   { : unknown
-    let items = [1, 2, 3] : int[]
+    let items = [1, 2, 3] : unknown -> int[]
     items.map(<lambda>) : unknown
   }
   !! 565..568: unresolved member: int[].map
+  !! 569..585: cannot infer type of lambda parameter `x` — add a type annotation or provide context
 }
 lambda user.test_map_inferred {
 }
 function user.test_throws() -> int throws never {
-  { : unknown
-    let risky = <lambda> : unknown
-    risky(42) : unknown
+  { : int
+    let risky = <lambda> : (x: int) -> int
+    risky(42) : int
   }
 }
 lambda user.test_throws {
 }
 function user.test_capture() -> int throws never {
-  { : unknown
-    let offset = 10 : 10 -> int
-    let add_offset = <lambda> : unknown
-    add_offset(32) : unknown
+  { : int
+    let offset = 10 : int
+    let add_offset = <lambda> : (x: int) -> int
+    add_offset(32) : int
   }
 }
 lambda user.test_capture {
 }
 function user.test_nested() -> int throws never {
-  { : unknown
-    let outer = <lambda> : unknown
-    outer(41) : unknown
+  { : int
+    let outer = <lambda> : (x: int) -> int
+    outer(41) : int
   }
 }
 lambda user.test_nested {
@@ -64,16 +65,16 @@ lambda user.test_nested {
 }
 function user.test_generic_lambda() -> int throws never {
   { : unknown
-    let identity = <lambda> : unknown
+    let identity = <lambda> : (x: unknown) -> unknown
     identity(42) : unknown
   }
 }
 lambda user.test_generic_lambda {
 }
 function user.test_multi_param() -> int throws never {
-  { : unknown
-    let add = <lambda> : unknown
-    add(20, 22) : unknown
+  { : int
+    let add = <lambda> : (a: int, b: int) -> int
+    add(20, 22) : int
   }
 }
 lambda user.test_multi_param {

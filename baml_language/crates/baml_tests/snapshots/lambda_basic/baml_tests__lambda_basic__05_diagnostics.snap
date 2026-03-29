@@ -12,6 +12,16 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
+  [type] Error: cannot infer type of lambda parameter `x` — add a type annotation or provide context
+    ╭─[ lambda_basic.baml:22:15 ]
+    │
+ 22 │     items.map((x) -> { x * 2 })
+    │               ────────┬───────  
+    │                       ╰───────── cannot infer type of lambda parameter `x` — add a type annotation or provide context
+    │ 
+    │ Note: Error code: E0001
+────╯
+
   [parse] Error: Expected type annotation, found ')'
     ╭─[ lambda_basic.baml:22:17 ]
     │

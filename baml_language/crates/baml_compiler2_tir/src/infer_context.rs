@@ -103,6 +103,9 @@ pub enum TirTypeError {
     ExtraneousThrowsDeclaration { extra_types: Vec<String> },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
+    /// A lambda parameter has no type annotation and no expected type context
+    /// to infer the type from.
+    CannotInferLambdaParamType { param_name: Name },
 }
 
 impl fmt::Display for TirTypeError {
@@ -208,6 +211,12 @@ impl fmt::Display for TirTypeError {
             ),
             TirTypeError::CannotInferTypeParameter { name } => {
                 write!(f, "cannot infer type parameter `{name}`")
+            }
+            TirTypeError::CannotInferLambdaParamType { param_name } => {
+                write!(
+                    f,
+                    "cannot infer type of lambda parameter `{param_name}` — add a type annotation or provide context"
+                )
             }
         }
     }
