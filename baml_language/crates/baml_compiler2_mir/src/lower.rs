@@ -1112,6 +1112,10 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(dead);
             }
 
+            AstExpr::Lambda(_) => {
+                self.emit_panic_call("lambda expressions are not yet supported", expr_id);
+            }
+
             AstExpr::Missing => {
                 self.emit_panic_call("parse error", expr_id);
             }

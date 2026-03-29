@@ -195,11 +195,11 @@ fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
     None
 }
 
-fn lower_params(pl: &ast::ParameterList) -> Vec<Param> {
+pub(crate) fn lower_params(pl: &ast::ParameterList) -> Vec<Param> {
     pl.params().filter_map(|p| lower_param(&p)).collect()
 }
 
-fn lower_param(param: &ast::Parameter) -> Option<Param> {
+pub(crate) fn lower_param(param: &ast::Parameter) -> Option<Param> {
     let name_token = param.name()?;
     Some(Param {
         name: Name::new(name_token.text()),
@@ -509,7 +509,7 @@ fn lower_class(node: &SyntaxNode) -> Option<crate::ast::ClassDef> {
 ///
 /// Walks the direct children of `node` to find a `GENERIC_PARAM_LIST`, then
 /// extracts each `GENERIC_PARAM` child's `WORD` token as a `Name`.
-fn extract_generic_params(node: &SyntaxNode) -> Vec<Name> {
+pub(crate) fn extract_generic_params(node: &SyntaxNode) -> Vec<Name> {
     use baml_compiler_syntax::SyntaxKind;
 
     let mut params = Vec::new();

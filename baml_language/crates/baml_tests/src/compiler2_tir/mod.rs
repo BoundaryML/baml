@@ -245,6 +245,7 @@ pub(crate) mod support {
             Expr::Index { base, index } => {
                 format!("{}[{}]", expr_desc(*base, body), expr_desc(*index, body))
             }
+            Expr::Lambda(_) => "<lambda>".into(),
             Expr::Missing => "<missing>".into(),
         }
     }
@@ -1170,6 +1171,7 @@ pub(crate) mod support {
                     expr_desc_hir(*base, body, prefix, local_type_names),
                     expr_desc_hir(*index, body, prefix, local_type_names)
                 ),
+                Expr::Lambda(_) => "<lambda>".into(),
                 Expr::Missing => "<missing>".into(),
             }
         }

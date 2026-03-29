@@ -317,6 +317,33 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.pop_scope(); // CatchClause
             }
         }
+
+        // Pass 5 — Lambda scopes: register lambda params in child scopes.
+        for (expr_id, expr) in body.exprs.iter() {
+            let ast::Expr::Lambda(ref func_def) = *expr else {
+                continue;
+            };
+            let lambda_span = source_map.expr_span(expr_id);
+
+            self.push_scope(ScopeKind::Lambda, None, lambda_span);
+            let scope_id = self.current_scope_id();
+
+            // Seed params into the lambda scope's bindings
+            for (idx, param) in func_def.params.iter().enumerate() {
+                self.scope_bindings[scope_id.index() as usize]
+                    .params
+                    .push((param.name.clone(), idx));
+            }
+
+            // Recursively walk the lambda's own ExprBody
+            if let Some(ast::FunctionBodyDef::Expr(ref lambda_body, ref lambda_source_map)) =
+                func_def.body
+            {
+                self.walk_expr_body(lambda_body, lambda_source_map);
+            }
+
+            self.pop_scope();
+        }
     }
 
     /// Extract the binding name from a pattern, if it has one.

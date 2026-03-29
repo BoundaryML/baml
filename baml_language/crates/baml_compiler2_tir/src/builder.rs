@@ -401,6 +401,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             }
+            Expr::Lambda(_) => Ty::Unknown {
+                attr: TyAttr::default(),
+            },
             Expr::Missing => Ty::Unknown {
                 attr: TyAttr::default(),
             },
@@ -1842,7 +1845,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_effective_throws_from_expr(*base, body, out);
                 self.collect_effective_throws_from_expr(*index, body, out);
             }
-            Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
+            Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
         }
     }
 
@@ -1990,7 +1993,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Catch { base, .. } => {
                 self.collect_throw_facts_from_expr(*base, body, out);
             }
-            Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
+            Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
         }
     }
 

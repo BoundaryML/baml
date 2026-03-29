@@ -614,6 +614,9 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("throw ".into()));
             spans.extend(expr_desc_spans(*value, body, inference));
         }
+        Expr::Lambda(_) => {
+            spans.push(DetailSpan::Code("<lambda>".into()));
+        }
         Expr::Missing => {
             spans.push(DetailSpan::Code("<missing>".into()));
         }
@@ -1983,6 +1986,7 @@ impl CompilerRunner {
                 }
                 Expr::FieldAccess { base, field } => format!("{}.{field}", expr_desc(*base, body)),
                 Expr::Index { base, .. } => format!("{}[...]", expr_desc(*base, body)),
+                Expr::Lambda(_) => "<lambda>".into(),
                 Expr::Missing => "<missing>".into(),
             }
         }

@@ -6,24 +6,19 @@ fn user.test_arity_mismatch() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: void
-    let _3: int[]
-    let _4: string
+    let _2: int[]
+    let _3: string
+    let _4: null
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
-        _3 = copy _1;
-        _4 = const "map";
-        _2 = copy _3[_4];
-        _0 = call copy _2() -> [bb1];
+        _2 = copy _1;
+        _3 = const "map";
+        _4 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
+        unreachable;
     }
 }
 
@@ -33,7 +28,7 @@ fn user.test_no_annotation_no_context() -> int {
     let _1: null
 
     bb0: {
-        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+        _1 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
     }
 
     bb1: {
@@ -45,24 +40,19 @@ fn user.test_param_type_mismatch() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: void
-    let _3: int[]
-    let _4: string
+    let _2: int[]
+    let _3: string
+    let _4: null
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
-        _3 = copy _1;
-        _4 = const "map";
-        _2 = copy _3[_4];
-        _0 = call copy _2() -> [bb1];
+        _2 = copy _1;
+        _3 = const "map";
+        _4 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
     }
 
     bb1: {
-        goto -> bb2;
-    }
-
-    bb2: {
-        return;
+        unreachable;
     }
 }
 
@@ -72,7 +62,7 @@ fn user.test_return_mismatch() -> int {
     let _1: null
 
     bb0: {
-        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+        _1 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
     }
 
     bb1: {

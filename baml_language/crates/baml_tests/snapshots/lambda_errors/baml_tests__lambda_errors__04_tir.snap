@@ -4,27 +4,35 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.test_return_mismatch() -> int throws never {
   { : 0
-    let bad = <missing> : unknown
+    let bad = <lambda> : unknown
     0 : 0
   }
 }
+lambda user.test_return_mismatch {
+}
 function user.test_no_annotation_no_context() -> int throws never {
   { : 0
-    let bad = <missing> : unknown
+    let bad = <lambda> : unknown
     0 : 0
   }
+}
+lambda user.test_no_annotation_no_context {
 }
 function user.test_arity_mismatch() -> int[] throws never {
   { : unknown
     let items = [1, 2, 3] : int[]
-    items.map() : unknown
+    items.map(<lambda>) : unknown
   }
   !! 460..463: unresolved member: int[].map
+}
+lambda user.test_arity_mismatch {
 }
 function user.test_param_type_mismatch() -> int[] throws never {
   { : unknown
     let items = [1, 2, 3] : int[]
-    items.map() : unknown
+    items.map(<lambda>) : unknown
   }
   !! 617..620: unresolved member: int[].map
+}
+lambda user.test_param_type_mismatch {
 }
