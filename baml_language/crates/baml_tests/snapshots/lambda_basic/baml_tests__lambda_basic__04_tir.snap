@@ -99,13 +99,13 @@ lambda user.test_nested {
 lambda user.test_nested {
 }
 function user.test_generic_lambda() -> int throws never {
-  { : unknown
-    let identity = : (x: unknown) -> unknown
-      <T>(x: T) -> T { ... } : (x: unknown) -> unknown
+  { : int | 42
+    let identity = : (x: T) -> T
+      <T>(x: T) -> T { ... } : (x: T) -> T
         {
           x
         }
-    identity(42) : unknown
+    identity<T>(42) : int | 42
   }
 }
 lambda user.test_generic_lambda {

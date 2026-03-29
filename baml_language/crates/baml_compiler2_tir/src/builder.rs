@@ -404,6 +404,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Lambda(func_def) => {
                 // Synthesis mode: no expected type available.
                 // All param types MUST be annotated; unannotated params produce an error.
+
+                // Combine parent generics with the lambda's own generic params
+                // so that `<T>(x: T) -> T { x }` recognizes T as a TypeVar.
+                let mut all_generic_params = self.generic_params.clone();
+                all_generic_params.extend(func_def.generic_params.iter().cloned());
+
                 let mut param_tys: Vec<(Option<baml_base::Name>, Ty)> = Vec::new();
 
                 for param in &func_def.params {
@@ -415,7 +421,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                                 &te.expr,
                                 self.package_items,
                                 &self.ns_context,
-                                &self.generic_params,
+                                &all_generic_params,
                                 &mut diags,
                             )
                         }
@@ -443,7 +449,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                         &te.expr,
                         self.package_items,
                         &self.ns_context,
-                        &self.generic_params,
+                        &all_generic_params,
                         &mut diags,
                     )
                 });
