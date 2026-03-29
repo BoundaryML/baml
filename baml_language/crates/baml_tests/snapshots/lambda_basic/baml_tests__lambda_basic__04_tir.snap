@@ -1,0 +1,114 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.test_annotated() -> int throws never {
+  { : unknown
+    let double = x : unknown
+    int : unknown
+    int {  } : unknown
+    double(21) : unknown
+  }
+  !! 107..108: unresolved name: x
+  !! 110..113: unresolved name: int
+}
+function user.test_inferred_return() -> int throws never {
+  { : unknown
+    let double = x : unknown
+    int : unknown
+    { : unknown
+      x Mul 2 : unknown
+    }
+    double(21) : unknown
+  }
+  !! 264..265: unresolved name: x
+  !! 267..270: unresolved name: int
+  !! 277..278: unresolved name: x
+}
+function user.test_zero_param() -> int throws never {
+  { : unknown
+    let constant = <missing> : unknown
+    int {  } : unknown
+    constant() : unknown
+  }
+}
+function user.test_map_inferred() -> int[] throws never {
+  { : unknown
+    let items = [1, 2, 3] : int[]
+    items.map(x) : unknown
+    { : unknown
+      x Mul 2 : unknown
+    }
+  }
+  !! 565..568: unresolved member: int[].map
+  !! 570..571: unresolved name: x
+  !! 578..579: unresolved name: x
+}
+function user.test_throws() -> int throws never {
+  { : unknown
+    let risky = x : unknown
+    int : unknown
+    int : unknown
+    string {  } : unknown
+    x : unknown
+  }
+  !! 668..669: unresolved name: x
+  !! 671..674: unresolved name: int
+  !! 679..682: unresolved name: int
+  !! 745..746: unresolved name: x
+}
+function user.test_capture() -> int throws never {
+  { : unknown
+    let offset = 10 : 10 -> int
+    let add_offset = x : unknown
+    int : unknown
+    int {  } : unknown
+    add_offset(32) : unknown
+  }
+  !! 886..887: unresolved name: x
+  !! 889..892: unresolved name: int
+}
+function user.test_nested() -> int throws never {
+  { : unknown
+    let outer = x : unknown
+    int : unknown
+    { : unknown
+      let inner = y : unknown
+      int : unknown
+      int {  } : unknown
+      inner(1) : unknown
+    }
+    outer(41) : unknown
+  }
+  !! 1005..1006: unresolved name: x
+  !! 1008..1011: unresolved name: int
+  !! 1039..1040: unresolved name: y
+  !! 1042..1045: unresolved name: int
+}
+function user.test_generic_lambda() -> int throws never {
+  { : unknown
+    let identity
+    T Gt x : bool
+    T : unknown
+    T {  } : unknown
+    identity(42) : unknown
+  }
+  !! 1182..1183: unresolved name: T
+  !! 1185..1186: unresolved name: x
+  !! 1188..1189: unresolved name: T
+  !! 1206..1214: unresolved name: identity
+}
+function user.test_multi_param() -> int throws never {
+  { : unknown
+    let add = a : unknown
+    int : unknown
+    b : unknown
+    int : unknown
+    int {  } : unknown
+    add(20, 22) : unknown
+  }
+  !! 1296..1297: unresolved name: a
+  !! 1299..1302: unresolved name: int
+  !! 1304..1305: unresolved name: b
+  !! 1307..1310: unresolved name: int
+}

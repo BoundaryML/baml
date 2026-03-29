@@ -1,0 +1,341 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_return_mismatch"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "bad"
+          EQUALS "="
+          PAREN_EXPR "(x"
+            L_PAREN "("
+            WORD "x"
+        COLON ":"
+        WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        OBJECT_LITERAL
+          WORD "string"
+          L_BRACE "{"
+          OBJECT_FIELD "x"
+            WORD "x"
+          STAR "*"
+          INTEGER_LITERAL "2"
+          R_BRACE "}"
+        INTEGER_LITERAL "0"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_no_annotation_no_context"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "bad"
+          EQUALS "="
+          PAREN_EXPR "(x)"
+            L_PAREN "("
+            WORD "x"
+            R_PAREN ")"
+        ARROW "->"
+        BLOCK_EXPR
+          L_BRACE "{"
+          BINARY_EXPR "x * 2"
+            WORD "x"
+            STAR "*"
+            INTEGER_LITERAL "2"
+          R_BRACE "}"
+        INTEGER_LITERAL "0"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_arity_mismatch"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int[]"
+      WORD "int"
+      L_BRACKET "["
+      R_BRACKET "]"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "items"
+          COLON ":"
+          TYPE_EXPR "int[]"
+            WORD "int"
+            L_BRACKET "["
+            R_BRACKET "]"
+          EQUALS "="
+          ARRAY_LITERAL "[1, 2, 3]"
+            L_BRACKET "["
+            INTEGER_LITERAL "1"
+            COMMA ","
+            INTEGER_LITERAL "2"
+            COMMA ","
+            INTEGER_LITERAL "3"
+            R_BRACKET "]"
+        CALL_EXPR
+          PATH_EXPR "items.map"
+            WORD "items"
+            DOT "."
+            WORD "map"
+          CALL_ARGS
+            L_PAREN "("
+            PAREN_EXPR "(x"
+              L_PAREN "("
+              WORD "x"
+            COMMA ","
+            WORD "y"
+            R_PAREN ")"
+        ARROW "->"
+        BLOCK_EXPR "{ x }"
+          L_BRACE "{"
+          WORD "x"
+          R_BRACE "}"
+        R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_param_type_mismatch"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int[]"
+      WORD "int"
+      L_BRACKET "["
+      R_BRACKET "]"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "items"
+          COLON ":"
+          TYPE_EXPR "int[]"
+            WORD "int"
+            L_BRACKET "["
+            R_BRACKET "]"
+          EQUALS "="
+          ARRAY_LITERAL "[1, 2, 3]"
+            L_BRACKET "["
+            INTEGER_LITERAL "1"
+            COMMA ","
+            INTEGER_LITERAL "2"
+            COMMA ","
+            INTEGER_LITERAL "3"
+            R_BRACKET "]"
+        CALL_EXPR
+          PATH_EXPR "items.map"
+            WORD "items"
+            DOT "."
+            WORD "map"
+          CALL_ARGS
+            L_PAREN "("
+            PAREN_EXPR "(x"
+              L_PAREN "("
+              WORD "x"
+        COLON ":"
+        WORD "string"
+        R_PAREN ")"
+        ARROW "->"
+        BLOCK_EXPR "{ x }"
+          L_BRACE "{"
+          WORD "x"
+          R_BRACE "}"
+        R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+Error: Expected ')', found ':'
+   ╭─[ lambda_errors.baml:3:17 ]
+   │
+ 3 │     let bad = (x: int) -> string { x * 2 }
+   │                 ┬  
+   │                 ╰── Expected ')', found ':'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found ':'
+   ╭─[ lambda_errors.baml:3:17 ]
+   │
+ 3 │     let bad = (x: int) -> string { x * 2 }
+   │                 ┬  
+   │                 ╰── Expected expression, found ':'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found ')'
+   ╭─[ lambda_errors.baml:3:22 ]
+   │
+ 3 │     let bad = (x: int) -> string { x * 2 }
+   │                      ┬  
+   │                      ╰── Expected expression, found ')'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found '->'
+   ╭─[ lambda_errors.baml:3:24 ]
+   │
+ 3 │     let bad = (x: int) -> string { x * 2 }
+   │                        ─┬  
+   │                         ╰── Expected expression, found '->'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected ':', found '*'
+   ╭─[ lambda_errors.baml:3:38 ]
+   │
+ 3 │     let bad = (x: int) -> string { x * 2 }
+   │                                      ┬  
+   │                                      ╰── Expected ':', found '*'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected ',' or '}' after object field, found '*'
+   ╭─[ lambda_errors.baml:3:38 ]
+   │
+ 3 │     let bad = (x: int) -> string { x * 2 }
+   │                                      ┬  
+   │                                      ╰── Expected ',' or '}' after object field, found '*'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected field name, spread element, or '}', found integer
+   ╭─[ lambda_errors.baml:3:40 ]
+   │
+ 3 │     let bad = (x: int) -> string { x * 2 }
+   │                                        ┬  
+   │                                        ╰── Expected field name, spread element, or '}', found integer
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found '->'
+   ╭─[ lambda_errors.baml:9:19 ]
+   │
+ 9 │     let bad = (x) -> { x * 2 }
+   │                   ─┬  
+   │                    ╰── Expected expression, found '->'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected ')', found ','
+    ╭─[ lambda_errors.baml:16:17 ]
+    │
+ 16 │     items.map((x, y) -> { x })
+    │                 ┬  
+    │                 ╰── Expected ')', found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '->'
+    ╭─[ lambda_errors.baml:16:22 ]
+    │
+ 16 │     items.map((x, y) -> { x })
+    │                      ─┬  
+    │                       ╰── Expected expression, found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_errors.baml:16:30 ]
+    │
+ 16 │     items.map((x, y) -> { x })
+    │                              ┬  
+    │                              ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found ':'
+    ╭─[ lambda_errors.baml:22:17 ]
+    │
+ 22 │     items.map((x: string) -> { x })
+    │                 ┬  
+    │                 ╰── Expected ')', found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found ':'
+    ╭─[ lambda_errors.baml:22:17 ]
+    │
+ 22 │     items.map((x: string) -> { x })
+    │                 ┬  
+    │                 ╰── Expected ')', found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ':'
+    ╭─[ lambda_errors.baml:22:17 ]
+    │
+ 22 │     items.map((x: string) -> { x })
+    │                 ┬  
+    │                 ╰── Expected expression, found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_errors.baml:22:25 ]
+    │
+ 22 │     items.map((x: string) -> { x })
+    │                         ┬  
+    │                         ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '->'
+    ╭─[ lambda_errors.baml:22:27 ]
+    │
+ 22 │     items.map((x: string) -> { x })
+    │                           ─┬  
+    │                            ╰── Expected expression, found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_errors.baml:22:35 ]
+    │
+ 22 │     items.map((x: string) -> { x })
+    │                                   ┬  
+    │                                   ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯

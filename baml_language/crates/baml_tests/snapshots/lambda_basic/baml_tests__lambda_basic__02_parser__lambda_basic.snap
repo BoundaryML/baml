@@ -1,0 +1,1080 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_annotated"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "double"
+          EQUALS "="
+          PAREN_EXPR "(x"
+            L_PAREN "("
+            WORD "x"
+        COLON ":"
+        WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        OBJECT_LITERAL
+          WORD "int"
+          L_BRACE "{"
+          OBJECT_FIELD "x"
+            WORD "x"
+          STAR "*"
+          INTEGER_LITERAL "2"
+          R_BRACE "}"
+        CALL_EXPR
+          WORD "double"
+          CALL_ARGS "(21)"
+            L_PAREN "("
+            INTEGER_LITERAL "21"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_inferred_return"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "double"
+          EQUALS "="
+          PAREN_EXPR "(x"
+            L_PAREN "("
+            WORD "x"
+        COLON ":"
+        WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        BLOCK_EXPR
+          L_BRACE "{"
+          BINARY_EXPR "x * 2"
+            WORD "x"
+            STAR "*"
+            INTEGER_LITERAL "2"
+          R_BRACE "}"
+        CALL_EXPR
+          WORD "double"
+          CALL_ARGS "(21)"
+            L_PAREN "("
+            INTEGER_LITERAL "21"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_zero_param"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "constant"
+          EQUALS "="
+          PAREN_EXPR "()"
+            L_PAREN "("
+            R_PAREN ")"
+        ARROW "->"
+        OBJECT_LITERAL "int { 42 }"
+          WORD "int"
+          L_BRACE "{"
+          INTEGER_LITERAL "42"
+          R_BRACE "}"
+        CALL_EXPR
+          WORD "constant"
+          CALL_ARGS "()"
+            L_PAREN "("
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_map_inferred"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int[]"
+      WORD "int"
+      L_BRACKET "["
+      R_BRACKET "]"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "items"
+          COLON ":"
+          TYPE_EXPR "int[]"
+            WORD "int"
+            L_BRACKET "["
+            R_BRACKET "]"
+          EQUALS "="
+          ARRAY_LITERAL "[1, 2, 3]"
+            L_BRACKET "["
+            INTEGER_LITERAL "1"
+            COMMA ","
+            INTEGER_LITERAL "2"
+            COMMA ","
+            INTEGER_LITERAL "3"
+            R_BRACKET "]"
+        CALL_EXPR
+          PATH_EXPR "items.map"
+            WORD "items"
+            DOT "."
+            WORD "map"
+          CALL_ARGS
+            L_PAREN "("
+            PAREN_EXPR "(x)"
+              L_PAREN "("
+              WORD "x"
+              R_PAREN ")"
+        ARROW "->"
+        BLOCK_EXPR
+          L_BRACE "{"
+          BINARY_EXPR "x * 2"
+            WORD "x"
+            STAR "*"
+            INTEGER_LITERAL "2"
+          R_BRACE "}"
+        R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_throws"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "risky"
+          EQUALS "="
+          PAREN_EXPR "(x"
+            L_PAREN "("
+            WORD "x"
+        COLON ":"
+        WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        WORD "int"
+        KW_THROWS "throws"
+        OBJECT_LITERAL
+          WORD "string"
+          L_BRACE "{"
+          KW_IF "if"
+          OBJECT_FIELD "x"
+            WORD "x"
+          LESS "<"
+          INTEGER_LITERAL "0"
+          L_BRACE "{"
+          KW_THROW "throw"
+          OBJECT_FIELD
+            STRING_LITERAL "negative"
+              QUOTE """
+              WORD "negative"
+              QUOTE """
+          R_BRACE "}"
+        WORD "x"
+        R_BRACE "}"
+  WORD "risky"
+  L_PAREN "("
+  INTEGER_LITERAL "42"
+  R_PAREN ")"
+  R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_capture"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT "let offset = 10"
+          KW_LET "let"
+          WORD "offset"
+          EQUALS "="
+          INTEGER_LITERAL "10"
+        LET_STMT
+          KW_LET "let"
+          WORD "add_offset"
+          EQUALS "="
+          PAREN_EXPR "(x"
+            L_PAREN "("
+            WORD "x"
+        COLON ":"
+        WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        OBJECT_LITERAL
+          WORD "int"
+          L_BRACE "{"
+          OBJECT_FIELD "x"
+            WORD "x"
+          PLUS "+"
+          OBJECT_FIELD "offset"
+            WORD "offset"
+          R_BRACE "}"
+        CALL_EXPR
+          WORD "add_offset"
+          CALL_ARGS "(32)"
+            L_PAREN "("
+            INTEGER_LITERAL "32"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_nested"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "outer"
+          EQUALS "="
+          PAREN_EXPR "(x"
+            L_PAREN "("
+            WORD "x"
+        COLON ":"
+        WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        BLOCK_EXPR
+          L_BRACE "{"
+          LET_STMT
+            KW_LET "let"
+            WORD "inner"
+            EQUALS "="
+            PAREN_EXPR "(y"
+              L_PAREN "("
+              WORD "y"
+          COLON ":"
+          WORD "int"
+          R_PAREN ")"
+          ARROW "->"
+          OBJECT_LITERAL
+            WORD "int"
+            L_BRACE "{"
+            OBJECT_FIELD "x"
+              WORD "x"
+            PLUS "+"
+            OBJECT_FIELD "y"
+              WORD "y"
+            R_BRACE "}"
+          CALL_EXPR
+            WORD "inner"
+            CALL_ARGS "(1)"
+              L_PAREN "("
+              INTEGER_LITERAL "1"
+              R_PAREN ")"
+          R_BRACE "}"
+        CALL_EXPR
+          WORD "outer"
+          CALL_ARGS "(41)"
+            L_PAREN "("
+            INTEGER_LITERAL "41"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_generic_lambda"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT "let identity = <"
+          KW_LET "let"
+          WORD "identity"
+          EQUALS "="
+          LESS "<"
+        BINARY_EXPR
+          WORD "T"
+          GREATER ">"
+          PAREN_EXPR "(x"
+            L_PAREN "("
+            WORD "x"
+        COLON ":"
+        WORD "T"
+        R_PAREN ")"
+        ARROW "->"
+        OBJECT_LITERAL
+          WORD "T"
+          L_BRACE "{"
+          OBJECT_FIELD "x"
+            WORD "x"
+          R_BRACE "}"
+        CALL_EXPR
+          WORD "identity"
+          CALL_ARGS "(42)"
+            L_PAREN "("
+            INTEGER_LITERAL "42"
+            R_PAREN ")"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "test_multi_param"
+    PARAMETER_LIST "()"
+      L_PAREN "("
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "int"
+      WORD "int"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        LET_STMT
+          KW_LET "let"
+          WORD "add"
+          EQUALS "="
+          PAREN_EXPR "(a"
+            L_PAREN "("
+            WORD "a"
+        COLON ":"
+        WORD "int"
+        COMMA ","
+        WORD "b"
+        COLON ":"
+        WORD "int"
+        R_PAREN ")"
+        ARROW "->"
+        OBJECT_LITERAL
+          WORD "int"
+          L_BRACE "{"
+          OBJECT_FIELD "a"
+            WORD "a"
+          PLUS "+"
+          OBJECT_FIELD "b"
+            WORD "b"
+          R_BRACE "}"
+        CALL_EXPR
+          WORD "add"
+          CALL_ARGS "(20, 22)"
+            L_PAREN "("
+            INTEGER_LITERAL "20"
+            COMMA ","
+            INTEGER_LITERAL "22"
+            R_PAREN ")"
+        R_BRACE "}"
+
+=== ERRORS ===
+Error: Expected ')', found ':'
+   ╭─[ lambda_basic.baml:3:20 ]
+   │
+ 3 │     let double = (x: int) -> int { x * 2 }
+   │                    ┬  
+   │                    ╰── Expected ')', found ':'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found ':'
+   ╭─[ lambda_basic.baml:3:20 ]
+   │
+ 3 │     let double = (x: int) -> int { x * 2 }
+   │                    ┬  
+   │                    ╰── Expected expression, found ':'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found ')'
+   ╭─[ lambda_basic.baml:3:25 ]
+   │
+ 3 │     let double = (x: int) -> int { x * 2 }
+   │                         ┬  
+   │                         ╰── Expected expression, found ')'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found '->'
+   ╭─[ lambda_basic.baml:3:27 ]
+   │
+ 3 │     let double = (x: int) -> int { x * 2 }
+   │                           ─┬  
+   │                            ╰── Expected expression, found '->'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected ':', found '*'
+   ╭─[ lambda_basic.baml:3:38 ]
+   │
+ 3 │     let double = (x: int) -> int { x * 2 }
+   │                                      ┬  
+   │                                      ╰── Expected ':', found '*'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected ',' or '}' after object field, found '*'
+   ╭─[ lambda_basic.baml:3:38 ]
+   │
+ 3 │     let double = (x: int) -> int { x * 2 }
+   │                                      ┬  
+   │                                      ╰── Expected ',' or '}' after object field, found '*'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected field name, spread element, or '}', found integer
+   ╭─[ lambda_basic.baml:3:40 ]
+   │
+ 3 │     let double = (x: int) -> int { x * 2 }
+   │                                        ┬  
+   │                                        ╰── Expected field name, spread element, or '}', found integer
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected ')', found ':'
+   ╭─[ lambda_basic.baml:9:20 ]
+   │
+ 9 │     let double = (x: int) -> { x * 2 }
+   │                    ┬  
+   │                    ╰── Expected ')', found ':'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found ':'
+   ╭─[ lambda_basic.baml:9:20 ]
+   │
+ 9 │     let double = (x: int) -> { x * 2 }
+   │                    ┬  
+   │                    ╰── Expected expression, found ':'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found ')'
+   ╭─[ lambda_basic.baml:9:25 ]
+   │
+ 9 │     let double = (x: int) -> { x * 2 }
+   │                         ┬  
+   │                         ╰── Expected expression, found ')'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found '->'
+   ╭─[ lambda_basic.baml:9:27 ]
+   │
+ 9 │     let double = (x: int) -> { x * 2 }
+   │                           ─┬  
+   │                            ╰── Expected expression, found '->'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_basic.baml:15:21 ]
+    │
+ 15 │     let constant = () -> int { 42 }
+    │                     ┬  
+    │                     ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found '->'
+    ╭─[ lambda_basic.baml:15:23 ]
+    │
+ 15 │     let constant = () -> int { 42 }
+    │                       ─┬  
+    │                        ╰── Expected ')', found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '->'
+    ╭─[ lambda_basic.baml:15:23 ]
+    │
+ 15 │     let constant = () -> int { 42 }
+    │                       ─┬  
+    │                        ╰── Expected expression, found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected field name, spread element, or '}', found integer
+    ╭─[ lambda_basic.baml:15:32 ]
+    │
+ 15 │     let constant = () -> int { 42 }
+    │                                ─┬  
+    │                                 ╰── Expected field name, spread element, or '}', found integer
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found '->'
+    ╭─[ lambda_basic.baml:22:19 ]
+    │
+ 22 │     items.map((x) -> { x * 2 })
+    │                   ─┬  
+    │                    ╰── Expected ')', found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '->'
+    ╭─[ lambda_basic.baml:22:19 ]
+    │
+ 22 │     items.map((x) -> { x * 2 })
+    │                   ─┬  
+    │                    ╰── Expected expression, found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_basic.baml:22:31 ]
+    │
+ 22 │     items.map((x) -> { x * 2 })
+    │                               ┬  
+    │                               ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found ':'
+    ╭─[ lambda_basic.baml:27:19 ]
+    │
+ 27 │     let risky = (x: int) -> int throws string {
+    │                   ┬  
+    │                   ╰── Expected ')', found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ':'
+    ╭─[ lambda_basic.baml:27:19 ]
+    │
+ 27 │     let risky = (x: int) -> int throws string {
+    │                   ┬  
+    │                   ╰── Expected expression, found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_basic.baml:27:24 ]
+    │
+ 27 │     let risky = (x: int) -> int throws string {
+    │                        ┬  
+    │                        ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '->'
+    ╭─[ lambda_basic.baml:27:26 ]
+    │
+ 27 │     let risky = (x: int) -> int throws string {
+    │                          ─┬  
+    │                           ╰── Expected expression, found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found throws
+    ╭─[ lambda_basic.baml:27:33 ]
+    │
+ 27 │     let risky = (x: int) -> int throws string {
+    │                                 ───┬──  
+    │                                    ╰──── Expected expression, found throws
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected field name, spread element, or '}', found if
+    ╭─[ lambda_basic.baml:28:9 ]
+    │
+ 28 │         if x < 0 { throw "negative" }
+    │         ─┬  
+    │          ╰── Expected field name, spread element, or '}', found if
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ':', found '<'
+    ╭─[ lambda_basic.baml:28:14 ]
+    │
+ 28 │         if x < 0 { throw "negative" }
+    │              ┬  
+    │              ╰── Expected ':', found '<'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ',' or '}' after object field, found '<'
+    ╭─[ lambda_basic.baml:28:14 ]
+    │
+ 28 │         if x < 0 { throw "negative" }
+    │              ┬  
+    │              ╰── Expected ',' or '}' after object field, found '<'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected field name, spread element, or '}', found integer
+    ╭─[ lambda_basic.baml:28:16 ]
+    │
+ 28 │         if x < 0 { throw "negative" }
+    │                ┬  
+    │                ╰── Expected field name, spread element, or '}', found integer
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected field name, spread element, or '}', found '{'
+    ╭─[ lambda_basic.baml:28:18 ]
+    │
+ 28 │         if x < 0 { throw "negative" }
+    │                  ┬  
+    │                  ╰── Expected field name, spread element, or '}', found '{'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected field name, spread element, or '}', found throw
+    ╭─[ lambda_basic.baml:28:20 ]
+    │
+ 28 │         if x < 0 { throw "negative" }
+    │                    ──┬──  
+    │                      ╰──── Expected field name, spread element, or '}', found throw
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ':', found '}'
+    ╭─[ lambda_basic.baml:28:37 ]
+    │
+ 28 │         if x < 0 { throw "negative" }
+    │                                     ┬  
+    │                                     ╰── Expected ':', found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found identifier
+    ╭─[ lambda_basic.baml:31:5 ]
+    │
+ 31 │     risky(42)
+    │     ──┬──  
+    │       ╰──── Expected top-level declaration, found identifier
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '('
+    ╭─[ lambda_basic.baml:31:10 ]
+    │
+ 31 │     risky(42)
+    │          ┬  
+    │          ╰── Expected top-level declaration, found '('
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found integer
+    ╭─[ lambda_basic.baml:31:11 ]
+    │
+ 31 │     risky(42)
+    │           ─┬  
+    │            ╰── Expected top-level declaration, found integer
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found ')'
+    ╭─[ lambda_basic.baml:31:13 ]
+    │
+ 31 │     risky(42)
+    │             ┬  
+    │             ╰── Expected top-level declaration, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected top-level declaration, found '}'
+    ╭─[ lambda_basic.baml:32:1 ]
+    │
+ 32 │ }
+    │ ┬  
+    │ ╰── Expected top-level declaration, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found ':'
+    ╭─[ lambda_basic.baml:37:24 ]
+    │
+ 37 │     let add_offset = (x: int) -> int { x + offset }
+    │                        ┬  
+    │                        ╰── Expected ')', found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ':'
+    ╭─[ lambda_basic.baml:37:24 ]
+    │
+ 37 │     let add_offset = (x: int) -> int { x + offset }
+    │                        ┬  
+    │                        ╰── Expected expression, found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_basic.baml:37:29 ]
+    │
+ 37 │     let add_offset = (x: int) -> int { x + offset }
+    │                             ┬  
+    │                             ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '->'
+    ╭─[ lambda_basic.baml:37:31 ]
+    │
+ 37 │     let add_offset = (x: int) -> int { x + offset }
+    │                               ─┬  
+    │                                ╰── Expected expression, found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ':', found '+'
+    ╭─[ lambda_basic.baml:37:42 ]
+    │
+ 37 │     let add_offset = (x: int) -> int { x + offset }
+    │                                          ┬  
+    │                                          ╰── Expected ':', found '+'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ',' or '}' after object field, found '+'
+    ╭─[ lambda_basic.baml:37:42 ]
+    │
+ 37 │     let add_offset = (x: int) -> int { x + offset }
+    │                                          ┬  
+    │                                          ╰── Expected ',' or '}' after object field, found '+'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ':', found '}'
+    ╭─[ lambda_basic.baml:37:51 ]
+    │
+ 37 │     let add_offset = (x: int) -> int { x + offset }
+    │                                                   ┬  
+    │                                                   ╰── Expected ':', found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found ':'
+    ╭─[ lambda_basic.baml:43:19 ]
+    │
+ 43 │     let outer = (x: int) -> {
+    │                   ┬  
+    │                   ╰── Expected ')', found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ':'
+    ╭─[ lambda_basic.baml:43:19 ]
+    │
+ 43 │     let outer = (x: int) -> {
+    │                   ┬  
+    │                   ╰── Expected expression, found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_basic.baml:43:24 ]
+    │
+ 43 │     let outer = (x: int) -> {
+    │                        ┬  
+    │                        ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '->'
+    ╭─[ lambda_basic.baml:43:26 ]
+    │
+ 43 │     let outer = (x: int) -> {
+    │                          ─┬  
+    │                           ╰── Expected expression, found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found ':'
+    ╭─[ lambda_basic.baml:44:23 ]
+    │
+ 44 │         let inner = (y: int) -> int { x + y }
+    │                       ┬  
+    │                       ╰── Expected ')', found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ':'
+    ╭─[ lambda_basic.baml:44:23 ]
+    │
+ 44 │         let inner = (y: int) -> int { x + y }
+    │                       ┬  
+    │                       ╰── Expected expression, found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_basic.baml:44:28 ]
+    │
+ 44 │         let inner = (y: int) -> int { x + y }
+    │                            ┬  
+    │                            ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '->'
+    ╭─[ lambda_basic.baml:44:30 ]
+    │
+ 44 │         let inner = (y: int) -> int { x + y }
+    │                              ─┬  
+    │                               ╰── Expected expression, found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ':', found '+'
+    ╭─[ lambda_basic.baml:44:41 ]
+    │
+ 44 │         let inner = (y: int) -> int { x + y }
+    │                                         ┬  
+    │                                         ╰── Expected ':', found '+'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ',' or '}' after object field, found '+'
+    ╭─[ lambda_basic.baml:44:41 ]
+    │
+ 44 │         let inner = (y: int) -> int { x + y }
+    │                                         ┬  
+    │                                         ╰── Expected ',' or '}' after object field, found '+'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ':', found '}'
+    ╭─[ lambda_basic.baml:44:45 ]
+    │
+ 44 │         let inner = (y: int) -> int { x + y }
+    │                                             ┬  
+    │                                             ╰── Expected ':', found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '<'
+    ╭─[ lambda_basic.baml:52:20 ]
+    │
+ 52 │     let identity = <T>(x: T) -> T { x }
+    │                    ┬  
+    │                    ╰── Expected expression, found '<'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found ':'
+    ╭─[ lambda_basic.baml:52:25 ]
+    │
+ 52 │     let identity = <T>(x: T) -> T { x }
+    │                         ┬  
+    │                         ╰── Expected ')', found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ':'
+    ╭─[ lambda_basic.baml:52:25 ]
+    │
+ 52 │     let identity = <T>(x: T) -> T { x }
+    │                         ┬  
+    │                         ╰── Expected expression, found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_basic.baml:52:28 ]
+    │
+ 52 │     let identity = <T>(x: T) -> T { x }
+    │                            ┬  
+    │                            ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '->'
+    ╭─[ lambda_basic.baml:52:30 ]
+    │
+ 52 │     let identity = <T>(x: T) -> T { x }
+    │                              ─┬  
+    │                               ╰── Expected expression, found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ':', found '}'
+    ╭─[ lambda_basic.baml:52:39 ]
+    │
+ 52 │     let identity = <T>(x: T) -> T { x }
+    │                                       ┬  
+    │                                       ╰── Expected ':', found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ')', found ':'
+    ╭─[ lambda_basic.baml:58:17 ]
+    │
+ 58 │     let add = (a: int, b: int) -> int { a + b }
+    │                 ┬  
+    │                 ╰── Expected ')', found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ':'
+    ╭─[ lambda_basic.baml:58:17 ]
+    │
+ 58 │     let add = (a: int, b: int) -> int { a + b }
+    │                 ┬  
+    │                 ╰── Expected expression, found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ','
+    ╭─[ lambda_basic.baml:58:22 ]
+    │
+ 58 │     let add = (a: int, b: int) -> int { a + b }
+    │                      ┬  
+    │                      ╰── Expected expression, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ':'
+    ╭─[ lambda_basic.baml:58:25 ]
+    │
+ 58 │     let add = (a: int, b: int) -> int { a + b }
+    │                         ┬  
+    │                         ╰── Expected expression, found ':'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found ')'
+    ╭─[ lambda_basic.baml:58:30 ]
+    │
+ 58 │     let add = (a: int, b: int) -> int { a + b }
+    │                              ┬  
+    │                              ╰── Expected expression, found ')'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected expression, found '->'
+    ╭─[ lambda_basic.baml:58:32 ]
+    │
+ 58 │     let add = (a: int, b: int) -> int { a + b }
+    │                                ─┬  
+    │                                 ╰── Expected expression, found '->'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ':', found '+'
+    ╭─[ lambda_basic.baml:58:43 ]
+    │
+ 58 │     let add = (a: int, b: int) -> int { a + b }
+    │                                           ┬  
+    │                                           ╰── Expected ':', found '+'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ',' or '}' after object field, found '+'
+    ╭─[ lambda_basic.baml:58:43 ]
+    │
+ 58 │     let add = (a: int, b: int) -> int { a + b }
+    │                                           ┬  
+    │                                           ╰── Expected ',' or '}' after object field, found '+'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected ':', found '}'
+    ╭─[ lambda_basic.baml:58:47 ]
+    │
+ 58 │     let add = (a: int, b: int) -> int { a + b }
+    │                                               ┬  
+    │                                               ╰── Expected ':', found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯

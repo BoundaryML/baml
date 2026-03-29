@@ -1,0 +1,193 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.test_annotated() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: void // double
+    let _2: void
+
+    bb0: {
+        _1 = const null;
+        _2 = copy _1;
+        _0 = call copy _2(const 21_i64) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_capture() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: void // add_offset
+    let _2: void
+
+    bb0: {
+        _1 = const null;
+        _2 = copy _1;
+        _0 = call copy _2(const 32_i64) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_generic_lambda() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: void // identity
+    let _2: void
+
+    bb0: {
+        _1 = const null;
+        _2 = copy _1;
+        _0 = call copy _2(const 42_i64) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_inferred_return() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: void // double
+    let _2: void
+
+    bb0: {
+        _1 = const null;
+        _2 = copy _1;
+        _0 = call copy _2(const 21_i64) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_map_inferred() -> int[] {
+    // Locals:
+    let _0: int[] // _0 // return
+    let _1: int[] // items
+    let _2: void
+    let _3: void
+    let _4: int[]
+    let _5: string
+
+    bb0: {
+        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _4 = copy _1;
+        _5 = const "map";
+        _3 = copy _4[_5];
+        _2 = call copy _3(const null) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const null * const 2_i64;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_multi_param() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: void // add
+    let _2: void
+
+    bb0: {
+        _1 = const null;
+        _2 = copy _1;
+        _0 = call copy _2(const 20_i64, const 22_i64) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.test_nested() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: void // outer
+    let _2: void
+    let _3: void // inner
+    let _4: void
+    let _5: void
+
+    bb0: {
+        _1 = const null;
+        _3 = const null;
+        _4 = copy _3;
+        _2 = call copy _4(const 1_i64) -> [bb1];
+    }
+
+    bb1: {
+        _5 = copy _1;
+        _0 = call copy _5(const 41_i64) -> [bb2];
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn user.test_throws() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_zero_param() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}

@@ -1,0 +1,80 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.test_annotated() -> int {
+    load_const 21
+    load_const null
+    call_indirect
+    return
+}
+
+function user.test_capture() -> int {
+    load_const 32
+    load_const null
+    call_indirect
+    return
+}
+
+function user.test_generic_lambda() -> int {
+    load_const 42
+    load_const null
+    call_indirect
+    return
+}
+
+function user.test_inferred_return() -> int {
+    load_const 21
+    load_const null
+    call_indirect
+    return
+}
+
+function user.test_map_inferred() -> int[] {
+    load_const null
+    load_const 1
+    load_const 2
+    load_const 3
+    alloc_array 3
+    load_const "map"
+    load_map_element
+    call_indirect
+    pop 1
+    load_const null
+    load_const 2
+    bin_op *
+    return
+}
+
+function user.test_multi_param() -> int {
+    load_const 20
+    load_const 22
+    load_const null
+    call_indirect
+    return
+}
+
+function user.test_nested() -> int {
+    load_const 1
+    load_const null
+    call_indirect
+    pop 1
+    load_const 41
+    load_const null
+    call_indirect
+    return
+}
+
+function user.test_throws() -> int {
+    load_const null
+    return
+}
+
+function user.test_zero_param() -> int {
+    load_const "parse error"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
