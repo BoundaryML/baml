@@ -25,7 +25,7 @@ function test_map_inferred() -> int[] {
 // Lambda with throws clause
 function test_throws() -> int {
     let risky = (x: int) -> int throws string {
-        if x < 0 { throw "negative" }
+        if (x < 0) { throw "negative" }
         x
     }
     risky(42)

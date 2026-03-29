@@ -208,10 +208,13 @@ SOURCE_FILE
               L_BRACE "{"
               IF_EXPR
                 KW_IF "if"
-                BINARY_EXPR "x < 0"
-                  WORD "x"
-                  LESS "<"
-                  INTEGER_LITERAL "0"
+                PAREN_EXPR
+                  L_PAREN "("
+                  BINARY_EXPR "x < 0"
+                    WORD "x"
+                    LESS "<"
+                    INTEGER_LITERAL "0"
+                  R_PAREN ")"
                 BLOCK_EXPR
                   L_BRACE "{"
                   THROW_STMT
