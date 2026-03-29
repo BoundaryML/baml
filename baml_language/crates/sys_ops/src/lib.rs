@@ -7,6 +7,7 @@
 // `.baml` `$rust_io_function` definitions by `baml_builtins2_codegen`.
 #[allow(
     dead_code,
+    non_snake_case,
     unreachable_pub,
     unused_imports,
     unused_variables,
@@ -138,11 +139,11 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         client: io::owned::llm::PrimitiveClient,
         response: String,
         type_def: baml_type::Ty,
-        _ctx: &SysOpContext,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         let old_client = convert_io_primitive_client(&client);
         SysOpOutput::Ready(
-            sys_llm::execute_parse_response_from_owned(&old_client, &response, &type_def)
+            sys_llm::execute_parse_response_from_owned(&old_client, &response, &type_def, ctx)
                 .map(bex_external_types::AsBexExternalValue::into_bex_external_value)
                 .map_err(OpErrorKind::from),
         )
@@ -194,6 +195,19 @@ impl<T> io::IoNamespaceLlm for T {
             )));
         };
         SysOpOutput::ok(info.return_type.clone())
+    }
+
+    fn __sap_parse(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        json: String,
+        ty: baml_type::Ty,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        SysOpOutput::Ready(
+            sys_llm::execute_sap_parse(&json, &ty, ctx, true).map_err(OpErrorKind::from),
+        )
     }
 }
 

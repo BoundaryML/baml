@@ -211,24 +211,6 @@ pub fn validate_sys_op_error(op: SysOp, kind: &OpErrorKind) -> Result<(), Contra
     }
 }
 
-impl From<sys_llm::LlmOpError> for OpErrorKind {
-    fn from(e: sys_llm::LlmOpError) -> Self {
-        match e {
-            sys_llm::LlmOpError::TypeError { expected, actual } => {
-                OpErrorKind::TypeError { expected, actual }
-            }
-            sys_llm::LlmOpError::RenderPrompt(msg) => OpErrorKind::RenderPrompt(msg),
-            sys_llm::LlmOpError::Other(msg) => OpErrorKind::Other(msg),
-            sys_llm::LlmOpError::ParseResponseError(e) => {
-                OpErrorKind::LlmClientError { message: e }
-            }
-            sys_llm::LlmOpError::NotImplemented { message } => {
-                OpErrorKind::NotImplemented { message }
-            }
-        }
-    }
-}
-
 // ============================================================================
 // Operation Results
 // ============================================================================

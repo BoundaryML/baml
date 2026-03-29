@@ -262,7 +262,11 @@ fn extract_from_class(
 ///
 /// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String)
 /// since they don't use `Object::Instance`.
-fn extract_class_fields(class_def: &ClassDef, namespace_prefix: &str, source_file: &str) -> Option<NativeClassDef> {
+fn extract_class_fields(
+    class_def: &ClassDef,
+    namespace_prefix: &str,
+    source_file: &str,
+) -> Option<NativeClassDef> {
     let class_name = class_def.name.as_str();
 
     // Skip classes with dedicated Object variants — they are not Instance-based.
