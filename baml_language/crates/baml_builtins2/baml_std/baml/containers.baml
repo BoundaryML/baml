@@ -33,6 +33,10 @@ class Array<T> {
   function join(self, separator: string) -> string {
     $rust_function
   }
+
+  function map<U>(self, f: (T) -> U) -> U[] {
+    $rust_function
+  }
 }
 
 class Map<K, V> {
@@ -61,6 +65,18 @@ class Map<K, V> {
 
   //baml:mut_vm
   function get(self, key: K) -> V? {
+    $rust_function
+  }
+
+  function map<U>(self, f: (K, V) -> U) -> U[] {
+    $rust_function
+  }
+
+  function map_keys<U>(self, f: (K) -> U) -> U[] {
+    $rust_function
+  }
+
+  function map_values<U>(self, f: (V) -> U) -> U[] {
     $rust_function
   }
 }

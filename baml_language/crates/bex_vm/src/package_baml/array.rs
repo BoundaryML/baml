@@ -54,4 +54,8 @@ impl BamlClassArray for PackageBamlImpl {
             .collect::<Vec<_>>()
             .join(separator)
     }
+
+    fn map(_array: &[Value], _f: &Value) -> Vec<Value> {
+        todo!("map not yet implemented");
+    }
 }
