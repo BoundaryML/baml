@@ -2,7 +2,65 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.test_branch_return_unification() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.test_capture_lambda() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
 fn user.test_chained_map() -> int[] {
+    // Locals:
+    let _0: int[] // _0 // return
+    let _1: int[] // items
+    let _2: null
+
+    bb0: {
+        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _2 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.test_compose() -> int[] {
+    // Locals:
+    let _0: int[] // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.test_covariance_return() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
@@ -84,6 +142,56 @@ fn user.test_lambda_calling_lambda() -> int {
     }
 
     bb1: {
+        unreachable;
+    }
+}
+
+fn user.test_lambda_in_match() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: string // op
+    let _2: bool
+    let _3: null
+    let _4: bool
+    let _5: null
+    let _6: null
+
+    bb0: {
+        _1 = const "double";
+        _2 = copy _1 == const "double";
+        branch copy _2 -> [bb7, bb1];
+    }
+
+    bb1: {
+        _4 = copy _1 == const "negate";
+        branch copy _4 -> [bb5, bb2];
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        _6 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb4];
+    }
+
+    bb4: {
+        unreachable;
+    }
+
+    bb5: {
+        _5 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb6];
+    }
+
+    bb6: {
+        unreachable;
+    }
+
+    bb7: {
+        _3 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb8];
+    }
+
+    bb8: {
         unreachable;
     }
 }
@@ -178,6 +286,22 @@ fn user.test_map_multi_statement() -> int[] {
     }
 }
 
+fn user.test_map_optional() -> int[] {
+    // Locals:
+    let _0: int[] // _0 // return
+    let _1: int?[] // items
+    let _2: null
+
+    bb0: {
+        _1 = [const 1_i64, const null, const 3_i64];
+        _2 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
 fn user.test_map_string_to_int() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
@@ -219,6 +343,36 @@ fn user.test_map_with_capture() -> int[] {
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.test_map_with_index_capture() -> int[] {
+    // Locals:
+    let _0: int[] // _0 // return
+    let _1: int[] // items
+    let _2: null
+
+    bb0: {
+        _1 = [const 10_i64, const 20_i64, const 30_i64];
+        _2 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.test_nested_generic() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
     }
 
     bb1: {
@@ -269,6 +423,50 @@ fn user.test_shadowing() -> string {
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
         _2 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.test_two_transforms() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.test_type_changing_chain() -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: int[] // nums
+    let _2: null
+
+    bb0: {
+        _1 = [const 1_i64, const 2_i64, const 3_i64];
+        _2 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+fn user.test_void_lambda() -> int {
+    // Locals:
+    let _0: int // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
     }
 
     bb1: {

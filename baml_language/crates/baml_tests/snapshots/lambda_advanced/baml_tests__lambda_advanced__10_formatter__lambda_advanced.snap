@@ -221,3 +221,165 @@ function test_optional_return() -> int? {
     }
     maybe(-1)
 }
+
+// ══════════════════════════════════════════════════════════════════
+// Advanced type inference scenarios
+// ══════════════════════════════════════════════════════════════════
+
+// ── Covariance: literal return type widens to declared type ──────
+function test_covariance_return() -> int[] {
+    let items: int[] = [1, 2, 3]
+    // Lambda returns literal 0, but map's U resolves to int via annotation
+    items
+        .map(
+            (x: int) -> int {
+                0
+            },
+        )
+}
+
+// ── Lambda producing different literal types in branches ─────────
+function test_branch_return_unification() -> string {
+    let format = (x: int) -> string {
+        if (x > 100) {
+            "big"
+        } else if (x > 10) {
+            "medium"
+        } else {
+            "small"
+        }
+    }
+    format(42)
+}
+
+// ── Compose: output of one lambda feeds input of another ─────────
+function test_compose() -> int[] {
+    let items: int[] = [1, 2, 3]
+    let double = (x: int) -> int {
+        x * 2
+    }
+    let add1 = (x: int) -> int {
+        x + 1
+    }
+    // Manually compose: map then map
+    let doubled: int[] = items.map(double)
+    doubled.map(add1)
+}
+
+// ── Multiple lambda args: apply two transforms ───────────────────
+function test_two_transforms() -> int {
+    let apply_both = (f: (int) -> int, g: (int) -> int, x: int) -> int {
+        g(f(x))
+    }
+    apply_both(
+        (x: int) -> int {
+            x * 2
+        },
+        (x: int) -> int {
+            x + 10
+        },
+        5,
+    ) // (5 * 2) + 10 = 20
+}
+
+// ── Lambda returning void (side-effect only) ─────────────────────
+function test_void_lambda() -> int {
+    let items: int[] = [1, 2, 3]
+    let count = 0
+    let inc = () -> {
+        count += 1
+    }
+    inc();
+    inc();
+    count
+}
+
+// ── Nested generic lambdas ───────────────────────────────────────
+function test_nested_generic() -> int {
+    let apply = <T, U>(f: (T) -> U, x: T) -> U {
+        f(x)
+    }
+    apply(
+        (x: int) -> int {
+            x * 2
+        },
+        21,
+    )
+}
+
+// ── Lambda in match arm ──────────────────────────────────────────
+function test_lambda_in_match() -> int {
+    let op = "double"
+    let f: (int) -> int = match (op) {
+        "double" => {
+            (x: int) -> int {
+                x * 2
+            }
+        },
+        "negate" => {
+            (x: int) -> int {
+                0 - x
+            }
+        },
+        _ => {
+            (x: int) -> int {
+                x
+            }
+        },
+    }
+    f(21)
+}
+
+// ── Map with index-like pattern using capture ────────────────────
+function test_map_with_index_capture() -> int[] {
+    let items: int[] = [10, 20, 30]
+    let base = 100
+    // Each element gets base + element value
+    items
+        .map(
+            (x) -> {
+                base + x
+            },
+        )
+}
+
+// ── Chained operations with type changes ─────────────────────────
+function test_type_changing_chain() -> string {
+    let nums: int[] = [1, 2, 3]
+    let strs: string[] = nums
+        .map(
+            (n: int) -> string {
+                match (n) {
+                    1 => "one",
+                    2 => "two",
+                    _ => "other",
+                }
+            },
+        )
+    strs.join(", ")
+}
+
+// ── Lambda capturing another lambda ──────────────────────────────
+function test_capture_lambda() -> int {
+    let multiply = (a: int, b: int) -> int {
+        a * b
+    }
+    let double = (x: int) -> int {
+        multiply(x, 2)
+    }
+    double(21)
+}
+
+// ── Map preserving optional type ─────────────────────────────────
+function test_map_optional() -> int[] {
+    let items: int?[] = [1, null, 3]
+    items
+        .map(
+            (x: int?) -> int {
+                match (x) {
+                    null => 0,
+                    _ => 1,
+                }
+            },
+        )
+}

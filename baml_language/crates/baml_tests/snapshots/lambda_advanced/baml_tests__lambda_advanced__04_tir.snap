@@ -274,3 +274,200 @@ function user.test_optional_return() -> int? throws never {
 }
 lambda user.test_optional_return {
 }
+function user.test_covariance_return() -> int[] throws never {
+  { : (int | 0)[]
+    let items = [1, 2, 3] : int[]
+    items.map<U>((x: int) -> int { ... }) : (int | 0)[]
+      (x: int) -> int { ... } : (x: int) -> 0
+        {
+          0
+        }
+  }
+}
+lambda user.test_covariance_return {
+}
+function user.test_branch_return_unification() -> string throws never {
+  { : "big" | "medium" | "small"
+    let format = : (x: int) -> "big" | "medium" | "small"
+      (x: int) -> string { ... } : (x: int) -> "big" | "medium" | "small"
+        {
+          if (x Gt 100)
+            {
+              "big"
+            }
+          else
+            if (x Gt 10)
+              {
+                "medium"
+              }
+            else
+              {
+                "small"
+              }
+        }
+    format(42) : "big" | "medium" | "small"
+  }
+}
+lambda user.test_branch_return_unification {
+}
+function user.test_compose() -> int[] throws never {
+  { : int[]
+    let items = [1, 2, 3] : int -> int[]
+    let double = : (x: int) -> int
+      (x: int) -> int { ... } : (x: int) -> int
+        {
+          x Mul 2
+        }
+    let add1 = : (x: int) -> int
+      (x: int) -> int { ... } : (x: int) -> int
+        {
+          x Add 1
+        }
+    let doubled = items.map<U>(double) : int[]
+    doubled.map<U>(add1) : int[]
+  }
+}
+lambda user.test_compose {
+}
+lambda user.test_compose {
+}
+function user.test_two_transforms() -> int throws never {
+  { : int
+    let apply_both = : int -> (f: (int) -> int, g: (int) -> int, x: int) -> int
+      (f: (int) -> int, g: (int) -> int, x: int) -> int { ... } : int
+        {
+          g(f(x))
+        }
+    apply_both((x: int) -> int { ... }, (x: int) -> int { ... }, 5) : int
+      (x: int) -> int { ... } : int
+        {
+          x Mul 2
+        }
+      (x: int) -> int { ... } : (x: int) -> int
+        {
+          x Add 10
+        }
+  }
+}
+lambda user.test_two_transforms {
+}
+lambda user.test_two_transforms {
+}
+lambda user.test_two_transforms {
+}
+function user.test_void_lambda() -> int throws never {
+  { : int
+    let items = [1, 2, 3] : int[]
+    let count = 0 : 0 -> int
+    let inc = : () -> void
+      () -> { ... } : () -> void
+        {
+          count Add= 1
+        }
+    inc() : void
+    inc() : void
+    count : int
+  }
+}
+lambda user.test_void_lambda {
+}
+function user.test_nested_generic() -> int throws never {
+  { : int
+    let apply = : int -> (f: (T) -> U, x: T) -> U
+      <T, U>(f: (T) -> U, x: T) -> U { ... } : int
+        {
+          f(x)
+        }
+    apply((x: int) -> int { ... }, 21) : int
+      (x: int) -> int { ... } : (x: int) -> int
+        {
+          x Mul 2
+        }
+  }
+}
+lambda user.test_nested_generic {
+}
+lambda user.test_nested_generic {
+}
+function user.test_lambda_in_match() -> int throws never {
+  { : int
+    let op = "double" : int -> string
+    let f = : (x: int) -> int
+      match (op : int) : (x: int) -> int
+        "double" =>
+          (x: int) -> int { ... } : int
+            {
+              x Mul 2
+            }
+        "negate" =>
+          (x: int) -> int { ... } : (x: int) -> int
+            {
+              0 Sub x
+            }
+        _ =>
+          (x: int) -> int { ... } : (x: int) -> int
+            {
+              x
+            }
+    f(21) : int
+  }
+}
+lambda user.test_lambda_in_match {
+}
+lambda user.test_lambda_in_match {
+}
+lambda user.test_lambda_in_match {
+}
+function user.test_map_with_index_capture() -> int[] throws never {
+  { : int[]
+    let items = [10, 20, 30] : int -> int[]
+    let base = 100 : 100 -> int
+    items.map<U>((x) -> { ... }) : int[]
+      (x) -> { ... } : (x: int) -> int
+        {
+          base Add x
+        }
+  }
+}
+lambda user.test_map_with_index_capture {
+}
+function user.test_type_changing_chain() -> string throws never {
+  { : string
+    let nums = [1, 2, 3] : "other" -> int[]
+    let strs = nums.map((n: int) -> string { ... }) : (string | "one" | "two" | "other")[]
+    strs.join(", ") : string
+  }
+}
+lambda user.test_type_changing_chain {
+}
+function user.test_capture_lambda() -> int throws never {
+  { : int
+    let multiply = : (a: int, b: int) -> int
+      (a: int, b: int) -> int { ... } : (a: int, b: int) -> int
+        {
+          a Mul b
+        }
+    let double = : (x: int) -> int
+      (x: int) -> int { ... } : (x: int) -> int
+        {
+          multiply(x, 2)
+        }
+    double(21) : int
+  }
+}
+lambda user.test_capture_lambda {
+}
+lambda user.test_capture_lambda {
+}
+function user.test_map_optional() -> int[] throws never {
+  { : (int | 0 | 1)[]
+    let items = [1, null, 3] : 0 | 1 -> int?[]
+    items.map<U>((x: int?) -> int { ... }) : (int | 0 | 1)[]
+      (x: int?) -> int { ... } : (x: int?) -> 0 | 1
+        {
+          match (x) { null => 0, _ => 1 }
+        }
+  }
+}
+lambda user.test_map_optional {
+}
