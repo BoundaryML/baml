@@ -92,18 +92,18 @@ pub fn function_throw_sets<'db>(
             let key = function_key(db, *func_loc, short_name);
             let sig = baml_compiler2_hir::signature::function_signature(db, *func_loc);
             let body = baml_compiler2_hir::body::function_body(db, *func_loc);
+            let func_ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
+                .namespace_path;
 
             let declared_throws = sig.throws.as_ref().map(|te| {
                 let mut diags = Vec::new();
-                let ns = baml_compiler2_hir::file_package::file_package(db, func_loc.file(db))
-                    .namespace_path;
                 let item_tree = baml_compiler2_hir::file_item_tree(db, func_loc.file(db));
                 let func_data = &item_tree[func_loc.id(db)];
                 let lowered = lower_type_expr_in_ns(
                     db,
                     te,
                     pkg_items,
-                    &ns,
+                    &func_ns,
                     &func_data.generic_params,
                     &mut diags,
                 );
@@ -114,7 +114,7 @@ pub fn function_throw_sets<'db>(
             let direct = if let Some(declared) = declared_throws.clone() {
                 declared
             } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) = body.as_ref() {
-                collect_direct_throws(db, pkg_items, expr_body)
+                collect_direct_throws(db, pkg_items, &func_ns, expr_body)
             } else {
                 BTreeSet::new()
             };
@@ -147,15 +147,15 @@ pub fn function_throw_sets<'db>(
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                 let body = baml_compiler2_hir::body::function_body(db, func_loc);
 
+                let method_ns =
+                    baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
                 let declared_throws = sig.throws.as_ref().map(|te| {
                     let mut diags = Vec::new();
-                    let ns_path =
-                        baml_compiler2_hir::file_package::file_package(db, file).namespace_path;
                     let lowered = lower_type_expr_in_ns(
                         db,
                         te,
                         pkg_items,
-                        &ns_path,
+                        &method_ns,
                         &method_data.generic_params,
                         &mut diags,
                     );
@@ -168,7 +168,7 @@ pub fn function_throw_sets<'db>(
                 } else if let baml_compiler2_hir::body::FunctionBody::Expr(expr_body) =
                     body.as_ref()
                 {
-                    collect_direct_throws(db, pkg_items, expr_body)
+                    collect_direct_throws(db, pkg_items, &method_ns, expr_body)
                 } else {
                     BTreeSet::new()
                 };
@@ -264,18 +264,23 @@ fn function_key<'db>(
 pub fn collect_direct_throws<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
+    ns_context: &[Name],
     body: &ExprBody,
 ) -> BTreeSet<ThrowFact> {
     let mut facts = BTreeSet::new();
 
     for (_, expr) in body.exprs.iter() {
         if let Expr::Throw { value } = expr {
-            facts.insert(throw_fact_from_expr(db, pkg_items, *value, body));
+            facts.insert(throw_fact_from_expr(
+                db, pkg_items, ns_context, *value, body,
+            ));
         }
     }
     for (_, stmt) in body.stmts.iter() {
         if let baml_compiler2_ast::Stmt::Throw { value } = stmt {
-            facts.insert(throw_fact_from_expr(db, pkg_items, *value, body));
+            facts.insert(throw_fact_from_expr(
+                db, pkg_items, ns_context, *value, body,
+            ));
         }
     }
 
@@ -322,6 +327,7 @@ pub fn collect_call_targets(body: &ExprBody) -> BTreeSet<Name> {
 fn throw_fact_from_expr<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
+    ns_context: &[Name],
     expr_id: baml_compiler2_ast::ExprId,
     body: &ExprBody,
 ) -> Ty {
@@ -333,9 +339,11 @@ fn throw_fact_from_expr<'db>(
         Expr::Literal(Literal::Float(_)) => Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
         Expr::Literal(Literal::Bool(_)) => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
         Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
-        Expr::Path(segments) if !segments.is_empty() => resolve_path_to_ty(db, pkg_items, segments),
+        Expr::Path(segments) if !segments.is_empty() => {
+            resolve_path_to_ty(db, pkg_items, ns_context, segments)
+        }
         Expr::FieldAccess { .. } => expr_to_path(expr_id, body)
-            .map(|segments| resolve_path_to_ty(db, pkg_items, &segments))
+            .map(|segments| resolve_path_to_ty(db, pkg_items, ns_context, &segments))
             .unwrap_or(Ty::Unknown {
                 attr: TyAttr::default(),
             }),
@@ -343,7 +351,7 @@ fn throw_fact_from_expr<'db>(
             type_name: Some(name),
             ..
         } => {
-            if let Some(def) = pkg_items.lookup_type(&[], name) {
+            if let Some(def) = pkg_items.lookup_type(ns_context, name) {
                 match def {
                     Definition::Class(_) => {
                         Ty::Class(qualify_def(db, def, name), TyAttr::default())
@@ -381,23 +389,26 @@ fn rewrite_self_target(target: &Name, class_name: &Name) -> Name {
 fn resolve_path_to_ty<'db>(
     db: &'db dyn crate::Db,
     pkg_items: &PackageItems<'db>,
+    ns_context: &[Name],
     segments: &[Name],
 ) -> Ty {
     // Try treating the last segment as an enum variant and the prefix as
-    // the enum path. We try progressively shorter prefixes so that
-    // ["ns", "Status", "HttpError"] → enum_path=["ns", "Status"], variant="HttpError"
-    // works alongside ["Status", "HttpError"] → enum_path=["Status"], variant="HttpError".
-    //
-    // This must run BEFORE the generic lookup because the namespace system
-    // registers enum variants as types in a child namespace, so
-    // `lookup_type(&["Status", "HttpError"])` would incorrectly match
-    // "HttpError" as a standalone enum rather than a variant of Status.
+    // the enum path. For bare `["Status", "HttpError"]` from a namespaced file,
+    // try namespace-qualified first, then unqualified.
     if segments.len() >= 2 {
         let enum_path = &segments[..segments.len() - 1];
         let variant = &segments[segments.len() - 1];
         let enum_name = enum_path.last().expect("enum_path is non-empty");
         let enum_ns = &enum_path[..enum_path.len() - 1];
-        if let Some(def) = pkg_items.lookup_type(enum_ns, enum_name) {
+        // Try with namespace context for bare enum names
+        let def = if !ns_context.is_empty() && enum_ns.is_empty() {
+            pkg_items
+                .lookup_type(ns_context, enum_name)
+                .or_else(|| pkg_items.lookup_type(enum_ns, enum_name))
+        } else {
+            pkg_items.lookup_type(enum_ns, enum_name)
+        };
+        if let Some(def) = def {
             if let Definition::Enum(_) = def {
                 let qtn = qualify_def(db, def, enum_name);
                 return Ty::EnumVariant(qtn, variant.clone(), TyAttr::default());
@@ -405,10 +416,19 @@ fn resolve_path_to_ty<'db>(
         }
     }
 
-    // Try the full path as a type lookup (handles namespaced types and
-    // single-segment names).
+    // Try the full path as a type lookup. For single-segment bare names,
+    // try namespace-qualified first, then unqualified.
     let name = segments.last().expect("segments is non-empty");
-    if let Some(def) = pkg_items.lookup_type(&segments[..segments.len() - 1], name) {
+    let seg_ns = &segments[..segments.len() - 1];
+    let def = if !ns_context.is_empty() && seg_ns.is_empty() {
+        let ns: Vec<Name> = ns_context.iter().chain(seg_ns.iter()).cloned().collect();
+        pkg_items
+            .lookup_type(&ns, name)
+            .or_else(|| pkg_items.lookup_type(seg_ns, name))
+    } else {
+        pkg_items.lookup_type(seg_ns, name)
+    };
+    if let Some(def) = def {
         return match def {
             Definition::Class(_) => Ty::Class(qualify_def(db, def, name), TyAttr::default()),
             Definition::Enum(_) => Ty::Enum(qualify_def(db, def, name), TyAttr::default()),

@@ -366,12 +366,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 type_name
                     .as_ref()
                     .and_then(|n| {
-                        self.package_items.lookup_type(&[], n).map(|def| {
-                            Ty::Class(
-                                crate::lower_type_expr::qualify_def(self.context.db(), def, n),
-                                TyAttr::default(),
-                            )
-                        })
+                        self.package_items
+                            .lookup_type(&self.ns_context, n)
+                            .map(|def| {
+                                Ty::Class(
+                                    crate::lower_type_expr::qualify_def(self.context.db(), def, n),
+                                    TyAttr::default(),
+                                )
+                            })
                     })
                     .unwrap_or(Ty::Unknown {
                         attr: TyAttr::default(),
@@ -1353,10 +1355,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::Null => BTreeSet::from(["null".to_string()]),
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
-                // Use the qualified name from scrutinee_ty when available,
-                // so the case string matches required_match_cases output.
+                // Use the qualified name from scrutinee_ty when the pattern's
+                // enum_name matches (bare or namespace-qualified). For
+                // `root.Status.Ok`, enum_name is "root.Status" — strip the
+                // `root.` prefix and compare against the QTN's ns+name path.
                 let qualified_enum = match scrutinee_ty {
-                    Ty::Enum(qtn, _) if qtn.name() == enum_name => qtn.to_string(),
+                    Ty::Enum(qtn, _) if Self::enum_name_matches(enum_name, qtn) => qtn.to_string(),
                     _ => enum_name.to_string(),
                 };
                 BTreeSet::from([format!("{qualified_enum}.{variant}")])
@@ -1469,11 +1473,11 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
                 if let Ty::Enum(qn, _) = scrutinee_ty {
-                    if qn.name() == enum_name {
+                    if Self::enum_name_matches(enum_name, qn) {
                         return Ty::EnumVariant(qn.clone(), variant.clone(), TyAttr::default());
                     }
                 }
-                if let Some(def) = self.package_items.lookup_type(&[], enum_name) {
+                if let Some(def) = self.package_items.lookup_type(&self.ns_context, enum_name) {
                     if matches!(def, Definition::Enum(_)) {
                         return Ty::EnumVariant(
                             crate::lower_type_expr::qualify_def(self.context.db(), def, enum_name),
@@ -1525,7 +1529,39 @@ impl<'db> TypeInferenceBuilder<'db> {
         matches!(
             name.as_str(),
             "int" | "float" | "string" | "bool" | "null" | "image" | "audio" | "video" | "pdf"
-        ) || self.package_items.lookup_type(&[], name).is_some()
+        ) || self
+            .package_items
+            .lookup_type(&self.ns_context, name)
+            .is_some()
+    }
+
+    /// Check if a pattern's `enum_name` (which may be dotted like `"root.Status"` or
+    /// `"root.llm.Status"`) refers to the same enum as a `QualifiedTypeName`.
+    fn enum_name_matches(enum_name: &Name, qtn: &crate::ty::QualifiedTypeName) -> bool {
+        // Bare name match: "Status" == qtn.name()
+        if qtn.name() == enum_name {
+            return true;
+        }
+        // Dotted name: split on "." and compare
+        let parts: Vec<&str> = enum_name.as_str().split('.').collect();
+        if parts.len() < 2 {
+            return false;
+        }
+        let name = parts[parts.len() - 1];
+        let path = &parts[..parts.len() - 1];
+        // Strip leading "root" if present
+        let ns_parts = if path.first() == Some(&"root") {
+            &path[1..]
+        } else {
+            path
+        };
+        // Compare namespace and name
+        name == qtn.name().as_str()
+            && ns_parts.len() == qtn.namespace().len()
+            && ns_parts
+                .iter()
+                .zip(qtn.namespace().iter())
+                .all(|(a, b): (&&str, &Name)| *a == b.as_str())
     }
 
     fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
@@ -1628,8 +1664,10 @@ impl<'db> TypeInferenceBuilder<'db> {
             }
             baml_compiler2_ast::Pattern::EnumVariant { enum_name, variant } => {
                 let matches_variant = match throw_fact {
-                    Ty::EnumVariant(qn, v, _) => qn.name() == enum_name && v == variant,
-                    Ty::Enum(qn, _) => qn.name() == enum_name,
+                    Ty::EnumVariant(qn, v, _) => {
+                        Self::enum_name_matches(enum_name, qn) && v == variant
+                    }
+                    Ty::Enum(qn, _) => Self::enum_name_matches(enum_name, qn),
                     _ => false,
                 };
                 if matches_variant {

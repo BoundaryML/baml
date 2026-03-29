@@ -110,10 +110,14 @@ pub fn resolve_name_at<'db>(
                 if let Some(def) = pkg_items.lookup_type(&pkg_info.namespace_path, name) {
                     return ResolvedName::Item(def);
                 }
-                // The type was found in deps — search deps
+                // The type was found in deps — search deps.
+                // Dep builtins are in the root namespace (&[]).
                 for (dep_name, _) in &res_ctx.dep_interfaces {
                     if let Some(dep_items) = res_ctx.items_for_package(db, dep_name) {
-                        if let Some(def) = dep_items.lookup_type(&[], name) {
+                        if let Some(def) = dep_items
+                            .lookup_type(&pkg_info.namespace_path, name)
+                            .or_else(|| dep_items.lookup_type(&[], name))
+                        {
                             return ResolvedName::Builtin(def);
                         }
                     }
@@ -164,18 +168,16 @@ pub fn resolve_path_at<'db>(
     };
 
     let after_pkg = &segments[1..];
-    // Route through PRC — ns_context is empty because the full path includes the namespace
-    if let Some((_source, def)) = res_ctx.resolve_value(db, after_pkg, &[]) {
+    // The path already includes namespace segments, so look up directly.
+    let item = after_pkg
+        .last()
+        .expect("multi-segment path has elements after pkg prefix");
+    let ns = &after_pkg[..after_pkg.len() - 1];
+    if let Some(def) = pkg_items.lookup_value(ns, item) {
         return ResolvedName::Builtin(def);
     }
-    if let Some((_source, _ty)) = res_ctx.resolve_type(db, after_pkg, &[]) {
-        let item = after_pkg
-            .last()
-            .expect("multi-segment path has elements after pkg prefix");
-        let ns = &after_pkg[..after_pkg.len() - 1];
-        if let Some(def) = pkg_items.lookup_type(ns, item) {
-            return ResolvedName::Builtin(def);
-        }
+    if let Some(def) = pkg_items.lookup_type(ns, item) {
+        return ResolvedName::Builtin(def);
     }
 
     ResolvedName::Unknown

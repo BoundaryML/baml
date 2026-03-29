@@ -181,10 +181,10 @@ fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, ar
     let _3: map<string, unknown> // args // param
     let _4: string // jinja_string
     let _5: future<string>
-    let _6: void // context
+    let _6: baml.llm.ExecutionContext // context
     let _7: string
     let _8: void // result
-    let _9: void
+    let _9: baml.llm.ExecutionContext
 
     bb0: {
         _5 = dispatch_future const fn baml.llm.get_jinja_template(copy _2) -> bb1;
@@ -371,9 +371,9 @@ fn baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.Orchestratio
     // Locals:
     let _0: baml.llm.OrchestrationStep[] // _0 // return
     let _1: baml.llm.Client // self // param
-    let _2: void // planner_state
+    let _2: baml.llm.PlannerState // planner_state
     let _3: void[]
-    let _4: void
+    let _4: baml.llm.PlannerState
 
     bb0: {
         _3 = [];
@@ -402,7 +402,7 @@ fn baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state
     let _6: future<() -> baml.llm.PrimitiveClient>
     let _7: baml.llm.PrimitiveClient // primitive
     let _8: () -> baml.llm.PrimitiveClient
-    let _9: void
+    let _9: baml.llm.OrchestrationStep
     let _10: baml.llm.PrimitiveClient
     let _11: baml.llm.OrchestrationStep[] // steps
     let _12: baml.llm.Client[]
@@ -579,9 +579,9 @@ fn baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationSt
     // Locals:
     let _0: baml.llm.OrchestrationStep[] // _0 // return
     let _1: baml.llm.Client // self // param
-    let _2: void // planner_state
+    let _2: baml.llm.PlannerState // planner_state
     let _3: void[]
-    let _4: void
+    let _4: baml.llm.PlannerState
 
     bb0: {
         _3 = [];
@@ -640,7 +640,7 @@ fn baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_state: b
     let _36: baml.llm.OrchestrationStep // step
     let _37: null
     let _38: baml.llm.OrchestrationStep[]
-    let _39: void
+    let _39: baml.llm.OrchestrationStep
     let _40: baml.llm.PrimitiveClient
     let _41: baml.llm.OrchestrationStep
     let _42: int

@@ -130,6 +130,50 @@ fn resolve_qualified_key(path: &[Name], ctx: &ExpandCtx<'_>) -> Option<Vec<Name>
     None
 }
 
+/// When a type alias in one namespace resolves to a type in a different
+/// namespace, the resulting `Named` path (and paths inside unions/lists/etc.)
+/// must be qualified so that `lower_type_expr_in_ns` can find them from the
+/// caller's namespace. Prepends `root.` to single-segment `Named` paths when
+/// the alias namespace differs from the caller namespace.
+fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> PpirTy {
+    if alias_ns == caller_ns {
+        return ty;
+    }
+    match ty {
+        PpirTy::Named { path, attrs } if path.len() == 1 && path[0].as_str() != "root" => {
+            let mut qualified = Vec::with_capacity(alias_ns.len() + 2);
+            qualified.push(SmolStr::from("root"));
+            qualified.extend(alias_ns.iter().cloned());
+            qualified.extend(path);
+            PpirTy::Named {
+                path: qualified,
+                attrs,
+            }
+        }
+        PpirTy::Union { variants, attrs } => PpirTy::Union {
+            variants: variants
+                .into_iter()
+                .map(|v| requalify_for_caller(v, alias_ns, caller_ns))
+                .collect(),
+            attrs,
+        },
+        PpirTy::List { inner, attrs } => PpirTy::List {
+            inner: Box::new(requalify_for_caller(*inner, alias_ns, caller_ns)),
+            attrs,
+        },
+        PpirTy::Optional { inner, attrs } => PpirTy::Optional {
+            inner: Box::new(requalify_for_caller(*inner, alias_ns, caller_ns)),
+            attrs,
+        },
+        PpirTy::Map { key, value, attrs } => PpirTy::Map {
+            key,
+            value: Box::new(requalify_for_caller(*value, alias_ns, caller_ns)),
+            attrs,
+        },
+        other => other,
+    }
+}
+
 // ── Context ──────────────────────────────────────────────────────────────────
 
 /// Shared context threaded through all stream-expansion functions.
@@ -392,11 +436,32 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                         if depth < MAX_ALIAS_DEPTH {
                             if let Some(key) = resolve_qualified_key(path, ctx) {
                                 if let Some(body) = ctx.alias_bodies.get(&key) {
-                                    // Set merged attrs on the resolved body and recurse
+                                    // The alias body's paths are relative to the alias
+                                    // definition's namespace (key = [pkg, ...ns, name]).
+                                    // Recurse with the alias's namespace so that
+                                    // classify_type / resolve_qualified_key resolve
+                                    // the body's bare names correctly.
+                                    let alias_ns = key[1..key.len() - 1].to_vec();
+                                    let alias_ctx = ExpandCtx {
+                                        namespace_path: &alias_ns,
+                                        ..*ctx
+                                    };
                                     let mut resolved = body.clone();
                                     resolved.attrs_mut().stream_must_exist = must_exist;
                                     resolved.attrs_mut().stream_done = done;
-                                    return stream_expand_inner(&resolved, ctx, depth + 1);
+                                    let (result_ty, sap) =
+                                        stream_expand_inner(&resolved, &alias_ctx, depth + 1);
+                                    // The result's Named paths are relative to alias_ns.
+                                    // If the caller is in a different namespace, qualify
+                                    // them so lower_type_expr_in_ns can resolve them.
+                                    return (
+                                        requalify_for_caller(
+                                            result_ty,
+                                            &alias_ns,
+                                            ctx.namespace_path,
+                                        ),
+                                        sap,
+                                    );
                                 }
                             }
                         }

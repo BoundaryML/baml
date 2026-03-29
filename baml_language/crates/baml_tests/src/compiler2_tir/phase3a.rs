@@ -54,7 +54,7 @@ fn unknown_type_in_param() {
       { : never
         return 0 : 0
       }
-      !! 11..25: unresolved type: Nonexistent
+      !! 13..25: unresolved type: Nonexistent
     }
     ");
 }

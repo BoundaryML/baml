@@ -324,8 +324,13 @@ pub fn infer_scope_types<'db>(
                                     &mut param_diags,
                                 );
                                 if !param_diags.is_empty() {
-                                    let span =
-                                        sig_sm.param_spans.get(i).copied().unwrap_or_default();
+                                    let span = sig_sm
+                                        .param_type_spans
+                                        .get(i)
+                                        .copied()
+                                        .flatten()
+                                        .or_else(|| sig_sm.param_spans.get(i).copied())
+                                        .unwrap_or_default();
                                     for diag in param_diags {
                                         builder.report_at_span(diag, span);
                                     }

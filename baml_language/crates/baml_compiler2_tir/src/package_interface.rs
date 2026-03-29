@@ -648,7 +648,10 @@ impl<'db> PackageResolutionContext<'db> {
         if class_pkg.as_str() == self.own_package_name.as_str() {
             self.lookup_own_class_fields(db, class_name)
         } else {
-            for (_dep_name, dep_iface) in &self.dep_interfaces {
+            for (dep_name, dep_iface) in &self.dep_interfaces {
+                if dep_name != class_pkg {
+                    continue;
+                }
                 if let Some(ExportedType::Class { fields, .. }) =
                     dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
@@ -670,7 +673,10 @@ impl<'db> PackageResolutionContext<'db> {
         if class_pkg.as_str() == self.own_package_name.as_str() {
             self.lookup_own_class_method(db, class_name, method_name)
         } else {
-            for (_dep_name, dep_iface) in &self.dep_interfaces {
+            for (dep_name, dep_iface) in &self.dep_interfaces {
+                if dep_name != class_pkg {
+                    continue;
+                }
                 if let Some(ExportedType::Class {
                     methods,
                     generic_params,
