@@ -4,49 +4,27 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.test_return_mismatch() -> int throws never {
   { : 0
-    let bad = x : unknown
-    int : unknown
-    string {  } : unknown
+    let bad = <missing> : unknown
     0 : 0
   }
-  !! 113..114: unresolved name: x
-  !! 116..119: unresolved name: int
 }
 function user.test_no_annotation_no_context() -> int throws never {
   { : 0
-    let bad = x : unknown
-    { : unknown
-      x Mul 2 : unknown
-    }
+    let bad = <missing> : unknown
     0 : 0
   }
-  !! 279..280: unresolved name: x
-  !! 287..288: unresolved name: x
 }
 function user.test_arity_mismatch() -> int[] throws never {
   { : unknown
     let items = [1, 2, 3] : int[]
-    items.map(x, y) : unknown
-    { : unknown
-      x : unknown
-    }
+    items.map() : unknown
   }
   !! 460..463: unresolved member: int[].map
-  !! 465..466: unresolved name: x
-  !! 468..469: unresolved name: y
-  !! 476..477: unresolved name: x
 }
 function user.test_param_type_mismatch() -> int[] throws never {
   { : unknown
     let items = [1, 2, 3] : int[]
-    items.map(x) : unknown
-    string : unknown
-    { : unknown
-      x : unknown
-    }
+    items.map() : unknown
   }
   !! 617..620: unresolved member: int[].map
-  !! 622..623: unresolved name: x
-  !! 625..631: unresolved name: string
-  !! 638..639: unresolved name: x
 }

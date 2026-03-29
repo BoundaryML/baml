@@ -2,124 +2,14 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved name: x
-   ╭─[ lambda_errors.baml:3:16 ]
+  [parse] Error: Expected type annotation, found ')'
+   ╭─[ lambda_errors.baml:9:17 ]
    │
- 3 │     let bad = (x: int) -> string { x * 2 }
-   │                ┬  
-   │                ╰── unresolved name: x
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [parse] Error: Expected ')', found ':'
-   ╭─[ lambda_errors.baml:3:17 ]
-   │
- 3 │     let bad = (x: int) -> string { x * 2 }
+ 9 │     let bad = (x) -> { x * 2 }
    │                 ┬  
-   │                 ╰── Expected ')', found ':'
+   │                 ╰── Expected type annotation, found ')'
    │ 
    │ Note: Error code: E0010
-───╯
-
-  [parse] Error: Expected expression, found ':'
-   ╭─[ lambda_errors.baml:3:17 ]
-   │
- 3 │     let bad = (x: int) -> string { x * 2 }
-   │                 ┬  
-   │                 ╰── Expected expression, found ':'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-  [type] Error: unresolved name: int
-   ╭─[ lambda_errors.baml:3:19 ]
-   │
- 3 │     let bad = (x: int) -> string { x * 2 }
-   │                   ─┬─  
-   │                    ╰─── unresolved name: int
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [parse] Error: Expected expression, found ')'
-   ╭─[ lambda_errors.baml:3:22 ]
-   │
- 3 │     let bad = (x: int) -> string { x * 2 }
-   │                      ┬  
-   │                      ╰── Expected expression, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-  [parse] Error: Expected expression, found '->'
-   ╭─[ lambda_errors.baml:3:24 ]
-   │
- 3 │     let bad = (x: int) -> string { x * 2 }
-   │                        ─┬  
-   │                         ╰── Expected expression, found '->'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-  [parse] Error: Expected ',' or '}' after object field, found '*'
-   ╭─[ lambda_errors.baml:3:38 ]
-   │
- 3 │     let bad = (x: int) -> string { x * 2 }
-   │                                      ┬  
-   │                                      ╰── Expected ',' or '}' after object field, found '*'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-  [parse] Error: Expected ':', found '*'
-   ╭─[ lambda_errors.baml:3:38 ]
-   │
- 3 │     let bad = (x: int) -> string { x * 2 }
-   │                                      ┬  
-   │                                      ╰── Expected ':', found '*'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-  [parse] Error: Expected field name, spread element, or '}', found integer
-   ╭─[ lambda_errors.baml:3:40 ]
-   │
- 3 │     let bad = (x: int) -> string { x * 2 }
-   │                                        ┬  
-   │                                        ╰── Expected field name, spread element, or '}', found integer
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-  [type] Error: unresolved name: x
-   ╭─[ lambda_errors.baml:9:16 ]
-   │
- 9 │     let bad = (x) -> { x * 2 }
-   │                ┬  
-   │                ╰── unresolved name: x
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [parse] Error: Expected expression, found '->'
-   ╭─[ lambda_errors.baml:9:19 ]
-   │
- 9 │     let bad = (x) -> { x * 2 }
-   │                   ─┬  
-   │                    ╰── Expected expression, found '->'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-  [type] Error: unresolved name: x
-   ╭─[ lambda_errors.baml:9:24 ]
-   │
- 9 │     let bad = (x) -> { x * 2 }
-   │                        ┬  
-   │                        ╰── unresolved name: x
-   │ 
-   │ Note: Error code: E0001
 ───╯
 
   [type] Error: unresolved member: int[].map
@@ -132,62 +22,22 @@ source: crates/baml_tests/src/generated_tests.rs
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved name: x
-    ╭─[ lambda_errors.baml:16:16 ]
-    │
- 16 │     items.map((x, y) -> { x })
-    │                ┬  
-    │                ╰── unresolved name: x
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [parse] Error: Expected ')', found ','
+  [parse] Error: Expected type annotation, found ','
     ╭─[ lambda_errors.baml:16:17 ]
     │
  16 │     items.map((x, y) -> { x })
     │                 ┬  
-    │                 ╰── Expected ')', found ','
+    │                 ╰── Expected type annotation, found ','
     │ 
     │ Note: Error code: E0010
 ────╯
 
-  [type] Error: unresolved name: y
-    ╭─[ lambda_errors.baml:16:19 ]
+  [parse] Error: Expected type annotation, found ')'
+    ╭─[ lambda_errors.baml:16:20 ]
     │
  16 │     items.map((x, y) -> { x })
-    │                   ┬  
-    │                   ╰── unresolved name: y
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [parse] Error: Expected expression, found '->'
-    ╭─[ lambda_errors.baml:16:22 ]
-    │
- 16 │     items.map((x, y) -> { x })
-    │                      ─┬  
-    │                       ╰── Expected expression, found '->'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [type] Error: unresolved name: x
-    ╭─[ lambda_errors.baml:16:27 ]
-    │
- 16 │     items.map((x, y) -> { x })
-    │                           ┬  
-    │                           ╰── unresolved name: x
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [parse] Error: Expected expression, found ')'
-    ╭─[ lambda_errors.baml:16:30 ]
-    │
- 16 │     items.map((x, y) -> { x })
-    │                              ┬  
-    │                              ╰── Expected expression, found ')'
+    │                    ┬  
+    │                    ╰── Expected type annotation, found ')'
     │ 
     │ Note: Error code: E0010
 ────╯
@@ -200,84 +50,4 @@ source: crates/baml_tests/src/generated_tests.rs
     │            ╰─── unresolved member: int[].map
     │ 
     │ Note: Error code: E0001
-────╯
-
-  [type] Error: unresolved name: x
-    ╭─[ lambda_errors.baml:22:16 ]
-    │
- 22 │     items.map((x: string) -> { x })
-    │                ┬  
-    │                ╰── unresolved name: x
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [parse] Error: Expected ')', found ':'
-    ╭─[ lambda_errors.baml:22:17 ]
-    │
- 22 │     items.map((x: string) -> { x })
-    │                 ┬  
-    │                 ╰── Expected ')', found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected expression, found ':'
-    ╭─[ lambda_errors.baml:22:17 ]
-    │
- 22 │     items.map((x: string) -> { x })
-    │                 ┬  
-    │                 ╰── Expected expression, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [type] Error: unresolved name: string
-    ╭─[ lambda_errors.baml:22:19 ]
-    │
- 22 │     items.map((x: string) -> { x })
-    │                   ───┬──  
-    │                      ╰──── unresolved name: string
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [parse] Error: Expected expression, found ')'
-    ╭─[ lambda_errors.baml:22:25 ]
-    │
- 22 │     items.map((x: string) -> { x })
-    │                         ┬  
-    │                         ╰── Expected expression, found ')'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [parse] Error: Expected expression, found '->'
-    ╭─[ lambda_errors.baml:22:27 ]
-    │
- 22 │     items.map((x: string) -> { x })
-    │                           ─┬  
-    │                            ╰── Expected expression, found '->'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-  [type] Error: unresolved name: x
-    ╭─[ lambda_errors.baml:22:32 ]
-    │
- 22 │     items.map((x: string) -> { x })
-    │                                ┬  
-    │                                ╰── unresolved name: x
-    │ 
-    │ Note: Error code: E0001
-────╯
-
-  [parse] Error: Expected expression, found ')'
-    ╭─[ lambda_errors.baml:22:35 ]
-    │
- 22 │     items.map((x: string) -> { x })
-    │                                   ┬  
-    │                                   ╰── Expected expression, found ')'
-    │ 
-    │ Note: Error code: E0010
 ────╯

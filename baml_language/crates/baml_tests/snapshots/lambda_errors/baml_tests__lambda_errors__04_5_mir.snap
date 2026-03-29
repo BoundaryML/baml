@@ -7,20 +7,18 @@ fn user.test_arity_mismatch() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: void
-    let _3: void
-    let _4: int[]
-    let _5: string
+    let _3: int[]
+    let _4: string
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
-        _4 = copy _1;
-        _5 = const "map";
-        _3 = copy _4[_5];
-        _2 = call copy _3(const null, const null) -> [bb1];
+        _3 = copy _1;
+        _4 = const "map";
+        _2 = copy _3[_4];
+        _0 = call copy _2() -> [bb1];
     }
 
     bb1: {
-        _0 = const null;
         goto -> bb2;
     }
 
@@ -32,14 +30,14 @@ fn user.test_arity_mismatch() -> int[] {
 fn user.test_no_annotation_no_context() -> int {
     // Locals:
     let _0: int // _0 // return
+    let _1: null
 
     bb0: {
-        _0 = const 0_i64;
-        goto -> bb1;
+        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
     }
 
     bb1: {
-        return;
+        unreachable;
     }
 }
 
@@ -48,20 +46,18 @@ fn user.test_param_type_mismatch() -> int[] {
     let _0: int[] // _0 // return
     let _1: int[] // items
     let _2: void
-    let _3: void
-    let _4: int[]
-    let _5: string
+    let _3: int[]
+    let _4: string
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
-        _4 = copy _1;
-        _5 = const "map";
-        _3 = copy _4[_5];
-        _2 = call copy _3(const null) -> [bb1];
+        _3 = copy _1;
+        _4 = const "map";
+        _2 = copy _3[_4];
+        _0 = call copy _2() -> [bb1];
     }
 
     bb1: {
-        _0 = const null;
         goto -> bb2;
     }
 
@@ -73,13 +69,13 @@ fn user.test_param_type_mismatch() -> int[] {
 fn user.test_return_mismatch() -> int {
     // Locals:
     let _0: int // _0 // return
+    let _1: null
 
     bb0: {
-        _0 = const 0_i64;
-        goto -> bb1;
+        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
     }
 
     bb1: {
-        return;
+        unreachable;
     }
 }

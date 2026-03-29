@@ -3,29 +3,29 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 function user.test_annotated() -> int  [expr] {
-  { let double = x; int; int {  } } double(21)
+  { let double = <missing> } double(21)
 }
 function user.test_capture() -> int  [expr] {
-  { let offset = 10; let add_offset = x; int; int {  } } add_offset(32)
+  { let offset = 10; let add_offset = <missing> } add_offset(32)
 }
 function user.test_generic_lambda() -> int  [expr] {
-  { let identity; T Gt x; T; T {  } } identity(42)
+  { let identity = <missing> } identity(42)
 }
 function user.test_inferred_return() -> int  [expr] {
-  { let double = x; int; {  } x Mul 2 } double(21)
+  { let double = <missing> } double(21)
 }
 function user.test_map_inferred() -> int[]  [expr] {
-  { let items: int[] = [1, 2, 3]; items.map(x) } {  } x Mul 2
+  { let items: int[] = [1, 2, 3] } items.map()
 }
 function user.test_multi_param() -> int  [expr] {
-  { let add = a; int; b; int; int {  } } add(20, 22)
+  { let add = <missing> } add(20, 22)
 }
 function user.test_nested() -> int  [expr] {
-  { let outer = x; int; { let inner = y; int; int {  } } inner(1) } outer(41)
+  { let outer = <missing> } outer(41)
 }
 function user.test_throws() -> int  [expr] {
-  { let risky = x; int; int; string {  } } x
+  { let risky = <missing> } risky(42)
 }
 function user.test_zero_param() -> int  [expr] {
-  { let constant = <missing>; int {  } } constant()
+  { let constant = <missing> } constant()
 }
