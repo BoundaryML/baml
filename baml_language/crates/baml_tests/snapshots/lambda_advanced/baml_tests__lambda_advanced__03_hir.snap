@@ -53,6 +53,6 @@ function user.test_nested_map() -> int[]  [expr] {
 function user.test_optional_return() -> int?  [expr] {
   { let maybe = (x: int) -> int? { {  } if (x Gt 0) {  } x else {  } null } } maybe(Neg 1)
 }
-function user.test_shadowing() -> int[]  [expr] {
-  { let x = "999"; let items: int[] = [1, 2, 3] } items.map((x) -> { {  } x Add 1 })
+function user.test_shadowing() -> string  [expr] {
+  { let x = "999"; let items: int[] = [1, 2, 3]; let mapped: int[] = items.map((x) -> { {  } x Add 1 }); for y in mapped { let i = 0; while i Lt y { x Add= "1"; i Add= 1 } } } x
 }

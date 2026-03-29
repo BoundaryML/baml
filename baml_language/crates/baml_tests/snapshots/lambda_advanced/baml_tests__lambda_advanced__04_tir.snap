@@ -228,15 +228,21 @@ function user.test_lambda_variable_then_pass() -> int[] throws never {
 }
 lambda user.test_lambda_variable_then_pass {
 }
-function user.test_shadowing() -> int[] throws never {
-  { : int[]
+function user.test_shadowing() -> string throws never {
+  { : string
     let x = "999" : int -> string
     let items = [1, 2, 3] : int[]
-    items.map<U>((x) -> { ... }) : int[]
-      (x) -> { ... } : (x: int) -> int
-        {
-          x Add 1
-        }
+    let mapped = items.map<U>((x) -> { ... }) : int[]
+    for y in mapped
+      { : void
+        let i = 0 : 0 -> int
+        while i Lt y
+          { : void
+            x Add= "1" : string
+            i Add= 1 : int
+          }
+      }
+    x : string
   }
 }
 lambda user.test_shadowing {

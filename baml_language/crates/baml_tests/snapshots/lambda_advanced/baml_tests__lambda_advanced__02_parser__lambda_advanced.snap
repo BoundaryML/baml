@@ -1097,10 +1097,8 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR "int[]"
-      WORD "int"
-      L_BRACKET "["
-      R_BRACKET "]"
+    TYPE_EXPR "string"
+      WORD "string"
     EXPR_FUNCTION_BODY
       BLOCK_EXPR
         L_BRACE "{"
@@ -1112,7 +1110,6 @@ SOURCE_FILE
             QUOTE """
             INTEGER_LITERAL "999"
             QUOTE """
-          SEMICOLON ";"
         LET_STMT
           KW_LET "let"
           WORD "items"
@@ -1130,28 +1127,78 @@ SOURCE_FILE
             COMMA ","
             INTEGER_LITERAL "3"
             R_BRACKET "]"
-        CALL_EXPR
-          PATH_EXPR "items.map"
-            WORD "items"
-            DOT "."
-            WORD "map"
-          CALL_ARGS
-            L_PAREN "("
-            LAMBDA_EXPR
-              PARAMETER_LIST
+        LET_STMT
+          KW_LET "let"
+          WORD "mapped"
+          COLON ":"
+          TYPE_EXPR "int[]"
+            WORD "int"
+            L_BRACKET "["
+            R_BRACKET "]"
+          EQUALS "="
+          CALL_EXPR
+            PATH_EXPR "items.map"
+              WORD "items"
+              DOT "."
+              WORD "map"
+            CALL_ARGS
+              L_PAREN "("
+              LAMBDA_EXPR
+                PARAMETER_LIST
+                  L_PAREN "("
+                  PARAMETER "x"
+                    WORD "x"
+                  R_PAREN ")"
+                ARROW "->"
+                BLOCK_EXPR
+                  L_BRACE "{"
+                  BINARY_EXPR "x + 1"
+                    WORD "x"
+                    PLUS "+"
+                    INTEGER_LITERAL "1"
+                  R_BRACE "}"
+              R_PAREN ")"
+        FOR_EXPR
+          KW_FOR "for"
+          L_PAREN "("
+          LET_STMT "let y"
+            KW_LET "let"
+            WORD "y"
+          KW_IN "in"
+          WORD "mapped"
+          R_PAREN ")"
+          BLOCK_EXPR
+            L_BRACE "{"
+            LET_STMT "let i = 0"
+              KW_LET "let"
+              WORD "i"
+              EQUALS "="
+              INTEGER_LITERAL "0"
+            WHILE_STMT
+              KW_WHILE "while"
+              PAREN_EXPR
                 L_PAREN "("
-                PARAMETER "x"
-                  WORD "x"
+                BINARY_EXPR "i < y"
+                  WORD "i"
+                  LESS "<"
+                  WORD "y"
                 R_PAREN ")"
-              ARROW "->"
               BLOCK_EXPR
                 L_BRACE "{"
-                BINARY_EXPR "x + 1"
+                BINARY_EXPR
                   WORD "x"
-                  PLUS "+"
+                  PLUS_EQUALS "+="
+                  STRING_LITERAL "1"
+                    QUOTE """
+                    INTEGER_LITERAL "1"
+                    QUOTE """
+                BINARY_EXPR "i += 1"
+                  WORD "i"
+                  PLUS_EQUALS "+="
                   INTEGER_LITERAL "1"
                 R_BRACE "}"
-            R_PAREN ")"
+            R_BRACE "}"
+        WORD "x"
         R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"

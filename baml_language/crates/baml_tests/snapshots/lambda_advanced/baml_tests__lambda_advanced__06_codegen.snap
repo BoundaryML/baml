@@ -214,7 +214,7 @@ function user.test_optional_return() -> int? {
     unreachable
 }
 
-function user.test_shadowing() -> int[] {
+function user.test_shadowing() -> string {
     load_const 1
     load_const 2
     load_const 3

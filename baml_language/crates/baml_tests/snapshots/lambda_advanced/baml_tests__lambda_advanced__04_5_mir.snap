@@ -260,9 +260,9 @@ fn user.test_optional_return() -> int? {
     }
 }
 
-fn user.test_shadowing() -> int[] {
+fn user.test_shadowing() -> string {
     // Locals:
-    let _0: int[] // _0 // return
+    let _0: string // _0 // return
     let _1: int[] // items
     let _2: null
 
