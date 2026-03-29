@@ -39,12 +39,14 @@ function user.test_zero_param() -> int throws never {
 lambda user.test_zero_param {
 }
 function user.test_map_inferred() -> int[] throws never {
-  { : unknown
-    let items = [1, 2, 3] : unknown -> int[]
-    items.map((x) -> { ... }) : unknown
+  { : unknown[]
+    let items = [1, 2, 3] : int -> int[]
+    items.map((x) -> { ... }) : unknown[]
+      (x) -> { ... } : (x: int) -> int
+        {
+          x Mul 2
+        }
   }
-  !! 565..568: unresolved member: int[].map
-  !! 569..585: cannot infer type of lambda parameter `x` — add a type annotation or provide context
 }
 lambda user.test_map_inferred {
 }

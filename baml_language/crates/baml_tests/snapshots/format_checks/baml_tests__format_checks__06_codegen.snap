@@ -3,6 +3,14 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
+    store_global ?185
+    call ?
+    store_global ?186
+    call ?
+    store_global ?187
+    call ?
+    store_global ?188
+    call ?
     store_global ?189
     call ?
     store_global ?190
@@ -62,14 +70,6 @@ function $init() -> null {
     store_global ?217
     call ?
     store_global ?218
-    call ?
-    store_global ?219
-    call ?
-    store_global ?220
-    call ?
-    store_global ?221
-    call ?
-    store_global ?222
     load_const ?
     return
 }
@@ -1694,13 +1694,6 @@ function user.LlmBasic$build_request(name: string) -> baml.http.Request {
     return
 }
 
-function user.LlmBasic$parse(json: string) -> string {
-    load_const "LlmBasic"
-    load_var json
-    call baml.llm.parse
-    return
-}
-
 function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
     load_const null
     load_const "LlmBasic"
@@ -1731,13 +1724,6 @@ function user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
     return
 }
 
-function user.LlmMultiLine$parse(json: string) -> string {
-    load_const "LlmMultiLine"
-    load_var json
-    call baml.llm.parse
-    return
-}
-
 function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
     load_const null
     load_const "LlmMultiLine"
@@ -1765,13 +1751,6 @@ function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request 
     load_const "text"
     alloc_map 1
     call baml.llm.build_request
-    return
-}
-
-function user.LlmReversedOrder$parse(json: string) -> string {
-    load_const "LlmReversedOrder"
-    load_var json
-    call baml.llm.parse
     return
 }
 
@@ -1837,13 +1816,6 @@ function user.LlmStringClient$build_request(text: string) -> baml.http.Request {
     return
 }
 
-function user.LlmStringClient$parse(json: string) -> string {
-    load_const "LlmStringClient"
-    load_var json
-    call baml.llm.parse
-    return
-}
-
 function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
     alloc_instance baml.llm.Client
     copy 0
@@ -1899,13 +1871,6 @@ function user.LlmWithLongSignature$build_request(first_context: string, second_c
     load_const "user_query"
     alloc_map 4
     call baml.llm.build_request
-    return
-}
-
-function user.LlmWithLongSignature$parse(json: string) -> string {
-    load_const "LlmWithLongSignature"
-    load_var json
-    call baml.llm.parse
     return
 }
 
@@ -5155,13 +5120,6 @@ function user.TestTarget$build_request() -> baml.http.Request {
     load_const "TestTarget"
     alloc_map 0
     call baml.llm.build_request
-    return
-}
-
-function user.TestTarget$parse(json: string) -> string {
-    load_const "TestTarget"
-    load_var json
-    call baml.llm.parse
     return
 }
 

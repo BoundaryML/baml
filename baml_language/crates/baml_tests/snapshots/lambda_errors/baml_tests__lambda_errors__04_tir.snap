@@ -29,22 +29,28 @@ function user.test_no_annotation_no_context() -> int throws never {
 lambda user.test_no_annotation_no_context {
 }
 function user.test_arity_mismatch() -> int[] throws never {
-  { : unknown
+  { : unknown[]
     let items = [1, 2, 3] : int[]
-    items.map((x, y) -> { ... }) : unknown
+    items.map((x, y) -> { ... }) : unknown[]
+      (x, y) -> { ... } : (x: int, y: unknown) -> int
+        {
+          x
+        }
   }
-  !! 460..463: unresolved member: int[].map
-  !! 464..479: cannot infer type of lambda parameter `x` — add a type annotation or provide context
-  !! 464..479: cannot infer type of lambda parameter `y` — add a type annotation or provide context
+  !! 464..479: expected 1 argument(s), got 2
 }
 lambda user.test_arity_mismatch {
 }
 function user.test_param_type_mismatch() -> int[] throws never {
-  { : unknown
+  { : unknown[]
     let items = [1, 2, 3] : int[]
-    items.map((x: string) -> { ... }) : unknown
+    items.map((x: string) -> { ... }) : unknown[]
+      (x: string) -> { ... } : (x: string) -> string
+        {
+          x
+        }
   }
-  !! 617..620: unresolved member: int[].map
+  !! 621..641: type mismatch: expected int, got string
 }
 lambda user.test_param_type_mismatch {
 }

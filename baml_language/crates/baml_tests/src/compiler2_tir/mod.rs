@@ -430,6 +430,12 @@ pub(crate) mod support {
                     arg_strs.join(", ")
                 )
                 .ok();
+                // Expand compound arguments (e.g. lambdas) below the call
+                for arg in args {
+                    if is_compound(&body.exprs[*arg]) {
+                        render_expr(*arg, body, inference, indent + 2, output);
+                    }
+                }
             }
             _ => {
                 let desc = expr_desc(expr_id, body);

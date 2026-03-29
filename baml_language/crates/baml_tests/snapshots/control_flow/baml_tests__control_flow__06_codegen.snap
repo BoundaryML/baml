@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
-    store_global ?108
+    store_global ?109
     load_const ?
     return
 }
@@ -101,13 +101,6 @@ function user.LlmFunction$build_request(input: string) -> baml.http.Request {
     load_const "input"
     alloc_map 1
     call baml.llm.build_request
-    return
-}
-
-function user.LlmFunction$parse(json: string) -> string {
-    load_const "LlmFunction"
-    load_var json
-    call baml.llm.parse
     return
 }
 

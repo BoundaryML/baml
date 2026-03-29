@@ -62,15 +62,11 @@ fn user.test_map_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: int[]
-    let _3: string
-    let _4: null
+    let _2: null
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
-        _2 = copy _1;
-        _3 = const "map";
-        _4 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
+        _2 = call const fn baml.sys.panic(const "lambda expressions are not yet supported") -> [bb1];
     }
 
     bb1: {
