@@ -29,9 +29,9 @@ function user.test_no_annotation_no_context() -> int throws never {
 lambda user.test_no_annotation_no_context {
 }
 function user.test_arity_mismatch() -> int[] throws never {
-  { : unknown[]
+  { : int[]
     let items = [1, 2, 3] : int[]
-    items.map((x, y) -> { ... }) : unknown[]
+    items.map<U>((x, y) -> { ... }) : int[]
       (x, y) -> { ... } : (x: int, y: unknown) -> int
         {
           x
@@ -42,15 +42,16 @@ function user.test_arity_mismatch() -> int[] throws never {
 lambda user.test_arity_mismatch {
 }
 function user.test_param_type_mismatch() -> int[] throws never {
-  { : unknown[]
+  { : (int | string)[]
     let items = [1, 2, 3] : int[]
-    items.map((x: string) -> { ... }) : unknown[]
+    items.map<U>((x: string) -> { ... }) : (int | string)[]
       (x: string) -> { ... } : (x: string) -> string
         {
           x
         }
   }
   !! 621..641: type mismatch: expected int, got string
+  !! 598..599: type mismatch: expected int, got string
 }
 lambda user.test_param_type_mismatch {
 }

@@ -3310,12 +3310,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         let class_data = &item_tree[class_loc.id(db)];
 
         // Bind generic type variables: e.g. {T → int} for Array<int>.
-        let bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
+        let mut bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
 
         // Search methods first.
         for &method_id in &class_data.methods {
             let method_data = &item_tree[method_id];
             if method_data.name == *member_name {
+                // Add method-level generics as TypeVar entries so they survive
+                // lowering and can be resolved by call-site inference.
+                for gp in &method_data.generic_params {
+                    bindings
+                        .entry(gp.clone())
+                        .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
+                }
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                 let mut diags = Vec::new();
