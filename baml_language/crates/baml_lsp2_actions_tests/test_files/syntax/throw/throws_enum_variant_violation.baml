@@ -1,4 +1,5 @@
-// throws specific variant, but body throws an extra variant — E0096
+// throws enum type, but body throws variants — contract mismatch
+// NOTE: enum variants in throws type position are not yet supported.
 
 enum Errors {
   AuthError
@@ -6,7 +7,7 @@ enum Errors {
   InternalError
 }
 
-function ThrowsVariantViolation(x: int) -> string throws Errors.AuthError {
+function ThrowsVariantViolation(x: int) -> string throws Errors {
   match (x) {
     0 => throw Errors.AuthError,
     _ => throw Errors.NotFoundError
@@ -15,21 +16,21 @@ function ThrowsVariantViolation(x: int) -> string throws Errors.AuthError {
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.AuthError` is missing user.Errors.AuthError, user.Errors.NotFoundError
-//    ╭─[ throw_throws_enum_variant_violation.baml:9:59 ]
-//    │
-//  9 │ function ThrowsVariantViolation(x: int) -> string throws Errors.AuthError {
-//    │                                                           ────────┬────────  
-//    │                                                                   ╰────────── throws contract violation: `user.AuthError` is missing user.Errors.AuthError, user.Errors.NotFoundError
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: extraneous throws declaration: user.AuthError
-//    ╭─[ throw_throws_enum_variant_violation.baml:9:59 ]
-//    │
-//  9 │ function ThrowsVariantViolation(x: int) -> string throws Errors.AuthError {
-//    │                                                           ────────┬────────  
-//    │                                                                   ╰────────── extraneous throws declaration: user.AuthError
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
+//     ╭─[ throw_throws_enum_variant_violation.baml:10:59 ]
+//     │
+//  10 │ function ThrowsVariantViolation(x: int) -> string throws Errors {
+//     │                                                           ───┬───  
+//     │                                                              ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: extraneous throws declaration: user.Errors
+//     ╭─[ throw_throws_enum_variant_violation.baml:10:59 ]
+//     │
+//  10 │ function ThrowsVariantViolation(x: int) -> string throws Errors {
+//     │                                                           ───┬───  
+//     │                                                              ╰───── extraneous throws declaration: user.Errors
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
