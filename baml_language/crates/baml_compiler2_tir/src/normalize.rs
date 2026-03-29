@@ -162,15 +162,27 @@ impl StructuralTy {
             // Null <: Optional<T>
             (StructuralTy::Null, StructuralTy::Optional(_)) => true,
 
-            // T <: Optional<T>
-            (inner, StructuralTy::Optional(opt_inner)) => {
+            // Optional<T> <: Optional<U> iff T <: U (covariance)
+            (StructuralTy::Optional(inner), StructuralTy::Optional(opt_inner)) => {
                 inner.is_subtype_of(opt_inner, assumptions)
             }
 
-            // Optional<T> <: T | null
+            // Union<T1, ..., Tn> <: Optional<U> iff every Ti is either Null or <: U
+            (StructuralTy::Union(types), StructuralTy::Optional(opt_inner)) => {
+                types.iter().all(|t| {
+                    matches!(t, StructuralTy::Null) || t.is_subtype_of(opt_inner, assumptions)
+                })
+            }
+
+            // Optional<T> <: Union  iff Null <: Union and T <: Union
             (StructuralTy::Optional(inner), StructuralTy::Union(types)) => {
-                types.contains(&StructuralTy::Null)
+                types.iter().any(|t| matches!(t, StructuralTy::Null))
                     && types.iter().any(|t| inner.is_subtype_of(t, assumptions))
+            }
+
+            // T <: Optional<T>
+            (inner, StructuralTy::Optional(opt_inner)) => {
+                inner.is_subtype_of(opt_inner, assumptions)
             }
 
             // T <: T | U

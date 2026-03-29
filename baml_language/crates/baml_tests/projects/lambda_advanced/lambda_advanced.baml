@@ -127,7 +127,7 @@ function test_lambda_variable_then_pass() -> int[] {
 
 // ── Shadowing: lambda param shadows outer variable ───────────────
 function test_shadowing() -> int[] {
-    let x = 999
+    let x = "999";
     let items: int[] = [1, 2, 3]
     items.map((x) -> { x + 1 }) // x here is the lambda param, not 999
 }
