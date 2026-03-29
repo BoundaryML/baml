@@ -166,7 +166,7 @@ fn requalify_for_caller(ty: PpirTy, alias_ns: &[Name], caller_ns: &[Name]) -> Pp
             attrs,
         },
         PpirTy::Map { key, value, attrs } => PpirTy::Map {
-            key,
+            key: Box::new(requalify_for_caller(*key, alias_ns, caller_ns)),
             value: Box::new(requalify_for_caller(*value, alias_ns, caller_ns)),
             attrs,
         },
