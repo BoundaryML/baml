@@ -665,7 +665,7 @@ pub fn render_scope_diagnostics<'db>(
     let source_map = item_tree
         .functions
         .iter()
-        .find(|(_, f)| f.span == scope.range)
+        .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name))
         .and_then(|(local_id, _)| {
             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
             baml_compiler2_hir::body::function_body_source_map(db, func_loc)

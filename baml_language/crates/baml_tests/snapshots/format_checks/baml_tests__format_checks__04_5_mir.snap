@@ -1516,6 +1516,24 @@ fn user.TestTarget$build_request() -> baml.http.Request {
     }
 }
 
+fn user.TestTarget$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "TestTarget", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.TestTarget$render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2041,6 +2059,24 @@ fn user.LlmBasic$build_request(name: string) -> baml.http.Request {
     }
 }
 
+fn user.LlmBasic$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LlmBasic", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2101,6 +2137,24 @@ fn user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
     }
 }
 
+fn user.LlmMultiLine$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LlmMultiLine", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2150,6 +2204,24 @@ fn user.LlmReversedOrder$build_request(text: string) -> baml.http.Request {
     bb0: {
         _2 = { const "text": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "LlmReversedOrder", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmReversedOrder$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LlmReversedOrder", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2229,6 +2301,24 @@ fn user.LlmStringClient$build_request(text: string) -> baml.http.Request {
     }
 }
 
+fn user.LlmStringClient$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LlmStringClient", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2288,6 +2378,24 @@ fn user.LlmWithLongSignature$build_request(first_context: string, second_context
     bb0: {
         _5 = { const "first_context": copy _1, const "second_context": copy _2, const "third_context": copy _3, const "user_query": copy _4 };
         _0 = call const fn baml.llm.build_request(const null, const "LlmWithLongSignature", copy _5) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmWithLongSignature$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LlmWithLongSignature", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -5843,8 +5951,9 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     let _118: MatchSuccess
     let _119: bool
     let _120: bool
-    let _121: MatchFailure
-    let _122: int
+    let _121: MatchFailure // f
+    let _122: MatchFailure
+    let _123: int
 
     bb0: {
         switch copy _1 [0: bb2, otherwise: bb1];
@@ -6646,7 +6755,8 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb169: {
-        _121 = const null;
+        _121 = copy _3;
+        _122 = copy _121;
         goto -> bb176;
     }
 
@@ -6746,8 +6856,8 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb192: {
-        _122 = discriminant(_116);
-        switch copy _122 [MatchStatus.Active: bb196, MatchStatus.Inactive: bb195, MatchStatus.Pending: bb194, otherwise: bb193] (exhaustive);
+        _123 = discriminant(_116);
+        switch copy _123 [MatchStatus.Active: bb196, MatchStatus.Inactive: bb195, MatchStatus.Pending: bb194, otherwise: bb193] (exhaustive);
     }
 
     bb193: {

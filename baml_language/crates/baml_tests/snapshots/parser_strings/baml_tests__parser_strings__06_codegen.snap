@@ -21,6 +21,13 @@ function user.FormatMessage$build_request(name: string) -> baml.http.Request {
     return
 }
 
+function user.FormatMessage$parse(json: string) -> string {
+    load_const "FormatMessage"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
 function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
     load_const null
     load_const "FormatMessage"
@@ -53,6 +60,13 @@ function user.ProcessText$build_request(input: string) -> baml.http.Request {
     load_const "input"
     alloc_map 1
     call baml.llm.build_request
+    return
+}
+
+function user.ProcessText$parse(json: string) -> string {
+    load_const "ProcessText"
+    load_var json
+    call baml.llm.parse
     return
 }
 

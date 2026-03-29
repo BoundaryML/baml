@@ -3,6 +3,18 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: unresolved name: GPT4
+   ╭─[ functions.baml:4:2 ]
+   │
+ 4 │ ╭─▶ }
+   ┆ ┆   
+ 9 │ ├─▶ }
+   │ │       
+   │ ╰─────── unresolved name: GPT4
+   │     
+   │     Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: GPT4
    ╭─[ functions.baml:6:31 ]
    │
  6 │ ╭─▶ function GetStatus() -> Status {
@@ -27,9 +39,33 @@ source: crates/baml_tests/src/generated_tests.rs
 ────╯
 
   [type] Error: unresolved name: GPT4
+    ╭─[ functions.baml:12:44 ]
+    │
+ 12 │ ╭─▶ function GetMixedList() -> (int | string)[] {
+    ┆ ┆   
+ 15 │ ├─▶ }
+    │ │       
+    │ ╰─────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: GPT4
     ╭─[ functions.baml:15:2 ]
     │
  15 │ ╭─▶ }
+    ┆ ┆   
+ 20 │ ├─▶ }
+    │ │      
+    │ ╰────── unresolved name: GPT4
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved name: GPT4
+    ╭─[ functions.baml:17:52 ]
+    │
+ 17 │ ╭─▶ function GetMixedMap() -> map<string, int | string> {
     ┆ ┆   
  20 │ ├─▶ }
     │ │      

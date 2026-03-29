@@ -130,3 +130,6 @@ function user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst thr
 function user.LlmFunction$build_request(input: string) -> baml.http.Request throws never {
   baml.llm.build_request(TestClient, "LlmFunction", map { "input": input }) : baml.http.Request
 }
+function user.LlmFunction$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("LlmFunction", json) : string
+}

@@ -42,6 +42,24 @@ fn user.FetchDatax$build_request(user_id: string) -> baml.http.Request {
     }
 }
 
+fn user.FetchDatax$parse(json: string) -> Hi {
+    // Locals:
+    let _0: Hi // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "FetchDatax", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return

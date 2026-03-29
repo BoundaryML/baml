@@ -11,6 +11,9 @@ function user.FetchDatax(user_id: string) -> user.Hi  [llm] {
 function user.FetchDatax$build_request(user_id: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(VertexGCP, "FetchDatax", map { "user_id": user_id })
 }
+function user.FetchDatax$parse(json: string) -> user.Hi  [expr] {
+  baml.llm.parse("FetchDatax", json)
+}
 function user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(VertexGCP, "FetchDatax", map { "user_id": user_id })
 }

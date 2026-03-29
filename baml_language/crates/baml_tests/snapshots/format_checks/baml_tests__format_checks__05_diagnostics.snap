@@ -301,9 +301,33 @@ source: crates/baml_tests/src/generated_tests.rs
 ─────╯
 
   [type] Error: unresolved name: GPT4
+     ╭─[ function_decls.baml:460:42 ]
+     │
+ 460 │ ╭─▶ function LlmBasic(name: string) -> string {
+     ┆ ┆   
+ 463 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: GPT4
      ╭─[ function_decls.baml:463:2 ]
      │
  463 │ ╭─▶ }
+     ┆ ┆   
+ 478 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: GPT4
+     ╭─[ function_decls.baml:471:46 ]
+     │
+ 471 │ ╭─▶ function LlmMultiLine(text: string) -> string {
      ┆ ┆   
  478 │ ├─▶ }
      │ │       
@@ -318,6 +342,30 @@ source: crates/baml_tests/src/generated_tests.rs
  484 │ ╭─▶ }
      ┆ ┆   
  490 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: GPT4
+     ╭─[ function_decls.baml:487:50 ]
+     │
+ 487 │ ╭─▶ function LlmReversedOrder(text: string) -> string {
+     ┆ ┆   
+ 490 │ ├─▶ }
+     │ │       
+     │ ╰─────── unresolved name: GPT4
+     │     
+     │     Note: Error code: E0001
+─────╯
+
+  [type] Error: unresolved name: GPT4
+     ╭─[ function_decls.baml:490:2 ]
+     │
+ 490 │ ╭─▶ }
+     ┆ ┆   
+ 501 │ ├─▶ }
      │ │       
      │ ╰─────── unresolved name: GPT4
      │     

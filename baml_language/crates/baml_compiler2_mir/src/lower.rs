@@ -320,7 +320,7 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_tir::{
     inference::infer_scope_types,
-    resolve::{ResolvedName, resolve_name_at},
+    resolve::{ResolvedName, resolve_name_at_in_scope},
 };
 use rustc_hash::FxHashMap;
 
@@ -345,6 +345,9 @@ struct LoweringContext<'db> {
     source_map: Option<AstSourceMap>,
     file: baml_base::SourceFile,
     func_loc: Option<FunctionLoc<'db>>,
+    /// Raw function name from the item tree (e.g. `"Foo$render_prompt"`).
+    /// Used to disambiguate companion scopes that share the same span.
+    scope_func_name: Option<Name>,
 
     // Schema maps built from PackageItems.
     // class_fields and class_type_tags are keyed by TypeName (name + module_path)
@@ -587,6 +590,7 @@ impl<'db> LoweringContext<'db> {
             source_map,
             file,
             func_loc: Some(func_loc),
+            scope_func_name: Some(func_data.name.clone()),
             class_fields,
             enum_variants,
             class_type_tags,
@@ -734,6 +738,7 @@ impl<'db> LoweringContext<'db> {
             source_map,
             file,
             func_loc: None,
+            scope_func_name: Some(let_name.clone()),
             class_fields,
             enum_variants,
             class_type_tags,
@@ -1168,7 +1173,13 @@ impl<'db> LoweringContext<'db> {
             .map(|sm| sm.expr_span(expr_id).start())
             .unwrap_or_default();
 
-        let resolved = resolve_name_at(self.db, self.file, span_start, name);
+        let resolved = resolve_name_at_in_scope(
+            self.db,
+            self.file,
+            span_start,
+            name,
+            self.scope_func_name.as_ref(),
+        );
         match resolved {
             ResolvedName::Local {
                 name: local_name, ..
@@ -1192,10 +1203,16 @@ impl<'db> LoweringContext<'db> {
                 );
             }
             ResolvedName::Unknown => {
-                // If TIR recorded a type for this expr, it was handled as a package
-                // path intermediate (e.g. `baml` in `baml.HttpMethod.Get`). Emit a
-                // null placeholder — the outer FieldAccess will produce the real value.
-                if self.expr_types.contains_key(&expr_id) {
+                // The MIR lowerer may already know this as a local (e.g. from
+                // lowering a let-statement, match arm, or catch clause). Check
+                // locals first as a guard against scope-resolution mismatches.
+                if let Some(&local) = self.locals.get(name) {
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
+                } else if self.expr_types.contains_key(&expr_id) {
+                    // Package path intermediate (e.g. `baml` in `baml.HttpMethod.Get`).
+                    // Emit a null placeholder — the outer FieldAccess will produce
+                    // the real value.
                     self.builder
                         .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
                 } else {
@@ -1481,7 +1498,13 @@ impl LoweringContext<'_> {
                     .as_ref()
                     .map(|sm| sm.expr_span(callee).start())
                     .unwrap_or_default();
-                let resolved = resolve_name_at(self.db, self.file, span_start, &segments[0]);
+                let resolved = resolve_name_at_in_scope(
+                    self.db,
+                    self.file,
+                    span_start,
+                    &segments[0],
+                    self.scope_func_name.as_ref(),
+                );
                 match resolved {
                     ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
                     ResolvedName::Item(Definition::Function(fl)) => Some(fl),

@@ -12,13 +12,13 @@ use baml_base::Name;
 
 use crate::{
     DeclarativeMeta,
-    ast::{FunctionBodyDef, FunctionDef, SpannedTypeExpr, TypeExpr},
-    lower_cst::synthesize_llm_builtin_call,
+    ast::{FunctionBodyDef, FunctionDef, Param, SpannedTypeExpr, TypeExpr},
+    lower_cst::{synthesize_llm_builtin_call, synthesize_llm_parse_call},
 };
 
 type CompanionExpander = fn(&FunctionDef) -> Option<FunctionDef>;
 
-const COMPANIONS: &[CompanionExpander] = &[llm_render_prompt, llm_build_request];
+const COMPANIONS: &[CompanionExpander] = &[llm_render_prompt, llm_build_request, llm_parse];
 
 /// Run all companion expanders on the given function.
 /// Works identically for top-level functions and class methods.
@@ -51,6 +51,44 @@ fn llm_build_request(parent: &FunctionDef) -> Option<FunctionDef> {
         "build_request",
         &["baml", "http", "Request"],
     ))
+}
+
+fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
+    // Only LLM functions get parse companion.
+    if !matches!(&parent.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
+        return None;
+    }
+
+    let name = Name::new(format!("{}$parse", parent.name));
+
+    // Parse takes a single `json: string` parameter instead of the parent's params.
+    let json_param = Param {
+        name: Name::new("json"),
+        type_expr: Some(SpannedTypeExpr {
+            expr: TypeExpr::String { attrs: vec![] },
+            span: parent.span,
+        }),
+        span: parent.span,
+        name_span: parent.name_span,
+    };
+
+    // Return type is the same as the parent function.
+    let return_type = parent.return_type.clone();
+
+    let (body, source_map) = synthesize_llm_parse_call(parent.name.as_str(), parent.span);
+
+    Some(FunctionDef {
+        name,
+        generic_params: parent.generic_params.clone(),
+        params: vec![json_param],
+        return_type,
+        throws: None,
+        body: Some(FunctionBodyDef::Expr(body, source_map)),
+        declarative_meta: None,
+        attributes: vec![],
+        span: parent.span,
+        name_span: parent.name_span,
+    })
 }
 
 fn make_llm_companion(

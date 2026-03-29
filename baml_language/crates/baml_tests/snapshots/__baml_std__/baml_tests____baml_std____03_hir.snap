@@ -119,6 +119,9 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
 function baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.T  [expr] {
   { let jinja_string = get_jinja_template(function_name); let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name }; let result: baml.llm.T = client.execute(context, 0) } result
 }
+function baml.llm.parse(function_name: string, json: string) -> baml.llm.T  [expr] {
+  { let return_type = get_return_type(function_name) } __sap_parse(json, return_type)
+}
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst  [expr] {
   { let jinja_string = get_jinja_template(function_name); let primitive_client = client.to_primitive_client(); let prompt = primitive_client.render_prompt(jinja_string, args) } primitive_client.specialize_prompt(prompt)
 }
@@ -171,6 +174,7 @@ class baml.llm.RetryPolicy {
   max_delay_ms: int
 }
 enum baml.llm.ClientType {Primitive, Fallback, RoundRobin}
+function baml.llm.__sap_parse(json: string, ty: type) -> baml.llm.T  [builtin]
 function baml.llm.build_attempt(self: ?) -> baml.llm.OrchestrationStep[]  [expr] {
   { let planner_state = PlannerState { rr_client_names: [] } } self.build_attempt_with_state(planner_state)
 }

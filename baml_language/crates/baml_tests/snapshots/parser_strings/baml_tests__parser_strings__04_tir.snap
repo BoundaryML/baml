@@ -20,11 +20,14 @@ function user.FormatMessage(name: string) -> string throws never {
 }
 function user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "FormatMessage", map { "name": name }) : baml.llm.PromptAst
-  !! 428..553: unresolved name: GPT4
+  !! 345..553: unresolved name: GPT4
 }
 function user.FormatMessage$build_request(name: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "FormatMessage", map { "name": name }) : baml.http.Request
-  !! 428..553: unresolved name: GPT4
+  !! 345..553: unresolved name: GPT4
+}
+function user.FormatMessage$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("FormatMessage", json) : string
 }
 class user.NestedQuotes$stream {
   single_in_double: null | string @alias("He said 'hello'")
@@ -50,7 +53,7 @@ class user.RawStrings {
 }
 function user.ProcessText(input: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "ProcessText", map { "input": input }) : string
-  !! 364..532: unresolved name: GPT4
+  !! 411..532: unresolved name: GPT4
 }
 function user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "ProcessText", map { "input": input }) : baml.llm.PromptAst
@@ -59,6 +62,9 @@ function user.ProcessText$render_prompt(input: string) -> baml.llm.PromptAst thr
 function user.ProcessText$build_request(input: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "ProcessText", map { "input": input }) : baml.http.Request
   !! 364..532: unresolved name: GPT4
+}
+function user.ProcessText$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("ProcessText", json) : string
 }
 class user.RawStrings$stream {
   simple: null | string @description(#"raw string"#)

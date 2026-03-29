@@ -48,8 +48,20 @@ pub fn resolve_name_at<'db>(
     at_offset: TextSize,
     name: &Name,
 ) -> ResolvedName<'db> {
+    resolve_name_at_in_scope(db, file, at_offset, name, None)
+}
+
+/// Like `resolve_name_at`, but disambiguates companion functions that share
+/// the same span by requiring the scope name to match `scope_name`.
+pub fn resolve_name_at_in_scope<'db>(
+    db: &'db dyn crate::Db,
+    file: SourceFile,
+    at_offset: TextSize,
+    name: &Name,
+    scope_name: Option<&Name>,
+) -> ResolvedName<'db> {
     let index = baml_compiler2_ppir::file_semantic_index(db, file);
-    let scope_id = index.scope_at_offset(at_offset, None);
+    let scope_id = index.scope_at_offset(at_offset, scope_name);
 
     // Walk ancestor scopes from innermost to outermost
     for ancestor_id in index.ancestor_scopes(scope_id) {
@@ -141,13 +153,14 @@ pub fn resolve_path_at<'db>(
     file: SourceFile,
     at_offset: TextSize,
     segments: &[Name],
+    scope_name: Option<&Name>,
 ) -> ResolvedName<'db> {
     if segments.is_empty() {
         return ResolvedName::Unknown;
     }
 
     if segments.len() == 1 {
-        return resolve_name_at(db, file, at_offset, &segments[0]);
+        return resolve_name_at_in_scope(db, file, at_offset, &segments[0], scope_name);
     }
 
     // First segment: `root` maps to the current file's package,

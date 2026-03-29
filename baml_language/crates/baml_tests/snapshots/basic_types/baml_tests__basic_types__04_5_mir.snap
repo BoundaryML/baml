@@ -40,6 +40,24 @@ fn user.GetMixedList$build_request() -> baml.http.Request {
     }
 }
 
+fn user.GetMixedList$parse(json: string) -> int | string[] {
+    // Locals:
+    let _0: int | string[] // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "GetMixedList", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.GetMixedList$render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -86,6 +104,24 @@ fn user.GetMixedMap$build_request() -> baml.http.Request {
     bb0: {
         _1 = {  };
         _0 = call const fn baml.llm.build_request(const null, const "GetMixedMap", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.GetMixedMap$parse(json: string) -> map<string, int | string> {
+    // Locals:
+    let _0: map<string, int | string> // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "GetMixedMap", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -154,6 +190,24 @@ fn user.GetStatus$build_request() -> baml.http.Request {
     }
 }
 
+fn user.GetStatus$parse(json: string) -> Status {
+    // Locals:
+    let _0: Status // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "GetStatus", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.GetStatus$render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -210,6 +264,24 @@ fn user.GetUser$build_request(id: int) -> baml.http.Request {
         _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
         _4 = { const "id": copy _1 };
         _0 = call const fn baml.llm.build_request(copy _2, const "GetUser", copy _4) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.GetUser$parse(json: string) -> User {
+    // Locals:
+    let _0: User // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "GetUser", copy _1) -> [bb1];
     }
 
     bb1: {
