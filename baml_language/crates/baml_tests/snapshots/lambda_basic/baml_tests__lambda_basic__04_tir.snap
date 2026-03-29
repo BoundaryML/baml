@@ -55,7 +55,7 @@ function user.test_throws() -> int throws never {
         {
           if (x Lt 0)
             {
-              <stmt>
+              throw "negative"
             }
           x
         }

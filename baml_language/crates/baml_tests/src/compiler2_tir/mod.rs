@@ -547,9 +547,38 @@ pub(crate) mod support {
                 writeln!(output, "{pad}while ({cond})").ok();
                 render_expr_body_untyped(body, *while_body, indent + 2, output);
             }
-            _ => {
-                writeln!(output, "{pad}<stmt>").ok();
+            Stmt::Return(Some(expr_id)) => {
+                let desc = expr_desc(*expr_id, body);
+                writeln!(output, "{pad}return {desc}").ok();
             }
+            Stmt::Return(None) => {
+                writeln!(output, "{pad}return").ok();
+            }
+            Stmt::Throw { value } => {
+                let desc = expr_desc(*value, body);
+                writeln!(output, "{pad}throw {desc}").ok();
+            }
+            Stmt::Assign { target, value } => {
+                let t = expr_desc(*target, body);
+                let v = expr_desc(*value, body);
+                writeln!(output, "{pad}{t} = {v}").ok();
+            }
+            Stmt::AssignOp { target, op, value } => {
+                let t = expr_desc(*target, body);
+                let v = expr_desc(*value, body);
+                writeln!(output, "{pad}{t} {op:?}= {v}").ok();
+            }
+            Stmt::Break => {
+                writeln!(output, "{pad}break").ok();
+            }
+            Stmt::Continue => {
+                writeln!(output, "{pad}continue").ok();
+            }
+            Stmt::Assert { condition } => {
+                let desc = expr_desc(*condition, body);
+                writeln!(output, "{pad}assert {desc}").ok();
+            }
+            Stmt::Missing | Stmt::HeaderComment { .. } => {}
         }
     }
 
