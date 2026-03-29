@@ -29,3 +29,7 @@ function user.test_throws() -> int  [expr] {
 function user.test_zero_param() -> int  [expr] {
   { let constant = () -> int { {  } 42 } } constant()
 }
+
+--- captures ---
+lambda (x) in test_capture: captures [offset]
+lambda (y) in ?: captures [x]

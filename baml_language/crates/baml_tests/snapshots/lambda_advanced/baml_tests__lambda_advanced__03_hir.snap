@@ -113,3 +113,14 @@ function user.test_void_lambda_inferred() -> int  [expr] {
 function user.test_void_lambda_inferred_captures() -> int  [expr] {
   { let inc = () -> { { let count = 0; let inc = () -> { { count Add= 1 } count } } inc }(); inc(); inc() } inc()
 }
+
+--- captures ---
+lambda (x) in ?: captures [n]
+lambda (c) in ?: captures [a, b]
+lambda (x) in test_map_with_capture: captures [factor]
+lambda (x) in ?: captures [n]
+lambda (c) in ?: captures [a, b]
+lambda (x) in test_capture_in_map_inferred: captures [factor]
+lambda () in test_void_lambda_inferred: captures [count]
+lambda () in ?: captures [count]
+lambda (x) in test_capture_lambda_inferred: captures [multiply]

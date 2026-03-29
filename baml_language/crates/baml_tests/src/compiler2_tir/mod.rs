@@ -1080,6 +1080,7 @@ pub(crate) mod support {
         use baml_compiler2_hir::{
             file_item_tree,
             file_package::file_package,
+            file_semantic_index,
             loc::{ClassLoc, EnumLoc, TypeAliasLoc},
         };
 
@@ -1602,6 +1603,41 @@ pub(crate) mod support {
             } else {
                 writeln!(output).ok();
             }
+        }
+
+        // ── Lambda capture annotations ──────────────────────────────────────
+        let index = file_semantic_index(db, file);
+        let mut has_captures = false;
+        for (i, scope) in index.scopes.iter().enumerate() {
+            if !matches!(scope.kind, baml_compiler2_hir::scope::ScopeKind::Lambda) {
+                continue;
+            }
+            let bindings = &index.scope_bindings[i];
+            if bindings.captures.is_empty() {
+                continue;
+            }
+            if !has_captures {
+                writeln!(output, "\n--- captures ---").ok();
+                has_captures = true;
+            }
+            // Build a descriptive path for the lambda scope
+            let parent_name = scope
+                .parent
+                .and_then(|pid| {
+                    let parent = &index.scopes[pid.index() as usize];
+                    parent.name.as_ref().map(|n| n.to_string())
+                })
+                .unwrap_or_else(|| "?".into());
+            let params: Vec<&str> = bindings.params.iter().map(|(n, _)| n.as_str()).collect();
+            let capture_names: Vec<&str> = bindings.captures.iter().map(|n| n.as_str()).collect();
+            writeln!(
+                output,
+                "lambda ({}) in {}: captures [{}]",
+                params.join(", "),
+                parent_name,
+                capture_names.join(", ")
+            )
+            .ok();
         }
 
         output
