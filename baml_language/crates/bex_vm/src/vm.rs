@@ -1968,19 +1968,20 @@ impl BexVm {
                                 CmpOp::NotEq => left != right,
 
                                 CmpOp::InstanceOf => {
-                                    let left = self.as_object_ptr(&left, ObjectType::Instance)?;
-
-                                    let Object::Instance(instance) = self.get_object(left) else {
-                                        return Err(InternalError::TypeError {
-                                            expected: ObjectType::Instance.into(),
-                                            got: ObjectType::of(self.get_object(left)).into(),
+                                    // null/non-object is never an instance of anything.
+                                    match left {
+                                        Value::Object(left_ptr) => {
+                                            match self.get_object(left_ptr) {
+                                                Object::Instance(instance) => {
+                                                    let right_ptr = self
+                                                        .as_object_ptr(&right, ObjectType::Class)?;
+                                                    instance.class == right_ptr
+                                                }
+                                                _ => false,
+                                            }
                                         }
-                                        .into());
-                                    };
-
-                                    let right = self.as_object_ptr(&right, ObjectType::Class)?;
-
-                                    instance.class == right
+                                        _ => false,
+                                    }
                                 }
 
                                 _ => {
