@@ -6,7 +6,7 @@ fn user.Fn() -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: baml.llm.Client
-    let _2: void[]
+    let _2: baml.llm.Client[]
     let _3: map<string, unknown>
 
     bb0: {
@@ -29,7 +29,7 @@ fn user.Fn$build_request() -> baml.http.Request {
     // Locals:
     let _0: baml.http.Request // _0 // return
     let _1: baml.llm.Client
-    let _2: void[]
+    let _2: baml.llm.Client[]
     let _3: map<string, unknown>
 
     bb0: {
@@ -70,7 +70,7 @@ fn user.Fn$render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
     let _1: baml.llm.Client
-    let _2: void[]
+    let _2: baml.llm.Client[]
     let _3: map<string, unknown>
 
     bb0: {

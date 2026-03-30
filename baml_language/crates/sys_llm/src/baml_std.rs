@@ -16,8 +16,6 @@ pub struct PrimitiveClient {
     pub provider: String,
     /// Resolved model name (falls back to empty string).
     pub model: String,
-    /// Resolved `max_tokens` (None if not set by user or provider default).
-    pub max_tokens: Option<i64>,
     /// Resolved default role (falls back to "system").
     pub default_role: String,
     /// Resolved allowed roles (falls back to \["user"\]).
@@ -51,7 +49,6 @@ impl PrimitiveClient {
                 .cloned()
                 .unwrap_or_else(|| "user".to_string())
         });
-        let max_tokens = options.max_tokens;
         let extra_body = {
             let mut map = serde_json::Map::new();
             for (key, value) in &options.request_body {
@@ -65,7 +62,6 @@ impl PrimitiveClient {
             name,
             provider,
             model,
-            max_tokens,
             default_role,
             allowed_roles,
             extra_body,
@@ -100,6 +96,7 @@ impl PrimitiveClient {
 #[derive(Clone, Debug, Default)]
 pub struct AnthropicOptions {
     pub anthropic_version: Option<String>,
+    pub max_tokens: Option<i64>,
 }
 
 #[derive(Clone, Debug)]
@@ -107,6 +104,7 @@ pub struct AzureOpenAiOptions {
     pub resource_name: Option<String>,
     pub deployment_id: Option<String>,
     pub api_version: String,
+    pub max_tokens: Option<i64>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -118,6 +116,9 @@ pub struct BedrockOptions {
     pub session_token: Option<String>,
     pub profile: Option<String>,
     pub stop_sequences: Option<Vec<String>>,
+    pub max_tokens: Option<i64>,
+    pub temperature: Option<f64>,
+    pub top_p: Option<f64>,
 }
 
 /// Provider-specific options, matching the BAML schema union
@@ -132,9 +133,6 @@ pub enum ProviderOptions {
 #[derive(Debug, Default)]
 pub struct PrimitiveClientOptions {
     pub model: Option<String>,
-    pub max_tokens: Option<i64>,
-    pub temperature: Option<f64>,
-    pub top_p: Option<f64>,
     pub max_one_system_prompt: Option<bool>,
     pub allowed_role_metadata: Option<bex_heap::BexExternalValue>,
     pub finish_reason_allow_list: Option<Vec<String>>,
@@ -156,9 +154,9 @@ impl PrimitiveClientOptions {
         match provider {
             LlmProvider::Anthropic => Self {
                 base_url: Some("https://api.anthropic.com".to_string()),
-                max_tokens: Some(4096),
                 provider_options: Some(ProviderOptions::Anthropic(AnthropicOptions {
                     anthropic_version: Some("2023-06-01".to_string()),
+                    max_tokens: Some(4096),
                 })),
                 ..Default::default()
             },
@@ -197,7 +195,6 @@ impl PrimitiveClientOptions {
                     "user".to_string(),
                     "assistant".to_string(),
                 ]),
-                max_tokens: Some(4096),
                 ..Default::default()
             },
             LlmProvider::AwsBedrock => Self {
@@ -221,9 +218,6 @@ impl PrimitiveClientOptions {
     pub fn with_defaults(self, defaults: Self) -> Self {
         Self {
             model: self.model.or(defaults.model),
-            max_tokens: self.max_tokens.or(defaults.max_tokens),
-            temperature: self.temperature.or(defaults.temperature),
-            top_p: self.top_p.or(defaults.top_p),
             max_one_system_prompt: self
                 .max_one_system_prompt
                 .or(defaults.max_one_system_prompt),

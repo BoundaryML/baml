@@ -178,6 +178,7 @@ mod tests {
                         resource_name: Some("my-resource".to_string()),
                         deployment_id: Some("gpt-4o".to_string()),
                         api_version: "2024-02-15-preview".to_string(),
+                        max_tokens: Some(4096),
                     },
                 )),
                 ..Default::default()

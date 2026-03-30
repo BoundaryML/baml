@@ -852,6 +852,13 @@ impl ToDiagnostic for HirDiagnostic {
             )
             .with_primary_span(*span),
 
+            HirDiagnostic::MissingClientOptions {
+                client_name: _,
+                message,
+                span,
+            } => Diagnostic::error(DiagnosticId::MissingClientOptions, message.clone())
+                .with_primary_span(*span),
+
             HirDiagnostic::UnknownClientProperty {
                 client_name: _,
                 field_name,

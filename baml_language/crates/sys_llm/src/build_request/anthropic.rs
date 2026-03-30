@@ -61,10 +61,6 @@ struct RequestBody {
     messages: Vec<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     max_tokens: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    top_p: Option<f64>,
     #[serde(flatten)]
     extra: serde_json::Map<String, serde_json::Value>,
 }
@@ -102,13 +98,16 @@ pub(crate) fn build_request(
     // Body
     let (system, messages) = extract_system_and_messages(prompt)?;
 
+    let max_tokens = match &client.options.provider_options {
+        Some(crate::baml_std::ProviderOptions::Anthropic(opts)) => opts.max_tokens,
+        _ => None,
+    };
+
     let body = RequestBody {
         model: client.model.clone(),
         system,
         messages,
-        max_tokens: client.max_tokens,
-        temperature: client.options.temperature,
-        top_p: client.options.top_p,
+        max_tokens,
         extra: client.extra_body.clone(),
     };
     let body_str = serde_json::to_string(&body)?;

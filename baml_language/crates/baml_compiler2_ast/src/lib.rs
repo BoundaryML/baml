@@ -15,7 +15,7 @@ pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;
 
 pub use ast::*;
-pub use lower_cst::lower_file;
+pub use lower_cst::{lower_file, lower_file_with_file_id};
 
 #[cfg(test)]
 mod tests {

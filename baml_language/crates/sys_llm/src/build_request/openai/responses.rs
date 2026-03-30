@@ -62,12 +62,6 @@ enum ResponsesContentPart {
 struct RequestBody {
     model: String,
     input: Vec<ResponsesMessage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    max_output_tokens: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    top_p: Option<f64>,
     #[serde(flatten)]
     extra: serde_json::Map<String, serde_json::Value>,
 }
@@ -87,9 +81,6 @@ pub(crate) fn build_request(
     let body = RequestBody {
         model: client.model.clone(),
         input: prompt_to_responses_input(prompt)?,
-        max_output_tokens: client.max_tokens,
-        temperature: client.options.temperature,
-        top_p: client.options.top_p,
         extra: client.extra_body.clone(),
     };
     let body_str = serde_json::to_string(&body)?;

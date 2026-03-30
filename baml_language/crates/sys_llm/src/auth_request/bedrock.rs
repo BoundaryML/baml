@@ -342,7 +342,7 @@ pub(crate) async fn resolve_region(
 
     if let Some(cb) = callbacks {
         let sdk_config = load_aws_sdk_config_with_callbacks(opts, cb).await;
-        return sdk_config.region().map(|r| r.to_string()).ok_or_else(|| {
+        return sdk_config.region().map(ToString::to_string).ok_or_else(|| {
             BuildRequestError::AuthorizationFailed(
                 "AWS region not found in default provider chain".into(),
             )
@@ -356,7 +356,7 @@ pub(crate) async fn resolve_region(
             loader = loader.profile_name(profile);
         }
         let sdk_config = loader.load().await;
-        sdk_config.region().map(|r| r.to_string()).ok_or_else(|| {
+        sdk_config.region().map(ToString::to_string).ok_or_else(|| {
             BuildRequestError::AuthorizationFailed(
                 "AWS region not found in default provider chain".into(),
             )

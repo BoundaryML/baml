@@ -22,15 +22,6 @@ function user.MyClient$new() -> null {
     load_const null
     store_field .model
     copy 0
-    load_const 100
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
     load_const null
     store_field .base_url
     copy 0
@@ -55,6 +46,7 @@ function user.MyClient$new() -> null {
     alloc_map 0
     store_field .query_params
     copy 0
+    load_const 100
     load_const "abc"
     load_const "abc"
     load_const "ccc"
@@ -95,6 +87,7 @@ function user.MyClient$new() -> null {
     load_const 100
     alloc_array 0
     load_const "#hellotheremyfriend{#acommentinaprompt#}#"
+    load_const "max_tokens"
     load_const "array_key_with_quoted_unquoted"
     load_const "key2"
     load_const "hello"
@@ -111,7 +104,7 @@ function user.MyClient$new() -> null {
     load_const "myInteger"
     load_const "tools"
     load_const "block_string"
-    alloc_map 16
+    alloc_map 17
     store_field .request_body
     store_field .options
     return

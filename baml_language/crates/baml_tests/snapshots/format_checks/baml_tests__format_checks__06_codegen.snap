@@ -89,15 +89,6 @@ function user.ArrayConfigClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -145,15 +136,6 @@ function user.ArrayOfObjectsClient$new() -> null {
     copy 0
     load_const "gpt-4"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const null
     store_field .base_url
@@ -643,15 +625,6 @@ function user.BasicClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -1105,15 +1078,6 @@ function user.C$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -1277,15 +1241,6 @@ function user.CommaClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const 100
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
     load_const null
     store_field .base_url
     copy 0
@@ -1310,7 +1265,9 @@ function user.CommaClient$new() -> null {
     alloc_map 0
     store_field .query_params
     copy 0
-    alloc_map 0
+    load_const 100
+    load_const "max_tokens"
+    alloc_map 1
     store_field .request_body
     store_field .options
     return
@@ -1503,15 +1460,6 @@ function user.DeeplyNestedClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -1577,15 +1525,6 @@ function user.EnvClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -1644,15 +1583,6 @@ function user.ExtraWhitespaceClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -1708,15 +1638,6 @@ function user.FullClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const 100
-    store_field .max_tokens
-    copy 0
-    load_const 0.7
-    store_field .temperature
-    copy 0
-    load_const 0.9
-    store_field .top_p
-    copy 0
     load_const null
     store_field .base_url
     copy 0
@@ -1741,7 +1662,13 @@ function user.FullClient$new() -> null {
     alloc_map 0
     store_field .query_params
     copy 0
-    alloc_map 0
+    load_const 100
+    load_const 0.7
+    load_const 0.9
+    load_const "max_tokens"
+    load_const "temperature"
+    load_const "top_p"
+    alloc_map 3
     store_field .request_body
     store_field .options
     return
@@ -2013,15 +1940,6 @@ function user.LongArrayClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -2071,15 +1989,6 @@ function user.LongArrayOfObjectsClient$new() -> null {
     copy 0
     load_const "gpt-4"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const null
     store_field .base_url
@@ -2141,15 +2050,6 @@ function user.LongNestedValuesClient$new() -> null {
     load_const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily"
     store_field .model
     copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
     load_const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming"
     store_field .base_url
     copy 0
@@ -2193,15 +2093,6 @@ function user.LongOptionClient$new() -> null {
     copy 0
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
     store_field .base_url
@@ -4001,15 +3892,6 @@ function user.ManyOptionsClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const 4096
-    store_field .max_tokens
-    copy 0
-    load_const 0.7
-    store_field .temperature
-    copy 0
-    load_const 0.95
-    store_field .top_p
-    copy 0
     load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
@@ -4034,6 +3916,9 @@ function user.ManyOptionsClient$new() -> null {
     alloc_map 0
     store_field .query_params
     copy 0
+    load_const 4096
+    load_const 0.7
+    load_const 0.95
     load_const 0.5
     load_const 0.3
     load_const "true"
@@ -4043,11 +3928,14 @@ function user.ManyOptionsClient$new() -> null {
     load_const "COMPLETE"
     load_const "FINISHED"
     alloc_array 5
+    load_const "max_tokens"
+    load_const "temperature"
+    load_const "top_p"
     load_const "frequency_penalty"
     load_const "presence_penalty"
     load_const "stream"
     load_const "stop_sequences"
-    alloc_map 4
+    alloc_map 7
     store_field .request_body
     store_field .options
     return
@@ -4779,15 +4667,6 @@ function user.MixedValuesClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const 100
-    store_field .max_tokens
-    copy 0
-    load_const 0.7
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
     load_const null
     store_field .base_url
     copy 0
@@ -4812,14 +4691,18 @@ function user.MixedValuesClient$new() -> null {
     alloc_map 0
     store_field .query_params
     copy 0
+    load_const 100
+    load_const 0.7
     load_const "true"
     load_const "END"
     alloc_array 1
     load_const "#inlineraw#"
+    load_const "max_tokens"
+    load_const "temperature"
     load_const "stream"
     load_const "stop"
     load_const "inline_string"
-    alloc_map 3
+    alloc_map 5
     store_field .request_body
     store_field .options
     return
@@ -4904,15 +4787,6 @@ function user.NestedConfigClient$new() -> null {
     copy 0
     load_const "gpt-4"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const null
     store_field .base_url
@@ -5139,15 +5013,6 @@ function user.RawStringConfigClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -5192,15 +5057,6 @@ function user.SameLineClient$new() -> null {
     copy 0
     load_const "gpt-4"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const null
     store_field .base_url
@@ -5255,15 +5111,6 @@ function user.StringProviderClient$new() -> null {
     copy 0
     load_const "mistralai/mistral-small-3.1-24b-instruct"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const "https://openrouter.ai/api/v1"
     store_field .base_url
@@ -5341,15 +5188,6 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -5399,15 +5237,6 @@ function user.TriviaClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -5450,15 +5279,6 @@ function user.TriviaClientBlock$new() -> null {
     copy 0
     load_const "gpt-4"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const null
     store_field .base_url
@@ -5505,15 +5325,6 @@ function user.TriviaDeeplyNestedClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -5556,15 +5367,6 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     copy 0
     load_const "gpt-4"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const null
     store_field .base_url
@@ -5634,15 +5436,6 @@ function user.TriviaLongValueClient$new() -> null {
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
     store_field .model
     copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
     store_field .base_url
     copy 0
@@ -5686,15 +5479,6 @@ function user.TriviaLongValueClientBlock$new() -> null {
     copy 0
     load_const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
     store_field .base_url
@@ -5760,15 +5544,6 @@ function user.TypedValuesClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const 2048
-    store_field .max_tokens
-    copy 0
-    load_const 0.5
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
     load_const null
     store_field .base_url
     copy 0
@@ -5793,9 +5568,13 @@ function user.TypedValuesClient$new() -> null {
     alloc_map 0
     store_field .query_params
     copy 0
+    load_const 0.5
+    load_const 2048
     load_const "true"
+    load_const "temperature"
+    load_const "max_tokens"
     load_const "stream"
-    alloc_map 1
+    alloc_map 3
     store_field .request_body
     store_field .options
     return

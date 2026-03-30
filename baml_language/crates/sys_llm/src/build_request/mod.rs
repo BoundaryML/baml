@@ -358,7 +358,10 @@ mod tests {
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("claude-3-haiku-20240307".to_string()),
                 api_key: Some("sk-ant-test".to_string()),
-                max_tokens: Some(1000),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(1000),
+                )]),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
@@ -406,7 +409,10 @@ mod tests {
             "anthropic",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("claude-3-haiku-20240307".to_string()),
-                max_tokens: Some(1000),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(1000),
+                )]),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
@@ -432,7 +438,10 @@ mod tests {
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("claude-3-haiku-20240307".to_string()),
                 api_key: Some("sk-ant-test".to_string()),
-                max_tokens: Some(500),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(500),
+                )]),
                 allowed_role_metadata: Some(BexExternalValue::Array {
                     element_type: Ty::String {
                         attr: baml_type::TyAttr::default(),
@@ -474,7 +483,10 @@ mod tests {
             "anthropic",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("claude-3-haiku-20240307".to_string()),
-                max_tokens: Some(1000),
+                request_body: IndexMap::from([(
+                    "max_tokens".to_string(),
+                    BexExternalValue::Int(1000),
+                )]),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
