@@ -974,7 +974,11 @@ class Item {
     ]}"#;
 
     let parsed = from_str(&target, &target_type, raw, true);
-    assert!(parsed.is_ok(), "Parse should succeed (items dropped, not error): {:?}", parsed);
+    assert!(
+        parsed.is_ok(),
+        "Parse should succeed (items dropped, not error): {:?}",
+        parsed
+    );
 
     let bvwf = parsed.unwrap();
 

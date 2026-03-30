@@ -378,8 +378,9 @@ impl DefaultValue for TypeIR {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_types::JinjaExpression;
+
+    use super::*;
 
     fn make_assert(label: Option<&str>, expr: &str) -> (Constraint, bool) {
         (
