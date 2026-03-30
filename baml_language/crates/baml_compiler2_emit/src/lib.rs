@@ -72,6 +72,41 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
+/// Extract `@description`, `@alias`, `@skip` from raw attributes.
+///
+/// Returns `(description, alias, skip)`. Invalid attribute usage (wrong arg
+/// count, non-string-literal) is silently ignored for now.
+fn extract_schema_attrs(
+    attrs: &[baml_compiler2_ast::ast::RawAttribute],
+) -> (Option<String>, Option<String>, bool) {
+    let mut description = None;
+    let mut alias = None;
+    let mut skip = false;
+    for attr in attrs {
+        match attr.name.as_str() {
+            "description" | "alias" => {
+                if attr.args.len() == 1 {
+                    let raw = attr.args[0].value.as_str();
+                    // Must be a string literal (quoted)
+                    if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
+                        let value = raw[1..raw.len() - 1].to_string();
+                        if attr.name.as_str() == "description" {
+                            description = Some(value);
+                        } else {
+                            alias = Some(value);
+                        }
+                    }
+                }
+            }
+            "skip" => {
+                skip = true;
+            }
+            _ => {}
+        }
+    }
+    (description, alias, skip)
+}
+
 pub use bex_vm_types::Program as ProgramAlias;
 
 /// Build a `TypeName` from a fully-qualified dotted path.
@@ -194,14 +229,18 @@ pub fn generate_project_bytecode(
                     .unwrap_or_else(|| baml_type::Ty::Null {
                         attr: baml_type::TyAttr::default(),
                     });
+                let (field_desc, field_alias, field_skip) = extract_schema_attrs(&field.attributes);
                 fields.push(ClassField {
                     name: field.name.to_string(),
                     field_type,
-                    description: None,
-                    alias: None,
-                    skip: false,
+                    description: field_desc,
+                    alias: field_alias,
+                    skip: field_skip,
                 });
             }
+
+            let (class_desc, class_alias, _class_skip) =
+                extract_schema_attrs(&class_data.attributes);
 
             let type_tag = bex_vm_types::type_tags::CLASS_BASE + class_type_tag_counter;
             class_type_tag_counter += 1;
@@ -209,8 +248,8 @@ pub fn generate_project_bytecode(
             let class_obj_idx = program.add_object(Object::Class(Class {
                 name: fq_to_type_name(&fq_name),
                 fields,
-                description: None,
-                alias: None,
+                description: class_desc,
+                alias: class_alias,
                 type_tag,
                 ty_attr: TyAttr::default(),
             }));
@@ -257,20 +296,23 @@ pub fn generate_project_bytecode(
             let mut variant_map = HashMap::new();
             let mut variants = Vec::new();
             for (idx, variant) in enum_data.variants.iter().enumerate() {
+                let (var_desc, var_alias, var_skip) = extract_schema_attrs(&variant.attributes);
                 variant_map.insert(variant.name.to_string(), idx);
                 variants.push(EnumVariant {
                     name: variant.name.to_string(),
-                    description: None,
-                    alias: None,
-                    skip: false,
+                    description: var_desc,
+                    alias: var_alias,
+                    skip: var_skip,
                 });
             }
+
+            let (enum_desc, enum_alias, _enum_skip) = extract_schema_attrs(&enum_data.attributes);
 
             let enum_obj_idx = program.add_object(Object::Enum(Enum {
                 name: fq_to_type_name(&fq_name),
                 variants,
-                description: None,
-                alias: None,
+                description: enum_desc,
+                alias: enum_alias,
                 ty_attr: TyAttr::default(),
             }));
             enum_object_indices.insert(fq_name.clone(), enum_obj_idx);

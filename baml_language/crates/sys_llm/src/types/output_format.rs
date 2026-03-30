@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use baml_base::Literal as LiteralValue;
 use baml_type::Ty;
 use indexmap::IndexMap;
@@ -122,10 +124,11 @@ impl OutputFormatContent {
             return Ok(None);
         }
 
-        // Compute which classes to hoist
-        let hoisted = self.compute_hoisted_classes(options);
+        // Compute which classes and enums to hoist
+        let hoisted_classes = self.compute_hoisted_classes(options);
+        let hoisted_enums = self.compute_hoisted_enums(options);
 
-        let prefix = self.get_prefix(options, &hoisted);
+        let prefix = self.get_prefix(options, &hoisted_classes);
 
         // For simple primitives (int, float, bool) with Auto prefix, the prefix IS the full message
         // But with explicit prefix, we need to append the type
@@ -137,11 +140,36 @@ impl OutputFormatContent {
             return Ok(prefix);
         }
 
+        // Check if the target is a hoisted enum
+        let target_is_hoisted_enum = if let Ty::Enum(tn, _) = &self.target {
+            hoisted_enums.contains(tn.display_name.as_str())
+        } else {
+            false
+        };
+
+        // Render hoisted enum definitions
+        let enum_definitions: Vec<String> = hoisted_enums
+            .iter()
+            .filter_map(|name| {
+                let enm = self.find_enum(name)?;
+                let enum_str = self.render_enum(enm, options);
+                // If this is the target enum, prepend prefix
+                if target_is_hoisted_enum && name == enm_display_name(&self.target) {
+                    prefix
+                        .as_ref()
+                        .map_or(Some(enum_str.clone()), |p| Some(format!("{p}{enum_str}")))
+                } else {
+                    Some(enum_str)
+                }
+            })
+            .collect();
+
         // Render hoisted class definitions
-        let mut hoisted_defs = Vec::new();
-        for name in &hoisted {
+        let mut class_defs = Vec::new();
+        for name in &hoisted_classes {
             if let Some(cls) = self.find_class(name) {
-                let body = self.render_class_hoisted(cls, options, &hoisted)?;
+                let body =
+                    self.render_class_hoisted(cls, options, &hoisted_classes, &hoisted_enums)?;
 
                 let hoisted_prefix = match &options.hoisted_class_prefix {
                     RenderSetting::Always(p) if !p.is_empty() => format!("{p} "),
@@ -150,9 +178,19 @@ impl OutputFormatContent {
 
                 let display_name = rendered_name(name, cls.alias.as_ref());
 
-                let def = format!("{hoisted_prefix}{display_name} {body}");
+                // Render class description above the name for hoisted classes
+                let mut def = String::new();
+                if let Some(ref desc) = cls.description {
+                    let desc = desc.trim();
+                    if !desc.is_empty() {
+                        for line in desc.lines() {
+                            let _ = writeln!(def, "/// {line}");
+                        }
+                    }
+                }
+                let _ = write!(def, "{hoisted_prefix}{display_name} {body}");
 
-                hoisted_defs.push(def);
+                class_defs.push(def);
             }
         }
 
@@ -160,7 +198,7 @@ impl OutputFormatContent {
         let mut alias_defs = Vec::new();
         for (alias_name, target_ty) in &self.recursive_type_aliases {
             let target_str = self
-                .render_type_hoisted(target_ty, options, &hoisted)?
+                .render_type_hoisted(target_ty, options, &hoisted_classes, &hoisted_enums)?
                 .unwrap_or_else(|| "unknown".to_string());
 
             let def = match &options.hoisted_class_prefix {
@@ -173,43 +211,62 @@ impl OutputFormatContent {
         }
 
         // Render the target type with hoisting awareness
-        let target_rendered = if let Ty::Class(tn, _) = &self.target {
-            if hoisted.contains(tn.display_name.as_str()) {
-                // Use alias if the class has one
+        let message = if let Ty::Class(tn, _) = &self.target {
+            if hoisted_classes.contains(tn.display_name.as_str()) {
                 let display_name = self
                     .find_class(tn.display_name.as_str())
                     .and_then(|cls| cls.alias.as_deref())
                     .unwrap_or(tn.display_name.as_str());
                 Some(display_name.to_string())
             } else {
-                self.render_type_hoisted(&self.target, options, &hoisted)?
+                self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
+            }
+        } else if let Ty::Enum(_, _) = &self.target {
+            if target_is_hoisted_enum {
+                // Hoisted target enum: rendered in enum_definitions block
+                None
+            } else {
+                self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
             }
         } else if let Ty::TypeAlias(fqn, _) = &self.target {
-            // Recursive type alias target: render as just the display name
             Some(fqn.display_name.to_string())
         } else {
-            self.render_type_hoisted(&self.target, options, &hoisted)?
+            self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
         };
 
-        // Assemble: hoisted class defs + alias defs + prefix + target
+        // Assemble: enum defs + class defs + alias defs + prefix + target
         let mut output = String::new();
-        if !hoisted_defs.is_empty() {
-            output.push_str(&hoisted_defs.join("\n\n"));
-            if !alias_defs.is_empty() {
+
+        if !enum_definitions.is_empty() {
+            output.push_str(&enum_definitions.join("\n\n"));
+            if !target_is_hoisted_enum {
                 output.push_str("\n\n");
             }
         }
+
+        if !class_defs.is_empty() {
+            output.push_str(&class_defs.join("\n\n"));
+            output.push_str("\n\n");
+        }
+
         if !alias_defs.is_empty() {
             output.push_str(&alias_defs.join("\n"));
             output.push_str("\n\n");
-        } else if !hoisted_defs.is_empty() {
-            output.push_str("\n\n");
         }
-        if let Some(p) = prefix {
-            output.push_str(&p);
+
+        if let Some(p) = &prefix {
+            // Only add prefix if not already included in hoisted target enum
+            if !target_is_hoisted_enum {
+                output.push_str(p);
+            }
         }
-        if let Some(t) = target_rendered {
-            output.push_str(&t);
+        if let Some(t) = &message {
+            output.push_str(t);
+        }
+
+        // Trim trailing newlines
+        while output.ends_with('\n') {
+            output.pop();
         }
 
         if output.is_empty() {
@@ -217,6 +274,23 @@ impl OutputFormatContent {
         } else {
             Ok(Some(output))
         }
+    }
+
+    /// Max enum values before auto-hoisting (matches old engine).
+    const INLINE_RENDER_ENUM_MAX_VALUES: usize = 6;
+
+    /// Compute which enums should be hoisted (rendered as top-level definitions).
+    fn compute_hoisted_enums(&self, options: &RenderOptions) -> indexmap::IndexSet<String> {
+        let mut hoisted = indexmap::IndexSet::new();
+        for (name, enm) in &self.enums {
+            if enm.values.len() > Self::INLINE_RENDER_ENUM_MAX_VALUES
+                || enm.values.iter().any(|v| v.description.is_some())
+                || matches!(options.always_hoist_enums, RenderSetting::Always(true))
+            {
+                hoisted.insert(name.clone());
+            }
+        }
+        hoisted
     }
 
     /// Compute which classes should be hoisted (rendered as top-level definitions).
@@ -299,11 +373,12 @@ impl OutputFormatContent {
         &self,
         ty: &Ty,
         options: &RenderOptions,
-        hoisted: &indexmap::IndexSet<String>,
+        hoisted_classes: &indexmap::IndexSet<String>,
+        hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<Option<String>, RenderError> {
         // Intercept hoisted classes: return just the (aliased) name
         if let Ty::Class(tn, _) = ty {
-            if hoisted.contains(tn.display_name.as_str()) {
+            if hoisted_classes.contains(tn.display_name.as_str()) {
                 let display_name = self
                     .find_class(tn.display_name.as_str())
                     .and_then(|cls| cls.alias.as_deref())
@@ -311,6 +386,11 @@ impl OutputFormatContent {
                 return Ok(Some(display_name.to_string()));
             }
         }
+
+        let or_splitter = match &options.or_splitter {
+            RenderSetting::Always(s) => s.as_str(),
+            RenderSetting::Auto | RenderSetting::Never => " or ",
+        };
 
         match ty {
             Ty::String { .. } => Ok(Some("string".to_string())),
@@ -321,21 +401,52 @@ impl OutputFormatContent {
 
             Ty::Optional(inner, _) => {
                 let inner_str = self
-                    .render_type_hoisted(inner, options, hoisted)?
+                    .render_type_hoisted(inner, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "unknown".to_string());
-                let splitter = match &options.or_splitter {
-                    RenderSetting::Always(s) => s.as_str(),
-                    RenderSetting::Auto | RenderSetting::Never => " or ",
-                };
-                Ok(Some(format!("{inner_str}{splitter}null")))
+                Ok(Some(format!("{inner_str}{or_splitter}null")))
             }
 
             Ty::List(inner, _) => {
                 let inner_str = self
-                    .render_type_hoisted(inner, options, hoisted)?
+                    .render_type_hoisted(inner, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "unknown".to_string());
-                let needs_parens = matches!(inner.as_ref(), Ty::Union(_, _) | Ty::Optional(_, _));
-                if needs_parens {
+
+                // Determine if we need multiline rendering
+                let is_hoisted = match inner.as_ref() {
+                    Ty::Class(tn, _) => hoisted_classes.contains(tn.display_name.as_str()),
+                    Ty::TypeAlias(tn, _) => self
+                        .recursive_type_aliases
+                        .contains_key(tn.display_name.as_str()),
+                    _ => false,
+                };
+                let needs_multiline = !is_hoisted
+                    && match inner.as_ref() {
+                        Ty::String { .. }
+                        | Ty::Int { .. }
+                        | Ty::Float { .. }
+                        | Ty::Bool { .. }
+                        | Ty::Null { .. } => false,
+                        Ty::Enum(tn, _) => {
+                            // Inline enums render short; hoisted ones are just a name
+                            !hoisted_enums.contains(tn.display_name.as_str())
+                                && inner_str.len() > 15
+                        }
+                        Ty::Union(items, _) => items.iter().all(|t| {
+                            !matches!(
+                                t,
+                                Ty::String { .. }
+                                    | Ty::Int { .. }
+                                    | Ty::Float { .. }
+                                    | Ty::Bool { .. }
+                                    | Ty::Null { .. }
+                            )
+                        }),
+                        _ => true,
+                    };
+
+                if needs_multiline {
+                    Ok(Some(format!("[\n  {}\n]", inner_str.replace('\n', "\n  "))))
+                } else if matches!(inner.as_ref(), Ty::Union(_, _)) {
                     Ok(Some(format!("({inner_str})[]")))
                 } else {
                     Ok(Some(format!("{inner_str}[]")))
@@ -344,10 +455,10 @@ impl OutputFormatContent {
 
             Ty::Map { key, value, .. } => {
                 let key_str = self
-                    .render_type_hoisted(key, options, hoisted)?
+                    .render_type_hoisted(key, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "string".to_string());
                 let value_str = self
-                    .render_type_hoisted(value, options, hoisted)?
+                    .render_type_hoisted(value, options, hoisted_classes, hoisted_enums)?
                     .unwrap_or_else(|| "unknown".to_string());
                 match options.map_style {
                     MapStyle::TypeParameters => Ok(Some(format!("map<{key_str}, {value_str}>"))),
@@ -360,18 +471,34 @@ impl OutputFormatContent {
             Ty::Union(variants, _) => {
                 let rendered: Vec<String> = variants
                     .iter()
-                    .filter_map(|v| self.render_type_hoisted(v, options, hoisted).ok().flatten())
+                    .filter_map(|v| {
+                        self.render_type_hoisted(v, options, hoisted_classes, hoisted_enums)
+                            .ok()
+                            .flatten()
+                    })
                     .collect();
-                let splitter = match &options.or_splitter {
-                    RenderSetting::Always(s) => s.as_str(),
-                    RenderSetting::Auto | RenderSetting::Never => " or ",
-                };
-                Ok(Some(rendered.join(splitter)))
+                Ok(Some(rendered.join(or_splitter)))
             }
 
             Ty::Enum(tn, _) => {
-                if let Some(enm) = self.find_enum(tn.display_name.as_str()) {
-                    Ok(Some(self.render_enum(enm, options)))
+                if hoisted_enums.contains(tn.display_name.as_str()) {
+                    // Hoisted enum: render as just the display name
+                    let enm = self.find_enum(tn.display_name.as_str());
+                    let display_name = enm
+                        .and_then(|e| e.alias.as_deref())
+                        .unwrap_or(tn.display_name.as_str());
+                    Ok(Some(display_name.to_string()))
+                } else if let Some(enm) = self.find_enum(tn.display_name.as_str()) {
+                    // Inline enum: render as 'val1' or 'val2' or 'val3'
+                    let values: Vec<String> = enm
+                        .values
+                        .iter()
+                        .map(|v| {
+                            let name = rendered_name(&v.name, v.alias.as_ref());
+                            format!("'{name}'")
+                        })
+                        .collect();
+                    Ok(Some(values.join(or_splitter)))
                 } else {
                     Ok(Some(tn.display_name.to_string()))
                 }
@@ -379,7 +506,12 @@ impl OutputFormatContent {
 
             Ty::Class(tn, _) => {
                 if let Some(cls) = self.find_class(tn.display_name.as_str()) {
-                    Ok(Some(self.render_class_hoisted(cls, options, hoisted)?))
+                    Ok(Some(self.render_class_hoisted(
+                        cls,
+                        options,
+                        hoisted_classes,
+                        hoisted_enums,
+                    )?))
                 } else {
                     Ok(Some(tn.display_name.to_string()))
                 }
@@ -436,12 +568,13 @@ impl OutputFormatContent {
         result
     }
 
-    /// Render a class body, with hoisted classes rendered as just their name in field types.
+    /// Render a class body, with hoisted classes/enums rendered as just their name in field types.
     fn render_class_hoisted(
         &self,
         cls: &Class,
         options: &RenderOptions,
-        hoisted: &indexmap::IndexSet<String>,
+        hoisted_classes: &indexmap::IndexSet<String>,
+        hoisted_enums: &indexmap::IndexSet<String>,
     ) -> Result<String, RenderError> {
         use std::fmt::Write;
 
@@ -449,7 +582,7 @@ impl OutputFormatContent {
 
         for field in &cls.fields {
             let ty_str = self
-                .render_type_hoisted(&field.field_type, options, hoisted)?
+                .render_type_hoisted(&field.field_type, options, hoisted_classes, hoisted_enums)?
                 .unwrap_or_else(|| "unknown".to_string());
             // Re-indent multi-line type strings for proper nesting
             let ty_str = if ty_str.contains('\n') {
@@ -464,20 +597,22 @@ impl OutputFormatContent {
             } else {
                 display_name.to_string()
             };
-            let line = match &field.description {
-                Some(d) => format!("  {field_name}: {ty_str}, // {d}"),
-                None => format!("  {field_name}: {ty_str},"),
-            };
-            fields_str.push(line);
+            // Field description as /// comment above the field
+            if let Some(d) = &field.description {
+                fields_str.push(format!("  /// {}", d.replace('\n', "\n  /// ")));
+            }
+            fields_str.push(format!("  {field_name}: {ty_str},"));
         }
 
         let mut output = String::new();
         output.push_str("{\n");
+        // For non-hoisted classes, render description inside braces
+        // (hoisted classes render description above the name line in render_impl)
         if let Some(ref d) = cls.description {
             let d = d.trim();
             if !d.is_empty() {
                 for line in d.lines() {
-                    let _ = writeln!(output, "  // {line}");
+                    let _ = writeln!(output, "  /// {line}");
                 }
                 output.push('\n');
             }
@@ -492,6 +627,14 @@ impl OutputFormatContent {
 /// Return alias if set, otherwise the real name.
 fn rendered_name<'a>(name: &'a str, alias: Option<&'a String>) -> &'a str {
     alias.map(String::as_str).unwrap_or(name)
+}
+
+/// Extract the display name from an enum target type.
+fn enm_display_name(ty: &Ty) -> &str {
+    match ty {
+        Ty::Enum(tn, _) => tn.display_name.as_str(),
+        _ => "",
+    }
 }
 
 /// Render a literal value following engine's `LiteralValue::Display` convention.
@@ -721,10 +864,11 @@ mod tests {
             Some(
                 "Answer in JSON using this schema:\n\
                  {\n  \
-                   // A person\n\
+                   /// A person\n\
                  \n  \
                    name: string,\n  \
-                   age: int, // Age in years\n\
+                   /// Age in years\n  \
+                   age: int,\n\
                  }"
                 .to_string()
             )
@@ -1239,7 +1383,7 @@ Answer in JSON using this schema: Tree"#
         assert_eq!(
             rendered,
             Some(String::from(
-                "Node {\n  // A node in a linked list\n\n  value: int,\n  next: Node or null,\n}\n\n\
+                "/// A node in a linked list\nNode {\n  /// A node in a linked list\n\n  value: int,\n  next: Node or null,\n}\n\n\
                  Answer in JSON using this schema: Node"
             ))
         );
@@ -1924,9 +2068,7 @@ Answer in JSON using this schema: Ret"#
             rendered,
             Some(
                 "Answer with any of the categories:\n\
-                 Foo\n\
-                 ----\n\
-                 - Bar"
+                 'Bar'"
                     .to_string()
             )
         );
@@ -2226,7 +2368,8 @@ Answer in JSON using this schema: Ret"#
             Some(
                 "Answer in JSON using this schema:\n\
                  {\n\
-                 \x20 a: string, // d\n\
+                 \x20 /// d\n\
+                 \x20 a: string,\n\
                  }"
                 .to_string()
             )
@@ -2340,11 +2483,8 @@ Answer in JSON using this schema: Ret"#
             rendered,
             Some(
                 "Answer with any of the categories:\n\
-                 Category\n\
-                 ----\n\
-                 - A\n\
-                 - B"
-                .to_string()
+                 'A' or 'B'"
+                    .to_string()
             )
         );
     }
@@ -2419,10 +2559,11 @@ Answer in JSON using this schema: Ret"#
             Some(
                 "Answer in JSON using this schema:\n\
                  {\n  \
-                   // A foo object\n\
+                   /// A foo object\n\
                  \n  \
                    bar: string,\n  \
-                   baz: int, // A baz field\n\
+                   /// A baz field\n  \
+                   baz: int,\n\
                  }"
                 .to_string()
             )

@@ -68,12 +68,16 @@ pub struct Class {
     /// Methods defined inside this class, referencing their `Function` entries
     /// in the same `ItemTree`.
     pub methods: Vec<LocalItemId<FunctionMarker>>,
+    /// Block-level attributes (@@description, @@alias, etc.).
+    pub attributes: Vec<ast::RawAttribute>,
 }
 
 /// An enum variant stored in the `ItemTree`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnumVariant {
     pub name: Name,
+    /// Field-level attributes (@description, @alias, @skip, etc.).
+    pub attributes: Vec<ast::RawAttribute>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,6 +85,8 @@ pub struct Enum {
     pub name: Name,
     /// Variants of the enum, in declaration order.
     pub variants: Vec<EnumVariant>,
+    /// Block-level attributes (@@description, @@alias, etc.).
+    pub attributes: Vec<ast::RawAttribute>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -298,6 +304,7 @@ impl ItemTree {
                 generic_params: c.generic_params.clone(),
                 fields,
                 methods: Vec::new(),
+                attributes: c.attributes.clone(),
             },
         );
         id
@@ -321,6 +328,7 @@ impl ItemTree {
             .iter()
             .map(|v| EnumVariant {
                 name: v.name.clone(),
+                attributes: v.attributes.clone(),
             })
             .collect();
         self.enums.insert(
@@ -328,6 +336,7 @@ impl ItemTree {
             Enum {
                 name: e.name.clone(),
                 variants,
+                attributes: e.attributes.clone(),
             },
         );
         id
