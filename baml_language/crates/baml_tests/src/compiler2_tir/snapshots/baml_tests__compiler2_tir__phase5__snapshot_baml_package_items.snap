@@ -33,6 +33,7 @@ namespace baml.http:
 namespace baml.llm:
   class AnthropicOptions { methods: [] }
   class AzureOpenAiOptions { methods: [] }
+  class BedrockOptions { methods: [] }
   class Client { methods: [to_primitive_client, get_constructor, build_attempt, build_attempt_with_state, build_plan, build_plan_with_state, execute, execute_once] }
   enum ClientType
   class ExecutionContext { methods: [] }

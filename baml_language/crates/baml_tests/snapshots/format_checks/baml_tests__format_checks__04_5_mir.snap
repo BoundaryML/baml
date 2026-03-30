@@ -1048,7 +1048,7 @@ fn user.ArrayConfigClient$new() -> null {
         _3 = {  };
         _5 = [const "END", const "STOP", const "DONE"];
         _4 = { const "stop_sequences": copy _5 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "ArrayConfigClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1072,7 +1072,7 @@ fn user.ArrayOfObjectsClient$new() -> null {
         _3 = {  };
         _5 = [];
         _4 = { const "tools": copy _5 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "ArrayOfObjectsClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1094,7 +1094,7 @@ fn user.BasicClient$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "BasicClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1116,7 +1116,7 @@ fn user.C$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "C", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1132,13 +1132,13 @@ fn user.CommaClient$new() -> null {
     let _1: void
     let _2: map<void, void>
     let _3: map<void, void>
-    let _4: map<"max_tokens", 100>
+    let _4: map<void, void>
 
     bb0: {
         _2 = {  };
         _3 = {  };
-        _4 = { const "max_tokens": const 100_i64 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const 100_i64, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "CommaClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1164,7 +1164,7 @@ fn user.DeeplyNestedClient$new() -> null {
         _2 =  { copy _3 };
         _5 = {  };
         _6 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _5, copy _6 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _5, copy _6 };
         _0 = baml.llm.PrimitiveClient { const "DeeplyNestedClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1191,7 +1191,7 @@ fn user.EnvClient$new() -> null {
         _3 = {  };
         _4 = {  };
         _5 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, copy _2, const null, copy _3, copy _4, copy _5 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, copy _2, const null, copy _3, copy _4, copy _5 };
         _0 = baml.llm.PrimitiveClient { const "EnvClient", const "openai", copy _1 };
         goto -> bb2;
     }
@@ -1213,7 +1213,7 @@ fn user.ExtraWhitespaceClient$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "ExtraWhitespaceClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1229,13 +1229,13 @@ fn user.FullClient$new() -> null {
     let _1: void
     let _2: map<void, void>
     let _3: map<void, void>
-    let _4: map<"max_tokens" | "temperature" | "top_p", 100 | 0.7 | 0.9>
+    let _4: map<void, void>
 
     bb0: {
         _2 = {  };
         _3 = {  };
-        _4 = { const "max_tokens": const 100_i64, const "temperature": const 0.7_f64, const "top_p": const 0.9_f64 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _4 = {  };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const 100_i64, const 0.7_f64, const 0.9_f64, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "FullClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1259,7 +1259,7 @@ fn user.LongArrayClient$new() -> null {
         _3 = {  };
         _5 = [const "STOP_GENERATION_NOW", const "END_OF_RESPONSE_MARKER", const "COMPLETION_FINISHED_SIGNAL", const "TERMINATE_OUTPUT_HERE", const "FINAL_ANSWER_DELIMITER"];
         _4 = { const "stop_sequences": copy _5 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "LongArrayClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1283,7 +1283,7 @@ fn user.LongArrayOfObjectsClient$new() -> null {
         _3 = {  };
         _5 = [];
         _4 = { const "tools": copy _5 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "LongArrayOfObjectsClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1305,7 +1305,7 @@ fn user.LongNestedValuesClient$new() -> null {
         _2 =  {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily", const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "anthropic/claude-3.5-sonnet-20250101-with-some-extremely-long-suffix-that-pushes-past-the-line-limit-easily", const null, const null, const null, const "https://some-extremely-long-api-gateway-subdomain.internal.production.cluster.example.com/api/v2/chat/completions/streaming", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "LongNestedValuesClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1327,7 +1327,7 @@ fn user.LongOptionClient$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const null, const null, const null, const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "LongOptionClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1344,7 +1344,7 @@ fn user.ManyOptionsClient$new() -> null {
     let _2: string
     let _3: map<void, void>
     let _4: map<void, void>
-    let _5: map<"max_tokens" | "temperature" | "top_p" | "frequency_penalty" | "presence_penalty" | "stream" | "stop_sequences", 4096 | 0.7 | 0.95 | 0.5 | 0.3 | "true" | "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]>
+    let _5: map<"frequency_penalty" | "presence_penalty" | "stream" | "stop_sequences", 0.5 | 0.3 | "true" | "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]>
     let _6: "END" | "STOP" | "DONE" | "COMPLETE" | "FINISHED"[]
 
     bb0: {
@@ -1355,8 +1355,8 @@ fn user.ManyOptionsClient$new() -> null {
         _3 = {  };
         _4 = {  };
         _6 = [const "END", const "STOP", const "DONE", const "COMPLETE", const "FINISHED"];
-        _5 = { const "max_tokens": const 4096_i64, const "temperature": const 0.7_f64, const "top_p": const 0.95_f64, const "frequency_penalty": const 0.5_f64, const "presence_penalty": const 0.3_f64, const "stream": const "true", const "stop_sequences": copy _6 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const "https://api.openai.com/v1", const null, const null, const null, copy _2, const null, copy _3, copy _4, copy _5 };
+        _5 = { const "frequency_penalty": const 0.5_f64, const "presence_penalty": const 0.3_f64, const "stream": const "true", const "stop_sequences": copy _6 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const 4096_i64, const 0.7_f64, const 0.95_f64, const "https://api.openai.com/v1", const null, const null, const null, copy _2, const null, copy _3, copy _4, copy _5 };
         _0 = baml.llm.PrimitiveClient { const "ManyOptionsClient", const "openai", copy _1 };
         goto -> bb2;
     }
@@ -1372,15 +1372,15 @@ fn user.MixedValuesClient$new() -> null {
     let _1: void
     let _2: map<void, void>
     let _3: map<void, void>
-    let _4: map<"max_tokens" | "temperature" | "stream" | "stop" | "inline_string", 100 | 0.7 | "true" | "END"[] | "#inlineraw#">
+    let _4: map<"stream" | "stop" | "inline_string", "true" | "END"[] | "#inlineraw#">
     let _5: "END"[]
 
     bb0: {
         _2 = {  };
         _3 = {  };
         _5 = [const "END"];
-        _4 = { const "max_tokens": const 100_i64, const "temperature": const 0.7_f64, const "stream": const "true", const "stop": copy _5, const "inline_string": const "#inlineraw#" };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _4 = { const "stream": const "true", const "stop": copy _5, const "inline_string": const "#inlineraw#" };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const 100_i64, const 0.7_f64, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "MixedValuesClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1402,7 +1402,7 @@ fn user.NestedConfigClient$new() -> null {
         _2 =  {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "NestedConfigClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1424,7 +1424,7 @@ fn user.RawStringConfigClient$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = { const "system_prompt": const "#Youareahelpfulassistant.Alwaysbeconcise.#" };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "RawStringConfigClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1446,7 +1446,7 @@ fn user.SameLineClient$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "SameLineClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1468,7 +1468,7 @@ fn user.StringProviderClient$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "mistralai/mistral-small-3.1-24b-instruct", const "https://openrouter.ai/api/v1", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "mistralai/mistral-small-3.1-24b-instruct", const null, const null, const null, const "https://openrouter.ai/api/v1", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "StringProviderClient", const "openai-generic", copy _1 };
         goto -> bb1;
     }
@@ -1565,7 +1565,7 @@ fn user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitO
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLineLimitOfOneHundredColumns", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1587,7 +1587,7 @@ fn user.TriviaClient$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "TriviaClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1609,7 +1609,7 @@ fn user.TriviaClientBlock$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "TriviaClientBlock", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1631,7 +1631,7 @@ fn user.TriviaDeeplyNestedClient$new() -> null {
         _2 =  {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "TriviaDeeplyNestedClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1653,7 +1653,7 @@ fn user.TriviaDeeplyNestedClientBlock$new() -> null {
         _2 =  {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "TriviaDeeplyNestedClientBlock", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1675,7 +1675,7 @@ fn user.TriviaLongValueClient$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const null, const null, const null, const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "TriviaLongValueClient", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1697,7 +1697,7 @@ fn user.TriviaLongValueClientBlock$new() -> null {
         _2 = {  };
         _3 = {  };
         _4 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "some-extremely-long-model-name-that-goes-on-and-on-and-should-push-well-past-the-line-width-limit", const null, const null, const null, const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "TriviaLongValueClientBlock", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -1713,13 +1713,13 @@ fn user.TypedValuesClient$new() -> null {
     let _1: void
     let _2: map<void, void>
     let _3: map<void, void>
-    let _4: map<"temperature" | "max_tokens" | "stream", 0.5 | 2048 | "true">
+    let _4: map<"stream", "true">
 
     bb0: {
         _2 = {  };
         _3 = {  };
-        _4 = { const "temperature": const 0.5_f64, const "max_tokens": const 2048_i64, const "stream": const "true" };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _4 = { const "stream": const "true" };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const 2048_i64, const 0.5_f64, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "TypedValuesClient", const "openai", copy _1 };
         goto -> bb1;
     }

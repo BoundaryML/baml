@@ -14,8 +14,8 @@ SOURCE_FILE
       L_BRACE "{"
       CONFIG_ITEM
         WORD "provider"
-        CONFIG_VALUE "baml-aws-bedrock"
-          WORD "baml-aws-bedrock"
+        CONFIG_VALUE "aws-bedrock"
+          WORD "aws-bedrock"
       CONFIG_ITEM
         WORD "options"
         CONFIG_BLOCK

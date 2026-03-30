@@ -1,7 +1,7 @@
 // Test case for comments in type positions
 
 client<llm> TestClient {
-  provider baml-openai-chat
+  provider openai
 }
 
 // This function has comments around the return type

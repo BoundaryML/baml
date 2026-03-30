@@ -1,19 +1,13 @@
 //! AWS Bedrock Converse API HTTP request builder.
 //!
-//! Builds raw HTTP requests for the Bedrock Converse API with `SigV4` signing.
-//! Text-only — no media support yet.
+//! Builds raw HTTP requests for the Bedrock Converse API. Text and media
+//! (image, video, audio, PDF) are supported. Body serialization is delegated
+//! to the `aws-sdk-bedrockruntime` crate via a dry-run interception pattern.
 //!
-//! Body serialization is delegated to the `aws-sdk-bedrockruntime` crate: we
-//! build typed SDK structs, then intercept the serialized HTTP body via
-//! `customize().map_request()` before any network I/O occurs.
-//!
-//! Credentials are resolved in order:
-//! 1. Explicit `access_key_id` / `secret_access_key` / `session_token` in client options
-//! 2. AWS default provider chain (`aws_config`) — env vars, profiles, IMDS, etc.
-//!
-//! Region is resolved in order:
-//! 1. Explicit `region` in client options
-//! 2. AWS default provider chain
+//! Auth (`SigV4` signing, credential resolution) is NOT handled here -- that
+//! belongs in `auth_request`.
+
+use std::sync::Arc;
 
 use aws_credential_types::Credentials;
 use aws_sdk_bedrockruntime as bedrock;
@@ -24,120 +18,50 @@ use bedrock::types::{
     ImageFormat, ImageSource, InferenceConfiguration, Message, SystemContentBlock, VideoBlock,
     VideoFormat, VideoSource,
 };
-use indexmap::IndexMap;
 
-use super::{
-    BuildRequestCallbacks, BuildRequestError, LlmPrimitiveClient, LlmRequestBuilder,
-    RawHttpRequest, get_string_option, mime_type_as_ok,
-};
+use super::BuildRequestError;
 
-/// Builder for the AWS Bedrock Converse provider.
-pub(crate) struct BedrockBuilder;
+// ============================================================================
+// Public entry point
+// ============================================================================
 
-/// Provider-specific option keys consumed by the builder (not forwarded to body).
-const BEDROCK_SKIP_KEYS: &[&str] = &[
-    "region",
-    "endpoint_url",
-    "profile",
-    "access_key_id",
-    "secret_access_key",
-    "session_token",
-    // inference config fields handled specially
-    "max_tokens",
-    "temperature",
-    "top_p",
-    "stop_sequences",
-];
+pub(crate) async fn build_request(
+    client: &crate::baml_std::PrimitiveClient,
+    prompt: &bex_vm_types::PromptAst,
+) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
+    // Convert BAML prompt to SDK types.
+    let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
+    let inference_config = build_inference_config(client)?;
+    let additional_fields = collect_additional_fields(client);
 
-impl LlmRequestBuilder for BedrockBuilder {
-    /// Builds an unsigned Bedrock Converse API request.
-    ///
-    /// Resolves the AWS region (from options or the default provider chain) for
-    /// URL construction. Credential resolution and `SigV4` signing are handled
-    /// by [`crate::auth_request::BedrockAuth`] as a post-build step.
-    async fn build_request(
-        &self,
-        client: &LlmPrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-        stream: bool,
-        callbacks: &BuildRequestCallbacks<'_>,
-    ) -> Result<RawHttpRequest, BuildRequestError> {
-        let model = get_string_option(client, "model")
-            .ok_or_else(|| BuildRequestError::MissingOption("model".into()))?;
-        let endpoint = if stream {
-            "converse-stream"
-        } else {
-            "converse"
-        };
+    // Serialize body via the SDK's own serialization pipeline.
+    let body = serialize_body_via_sdk(
+        &client.model,
+        system_blocks,
+        messages,
+        inference_config,
+        additional_fields,
+    )
+    .await?;
 
-        // When endpoint_url is set (e.g. LocalStack), region is only needed for
-        // SigV4 signing later, not for URL construction. Otherwise resolve from
-        // explicit option first, then the AWS default provider chain.
-        let url = if let Some(base) = get_string_option(client, "endpoint_url") {
-            let base = base.trim_end_matches('/');
-            format!("{base}/model/{model}/{endpoint}")
-        } else {
-            let region = match get_string_option(client, "region") {
-                Some(r) => r,
-                None => {
-                    let sdk_config = crate::auth_request::load_aws_sdk_config(
-                        client,
-                        callbacks.http_send,
-                        callbacks.env_read,
-                        callbacks.fs_read,
-                    )
-                    .await;
-                    sdk_config
-                        .region()
-                        .map(std::string::ToString::to_string)
-                        .ok_or_else(|| BuildRequestError::MissingOption("region".into()))?
-                }
-            };
-            format!("https://bedrock-runtime.{region}.amazonaws.com/model/{model}/{endpoint}")
-        };
-
-        // Convert BAML prompt to SDK types.
-        let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
-        let inference_config = build_sdk_inference_config(client)?;
-        let additional_fields = collect_additional_fields(client);
-
-        // Serialize body via the SDK's own serialization pipeline.
-        let body = serialize_body_via_sdk(
-            &model,
-            system_blocks,
-            messages,
-            inference_config,
-            additional_fields,
-        )
-        .await?;
-
-        let mut headers = IndexMap::new();
-        headers.insert("content-type".to_string(), "application/json".to_string());
-        headers.insert("accept".to_string(), "application/json".to_string());
-
-        // Forward custom headers from client.options["headers"].
-        if let Some(bex_external_types::BexExternalValue::Map { entries, .. }) =
-            client.options.get("headers")
-        {
-            for (key, value) in entries {
-                if let bex_external_types::BexExternalValue::String(v) = value {
-                    headers.insert(key.clone(), v.clone());
-                }
-            }
-        }
-
-        Ok(RawHttpRequest {
-            method: "POST".to_string(),
-            url,
-            headers,
-            body,
-        })
+    let mut headers = indexmap::IndexMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+    headers.insert("accept".to_string(), "application/json".to_string());
+    for (key, value) in &client.options.headers {
+        headers.insert(key.clone(), value.clone());
     }
+
+    Ok(crate::baml_std::HttpRequest {
+        method: "POST".to_string(),
+        url: client.url.clone(),
+        headers,
+        body,
+    })
 }
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // SDK body serialization via map_request interception
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 /// Sentinel error returned by the `map_request` interceptor to abort the SDK
 /// pipeline after capturing the serialized body.
@@ -153,12 +77,8 @@ impl std::fmt::Display for DryRunError {
 impl std::error::Error for DryRunError {}
 
 /// Build a throwaway SDK client config for serialization only.
-///
-/// On native, a minimal config with dummy credentials suffices. On WASM,
-/// the SDK orchestrator also needs sleep and time-source implementations
-/// (even though we abort before any real I/O) to avoid hanging.
 fn dry_run_sdk_config() -> bedrock::Config {
-    #[allow(unused_mut)] // mut needed on wasm32
+    #[allow(unused_mut)]
     let mut builder = bedrock::Config::builder()
         .behavior_version(bedrock::config::BehaviorVersion::latest())
         .region(bedrock::config::Region::new("us-east-1"))
@@ -176,10 +96,6 @@ fn dry_run_sdk_config() -> bedrock::Config {
 }
 
 /// Serialize the Converse API request body using the SDK's own Smithy serializer.
-///
-/// Constructs a throwaway SDK client with dummy credentials, builds the Converse
-/// request with typed SDK models, then intercepts the serialized HTTP body via
-/// `customize().map_request()` before any signing or network I/O occurs.
 async fn serialize_body_via_sdk(
     model: &str,
     system_blocks: Vec<SystemContentBlock>,
@@ -187,7 +103,7 @@ async fn serialize_body_via_sdk(
     inference_config: Option<InferenceConfiguration>,
     additional_fields: Option<aws_smithy_types::Document>,
 ) -> Result<String, BuildRequestError> {
-    let captured = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let captured = Arc::new(std::sync::Mutex::new(String::new()));
     let captured_clone = captured.clone();
 
     let sdk_client = bedrock::Client::from_conf(dry_run_sdk_config());
@@ -217,20 +133,19 @@ async fn serialize_body_via_sdk(
 
     let body = captured.lock().unwrap().clone();
     if body.is_empty() {
-        return Err(BuildRequestError::BodySerialization(
+        return Err(BuildRequestError::Other(
             "SDK serialization produced no body (dry-run interception failed)".into(),
         ));
     }
     Ok(body)
 }
 
-// ---------------------------------------------------------------------------
-// BAML → SDK type conversions
-// ---------------------------------------------------------------------------
+// ============================================================================
+// BAML -> SDK type conversions
+// ============================================================================
 
-/// Convert a BAML `PromptAst` into SDK `SystemContentBlock`s and `Message`s.
 fn prompt_to_sdk_types(
-    prompt: bex_vm_types::PromptAst,
+    prompt: &bex_vm_types::PromptAst,
     default_role: &str,
 ) -> Result<(Vec<SystemContentBlock>, Vec<Message>), BuildRequestError> {
     let mut system_blocks = Vec::new();
@@ -238,7 +153,7 @@ fn prompt_to_sdk_types(
 
     let items = match prompt.as_ref() {
         PromptAst::Vec(v) => v.clone(),
-        _ => vec![prompt],
+        _ => vec![prompt.clone()],
     };
 
     for item in &items {
@@ -263,7 +178,7 @@ fn prompt_to_sdk_types(
                         .set_content(Some(blocks))
                         .build()
                         .map_err(|e| {
-                            BuildRequestError::BodySerialization(format!(
+                            BuildRequestError::UnsupportedMedia(format!(
                                 "failed to build message: {e}"
                             ))
                         })?,
@@ -278,7 +193,7 @@ fn prompt_to_sdk_types(
                         .set_content(Some(blocks))
                         .build()
                         .map_err(|e| {
-                            BuildRequestError::BodySerialization(format!(
+                            BuildRequestError::UnsupportedMedia(format!(
                                 "failed to build message: {e}"
                             ))
                         })?,
@@ -295,7 +210,7 @@ fn parse_conversation_role(role: &str) -> Result<ConversationRole, BuildRequestE
     match role {
         "user" => Ok(ConversationRole::User),
         "assistant" => Ok(ConversationRole::Assistant),
-        other => Err(BuildRequestError::BodySerialization(format!(
+        other => Err(BuildRequestError::UnsupportedMedia(format!(
             "unsupported conversation role for Bedrock: {other}"
         ))),
     }
@@ -335,18 +250,15 @@ fn content_to_system_blocks(
     }
 }
 
-/// Resolved media: either an S3 URI or raw bytes ready for a `Blob`.
+// ============================================================================
+// Media handling
+// ============================================================================
+
 enum ResolvedMedia {
     S3Uri(String),
     Bytes(Vec<u8>),
 }
 
-/// Resolve media content into either an S3 URI or raw bytes.
-///
-/// HACK: The SDK's `Blob` type stores raw bytes and the Smithy serializer
-/// re-encodes them as base64. We already have base64 data, so this is a
-/// wasteful decode then re-encode round-trip. If this becomes a perf issue,
-/// we can upstream a change to allow base64 to be passed directly.
 fn resolve_media_source(
     content: &baml_builtins::MediaContent,
     kind_label: &str,
@@ -377,7 +289,7 @@ fn resolve_media_source(
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(base64_data)
                 .map_err(|e| {
-                    BuildRequestError::BodySerialization(format!(
+                    BuildRequestError::UnsupportedMedia(format!(
                         "invalid base64 {kind_label} data: {e}"
                     ))
                 })?;
@@ -391,7 +303,6 @@ fn resolve_media_source(
     }
 }
 
-/// Parse a MIME type string into a Bedrock `ImageFormat`.
 fn parse_image_format(mime: &str) -> Result<ImageFormat, BuildRequestError> {
     match mime {
         "image/png" => Ok(ImageFormat::Png),
@@ -404,7 +315,6 @@ fn parse_image_format(mime: &str) -> Result<ImageFormat, BuildRequestError> {
     }
 }
 
-/// Parse a MIME type string into a Bedrock `VideoFormat`.
 fn parse_video_format(mime: &str) -> Result<VideoFormat, BuildRequestError> {
     match mime {
         "video/mp4" => Ok(VideoFormat::Mp4),
@@ -420,7 +330,6 @@ fn parse_video_format(mime: &str) -> Result<VideoFormat, BuildRequestError> {
     }
 }
 
-/// Parse a MIME type string into a Bedrock `AudioFormat`.
 fn parse_audio_format(mime: &str) -> Result<bedrock::types::AudioFormat, BuildRequestError> {
     use bedrock::types::AudioFormat;
     match mime {
@@ -435,7 +344,6 @@ fn parse_audio_format(mime: &str) -> Result<bedrock::types::AudioFormat, BuildRe
     }
 }
 
-/// Build an `S3Location` from a URI string.
 fn s3_location(uri: String) -> bedrock::types::S3Location {
     bedrock::types::S3Location::builder()
         .uri(uri)
@@ -443,12 +351,11 @@ fn s3_location(uri: String) -> bedrock::types::S3Location {
         .unwrap()
 }
 
-/// Convert a BAML `MediaValue` into Bedrock `ContentBlock`(s).
 fn media_to_content_block(
     media: &baml_builtins::MediaValue,
     content: &baml_builtins::MediaContent,
 ) -> Result<Vec<ContentBlock>, BuildRequestError> {
-    let mime = mime_type_as_ok(media)?;
+    let mime = super::mime_type_as_ok(media)?;
     let kind_label = media.kind.to_string();
     let source = resolve_media_source(content, &kind_label)?;
 
@@ -466,9 +373,7 @@ fn media_to_content_block(
                 .source(img_source)
                 .build()
                 .map_err(|e| {
-                    BuildRequestError::BodySerialization(format!(
-                        "failed to build image block: {e}"
-                    ))
+                    BuildRequestError::UnsupportedMedia(format!("failed to build image block: {e}"))
                 })?;
             Ok(vec![ContentBlock::Image(block)])
         }
@@ -485,9 +390,7 @@ fn media_to_content_block(
                 .source(vid_source)
                 .build()
                 .map_err(|e| {
-                    BuildRequestError::BodySerialization(format!(
-                        "failed to build video block: {e}"
-                    ))
+                    BuildRequestError::UnsupportedMedia(format!("failed to build video block: {e}"))
                 })?;
             Ok(vec![ContentBlock::Video(block)])
         }
@@ -504,7 +407,7 @@ fn media_to_content_block(
                 .source(doc_source)
                 .build()
                 .map_err(|e| {
-                    BuildRequestError::BodySerialization(format!(
+                    BuildRequestError::UnsupportedMedia(format!(
                         "failed to build document block: {e}"
                     ))
                 })?;
@@ -527,58 +430,58 @@ fn media_to_content_block(
                 .source(aud_source)
                 .build()
                 .map_err(|e| {
-                    BuildRequestError::BodySerialization(format!(
-                        "failed to build audio block: {e}"
-                    ))
+                    BuildRequestError::UnsupportedMedia(format!("failed to build audio block: {e}"))
                 })?;
             Ok(vec![ContentBlock::Audio(block)])
         }
         MediaKind::Generic => Err(BuildRequestError::UnsupportedMedia(
-            "generic media type is not supported — specify image, video, audio, or pdf".into(),
+            "generic media type is not supported -- specify image, video, audio, or pdf".into(),
         )),
     }
 }
 
-/// Build an `InferenceConfiguration` from client options, if any are set.
-///
-/// Returns `InvalidOption` if `max_tokens` overflows `i32`.
-fn build_sdk_inference_config(
-    client: &LlmPrimitiveClient,
-) -> Result<Option<InferenceConfiguration>, BuildRequestError> {
-    use bex_external_types::BexExternalValue;
+// ============================================================================
+// Inference config + additional fields
+// ============================================================================
 
+fn build_inference_config(
+    client: &crate::baml_std::PrimitiveClient,
+) -> Result<Option<InferenceConfiguration>, BuildRequestError> {
     let mut builder = InferenceConfiguration::builder();
     let mut has_config = false;
 
-    if let Some(BexExternalValue::Int(v)) = client.options.get("max_tokens") {
-        let narrow = i32::try_from(*v).map_err(|_| BuildRequestError::InvalidOption {
+    if let Some(max_tokens) = client.max_tokens {
+        let narrow = i32::try_from(max_tokens).map_err(|_| BuildRequestError::InvalidOption {
             key: "max_tokens".into(),
-            reason: format!("value {v} is out of the supported range (0..={})", i32::MAX),
+            reason: format!(
+                "value {max_tokens} is out of the supported range (0..={})",
+                i32::MAX
+            ),
         })?;
         builder = builder.max_tokens(narrow);
         has_config = true;
     }
+
     #[allow(clippy::cast_possible_truncation)]
-    if let Some(BexExternalValue::Float(v)) = client.options.get("temperature") {
-        builder = builder.temperature(*v as f32);
+    if let Some(t) = client.options.temperature {
+        builder = builder.temperature(t as f32);
         has_config = true;
     }
+
     #[allow(clippy::cast_possible_truncation)]
-    if let Some(BexExternalValue::Float(v)) = client.options.get("top_p") {
-        builder = builder.top_p(*v as f32);
+    if let Some(p) = client.options.top_p {
+        builder = builder.top_p(p as f32);
         has_config = true;
     }
-    if let Some(BexExternalValue::Array { items, .. }) = client.options.get("stop_sequences") {
-        let seqs: Vec<String> = items
-            .iter()
-            .filter_map(|v| match v {
-                BexExternalValue::String(s) => Some(s.clone()),
-                _ => None,
-            })
-            .collect();
-        if !seqs.is_empty() {
-            builder = builder.set_stop_sequences(Some(seqs));
-            has_config = true;
+
+    if let Some(crate::baml_std::ProviderOptions::Bedrock(bedrock_opts)) =
+        &client.options.provider_options
+    {
+        if let Some(seqs) = &bedrock_opts.stop_sequences {
+            if !seqs.is_empty() {
+                builder = builder.set_stop_sequences(Some(seqs.clone()));
+                has_config = true;
+            }
         }
     }
 
@@ -589,19 +492,12 @@ fn build_sdk_inference_config(
     }
 }
 
-/// Collect non-skipped options as `additionalModelRequestFields` (`Document`).
-fn collect_additional_fields(client: &LlmPrimitiveClient) -> Option<aws_smithy_types::Document> {
-    use super::{BUILD_REQUEST_SKIP_KEYS, SPECIALIZE_PROMPT_SKIP_KEYS};
-
+fn collect_additional_fields(
+    client: &crate::baml_std::PrimitiveClient,
+) -> Option<aws_smithy_types::Document> {
     let mut fields = std::collections::HashMap::new();
-    for (key, value) in &client.options {
-        if SPECIALIZE_PROMPT_SKIP_KEYS.contains(&key.as_str())
-            || BUILD_REQUEST_SKIP_KEYS.contains(&key.as_str())
-            || BEDROCK_SKIP_KEYS.contains(&key.as_str())
-        {
-            continue;
-        }
-        if let Some(doc) = bex_value_to_document(value) {
+    for (key, value) in &client.extra_body {
+        if let Some(doc) = json_value_to_document(value) {
             fields.insert(key.clone(), doc);
         }
     }
@@ -613,84 +509,89 @@ fn collect_additional_fields(client: &LlmPrimitiveClient) -> Option<aws_smithy_t
     }
 }
 
-/// Convert a `BexExternalValue` to a Smithy `Document`.
-fn bex_value_to_document(
-    value: &bex_external_types::BexExternalValue,
-) -> Option<aws_smithy_types::Document> {
+fn json_value_to_document(value: &serde_json::Value) -> Option<aws_smithy_types::Document> {
     use aws_smithy_types::{Document, Number};
-    use bex_external_types::BexExternalValue;
-
     match value {
-        BexExternalValue::Null => Some(Document::Null),
-        BexExternalValue::Int(i) => {
-            if *i >= 0 {
-                Some(Document::Number(Number::PosInt((*i).cast_unsigned())))
+        serde_json::Value::Null => Some(Document::Null),
+        serde_json::Value::Bool(b) => Some(Document::Bool(*b)),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                if i >= 0 {
+                    #[allow(clippy::cast_sign_loss)]
+                    Some(Document::Number(Number::PosInt(i as u64)))
+                } else {
+                    Some(Document::Number(Number::NegInt(i)))
+                }
             } else {
-                Some(Document::Number(Number::NegInt(*i)))
+                n.as_f64().map(|f| Document::Number(Number::Float(f)))
             }
         }
-        BexExternalValue::Float(f) => Some(Document::Number(Number::Float(*f))),
-        BexExternalValue::Bool(b) => Some(Document::Bool(*b)),
-        BexExternalValue::String(s) => Some(Document::String(s.clone())),
-        BexExternalValue::Array { items, .. } => {
-            let arr: Vec<Document> = items.iter().filter_map(bex_value_to_document).collect();
-            Some(Document::Array(arr))
+        serde_json::Value::String(s) => Some(Document::String(s.clone())),
+        serde_json::Value::Array(arr) => {
+            let docs: Vec<Document> = arr.iter().filter_map(json_value_to_document).collect();
+            Some(Document::Array(docs))
         }
-        BexExternalValue::Map { entries, .. } => {
-            let map: std::collections::HashMap<String, Document> = entries
+        serde_json::Value::Object(map) => {
+            let docs: std::collections::HashMap<String, Document> = map
                 .iter()
-                .filter_map(|(k, v)| bex_value_to_document(v).map(|d| (k.clone(), d)))
+                .filter_map(|(k, v)| json_value_to_document(v).map(|d| (k.clone(), d)))
                 .collect();
-            Some(Document::Object(map))
+            Some(Document::Object(docs))
         }
-        _ => None,
     }
 }
+
+// ============================================================================
+// Tests
+// ============================================================================
 
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
     use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-    use bex_external_types::BexExternalValue;
-    use indexmap::IndexMap;
 
     use super::*;
 
-    fn make_client(options: Vec<(&str, BexExternalValue)>) -> LlmPrimitiveClient {
-        let mut opts = IndexMap::new();
-        for (k, v) in options {
-            opts.insert(k.to_string(), v);
-        }
-        LlmPrimitiveClient {
-            name: "test-bedrock".to_string(),
-            provider: "aws-bedrock".to_string(),
-            default_role: "user".to_string(),
-            allowed_roles: vec![
+    fn make_client(
+        region: Option<&str>,
+        endpoint_url: Option<&str>,
+        model: &str,
+    ) -> crate::baml_std::PrimitiveClient {
+        let options = crate::baml_std::PrimitiveClientOptions {
+            model: Some(model.to_string()),
+            provider_options: Some(crate::baml_std::ProviderOptions::Bedrock(
+                crate::baml_std::BedrockOptions {
+                    region: region.map(String::from),
+                    endpoint_url: endpoint_url.map(String::from),
+                    ..Default::default()
+                },
+            )),
+            default_role: Some("user".to_string()),
+            allowed_roles: Some(vec![
                 "system".to_string(),
                 "user".to_string(),
                 "assistant".to_string(),
-            ],
-            options: opts,
-        }
+            ]),
+            ..Default::default()
+        };
+        let defaults = crate::baml_std::PrimitiveClientOptions::provider_defaults(
+            crate::LlmProvider::AwsBedrock,
+        );
+        crate::baml_std::PrimitiveClient::new(
+            "test-bedrock".to_string(),
+            "aws-bedrock".to_string(),
+            options.with_defaults(defaults),
+        )
+        .unwrap()
     }
 
-    fn base_options() -> Vec<(&'static str, BexExternalValue)> {
-        vec![
-            ("region", BexExternalValue::String("us-east-1".into())),
-            (
-                "model",
-                BexExternalValue::String("anthropic.claude-3-haiku-20240307-v1:0".into()),
-            ),
-            (
-                "access_key_id",
-                BexExternalValue::String("AKIAIOSFODNN7EXAMPLE".into()),
-            ),
-            (
-                "secret_access_key",
-                BexExternalValue::String("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
-            ),
-        ]
+    fn make_default_client() -> crate::baml_std::PrimitiveClient {
+        make_client(
+            Some("us-east-1"),
+            None,
+            "anthropic.claude-3-haiku-20240307-v1:0",
+        )
     }
 
     fn msg(role: &str, text: &str) -> Arc<PromptAst> {
@@ -701,7 +602,6 @@ mod tests {
         })
     }
 
-    /// Build a message containing a single media item.
     fn media_msg(
         role: &str,
         kind: baml_base::MediaKind,
@@ -716,7 +616,6 @@ mod tests {
         })
     }
 
-    /// Build a message with text + media parts.
     fn multipart_msg(
         role: &str,
         text: &str,
@@ -735,19 +634,21 @@ mod tests {
         })
     }
 
-    /// Helper: build a request and return the parsed body JSON.
-    async fn body_for(client: &LlmPrimitiveClient, prompt: Arc<PromptAst>) -> serde_json::Value {
-        let result = build_raw(client, prompt, false).await.unwrap();
+    async fn body_for(
+        client: &crate::baml_std::PrimitiveClient,
+        prompt: Arc<PromptAst>,
+    ) -> serde_json::Value {
+        let result = build_request(client, &prompt).await.unwrap();
         serde_json::from_str(&result.body).unwrap()
     }
 
     // -----------------------------------------------------------------------
-    // Body snapshot tests — each asserts the full JSON body
+    // Body snapshot tests
     // -----------------------------------------------------------------------
 
     #[tokio::test]
     async fn bedrock_system_and_user_text() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         let prompt = Arc::new(PromptAst::Vec(vec![
             msg("system", "You are helpful."),
             msg("user", "Hello"),
@@ -765,7 +666,7 @@ mod tests {
 
     #[tokio::test]
     async fn bedrock_user_only() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         assert_eq!(
             body_for(&client, msg("user", "Hello")).await,
             serde_json::json!({
@@ -778,7 +679,7 @@ mod tests {
 
     #[tokio::test]
     async fn bedrock_multi_turn() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         let prompt = Arc::new(PromptAst::Vec(vec![
             msg("system", "Be concise."),
             msg("user", "What is 2+2?"),
@@ -800,12 +701,34 @@ mod tests {
 
     #[tokio::test]
     async fn bedrock_inference_config() {
-        // Use f32-exact values so the snapshot comparison is deterministic.
-        let mut opts = base_options();
-        opts.push(("max_tokens", BexExternalValue::Int(500)));
-        opts.push(("temperature", BexExternalValue::Float(0.5)));
-        opts.push(("top_p", BexExternalValue::Float(0.75)));
-        let client = make_client(opts);
+        let options = crate::baml_std::PrimitiveClientOptions {
+            model: Some("anthropic.claude-3-haiku-20240307-v1:0".to_string()),
+            max_tokens: Some(500),
+            temperature: Some(0.5),
+            top_p: Some(0.75),
+            provider_options: Some(crate::baml_std::ProviderOptions::Bedrock(
+                crate::baml_std::BedrockOptions {
+                    region: Some("us-east-1".to_string()),
+                    ..Default::default()
+                },
+            )),
+            default_role: Some("user".to_string()),
+            allowed_roles: Some(vec![
+                "system".to_string(),
+                "user".to_string(),
+                "assistant".to_string(),
+            ]),
+            ..Default::default()
+        };
+        let defaults = crate::baml_std::PrimitiveClientOptions::provider_defaults(
+            crate::LlmProvider::AwsBedrock,
+        );
+        let client = crate::baml_std::PrimitiveClient::new(
+            "test".to_string(),
+            "aws-bedrock".to_string(),
+            options.with_defaults(defaults),
+        )
+        .unwrap();
         assert_eq!(
             body_for(&client, msg("user", "Hi")).await,
             serde_json::json!({
@@ -822,32 +745,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn bedrock_url_contains_model_and_region() {
+        let client = make_default_client();
+        let result = build_request(&client, &msg("user", "hi")).await.unwrap();
+        assert_eq!(
+            result.url,
+            "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
+        );
+    }
+
+    #[tokio::test]
+    async fn bedrock_endpoint_url_overrides_base() {
+        let client = make_client(
+            Some("us-east-1"),
+            Some("http://localhost:4566"),
+            "anthropic.claude-3-haiku-20240307-v1:0",
+        );
+        let result = build_request(&client, &msg("user", "hi")).await.unwrap();
+        assert_eq!(
+            result.url,
+            "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
+        );
+    }
+
+    #[tokio::test]
     async fn bedrock_no_model_or_creds_in_body() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         let body = body_for(&client, msg("user", "Hello")).await;
-        assert!(
-            body.get("model").is_none(),
-            "model should be in URL, not body"
-        );
-        assert!(
-            body.get("modelId").is_none(),
-            "modelId should be in URL, not body"
-        );
-        assert!(body.get("access_key_id").is_none());
-        assert!(body.get("secret_access_key").is_none());
-        assert!(body.get("region").is_none());
+        assert!(body.get("model").is_none());
+        assert!(body.get("modelId").is_none());
     }
 
     // -----------------------------------------------------------------------
     // Media tests
     // -----------------------------------------------------------------------
 
-    /// `"SGVsbG8="` is base64 for the bytes [0x48, 0x65, 0x6c, 0x6c, 0x6f] ("Hello").
     const TINY_B64: &str = "SGVsbG8=";
 
     #[tokio::test]
     async fn bedrock_image_base64() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         let prompt = media_msg(
             "user",
             baml_base::MediaKind::Image,
@@ -874,7 +811,7 @@ mod tests {
 
     #[tokio::test]
     async fn bedrock_image_s3() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         let prompt = media_msg(
             "user",
             baml_base::MediaKind::Image,
@@ -902,7 +839,7 @@ mod tests {
 
     #[tokio::test]
     async fn bedrock_video_base64() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         let prompt = media_msg(
             "user",
             baml_base::MediaKind::Video,
@@ -929,7 +866,7 @@ mod tests {
 
     #[tokio::test]
     async fn bedrock_pdf_base64() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         let prompt = media_msg(
             "user",
             baml_base::MediaKind::Pdf,
@@ -957,7 +894,7 @@ mod tests {
 
     #[tokio::test]
     async fn bedrock_audio_base64() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         let prompt = media_msg(
             "user",
             baml_base::MediaKind::Audio,
@@ -984,7 +921,7 @@ mod tests {
 
     #[tokio::test]
     async fn bedrock_text_and_image_multipart() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         let prompt = multipart_msg(
             "user",
             "Describe this image",
@@ -1012,8 +949,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn bedrock_non_s3_url_rejected() {
+        let client = make_default_client();
+        let prompt = media_msg(
+            "user",
+            baml_base::MediaKind::Image,
+            "image/png",
+            MediaContent::Url {
+                url: "https://example.com/img.png".into(),
+                base64_data: None,
+            },
+        );
+        let result = build_request(&client, &prompt).await;
+        assert!(result.is_err(), "non-s3 URLs should be rejected");
+    }
+
+    #[tokio::test]
     async fn bedrock_video_s3() {
-        let client = make_client(base_options());
+        let client = make_default_client();
         let prompt = media_msg(
             "user",
             baml_base::MediaKind::Video,
@@ -1040,147 +993,59 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn bedrock_non_s3_url_rejected() {
-        let client = make_client(base_options());
-        let prompt = media_msg(
-            "user",
-            baml_base::MediaKind::Image,
-            "image/png",
-            MediaContent::Url {
-                url: "https://example.com/img.png".into(),
-                base64_data: None,
-            },
-        );
-        let result = build_raw(&client, prompt, false).await;
-        assert!(result.is_err(), "non-s3 URLs should be rejected");
-    }
-
-    // -----------------------------------------------------------------------
-    // URL, headers, error cases
-    // -----------------------------------------------------------------------
-
-    /// Helper: run only the build step (no auth/signing) via the
-    /// `LlmRequestBuilder` trait so URL tests don't need valid credentials.
-    async fn build_raw(
-        client: &LlmPrimitiveClient,
-        prompt: Arc<PromptAst>,
-        stream: bool,
-    ) -> Result<RawHttpRequest, BuildRequestError> {
-        let (h, e, f) = crate::build_request::stub_callbacks();
-        let callbacks = crate::build_request::BuildRequestCallbacks {
-            http_send: &h,
-            env_read: &e,
-            fs_read: &f,
-        };
-        BedrockBuilder
-            .build_request(client, prompt, stream, &callbacks)
-            .await
-    }
-
-    #[tokio::test]
-    async fn bedrock_url_contains_model_and_region() {
-        let client = make_client(base_options());
-        let result = build_raw(&client, msg("user", "hi"), false).await.unwrap();
-        assert_eq!(
-            result.url,
-            "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
-        );
-    }
-
-    #[tokio::test]
-    async fn bedrock_stream_url_uses_converse_stream() {
-        let client = make_client(base_options());
-        let result = build_raw(&client, msg("user", "hi"), true).await.unwrap();
-        assert!(result.url.ends_with("/converse-stream"));
-    }
-
-    #[tokio::test]
-    async fn bedrock_endpoint_url_overrides_base() {
-        let mut opts = base_options();
-        opts.push((
-            "endpoint_url",
-            BexExternalValue::String("http://localhost:4566".into()),
-        ));
-        let client = make_client(opts);
-        let result = build_raw(&client, msg("user", "hi"), false).await.unwrap();
-        assert_eq!(
-            result.url,
-            "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
-        );
-    }
-
-    #[tokio::test]
     async fn bedrock_endpoint_url_with_trailing_slash() {
-        let mut opts = base_options();
-        opts.push((
-            "endpoint_url",
-            BexExternalValue::String("http://localhost:4566/".into()),
-        ));
-        let client = make_client(opts);
-        let result = build_raw(&client, msg("user", "hi"), false).await.unwrap();
+        let client = make_client(
+            Some("us-east-1"),
+            Some("http://localhost:4566/"),
+            "anthropic.claude-3-haiku-20240307-v1:0",
+        );
+        let result = build_request(&client, &msg("user", "hi")).await.unwrap();
         assert_eq!(
             result.url,
-            "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
+            "http://localhost:4566//model/anthropic.claude-3-haiku-20240307-v1:0/converse"
         );
     }
 
     #[tokio::test]
     async fn bedrock_endpoint_url_does_not_require_region() {
-        let client = make_client(vec![
-            (
-                "model",
-                BexExternalValue::String("anthropic.claude-3-haiku-20240307-v1:0".into()),
-            ),
-            (
-                "endpoint_url",
-                BexExternalValue::String("http://localhost:4566".into()),
-            ),
-        ]);
-        let result = build_raw(&client, msg("user", "hi"), false).await.unwrap();
+        let client = make_client(
+            None,
+            Some("http://localhost:4566"),
+            "anthropic.claude-3-haiku-20240307-v1:0",
+        );
+        let result = build_request(&client, &msg("user", "hi")).await.unwrap();
         assert!(result.url.starts_with("http://localhost:4566/"));
     }
 
     #[tokio::test]
-    async fn bedrock_missing_region_errors() {
-        // No region in options, so build_request falls back to the AWS
-        // provider chain. noop callbacks return "not found" so region
-        // resolution fails, which is what we're testing.
-        use std::sync::Arc;
-        let client = make_client(vec![("model", BexExternalValue::String("m".into()))]);
-        let h: crate::HttpSendFn =
-            Arc::new(|_| Box::pin(async { Err(crate::LlmOpError::Other("not available".into())) }));
-        let (e, f) = crate::build_request::noop_env_fs_callbacks();
-        let callbacks = crate::build_request::BuildRequestCallbacks {
-            http_send: &h,
-            env_read: &e,
-            fs_read: &f,
-        };
-        let result = BedrockBuilder
-            .build_request(&client, msg("user", "hi"), false, &callbacks)
-            .await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn bedrock_missing_model_errors() {
-        let client = make_client(vec![(
-            "region",
-            BexExternalValue::String("us-east-1".into()),
-        )]);
-        let result = build_raw(&client, msg("user", "hi"), false).await;
-        assert!(result.is_err());
-    }
-
-    // -----------------------------------------------------------------------
-    // Range validation tests
-    // -----------------------------------------------------------------------
-
-    #[tokio::test]
     async fn bedrock_max_tokens_overflow_rejected() {
-        let mut opts = base_options();
-        opts.push(("max_tokens", BexExternalValue::Int(i64::from(i32::MAX) + 1)));
-        let client = make_client(opts);
-        let result = build_raw(&client, msg("user", "hi"), false).await;
+        let options = crate::baml_std::PrimitiveClientOptions {
+            model: Some("anthropic.claude-3-haiku-20240307-v1:0".to_string()),
+            max_tokens: Some(i64::from(i32::MAX) + 1),
+            provider_options: Some(crate::baml_std::ProviderOptions::Bedrock(
+                crate::baml_std::BedrockOptions {
+                    region: Some("us-east-1".to_string()),
+                    ..Default::default()
+                },
+            )),
+            default_role: Some("user".to_string()),
+            allowed_roles: Some(vec![
+                "system".to_string(),
+                "user".to_string(),
+                "assistant".to_string(),
+            ]),
+            ..Default::default()
+        };
+        let defaults = crate::baml_std::PrimitiveClientOptions::provider_defaults(
+            crate::LlmProvider::AwsBedrock,
+        );
+        let client = crate::baml_std::PrimitiveClient::new(
+            "test".to_string(),
+            "aws-bedrock".to_string(),
+            options.with_defaults(defaults),
+        )
+        .unwrap();
+        let result = build_request(&client, &msg("user", "hi")).await;
         assert!(
             matches!(&result, Err(BuildRequestError::InvalidOption { key, .. }) if key == "max_tokens"),
             "expected InvalidOption for max_tokens, got: {result:?}"

@@ -8,7 +8,7 @@ fn user.MyClient$new() -> null {
     let _1: void
     let _2: map<void, void>
     let _3: map<void, void>
-    let _4: map<"max_tokens" | "array_key_with_quoted_unquoted" | "key2" | "hello" | "thing" | "block_string" | "inline_raw_string" | "booleanValue" | "stringKey" | "array1" | "array2" | "array3Numbers" | "nestedKey" | "oneMoreValueToTestBrokenness" | "myInteger" | "tools", 100 | "abc" | "ccc"[] | "somerandomvalue" | "world" | "hello" | "#hellotheremyfriend#" | "#inlinerawstring,,#" | "true" | "one" | "two"[] | null[] | void | "value" | void[] | "#hellotheremyfriend{#acommentinaprompt#}#">
+    let _4: map<"array_key_with_quoted_unquoted" | "key2" | "hello" | "thing" | "block_string" | "inline_raw_string" | "booleanValue" | "stringKey" | "array1" | "array2" | "array3Numbers" | "nestedKey" | "oneMoreValueToTestBrokenness" | "myInteger" | "tools", "abc" | "ccc"[] | "somerandomvalue" | "world" | "hello" | "#hellotheremyfriend#" | "#inlinerawstring,,#" | "true" | "one" | "two"[] | null[] | void | "value" | 100 | void[] | "#hellotheremyfriend{#acommentinaprompt#}#">
     let _5: "abc" | "ccc"[]
     let _6: "one" | "two"[]
     let _7: "one" | "two"[]
@@ -27,9 +27,9 @@ fn user.MyClient$new() -> null {
         _10 = [const "yes", const "queen"];
         _9 =  { const "value", const "value2", copy _10, const 10_i64 };
         _11 = [];
-        _4 = { const "max_tokens": const 100_i64, const "array_key_with_quoted_unquoted": copy _5, const "key2": const "somerandomvalue", const "hello": const "world", const "thing": const "hello", const "block_string": const "#hellotheremyfriend#", const "inline_raw_string": const "#inlinerawstring,,#", const "booleanValue": const "true", const "stringKey": const "true", const "array1": copy _6, const "array2": copy _7, const "array3Numbers": copy _8, const "nestedKey": copy _9, const "oneMoreValueToTestBrokenness": const "value", const "myInteger": const 100_i64, const "tools": copy _11, const "block_string": const "#hellotheremyfriend{#acommentinaprompt#}#" };
-        _1 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
-        _0 = baml.llm.PrimitiveClient { const "MyClient", const "baml-openai-chat", copy _1 };
+        _4 = { const "array_key_with_quoted_unquoted": copy _5, const "key2": const "somerandomvalue", const "hello": const "world", const "thing": const "hello", const "block_string": const "#hellotheremyfriend#", const "inline_raw_string": const "#inlinerawstring,,#", const "booleanValue": const "true", const "stringKey": const "true", const "array1": copy _6, const "array2": copy _7, const "array3Numbers": copy _8, const "nestedKey": copy _9, const "oneMoreValueToTestBrokenness": const "value", const "myInteger": const 100_i64, const "tools": copy _11, const "block_string": const "#hellotheremyfriend{#acommentinaprompt#}#" };
+        _1 = baml.llm.PrimitiveClientOptions { const null, const 100_i64, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _0 = baml.llm.PrimitiveClient { const "MyClient", const "openai", copy _1 };
         goto -> bb1;
     }
 

@@ -77,7 +77,10 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         args: indexmap::IndexMap<String, BexExternalValue>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::PromptAst> {
-        let old_client = convert_io_primitive_client(&client);
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
         let args_ext = BexExternalValue::Map {
             key_type: baml_type::Ty::string(),
             value_type: baml_type::Ty::unknown(),
@@ -98,7 +101,10 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         prompt: io::owned::llm::PromptAst,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::PromptAst> {
-        let old_client = convert_io_primitive_client(&client);
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
         let prompt_ast = unwrap_prompt_ast(&prompt);
         SysOpOutput::Ready(
             sys_llm::execute_specialize_prompt_from_owned(&old_client, prompt_ast)
@@ -115,10 +121,14 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         prompt: io::owned::llm::PromptAst,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let old_client = convert_io_primitive_client(&client);
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
         let prompt_ast = unwrap_prompt_ast(&prompt);
-        SysOpOutput::Ready(
-            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast)
+        SysOpOutput::async_op(async move {
+            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast, None)
+                .await
                 .map(|req| {
                     io::owned::http::Request {
                         method: req.method,
@@ -128,8 +138,8 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
                     }
                     .into_bex_external_value()
                 })
-                .map_err(OpErrorKind::from),
-        )
+                .map_err(OpErrorKind::from)
+        })
     }
 
     fn parse(
@@ -141,7 +151,10 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         type_def: baml_type::Ty,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        let old_client = convert_io_primitive_client(&client);
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
         SysOpOutput::Ready(
             sys_llm::execute_parse_response_from_owned(&old_client, &response, &type_def, ctx)
                 .map(bex_external_types::AsBexExternalValue::into_bex_external_value)
@@ -238,7 +251,7 @@ fn convert_io_primitive_client(
         provider,
         options,
     }: &io::owned::llm::PrimitiveClient,
-) -> sys_llm::baml_std::PrimitiveClient {
+) -> Result<sys_llm::baml_std::PrimitiveClient, sys_llm::baml_std::ClientError> {
     sys_llm::baml_std::PrimitiveClient::new(
         name.clone(),
         provider.clone(),
