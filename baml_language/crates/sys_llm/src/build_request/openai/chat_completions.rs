@@ -71,12 +71,6 @@ struct FileRef {
 struct RequestBody {
     model: String,
     messages: Vec<ChatMessage>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    max_tokens: Option<i64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    top_p: Option<f64>,
     #[serde(flatten)]
     extra: serde_json::Map<String, serde_json::Value>,
 }
@@ -93,56 +87,57 @@ pub(crate) fn build_request(
     }
 
     // Body
+    let mut extra = client.extra_body.clone();
+
+    // Azure: inject max_tokens default if not already set via request_body.
+    if let Some(crate::baml_std::ProviderOptions::AzureOpenAi(azure)) =
+        &client.options.provider_options
+    {
+        if let Some(mt) = azure.max_tokens {
+            extra
+                .entry("max_tokens")
+                .or_insert(serde_json::Value::Number(mt.into()));
+        }
+    }
+
     let body = RequestBody {
         model: client.model.clone(),
         messages: prompt_to_openai_messages(prompt)?,
-        max_tokens: client.max_tokens,
-        temperature: client.options.temperature,
-        top_p: client.options.top_p,
-        extra: client.extra_body.clone(),
+        extra,
     };
     let body_str = serde_json::to_string(&body)?;
 
     Ok(crate::baml_std::HttpRequest {
         method: "POST".to_string(),
-        url: resolve_url(client)?,
+        url: resolve_url(client),
         headers,
         body: body_str,
     })
 }
 
-fn resolve_url(
-    client: &crate::baml_std::PrimitiveClient,
-) -> Result<String, crate::build_request::BuildRequestError> {
-    if let Some(base_url) = &client.options.base_url {
-        // Azure needs api-version query param.
-        if let Some(crate::baml_std::ProviderOptions::AzureOpenAi(azure)) =
-            &client.options.provider_options
-        {
-            return Ok(format!(
-                "{base_url}/chat/completions?api-version={}",
-                azure.api_version
-            ));
-        }
-        return Ok(format!("{base_url}/chat/completions"));
-    }
-
-    // No base_url: Azure can build from resource_name + deployment_id.
+fn resolve_url(client: &crate::baml_std::PrimitiveClient) -> String {
     if let Some(crate::baml_std::ProviderOptions::AzureOpenAi(azure)) =
         &client.options.provider_options
     {
-        if let (Some(rn), Some(did)) = (&azure.resource_name, &azure.deployment_id) {
-            return Ok(format!(
-                "https://{rn}.openai.azure.com/openai/deployments/{did}/chat/completions?api-version={}",
-                azure.api_version
-            ));
-        }
+        let base = match (
+            &client.options.base_url,
+            &azure.resource_name,
+            &azure.deployment_id,
+        ) {
+            (Some(url), _, _) => url.clone(),
+            (None, Some(rn), Some(did)) => {
+                format!("https://{rn}.openai.azure.com/openai/deployments/{did}")
+            }
+            // Validated at compile time in lower_cst.rs
+            _ => unreachable!("azure-openai requires base_url or resource_name + deployment_id"),
+        };
+        return format!("{base}/chat/completions?api-version={}", azure.api_version);
     }
 
-    Ok(format!(
+    format!(
         "{}/chat/completions",
         client.options.base_url.as_deref().unwrap_or_default()
-    ))
+    )
 }
 
 // ============================================================================
@@ -809,6 +804,7 @@ mod tests {
                         resource_name: Some("my-resource".to_string()),
                         deployment_id: Some("gpt-4o".to_string()),
                         api_version: "2024-02-15-preview".to_string(),
+                        max_tokens: Some(4096),
                     },
                 )),
                 ..Default::default()
@@ -835,12 +831,16 @@ mod tests {
             "azure-openai",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gpt-4o".to_string()),
-                max_tokens: Some(2048),
+                request_body: indexmap::IndexMap::from([(
+                    "max_tokens".to_string(),
+                    bex_external_types::BexExternalValue::Int(2048),
+                )]),
                 provider_options: Some(crate::baml_std::ProviderOptions::AzureOpenAi(
                     crate::baml_std::AzureOpenAiOptions {
                         resource_name: Some("my-resource".to_string()),
                         deployment_id: Some("gpt-4o".to_string()),
                         api_version: "2024-02-15-preview".to_string(),
+                        max_tokens: Some(4096),
                     },
                 )),
                 ..Default::default()
@@ -872,6 +872,7 @@ mod tests {
                         resource_name: Some("my-resource".to_string()),
                         deployment_id: Some("gpt-4o".to_string()),
                         api_version: "2024-02-15-preview".to_string(),
+                        max_tokens: Some(4096),
                     },
                 )),
                 request_body: IndexMap::from([(

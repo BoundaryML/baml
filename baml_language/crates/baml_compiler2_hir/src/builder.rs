@@ -68,6 +68,19 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
+    /// Convert an AST-level `HirDiagnostic` into the HIR diagnostic list.
+    pub fn push_ast_diagnostic(&mut self, diag: &baml_compiler_diagnostics::HirDiagnostic) {
+        use baml_compiler_diagnostics::ToDiagnostic;
+        let d = diag.to_diagnostic();
+        if let Some(span) = d.primary_span() {
+            self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                diagnostic_id: d.id,
+                message: d.message,
+                span: span.range,
+            });
+        }
+    }
+
     /// Build the `FileSemanticIndex` from a list of AST items.
     ///
     /// `file_range` is the full text range of the file (used for

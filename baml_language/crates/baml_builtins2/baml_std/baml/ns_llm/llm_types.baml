@@ -227,9 +227,6 @@ class Client {
 
 class PrimitiveClientOptions {
   model string | null
-  max_tokens int | null
-  temperature float | null
-  top_p float | null
   base_url string | null
   default_role string | null
   allowed_roles string[] | null
@@ -247,10 +244,12 @@ class AzureOpenAiOptions {
   resource_name string | null
   deployment_id string | null
   api_version string
+  max_tokens int | null
 }
 
 class AnthropicOptions {
   anthropic_version string | null
+  max_tokens int | null
 }
 
 class BedrockOptions {
@@ -261,6 +260,9 @@ class BedrockOptions {
   session_token string | null
   profile string | null
   stop_sequences string[] | null
+  max_tokens int | null
+  temperature float | null
+  top_p float | null
 }
 
 class PrimitiveClient {

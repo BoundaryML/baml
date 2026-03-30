@@ -475,33 +475,34 @@ fn build_inference_config(
     let mut builder = InferenceConfiguration::builder();
     let mut has_config = false;
 
-    if let Some(max_tokens) = client.max_tokens {
-        let narrow = i32::try_from(max_tokens).map_err(|_| BuildRequestError::InvalidOption {
-            key: "max_tokens".into(),
-            reason: format!(
-                "value {max_tokens} is out of the supported range (0..={})",
-                i32::MAX
-            ),
-        })?;
-        builder = builder.max_tokens(narrow);
-        has_config = true;
-    }
-
-    #[allow(clippy::cast_possible_truncation)]
-    if let Some(t) = client.options.temperature {
-        builder = builder.temperature(t as f32);
-        has_config = true;
-    }
-
-    #[allow(clippy::cast_possible_truncation)]
-    if let Some(p) = client.options.top_p {
-        builder = builder.top_p(p as f32);
-        has_config = true;
-    }
-
     if let Some(crate::baml_std::ProviderOptions::Bedrock(bedrock_opts)) =
         &client.options.provider_options
     {
+        if let Some(max_tokens) = bedrock_opts.max_tokens {
+            let narrow =
+                i32::try_from(max_tokens).map_err(|_| BuildRequestError::InvalidOption {
+                    key: "max_tokens".into(),
+                    reason: format!(
+                        "value {max_tokens} is out of the supported range (0..={})",
+                        i32::MAX
+                    ),
+                })?;
+            builder = builder.max_tokens(narrow);
+            has_config = true;
+        }
+
+        #[allow(clippy::cast_possible_truncation)]
+        if let Some(t) = bedrock_opts.temperature {
+            builder = builder.temperature(t as f32);
+            has_config = true;
+        }
+
+        #[allow(clippy::cast_possible_truncation)]
+        if let Some(p) = bedrock_opts.top_p {
+            builder = builder.top_p(p as f32);
+            has_config = true;
+        }
+
         if let Some(seqs) = &bedrock_opts.stop_sequences {
             if !seqs.is_empty() {
                 builder = builder.set_stop_sequences(Some(seqs.clone()));
@@ -728,12 +729,12 @@ mod tests {
     async fn bedrock_inference_config() {
         let options = crate::baml_std::PrimitiveClientOptions {
             model: Some("anthropic.claude-3-haiku-20240307-v1:0".to_string()),
-            max_tokens: Some(500),
-            temperature: Some(0.5),
-            top_p: Some(0.75),
             provider_options: Some(crate::baml_std::ProviderOptions::Bedrock(
                 crate::baml_std::BedrockOptions {
                     region: Some("us-east-1".to_string()),
+                    max_tokens: Some(500),
+                    temperature: Some(0.5),
+                    top_p: Some(0.75),
                     ..Default::default()
                 },
             )),
@@ -1054,10 +1055,10 @@ mod tests {
     async fn bedrock_max_tokens_overflow_rejected() {
         let options = crate::baml_std::PrimitiveClientOptions {
             model: Some("anthropic.claude-3-haiku-20240307-v1:0".to_string()),
-            max_tokens: Some(i64::from(i32::MAX) + 1),
             provider_options: Some(crate::baml_std::ProviderOptions::Bedrock(
                 crate::baml_std::BedrockOptions {
                     region: Some("us-east-1".to_string()),
+                    max_tokens: Some(i64::from(i32::MAX) + 1),
                     ..Default::default()
                 },
             )),

@@ -440,9 +440,6 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
 }
 class baml.llm.PrimitiveClientOptions {
   model: string | null
-  max_tokens: int | null
-  temperature: float | null
-  top_p: float | null
   base_url: string | null
   default_role: string | null
   allowed_roles: string[] | null
@@ -457,9 +454,11 @@ class baml.llm.AzureOpenAiOptions {
   resource_name: string | null
   deployment_id: string | null
   api_version: string
+  max_tokens: int | null
 }
 class baml.llm.AnthropicOptions {
   anthropic_version: string | null
+  max_tokens: int | null
 }
 class baml.llm.BedrockOptions {
   region: string | null
@@ -469,6 +468,9 @@ class baml.llm.BedrockOptions {
   session_token: string | null
   profile: string | null
   stop_sequences: string[] | null
+  max_tokens: int | null
+  temperature: float | null
+  top_p: float | null
 }
 class baml.llm.PrimitiveClient {
   name: string
@@ -493,9 +495,6 @@ class baml.llm.Client$stream {
 }
 class baml.llm.PrimitiveClientOptions$stream {
   model: string | null
-  max_tokens: int | null
-  temperature: float | null
-  top_p: float | null
   base_url: string | null
   default_role: string | null
   allowed_roles: string[] | null
@@ -510,9 +509,11 @@ class baml.llm.AzureOpenAiOptions$stream {
   resource_name: string | null
   deployment_id: string | null
   api_version: null | string
+  max_tokens: int | null
 }
 class baml.llm.AnthropicOptions$stream {
   anthropic_version: string | null
+  max_tokens: int | null
 }
 class baml.llm.BedrockOptions$stream {
   region: string | null
@@ -522,6 +523,9 @@ class baml.llm.BedrockOptions$stream {
   session_token: string | null
   profile: string | null
   stop_sequences: string[] | null
+  max_tokens: int | null
+  temperature: float | null
+  top_p: float | null
 }
 class baml.llm.PrimitiveClient$stream {
   name: null | string

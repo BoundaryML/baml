@@ -135,11 +135,13 @@ function baml.llm.rr_pick_index(self: ?, client_name: string, counter: int, sub_
 --- <builtin>/baml/ns_llm/llm_types.baml ---
 class baml.llm.AnthropicOptions {
   anthropic_version: string | null
+  max_tokens: int | null
 }
 class baml.llm.AzureOpenAiOptions {
   resource_name: string | null
   deployment_id: string | null
   api_version: string
+  max_tokens: int | null
 }
 class baml.llm.BedrockOptions {
   region: string | null
@@ -149,6 +151,9 @@ class baml.llm.BedrockOptions {
   session_token: string | null
   profile: string | null
   stop_sequences: string[] | null
+  max_tokens: int | null
+  temperature: float | null
+  top_p: float | null
 }
 class baml.llm.Client {
   name: string
@@ -164,9 +169,6 @@ class baml.llm.PrimitiveClient {
 }
 class baml.llm.PrimitiveClientOptions {
   model: string | null
-  max_tokens: int | null
-  temperature: float | null
-  top_p: float | null
   base_url: string | null
   default_role: string | null
   allowed_roles: string[] | null

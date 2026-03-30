@@ -33,6 +33,7 @@ function user.EchoJSON(i: user.JSON) -> user.JSON throws never {
   { : user.NotJSON
     NotJSON { inner: "Whoops" } : user.NotJSON
   }
+  !! 92..97: unresolved type: name
 }
 function user.MakeJSON(i: user.NotJSON) -> user.JSON throws never {
   { : unknown

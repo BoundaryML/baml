@@ -29,15 +29,6 @@ function user.Gpt4oClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -80,15 +71,6 @@ function user.O1Client$new() -> null {
     copy 0
     load_const "o1"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const null
     store_field .base_url
@@ -135,15 +117,6 @@ function user.O1MiniClient$new() -> null {
     store_field .model
     copy 0
     load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
-    copy 0
-    load_const null
     store_field .base_url
     copy 0
     load_const null
@@ -186,15 +159,6 @@ function user.O1WithExplicitRoles$new() -> null {
     copy 0
     load_const "o1"
     store_field .model
-    copy 0
-    load_const null
-    store_field .max_tokens
-    copy 0
-    load_const null
-    store_field .temperature
-    copy 0
-    load_const null
-    store_field .top_p
     copy 0
     load_const null
     store_field .base_url

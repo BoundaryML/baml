@@ -32,8 +32,15 @@ use crate::{
 /// After this returns, the CST is no longer needed — all structural content
 /// is owned by the returned `Item`s.
 pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<HirDiagnostic>) {
+    lower_file_with_file_id(root, baml_base::FileId::sentinel())
+}
+
+pub fn lower_file_with_file_id(
+    root: &SyntaxNode,
+    file_id: baml_base::FileId,
+) -> (Vec<Item>, Vec<HirDiagnostic>) {
     let mut items = Vec::new();
-    let diagnostics = Vec::new();
+    let mut diagnostics = Vec::new();
 
     for child in root.children() {
         match child.kind() {
@@ -60,7 +67,9 @@ pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<HirDiagnostic>) {
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLIENT_DEF => {
-                if let Some((let_item, companion)) = synthesize_client_items(&child) {
+                if let Some((let_item, companion)) =
+                    synthesize_client_items(&child, file_id, &mut diagnostics)
+                {
                     items.push(let_item);
                     if let Some(func) = companion {
                         items.push(Item::Function(func));
@@ -699,7 +708,11 @@ fn synthesize_retry_policy_let(node: &SyntaxNode) -> Option<Item> {
 ///   constructs `Client { name, client_type, sub_clients: [], retry: null }`.
 /// - Primitive clients also produce an `Item::Function("ClientName$new")` whose body
 ///   constructs `PrimitiveClient { name, provider, options }`.
-fn synthesize_client_items(node: &SyntaxNode) -> Option<(Item, Option<FunctionDef>)> {
+fn synthesize_client_items(
+    node: &SyntaxNode,
+    file_id: baml_base::FileId,
+    diagnostics: &mut Vec<HirDiagnostic>,
+) -> Option<(Item, Option<FunctionDef>)> {
     let client = ast::ClientDef::cast(node.clone())?;
     let name_token = client.name()?;
     let client_name = name_token.text().to_string();
@@ -741,6 +754,8 @@ fn synthesize_client_items(node: &SyntaxNode) -> Option<(Item, Option<FunctionDe
             &name_token,
             &config_block,
             provider.as_ref(),
+            file_id,
+            diagnostics,
         ))
     } else {
         None
@@ -934,6 +949,8 @@ fn synthesize_client_new_companion(
     name_token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>,
     config_block: &ast::ConfigBlock,
     provider: Option<&String>,
+    file_id: baml_base::FileId,
+    diagnostics: &mut Vec<HirDiagnostic>,
 ) -> FunctionDef {
     use baml_base::Literal;
 
@@ -947,9 +964,6 @@ fn synthesize_client_new_companion(
 
     // Top-level scalar fields (default Null)
     let mut model = alloc(Expr::Null);
-    let mut max_tokens = alloc(Expr::Null);
-    let mut temperature = alloc(Expr::Null);
-    let mut top_p = alloc(Expr::Null);
     let mut base_url = alloc(Expr::Null);
     let mut default_role = alloc(Expr::Null);
     let mut allowed_roles = alloc(Expr::Null);
@@ -967,6 +981,13 @@ fn synthesize_client_new_companion(
         .map(|(_, fields)| fields.iter().enumerate().map(|(i, &f)| (f, i)).collect())
         .unwrap_or_default();
     let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
+    let mut has_base_url = false;
+
+    let options_span = config_block
+        .items()
+        .find(|item| item.matches_key("options"))
+        .map(|item| item.syntax().text_range())
+        .unwrap_or(span);
 
     if let Some(options_item) = config_block
         .items()
@@ -981,10 +1002,10 @@ fn synthesize_client_new_companion(
                 let val = crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
                 match k {
                     "model" => model = val,
-                    "max_tokens" => max_tokens = val,
-                    "temperature" => temperature = val,
-                    "top_p" => top_p = val,
-                    "base_url" => base_url = val,
+                    "base_url" => {
+                        has_base_url = true;
+                        base_url = val;
+                    }
                     "default_role" => default_role = val,
                     "allowed_roles" => allowed_roles = val,
                     "remap_roles" => remap_roles = val,
@@ -1002,6 +1023,19 @@ fn synthesize_client_new_companion(
                 }
             }
         }
+    }
+
+    // Provider-specific compile-time validation.
+    if let Some(provider_str) = provider.map(String::as_str) {
+        validate_client_options(
+            provider_str,
+            client_name,
+            has_base_url,
+            &prov_index,
+            &prov_vals,
+            baml_base::Span::new(file_id, options_span),
+            diagnostics,
+        );
     }
 
     let provider_options = if selected_group.is_some_and(|_| prov_vals.iter().any(Option::is_some))
@@ -1027,9 +1061,6 @@ fn synthesize_client_new_companion(
         type_name: Some(Name::new("baml.llm.PrimitiveClientOptions")),
         fields: vec![
             (Name::new("model"), model),
-            (Name::new("max_tokens"), max_tokens),
-            (Name::new("temperature"), temperature),
-            (Name::new("top_p"), top_p),
             (Name::new("base_url"), base_url),
             (Name::new("default_role"), default_role),
             (Name::new("allowed_roles"), allowed_roles),
@@ -1101,10 +1132,18 @@ fn synthesize_client_new_companion(
 /// `unimplemented!` so that adding a new provider forces a decision here.
 fn provider_group_for(provider: &str) -> Option<(&'static str, &'static [&'static str])> {
     match provider {
-        "anthropic" => Some(("baml.llm.AnthropicOptions", &["anthropic_version"])),
+        "anthropic" => Some((
+            "baml.llm.AnthropicOptions",
+            &["anthropic_version", "max_tokens"],
+        )),
         "azure-openai" => Some((
             "baml.llm.AzureOpenAiOptions",
-            &["resource_name", "deployment_id", "api_version"],
+            &[
+                "resource_name",
+                "deployment_id",
+                "api_version",
+                "max_tokens",
+            ],
         )),
         "aws-bedrock" => Some((
             "baml.llm.BedrockOptions",
@@ -1116,11 +1155,44 @@ fn provider_group_for(provider: &str) -> Option<(&'static str, &'static [&'stati
                 "session_token",
                 "profile",
                 "stop_sequences",
+                "max_tokens",
+                "temperature",
+                "top_p",
             ],
         )),
         "openai" | "openai-generic" | "openai-responses" | "ollama" | "openrouter"
         | "google-ai" | "vertex-ai" | "baml-fallback" | "baml-round-robin" => None,
         _ => unimplemented!("unknown provider {provider:?}: add it to provider_group_for"),
+    }
+}
+
+/// Validate provider-specific option constraints at compile time.
+fn validate_client_options(
+    provider: &str,
+    client_name: &str,
+    has_base_url: bool,
+    prov_index: &std::collections::HashMap<&str, usize>,
+    prov_vals: &[Option<ExprId>],
+    span: baml_base::Span,
+    diagnostics: &mut Vec<HirDiagnostic>,
+) {
+    let has_prov = |name: &str| -> bool {
+        prov_index
+            .get(name)
+            .is_some_and(|&i| prov_vals[i].is_some())
+    };
+
+    if provider == "azure-openai"
+        && !has_base_url
+        && !(has_prov("resource_name") && has_prov("deployment_id"))
+    {
+        diagnostics.push(HirDiagnostic::MissingClientOptions {
+            client_name: client_name.to_string(),
+            message:
+                "azure-openai requires either base_url or both resource_name and deployment_id"
+                    .to_string(),
+            span,
+        });
     }
 }
 

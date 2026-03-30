@@ -360,24 +360,26 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Object {
                 type_name, fields, ..
             } => {
-                for (_, expr_id) in fields {
-                    self.infer_expr(*expr_id, body);
-                }
-                type_name
+                let class_ty = type_name
                     .as_ref()
-                    .and_then(|n| {
-                        self.package_items
-                            .lookup_type(&self.ns_context, n)
-                            .map(|def| {
-                                Ty::Class(
-                                    crate::lower_type_expr::qualify_def(self.context.db(), def, n),
-                                    TyAttr::default(),
-                                )
-                            })
-                    })
-                    .unwrap_or(Ty::Unknown {
-                        attr: TyAttr::default(),
-                    })
+                    .and_then(|n| self.resolve_object_type_name(n));
+                if let Some(Ty::Class(ref class_name, _)) = class_ty {
+                    let field_types = self.lookup_class_fields(class_name);
+                    for (field_name, field_expr) in fields {
+                        if let Some(declared_ty) = field_types.get(field_name) {
+                            self.check_expr(*field_expr, body, declared_ty);
+                        } else {
+                            self.infer_expr(*field_expr, body);
+                        }
+                    }
+                } else {
+                    for (_, expr_id) in fields {
+                        self.infer_expr(*expr_id, body);
+                    }
+                }
+                class_ty.unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                })
             }
             Expr::Index { base, index } => {
                 let base_ty = self.infer_expr(*base, body);
@@ -512,11 +514,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.infer_expr(expr_id, body)
                 }
             }
-            // Object: if expected is Class(name), check fields
+            // Object: if expected is Class(name), check fields against declared types.
             Expr::Object { fields, .. } => {
-                if let Ty::Class(_, _) = expected {
-                    for (_field_name, field_expr) in fields {
-                        self.infer_expr(*field_expr, body);
+                if let Ty::Class(class_name, _) = expected {
+                    let field_types = self.lookup_class_fields(class_name);
+                    for (field_name, field_expr) in fields {
+                        if let Some(declared_ty) = field_types.get(field_name) {
+                            self.check_expr(*field_expr, body, declared_ty);
+                        } else {
+                            self.infer_expr(*field_expr, body);
+                        }
                     }
                     let ty = expected.clone();
                     self.record_expr_type(expr_id, ty.clone());
@@ -2689,6 +2696,36 @@ impl<'db> TypeInferenceBuilder<'db> {
     /// Look up class fields from the package items (via item tree).
     ///
     /// Returns a map of field name → resolved field type.
+    /// Resolve a potentially dotted type name (e.g. `baml.llm.PrimitiveClient`)
+    /// from an `Expr::Object { type_name }` to a `Ty::Class`.
+    fn resolve_object_type_name(&self, name: &Name) -> Option<Ty> {
+        let s = name.as_str();
+        let parts: Vec<&str> = s.split('.').collect();
+        if parts.len() >= 2 {
+            // Dotted: first segment is package, middle segments are namespace, last is item.
+            let pkg_name = Name::new(parts[0]);
+            let ns: Vec<Name> = parts[1..parts.len() - 1]
+                .iter()
+                .map(|s| Name::new(*s))
+                .collect();
+            let item_name = Name::new(parts[parts.len() - 1]);
+            let db = self.context.db();
+            let pkg_items = self.res_ctx.items_for_package(db, &pkg_name)?;
+            let def = pkg_items.lookup_type(&ns, &item_name)?;
+            Some(Ty::Class(
+                crate::lower_type_expr::qualify_def(db, def, &item_name),
+                TyAttr::default(),
+            ))
+        } else {
+            // Simple name: use current package + namespace context.
+            let def = self.package_items.lookup_type(&self.ns_context, name)?;
+            Some(Ty::Class(
+                crate::lower_type_expr::qualify_def(self.context.db(), def, name),
+                TyAttr::default(),
+            ))
+        }
+    }
+
     fn lookup_class_fields(
         &self,
         class_name: &crate::ty::QualifiedTypeName,
