@@ -472,3 +472,42 @@ async fn issue_b_captured_variable_mutation_visible() {
     // Parent reads x after lambda mutated it — should see 42
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }
+
+/// Issue B (variant): watch let + lambda capture.
+/// A watched variable that is also captured by a lambda. After cell wrapping,
+/// the watch instruction sees Object::Cell instead of the user value. Lambda
+/// mutation via StoreDeref may not trigger watch notifications.
+#[tokio::test]
+async fn issue_b_watch_let_captured_by_lambda() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            watch let x = 0;
+            let inc = () -> { x += 1 }
+            inc()
+            inc()
+            x
+        }
+    "#
+    );
+    // Even if watch notifications are broken, the value should still be correct
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+/// Issue B (variant): watch let mutated by both parent and lambda.
+#[tokio::test]
+async fn issue_b_watch_let_mutated_by_parent_and_lambda() {
+    let output = baml_test!(
+        r#"
+        function main() -> int {
+            watch let counter = 0;
+            counter = 1;
+            let bump = () -> { counter += 10 }
+            bump()
+            counter
+        }
+    "#
+    );
+    // counter: 0 → 1 (parent) → 11 (lambda)
+    assert_eq!(output.result, Ok(BexExternalValue::Int(11)));
+}
