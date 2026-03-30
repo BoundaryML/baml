@@ -1,5 +1,5 @@
 client<llm> Bar {
-  provider baml-openai-chat
+  provider openai
 }
 
 template_string Foo() #"

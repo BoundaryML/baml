@@ -84,6 +84,14 @@ pub(crate) fn lower_config_value(
         });
     }
 
+    // Bool literals
+    if text == "true" {
+        return alloc(Expr::Literal(Literal::Bool(true)));
+    }
+    if text == "false" {
+        return alloc(Expr::Literal(Literal::Bool(false)));
+    }
+
     // Quoted string or bare word → String literal
     let cleaned = text.trim_matches('"');
     alloc(Expr::Literal(Literal::String(cleaned.to_string())))

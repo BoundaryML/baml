@@ -92,6 +92,18 @@ function user.ArrayConfigClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -139,6 +151,18 @@ function user.ArrayOfObjectsClient$new() -> null {
     copy 0
     load_const null
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -628,6 +652,18 @@ function user.BasicClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -1081,6 +1117,18 @@ function user.C$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -1243,6 +1291,18 @@ function user.CommaClient$new() -> null {
     copy 0
     load_const null
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -1463,6 +1523,18 @@ function user.DeeplyNestedClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -1481,7 +1553,7 @@ function user.DeeplyNestedClient$new() -> null {
     copy 0
     load_const null /* unknown class:  */
     copy 0
-    load_const "true"
+    load_const true
     store_field .0
     copy 0
     load_const 30000
@@ -1526,6 +1598,18 @@ function user.EnvClient$new() -> null {
     copy 0
     load_const null
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -1586,6 +1670,18 @@ function user.ExtraWhitespaceClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -1640,6 +1736,18 @@ function user.FullClient$new() -> null {
     copy 0
     load_const null
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -1943,6 +2051,18 @@ function user.LongArrayClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -1992,6 +2112,18 @@ function user.LongArrayOfObjectsClient$new() -> null {
     copy 0
     load_const null
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -2054,6 +2186,18 @@ function user.LongNestedValuesClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -2096,6 +2240,18 @@ function user.LongOptionClient$new() -> null {
     copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -3896,6 +4052,18 @@ function user.ManyOptionsClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -3921,7 +4089,7 @@ function user.ManyOptionsClient$new() -> null {
     load_const 0.95
     load_const 0.5
     load_const 0.3
-    load_const "true"
+    load_const true
     load_const "END"
     load_const "STOP"
     load_const "DONE"
@@ -4671,6 +4839,18 @@ function user.MixedValuesClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -4693,7 +4873,7 @@ function user.MixedValuesClient$new() -> null {
     copy 0
     load_const 100
     load_const 0.7
-    load_const "true"
+    load_const true
     load_const "END"
     alloc_array 1
     load_const "#inlineraw#"
@@ -4790,6 +4970,18 @@ function user.NestedConfigClient$new() -> null {
     copy 0
     load_const null
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -5016,6 +5208,18 @@ function user.RawStringConfigClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -5060,6 +5264,18 @@ function user.SameLineClient$new() -> null {
     copy 0
     load_const null
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -5114,6 +5330,18 @@ function user.StringProviderClient$new() -> null {
     copy 0
     load_const "https://openrouter.ai/api/v1"
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -5191,6 +5419,18 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -5240,6 +5480,18 @@ function user.TriviaClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -5282,6 +5534,18 @@ function user.TriviaClientBlock$new() -> null {
     copy 0
     load_const null
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -5328,6 +5592,18 @@ function user.TriviaDeeplyNestedClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -5370,6 +5646,18 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     copy 0
     load_const null
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -5440,6 +5728,18 @@ function user.TriviaLongValueClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -5482,6 +5782,18 @@ function user.TriviaLongValueClientBlock$new() -> null {
     copy 0
     load_const "https://some-really-long-domain-name-for-testing.example.com/api/v1/chat/completions"
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -5548,6 +5860,18 @@ function user.TypedValuesClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -5570,7 +5894,7 @@ function user.TypedValuesClient$new() -> null {
     copy 0
     load_const 0.5
     load_const 2048
-    load_const "true"
+    load_const true
     load_const "temperature"
     load_const "max_tokens"
     load_const "stream"

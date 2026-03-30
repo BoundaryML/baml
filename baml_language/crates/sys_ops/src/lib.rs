@@ -252,21 +252,27 @@ fn convert_io_primitive_client(
         options,
     }: &io::owned::llm::PrimitiveClient,
 ) -> Result<sys_llm::baml_std::PrimitiveClient, sys_llm::baml_std::ClientError> {
+    let defaults = std::str::FromStr::from_str(provider.as_str())
+        .map(sys_llm::baml_std::PrimitiveClientOptions::provider_defaults)
+        .unwrap_or_default();
+
+    let user_options = sys_llm::baml_std::PrimitiveClientOptions {
+        model: options.model.clone(),
+        base_url: options.base_url.clone(),
+        default_role: options.default_role.clone(),
+        allowed_roles: options.allowed_roles.clone(),
+        remap_roles: options.remap_roles.clone(),
+        api_key: options.api_key.clone(),
+        headers: options.headers.clone(),
+        query_params: options.query_params.clone(),
+        request_body: options.request_body.clone(),
+        ..Default::default()
+    };
+
     sys_llm::baml_std::PrimitiveClient::new(
         name.clone(),
         provider.clone(),
-        sys_llm::baml_std::PrimitiveClientOptions {
-            model: options.model.clone(),
-            base_url: options.base_url.clone(),
-            default_role: options.default_role.clone(),
-            allowed_roles: options.allowed_roles.clone(),
-            remap_roles: options.remap_roles.clone(),
-            api_key: options.api_key.clone(),
-            headers: options.headers.clone(),
-            query_params: options.query_params.clone(),
-            request_body: options.request_body.clone(),
-            ..Default::default()
-        },
+        user_options.with_defaults(defaults),
     )
 }
 

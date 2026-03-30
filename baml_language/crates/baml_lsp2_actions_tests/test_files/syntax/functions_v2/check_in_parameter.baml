@@ -1,5 +1,5 @@
 client<llm> MyClient {
-  provider baml-openai-chat
+  provider openai
 }
 
 class Foo {

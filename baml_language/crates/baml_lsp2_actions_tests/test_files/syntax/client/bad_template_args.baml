@@ -1,5 +1,5 @@
 client<l> MyClient2 {
-  provider baml-openai-chat
+  provider openai
 }
 
 // error: Error validating: This line is invalid. It does not start with any known Baml schema keyword.
@@ -7,7 +7,7 @@ client<l> MyClient2 {
 //    |
 //    |
 //  1 | client<l> MyClient2 {
-//  2 |   provider baml-openai-chat
+//  2 |   provider openai
 //    |
 
 //----
