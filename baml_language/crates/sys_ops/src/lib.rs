@@ -78,7 +78,8 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         client: io::owned::llm::PrimitiveClient,
         template: String,
         args: indexmap::IndexMap<String, BexExternalValue>,
-        _ctx: &SysOpContext,
+        return_type: baml_type::Ty,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::llm::PromptAst> {
         let old_client = match convert_io_primitive_client(&client) {
             Ok(c) => c,
@@ -90,9 +91,15 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
             entries: args,
         };
         SysOpOutput::Ready(
-            sys_llm::execute_render_prompt_from_owned(&old_client, &template, &args_ext)
-                .map(wrap_prompt_ast)
-                .map_err(OpErrorKind::from),
+            sys_llm::execute_render_prompt_from_owned(
+                &old_client,
+                &template,
+                &args_ext,
+                &return_type,
+                ctx,
+            )
+            .map(wrap_prompt_ast)
+            .map_err(OpErrorKind::from),
         )
     }
 

@@ -186,8 +186,9 @@ function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst throws never {
   { : baml.llm.PromptAst
     let jinja_string = get_jinja_template(function_name) : string
+    let return_type = get_return_type(function_name) : type
     let primitive_client = client.to_primitive_client() : baml.llm.PrimitiveClient
-    let prompt = primitive_client.render_prompt(jinja_string, args) : baml.llm.PromptAst
+    let prompt = primitive_client.render_prompt(jinja_string, args, return_type) : baml.llm.PromptAst
     primitive_client.specialize_prompt(prompt) : baml.llm.PromptAst
   }
 }
@@ -398,14 +399,14 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
         { : T
           let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
           let primitive = resolve_fn() : baml.llm.PrimitiveClient
-          let prompt = primitive.render_prompt(context.jinja_string, context.args) : baml.llm.PromptAst
+          let return_type = get_return_type(context.function_name) : type
+          let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type) : baml.llm.PromptAst
           let specialized = primitive.specialize_prompt(prompt) : baml.llm.PromptAst
           let http_request = primitive.build_request(specialized) : baml.http.Request
           let http_response = root.http.send(http_request) : baml.http.Response
           if (http_response.ok() : bool) : T
             { : T
               let body = http_response.text() : string
-              let return_type = get_return_type(context.function_name) : type
               let result = : unknown -> T
                 catch (primitive.parse<T>(body, return_type) : T) : unknown
                   catch (e)

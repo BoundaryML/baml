@@ -36,8 +36,9 @@ class PlannerState {
 
 function render_prompt(client: Client, function_name: string, args: map<string, unknown>) -> PromptAst {
   let jinja_string = get_jinja_template(function_name);
+  let return_type = get_return_type(function_name);
   let primitive_client = client.to_primitive_client();
-  let prompt = primitive_client.render_prompt(jinja_string, args);
+  let prompt = primitive_client.render_prompt(jinja_string, args, return_type);
 
   primitive_client.specialize_prompt(prompt)
 }
