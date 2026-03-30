@@ -948,11 +948,28 @@ impl BexVm {
     }
 
     fn allocate_real_locals_for_frame(&mut self, function_ptr: HeapPtr) -> Result<(), VmError> {
-        let Object::Function(function) = self.get_object(function_ptr) else {
-            return Err(RuntimeError::Other("Invalid frame function".to_string()).into());
+        let real_local_count = match self.get_object(function_ptr) {
+            Object::Function(function) => function.real_local_count,
+            Object::Closure(closure) => {
+                // SAFETY: closure.function points to a Function object with
+                // appropriate lifetime guarantees.
+                let func_obj = unsafe { closure.function.get() };
+                match func_obj {
+                    Object::Function(f) => f.real_local_count,
+                    _ => {
+                        return Err(RuntimeError::Other(
+                            "Invalid closure inner function".to_string(),
+                        )
+                        .into());
+                    }
+                }
+            }
+            _ => {
+                return Err(RuntimeError::Other("Invalid frame function".to_string()).into());
+            }
         };
 
-        let new_len = self.stack.len() + function.real_local_count;
+        let new_len = self.stack.len() + real_local_count;
         self.stack.resize(new_len, Value::Null);
         Ok(())
     }

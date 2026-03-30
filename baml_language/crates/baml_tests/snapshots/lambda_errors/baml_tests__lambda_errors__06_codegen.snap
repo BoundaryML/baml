@@ -6,24 +6,14 @@ function user.test_arity_mismatch() -> int[] {
     load_const 2
     load_const 3
     alloc_array 3
-    store_var items
-    load_const "lambda expressions are not yet supported"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    make_closure .<lambda(test_arity_mismatch, 0)>, 0
+    call baml.Array.map
+    return
 }
 
 function user.test_no_annotation_no_context() -> int {
-    load_const "lambda expressions are not yet supported"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const 0
+    return
 }
 
 function user.test_param_type_mismatch() -> int[] {
@@ -31,22 +21,12 @@ function user.test_param_type_mismatch() -> int[] {
     load_const 2
     load_const 3
     alloc_array 3
-    store_var items
-    load_const "lambda expressions are not yet supported"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    make_closure .<lambda(test_param_type_mismatch, 0)>, 0
+    call baml.Array.map
+    return
 }
 
 function user.test_return_mismatch() -> int {
-    load_const "lambda expressions are not yet supported"
-    call baml.sys.panic
-    pop 1
-    jump L0
-
-  L0:
-    unreachable
+    load_const 0
+    return
 }

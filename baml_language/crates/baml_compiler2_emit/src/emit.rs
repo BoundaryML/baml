@@ -264,8 +264,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             block_notifications: Vec::new(),
             local_types: HashMap::new(),
             slot_names: Vec::new(),
-            lambda_object_indices: Vec::new(),
-            lambda_names: Vec::new(),
+            lambda_object_indices: ctx.lambda_object_indices.to_vec(),
+            lambda_names: ctx.lambda_names.to_vec(),
         }
     }
 

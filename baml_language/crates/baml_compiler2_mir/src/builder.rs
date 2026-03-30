@@ -68,6 +68,11 @@ impl MirBuilder {
         }
     }
 
+    /// Return the function name.
+    pub(crate) fn name(&self) -> &Name {
+        &self.name
+    }
+
     /// Set the source span for the function.
     pub(crate) fn set_span(&mut self, span: Span) {
         self.span = Some(span);

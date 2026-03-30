@@ -380,6 +380,11 @@ struct LoweringContext<'db> {
 
     // Counter for generating unique synthetic variable names (e.g. __for_idx, __for_idx_1)
     synthetic_name_counts: HashMap<String, usize>,
+
+    // Lambda functions lowered during body traversal.
+    // Collected here and moved into MirFunction.lambdas at the end of lowering.
+    // Each entry is a fully-lowered MirFunction for one lambda expression.
+    pending_lambdas: Vec<MirFunction>,
 }
 
 impl<'db> LoweringContext<'db> {
@@ -601,6 +606,7 @@ impl<'db> LoweringContext<'db> {
             class_fields,
             enum_variants,
             class_type_tags,
+            pending_lambdas: Vec::new(),
             type_aliases,
             recursive_aliases,
             watched_locals_stack: Vec::new(),
@@ -756,6 +762,7 @@ impl<'db> LoweringContext<'db> {
             viz_context: VizContext::new(let_name.to_string()),
             pending_header: None,
             synthetic_name_counts: HashMap::new(),
+            pending_lambdas: Vec::new(),
         }
     }
 
@@ -948,6 +955,12 @@ impl LoweringContext<'_> {
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut mir = builder.build();
         cleanup::cleanup_function(&mut mir);
+
+        // Drain any lambda functions lowered during this function's body into the
+        // MirFunction's lambdas list.  The lambda_idx values in MakeClosure rvalues
+        // index into this vec.
+        mir.lambdas = std::mem::take(&mut self.pending_lambdas);
+
         mir
     }
 
@@ -997,6 +1010,202 @@ impl LoweringContext<'_> {
         let mut body = builder.build_body();
         cleanup::cleanup_function_body(&mut body);
         body
+    }
+
+    /// Lower a lambda expression into a nested `MirFunction` and emit a
+    /// `Rvalue::MakeClosure` assignment into `dest`.
+    ///
+    /// Saves all parent-body state, sets up a fresh builder for the lambda,
+    /// lowers the lambda body, then restores the parent state.  The completed
+    /// `MirFunction` is pushed into `self.pending_lambdas`; its index becomes
+    /// the `lambda_idx` in the emitted `MakeClosure` rvalue.
+    ///
+    /// Captures are empty in Phase 3 (non-capturing lambdas only).
+    #[allow(clippy::cast_possible_truncation)]
+    fn lower_lambda(
+        &mut self,
+        func_def: &baml_compiler2_ast::FunctionDef,
+        expr_id: AstExprId,
+        dest: Place,
+    ) {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+        // Generate a unique synthetic name for this lambda.
+        let parent_name = self.builder.name().to_string();
+        let lambda_count = self
+            .synthetic_name_counts
+            .entry("__lambda".to_string())
+            .or_insert(0);
+        let lambda_idx_name = *lambda_count;
+        *lambda_count += 1;
+        let lambda_name = format!("<lambda({parent_name}, {lambda_idx_name})>");
+
+        // Find the lambda's FileScopeId from the HIR index.
+        // The HIR builder registered a ScopeKind::Lambda at the lambda expression's span.
+        let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
+            let lambda_span = sm.expr_span(expr_id);
+            let index = file_semantic_index(self.db, self.file);
+            // Find the Lambda scope containing this span by searching for it.
+            // We look for a Lambda-kind scope whose range matches the lambda span.
+            let mut found = None;
+            for (i, scope) in index.scopes.iter().enumerate() {
+                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Lambda
+                    && scope.range == lambda_span
+                {
+                    found = Some(FileScopeId::new(i as u32));
+                    break;
+                }
+            }
+            found.unwrap_or(self.current_scope)
+        } else {
+            self.current_scope
+        };
+
+        // Pull out the lambda's body and source map.
+        let (lambda_body, lambda_source_map) = match func_def.body.as_ref() {
+            Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, sm)) => {
+                (body.clone(), Some(sm.clone()))
+            }
+            _ => {
+                // No body — emit a panic stub and return.
+                self.emit_panic_call("lambda without body", expr_id);
+                return;
+            }
+        };
+
+        // Save parent state.
+        let saved_builder = std::mem::replace(
+            &mut self.builder,
+            MirBuilder::new(Name::new(&lambda_name), 0),
+        );
+        let saved_body = std::mem::replace(&mut self.body, lambda_body);
+        let saved_source_map = std::mem::replace(&mut self.source_map, lambda_source_map);
+        let saved_locals = std::mem::take(&mut self.locals);
+        let saved_exit_block = self.exit_block;
+        let saved_loop_context = self.loop_context.take();
+        let saved_catch_context = self.catch_context.take();
+        let saved_watched_locals = std::mem::take(&mut self.watched_locals_stack);
+        let saved_current_scope = self.current_scope;
+        // NOTE: synthetic_name_counts is intentionally NOT saved — its counter
+        // keeps incrementing across the whole function for uniqueness.
+        //
+        // pending_lambdas IS saved so each lambda collects only its own direct
+        // children. The lambda body's nested lambdas are collected separately
+        // and attached to the lambda as its `.lambdas` field.
+        let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
+
+        // Switch to the lambda scope.
+        self.current_scope = lambda_scope_id;
+
+        // Set up a fresh builder with the correct arity.
+        let arity = func_def.params.len();
+        self.builder = MirBuilder::new(Name::new(&lambda_name), arity);
+
+        // Declare return place _0.
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
+        let pkg_items = package_items(self.db, pkg_id);
+        let ret = self.builder.declare_local(
+            Some(Name::new("_0")),
+            baml_type::Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            },
+            None,
+            false,
+        );
+
+        // Declare parameter locals _1..=_n.
+        for param in &func_def.params {
+            let param_ty = match &param.type_expr {
+                Some(spanned_te) => {
+                    let mut diags = Vec::new();
+                    let tir_ty = lower_type_expr_in_ns(
+                        self.db,
+                        &spanned_te.expr,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &[],
+                        &mut diags,
+                    );
+                    convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
+                }
+                None => baml_type::Ty::Null {
+                    attr: baml_type::TyAttr::default(),
+                },
+            };
+            let local = self
+                .builder
+                .declare_local(Some(param.name.clone()), param_ty, None, false);
+            self.locals.insert(param.name.clone(), local);
+        }
+
+        // Create entry and exit blocks.
+        let entry = self.builder.create_block();
+        let exit_blk = self.builder.create_block();
+        self.exit_block = exit_blk;
+        self.builder.set_current_block(entry);
+
+        // Lower the root expression into the return place.
+        if let Some(root) = self.body.root_expr {
+            self.lower_expr(root, Place::local(ret));
+        } else {
+            self.builder.assign(
+                Place::local(ret),
+                Rvalue::Use(Operand::Constant(Constant::Null)),
+            );
+        }
+
+        // Terminate: goto exit, then return.
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(self.exit_block);
+        }
+        self.builder.set_current_block(self.exit_block);
+        self.builder.return_();
+
+        // Build the lambda MirFunction.
+        // First, collect any nested lambdas that were encountered while lowering
+        // this lambda's body (direct children only — saved_pending_lambdas holds
+        // any lambdas from the parent scope that were already pending before
+        // entering this lambda).
+        let nested_lambdas = std::mem::take(&mut self.pending_lambdas);
+
+        let dummy = MirBuilder::new(Name::new("_dummy"), 0);
+        let lambda_builder = std::mem::replace(&mut self.builder, dummy);
+        let mut lambda_mir = lambda_builder.build();
+        cleanup::cleanup_function(&mut lambda_mir);
+        // Override item_ref with the synthetic name.
+        lambda_mir.item_ref = ItemRef::Free {
+            package: Name::new(""),
+            namespace: vec![],
+            name: Name::new(&lambda_name),
+        };
+        // Attach nested lambdas as direct children.
+        lambda_mir.lambdas = nested_lambdas;
+
+        // Restore parent state.
+        self.builder = saved_builder;
+        self.body = saved_body;
+        self.source_map = saved_source_map;
+        self.locals = saved_locals;
+        self.exit_block = saved_exit_block;
+        self.loop_context = saved_loop_context;
+        self.catch_context = saved_catch_context;
+        self.watched_locals_stack = saved_watched_locals;
+        self.current_scope = saved_current_scope;
+        // Restore parent's pending_lambdas (siblings of this lambda).
+        self.pending_lambdas = saved_pending_lambdas;
+
+        // Push this lambda into the parent's pending_lambdas and emit MakeClosure.
+        let lambda_pending_idx = self.pending_lambdas.len();
+        self.pending_lambdas.push(lambda_mir);
+
+        self.builder.assign(
+            dest,
+            Rvalue::MakeClosure {
+                lambda_idx: lambda_pending_idx,
+                captures: vec![], // no captures in Phase 3
+            },
+        );
     }
 }
 
@@ -1120,8 +1329,8 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(dead);
             }
 
-            AstExpr::Lambda(_) => {
-                self.emit_panic_call("lambda expressions are not yet supported", expr_id);
+            AstExpr::Lambda(func_def) => {
+                self.lower_lambda(&func_def, expr_id, dest);
             }
 
             AstExpr::Missing => {
@@ -2984,14 +3193,16 @@ impl LoweringContext<'_> {
 pub fn lower_let_body<'db>(
     db: &'db dyn crate::Db,
     let_loc: LetLoc<'db>,
-) -> Option<MirFunctionBody> {
+) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
     let body = let_body(db, let_loc);
     let source_map = let_body_source_map(db, let_loc);
 
     match body.as_ref() {
         LetBody::Expr(expr_body) => {
             let mut ctx = LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map);
-            Some(ctx.lower_let_body_inner())
+            let mir_body = ctx.lower_let_body_inner();
+            let lambdas = std::mem::take(&mut ctx.pending_lambdas);
+            Some((mir_body, lambdas))
         }
         LetBody::Missing => None,
     }
