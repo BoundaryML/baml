@@ -1108,7 +1108,9 @@ impl LoweringContext<'_> {
         };
 
         // Read HIR captures for this lambda scope.
-        // `captures` lists names that the lambda reads from enclosing scopes.
+        // `captures` lists (name, DefinitionSite) pairs that the lambda reads from
+        // enclosing scopes. The DefinitionSite uniquely identifies the declaration
+        // even with shadowing.
         // We build `capture_indices` (name → index in closure.captures[]) so that
         // `lower_path_expr` and `lower_lvalue` can emit Place::Capture(idx).
         let hir_captures: Vec<Name> = {
@@ -1116,7 +1118,7 @@ impl LoweringContext<'_> {
             index
                 .scope_bindings
                 .get(lambda_scope_id.index() as usize)
-                .map(|sb| sb.captures.clone())
+                .map(|sb| sb.captures.iter().map(|(name, _)| name.clone()).collect())
                 .unwrap_or_default()
         };
         let lambda_capture_indices: HashMap<Name, usize> = hir_captures
@@ -1301,6 +1303,10 @@ impl LoweringContext<'_> {
         let mut capture_operands: Vec<Operand> = Vec::with_capacity(extended_hir_captures.len());
         for name in &extended_hir_captures {
             if let Some(&local) = self.locals.get(name) {
+                // Mark the local as captured at the capture site — this is the
+                // definitive place where we know the exact Local being captured,
+                // even in the presence of shadowing (future-proofing).
+                self.builder.local_decl_mut(local).is_captured = true;
                 capture_operands.push(Operand::Copy(Place::Local(local)));
             } else if let Some(cap_idx) = self
                 .capture_indices
@@ -1840,8 +1846,33 @@ impl LoweringContext<'_> {
             self.builder
                 .await_(future_place, dest_place, target, unwind);
         } else {
-            self.builder
-                .call(callee_operand, arg_operands, dest, target, unwind);
+            // Call destinations must be Place::Local in MIR. If `dest` is a
+            // projection (Field/Index) or a capture, call into a temp local
+            // first, then assign from the temp to the real destination.
+            match &dest {
+                Place::Local(_) => {
+                    self.builder
+                        .call(callee_operand, arg_operands, dest, target, unwind);
+                }
+                _ => {
+                    let call_ty = self.expr_ty(expr_id);
+                    let tmp = self.builder.temp(call_ty);
+                    self.builder.call(
+                        callee_operand,
+                        arg_operands,
+                        Place::local(tmp),
+                        target,
+                        unwind,
+                    );
+                    self.builder.set_current_block(target);
+                    let after = self.builder.create_block();
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
+                    self.builder.goto(after);
+                    self.builder.set_current_block(after);
+                    return;
+                }
+            }
         }
 
         self.builder.set_current_block(target);

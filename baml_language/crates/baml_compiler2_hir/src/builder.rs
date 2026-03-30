@@ -347,7 +347,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 let referenced_names = Self::collect_name_references(lambda_body);
                 let lambda_idx = scope_id.index() as usize;
 
-                let mut captures: Vec<Name> = Vec::new();
+                let mut captures: Vec<(Name, DefinitionSite)> = Vec::new();
                 let mut seen: std::collections::HashSet<Name> = std::collections::HashSet::new();
 
                 for name in &referenced_names {
@@ -371,9 +371,13 @@ impl<'db> SemanticIndexBuilder<'db> {
                         let ancestor_kind = self.scopes[ancestor_idx].kind.clone();
                         let ancestor_parent = self.scopes[ancestor_idx].parent;
 
-                        // Check if this ancestor defines the name
-                        if Self::scope_defines_name(&self.scope_bindings[ancestor_idx], name) {
-                            captures.push(name.clone());
+                        // Check if this ancestor defines the name — record the
+                        // DefinitionSite so captures are tied to the specific
+                        // declaration, not just the name (future-proofs for shadowing).
+                        if let Some(def_site) =
+                            Self::scope_definition_site(&self.scope_bindings[ancestor_idx], name)
+                        {
+                            captures.push((name.clone(), def_site));
                             seen.insert(name.clone());
                             // Mark the name as captured in the defining scope
                             self.scope_bindings[ancestor_idx]
@@ -386,8 +390,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                         // lambda (for nested capture chains: inner lambda captures
                         // from an intermediate lambda that itself captures from the
                         // parent).
-                        if self.scope_bindings[ancestor_idx].captures.contains(name) {
-                            captures.push(name.clone());
+                        if let Some((_, def_site)) = self.scope_bindings[ancestor_idx]
+                            .captures
+                            .iter()
+                            .find(|(n, _)| n == name)
+                        {
+                            captures.push((name.clone(), *def_site));
                             seen.insert(name.clone());
                             break;
                         }
@@ -439,6 +447,18 @@ impl<'db> SemanticIndexBuilder<'db> {
     fn scope_defines_name(bindings: &ScopeBindings, name: &Name) -> bool {
         bindings.params.iter().any(|(n, _)| n == name)
             || bindings.bindings.iter().any(|(n, _, _)| n == name)
+    }
+
+    /// Find the `DefinitionSite` for a name in a scope's bindings.
+    /// Returns the first matching definition (params checked first, then bindings).
+    fn scope_definition_site(bindings: &ScopeBindings, name: &Name) -> Option<DefinitionSite> {
+        if let Some((_, idx)) = bindings.params.iter().find(|(n, _)| n == name) {
+            return Some(DefinitionSite::Parameter(*idx));
+        }
+        if let Some((_, def, _)) = bindings.bindings.iter().find(|(n, _, _)| n == name) {
+            return Some(*def);
+        }
+        None
     }
 
     // ── Item lowering ────────────────────────────────────────────────────────

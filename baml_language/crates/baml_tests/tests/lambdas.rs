@@ -286,3 +286,189 @@ async fn lambda_captures_loop_variable_accumulation() {
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
 }
+
+// ============================================================================
+// PR Review Issue Tests — Probing potential bugs identified in code review
+// ============================================================================
+
+/// Issue E: resolutions/exhaustive_matches keyed by bare AstExprId.
+/// Lambda bodies restart ExprIds at 0. If a lambda body contains a match
+/// expression at the same ExprId as a parent match, the resolution map
+/// entry could be overwritten.
+///
+/// This test has a match in both parent and lambda body.
+#[tokio::test]
+async fn issue_e_match_in_lambda_and_parent() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let x = 1
+            let result = match (x) {
+                1 => 10
+                _ => 0
+            }
+            let f = (y: int) -> int {
+                match (y) {
+                    1 => 100
+                    _ => 0
+                }
+            }
+            result + f(1)
+        }
+    "
+    );
+    // Parent match yields 10, lambda match yields 100 → 110
+    assert_eq!(output.result, Ok(BexExternalValue::Int(110)));
+}
+
+/// Issue E (variant): method call resolution collision.
+/// Lambda body has a method call at same ExprId as parent body method call.
+#[tokio::test]
+async fn issue_e_method_call_in_lambda_and_parent() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let s = \"hello\"
+            let parent_len = s.length()
+            let f = (t: string) -> int { t.length() }
+            parent_len + f(\"world!\")
+        }
+    "
+    );
+    // "hello".length() = 5, "world!".length() = 6 → 11
+    assert_eq!(output.result, Ok(BexExternalValue::Int(11)));
+}
+
+/// Issue F: is_captured post-pass marks wrong local with shadowing.
+/// let x = 1; let g captures x (=1); let x = "shadow"; let f captures x (="shadow")
+/// Both lambdas should capture the correct x for their position.
+#[tokio::test]
+#[ignore = "BAML disallows variable shadowing; test kept for when shadowing is added"]
+async fn issue_f_shadowing_capture_correct_binding() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let x = 1
+            let g = () -> int { x }
+            let x = 2
+            let f = () -> int { x }
+            g() * 10 + f()
+        }
+    "
+    );
+    // g() captures first x=1, f() captures second x=2 → 10 + 2 = 12
+    assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
+}
+
+/// Issue F (variant): shadowed capture with mutation.
+/// The first x should be independently cell-wrapped from the second x.
+#[tokio::test]
+#[ignore = "BAML disallows variable shadowing; test kept for when shadowing is added"]
+async fn issue_f_shadowing_capture_independent_cells() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let x = 10
+            let inc_first = () -> int { x += 1; x }
+            let x = 100
+            let inc_second = () -> int { x += 1; x }
+            inc_first()
+            inc_second()
+            // first x should be 11, second x should be 101
+            // but we can only return one — return inc_first result
+            inc_first()
+        }
+    "
+    );
+    // inc_first mutates first x: 10→11→12, inc_second mutates second x: 100→101
+    // final inc_first() returns 12
+    assert_eq!(output.result, Ok(BexExternalValue::Int(12)));
+}
+
+/// Issue A: Virtual inlining re-evaluating capture reads.
+/// Read capture, mutate capture via another closure, read again.
+/// If virtual inlining caches the first read, the second read is wrong.
+#[tokio::test]
+async fn issue_a_capture_read_after_mutation() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let x = 0
+            let read_x = () -> int { x }
+            let inc_x = () -> { x += 1 }
+            let before = read_x()
+            inc_x()
+            let after = read_x()
+            before * 10 + after
+        }
+    "
+    );
+    // before = 0, inc_x makes x=1, after = 1 → 0*10 + 1 = 1
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+/// Issue A (variant): interleaved reads and writes through shared cell.
+/// Tests that each read sees the most recent write.
+#[tokio::test]
+async fn issue_a_interleaved_capture_reads_writes() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let x = 0
+            let set_x = (v: int) -> { x = v }
+            let get_x = () -> int { x }
+            set_x(10)
+            let a = get_x()
+            set_x(20)
+            let b = get_x()
+            set_x(30)
+            let c = get_x()
+            a + b + c
+        }
+    "
+    );
+    // a=10, b=20, c=30 → 60
+    assert_eq!(output.result, Ok(BexExternalValue::Int(60)));
+}
+
+/// Issue D: Place::Capture as destination of a function call in lambda body.
+/// If cleanup.rs calls base_local() on a Call terminator destination that is
+/// Place::Capture, it panics. This test exercises assigning a call result to
+/// a captured variable.
+#[tokio::test]
+async fn issue_d_capture_as_call_destination() {
+    let output = baml_test!(
+        "
+        function helper() -> int { 42 }
+        function main() -> int {
+            let x = 0
+            let f = () -> int {
+                x = helper()
+                x
+            }
+            f()
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+/// Issue B: @watch on a captured local.
+/// If cell wrapping breaks watch, the watch value won't update.
+/// This is a basic test — if @watch is not applicable in this context,
+/// the test just verifies capture + mutation works.
+#[tokio::test]
+async fn issue_b_captured_variable_mutation_visible() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let x = 0
+            let set = (v: int) -> { x = v }
+            set(42)
+            x
+        }
+    "
+    );
+    // Parent reads x after lambda mutated it — should see 42
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}

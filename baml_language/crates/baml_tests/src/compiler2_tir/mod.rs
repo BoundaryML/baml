@@ -1637,7 +1637,8 @@ pub(crate) mod support {
                 })
                 .unwrap_or_else(|| "?".into());
             let params: Vec<&str> = bindings.params.iter().map(|(n, _)| n.as_str()).collect();
-            let capture_names: Vec<&str> = bindings.captures.iter().map(|n| n.as_str()).collect();
+            let capture_names: Vec<&str> =
+                bindings.captures.iter().map(|(n, _)| n.as_str()).collect();
             writeln!(
                 output,
                 "lambda ({}) in {}: captures [{}]",

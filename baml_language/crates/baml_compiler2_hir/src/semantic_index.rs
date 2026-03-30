@@ -43,9 +43,11 @@ pub struct ScopeBindings {
     pub bindings: Vec<(Name, DefinitionSite, TextRange)>,
     /// Parameters (for Function/Lambda scopes).
     pub params: Vec<(Name, usize)>, // (name, param_index)
-    /// Names captured from ancestor scopes (for Lambda scopes only).
+    /// Variables captured from ancestor scopes (for Lambda scopes only).
+    /// Each entry is `(name, definition_site)` to uniquely identify the
+    /// captured declaration, even in the presence of shadowing.
     /// Populated by capture analysis in `SemanticIndexBuilder::walk_expr_body`.
-    pub captures: Vec<Name>,
+    pub captures: Vec<(Name, DefinitionSite)>,
     /// Names in this scope that are captured by a descendant lambda.
     /// Used by MIR lowering to decide which locals need cell wrapping.
     pub captured_names: HashSet<Name>,

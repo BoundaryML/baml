@@ -408,7 +408,7 @@ pub fn infer_scope_types<'db>(
             // can resolve references to captures without reporting "unresolved name"
             // diagnostics. Proper capture types will be propagated in a later phase.
             let captures = &index.scope_bindings[file_scope.index() as usize].captures;
-            for capture_name in captures {
+            for (capture_name, _def_site) in captures {
                 builder.add_local(
                     capture_name.clone(),
                     Ty::Unknown {

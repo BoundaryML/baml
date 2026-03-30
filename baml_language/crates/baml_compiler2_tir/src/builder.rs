@@ -4320,7 +4320,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if matches!(scope.kind, baml_compiler2_hir::scope::ScopeKind::Lambda)
                     && scope.range == lambda_span
                 {
-                    for capture_name in &index.scope_bindings[i].captures {
+                    for (capture_name, _def_site) in &index.scope_bindings[i].captures {
                         if !self.locals.contains_key(capture_name) {
                             self.locals.insert(
                                 capture_name.clone(),
