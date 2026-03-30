@@ -42,7 +42,7 @@ async fn test_render_prompt_directly() {
             name: client.name.clone(),
             provider: client.provider.clone(),
             default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles.clone(),
+            allowed_roles: client.allowed_roles,
         },
         output_format: sys_llm::OutputFormatContent::new(Ty::String {
             attr: TyAttr::default(),
@@ -99,7 +99,7 @@ You are a helpful assistant.
             name: client.name.clone(),
             provider: client.provider.clone(),
             default_role: client.default_role.clone(),
-            allowed_roles: client.allowed_roles.clone(),
+            allowed_roles: client.allowed_roles,
         },
         output_format: sys_llm::OutputFormatContent::new(Ty::String {
             attr: TyAttr::default(),

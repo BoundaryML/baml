@@ -503,7 +503,7 @@ mod tests {
     // ---- validate_and_remap_roles tests ----
 
     fn allowed(roles: &[&str]) -> Vec<String> {
-        roles.iter().map(|s| s.to_string()).collect()
+        roles.iter().map(std::string::ToString::to_string).collect()
     }
 
     #[test]
