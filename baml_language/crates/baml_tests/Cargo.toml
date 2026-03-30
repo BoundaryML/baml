@@ -33,7 +33,10 @@ indexmap = { workspace = true }
 insta = { workspace = true }
 la-arena = { workspace = true }
 salsa = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 text-size = { workspace = true }
+walkdir = { workspace = true }
 
 [build-dependencies]
 prettyplease = { workspace = true }
