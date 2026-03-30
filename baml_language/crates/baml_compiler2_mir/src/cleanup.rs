@@ -220,6 +220,11 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
                 scan_place(p, set);
             }
             crate::Rvalue::IsType { operand, .. } => scan_operand(operand, set),
+            crate::Rvalue::MakeClosure { captures, .. } => {
+                for cap in captures {
+                    scan_operand(cap, set);
+                }
+            }
         }
     }
 
@@ -376,6 +381,11 @@ fn count_in_rvalue(rv: &crate::Rvalue, uses: &mut [usize]) {
         crate::Rvalue::TypeTag(p) => count_in_place(p, uses),
         crate::Rvalue::Len(p) => count_in_place(p, uses),
         crate::Rvalue::IsType { operand, .. } => count_in_operand(operand, uses),
+        crate::Rvalue::MakeClosure { captures, .. } => {
+            for cap in captures {
+                count_in_operand(cap, uses);
+            }
+        }
     }
 }
 
@@ -641,6 +651,11 @@ fn apply_subst_to_rvalue(rv: &mut crate::Rvalue, subst: &HashMap<Local, Operand>
             apply_subst_to_place_locals(p, subst);
         }
         crate::Rvalue::IsType { operand, .. } => apply_subst_to_operand(operand, subst),
+        crate::Rvalue::MakeClosure { captures, .. } => {
+            for cap in captures {
+                apply_subst_to_operand(cap, subst);
+            }
+        }
     }
 }
 
@@ -818,6 +833,11 @@ fn remap_rvalue(rv: &mut crate::Rvalue, map: &[Option<Local>]) {
             remap_place(p, map);
         }
         crate::Rvalue::IsType { operand, .. } => remap_operand(operand, map),
+        crate::Rvalue::MakeClosure { captures, .. } => {
+            for cap in captures {
+                remap_operand(cap, map);
+            }
+        }
     }
 }
 
@@ -997,6 +1017,11 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
                         | crate::Rvalue::TypeTag(p)
                         | crate::Rvalue::Len(p) => check_place(p, &blk),
                         crate::Rvalue::IsType { operand, .. } => check_operand(operand, &blk),
+                        crate::Rvalue::MakeClosure { captures, .. } => {
+                            for cap in captures {
+                                check_operand(cap, &blk);
+                            }
+                        }
                     }
                 }
                 crate::StatementKind::Drop(p) => check_place(p, &blk),

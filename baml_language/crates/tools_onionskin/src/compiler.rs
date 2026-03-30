@@ -4954,6 +4954,8 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Future(_) => "<future>".to_string(),
                 Object::Collector(_) => "<collector>".to_string(),
                 Object::Type(ty) => format!("<type: {ty}>"),
+                Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),
+                Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.value, vm)),
                 Object::RustData(_) => "<rust_data>".to_string(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => "<sentinel>".to_string(),

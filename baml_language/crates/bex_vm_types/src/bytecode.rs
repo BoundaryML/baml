@@ -386,6 +386,50 @@ pub enum Instruction {
     ///
     /// Throws `RuntimeError::Unreachable` (in `bex_vm` crate).
     Unreachable,
+
+    /// Allocate a `Closure` object wrapping a function from the object pool.
+    ///
+    /// Pops `capture_count` values from the stack (left-to-right order, reversed
+    /// after popping), pairs them with the function at `obj_idx`, and pushes the
+    /// resulting `Object::Closure`.
+    ///
+    /// Stack: `[cap_0, cap_1, ..., cap_{n-1}]` -> `[closure]`
+    MakeClosure(ObjectIndex, usize),
+
+    /// Wrap the top-of-stack value in a `Cell` object.
+    ///
+    /// Stack: `[value]` -> `[cell]`
+    MakeCell,
+
+    /// Load the value stored inside a `Cell` local variable.
+    ///
+    /// The local at `slot` must hold an `Object::Cell`.
+    ///
+    /// Stack: `[]` -> `[value]`
+    LoadDeref(usize),
+
+    /// Store a value into a `Cell` local variable.
+    ///
+    /// The local at `slot` must hold an `Object::Cell`.
+    ///
+    /// Stack: `[value]` -> `[]`
+    StoreDeref(usize),
+
+    /// Load a value from a capture slot of the current closure.
+    ///
+    /// The current frame's function must be an `Object::Closure`. Reads through
+    /// the cell at `captures[idx]`.
+    ///
+    /// Stack: `[]` -> `[value]`
+    LoadCapture(usize),
+
+    /// Store a value into a capture slot of the current closure.
+    ///
+    /// The current frame's function must be an `Object::Closure`. Writes through
+    /// the cell at `captures[idx]`.
+    ///
+    /// Stack: `[value]` -> `[]`
+    StoreCapture(usize),
 }
 
 /// Block notification metadata stored in the Function struct.
@@ -593,6 +637,14 @@ impl std::fmt::Display for Instruction {
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
+            Instruction::MakeClosure(obj_idx, count) => {
+                write!(f, "MAKE_CLOSURE {} {}", obj_idx.raw(), count)
+            }
+            Instruction::MakeCell => f.write_str("MAKE_CELL"),
+            Instruction::LoadDeref(slot) => write!(f, "LOAD_DEREF {slot}"),
+            Instruction::StoreDeref(slot) => write!(f, "STORE_DEREF {slot}"),
+            Instruction::LoadCapture(idx) => write!(f, "LOAD_CAPTURE {idx}"),
+            Instruction::StoreCapture(idx) => write!(f, "STORE_CAPTURE {idx}"),
         }
     }
 }

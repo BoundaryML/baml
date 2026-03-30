@@ -3004,6 +3004,7 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
             span: None,
             item_ref,
             kind: MirFunctionKind::Builtin(*kind),
+            lambdas: vec![],
         },
         FunctionBody::Missing => MirFunction {
             arity,
@@ -3024,6 +3025,7 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
                         ty: baml_type::Ty::Void {
                             attr: baml_type::TyAttr::default(),
                         },
+                        is_captured: false,
                         span: None,
                         scope_span: None,
                         is_watched: false,
@@ -3032,6 +3034,7 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
                 unwind_error_locals: std::collections::HashMap::new(),
                 viz_nodes: vec![],
             }),
+            lambdas: vec![],
         },
     }
 }

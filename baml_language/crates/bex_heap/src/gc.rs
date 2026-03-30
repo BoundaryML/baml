@@ -290,6 +290,19 @@ impl BexHeap {
                     }
                 }
             }
+            Object::Closure(closure) => {
+                worklist.push(closure.function);
+                for value in &closure.captures {
+                    if let Value::Object(ptr) = value {
+                        worklist.push(*ptr);
+                    }
+                }
+            }
+            Object::Cell(cell) => {
+                if let Value::Object(ptr) = &cell.value {
+                    worklist.push(*ptr);
+                }
+            }
             Object::Variant(var) => {
                 worklist.push(var.enm);
             }
@@ -359,6 +372,17 @@ impl BexHeap {
                 for value in &mut inst.fields {
                     self.fixup_value(value, forwarding);
                 }
+            }
+            Object::Closure(closure) => {
+                if let Some(&new_ptr) = forwarding.get(&closure.function) {
+                    closure.function = new_ptr;
+                }
+                for value in &mut closure.captures {
+                    self.fixup_value(value, forwarding);
+                }
+            }
+            Object::Cell(cell) => {
+                self.fixup_value(&mut cell.value, forwarding);
             }
             Object::Variant(var) => {
                 // Update enum pointer

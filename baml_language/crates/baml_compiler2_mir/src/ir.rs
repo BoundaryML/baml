@@ -70,6 +70,11 @@ pub struct MirFunction {
     pub item_ref: ItemRef,
     /// Whether this function has bytecode or is a builtin.
     pub kind: MirFunctionKind,
+    /// Child lambda functions defined inside this function's body.
+    ///
+    /// Indexed by `lambda_idx` in `Rvalue::MakeClosure`.
+    /// Empty until lambda lowering is implemented.
+    pub lambdas: Vec<MirFunction>,
 }
 
 // ============================================================================
@@ -116,6 +121,11 @@ pub struct LocalDecl {
     pub scope_span: Option<Span>,
     /// Whether this local is being watched for changes.
     pub is_watched: bool,
+    /// Whether this local is captured by a nested closure.
+    ///
+    /// When `true`, the local's stack slot holds an `Object::Cell` rather than
+    /// the value directly. Reads/writes go through `LoadDeref`/`StoreDeref`.
+    pub is_captured: bool,
 }
 
 // ============================================================================
@@ -485,6 +495,15 @@ pub enum Rvalue {
 
     /// Type check for pattern matching: `is_type(_1, Type)`
     IsType { operand: Operand, ty: Ty },
+
+    /// Allocate a closure object from a child lambda function.
+    ///
+    /// `lambda_idx` indexes into `MirFunction::lambdas` of the enclosing function.
+    /// `captures` is the ordered list of captured values (each will become a Cell).
+    MakeClosure {
+        lambda_idx: usize,
+        captures: Vec<Operand>,
+    },
 }
 
 /// The kind of aggregate being constructed.

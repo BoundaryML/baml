@@ -1574,6 +1574,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 Self::collect_locals_in_place(place, out);
             }
             Rvalue::IsType { operand, .. } => Self::collect_locals_in_operand(operand, out),
+            Rvalue::MakeClosure { captures, .. } => {
+                for cap in captures {
+                    Self::collect_locals_in_operand(cap, out);
+                }
+            }
         }
     }
 

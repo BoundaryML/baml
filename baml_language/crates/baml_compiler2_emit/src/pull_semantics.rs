@@ -370,5 +370,9 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             walk_operand_pull(sink, operand)?;
             sink.is_type(ty)
         }
+        Rvalue::MakeClosure { .. } => {
+            // Not yet implemented — will be wired up in a later phase.
+            todo!("MakeClosure emit not yet implemented")
+        }
     }
 }

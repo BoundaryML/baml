@@ -111,6 +111,10 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Collector(_) => Ok("<collector>".to_string()),
             Object::Type(ty) => Ok(format!("<type: {ty}>")),
             Object::RustData(_) => Ok("<rust_data>".to_string()),
+            Object::Closure(closure) => {
+                Ok(format!("<closure captures={}>", closure.captures.len()))
+            }
+            Object::Cell(cell) => Ok(format!("<cell {}>", cell.value)),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Ok("<sentinel>".to_string()),
         },

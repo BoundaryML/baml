@@ -97,6 +97,7 @@ impl MirBuilder {
             span,
             scope_span: None,
             is_watched,
+            is_captured: false,
         });
         id
     }
@@ -415,6 +416,7 @@ impl MirBuilder {
                 unwind_error_locals: self.unwind_error_locals,
                 viz_nodes: self.viz_nodes,
             }),
+            lambdas: vec![],
         }
     }
 
@@ -456,6 +458,7 @@ impl MirBuilder {
                 unwind_error_locals: self.unwind_error_locals,
                 viz_nodes: self.viz_nodes,
             }),
+            lambdas: vec![],
         }
     }
 
