@@ -36,6 +36,18 @@ function user.BadAzureMissingUrl$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -92,6 +104,18 @@ function user.BadMaxTokens$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -138,6 +162,18 @@ function user.BadTemperature$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -182,6 +218,18 @@ function user.ValidAzure$new() -> null {
     copy 0
     load_const null
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role
@@ -240,6 +288,18 @@ function user.ValidAzureBaseUrl$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -294,6 +354,18 @@ function user.ValidOpenAI$new() -> null {
     copy 0
     load_const "https://api.openai.com/v1"
     store_field .base_url
+    copy 0
+    load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
     copy 0
     load_const null
     store_field .default_role

@@ -732,6 +732,17 @@ fn synthesize_client_items(
         })
     });
 
+    // Validate provider name.
+    if let Some(p) = &provider {
+        if !VALID_PROVIDERS.contains(&p.as_str()) {
+            diagnostics.push(HirDiagnostic::UnknownProvider {
+                client_name: client_name.clone(),
+                provider: p.clone(),
+                span: baml_base::Span::new(file_id, span),
+            });
+        }
+    }
+
     let is_fallback = provider.as_deref() == Some("fallback");
     let is_round_robin = provider.as_deref() == Some("round-robin");
     let is_composite = is_fallback || is_round_robin;
@@ -968,6 +979,10 @@ fn synthesize_client_new_companion(
     let mut default_role = alloc(Expr::Null);
     let mut allowed_roles = alloc(Expr::Null);
     let mut remap_roles = alloc(Expr::Null);
+    let mut allowed_role_metadata = alloc(Expr::Null);
+    let mut finish_reason_allow_list = alloc(Expr::Null);
+    let mut finish_reason_deny_list = alloc(Expr::Null);
+    let mut supports_streaming = alloc(Expr::Null);
     let mut api_key = alloc(Expr::Null);
     // Top-level map fields (default empty map)
     let mut headers = alloc(Expr::Map { entries: vec![] });
@@ -1010,6 +1025,10 @@ fn synthesize_client_new_companion(
                     "allowed_roles" => allowed_roles = val,
                     "remap_roles" => remap_roles = val,
                     "api_key" => api_key = val,
+                    "allowed_role_metadata" => allowed_role_metadata = val,
+                    "finish_reason_allow_list" => finish_reason_allow_list = val,
+                    "finish_reason_deny_list" => finish_reason_deny_list = val,
+                    "supports_streaming" => supports_streaming = val,
                     "headers" => headers = val,
                     "query_params" => query_params = val,
                     other => {
@@ -1062,6 +1081,16 @@ fn synthesize_client_new_companion(
         fields: vec![
             (Name::new("model"), model),
             (Name::new("base_url"), base_url),
+            (Name::new("allowed_role_metadata"), allowed_role_metadata),
+            (
+                Name::new("finish_reason_allow_list"),
+                finish_reason_allow_list,
+            ),
+            (
+                Name::new("finish_reason_deny_list"),
+                finish_reason_deny_list,
+            ),
+            (Name::new("supports_streaming"), supports_streaming),
             (Name::new("default_role"), default_role),
             (Name::new("allowed_roles"), allowed_roles),
             (Name::new("remap_roles"), remap_roles),
@@ -1161,10 +1190,27 @@ fn provider_group_for(provider: &str) -> Option<(&'static str, &'static [&'stati
             ],
         )),
         "openai" | "openai-generic" | "openai-responses" | "ollama" | "openrouter"
-        | "google-ai" | "vertex-ai" | "baml-fallback" | "baml-round-robin" => None,
-        _ => unimplemented!("unknown provider {provider:?}: add it to provider_group_for"),
+        | "google-ai" | "vertex-ai" => None,
+        // Keep this as a dev guard: adding a new provider to LlmProvider
+        // without updating this function will panic at test time.
+        _ => unreachable!("unknown provider {provider:?}: add it to provider_group_for"),
     }
 }
+
+const VALID_PROVIDERS: &[&str] = &[
+    "anthropic",
+    "azure-openai",
+    "aws-bedrock",
+    "openai",
+    "openai-generic",
+    "openai-responses",
+    "ollama",
+    "openrouter",
+    "google-ai",
+    "vertex-ai",
+    "fallback",
+    "round-robin",
+];
 
 /// Validate provider-specific option constraints at compile time.
 fn validate_client_options(

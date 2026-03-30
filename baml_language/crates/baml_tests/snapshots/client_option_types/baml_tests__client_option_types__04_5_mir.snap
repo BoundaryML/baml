@@ -5,18 +5,18 @@ source: crates/baml_tests/src/generated_tests.rs
 fn user.BadAzureMissingUrl$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: baml.llm.AzureOpenAiOptions
-    let _3: map<string, string>
-    let _4: map<string, string>
-    let _5: map<string, unknown>
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<void, void>
+    let _5: map<void, void>
 
     bb0: {
         _2 = baml.llm.AzureOpenAiOptions { const null, const null, const "2024-02-15-preview", const null };
         _3 = {  };
         _4 = {  };
         _5 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4o", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4, copy _5 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4o", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4, copy _5 };
         _0 = baml.llm.PrimitiveClient { const "BadAzureMissingUrl", const "azure-openai", copy _1 };
         goto -> bb1;
     }
@@ -29,16 +29,16 @@ fn user.BadAzureMissingUrl$new() -> null {
 fn user.BadMaxTokens$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<string, string>
-    let _3: map<string, string>
-    let _4: map<string, unknown>
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"max_tokens", "notanumber">
 
     bb0: {
         _2 = {  };
         _3 = {  };
         _4 = { const "max_tokens": const "notanumber" };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "BadMaxTokens", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -51,16 +51,16 @@ fn user.BadMaxTokens$new() -> null {
 fn user.BadTemperature$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<string, string>
-    let _3: map<string, string>
-    let _4: map<string, unknown>
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"temperature", "warm">
 
     bb0: {
         _2 = {  };
         _3 = {  };
         _4 = { const "temperature": const "warm" };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "BadTemperature", const "openai", copy _1 };
         goto -> bb1;
     }
@@ -73,18 +73,18 @@ fn user.BadTemperature$new() -> null {
 fn user.ValidAzure$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: baml.llm.AzureOpenAiOptions
-    let _3: map<string, string>
-    let _4: map<string, string>
-    let _5: map<string, unknown>
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<void, void>
+    let _5: map<void, void>
 
     bb0: {
         _2 = baml.llm.AzureOpenAiOptions { const "my-resource", const "gpt-4o", const "2024-02-15-preview", const null };
         _3 = {  };
         _4 = {  };
         _5 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4, copy _5 };
+        _1 = baml.llm.PrimitiveClientOptions { const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4, copy _5 };
         _0 = baml.llm.PrimitiveClient { const "ValidAzure", const "azure-openai", copy _1 };
         goto -> bb1;
     }
@@ -97,18 +97,18 @@ fn user.ValidAzure$new() -> null {
 fn user.ValidAzureBaseUrl$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: baml.llm.AzureOpenAiOptions
-    let _3: map<string, string>
-    let _4: map<string, string>
-    let _5: map<string, unknown>
+    let _1: void
+    let _2: void
+    let _3: map<void, void>
+    let _4: map<void, void>
+    let _5: map<void, void>
 
     bb0: {
         _2 = baml.llm.AzureOpenAiOptions { const null, const null, const "2024-02-15-preview", const null };
         _3 = {  };
         _4 = {  };
         _5 = {  };
-        _1 = baml.llm.PrimitiveClientOptions { const null, const "https://my-resource.openai.azure.com/openai/deployments/gpt-4o", const null, const null, const null, const null, copy _2, copy _3, copy _4, copy _5 };
+        _1 = baml.llm.PrimitiveClientOptions { const null, const "https://my-resource.openai.azure.com/openai/deployments/gpt-4o", const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4, copy _5 };
         _0 = baml.llm.PrimitiveClient { const "ValidAzureBaseUrl", const "azure-openai", copy _1 };
         goto -> bb1;
     }
@@ -121,16 +121,16 @@ fn user.ValidAzureBaseUrl$new() -> null {
 fn user.ValidOpenAI$new() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: baml.llm.PrimitiveClientOptions
-    let _2: map<string, string>
-    let _3: map<string, string>
-    let _4: map<string, unknown>
+    let _1: void
+    let _2: map<void, void>
+    let _3: map<void, void>
+    let _4: map<"max_tokens" | "temperature", 100 | 0.7>
 
     bb0: {
         _2 = {  };
         _3 = {  };
         _4 = { const "max_tokens": const 100_i64, const "temperature": const 0.7_f64 };
-        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const "https://api.openai.com/v1", const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _1 = baml.llm.PrimitiveClientOptions { const "gpt-4", const "https://api.openai.com/v1", const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
         _0 = baml.llm.PrimitiveClient { const "ValidOpenAI", const "openai", copy _1 };
         goto -> bb1;
     }

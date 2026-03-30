@@ -133,7 +133,10 @@ pub enum ProviderOptions {
 #[derive(Debug, Default)]
 pub struct PrimitiveClientOptions {
     pub model: Option<String>,
+    // Internal provider feature flag, not user-configurable.
+    // Hardcoded per provider in model_features.rs.
     pub max_one_system_prompt: Option<bool>,
+    pub supports_streaming: Option<bool>,
     pub allowed_role_metadata: Option<bex_heap::BexExternalValue>,
     pub finish_reason_allow_list: Option<Vec<String>>,
     pub finish_reason_deny_list: Option<Vec<String>>,
@@ -221,6 +224,7 @@ impl PrimitiveClientOptions {
             max_one_system_prompt: self
                 .max_one_system_prompt
                 .or(defaults.max_one_system_prompt),
+            supports_streaming: self.supports_streaming.or(defaults.supports_streaming),
             allowed_role_metadata: self
                 .allowed_role_metadata
                 .or(defaults.allowed_role_metadata),

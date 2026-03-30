@@ -852,6 +852,16 @@ impl ToDiagnostic for HirDiagnostic {
             )
             .with_primary_span(*span),
 
+            HirDiagnostic::UnknownProvider {
+                client_name: _,
+                provider,
+                span,
+            } => Diagnostic::error(
+                DiagnosticId::UnknownProvider,
+                format!("unknown provider '{provider}'"),
+            )
+            .with_primary_span(*span),
+
             HirDiagnostic::MissingClientOptions {
                 client_name: _,
                 message,

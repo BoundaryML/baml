@@ -90,6 +90,8 @@ pub enum DiagnosticId {
     AllowedRolesEmpty,
     /// `allowed_roles` values must be strings.
     AllowedRoleNotString,
+    /// Unknown provider in client definition.
+    UnknownProvider,
     /// Missing required client option(s).
     MissingClientOptions,
     /// Composite client has empty strategy.
@@ -232,6 +234,7 @@ impl DiagnosticId {
             | DiagnosticId::RemapRoleNotAllowed
             | DiagnosticId::AllowedRolesEmpty
             | DiagnosticId::AllowedRoleNotString => "E0044",
+            DiagnosticId::UnknownProvider => "E0102",
             DiagnosticId::MissingClientOptions => "E0101",
             DiagnosticId::EmptyStrategy => "E0090",
             DiagnosticId::UnknownRetryPolicy => "E0091",

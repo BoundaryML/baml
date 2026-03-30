@@ -228,6 +228,10 @@ class Client {
 class PrimitiveClientOptions {
   model string | null
   base_url string | null
+  allowed_role_metadata unknown | null
+  finish_reason_allow_list string[] | null
+  finish_reason_deny_list string[] | null
+  supports_streaming bool | null
   default_role string | null
   allowed_roles string[] | null
   remap_roles map<string, string> | null

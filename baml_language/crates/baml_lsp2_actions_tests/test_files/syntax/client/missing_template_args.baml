@@ -1,5 +1,5 @@
 client MyClient {
-  provider baml-openai-chat
+  provider openai
 }
 
 //----

@@ -214,6 +214,18 @@ function user.TestClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null

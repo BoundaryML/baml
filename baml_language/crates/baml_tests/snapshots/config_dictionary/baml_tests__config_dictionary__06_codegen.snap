@@ -26,6 +26,18 @@ function user.MyClient$new() -> null {
     store_field .base_url
     copy 0
     load_const null
+    store_field .allowed_role_metadata
+    copy 0
+    load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const null
     store_field .default_role
     copy 0
     load_const null
@@ -56,8 +68,8 @@ function user.MyClient$new() -> null {
     load_const "hello"
     load_const "#hellotheremyfriend#"
     load_const "#inlinerawstring,,#"
-    load_const "true"
-    load_const "true"
+    load_const true
+    load_const true
     load_const "one"
     load_const "two"
     alloc_array 2
