@@ -26,13 +26,13 @@ pub mod io {
 
     pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
     pub use bex_vm_types::SysOp;
+    // Owned structs are generated once in sys_types and re-exported here
+    // so that `io::owned::llm::*` paths continue to work.
+    pub use sys_types::generated::owned;
     pub use sys_types::{
         AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, OpErrorKind, SysOpContext,
         SysOpFn, SysOpOutput, SysOpResult,
     };
-    // Owned structs are generated once in sys_types and re-exported here
-    // so that `io::owned::llm::*` paths continue to work.
-    pub use sys_types::generated::owned;
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
 }

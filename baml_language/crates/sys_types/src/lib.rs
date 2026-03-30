@@ -29,12 +29,13 @@ pub use tokio_util::sync::CancellationToken;
 #[allow(warnings, clippy::all, clippy::pedantic)]
 pub mod generated {
 
-    pub use crate::{
-        BexHeap, CallId, OpError, OpErrorKind, SysOpContext, SysOpFn, SysOpOutput, SysOpResult,
-    };
     pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
     pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
     pub use bex_vm_types::SysOp;
+
+    pub use crate::{
+        BexHeap, CallId, OpError, OpErrorKind, SysOpContext, SysOpFn, SysOpOutput, SysOpResult,
+    };
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
 }

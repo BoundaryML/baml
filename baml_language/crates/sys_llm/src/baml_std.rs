@@ -101,9 +101,7 @@ impl PrimitiveClient {
 }
 
 // Provider option structs are generated from llm_types.baml via sys_types.
-pub use sys_types::generated::owned::llm::AnthropicOptions;
-pub use sys_types::generated::owned::llm::AzureOpenAiOptions;
-pub use sys_types::generated::owned::llm::BedrockOptions;
+pub use sys_types::generated::owned::llm::{AnthropicOptions, AzureOpenAiOptions, BedrockOptions};
 
 /// Provider-specific options, matching the BAML schema union
 /// `AnthropicOptions | AzureOpenAiOptions | BedrockOptions | null`.

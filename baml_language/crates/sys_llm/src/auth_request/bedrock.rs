@@ -517,9 +517,10 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
     };
 
+    use bex_external_types::AsBexExternalValue;
+
     use super::*;
     use crate::baml_std::PrimitiveClientOptions;
-    use bex_external_types::AsBexExternalValue;
 
     fn make_client(opts: BedrockOptions) -> PrimitiveClient {
         PrimitiveClient::new(

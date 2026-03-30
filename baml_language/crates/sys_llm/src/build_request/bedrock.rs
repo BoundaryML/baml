@@ -575,7 +575,6 @@ mod tests {
     use std::sync::Arc;
 
     use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-
     use bex_external_types::AsBexExternalValue;
 
     use super::*;

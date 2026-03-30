@@ -80,9 +80,10 @@ fn auth_openai(request: &mut HttpRequest, client: &PrimitiveClient, provider: Ll
 
 #[cfg(test)]
 mod tests {
+    use bex_external_types::AsBexExternalValue;
+
     use super::*;
     use crate::baml_std::PrimitiveClientOptions;
-    use bex_external_types::AsBexExternalValue;
 
     fn make_client(provider: &str, options: PrimitiveClientOptions) -> PrimitiveClient {
         PrimitiveClient::new("test".to_string(), provider.to_string(), options).unwrap()
