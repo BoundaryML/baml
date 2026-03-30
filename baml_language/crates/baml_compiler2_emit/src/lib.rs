@@ -72,12 +72,37 @@ impl std::fmt::Display for LoweringError {
 
 impl std::error::Error for LoweringError {}
 
-/// Extract `@description`, `@alias`, `@skip` from raw attributes.
+/// Unescape common escape sequences in a string literal body (without surrounding quotes).
+fn unescape_string_literal(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => result.push('\n'),
+                Some('t') => result.push('\t'),
+                Some('r') => result.push('\r'),
+                Some('\\') => result.push('\\'),
+                Some('"') => result.push('"'),
+                Some(other) => {
+                    result.push('\\');
+                    result.push(other);
+                }
+                None => result.push('\\'),
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
+}
+
+/// Extract `@description`, `@alias`, `@skip` from span-free HIR attributes.
 ///
 /// Returns `(description, alias, skip)`. Invalid attribute usage (wrong arg
 /// count, non-string-literal) is silently ignored for now.
 fn extract_schema_attrs(
-    attrs: &[baml_compiler2_ast::ast::RawAttribute],
+    attrs: &[baml_compiler2_hir::item_tree::Attribute],
 ) -> (Option<String>, Option<String>, bool) {
     let mut description = None;
     let mut alias = None;
@@ -89,7 +114,7 @@ fn extract_schema_attrs(
                     let raw = attr.args[0].value.as_str();
                     // Must be a string literal (quoted)
                     if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
-                        let value = raw[1..raw.len() - 1].to_string();
+                        let value = unescape_string_literal(&raw[1..raw.len() - 1]);
                         if attr.name.as_str() == "description" {
                             description = Some(value);
                         } else {

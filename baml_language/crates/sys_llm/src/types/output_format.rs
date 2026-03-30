@@ -168,8 +168,13 @@ impl OutputFormatContent {
         let mut class_defs = Vec::new();
         for name in &hoisted_classes {
             if let Some(cls) = self.find_class(name) {
-                let body =
-                    self.render_class_hoisted(cls, options, &hoisted_classes, &hoisted_enums)?;
+                let body = self.render_class_hoisted(
+                    cls,
+                    options,
+                    &hoisted_classes,
+                    &hoisted_enums,
+                    true,
+                )?;
 
                 let hoisted_prefix = match &options.hoisted_class_prefix {
                     RenderSetting::Always(p) if !p.is_empty() => format!("{p} "),
@@ -511,6 +516,7 @@ impl OutputFormatContent {
                         options,
                         hoisted_classes,
                         hoisted_enums,
+                        false,
                     )?))
                 } else {
                     Ok(Some(tn.display_name.to_string()))
@@ -544,10 +550,23 @@ impl OutputFormatContent {
 
     #[allow(clippy::unused_self)]
     fn render_enum(&self, enm: &Enum, options: &RenderOptions) -> String {
+        use std::fmt::Write;
+
         let display_name = rendered_name(&enm.name, enm.alias.as_ref());
 
+        let mut result = String::new();
+        // Enum-level description as /// comments above the name
+        if let Some(ref d) = enm.description {
+            let d = d.trim();
+            if !d.is_empty() {
+                for line in d.lines() {
+                    let _ = writeln!(result, "/// {line}");
+                }
+            }
+        }
+
         // Header: "EnumName\n----"
-        let mut result = format!("{display_name}\n----");
+        let _ = write!(result, "{display_name}\n----");
 
         // Values with prefix (default "- ")
         for v in &enm.values {
@@ -569,12 +588,15 @@ impl OutputFormatContent {
     }
 
     /// Render a class body, with hoisted classes/enums rendered as just their name in field types.
+    /// When `skip_class_description` is true, the class-level description is omitted from the body
+    /// (used for hoisted classes where the description is rendered above the name line).
     fn render_class_hoisted(
         &self,
         cls: &Class,
         options: &RenderOptions,
         hoisted_classes: &indexmap::IndexSet<String>,
         hoisted_enums: &indexmap::IndexSet<String>,
+        skip_class_description: bool,
     ) -> Result<String, RenderError> {
         use std::fmt::Write;
 
@@ -606,15 +628,15 @@ impl OutputFormatContent {
 
         let mut output = String::new();
         output.push_str("{\n");
-        // For non-hoisted classes, render description inside braces
-        // (hoisted classes render description above the name line in render_impl)
-        if let Some(ref d) = cls.description {
-            let d = d.trim();
-            if !d.is_empty() {
-                for line in d.lines() {
-                    let _ = writeln!(output, "  /// {line}");
+        if !skip_class_description {
+            if let Some(ref d) = cls.description {
+                let d = d.trim();
+                if !d.is_empty() {
+                    for line in d.lines() {
+                        let _ = writeln!(output, "  /// {line}");
+                    }
+                    output.push('\n');
                 }
-                output.push('\n');
             }
         }
         output.push_str(&fields_str.join("\n"));
@@ -1383,7 +1405,7 @@ Answer in JSON using this schema: Tree"#
         assert_eq!(
             rendered,
             Some(String::from(
-                "/// A node in a linked list\nNode {\n  /// A node in a linked list\n\n  value: int,\n  next: Node or null,\n}\n\n\
+                "/// A node in a linked list\nNode {\n  value: int,\n  next: Node or null,\n}\n\n\
                  Answer in JSON using this schema: Node"
             ))
         );

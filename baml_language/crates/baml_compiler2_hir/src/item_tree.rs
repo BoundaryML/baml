@@ -16,6 +16,41 @@ use crate::ids::{
     LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker, hash_name,
 };
 
+// ── Span-free attribute representation ───────────────────────────────────────
+
+/// A span-free attribute for position-independent storage in the `ItemTree`.
+/// Derived from `ast::RawAttribute` with all `TextRange`s stripped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Attribute {
+    pub name: Name,
+    pub args: Vec<AttributeArg>,
+}
+
+/// A span-free attribute argument.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttributeArg {
+    pub key: Option<Name>,
+    pub value: String,
+}
+
+impl From<&ast::RawAttribute> for Attribute {
+    fn from(raw: &ast::RawAttribute) -> Self {
+        Self {
+            name: raw.name.clone(),
+            args: raw.args.iter().map(AttributeArg::from).collect(),
+        }
+    }
+}
+
+impl From<&ast::RawAttributeArg> for AttributeArg {
+    fn from(raw: &ast::RawAttributeArg) -> Self {
+        Self {
+            key: raw.key.clone(),
+            value: raw.value.clone(),
+        }
+    }
+}
+
 // ── Minimal item data structs ────────────────────────────────────────────────
 
 /// Full function data stored in the `ItemTree`.
@@ -54,7 +89,7 @@ pub struct FunctionParam {
 pub struct ClassField {
     pub name: Name,
     pub type_expr: Option<ast::SpannedTypeExpr>,
-    pub attributes: Vec<ast::RawAttribute>,
+    pub attributes: Vec<Attribute>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,7 +104,7 @@ pub struct Class {
     /// in the same `ItemTree`.
     pub methods: Vec<LocalItemId<FunctionMarker>>,
     /// Block-level attributes (@@description, @@alias, etc.).
-    pub attributes: Vec<ast::RawAttribute>,
+    pub attributes: Vec<Attribute>,
 }
 
 /// An enum variant stored in the `ItemTree`.
@@ -77,7 +112,7 @@ pub struct Class {
 pub struct EnumVariant {
     pub name: Name,
     /// Field-level attributes (@description, @alias, @skip, etc.).
-    pub attributes: Vec<ast::RawAttribute>,
+    pub attributes: Vec<Attribute>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -86,7 +121,7 @@ pub struct Enum {
     /// Variants of the enum, in declaration order.
     pub variants: Vec<EnumVariant>,
     /// Block-level attributes (@@description, @@alias, etc.).
-    pub attributes: Vec<ast::RawAttribute>,
+    pub attributes: Vec<Attribute>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -294,7 +329,7 @@ impl ItemTree {
             .map(|f| ClassField {
                 name: f.name.clone(),
                 type_expr: f.type_expr.clone(),
-                attributes: f.attributes.clone(),
+                attributes: f.attributes.iter().map(Attribute::from).collect(),
             })
             .collect();
         self.classes.insert(
@@ -304,7 +339,7 @@ impl ItemTree {
                 generic_params: c.generic_params.clone(),
                 fields,
                 methods: Vec::new(),
-                attributes: c.attributes.clone(),
+                attributes: c.attributes.iter().map(Attribute::from).collect(),
             },
         );
         id
@@ -328,7 +363,7 @@ impl ItemTree {
             .iter()
             .map(|v| EnumVariant {
                 name: v.name.clone(),
-                attributes: v.attributes.clone(),
+                attributes: v.attributes.iter().map(Attribute::from).collect(),
             })
             .collect();
         self.enums.insert(
@@ -336,7 +371,7 @@ impl ItemTree {
             Enum {
                 name: e.name.clone(),
                 variants,
-                attributes: e.attributes.clone(),
+                attributes: e.attributes.iter().map(Attribute::from).collect(),
             },
         );
         id

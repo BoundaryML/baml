@@ -153,143 +153,126 @@ fn build_output_format_content(
 ) -> types::OutputFormatContent {
     use std::collections::HashSet;
 
-    use baml_type::Ty;
-
     let mut content = types::OutputFormatContent::new(ty.clone());
     let mut visited = HashSet::new();
-    // Track classes currently on the walk stack for cycle detection.
-    let mut in_stack = HashSet::new();
-    let mut stack: Vec<Ty> = vec![ty.clone()];
+    let mut ancestry = Vec::new();
 
-    while let Some(current) = stack.pop() {
-        match &current {
-            Ty::Class(type_name, _) => {
-                let key = type_name.display_name.clone();
-                if !visited.insert(key.clone()) {
-                    continue;
-                }
-                if let Some(class_def) = ctx.class_definitions.get(type_name) {
-                    // Detect recursive classes: if a field transitively references
-                    // a class already being processed we mark it as recursive.
-                    in_stack.insert(key.clone());
-
-                    let fields: Vec<types::ClassField> = class_def
-                        .fields
-                        .iter()
-                        .filter(|f| !f.skip)
-                        .map(|f| {
-                            // Check if any field type references a class in the current stack
-                            check_recursive(&f.field_type, &in_stack, &mut content);
-                            types::ClassField {
-                                name: f.name.clone(),
-                                alias: f.alias.clone(),
-                                field_type: f.field_type.clone(),
-                                description: f.description.clone(),
-                            }
-                        })
-                        .collect();
-
-                    content = content.with_class(types::Class {
-                        name: class_def.name.clone(),
-                        alias: class_def.alias.clone(),
-                        description: class_def.description.clone(),
-                        fields,
-                    });
-
-                    // Push field types for further traversal
-                    for field_def in &class_def.fields {
-                        if !field_def.skip {
-                            stack.push(field_def.field_type.clone());
-                        }
-                    }
-
-                    in_stack.remove(&key);
-                }
-            }
-            Ty::Enum(type_name, _) => {
-                let key = type_name.display_name.clone();
-                if !visited.insert(key) {
-                    continue;
-                }
-                if let Some(enum_def) = ctx.enum_definitions.get(type_name) {
-                    let values: Vec<types::EnumValue> = enum_def
-                        .variants
-                        .iter()
-                        .map(|v| types::EnumValue {
-                            name: v.name.clone(),
-                            alias: v.alias.clone(),
-                            description: v.description.clone(),
-                        })
-                        .collect();
-
-                    content = content.with_enum(types::Enum {
-                        name: enum_def.name.clone(),
-                        alias: enum_def.alias.clone(),
-                        description: enum_def.description.clone(),
-                        values,
-                    });
-                }
-            }
-            Ty::TypeAlias(type_name, _) => {
-                let key = type_name.display_name.clone();
-                if !visited.insert(key) {
-                    continue;
-                }
-                if let Some(target_ty) = ctx.type_alias_definitions.get(type_name) {
-                    content = content.with_recursive_type_alias(
-                        type_name.display_name.to_string(),
-                        target_ty.clone(),
-                    );
-                    stack.push(target_ty.clone());
-                }
-            }
-            Ty::Optional(inner, _) | Ty::List(inner, _) => {
-                stack.push(inner.as_ref().clone());
-            }
-            Ty::Map { key, value, .. } => {
-                stack.push(key.as_ref().clone());
-                stack.push(value.as_ref().clone());
-            }
-            Ty::Union(members, _) => {
-                for member in members {
-                    stack.push(member.clone());
-                }
-            }
-            // Primitives and other types don't reference definitions.
-            _ => {}
-        }
-    }
+    walk_ty(ty, ctx, &mut content, &mut visited, &mut ancestry);
 
     content
 }
 
-/// Check if a type references any class currently on the walk stack,
-/// indicating a recursive cycle. If so, mark those classes as recursive.
-fn check_recursive(
+/// Recursive DFS walk of a type tree. `ancestry` tracks the class names
+/// currently on the call stack so mutual recursion (A → B → A) is detected.
+fn walk_ty(
     ty: &baml_type::Ty,
-    in_stack: &std::collections::HashSet<baml_base::Name>,
+    ctx: &::sys_types::SysOpContext,
     content: &mut types::OutputFormatContent,
+    visited: &mut std::collections::HashSet<baml_base::Name>,
+    ancestry: &mut Vec<baml_base::Name>,
 ) {
     use baml_type::Ty;
+
     match ty {
-        Ty::Class(tn, _) => {
-            if in_stack.contains(&tn.display_name) {
-                // Mark all classes in the current stack as part of the recursive cycle
-                for name in in_stack {
+        Ty::Class(type_name, _) => {
+            let key = type_name.display_name.clone();
+
+            // If this class is already on the ancestry stack, it's a recursive cycle.
+            // Only mark classes from the cycle start, not unrelated ancestors.
+            if let Some(start) = ancestry.iter().position(|name| name == &key) {
+                for name in &ancestry[start..] {
                     content.recursive_classes.insert(name.to_string());
                 }
+                return;
+            }
+
+            if !visited.insert(key.clone()) {
+                return;
+            }
+
+            if let Some(class_def) = ctx.class_definitions.get(type_name) {
+                let fields: Vec<types::ClassField> = class_def
+                    .fields
+                    .iter()
+                    .filter(|f| !f.skip)
+                    .map(|f| types::ClassField {
+                        name: f.name.clone(),
+                        alias: f.alias.clone(),
+                        field_type: f.field_type.clone(),
+                        description: f.description.clone(),
+                    })
+                    .collect();
+
+                content.classes.insert(
+                    class_def.name.clone(),
+                    types::Class {
+                        name: class_def.name.clone(),
+                        alias: class_def.alias.clone(),
+                        description: class_def.description.clone(),
+                        fields,
+                    },
+                );
+
+                // Push onto ancestry before recursing into fields
+                ancestry.push(key);
+                for field_def in &class_def.fields {
+                    if !field_def.skip {
+                        walk_ty(&field_def.field_type, ctx, content, visited, ancestry);
+                    }
+                }
+                ancestry.pop();
+            }
+        }
+        Ty::Enum(type_name, _) => {
+            let key = type_name.display_name.clone();
+            if !visited.insert(key) {
+                return;
+            }
+            if let Some(enum_def) = ctx.enum_definitions.get(type_name) {
+                // Skipped variants are already filtered out in bex_engine extraction.
+                let values: Vec<types::EnumValue> = enum_def
+                    .variants
+                    .iter()
+                    .map(|v| types::EnumValue {
+                        name: v.name.clone(),
+                        alias: v.alias.clone(),
+                        description: v.description.clone(),
+                    })
+                    .collect();
+
+                content.enums.insert(
+                    enum_def.name.clone(),
+                    types::Enum {
+                        name: enum_def.name.clone(),
+                        alias: enum_def.alias.clone(),
+                        description: enum_def.description.clone(),
+                        values,
+                    },
+                );
+            }
+        }
+        Ty::TypeAlias(type_name, _) => {
+            let key = type_name.display_name.clone();
+            if !visited.insert(key) {
+                return;
+            }
+            if let Some(target_ty) = ctx.type_alias_definitions.get(type_name) {
+                content
+                    .recursive_type_aliases
+                    .insert(type_name.display_name.to_string(), target_ty.clone());
+                walk_ty(target_ty, ctx, content, visited, ancestry);
             }
         }
         Ty::Optional(inner, _) | Ty::List(inner, _) => {
-            check_recursive(inner, in_stack, content);
+            walk_ty(inner, ctx, content, visited, ancestry);
         }
         Ty::Map { key, value, .. } => {
-            check_recursive(key, in_stack, content);
-            check_recursive(value, in_stack, content);
+            walk_ty(key, ctx, content, visited, ancestry);
+            walk_ty(value, ctx, content, visited, ancestry);
         }
         Ty::Union(members, _) => {
-            for m in members {
-                check_recursive(m, in_stack, content);
+            for member in members {
+                walk_ty(member, ctx, content, visited, ancestry);
             }
         }
         _ => {}
