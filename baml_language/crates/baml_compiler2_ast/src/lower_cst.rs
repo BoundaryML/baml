@@ -1239,9 +1239,10 @@ fn provider_config_for(provider: &str) -> ProviderConfig {
                 provider_options!("baml.llm.AnthropicOptions", max_tokens = 4096,);
             ProviderConfig {
                 base_url: Some("https://api.anthropic.com"),
+                default_role: Some("user"),
+                allowed_roles: Some(SAU),
                 provider_options: opts,
                 provider_option_defaults: defaults,
-                ..ProviderConfig::EMPTY
             }
         }
         "openai" | "openai-generic" | "openai-responses" => ProviderConfig {
