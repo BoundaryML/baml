@@ -248,16 +248,15 @@ mod tests {
     use ::sys_types::SysOpContext;
 
     use super::execute_parse_response_from_owned;
-    use crate::{LlmProvider, baml_std};
+    use crate::baml_std;
 
     fn make_client_with_options(
         options: baml_std::PrimitiveClientOptions,
     ) -> baml_std::PrimitiveClient {
-        let defaults = baml_std::PrimitiveClientOptions::provider_defaults(LlmProvider::OpenAi);
         baml_std::PrimitiveClient::new(
             "TestClient".to_string(),
             "openai".to_string(),
-            options.with_defaults(defaults),
+            options,
         )
         .unwrap()
     }

@@ -461,7 +461,6 @@ class baml.llm.AzureOpenAiOptions {
   max_tokens: int | null
 }
 class baml.llm.AnthropicOptions {
-  anthropic_version: string | null
   max_tokens: int | null
 }
 class baml.llm.BedrockOptions {
@@ -520,7 +519,6 @@ class baml.llm.AzureOpenAiOptions$stream {
   max_tokens: int | null
 }
 class baml.llm.AnthropicOptions$stream {
-  anthropic_version: string | null
   max_tokens: int | null
 }
 class baml.llm.BedrockOptions$stream {

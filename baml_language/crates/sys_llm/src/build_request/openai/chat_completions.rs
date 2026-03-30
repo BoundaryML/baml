@@ -351,13 +351,10 @@ mod tests {
         provider: &str,
         options: crate::baml_std::PrimitiveClientOptions,
     ) -> crate::baml_std::PrimitiveClient {
-        let defaults = crate::baml_std::PrimitiveClientOptions::provider_defaults(
-            std::str::FromStr::from_str(provider).expect("test uses valid provider"),
-        );
         crate::baml_std::PrimitiveClient::new(
             "test".to_string(),
             provider.to_string(),
-            options.with_defaults(defaults),
+            options,
         )
         .unwrap()
     }

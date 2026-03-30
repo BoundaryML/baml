@@ -95,7 +95,6 @@ impl PrimitiveClient {
 
 #[derive(Clone, Debug, Default)]
 pub struct AnthropicOptions {
-    pub anthropic_version: Option<String>,
     pub max_tokens: Option<i64>,
 }
 
@@ -151,113 +150,7 @@ pub struct PrimitiveClientOptions {
     pub request_body: indexmap::IndexMap<String, bex_heap::BexExternalValue>,
 }
 
-impl PrimitiveClientOptions {
-    /// Provider-specific defaults. User-specified values are merged on top.
-    pub fn provider_defaults(provider: LlmProvider) -> Self {
-        match provider {
-            LlmProvider::Anthropic => Self {
-                base_url: Some("https://api.anthropic.com".to_string()),
-                provider_options: Some(ProviderOptions::Anthropic(AnthropicOptions {
-                    anthropic_version: Some("2023-06-01".to_string()),
-                    max_tokens: Some(4096),
-                })),
-                ..Default::default()
-            },
-            LlmProvider::OpenAi | LlmProvider::OpenAiGeneric | LlmProvider::OpenAiResponses => {
-                Self {
-                    base_url: Some("https://api.openai.com/v1".to_string()),
-                    default_role: Some("system".to_string()),
-                    allowed_roles: Some(vec![
-                        "system".to_string(),
-                        "user".to_string(),
-                        "assistant".to_string(),
-                    ]),
-                    ..Default::default()
-                }
-            }
-            LlmProvider::Ollama => Self {
-                base_url: Some("http://localhost:11434".to_string()),
-                default_role: Some("user".to_string()),
-                allowed_roles: Some(vec!["user".to_string(), "assistant".to_string()]),
-                ..Default::default()
-            },
-            LlmProvider::OpenRouter => Self {
-                base_url: Some("https://openrouter.ai/api".to_string()),
-                default_role: Some("system".to_string()),
-                allowed_roles: Some(vec![
-                    "system".to_string(),
-                    "user".to_string(),
-                    "assistant".to_string(),
-                ]),
-                ..Default::default()
-            },
-            LlmProvider::AzureOpenAi => Self {
-                default_role: Some("system".to_string()),
-                allowed_roles: Some(vec![
-                    "system".to_string(),
-                    "user".to_string(),
-                    "assistant".to_string(),
-                ]),
-                ..Default::default()
-            },
-            LlmProvider::AwsBedrock => Self {
-                default_role: Some("user".to_string()),
-                allowed_roles: Some(vec![
-                    "system".to_string(),
-                    "user".to_string(),
-                    "assistant".to_string(),
-                ]),
-                ..Default::default()
-            },
-            LlmProvider::GoogleAi
-            | LlmProvider::VertexAi
-            | LlmProvider::BamlFallback
-            | LlmProvider::BamlRoundRobin => PrimitiveClientOptions::default(),
-        }
-    }
-
-    /// Merge user-specified values on top of defaults. User values take precedence.
-    #[must_use]
-    pub fn with_defaults(self, defaults: Self) -> Self {
-        Self {
-            model: self.model.or(defaults.model),
-            max_one_system_prompt: self
-                .max_one_system_prompt
-                .or(defaults.max_one_system_prompt),
-            supports_streaming: self.supports_streaming.or(defaults.supports_streaming),
-            allowed_role_metadata: self
-                .allowed_role_metadata
-                .or(defaults.allowed_role_metadata),
-            finish_reason_allow_list: self
-                .finish_reason_allow_list
-                .or(defaults.finish_reason_allow_list),
-            finish_reason_deny_list: self
-                .finish_reason_deny_list
-                .or(defaults.finish_reason_deny_list),
-            base_url: self.base_url.or(defaults.base_url),
-            default_role: self.default_role.or(defaults.default_role),
-            allowed_roles: self.allowed_roles.or(defaults.allowed_roles),
-            remap_roles: self.remap_roles.or(defaults.remap_roles),
-            api_key: self.api_key.or(defaults.api_key),
-            provider_options: self.provider_options.or(defaults.provider_options),
-            headers: if self.headers.is_empty() {
-                defaults.headers
-            } else {
-                self.headers
-            },
-            query_params: if self.query_params.is_empty() {
-                defaults.query_params
-            } else {
-                self.query_params
-            },
-            request_body: if self.request_body.is_empty() {
-                defaults.request_body
-            } else {
-                self.request_body
-            },
-        }
-    }
-}
+// Provider defaults are now applied at compile time in lower_cst.rs.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpRequest {

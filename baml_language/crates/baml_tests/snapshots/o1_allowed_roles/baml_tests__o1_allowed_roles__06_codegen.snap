@@ -28,7 +28,7 @@ function user.Gpt4oClient$new() -> null {
     load_const "gpt-4o"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -43,10 +43,13 @@ function user.Gpt4oClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -84,7 +87,7 @@ function user.O1Client$new() -> null {
     load_const "o1"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -99,10 +102,13 @@ function user.O1Client$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -140,7 +146,7 @@ function user.O1MiniClient$new() -> null {
     load_const "o1-mini"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -155,10 +161,13 @@ function user.O1MiniClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -196,7 +205,7 @@ function user.O1WithExplicitRoles$new() -> null {
     load_const "o1"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -211,7 +220,7 @@ function user.O1WithExplicitRoles$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
     load_const "system"

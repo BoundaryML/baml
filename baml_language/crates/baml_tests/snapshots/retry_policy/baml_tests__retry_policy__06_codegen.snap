@@ -24,7 +24,7 @@ function user.MyClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -39,10 +39,13 @@ function user.MyClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null

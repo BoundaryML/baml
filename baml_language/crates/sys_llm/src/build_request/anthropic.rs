@@ -77,19 +77,9 @@ pub(crate) fn build_request(
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
 
-    // anthropic-version from provider_options (always set via provider_defaults)
-    let Some(crate::baml_std::ProviderOptions::Anthropic(anthropic_opts)) =
-        &client.options.provider_options
-    else {
-        unreachable!("anthropic provider_options should always be set for anthropic clients")
-    };
-    headers.insert(
-        "anthropic-version".to_string(),
-        anthropic_opts
-            .anthropic_version
-            .clone()
-            .expect("anthropic_version should always be set via provider_defaults"),
-    );
+    headers
+        .entry("anthropic-version".to_string())
+        .or_insert_with(|| "2023-06-01".to_string());
 
     for (key, value) in &client.options.headers {
         headers.insert(key.clone(), value.clone());
@@ -322,18 +312,20 @@ mod tests {
                 request_body.insert(k.to_string(), v);
             }
         }
-        let defaults = crate::baml_std::PrimitiveClientOptions::provider_defaults(
-            crate::LlmProvider::Anthropic,
-        );
         crate::baml_std::PrimitiveClient::new(
             "test".to_string(),
             "anthropic".to_string(),
             crate::baml_std::PrimitiveClientOptions {
                 model,
                 request_body,
+                base_url: Some("https://api.anthropic.com".to_string()),
+                provider_options: Some(crate::baml_std::ProviderOptions::Anthropic(
+                    crate::baml_std::AnthropicOptions {
+                        max_tokens: Some(4096),
+                    },
+                )),
                 ..Default::default()
-            }
-            .with_defaults(defaults),
+            },
         )
         .unwrap()
     }
