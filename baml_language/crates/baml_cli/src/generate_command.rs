@@ -1,9 +1,10 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use baml_db::baml_compiler_diagnostics::Severity;
+use baml_db::baml_compiler_diagnostics::{render, Severity};
 use baml_compiler2_hir::{self, file_package, item_tree::GeneratorConfigItem};
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
@@ -56,10 +57,21 @@ impl GenerateArgs {
             .filter(|d| d.severity == Severity::Error)
             .collect();
         if !errors.is_empty() {
-            eprintln!("Compilation errors found ({}):", errors.len());
-            for diag in &errors {
-                eprintln!("  error: {}", diag.message);
+            // Build source/path maps for ariadne rendering.
+            let mut sources = HashMap::new();
+            let mut file_paths = HashMap::new();
+            for sf in &source_files {
+                let file_id = sf.file_id(&db);
+                sources.insert(file_id, sf.text(&db).to_string());
+                file_paths.insert(file_id, sf.path(&db));
             }
+            let rendered = render::render_diagnostics(
+                &errors.iter().copied().cloned().collect::<Vec<_>>(),
+                &sources,
+                &file_paths,
+                &render::RenderConfig::cli(),
+            );
+            eprintln!("{rendered}");
             return Ok(crate::ExitCode::Other);
         }
 

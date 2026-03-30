@@ -415,20 +415,33 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                     Some(SymbolKind::Class) => {
                         // Merge @@stream.* block attrs
                         merge_block_attrs(path, ctx, &mut must_exist, &mut done);
-                        let (bare_name, prefix) = path.split_last().expect("non-empty path");
-                        let stream_path: Vec<Name> = prefix
-                            .iter()
-                            .cloned()
-                            .chain(std::iter::once(SmolStr::new(format!("{bare_name}$stream"))))
-                            .collect();
-                        (
-                            PpirTy::Named {
-                                path: stream_path,
-                                attrs: d.clone(),
-                            },
-                            DefaultWhenPending::PrependNull,
-                            InProgress::Allowed,
-                        )
+                        if done == TyAttrValue::Set {
+                            // @stream.done: field keeps the original (non-stream) type
+                            // because it won't be populated until streaming completes.
+                            (
+                                ty.clone_without_attrs(),
+                                DefaultWhenPending::PrependNull,
+                                InProgress::NotAllowed,
+                            )
+                        } else {
+                            let (bare_name, prefix) =
+                                path.split_last().expect("non-empty path");
+                            let stream_path: Vec<Name> = prefix
+                                .iter()
+                                .cloned()
+                                .chain(std::iter::once(SmolStr::new(format!(
+                                    "{bare_name}$stream"
+                                ))))
+                                .collect();
+                            (
+                                PpirTy::Named {
+                                    path: stream_path,
+                                    attrs: d.clone(),
+                                },
+                                DefaultWhenPending::PrependNull,
+                                InProgress::Allowed,
+                            )
+                        }
                     }
                     Some(SymbolKind::TypeAlias) => {
                         // Merge @@stream.* block attrs, then resolve alias recursively

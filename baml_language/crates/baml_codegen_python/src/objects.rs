@@ -357,16 +357,18 @@ mod render {
         }
 
         fn print_sync_impl(&self) -> String {
-            function::print_sync_impl(self, Namespace::Types)
+            function::print_sync_impl(self, Namespace::Other)
         }
 
         fn print_async_impl(&self) -> String {
-            function::print_async_impl(self, Namespace::Types)
+            function::print_async_impl(self, Namespace::Other)
         }
     }
 
     baml_codegen_types::render_fn! {
         /// ```askama
+        /// from __future__ import annotations
+        ///
         /// import typing
         /// import typing_extensions
         /// from enum import Enum
@@ -401,6 +403,8 @@ mod render {
 
     baml_codegen_types::render_fn! {
         /// ```askama
+        /// from __future__ import annotations
+        ///
         /// import typing
         /// import typing_extensions
         /// from pydantic import BaseModel, ConfigDict, Field
@@ -441,6 +445,7 @@ mod render {
         /// import baml_py
         ///
         /// from . import types
+        /// from . import stream_types
         /// from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
         ///
         ///
@@ -482,6 +487,7 @@ mod render {
         /// import baml_py
         ///
         /// from . import types
+        /// from . import stream_types
         /// from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
         ///
         ///

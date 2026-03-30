@@ -209,8 +209,22 @@ fn resolve_type_expr(
     Some(convert_tir_to_codegen_ty(&tir_ty))
 }
 
-/// Convert a TIR `Ty` to a `baml_codegen_types::Ty`.
+/// Convert a TIR `Ty` to a `baml_codegen_types::Ty`, simplifying as we go.
+///
+/// Simplification (analogous to `simplify_sap` but for codegen, without attrs):
+/// - Optional → union with null
+/// - Flatten nested unions
+/// - Deduplicate variants (structural equality)
+/// - Push null to end
+/// - Unwrap singleton unions
 fn convert_tir_to_codegen_ty(ty: &TirTy) -> cg::Ty {
+    let converted = convert_tir_leaf(ty);
+    // Simplify unions that were built during conversion.
+    simplify_codegen_ty(converted)
+}
+
+/// Convert a single TIR type node without simplifying unions yet.
+fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
     match ty {
         // Primitives
         TirTy::Primitive(PrimitiveType::Int, _) => cg::Ty::Int,
@@ -242,7 +256,7 @@ fn convert_tir_to_codegen_ty(ty: &TirTy) -> cg::Ty {
             namespace: namespace_for(qtn.name().as_str()),
         }),
 
-        // Containers
+        // Containers — recurse via convert_tir_to_codegen_ty so children are simplified.
         TirTy::List(inner, _) | TirTy::EvolvingList(inner, _) => {
             cg::Ty::List(Box::new(convert_tir_to_codegen_ty(inner)))
         }
@@ -250,11 +264,14 @@ fn convert_tir_to_codegen_ty(ty: &TirTy) -> cg::Ty {
             key: Box::new(convert_tir_to_codegen_ty(k)),
             value: Box::new(convert_tir_to_codegen_ty(v)),
         },
+        // Unions and optionals: convert children, then let simplify_codegen_ty handle them.
         TirTy::Union(members, _) => {
             cg::Ty::Union(members.iter().map(convert_tir_to_codegen_ty).collect())
         }
         TirTy::Optional(inner, _) => {
-            cg::Ty::Optional(Box::new(convert_tir_to_codegen_ty(inner)))
+            // Desugar Optional<T> into Union(T, Null) so simplification can
+            // flatten/dedup with any nulls already present.
+            cg::Ty::Union(vec![convert_tir_to_codegen_ty(inner), cg::Ty::Null])
         }
         TirTy::Literal(lit, _freshness, _) => cg::Ty::Literal(lit.clone()),
 
@@ -271,4 +288,83 @@ fn convert_tir_to_codegen_ty(ty: &TirTy) -> cg::Ty {
         // Function types don't map to codegen types
         TirTy::Function { .. } => cg::Ty::Unit,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Codegen type simplification
+// ---------------------------------------------------------------------------
+
+/// Simplify a codegen type: flatten unions, dedup, null-to-end, unwrap singletons.
+fn simplify_codegen_ty(ty: cg::Ty) -> cg::Ty {
+    match ty {
+        cg::Ty::Union(variants) => simplify_union(variants),
+        cg::Ty::Optional(inner) => {
+            // Shouldn't normally appear (we desugar above), but handle defensively.
+            simplify_union(vec![*inner, cg::Ty::Null])
+        }
+        // Recurse into containers.
+        cg::Ty::List(inner) => cg::Ty::List(Box::new(simplify_codegen_ty(*inner))),
+        cg::Ty::Map { key, value } => cg::Ty::Map {
+            key: Box::new(simplify_codegen_ty(*key)),
+            value: Box::new(simplify_codegen_ty(*value)),
+        },
+        // Leaf types pass through unchanged.
+        other => other,
+    }
+}
+
+fn simplify_union(variants: Vec<cg::Ty>) -> cg::Ty {
+    // 1. Flatten nested unions.
+    let variants = flatten_union(variants);
+
+    // 2. Deduplicate (structural equality).
+    let variants = dedup_variants(variants);
+
+    // 3. Push null to end.
+    let variants = null_to_end(variants);
+
+    // 4. Unwrap singleton.
+    if variants.len() == 1 {
+        variants.into_iter().next().unwrap()
+    } else {
+        cg::Ty::Union(variants)
+    }
+}
+
+/// Flatten nested unions into a single level.
+fn flatten_union(variants: Vec<cg::Ty>) -> Vec<cg::Ty> {
+    let mut out = Vec::new();
+    for v in variants {
+        match v {
+            cg::Ty::Union(inner) => out.extend(flatten_union(inner)),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+/// Remove structurally duplicate variants.
+fn dedup_variants(variants: Vec<cg::Ty>) -> Vec<cg::Ty> {
+    let mut result: Vec<cg::Ty> = Vec::new();
+    for candidate in variants {
+        if !result.contains(&candidate) {
+            result.push(candidate);
+        }
+    }
+    result
+}
+
+/// Push `Null` variants to the end.
+fn null_to_end(variants: Vec<cg::Ty>) -> Vec<cg::Ty> {
+    let mut non_null = Vec::new();
+    let mut nulls = Vec::new();
+    for v in variants {
+        if matches!(v, cg::Ty::Null) {
+            nulls.push(v);
+        } else {
+            non_null.push(v);
+        }
+    }
+    non_null.extend(nulls);
+    non_null
 }
