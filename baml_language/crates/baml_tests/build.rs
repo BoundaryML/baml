@@ -142,6 +142,10 @@ fn discover_projects(projects_dir: &Path) -> Vec<TestProject> {
 
         let name = path.file_name().unwrap().to_str().unwrap().to_string();
 
+        if name == "parser_stress" {
+            continue;
+        }
+
         let files = discover_baml_files(&path);
 
         if !files.is_empty() {

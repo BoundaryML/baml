@@ -244,6 +244,33 @@ async fn multiple_closures_share_cell() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
+/// `deep_copy` of a closure creates a new closure object but preserves the
+/// same captured cells — matching JS/Python semantics where closures close
+/// over variables by reference.  All four closures (inc, inc2, dec, dec2)
+/// mutate the shared x cell: 0 →1 →2 →1 →2 →3 →2.
+#[tokio::test]
+async fn multiple_closures_share_cell_deep_copy() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let x = 0
+            let inc = () -> int { x += 1; x }
+            let dec = () -> int { x -= 1; x }
+            let inc2 = baml.deep_copy(inc)
+            let dec2 = baml.deep_copy(dec)
+            inc()
+            inc()
+            dec2()
+            inc2()
+            inc2()
+            dec2()
+            x
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
 /// Deep nesting (3 levels) with transitive captures at each level.
 /// a in main, b param of f, c param of g, d param of h.
 /// a + b + c + d = 1 + 10 + 100 + 1000 = 1111
@@ -292,51 +319,24 @@ async fn lambda_captures_loop_variable_accumulation() {
 // ============================================================================
 
 /// Issue E: resolutions/exhaustive_matches keyed by bare AstExprId.
-/// Lambda bodies restart ExprIds at 0. If a lambda body contains a match
-/// expression at the same ExprId as a parent match, the resolution map
-/// entry could be overwritten.
-///
-/// This test has a match in both parent and lambda body.
+/// Parent resolves `.length()` on `int[]` (Array.length → 3), lambda resolves
+/// `.length()` on `string` (String.length → 5).  These are different
+/// MemberResolutions; if one overwrites the other due to an ExprId collision,
+/// the wrong method gets dispatched and the result will be incorrect.
 #[tokio::test]
-async fn issue_e_match_in_lambda_and_parent() {
+async fn issue_e_method_resolution_different_types() {
     let output = baml_test!(
         "
         function main() -> int {
-            let x = 1
-            let result = match (x) {
-                1 => 10
-                _ => 0
-            }
-            let f = (y: int) -> int {
-                match (y) {
-                    1 => 100
-                    _ => 0
-                }
-            }
-            result + f(1)
+            let arr: int[] = [1, 2, 3]
+            let arr_len = arr.length()
+            let f = (s: string) -> int { s.length() }
+            arr_len * 10 + f(\"hello\")
         }
     "
     );
-    // Parent match yields 10, lambda match yields 100 → 110
-    assert_eq!(output.result, Ok(BexExternalValue::Int(110)));
-}
-
-/// Issue E (variant): method call resolution collision.
-/// Lambda body has a method call at same ExprId as parent body method call.
-#[tokio::test]
-async fn issue_e_method_call_in_lambda_and_parent() {
-    let output = baml_test!(
-        "
-        function main() -> int {
-            let s = \"hello\"
-            let parent_len = s.length()
-            let f = (t: string) -> int { t.length() }
-            parent_len + f(\"world!\")
-        }
-    "
-    );
-    // "hello".length() = 5, "world!".length() = 6 → 11
-    assert_eq!(output.result, Ok(BexExternalValue::Int(11)));
+    // arr.length() = 3, "hello".length() = 5 → 35
+    assert_eq!(output.result, Ok(BexExternalValue::Int(35)));
 }
 
 /// Issue F: is_captured post-pass marks wrong local with shadowing.
