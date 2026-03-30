@@ -1,0 +1,25 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Group F: enum variant attributes.
+// Verifies no regression from the parse_type() change.
+
+enum GroupF {
+    // F1: variant with @alias — valid
+    F1 @alias("f1_alias"),
+
+    // F2: variant with @description — valid
+    F2 @description("f2 desc"),
+
+    // F3: variant with both — valid
+    F3 @alias("f3_alias") @description("f3 desc"),
+
+    // F4: variant with type attr — ERROR (no type expr on variants)
+    F4 @stream.done,
+
+    // F5: variant with field attr + type attr — ERROR for @stream.done
+    F5 @alias("f5_alias") @stream.done,
+
+    // F6: variant with @skip — valid
+    F6 @skip,
+}

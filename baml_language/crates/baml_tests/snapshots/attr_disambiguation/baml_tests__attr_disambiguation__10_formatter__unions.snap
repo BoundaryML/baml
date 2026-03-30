@@ -1,0 +1,5 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== PARSER ERROR ===
+[UnexpectedToken { expected: "Unexpected token in class body", found: "'|'", span: Span { file_id: FileId(0), range: 585..586 } }, InvalidSyntax { message: "field 'UC' is missing a type annotation", span: Span { file_id: FileId(0), range: 587..589 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'|'", span: Span { file_id: FileId(0), range: 664..665 } }, InvalidSyntax { message: "field 'UB' is missing a type annotation", span: Span { file_id: FileId(0), range: 666..668 } }, UnexpectedToken { expected: "Unexpected token in class body", found: "'|'", span: Span { file_id: FileId(0), range: 669..670 } }, InvalidSyntax { message: "field 'UC' is missing a type annotation", span: Span { file_id: FileId(0), range: 671..673 } }, InvalidSyntax { message: "Unexpected '@' in type expression", span: Span { file_id: FileId(0), range: 1481..1482 } }, InvalidSyntax { message: "Unexpected '@' in type expression", span: Span { file_id: FileId(0), range: 1582..1583 } }]
