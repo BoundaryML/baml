@@ -77,9 +77,7 @@ pub(crate) fn build_request(
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
 
-    headers
-        .entry("anthropic-version".to_string())
-        .or_insert_with(|| "2023-06-01".to_string());
+    headers.insert("anthropic-version".to_string(), "2023-06-01".to_string());
 
     for (key, value) in &client.options.headers {
         headers.insert(key.clone(), value.clone());

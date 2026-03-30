@@ -393,4 +393,76 @@ mod tests {
             assert!(matches!(&**s, PromptAstSimple::String(t) if t == "abcd"));
         }
     }
+
+    #[test]
+    fn test_media_content_base64_data() {
+        let base64 = MediaContent::Base64 {
+            base64_data: "abc123".to_string(),
+        };
+        assert_eq!(base64.base64_data(), Some("abc123"));
+
+        let url_no_data = MediaContent::Url {
+            url: "http://example.com".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(url_no_data.base64_data(), None);
+
+        let url_with_data = MediaContent::Url {
+            url: "http://example.com".to_string(),
+            base64_data: Some("xyz".to_string()),
+        };
+        assert_eq!(url_with_data.base64_data(), Some("xyz"));
+
+        let file_no_data = MediaContent::File {
+            file: "/path/to/file".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(file_no_data.base64_data(), None);
+
+        let file_with_data = MediaContent::File {
+            file: "/path/to/file".to_string(),
+            base64_data: Some("data".to_string()),
+        };
+        assert_eq!(file_with_data.base64_data(), Some("data"));
+    }
+
+    #[test]
+    fn test_media_content_url() {
+        let url = MediaContent::Url {
+            url: "http://example.com".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(url.url(), Some("http://example.com"));
+
+        let base64 = MediaContent::Base64 {
+            base64_data: "abc".to_string(),
+        };
+        assert_eq!(base64.url(), None);
+
+        let file = MediaContent::File {
+            file: "/path".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(file.url(), None);
+    }
+
+    #[test]
+    fn test_media_content_file_path() {
+        let file = MediaContent::File {
+            file: "/path/to/file".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(file.file_path(), Some("/path/to/file"));
+
+        let url = MediaContent::Url {
+            url: "http://example.com".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(url.file_path(), None);
+
+        let base64 = MediaContent::Base64 {
+            base64_data: "abc".to_string(),
+        };
+        assert_eq!(base64.file_path(), None);
+    }
 }

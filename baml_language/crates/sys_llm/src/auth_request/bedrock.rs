@@ -328,6 +328,21 @@ pub(crate) async fn auth_bedrock(
 }
 
 // ---------------------------------------------------------------------------
+// Shared native SDK config loader (no callbacks)
+// ---------------------------------------------------------------------------
+
+/// Load the AWS SDK config using the native default provider chain.
+/// This is the no-callbacks counterpart of `load_aws_sdk_config_with_callbacks`.
+#[cfg(not(target_arch = "wasm32"))]
+async fn load_aws_sdk_config_native(opts: &BedrockOptions) -> aws_config::SdkConfig {
+    let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest());
+    if let Some(profile) = &opts.profile {
+        loader = loader.profile_name(profile);
+    }
+    loader.load().await
+}
+
+// ---------------------------------------------------------------------------
 // Credential resolution
 // ---------------------------------------------------------------------------
 
@@ -351,11 +366,7 @@ pub(crate) async fn resolve_region(
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest());
-        if let Some(profile) = &opts.profile {
-            loader = loader.profile_name(profile);
-        }
-        let sdk_config = loader.load().await;
+        let sdk_config = load_aws_sdk_config_native(opts).await;
         sdk_config.region().map(ToString::to_string).ok_or_else(|| {
             BuildRequestError::AuthorizationFailed(
                 "AWS region not found in default provider chain".into(),
@@ -403,11 +414,7 @@ async fn resolve_credentials(
     // No callbacks -- try the native default provider chain directly.
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest());
-        if let Some(profile) = &opts.profile {
-            loader = loader.profile_name(profile);
-        }
-        let sdk_config = loader.load().await;
+        let sdk_config = load_aws_sdk_config_native(opts).await;
 
         let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
             BuildRequestError::AuthorizationFailed(

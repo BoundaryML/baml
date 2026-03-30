@@ -1338,11 +1338,17 @@ fn validate_client_options(
         && !has_base_url
         && !(has_prov("resource_name") && has_prov("deployment_id"))
     {
+        let missing = match (has_prov("resource_name"), has_prov("deployment_id")) {
+            (false, false) => "resource_name and deployment_id",
+            (false, true) => "resource_name",
+            (true, false) => "deployment_id",
+            (true, true) => unreachable!(),
+        };
         diagnostics.push(HirDiagnostic::MissingClientOptions {
             client_name: client_name.to_string(),
-            message:
-                "azure-openai requires either base_url or both resource_name and deployment_id"
-                    .to_string(),
+            message: format!(
+                "azure-openai requires either base_url or both resource_name and deployment_id (missing: {missing})"
+            ),
             span,
         });
     }

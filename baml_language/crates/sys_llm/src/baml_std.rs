@@ -45,6 +45,9 @@ impl PrimitiveClient {
                 "system".to_string(),
             ]
         });
+        // Falls back to the first allowed role, or "user" if allowed_roles is empty.
+        // An empty allowed_roles is not a valid configuration but we handle it
+        // gracefully rather than panicking.
         let default_role = options.default_role.clone().unwrap_or_else(|| {
             allowed_roles
                 .first()

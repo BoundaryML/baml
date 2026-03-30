@@ -373,7 +373,7 @@ fn s3_location(uri: String) -> bedrock::types::S3Location {
     bedrock::types::S3Location::builder()
         .uri(uri)
         .build()
-        .unwrap()
+        .expect("S3Location build cannot fail when uri is set")
 }
 
 fn media_to_content_block(
