@@ -5,9 +5,48 @@ import type { TestResponseData } from '../../../../../../sdk/interface'
 import { useTheme } from 'next-themes'
 import { RenderPromptPart } from '../../render-text'
 import { ScrollArea } from '@baml/ui/scroll-area'
+import { useState } from 'react'
+import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 
 const ErrorText = ({ text }: { text: string }) => {
   return <pre className='text-xs text-red-500 whitespace-pre-wrap'>{text}</pre>
+}
+
+const ExplanationView = ({ explanation }: { explanation: string }) => {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  let parsed: unknown[];
+  try {
+    parsed = JSON.parse(explanation)
+    if (!Array.isArray(parsed) || parsed.length === 0) return null
+  } catch {
+    return null
+  }
+
+  return (
+    <div className='mt-2 rounded-md border border-yellow-500/30 bg-yellow-500/5 p-2'>
+      <button
+        className='flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400 hover:underline'
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <AlertTriangle className='w-3 h-3' />
+        <span>
+          {parsed.length} parsing {parsed.length === 1 ? 'issue' : 'issues'}{' '}
+          (items may have been dropped)
+        </span>
+        {isExpanded ? (
+          <ChevronUp className='w-3 h-3' />
+        ) : (
+          <ChevronDown className='w-3 h-3' />
+        )}
+      </button>
+      {isExpanded && (
+        <pre className='mt-2 text-xs text-yellow-700 dark:text-yellow-300 whitespace-pre-wrap max-h-[300px] overflow-auto'>
+          {JSON.stringify(parsed, null, 2)}
+        </pre>
+      )}
+    </div>
+  )
 }
 
 // Renders the parsed response only
@@ -31,6 +70,9 @@ export const ParsedResponseRenderer: React.FC<{
     <div>
       <ParsedResponseRender response={parsedResponse?.value} />
       {failureMessage && <ErrorText text={failureMessage} />}
+      {parsedResponse?.explanation && (
+        <ExplanationView explanation={parsedResponse.explanation} />
+      )}
     </div>
   )
 }
@@ -108,9 +150,15 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
             )}
           />
           <JsonView.KeyName
-            render={({ style: _style, ...props }, { parentValue, value, keyName }) => {
-              if (Array.isArray(parentValue) && Number.isFinite(props.children)) {
-                return <span className='' />
+            render={(
+              { style: _style, ...props },
+              { parentValue, value, keyName },
+            ) => {
+              if (
+                Array.isArray(parentValue) &&
+                Number.isFinite(props.children)
+              ) {
+                return <span className='' />;
               }
               return <span className='' {...props} />
             }}

@@ -937,3 +937,87 @@ mod try_cast_tests {
         assert!(result.is_none());
     }
 }
+
+/// Test that when list items are dropped due to failing asserts, the
+/// explanation_json on ResponseBamlValue surfaces those failures.
+#[test_log::test]
+fn test_dropped_list_items_appear_in_explanation() {
+    use crate::helpers::{load_test_ir, parsed_value_to_response, render_output_format};
+
+    let schema = r#"
+class Receipt {
+    name string
+    items Item[]
+}
+
+class Item {
+    label string
+    price float @assert(expensive, {{ this > 100.0 }})
+}
+"#;
+
+    let ir = load_test_ir(schema);
+    let mut target_type = TypeIR::class("Receipt");
+    ir.finalize_type(&mut target_type);
+    let target = render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
+
+    // All items have price < 100, so all should fail the assert and be dropped.
+    let raw = r#"{"name": "Test Store", "items": [
+        {"label": "Apple", "price": 1.50},
+        {"label": "Banana", "price": 0.75}
+    ]}"#;
+
+    let parsed = from_str(&target, &target_type, raw, true);
+    assert!(
+        parsed.is_ok(),
+        "Parse should succeed (items dropped, not error): {:?}",
+        parsed
+    );
+
+    let bvwf = parsed.unwrap();
+
+    // The parsed value should have an empty items list.
+    let value: BamlValue = bvwf.clone().into();
+    let items = match &value {
+        BamlValue::Class(_, fields) => fields.get("items"),
+        _ => panic!("Expected class"),
+    };
+    assert_eq!(
+        items.map(|v| match v {
+            BamlValue::List(l) => l.len(),
+            _ => panic!("Expected list"),
+        }),
+        Some(0),
+        "All items should have been dropped by the assert"
+    );
+
+    // Check BamlValueWithFlags-level explanation.
+    let bvwf_explanations = bvwf.explanation_json();
+    assert!(
+        !bvwf_explanations.is_empty(),
+        "Expected non-empty BamlValueWithFlags explanations"
+    );
+
+    // Check ResponseBamlValue-level explanation.
+    let response = parsed_value_to_response(&ir, bvwf, baml_types::StreamingMode::NonStreaming)
+        .expect("parsed_value_to_response should succeed");
+
+    let explanations = response.explanation_json();
+    let explanation_str = serde_json::to_string(&explanations).unwrap();
+    assert!(
+        !explanations.is_empty(),
+        "Expected non-empty ResponseBamlValue explanations"
+    );
+
+    // The explanation should mention "Assertions failed" somewhere in the tree.
+    assert!(
+        explanation_str.contains("Assertions failed"),
+        "Expected 'Assertions failed' in explanation, got: {explanation_str}"
+    );
+}

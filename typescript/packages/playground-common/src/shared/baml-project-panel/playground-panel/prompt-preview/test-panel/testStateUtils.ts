@@ -20,10 +20,3 @@ export const getTestStateResponse = (response: TestState) => {
   }
   return undefined;
 };
-
-export const getExplanation = (response: TestState) => {
-  if (response.status === 'done') {
-    return response.response.parsed_response?.explanation;
-  }
-  return undefined;
-};

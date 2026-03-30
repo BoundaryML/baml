@@ -461,12 +461,17 @@ where
                     );
                     BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
                 }
-                // Don't include flags in final resopnse either until we
-                // figure out how to reduce memory usage.
+                // Strip most flags to reduce memory usage, but keep the
+                // lightweight ones that the UI needs for diagnostics.
                 let response_value_without_flags = match response_value {
                     Some(Ok(baml_value)) => {
                         Some(Ok(ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
-                            jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
+                            use jsonish::deserializer::deserialize_flags::Flag;
+                            const MAX_KEPT_FLAGS: usize = 10;
+                            let kept: Vec<Flag> = m.0.into_iter().filter(|f| {
+                                matches!(f, Flag::ArrayItemParseError(..) | Flag::ConstraintResults(..))
+                            }).take(MAX_KEPT_FLAGS).collect();
+                            jsonish::ResponseValueMeta(kept, m.1, m.2, m.3)
                         }))))
                     }
                     Some(Err(e)) => Some(Err(e)),
