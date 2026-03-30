@@ -16,6 +16,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@boundaryml/baml": "^0.217.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
     "@lexical/code": "^0.39.0",
     "@lexical/list": "^0.39.0",
     "@lexical/markdown": "^0.39.0",

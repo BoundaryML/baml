@@ -1,8 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useState, useCallback } from "react";
+import { useQuery, useMutation } from "convex/react";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCorners,
+  useDroppable,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 import { BepCard } from "./bep-card";
 import { BepKanbanCard } from "./bep-kanban-card";
 import { Badge } from "@/components/ui/badge";
@@ -40,15 +57,97 @@ const KANBAN_COLUMNS: { status: BepStatus; label: string; color: string }[] = [
   { status: "superseded", label: "Superseded", color: "bg-orange-500" },
 ];
 
+interface KanbanColumnProps {
+  status: BepStatus;
+  label: string;
+  color: string;
+  beps: Array<{
+    _id: Id<"beps">;
+    number: number;
+    title: string;
+    status: BepStatus;
+    shepherdNames: string[];
+    commentCount: number;
+    openIssueCount: number;
+    updatedAt: number;
+  }>;
+  isOver?: boolean;
+}
+
+function KanbanColumn({ status, label, color, beps, isOver }: KanbanColumnProps) {
+  const { setNodeRef } = useDroppable({
+    id: status,
+    data: {
+      type: "column",
+      status,
+    },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex flex-col min-h-[200px] transition-colors ${
+        isOver ? "bg-accent/30 rounded-lg" : ""
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-3 pb-2 border-b">
+        <div className={`w-3 h-3 rounded-full ${color}`} />
+        <h3 className="font-medium text-sm">{label}</h3>
+        <span className="text-xs text-muted-foreground ml-auto">
+          {beps.length}
+        </span>
+      </div>
+      <SortableContext
+        items={beps.map((bep) => bep._id)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className="flex flex-col gap-2 flex-1 min-h-[100px]">
+          {beps.length > 0 ? (
+            beps.map((bep) => (
+              <BepKanbanCard
+                key={bep._id}
+                id={bep._id}
+                number={bep.number}
+                title={bep.title}
+                status={bep.status}
+                shepherdNames={bep.shepherdNames}
+                commentCount={bep.commentCount}
+                openIssueCount={bep.openIssueCount}
+                updatedAt={bep.updatedAt}
+              />
+            ))
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground bg-muted/30 rounded-md min-h-[100px]">
+              {isOver ? "Drop here" : "No BEPs"}
+            </div>
+          )}
+        </div>
+      </SortableContext>
+    </div>
+  );
+}
+
 export function BepList() {
   const [statusFilter, setStatusFilter] = useState<BepStatus | "all">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showOldestFirst, setShowOldestFirst] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("kanban");
+  const [activeId, setActiveId] = useState<Id<"beps"> | null>(null);
+  const [overColumn, setOverColumn] = useState<BepStatus | null>(null);
 
   const beps = useQuery(api.beps.list, {
     status: viewMode === "kanban" ? undefined : statusFilter === "all" ? undefined : statusFilter,
   });
+
+  const updateStatus = useMutation(api.beps.updateStatus);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
 
   const filteredBeps = beps
     ?.filter((bep) => {
@@ -64,9 +163,82 @@ export function BepList() {
       showOldestFirst ? a.number - b.number : b.number - a.number
     );
 
-  const getBepsByStatus = (status: BepStatus) => {
-    return filteredBeps?.filter((bep) => bep.status === status) || [];
-  };
+  const getBepsByStatus = useCallback(
+    (status: BepStatus) => {
+      return filteredBeps?.filter((bep) => bep.status === status) || [];
+    },
+    [filteredBeps]
+  );
+
+  const activeBep = activeId
+    ? filteredBeps?.find((bep) => bep._id === activeId)
+    : null;
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const { active } = event;
+    setActiveId(active.id as Id<"beps">);
+  }, []);
+
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const { over } = event;
+    if (!over) {
+      setOverColumn(null);
+      return;
+    }
+
+    const overData = over.data.current;
+    if (overData?.type === "column") {
+      setOverColumn(overData.status as BepStatus);
+    } else if (overData?.type === "bep") {
+      const overBep = filteredBeps?.find((bep) => bep._id === over.id);
+      if (overBep) {
+        setOverColumn(overBep.status);
+      }
+    }
+  }, [filteredBeps]);
+
+  const handleDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveId(null);
+      setOverColumn(null);
+
+      if (!over) return;
+
+      const activeBepId = active.id as Id<"beps">;
+      const activeBepData = filteredBeps?.find((bep) => bep._id === activeBepId);
+      if (!activeBepData) return;
+
+      let targetStatus: BepStatus | null = null;
+
+      const overData = over.data.current;
+      if (overData?.type === "column") {
+        targetStatus = overData.status as BepStatus;
+      } else if (overData?.type === "bep") {
+        const overBep = filteredBeps?.find((bep) => bep._id === over.id);
+        if (overBep) {
+          targetStatus = overBep.status;
+        }
+      }
+
+      if (targetStatus && targetStatus !== activeBepData.status) {
+        try {
+          await updateStatus({
+            id: activeBepId,
+            status: targetStatus,
+          });
+        } catch (error) {
+          console.error("Failed to update BEP status:", error);
+        }
+      }
+    },
+    [filteredBeps, updateStatus]
+  );
+
+  const handleDragCancel = useCallback(() => {
+    setActiveId(null);
+    setOverColumn(null);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -141,42 +313,44 @@ export function BepList() {
           <Skeleton className="h-24 w-full" />
         </div>
       ) : viewMode === "kanban" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {KANBAN_COLUMNS.map((column) => {
-            const columnBeps = getBepsByStatus(column.status);
-            return (
-              <div key={column.status} className="flex flex-col min-h-[200px]">
-                <div className="flex items-center gap-2 mb-3 pb-2 border-b">
-                  <div className={`w-3 h-3 rounded-full ${column.color}`} />
-                  <h3 className="font-medium text-sm">{column.label}</h3>
-                  <span className="text-xs text-muted-foreground ml-auto">
-                    {columnBeps.length}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2 flex-1">
-                  {columnBeps.length > 0 ? (
-                    columnBeps.map((bep) => (
-                      <BepKanbanCard
-                        key={bep._id}
-                        number={bep.number}
-                        title={bep.title}
-                        status={bep.status}
-                        shepherdNames={bep.shepherdNames}
-                        commentCount={bep.commentCount}
-                        openIssueCount={bep.openIssueCount}
-                        updatedAt={bep.updatedAt}
-                      />
-                    ))
-                  ) : (
-                    <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground bg-muted/30 rounded-md">
-                      No BEPs
-                    </div>
-                  )}
-                </div>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+            {KANBAN_COLUMNS.map((column) => (
+              <KanbanColumn
+                key={column.status}
+                status={column.status}
+                label={column.label}
+                color={column.color}
+                beps={getBepsByStatus(column.status)}
+                isOver={overColumn === column.status}
+              />
+            ))}
+          </div>
+          <DragOverlay>
+            {activeBep ? (
+              <div className="opacity-90">
+                <BepKanbanCard
+                  id={activeBep._id}
+                  number={activeBep.number}
+                  title={activeBep.title}
+                  status={activeBep.status}
+                  shepherdNames={activeBep.shepherdNames}
+                  commentCount={activeBep.commentCount}
+                  openIssueCount={activeBep.openIssueCount}
+                  updatedAt={activeBep.updatedAt}
+                  isDragging
+                />
               </div>
-            );
-          })}
-        </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       ) : filteredBeps && filteredBeps.length > 0 ? (
         <div className="flex flex-col gap-1">
           {filteredBeps.map((bep) => (
