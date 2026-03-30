@@ -13,6 +13,7 @@ use baml_compiler_diagnostics::HirDiagnostic;
 use baml_compiler_syntax::{SyntaxNode, ast};
 use rowan::ast::AstNode;
 
+
 use crate::{
     DeclarativeMeta,
     ast::{
@@ -973,22 +974,45 @@ fn synthesize_client_new_companion(
         id
     };
 
-    // Top-level scalar fields (default Null)
+    // Initialize all top-level fields and provider-specific options from a
+    // single ProviderConfig. User-specified values overwrite these below.
+    let config = provider
+        .map(String::as_str)
+        .filter(|p| VALID_PROVIDERS.contains(p))
+        .map(provider_config_for);
+
     let mut model = alloc(Expr::Null);
-    let mut base_url = alloc(Expr::Null);
-    let mut default_role = alloc(Expr::Null);
-    let mut allowed_roles = alloc(Expr::Null);
+    let mut base_url = config
+        .as_ref()
+        .and_then(|c| c.base_url)
+        .map(|s| alloc(Expr::Literal(Literal::String(s.to_string()))))
+        .unwrap_or_else(|| alloc(Expr::Null));
+    let mut default_role = config
+        .as_ref()
+        .and_then(|c| c.default_role)
+        .map(|s| alloc(Expr::Literal(Literal::String(s.to_string()))))
+        .unwrap_or_else(|| alloc(Expr::Null));
+    let mut allowed_roles = config
+        .as_ref()
+        .and_then(|c| c.allowed_roles)
+        .map(|items| {
+            let elements: Vec<ExprId> = items
+                .iter()
+                .map(|s| alloc(Expr::Literal(Literal::String(s.to_string()))))
+                .collect();
+            alloc(Expr::Array { elements })
+        })
+        .unwrap_or_else(|| alloc(Expr::Null));
     let mut remap_roles = alloc(Expr::Null);
     let mut allowed_role_metadata = alloc(Expr::Null);
     let mut finish_reason_allow_list = alloc(Expr::Null);
     let mut finish_reason_deny_list = alloc(Expr::Null);
     let mut supports_streaming = alloc(Expr::Null);
     let mut api_key = alloc(Expr::Null);
-    // Top-level map fields (default empty map)
     let mut headers = alloc(Expr::Map { entries: vec![] });
     let mut query_params = alloc(Expr::Map { entries: vec![] });
 
-    let selected_group = provider.and_then(|p| provider_group_for(p));
+    let selected_group = config.as_ref().and_then(|c| c.provider_options);
     let mut prov_vals: Vec<Option<ExprId>> = selected_group
         .map(|(_, fields)| vec![None; fields.len()])
         .unwrap_or_default();
@@ -997,6 +1021,15 @@ fn synthesize_client_new_companion(
         .unwrap_or_default();
     let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
     let mut has_base_url = false;
+
+    // Provider-specific option defaults.
+    if let Some(cfg) = &config {
+        for &(field, value) in cfg.provider_option_defaults {
+            if let Some(&i) = prov_index.get(field) {
+                prov_vals[i] = Some(alloc(Expr::Literal(Literal::Int(value))));
+            }
+        }
+    }
 
     let options_span = config_block
         .items()
@@ -1154,46 +1187,119 @@ fn synthesize_client_new_companion(
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-/// Returns the provider-specific options type name and its field list for a
-/// given provider string, or `None` for providers with no provider-specific fields.
+/// All provider configuration in one place: top-level defaults, provider-
+/// specific option type + fields, and provider-specific option defaults.
+struct ProviderConfig {
+    base_url: Option<&'static str>,
+    default_role: Option<&'static str>,
+    allowed_roles: Option<&'static [&'static str]>,
+    provider_options: Option<(&'static str, &'static [&'static str])>,
+    provider_option_defaults: &'static [(&'static str, i64)],
+}
+
+impl ProviderConfig {
+    const EMPTY: Self = Self {
+        base_url: None,
+        default_role: None,
+        allowed_roles: None,
+        provider_options: None,
+        provider_option_defaults: &[],
+    };
+}
+
+/// Define provider-specific options with fields and defaults inline.
 ///
-/// Every known provider must be listed explicitly. Unknown provider strings hit
-/// `unimplemented!` so that adding a new provider forces a decision here.
-fn provider_group_for(provider: &str) -> Option<(&'static str, &'static [&'static str])> {
+/// ```ignore
+/// provider_options!("baml.llm.BedrockOptions",
+///     region,
+///     endpoint_url,
+///     max_tokens = 4096,  // field with default
+///     temperature,
+/// )
+/// ```
+macro_rules! provider_options {
+    ($type_name:expr, $($field:ident $(= $default:expr)?),* $(,)?) => {{
+        const FIELDS: &[&str] = &[$(stringify!($field)),*];
+        const DEFAULTS: &[(&str, i64)] = &[
+            $($((stringify!($field), $default)),*)?
+        ];
+        (Some(($type_name, FIELDS)), DEFAULTS)
+    }};
+}
+
+const SAU: &[&str] = &["system", "user", "assistant"];
+const UA: &[&str] = &["user", "assistant"];
+
+fn provider_config_for(provider: &str) -> ProviderConfig {
     match provider {
-        "anthropic" => Some((
-            "baml.llm.AnthropicOptions",
-            &["anthropic_version", "max_tokens"],
-        )),
-        "azure-openai" => Some((
-            "baml.llm.AzureOpenAiOptions",
-            &[
-                "resource_name",
-                "deployment_id",
-                "api_version",
-                "max_tokens",
-            ],
-        )),
-        "aws-bedrock" => Some((
-            "baml.llm.BedrockOptions",
-            &[
-                "region",
-                "endpoint_url",
-                "access_key_id",
-                "secret_access_key",
-                "session_token",
-                "profile",
-                "stop_sequences",
-                "max_tokens",
-                "temperature",
-                "top_p",
-            ],
-        )),
-        "openai" | "openai-generic" | "openai-responses" | "ollama" | "openrouter"
-        | "google-ai" | "vertex-ai" => None,
-        // Keep this as a dev guard: adding a new provider to LlmProvider
-        // without updating this function will panic at test time.
-        _ => unreachable!("unknown provider {provider:?}: add it to provider_group_for"),
+        "anthropic" => {
+            let (opts, defaults) = provider_options!("baml.llm.AnthropicOptions",
+                max_tokens = 4096,
+            );
+            ProviderConfig {
+                base_url: Some("https://api.anthropic.com"),
+                provider_options: opts,
+                provider_option_defaults: defaults,
+                ..ProviderConfig::EMPTY
+            }
+        }
+        "openai" | "openai-generic" | "openai-responses" => ProviderConfig {
+            base_url: Some("https://api.openai.com/v1"),
+            default_role: Some("system"),
+            allowed_roles: Some(SAU),
+            ..ProviderConfig::EMPTY
+        },
+        "ollama" => ProviderConfig {
+            base_url: Some("http://localhost:11434"),
+            default_role: Some("user"),
+            allowed_roles: Some(UA),
+            ..ProviderConfig::EMPTY
+        },
+        "openrouter" => ProviderConfig {
+            base_url: Some("https://openrouter.ai/api"),
+            default_role: Some("system"),
+            allowed_roles: Some(SAU),
+            ..ProviderConfig::EMPTY
+        },
+        "azure-openai" => {
+            let (opts, defaults) = provider_options!("baml.llm.AzureOpenAiOptions",
+                resource_name,
+                deployment_id,
+                api_version,
+                max_tokens = 4096,
+            );
+            ProviderConfig {
+                default_role: Some("system"),
+                allowed_roles: Some(SAU),
+                provider_options: opts,
+                provider_option_defaults: defaults,
+                ..ProviderConfig::EMPTY
+            }
+        }
+        "aws-bedrock" => {
+            let (opts, defaults) = provider_options!("baml.llm.BedrockOptions",
+                region,
+                endpoint_url,
+                access_key_id,
+                secret_access_key,
+                session_token,
+                profile,
+                stop_sequences,
+                max_tokens,
+                temperature,
+                top_p,
+            );
+            ProviderConfig {
+                default_role: Some("user"),
+                allowed_roles: Some(SAU),
+                provider_options: opts,
+                provider_option_defaults: defaults,
+                ..ProviderConfig::EMPTY
+            }
+        }
+        "google-ai" | "vertex-ai" => ProviderConfig::EMPTY,
+        // Dev guard: adding a new provider without updating this panics at test time.
+        _ => unreachable!("unknown provider {provider:?}: add it to provider_config_for"),
     }
 }
 

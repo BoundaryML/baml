@@ -121,13 +121,10 @@ mod tests {
             "user".to_string(),
             "assistant".to_string(),
         ]);
-        let defaults = crate::baml_std::PrimitiveClientOptions::provider_defaults(
-            std::str::FromStr::from_str(provider).expect("test uses valid provider"),
-        );
         crate::baml_std::PrimitiveClient::new(
             "test-client".to_string(),
             provider.to_string(),
-            options.with_defaults(defaults),
+            options,
         )
         .unwrap()
     }
@@ -173,6 +170,7 @@ mod tests {
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gpt-4o".to_string()),
                 api_key: Some("sk-test-key".to_string()),
+                base_url: Some("https://api.openai.com/v1".to_string()),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
@@ -219,6 +217,7 @@ mod tests {
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gpt-4-turbo".to_string()),
                 api_key: Some("sk-test-key".to_string()),
+                base_url: Some("https://api.openai.com/v1".to_string()),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
@@ -358,6 +357,7 @@ mod tests {
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("claude-3-haiku-20240307".to_string()),
                 api_key: Some("sk-ant-test".to_string()),
+                base_url: Some("https://api.anthropic.com".to_string()),
                 request_body: IndexMap::from([(
                     "max_tokens".to_string(),
                     BexExternalValue::Int(1000),
@@ -511,6 +511,11 @@ mod tests {
             "anthropic",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("claude-3-haiku-20240307".to_string()),
+                provider_options: Some(crate::baml_std::ProviderOptions::Anthropic(
+                    crate::baml_std::AnthropicOptions {
+                        max_tokens: Some(4096),
+                    },
+                )),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );

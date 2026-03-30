@@ -514,15 +514,13 @@ mod tests {
     use crate::baml_std::PrimitiveClientOptions;
 
     fn make_client(opts: BedrockOptions) -> PrimitiveClient {
-        let defaults = PrimitiveClientOptions::provider_defaults(crate::LlmProvider::AwsBedrock);
         PrimitiveClient::new(
             "test-bedrock".to_string(),
             "aws-bedrock".to_string(),
             PrimitiveClientOptions {
                 provider_options: Some(ProviderOptions::Bedrock(opts)),
                 ..Default::default()
-            }
-            .with_defaults(defaults),
+            },
         )
         .unwrap()
     }

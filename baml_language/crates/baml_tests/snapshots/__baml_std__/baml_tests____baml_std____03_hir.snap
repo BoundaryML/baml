@@ -142,7 +142,6 @@ function baml.llm.rr_pick_index(self: ?, client_name: string, counter: int, sub_
 
 --- <builtin>/baml/ns_llm/llm_types.baml ---
 class baml.llm.AnthropicOptions {
-  anthropic_version: string | null
   max_tokens: int | null
 }
 class baml.llm.AzureOpenAiOptions {

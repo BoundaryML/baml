@@ -47,10 +47,13 @@ function user.BadAzureMissingUrl$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -70,7 +73,7 @@ function user.BadAzureMissingUrl$new() -> null {
     load_const "2024-02-15-preview"
     store_field .api_version
     copy 0
-    load_const null
+    load_const 4096
     store_field .max_tokens
     store_field .provider_options
     copy 0
@@ -100,7 +103,7 @@ function user.BadMaxTokens$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -115,10 +118,13 @@ function user.BadMaxTokens$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -158,7 +164,7 @@ function user.BadTemperature$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -173,10 +179,13 @@ function user.BadTemperature$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -231,10 +240,13 @@ function user.ValidAzure$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -254,7 +266,7 @@ function user.ValidAzure$new() -> null {
     load_const "2024-02-15-preview"
     store_field .api_version
     copy 0
-    load_const null
+    load_const 4096
     store_field .max_tokens
     store_field .provider_options
     copy 0
@@ -299,10 +311,13 @@ function user.ValidAzureBaseUrl$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -322,7 +337,7 @@ function user.ValidAzureBaseUrl$new() -> null {
     load_const "2024-02-15-preview"
     store_field .api_version
     copy 0
-    load_const null
+    load_const 4096
     store_field .max_tokens
     store_field .provider_options
     copy 0
@@ -367,10 +382,13 @@ function user.ValidOpenAI$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null

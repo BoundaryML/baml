@@ -88,7 +88,7 @@ function user.ArrayConfigClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -103,10 +103,13 @@ function user.ArrayConfigClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -149,7 +152,7 @@ function user.ArrayOfObjectsClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -164,10 +167,13 @@ function user.ArrayOfObjectsClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -648,7 +654,7 @@ function user.BasicClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -663,10 +669,13 @@ function user.BasicClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -1113,7 +1122,7 @@ function user.C$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -1128,10 +1137,13 @@ function user.C$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -1289,7 +1301,7 @@ function user.CommaClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -1304,10 +1316,13 @@ function user.CommaClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -1519,7 +1534,7 @@ function user.DeeplyNestedClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -1534,10 +1549,13 @@ function user.DeeplyNestedClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -1582,7 +1600,7 @@ function user.DeeplyNestedClient$new() -> null {
 function user.EnvClient$new() -> null {
     load_const "OPENAI_API_KEY"
     call baml.env.get_or_panic
-    store_var _2
+    store_var _3
     alloc_instance baml.llm.PrimitiveClient
     copy 0
     load_const "EnvClient"
@@ -1596,7 +1614,7 @@ function user.EnvClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -1611,16 +1629,19 @@ function user.EnvClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
     store_field .remap_roles
     copy 0
-    load_var _2
+    load_var _3
     store_field .api_key
     copy 0
     load_const null
@@ -1666,7 +1687,7 @@ function user.ExtraWhitespaceClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -1681,10 +1702,13 @@ function user.ExtraWhitespaceClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -1734,7 +1758,7 @@ function user.FullClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -1749,10 +1773,13 @@ function user.FullClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -2047,7 +2074,7 @@ function user.LongArrayClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -2062,10 +2089,13 @@ function user.LongArrayClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -2110,7 +2140,7 @@ function user.LongArrayOfObjectsClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -2125,10 +2155,13 @@ function user.LongArrayOfObjectsClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -2197,10 +2230,13 @@ function user.LongNestedValuesClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -2253,10 +2289,13 @@ function user.LongOptionClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -4034,7 +4073,7 @@ function user.ManyNestedExprs(items: int[]) -> int {
 function user.ManyOptionsClient$new() -> null {
     load_const "OPENAI_API_KEY"
     call baml.env.get_or_panic
-    store_var _2
+    store_var _3
     alloc_instance baml.llm.PrimitiveClient
     copy 0
     load_const "ManyOptionsClient"
@@ -4063,16 +4102,19 @@ function user.ManyOptionsClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
     store_field .remap_roles
     copy 0
-    load_var _2
+    load_var _3
     store_field .api_key
     copy 0
     load_const null
@@ -4835,7 +4877,7 @@ function user.MixedValuesClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -4850,10 +4892,13 @@ function user.MixedValuesClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -4968,7 +5013,7 @@ function user.NestedConfigClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -4983,10 +5028,13 @@ function user.NestedConfigClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5204,7 +5252,7 @@ function user.RawStringConfigClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -5219,10 +5267,13 @@ function user.RawStringConfigClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5262,7 +5313,7 @@ function user.SameLineClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -5277,10 +5328,13 @@ function user.SameLineClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5343,10 +5397,13 @@ function user.StringProviderClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5415,7 +5472,7 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -5430,10 +5487,13 @@ function user.ThisIsAnExtremelyLongClientNameThatDefinitelyExceedsTheDefaultLine
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5476,7 +5536,7 @@ function user.TriviaClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -5491,10 +5551,13 @@ function user.TriviaClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5532,7 +5595,7 @@ function user.TriviaClientBlock$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -5547,10 +5610,13 @@ function user.TriviaClientBlock$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5588,7 +5654,7 @@ function user.TriviaDeeplyNestedClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -5603,10 +5669,13 @@ function user.TriviaDeeplyNestedClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5644,7 +5713,7 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -5659,10 +5728,13 @@ function user.TriviaDeeplyNestedClientBlock$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5739,10 +5811,13 @@ function user.TriviaLongValueClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5795,10 +5870,13 @@ function user.TriviaLongValueClientBlock$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
@@ -5856,7 +5934,7 @@ function user.TypedValuesClient$new() -> null {
     load_const "gpt-4"
     store_field .model
     copy 0
-    load_const null
+    load_const "https://api.openai.com/v1"
     store_field .base_url
     copy 0
     load_const null
@@ -5871,10 +5949,13 @@ function user.TypedValuesClient$new() -> null {
     load_const null
     store_field .supports_streaming
     copy 0
-    load_const null
+    load_const "system"
     store_field .default_role
     copy 0
-    load_const null
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null

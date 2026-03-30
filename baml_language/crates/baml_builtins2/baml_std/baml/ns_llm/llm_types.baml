@@ -252,7 +252,6 @@ class AzureOpenAiOptions {
 }
 
 class AnthropicOptions {
-  anthropic_version string | null
   max_tokens int | null
 }
 

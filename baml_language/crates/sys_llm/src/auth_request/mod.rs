@@ -84,13 +84,10 @@ mod tests {
     use crate::baml_std::PrimitiveClientOptions;
 
     fn make_client(provider: &str, options: PrimitiveClientOptions) -> PrimitiveClient {
-        let defaults = PrimitiveClientOptions::provider_defaults(
-            std::str::FromStr::from_str(provider).expect("test uses valid provider"),
-        );
         PrimitiveClient::new(
             "test".to_string(),
             provider.to_string(),
-            options.with_defaults(defaults),
+            options,
         )
         .unwrap()
     }

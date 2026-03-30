@@ -601,13 +601,10 @@ mod tests {
             ]),
             ..Default::default()
         };
-        let defaults = crate::baml_std::PrimitiveClientOptions::provider_defaults(
-            crate::LlmProvider::AwsBedrock,
-        );
         crate::baml_std::PrimitiveClient::new(
             "test-bedrock".to_string(),
             "aws-bedrock".to_string(),
-            options.with_defaults(defaults),
+            options,
         )
         .unwrap()
     }
@@ -746,13 +743,10 @@ mod tests {
             ]),
             ..Default::default()
         };
-        let defaults = crate::baml_std::PrimitiveClientOptions::provider_defaults(
-            crate::LlmProvider::AwsBedrock,
-        );
         let client = crate::baml_std::PrimitiveClient::new(
             "test".to_string(),
             "aws-bedrock".to_string(),
-            options.with_defaults(defaults),
+            options,
         )
         .unwrap();
         assert_eq!(
@@ -1070,13 +1064,10 @@ mod tests {
             ]),
             ..Default::default()
         };
-        let defaults = crate::baml_std::PrimitiveClientOptions::provider_defaults(
-            crate::LlmProvider::AwsBedrock,
-        );
         let client = crate::baml_std::PrimitiveClient::new(
             "test".to_string(),
             "aws-bedrock".to_string(),
-            options.with_defaults(defaults),
+            options,
         )
         .unwrap();
         let result = build_request(&client, &msg("user", "hi"), None).await;
