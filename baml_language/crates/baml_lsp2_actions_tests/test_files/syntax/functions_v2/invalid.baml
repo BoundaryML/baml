@@ -56,7 +56,7 @@ function FooBar(arg) -> bar {
 //    │                  │ 
 //    │                  ╰─ unparseable type
 //    │ 
-//    │ Note: Error code: E0102
+//    │ Note: Error code: E0108
 // ───╯
 // Error: unresolved name: Bar
 //    ╭─[ functions_v2_invalid.baml:1:18 ]

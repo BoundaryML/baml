@@ -35,7 +35,7 @@ function qux() -> () {
 //     │                  ─┬─  
 //     │                   ╰─── unparseable type
 //     │ 
-//     │ Note: Error code: E0102
+//     │ Note: Error code: E0108
 // ────╯
 // Error: could not parse type expression for return type of `baz`
 //     ╭─[ for_loops.baml:17:18 ]
@@ -44,7 +44,7 @@ function qux() -> () {
 //     │                  ─┬─  
 //     │                   ╰─── unparseable type
 //     │ 
-//     │ Note: Error code: E0102
+//     │ Note: Error code: E0108
 // ────╯
 // Error: could not parse type expression for return type of `qux`
 //     ╭─[ for_loops.baml:23:18 ]
@@ -53,7 +53,7 @@ function qux() -> () {
 //     │                  ─┬─  
 //     │                   ╰─── unparseable type
 //     │ 
-//     │ Note: Error code: E0102
+//     │ Note: Error code: E0108
 // ────╯
 //
 //- inlay_hints

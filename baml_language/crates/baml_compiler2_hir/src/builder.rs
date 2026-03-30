@@ -70,20 +70,8 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
-    /// Convert an AST-level `HirDiagnostic` into the HIR diagnostic list.
-    pub fn push_ast_diagnostic(&mut self, diag: &baml_compiler_diagnostics::HirDiagnostic) {
-        use baml_compiler_diagnostics::ToDiagnostic;
-        let d = diag.to_diagnostic();
-        if let Some(span) = d.primary_span() {
-            self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
-                diagnostic_id: d.id,
-                message: d.message,
-                span: span.range,
-            });
-        }
-    }
-
     /// Set lowering diagnostics produced during CST → AST lowering.
+    #[must_use]
     pub fn with_lowering_diagnostics(mut self, diags: Vec<LoweringDiagnostic>) -> Self {
         self.lowering_diagnostics = diags;
         self
@@ -930,15 +918,16 @@ impl<'db> SemanticIndexBuilder<'db> {
                     }
                 }
                 _ => {
-                    self.diagnostics.push(Hir2Diagnostic::UnknownAttribute {
-                        attr_name: attr.name.clone(),
-                        span: attr.span,
-                        valid_attributes: vec![
-                            "internal.opaque",
-                            "internal.uses",
-                            "internal.panics",
-                        ],
-                    });
+                    self.diagnostics
+                        .push(Hir2Diagnostic::UnknownInternalAttribute {
+                            attr_name: attr.name.clone(),
+                            span: attr.span,
+                            valid_attributes: vec![
+                                "internal.opaque",
+                                "internal.uses",
+                                "internal.panics",
+                            ],
+                        });
                 }
             }
         }
@@ -1005,6 +994,55 @@ impl<'db> SemanticIndexBuilder<'db> {
                 feature: "$rust_type".to_string(),
                 span,
             });
+        }
+
+        Self::collect_unknown_type_attrs(type_expr, &mut self.diagnostics);
+    }
+
+    /// Known type-level attribute names (not field attrs, which are handled by
+    /// `disambiguate::validate_field_attrs`).
+    const KNOWN_TYPE_ATTRS: &'static [&'static str] = &[
+        "stream.done",
+        "stream.must_exist",
+        "stream.with_state",
+        "check",
+        "assert",
+    ];
+
+    fn collect_unknown_type_attrs(
+        type_expr: &ast::TypeExpr,
+        diagnostics: &mut Vec<Hir2Diagnostic>,
+    ) {
+        for attr in type_expr.attrs() {
+            let name = attr.name.as_str();
+            if !ast::is_field_attr(name) && !Self::KNOWN_TYPE_ATTRS.contains(&name) {
+                diagnostics.push(Hir2Diagnostic::UnknownTypeAttribute {
+                    attr_name: attr.name.clone(),
+                    span: attr.span,
+                });
+            }
+        }
+
+        match type_expr {
+            ast::TypeExpr::Optional { inner, .. } | ast::TypeExpr::List { inner, .. } => {
+                Self::collect_unknown_type_attrs(inner, diagnostics);
+            }
+            ast::TypeExpr::Map { key, value, .. } => {
+                Self::collect_unknown_type_attrs(key, diagnostics);
+                Self::collect_unknown_type_attrs(value, diagnostics);
+            }
+            ast::TypeExpr::Union { variants, .. } => {
+                for v in variants {
+                    Self::collect_unknown_type_attrs(v, diagnostics);
+                }
+            }
+            ast::TypeExpr::Function { params, ret, .. } => {
+                for p in params {
+                    Self::collect_unknown_type_attrs(&p.ty, diagnostics);
+                }
+                Self::collect_unknown_type_attrs(ret, diagnostics);
+            }
+            _ => {}
         }
     }
 

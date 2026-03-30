@@ -64,11 +64,10 @@ pub fn validate_compiler2_stdlib() -> Result<(), String> {
         }
 
         let root = baml_compiler_syntax::SyntaxNode::new_root(green);
-        let mut lowering_diags = Vec::new();
-        let (_items, _hir_diags) = baml_compiler2_ast::lower_file(&root, &mut lowering_diags);
-        if !lowering_diags.is_empty() {
+        let (_items, diags) = baml_compiler2_ast::lower_file(&root);
+        if !diags.is_empty() {
             return Err(format!(
-                "failed to lower compiler2 builtin {}: {lowering_diags:#?}",
+                "failed to lower compiler2 builtin {}: {diags:#?}",
                 builtin.virtual_path()
             ));
         }

@@ -1565,8 +1565,11 @@ impl<'a> Parser<'a> {
 
     // ============ Attribute Parsing ============
 
-    /// Parse a field attribute: @alias("name") or @stream.done
-    pub(crate) fn parse_field_attribute(&mut self) {
+    /// Parse an @attr: @alias("name") or @stream.done
+    pub(crate) fn parse_at_attribute(&mut self) {
+        // Eat leading trivia so whitespace stays outside the ATTRIBUTE node,
+        // keeping the node's text_range tight around `@name(...)`.
+        while self.eat_trivia() {}
         self.with_node(SyntaxKind::ATTRIBUTE, |p| {
             let at_span = p.current().map(|t| t.span);
             p.expect(TokenKind::At);
@@ -1605,8 +1608,8 @@ impl<'a> Parser<'a> {
         });
     }
 
-    /// Parse a block attribute: @@dynamic or @@stream.done
-    pub(crate) fn parse_block_attribute(&mut self) {
+    /// Parse an @@attr: @@dynamic or @@stream.done
+    pub(crate) fn parse_atat_attribute(&mut self) {
         self.with_node(SyntaxKind::BLOCK_ATTRIBUTE, |p| {
             p.expect(TokenKind::AtAt);
 
@@ -1742,20 +1745,13 @@ impl<'a> Parser<'a> {
                     p.bump();
                     p.parse_type_primary();
                 } else if p.at(TokenKind::At) {
-                    // An attribute
-                    let Some(attr_name_first) = p.peek(1) else {
-                        break; // attribute goes on a parent node or something
-                    };
-                    if attr_name_first.kind == TokenKind::Word
-                        && matches!(
-                            attr_name_first.text.as_str(),
-                            "alias" | "description" | "skip"
-                        )
-                    {
-                        // attribute applies to a field, not the type
+                    // All attributes (both type and field) are consumed inside TYPE_EXPR.
+                    // Disambiguation happens during lowering, which has the structural
+                    // context to classify field vs type attributes.
+                    if p.peek(1).is_none() {
                         break;
                     }
-                    p.parse_field_attribute();
+                    p.parse_at_attribute();
                 } else {
                     break;
                 }
@@ -1952,7 +1948,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_enum(&mut self) {
         self.with_node(SyntaxKind::ENUM_DEF, |p| {
             while p.at(TokenKind::AtAt) {
-                p.parse_block_attribute();
+                p.parse_atat_attribute();
             }
 
             // 'enum' keyword
@@ -1979,7 +1975,7 @@ impl<'a> Parser<'a> {
 
                 if p.at(TokenKind::AtAt) {
                     // Block attribute: @@dynamic
-                    p.parse_block_attribute();
+                    p.parse_atat_attribute();
                 } else if p.at(TokenKind::Word) {
                     // Enum variant
                     p.parse_enum_variant();
@@ -2066,7 +2062,7 @@ impl<'a> Parser<'a> {
 
             // Optional field attributes (@alias, etc.)
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_field_attribute();
+                p.parse_at_attribute();
             }
         });
     }
@@ -2077,7 +2073,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_class(&mut self) {
         self.with_node(SyntaxKind::CLASS_DEF, |p| {
             while p.at(TokenKind::AtAt) {
-                p.parse_block_attribute();
+                p.parse_atat_attribute();
             }
 
             // 'class' keyword
@@ -2114,7 +2110,7 @@ impl<'a> Parser<'a> {
                     p.parse_function();
                 } else if p.at(TokenKind::AtAt) {
                     // Block attribute: @@dynamic
-                    p.parse_block_attribute();
+                    p.parse_atat_attribute();
                 } else if p.at(TokenKind::Function) {
                     // Method definition
                     p.parse_function();
@@ -2180,12 +2176,6 @@ impl<'a> Parser<'a> {
             let has_type = p.is_at_type_start() && (!newline_before_type || has_colon);
             if has_type {
                 p.parse_type();
-
-                // Optional field attributes (@alias, @description, @skip, etc.)
-                // `parse_type` has already consumed all the "field" attributes that aren't field-related
-                while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                    p.parse_field_attribute();
-                }
             } else {
                 // Field is incomplete - emit error and don't consume more tokens
                 if let Some(span) = field_name_span {
@@ -2203,7 +2193,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_function(&mut self) {
         self.with_node(SyntaxKind::FUNCTION_DEF, |p| {
             while p.at(TokenKind::AtAt) {
-                p.parse_block_attribute();
+                p.parse_atat_attribute();
             }
 
             // 'function' keyword
@@ -4233,7 +4223,7 @@ impl<'a> Parser<'a> {
 
                 // Block attributes like @@check(...) inside config blocks
                 if p.at(TokenKind::AtAt) {
-                    p.parse_block_attribute();
+                    p.parse_atat_attribute();
                 } else {
                     p.parse_config_item();
                     // Allow optional comma after config items
@@ -4307,7 +4297,7 @@ impl<'a> Parser<'a> {
 
             // Optional field attributes after config value (e.g., args { ... } @check(...))
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_field_attribute();
+                p.parse_at_attribute();
             }
         });
     }
@@ -4664,7 +4654,7 @@ impl<'a> Parser<'a> {
 
             // Optional attributes (not including those taken by the type)
             while p.at(TokenKind::At) && !p.at(TokenKind::AtAt) {
-                p.parse_field_attribute();
+                p.parse_at_attribute();
             }
 
             // Optional semicolon

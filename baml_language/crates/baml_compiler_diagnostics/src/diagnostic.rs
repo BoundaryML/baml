@@ -192,6 +192,9 @@ pub enum DiagnosticId {
     MissingConfigBlock,
     MissingConfigKey,
     MalformedAttribute,
+
+    // Attribute disambiguation (E0106)
+    FieldAttributeInTypePosition,
 }
 
 impl DiagnosticId {
@@ -332,11 +335,14 @@ impl DiagnosticId {
             DiagnosticId::NamespaceShadow => "E0099",
 
             // Lowering diagnostics
-            DiagnosticId::MissingName => "E0101",
-            DiagnosticId::UnparseableType => "E0102",
+            DiagnosticId::MissingName => "E0107",
+            DiagnosticId::UnparseableType => "E0108",
             DiagnosticId::MissingConfigBlock => "E0103",
             DiagnosticId::MissingConfigKey => "E0104",
             DiagnosticId::MalformedAttribute => "E0105",
+
+            // Attribute disambiguation
+            DiagnosticId::FieldAttributeInTypePosition => "E0106",
         }
     }
 }

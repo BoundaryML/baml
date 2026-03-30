@@ -10,11 +10,14 @@ use la_arena::Arena;
 use rowan::ast::AstNode;
 use text_size::{TextRange, TextSize};
 
-use crate::ast::{
-    AssignOp, AstSourceMap, BinaryOp, CatchArm, CatchArmId, CatchClause, CatchClauseKind, Expr,
-    ExprBody, ExprId, FunctionBodyDef, FunctionDef, LetOrigin, Literal, LoopOrigin, MatchArm,
-    MatchArmId, PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId, TypeExpr,
-    UnaryOp,
+use crate::{
+    LoweringDiagnostic,
+    ast::{
+        AssignOp, AstSourceMap, BinaryOp, CatchArm, CatchArmId, CatchClause, CatchClauseKind, Expr,
+        ExprBody, ExprId, FunctionBodyDef, FunctionDef, LetOrigin, Literal, LoopOrigin, MatchArm,
+        MatchArmId, PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId,
+        TypeExpr, UnaryOp,
+    },
 };
 
 /// Returns true if `kind` can serve as an identifier token in expression position.
@@ -31,6 +34,7 @@ fn is_ident_token(kind: SyntaxKind) -> bool {
 pub(crate) fn lower(
     expr_body: &baml_compiler_syntax::ast::ExprFunctionBody,
     param_names: &[Name],
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> (ExprBody, AstSourceMap) {
     let mut ctx = LoweringContext::new();
 
@@ -46,7 +50,9 @@ pub(crate) fn lower(
         .find_map(baml_compiler_syntax::ast::BlockExpr::cast)
         .map(|block| ctx.lower_block_expr(&block));
 
-    ctx.finish(root_expr)
+    let (body, source_map, ctx_diags) = ctx.finish(root_expr);
+    diags.extend(ctx_diags);
+    (body, source_map)
 }
 
 /// Helper enum for building pattern elements during lowering.
@@ -70,6 +76,8 @@ struct LoweringContext {
     source_map: AstSourceMap,
     /// All names used, for generating unique synthetic variable names.
     names_in_scope: std::collections::HashSet<String>,
+    /// Diagnostics accumulated during lowering.
+    diags: Vec<LoweringDiagnostic>,
 }
 
 impl LoweringContext {
@@ -83,6 +91,7 @@ impl LoweringContext {
             type_annotations: Arena::new(),
             source_map: AstSourceMap::new(),
             names_in_scope: std::collections::HashSet::new(),
+            diags: Vec::new(),
         }
     }
 
@@ -156,7 +165,10 @@ impl LoweringContext {
         }
     }
 
-    fn finish(self, root_expr: Option<ExprId>) -> (ExprBody, AstSourceMap) {
+    fn finish(
+        self,
+        root_expr: Option<ExprId>,
+    ) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
         let body = ExprBody {
             exprs: self.exprs,
             stmts: self.stmts,
@@ -166,7 +178,7 @@ impl LoweringContext {
             type_annotations: self.type_annotations,
             root_expr,
         };
-        (body, self.source_map)
+        (body, self.source_map, self.diags)
     }
 
     fn lower_block_expr(&mut self, block: &baml_compiler_syntax::ast::BlockExpr) -> ExprId {
@@ -1672,7 +1684,7 @@ impl LoweringContext {
             .children()
             .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
             .and_then(ast::ParameterList::cast)
-            .map(|pl| crate::lower_cst::lower_params(&pl, "<lambda>", &mut Vec::new()))
+            .map(|pl| crate::lower_cst::lower_params(&pl, "<lambda>", &mut self.diags))
             .unwrap_or_default();
 
         let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
@@ -1727,7 +1739,8 @@ impl LoweringContext {
                     lambda_ctx.names_in_scope.insert(name.to_string());
                 }
                 let root_expr = lambda_ctx.lower_block_expr(&block);
-                let (body, source_map) = lambda_ctx.finish(Some(root_expr));
+                let (body, source_map, lambda_diags) = lambda_ctx.finish(Some(root_expr));
+                self.diags.extend(lambda_diags);
                 FunctionBodyDef::Expr(body, source_map)
             });
 

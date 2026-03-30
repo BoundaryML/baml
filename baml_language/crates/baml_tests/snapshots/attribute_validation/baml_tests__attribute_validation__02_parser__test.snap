@@ -67,38 +67,38 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "name"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "n"
-            QUOTE """
-            WORD "n"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "Name"
-            QUOTE """
-            WORD "Name"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "nm"
-            QUOTE """
-            WORD "nm"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "n"
+              QUOTE """
+              WORD "n"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "Name"
+              QUOTE """
+              WORD "Name"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "nm"
+              QUOTE """
+              WORD "nm"
+              QUOTE """
+            R_PAREN ")"
     R_BRACE "}"
   ENUM_DEF
     KW_ENUM "enum"

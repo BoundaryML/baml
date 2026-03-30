@@ -38,16 +38,13 @@ class MultiAttrField {
 
 // ===== Field type + attr exceeding limit =====
 class LongAttrField {
-    name: string
-        @description(
-            "This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns",
-        )
-    data: map<string, int | string | bool>
-        @description("complex data")
-        @alias("payload")
-        @stream.done
-    config: map<string, map<string, int | string | bool | null>>
-        @description("deeply nested config structure for testing wrapping")
+    name: string @description(
+        "This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns",
+    )
+    data: map<string, int | string | bool> @description("complex data") @alias("payload") @stream.done
+    config: map<string, map<string, int | string | bool | null>> @description(
+        "deeply nested config structure for testing wrapping",
+    )
 }
 
 // ===== Field name + long union type exceeding limit =====
@@ -112,7 +109,6 @@ class TriviaClassBlock { /* 6 open brace trailing */
 class TriviaFieldAttrs {
     // 1 field leading
     name: string // 6 type trailing
-        // 7 attr leading
         @description( // 10 open paren trailing
             // 11 arg leading
             "the name", // 12 arg trailing
@@ -124,7 +120,6 @@ class TriviaFieldAttrs {
 class TriviaFieldAttrsBlock {
     /* 1 field leading */
     name: /* 4 colon trailing *//* 5 type leading */string /* 6 type trailing */
-        /* 7 attr leading */
         @description( /* 10 open paren trailing */
             /* 11 arg leading */
             "the name", /* 12 arg trailing */
@@ -145,7 +140,6 @@ class TriviaLongFieldType {
             | float // 21 fourth trailing
             | null // 24 fifth trailing
     > // 25 close angle trailing
-        // 26 attr leading
         @description( // 28 attr open trailing
             // 29 attr arg leading
             "a long description", // 30 attr arg trailing
@@ -165,7 +159,6 @@ class TriviaLongFieldTypeBlock {
             |/* 19 pipe trailing *//* 20 fourth leading */float /* 21 fourth trailing */
             |/* 22 pipe trailing *//* 23 fifth leading */null /* 24 fifth trailing */
     > /* 25 close angle trailing */
-        /* 26 attr leading */
         @description( /* 28 attr open trailing */
             /* 29 attr arg leading */
             "a long description", /* 30 attr arg trailing */
@@ -176,17 +169,14 @@ class TriviaLongFieldTypeBlock {
 class TriviaMultiAttr {
     // 1 field leading
     name: string // 6 type trailing
-        // 7 first attr leading
         @description( // 9 first attr open trailing
             // 10 arg leading
             "name", // 11 arg trailing
-        ) // 12 first attr close trailing
-        // 13 second attr leading
+        )
         @alias( // 15 second attr open trailing
             // 16 arg leading
             "user_name", // 17 arg trailing
-        ) // 18 second attr close trailing
-        // 19 third attr leading    
+        )
         @stream.done // 20 third attr trailing
 }
 
@@ -194,11 +184,8 @@ class TriviaMultiAttr {
 class TriviaMultiAttrBlock {
     /* 1 field leading */
     name: /* 4 colon trailing *//* 5 type leading */string /* 6 type trailing */
-        /* 7 first attr leading */
-        @description(/* 9 first attr open trailing *//* 10 arg leading */"name"/* 11 arg trailing */) /* 12 first attr close trailing */
-        /* 13 second attr leading */
-        @alias(/* 15 second attr open trailing *//* 16 arg leading */"user_name"/* 17 arg trailing */) /* 18 second attr close trailing */
-        /* 19 third attr leading */
+        @description(/* 9 first attr open trailing *//* 10 arg leading */"name"/* 11 arg trailing */)
+        @alias(/* 15 second attr open trailing *//* 16 arg leading */"user_name"/* 17 arg trailing */)
         @stream.done /* 20 third attr trailing */
 }
 

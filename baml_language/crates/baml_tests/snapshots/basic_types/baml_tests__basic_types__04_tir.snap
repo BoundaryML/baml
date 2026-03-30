@@ -9,7 +9,7 @@ class user.FieldAttributes {
   summary: string
   details: string?
   state: string
-  multiple: string? @description("Multiple attributes") @alias("multiple_alias") @stream.done @stream.not_null
+  multiple: string? @description("Multiple attributes") @alias("multiple_alias")
 }
 class user.ClassAttributes {
   name: string

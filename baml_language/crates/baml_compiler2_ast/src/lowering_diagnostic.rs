@@ -58,6 +58,25 @@ pub enum LoweringDiagnostic {
         block_name: String,
         span: TextRange,
     },
+
+    /// The client's `provider` value is not a recognized provider name.
+    UnknownProvider {
+        client_name: String,
+        provider: String,
+        span: TextRange,
+    },
+
+    /// A client is missing required provider-specific options.
+    MissingClientOptions {
+        client_name: String,
+        message: String,
+        span: TextRange,
+    },
+
+    /// A field attribute (`@alias`, `@description`, `@skip`) appeared in a type
+    /// expression where only type attributes are valid (e.g. inside parens, on a
+    /// non-final union member, or in a function signature).
+    FieldAttributeInTypePosition { attr_name: String, span: TextRange },
 }
 
 impl LoweringDiagnostic {
@@ -125,6 +144,35 @@ impl LoweringDiagnostic {
                 format!("{block_kind} `{block_name}` is missing a required config block"),
                 *span,
                 "expected a config block",
+            ),
+            LoweringDiagnostic::UnknownProvider {
+                client_name: _,
+                provider,
+                span,
+            } => (
+                DiagnosticId::UnknownProvider,
+                format!("unknown provider '{provider}'"),
+                *span,
+                "unknown provider",
+            ),
+            LoweringDiagnostic::MissingClientOptions {
+                client_name: _,
+                message,
+                span,
+            } => (
+                DiagnosticId::MissingClientOptions,
+                message.clone(),
+                *span,
+                "missing options",
+            ),
+            LoweringDiagnostic::FieldAttributeInTypePosition { attr_name, span } => (
+                DiagnosticId::FieldAttributeInTypePosition,
+                format!(
+                    "`@{attr_name}` is only allowed on class fields and enum variants; \
+                     remove it here"
+                ),
+                *span,
+                "field attribute here",
             ),
         };
 

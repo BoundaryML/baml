@@ -306,60 +306,60 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "status"
-      TYPE_EXPR "GStatus"
+      TYPE_EXPR
         WORD "GStatus"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "s"
-            QUOTE """
-            WORD "s"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "s"
+              QUOTE """
+              WORD "s"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "role"
-      TYPE_EXPR "GRole"
+      TYPE_EXPR
         WORD "GRole"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "r"
-            QUOTE """
-            WORD "r"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "r"
+              QUOTE """
+              WORD "r"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "point"
-      TYPE_EXPR "GPoint"
+      TYPE_EXPR
         WORD "GPoint"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "p"
-            QUOTE """
-            WORD "p"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "p"
+              QUOTE """
+              WORD "p"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "coord"
-      TYPE_EXPR "GCoord"
+      TYPE_EXPR
         WORD "GCoord"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "c"
-            QUOTE """
-            WORD "c"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "c"
+              QUOTE """
+              WORD "c"
+              QUOTE """
+            R_PAREN ")"
     R_BRACE "}"
   CLASS_DEF
     KW_CLASS "class"
