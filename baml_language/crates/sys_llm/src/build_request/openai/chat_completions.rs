@@ -194,10 +194,8 @@ fn merge_adjacent_openai_messages(messages: Vec<ChatMessage>) -> Vec<ChatMessage
     let mut merged: Vec<ChatMessage> = Vec::new();
     for msg in messages {
         if let Some(last) = merged.last_mut() {
-            if last.role == msg.role {
+            if last.role == msg.role && last.extra == msg.extra {
                 last.content.extend(msg.content);
-                // Merge extra fields; later values win.
-                last.extra.extend(msg.extra);
                 continue;
             }
         }

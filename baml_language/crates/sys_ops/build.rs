@@ -4,7 +4,7 @@ fn main() {
     let code = baml_builtins2_codegen::generate_io_traits(
         &io_builtins,
         &class_defs,
-        "sys_types::generated::owned",
+        "sys_types::generated",
     );
     let out_dir = std::env::var("OUT_DIR").unwrap();
     std::fs::write(format!("{out_dir}/io_generated.rs"), code).unwrap();

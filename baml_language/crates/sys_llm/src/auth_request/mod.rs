@@ -85,7 +85,10 @@ mod tests {
     use super::*;
     use crate::baml_std::PrimitiveClientOptions;
 
-    fn make_client(provider: &str, options: PrimitiveClientOptions) -> PrimitiveClient {
+    fn make_client(provider: &str, mut options: PrimitiveClientOptions) -> PrimitiveClient {
+        if options.model.is_none() {
+            options.model = Some("test-model".to_string());
+        }
         PrimitiveClient::new("test".to_string(), provider.to_string(), options).unwrap()
     }
 

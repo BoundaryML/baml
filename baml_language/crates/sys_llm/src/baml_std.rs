@@ -16,9 +16,9 @@ pub struct PrimitiveClient {
     pub provider: String,
     /// Resolved model name (falls back to empty string).
     pub model: String,
-    /// Resolved default role (falls back to "system").
+    /// Resolved default role (falls back to the first allowed role, or "user").
     pub default_role: String,
-    /// Resolved allowed roles (falls back to \["user"\]).
+    /// Resolved allowed roles (falls back to \["user", "assistant", "system"\]).
     pub allowed_roles: Vec<String>,
     /// Forward options from `request_body`, pre-converted to JSON.
     pub(crate) extra_body: serde_json::Map<String, serde_json::Value>,
@@ -37,7 +37,14 @@ impl PrimitiveClient {
             client: name.clone(),
             provider: provider.clone(),
         })?;
-        let model = options.model.clone().unwrap_or_default();
+        let model = options
+            .model
+            .clone()
+            .filter(|m| !m.trim().is_empty())
+            .ok_or_else(|| ClientError::MissingOption {
+                client: name.clone(),
+                option: "model".to_string(),
+            })?;
         let allowed_roles = options.allowed_roles.clone().unwrap_or_else(|| {
             vec![
                 "user".to_string(),

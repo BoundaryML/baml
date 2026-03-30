@@ -115,6 +115,9 @@ mod tests {
         provider: &str,
         mut options: crate::baml_std::PrimitiveClientOptions,
     ) -> crate::baml_std::PrimitiveClient {
+        if options.model.is_none() {
+            options.model = Some("test-model".to_string());
+        }
         options.default_role = Some("user".to_string());
         options.allowed_roles = Some(vec![
             "system".to_string(),

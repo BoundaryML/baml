@@ -251,8 +251,11 @@ mod tests {
     use crate::baml_std;
 
     fn make_client_with_options(
-        options: baml_std::PrimitiveClientOptions,
+        mut options: baml_std::PrimitiveClientOptions,
     ) -> baml_std::PrimitiveClient {
+        if options.model.is_none() {
+            options.model = Some("test-model".to_string());
+        }
         baml_std::PrimitiveClient::new("TestClient".to_string(), "openai".to_string(), options)
             .unwrap()
     }

@@ -178,7 +178,7 @@ fn validate_and_remap_recursive(
             content,
             metadata,
         } => {
-            if !allowed_roles.iter().any(|r| r == role) {
+            if !allowed_roles.contains(role) {
                 return Err(super::SpecializePromptError::DisallowedRole {
                     role: role.clone(),
                     allowed: allowed_roles.to_vec(),

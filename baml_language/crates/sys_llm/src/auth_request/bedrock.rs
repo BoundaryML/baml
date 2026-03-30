@@ -527,6 +527,7 @@ mod tests {
             "test-bedrock".to_string(),
             "aws-bedrock".to_string(),
             PrimitiveClientOptions {
+                model: Some("test-model".to_string()),
                 provider_options: opts.into_bex_external_value(),
                 ..Default::default()
             },

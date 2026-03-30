@@ -35,8 +35,8 @@ pub(crate) async fn build_request(
     let inference_config = build_inference_config(client)?;
     let additional_fields = collect_additional_fields(client);
 
-    // Serialize body via the SDK's own serialization pipeline.
-    let body = serialize_body_via_sdk(
+    // Serialize via the SDK's own pipeline, capturing body and URI path.
+    let dry_run = serialize_via_sdk(
         &client.model,
         system_blocks,
         messages,
@@ -45,7 +45,7 @@ pub(crate) async fn build_request(
     )
     .await?;
 
-    let url = resolve_url(client, callbacks).await?;
+    let url = resolve_url(client, callbacks, &dry_run.sdk_uri).await?;
 
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
@@ -58,15 +58,27 @@ pub(crate) async fn build_request(
         method: "POST".to_string(),
         url,
         headers,
-        body,
+        body: dry_run.body,
     })
 }
 
-/// Build the Bedrock URL, resolving the region from options or the AWS provider chain.
+/// Build the Bedrock URL, using the path from the SDK-generated URI (which
+/// correctly encodes the model ID, including ARN-shaped IDs with `/`).
+///
+/// `sdk_uri` is the full URL from the dry-run SDK client (e.g.
+/// `https://bedrock-runtime.us-east-1.amazonaws.com/model/{encoded}/converse`).
+/// We extract the path starting at `/model/` and prepend the real host.
 async fn resolve_url(
     client: &crate::baml_std::PrimitiveClient,
     callbacks: Option<&crate::BuildRequestCallbacks>,
+    sdk_uri: &str,
 ) -> Result<String, BuildRequestError> {
+    // Extract the path portion from the SDK URI (everything from `/model/` onward).
+    let path = sdk_uri
+        .find("/model/")
+        .map(|i| &sdk_uri[i..])
+        .unwrap_or(sdk_uri);
+
     let bedrock_opts = match &client.provider_options {
         Some(crate::baml_std::ProviderOptions::Bedrock(opts)) => opts.clone(),
         _ => crate::baml_std::BedrockOptions::default(),
@@ -74,13 +86,12 @@ async fn resolve_url(
 
     if let Some(endpoint) = &bedrock_opts.endpoint_url {
         let endpoint = endpoint.trim_end_matches('/');
-        return Ok(format!("{endpoint}/model/{}/converse", client.model));
+        return Ok(format!("{endpoint}{path}"));
     }
 
     let region = crate::auth_request::bedrock::resolve_region(&bedrock_opts, callbacks).await?;
     Ok(format!(
-        "https://bedrock-runtime.{region}.amazonaws.com/model/{}/converse",
-        client.model
+        "https://bedrock-runtime.{region}.amazonaws.com{path}",
     ))
 }
 
@@ -120,16 +131,28 @@ fn dry_run_sdk_config() -> bedrock::Config {
     builder.build()
 }
 
-/// Serialize the Converse API request body using the SDK's own Smithy serializer.
-async fn serialize_body_via_sdk(
+/// Captured body and URI from the SDK's dry-run serialization.
+struct SdkDryRunResult {
+    body: String,
+    /// The full URI the SDK would send to, including the dummy host from
+    /// `dry_run_sdk_config`. Only the path portion (starting with `/model/`)
+    /// is used -- `resolve_url` replaces the host with the real one.
+    sdk_uri: String,
+}
+
+/// Serialize the Converse API request using the SDK's own Smithy serializer,
+/// capturing both the body and the URI path (which correctly encodes the model ID).
+async fn serialize_via_sdk(
     model: &str,
     system_blocks: Vec<SystemContentBlock>,
     messages: Vec<Message>,
     inference_config: Option<InferenceConfiguration>,
     additional_fields: Option<aws_smithy_types::Document>,
-) -> Result<String, BuildRequestError> {
-    let captured = Arc::new(std::sync::Mutex::new(String::new()));
-    let captured_clone = captured.clone();
+) -> Result<SdkDryRunResult, BuildRequestError> {
+    let captured_body = Arc::new(std::sync::Mutex::new(String::new()));
+    let captured_uri = Arc::new(std::sync::Mutex::new(String::new()));
+    let body_clone = captured_body.clone();
+    let uri_clone = captured_uri.clone();
 
     let sdk_client = bedrock::Client::from_conf(dry_run_sdk_config());
 
@@ -148,21 +171,26 @@ async fn serialize_body_via_sdk(
     let _ = fluent
         .customize()
         .map_request(move |req| {
+            *uri_clone.lock().unwrap() = req.uri().to_string();
             if let Some(bytes) = req.body().bytes() {
-                *captured_clone.lock().unwrap() = String::from_utf8_lossy(bytes).into_owned();
+                *body_clone.lock().unwrap() = String::from_utf8_lossy(bytes).into_owned();
             }
             Err::<_, DryRunError>(DryRunError)
         })
         .send()
         .await;
 
-    let body = captured.lock().unwrap().clone();
+    let body = captured_body.lock().unwrap().clone();
+    let uri_path = captured_uri.lock().unwrap().clone();
     if body.is_empty() {
         return Err(BuildRequestError::Other(
             "SDK serialization produced no body (dry-run interception failed)".into(),
         ));
     }
-    Ok(body)
+    Ok(SdkDryRunResult {
+        body,
+        sdk_uri: uri_path,
+    })
 }
 
 // ============================================================================
@@ -767,7 +795,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             result.url,
-            "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
+            "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1%3A0/converse"
         );
     }
 
@@ -783,8 +811,26 @@ mod tests {
             .unwrap();
         assert_eq!(
             result.url,
-            "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
+            "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1%3A0/converse"
         );
+    }
+
+    #[tokio::test]
+    async fn bedrock_arn_model_id_encoded_in_url() {
+        let client = make_client(
+            Some("us-west-2"),
+            None,
+            "arn:aws:bedrock:us-west-2:123456789012:foundation-model/anthropic.claude-3-sonnet",
+        );
+        let result = build_request(&client, &msg("user", "hi"), None)
+            .await
+            .unwrap();
+        assert_eq!(
+            result.url,
+            "https://bedrock-runtime.us-west-2.amazonaws.com/model/arn%3Aaws%3Abedrock%3Aus-west-2%3A123456789012%3Afoundation-model%2Fanthropic.claude-3-sonnet/converse"
+        );
+        // The `/` in the ARN must be encoded as %2F so it stays in one path segment.
+        assert!(result.url.contains("%2F"));
     }
 
     #[tokio::test]
@@ -1023,7 +1069,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             result.url,
-            "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
+            "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1%3A0/converse"
         );
     }
 
