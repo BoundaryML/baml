@@ -25,6 +25,15 @@ function user.OpenRouterMistralSmall3_1_24b$new() -> null {
     load_const "mistralai/mistral-small-3.1-24b-instruct"
     store_field .model
     copy 0
+    load_const null
+    store_field .max_tokens
+    copy 0
+    load_const 0.1
+    store_field .temperature
+    copy 0
+    load_const null
+    store_field .top_p
+    copy 0
     load_const "https://openrouter.ai/api/v1"
     store_field .base_url
     copy 0
@@ -49,9 +58,7 @@ function user.OpenRouterMistralSmall3_1_24b$new() -> null {
     alloc_map 0
     store_field .query_params
     copy 0
-    load_const 0.1
-    load_const "temperature"
-    alloc_map 1
+    alloc_map 0
     store_field .request_body
     store_field .options
     return

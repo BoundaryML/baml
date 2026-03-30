@@ -945,27 +945,29 @@ fn synthesize_client_new_companion(
         id
     };
 
-    // Named PrimitiveClientOptions fields — default null
+    // Top-level scalar fields (default Null)
     let mut model = alloc(Expr::Null);
+    let mut max_tokens = alloc(Expr::Null);
+    let mut temperature = alloc(Expr::Null);
+    let mut top_p = alloc(Expr::Null);
     let mut base_url = alloc(Expr::Null);
     let mut default_role = alloc(Expr::Null);
-    let mut api_key = alloc(Expr::Null);
     let mut allowed_roles = alloc(Expr::Null);
     let mut remap_roles = alloc(Expr::Null);
+    let mut api_key = alloc(Expr::Null);
+    // Top-level map fields (default empty map)
+    let mut headers = alloc(Expr::Map { entries: vec![] });
+    let mut query_params = alloc(Expr::Map { entries: vec![] });
 
-    // Map fields — default empty
-    let mut headers_expr = alloc(Expr::Map { entries: vec![] });
-    let mut query_params_expr = alloc(Expr::Map { entries: vec![] });
-
-    // Provider-specific accumulators
-    let mut anthropic_version: Option<ExprId> = None;
-    let mut resource_name: Option<ExprId> = None;
-    let mut api_version: Option<ExprId> = None;
-
-    // Unknown keys → request_body
+    let selected_group = provider.and_then(|p| provider_group_for(p));
+    let mut prov_vals: Vec<Option<ExprId>> = selected_group
+        .map(|(_, fields)| vec![None; fields.len()])
+        .unwrap_or_default();
+    let prov_index: std::collections::HashMap<&str, usize> = selected_group
+        .map(|(_, fields)| fields.iter().enumerate().map(|(i, &f)| (f, i)).collect())
+        .unwrap_or_default();
     let mut request_body_entries: Vec<(ExprId, ExprId)> = vec![];
 
-    // Walk the options nested block
     if let Some(options_item) = config_block
         .items()
         .find(|item| item.matches_key("options"))
@@ -975,108 +977,68 @@ fn synthesize_client_new_companion(
                 let Some(opt_key) = opt_item.key() else {
                     continue;
                 };
-                match opt_key.text() {
-                    // Named scalar fields
-                    "model" => {
-                        model = crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
-                    }
-                    "base_url" => {
-                        base_url =
-                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
-                    }
-                    "default_role" => {
-                        default_role =
-                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
-                    }
-                    "api_key" => {
-                        api_key =
-                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
-                    }
-                    "allowed_roles" => {
-                        allowed_roles =
-                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
-                    }
-                    "remap_roles" => {
-                        remap_roles =
-                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
-                    }
-                    // Map fields (nested blocks)
-                    "headers" => {
-                        headers_expr =
-                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
-                    }
-                    "query_params" => {
-                        query_params_expr =
-                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
-                    }
-                    // Provider-specific keys
-                    "anthropic_version" => {
-                        anthropic_version = Some(crate::lower_config_item::lower_config_value(
-                            &opt_item, &mut alloc,
-                        ));
-                    }
-                    "resource_name" => {
-                        resource_name = Some(crate::lower_config_item::lower_config_value(
-                            &opt_item, &mut alloc,
-                        ));
-                    }
-                    "api_version" => {
-                        api_version = Some(crate::lower_config_item::lower_config_value(
-                            &opt_item, &mut alloc,
-                        ));
-                    }
-                    // Unknown → request_body
+                let k = opt_key.text();
+                let val = crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                match k {
+                    "model" => model = val,
+                    "max_tokens" => max_tokens = val,
+                    "temperature" => temperature = val,
+                    "top_p" => top_p = val,
+                    "base_url" => base_url = val,
+                    "default_role" => default_role = val,
+                    "allowed_roles" => allowed_roles = val,
+                    "remap_roles" => remap_roles = val,
+                    "api_key" => api_key = val,
+                    "headers" => headers = val,
+                    "query_params" => query_params = val,
                     other => {
-                        let key_expr = alloc(Expr::Literal(Literal::String(other.to_string())));
-                        let val_expr =
-                            crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
-                        request_body_entries.push((key_expr, val_expr));
+                        if let Some(&i) = prov_index.get(other) {
+                            prov_vals[i] = Some(val);
+                        } else {
+                            let kx = alloc(Expr::Literal(Literal::String(other.to_string())));
+                            request_body_entries.push((kx, val));
+                        }
                     }
                 }
             }
         }
     }
 
-    // Build provider_options from accumulated provider-specific keys
-    let provider_options = if let Some(av) = anthropic_version {
+    let provider_options = if selected_group.is_some_and(|_| prov_vals.iter().any(Option::is_some))
+    {
+        let (type_name, fields) = selected_group.unwrap();
+        let mut obj_fields: Vec<(Name, ExprId)> = Vec::with_capacity(fields.len());
+        for (&f, v) in fields.iter().zip(&prov_vals) {
+            obj_fields.push((Name::new(f), v.unwrap_or_else(|| alloc(Expr::Null))));
+        }
         alloc(Expr::Object {
-            type_name: Some(Name::new("baml.llm.AnthropicOptions")),
-            fields: vec![(Name::new("anthropic_version"), av)],
-            spreads: vec![],
-        })
-    } else if resource_name.is_some() || api_version.is_some() {
-        let rn = resource_name.unwrap_or_else(|| alloc(Expr::Null));
-        let av = api_version.unwrap_or_else(|| alloc(Expr::Null));
-        alloc(Expr::Object {
-            type_name: Some(Name::new("baml.llm.AzureOpenAiOptions")),
-            fields: vec![
-                (Name::new("resource_name"), rn),
-                (Name::new("api_version"), av),
-            ],
+            type_name: Some(Name::new(type_name)),
+            fields: obj_fields,
             spreads: vec![],
         })
     } else {
         alloc(Expr::Null)
     };
 
-    let request_body_expr = alloc(Expr::Map {
+    let request_body = alloc(Expr::Map {
         entries: request_body_entries,
     });
-
-    // PrimitiveClientOptions { ... }
     let options_expr = alloc(Expr::Object {
         type_name: Some(Name::new("baml.llm.PrimitiveClientOptions")),
         fields: vec![
             (Name::new("model"), model),
+            (Name::new("max_tokens"), max_tokens),
+            (Name::new("temperature"), temperature),
+            (Name::new("top_p"), top_p),
             (Name::new("base_url"), base_url),
             (Name::new("default_role"), default_role),
             (Name::new("allowed_roles"), allowed_roles),
             (Name::new("remap_roles"), remap_roles),
             (Name::new("api_key"), api_key),
             (Name::new("provider_options"), provider_options),
-            (Name::new("headers"), headers_expr),
-            (Name::new("query_params"), query_params_expr),
-            (Name::new("request_body"), request_body_expr),
+            (Name::new("headers"), headers),
+            (Name::new("query_params"), query_params),
+            (Name::new("request_body"), request_body),
         ],
         spreads: vec![],
     });
@@ -1131,6 +1093,36 @@ fn synthesize_client_new_companion(
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
+
+/// Returns the provider-specific options type name and its field list for a
+/// given provider string, or `None` for providers with no provider-specific fields.
+///
+/// Every known provider must be listed explicitly. Unknown provider strings hit
+/// `unimplemented!` so that adding a new provider forces a decision here.
+fn provider_group_for(provider: &str) -> Option<(&'static str, &'static [&'static str])> {
+    match provider {
+        "anthropic" => Some(("baml.llm.AnthropicOptions", &["anthropic_version"])),
+        "azure-openai" => Some((
+            "baml.llm.AzureOpenAiOptions",
+            &["resource_name", "deployment_id", "api_version"],
+        )),
+        "aws-bedrock" => Some((
+            "baml.llm.BedrockOptions",
+            &[
+                "region",
+                "endpoint_url",
+                "access_key_id",
+                "secret_access_key",
+                "session_token",
+                "profile",
+                "stop_sequences",
+            ],
+        )),
+        "openai" | "openai-generic" | "openai-responses" | "ollama" | "openrouter"
+        | "google-ai" | "vertex-ai" | "baml-fallback" | "baml-round-robin" => None,
+        _ => unimplemented!("unknown provider {provider:?}: add it to provider_group_for"),
+    }
+}
 
 fn lower_config_block(cb: &ast::ConfigBlock) -> Vec<ConfigItemDef> {
     cb.items()

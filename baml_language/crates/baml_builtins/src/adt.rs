@@ -95,6 +95,36 @@ pub enum MediaContent {
     },
 }
 
+impl MediaContent {
+    /// Get the base64 data regardless of variant.
+    ///
+    /// Returns `Some` for `Base64`, and for `Url`/`File` when the data has
+    /// been pre-fetched. Returns `None` when no base64 data is available.
+    pub fn base64_data(&self) -> Option<&str> {
+        match self {
+            MediaContent::Base64 { base64_data } => Some(base64_data),
+            MediaContent::Url { base64_data, .. } => base64_data.as_deref(),
+            MediaContent::File { base64_data, .. } => base64_data.as_deref(),
+        }
+    }
+
+    /// Get the original URL, if this content was sourced from one.
+    pub fn url(&self) -> Option<&str> {
+        match self {
+            MediaContent::Url { url, .. } => Some(url),
+            _ => None,
+        }
+    }
+
+    /// Get the file path, if this content references a local file.
+    pub fn file_path(&self) -> Option<&str> {
+        match self {
+            MediaContent::File { file, .. } => Some(file),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for MediaValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.read_content(|content| write!(f, "{}::{}", self.kind, content))

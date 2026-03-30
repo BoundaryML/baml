@@ -3,5 +3,5 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 function user.MyAwsClient$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "MyAwsClient", provider: "baml-aws-bedrock", options: baml.llm.PrimitiveClientOptions { model: "anthropic.claude-...", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "sk-1234", provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "max_tokens": 100, "temperature": 0.7 } } }
+  baml.llm.PrimitiveClient { name: "MyAwsClient", provider: "aws-bedrock", options: baml.llm.PrimitiveClientOptions { model: "anthropic.claude-...", max_tokens: 100, temperature: 0.7, top_p: null, base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: "sk-1234", provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }

@@ -1,5 +1,5 @@
 client<llm> MyAwsClient {
-  provider baml-aws-bedrock
+  provider aws-bedrock
   options {
     model "anthropic.claude-3-haiku-20240307-v1:0"
     max_tokens 100

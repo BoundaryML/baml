@@ -88,13 +88,22 @@ function user.TestClient$new() -> null {
     load_const "TestClient"
     store_field .name
     copy 0
-    load_const "baml-openai-chat"
+    load_const "openai"
     store_field .provider
     copy 0
     alloc_instance baml.llm.PrimitiveClientOptions
     copy 0
     load_const null
     store_field .model
+    copy 0
+    load_const null
+    store_field .max_tokens
+    copy 0
+    load_const null
+    store_field .temperature
+    copy 0
+    load_const null
+    store_field .top_p
     copy 0
     load_const null
     store_field .base_url
