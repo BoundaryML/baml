@@ -106,7 +106,7 @@ mod tests {
     use std::sync::Arc;
 
     use baml_builtins::PromptAst;
-    use bex_external_types::Ty;
+    use bex_external_types::{AsBexExternalValue, Ty};
     use indexmap::IndexMap;
 
     use super::*;
@@ -511,11 +511,10 @@ mod tests {
             "anthropic",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("claude-3-haiku-20240307".to_string()),
-                provider_options: Some(crate::baml_std::ProviderOptions::Anthropic(
-                    crate::baml_std::AnthropicOptions {
-                        max_tokens: Some(4096),
-                    },
-                )),
+                provider_options: crate::baml_std::AnthropicOptions {
+                    max_tokens: Some(4096),
+                }
+                .into_bex_external_value(),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );

@@ -306,7 +306,7 @@ pub(crate) async fn auth_bedrock(
     client: &PrimitiveClient,
     callbacks: Option<&BuildRequestCallbacks>,
 ) -> Result<(), BuildRequestError> {
-    let bedrock_opts = match &client.options.provider_options {
+    let bedrock_opts = match &client.provider_options {
         Some(ProviderOptions::Bedrock(opts)) => opts.clone(),
         _ => BedrockOptions::default(),
     };
@@ -512,13 +512,14 @@ mod tests {
 
     use super::*;
     use crate::baml_std::PrimitiveClientOptions;
+    use bex_external_types::AsBexExternalValue;
 
     fn make_client(opts: BedrockOptions) -> PrimitiveClient {
         PrimitiveClient::new(
             "test-bedrock".to_string(),
             "aws-bedrock".to_string(),
             PrimitiveClientOptions {
-                provider_options: Some(ProviderOptions::Bedrock(opts)),
+                provider_options: opts.into_bex_external_value(),
                 ..Default::default()
             },
         )

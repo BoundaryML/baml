@@ -25,7 +25,7 @@ async fn test_render_prompt_directly() {
 
     let client =
         sys_llm::baml_std::PrimitiveClient::new("test".to_string(), "openai".to_string(), {
-            let opts = sys_llm::baml_std::PrimitiveClientOptions {
+            sys_llm::baml_std::PrimitiveClientOptions {
                 default_role: Some("user".to_string()),
                 allowed_roles: Some(vec![
                     "user".to_string(),
@@ -33,11 +33,7 @@ async fn test_render_prompt_directly() {
                     "system".to_string(),
                 ]),
                 ..Default::default()
-            };
-            let defaults = sys_llm::baml_std::PrimitiveClientOptions::provider_defaults(
-                sys_llm::LlmProvider::OpenAi,
-            );
-            opts.with_defaults(defaults)
+            }
         })
         .unwrap();
 
@@ -86,7 +82,7 @@ You are a helpful assistant.
 
     let client =
         sys_llm::baml_std::PrimitiveClient::new("test".to_string(), "openai".to_string(), {
-            let opts = sys_llm::baml_std::PrimitiveClientOptions {
+            sys_llm::baml_std::PrimitiveClientOptions {
                 default_role: Some("user".to_string()),
                 allowed_roles: Some(vec![
                     "user".to_string(),
@@ -94,11 +90,7 @@ You are a helpful assistant.
                     "system".to_string(),
                 ]),
                 ..Default::default()
-            };
-            let defaults = sys_llm::baml_std::PrimitiveClientOptions::provider_defaults(
-                sys_llm::LlmProvider::OpenAi,
-            );
-            opts.with_defaults(defaults)
+            }
         })
         .unwrap();
 

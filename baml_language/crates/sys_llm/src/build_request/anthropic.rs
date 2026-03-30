@@ -88,7 +88,7 @@ pub(crate) fn build_request(
     // Body
     let (system, messages) = extract_system_and_messages(prompt)?;
 
-    let max_tokens = match &client.options.provider_options {
+    let max_tokens = match &client.provider_options {
         Some(crate::baml_std::ProviderOptions::Anthropic(opts)) => opts.max_tokens,
         _ => None,
     };
@@ -263,7 +263,7 @@ mod tests {
     use std::sync::Arc;
 
     use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-    use bex_external_types::BexExternalValue;
+    use bex_external_types::{AsBexExternalValue, BexExternalValue};
     use indexmap::IndexMap;
 
     use super::*;
@@ -319,11 +319,10 @@ mod tests {
                 model,
                 request_body,
                 base_url: Some("https://api.anthropic.com".to_string()),
-                provider_options: Some(crate::baml_std::ProviderOptions::Anthropic(
-                    crate::baml_std::AnthropicOptions {
-                        max_tokens: Some(4096),
-                    },
-                )),
+                provider_options: crate::baml_std::AnthropicOptions {
+                    max_tokens: Some(4096),
+                }
+                .into_bex_external_value(),
                 ..Default::default()
             },
         )

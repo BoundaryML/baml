@@ -253,12 +253,8 @@ mod tests {
     fn make_client_with_options(
         options: baml_std::PrimitiveClientOptions,
     ) -> baml_std::PrimitiveClient {
-        baml_std::PrimitiveClient::new(
-            "TestClient".to_string(),
-            "openai".to_string(),
-            options,
-        )
-        .unwrap()
+        baml_std::PrimitiveClient::new("TestClient".to_string(), "openai".to_string(), options)
+            .unwrap()
     }
 
     #[test]

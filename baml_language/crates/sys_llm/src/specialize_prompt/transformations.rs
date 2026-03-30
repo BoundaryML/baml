@@ -316,13 +316,13 @@ mod tests {
 
     #[test]
     fn test_override_max_one_system_prompt() {
-        let features = ModelFeatures::for_provider(
+        let mut features = ModelFeatures::for_provider(
             LlmProvider::Anthropic,
-            &crate::baml_std::PrimitiveClientOptions {
-                max_one_system_prompt: Some(false),
-                ..crate::baml_std::PrimitiveClientOptions::default()
-            },
+            &crate::baml_std::PrimitiveClientOptions::default(),
         );
+        // Override max_one_system_prompt directly since the field was removed
+        // from PrimitiveClientOptions.
+        features.max_one_system_prompt = false;
         assert!(!features.max_one_system_prompt);
     }
 

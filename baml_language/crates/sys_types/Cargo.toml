@@ -18,6 +18,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync" ] }
 tokio-util = { workspace = true }
 
+[build-dependencies]
+baml_builtins2_codegen = { workspace = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = [ "rt", "macros" ] }
 

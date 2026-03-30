@@ -30,6 +30,9 @@ pub mod io {
         AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, OpErrorKind, SysOpContext,
         SysOpFn, SysOpOutput, SysOpResult,
     };
+    // Owned structs are generated once in sys_types and re-exported here
+    // so that `io::owned::llm::*` paths continue to work.
+    pub use sys_types::generated::owned;
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
 }
@@ -252,14 +255,11 @@ fn convert_io_primitive_client(
         options,
     }: &io::owned::llm::PrimitiveClient,
 ) -> Result<sys_llm::baml_std::PrimitiveClient, sys_llm::baml_std::ClientError> {
-    let provider_options = convert_provider_options(&options.provider_options);
-
     sys_llm::baml_std::PrimitiveClient::new(
         name.clone(),
         provider.clone(),
         sys_llm::baml_std::PrimitiveClientOptions {
             model: options.model.clone(),
-            max_one_system_prompt: None,
             supports_streaming: options.supports_streaming,
             allowed_role_metadata: options.allowed_role_metadata.clone(),
             finish_reason_allow_list: options.finish_reason_allow_list.clone(),
@@ -269,92 +269,12 @@ fn convert_io_primitive_client(
             allowed_roles: options.allowed_roles.clone(),
             remap_roles: options.remap_roles.clone(),
             api_key: options.api_key.clone(),
-            provider_options,
+            provider_options: options.provider_options.clone(),
             headers: options.headers.clone(),
             query_params: options.query_params.clone(),
             request_body: options.request_body.clone(),
         },
     )
-}
-
-fn convert_provider_options(val: &BexExternalValue) -> Option<sys_llm::baml_std::ProviderOptions> {
-    let BexExternalValue::Instance {
-        class_name, fields, ..
-    } = val
-    else {
-        return None;
-    };
-
-    let str_field = |name: &str| -> Option<String> {
-        match fields.get(name)? {
-            BexExternalValue::String(s) => Some(s.clone()),
-            _ => None,
-        }
-    };
-    let int_field = |name: &str| -> Option<i64> {
-        match fields.get(name)? {
-            BexExternalValue::Int(i) => Some(*i),
-            _ => None,
-        }
-    };
-    let float_field = |name: &str| -> Option<f64> {
-        match fields.get(name)? {
-            BexExternalValue::Float(f) => Some(*f),
-            _ => None,
-        }
-    };
-    // let bool_field = |name: &str| -> Option<bool> {
-    //     match fields.get(name)? {
-    //         BexExternalValue::Bool(b) => Some(*b),
-    //         _ => None,
-    //     }
-    // };
-    let string_list_field = |name: &str| -> Option<Vec<String>> {
-        match fields.get(name)? {
-            BexExternalValue::Array { items, .. } => {
-                let strs: Vec<String> = items
-                    .iter()
-                    .filter_map(|v| match v {
-                        BexExternalValue::String(s) => Some(s.clone()),
-                        _ => None,
-                    })
-                    .collect();
-                if strs.is_empty() { None } else { Some(strs) }
-            }
-            _ => None,
-        }
-    };
-
-    match class_name.as_str() {
-        "baml.llm.AnthropicOptions" => Some(sys_llm::baml_std::ProviderOptions::Anthropic(
-            sys_llm::baml_std::AnthropicOptions {
-                max_tokens: int_field("max_tokens"),
-            },
-        )),
-        "baml.llm.AzureOpenAiOptions" => Some(sys_llm::baml_std::ProviderOptions::AzureOpenAi(
-            sys_llm::baml_std::AzureOpenAiOptions {
-                resource_name: str_field("resource_name"),
-                deployment_id: str_field("deployment_id"),
-                api_version: str_field("api_version").unwrap_or_default(),
-                max_tokens: int_field("max_tokens"),
-            },
-        )),
-        "baml.llm.BedrockOptions" => Some(sys_llm::baml_std::ProviderOptions::Bedrock(
-            sys_llm::baml_std::BedrockOptions {
-                region: str_field("region"),
-                endpoint_url: str_field("endpoint_url"),
-                access_key_id: str_field("access_key_id"),
-                secret_access_key: str_field("secret_access_key"),
-                session_token: str_field("session_token"),
-                profile: str_field("profile"),
-                stop_sequences: string_list_field("stop_sequences"),
-                max_tokens: int_field("max_tokens"),
-                temperature: float_field("temperature"),
-                top_p: float_field("top_p"),
-            },
-        )),
-        _ => None,
-    }
 }
 
 // ============================================================================

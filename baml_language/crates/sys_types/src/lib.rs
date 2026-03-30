@@ -21,6 +21,24 @@ pub use bex_heap::BexHeap;
 pub use bex_vm_types::SysOp;
 pub use tokio_util::sync::CancellationToken;
 
+/// Types generated from `llm_types.baml`.
+/// NOTE: sys_ops also generates the same code via its own build.rs because the
+/// generated IO traits contain blanket impls that must live in the crate that
+/// defines the SysOps struct (orphan rule). The owned structs here are used by
+/// sys_llm for provider option types.
+#[allow(warnings, clippy::all, clippy::pedantic)]
+pub mod generated {
+
+    pub use crate::{
+        BexHeap, CallId, OpError, OpErrorKind, SysOpContext, SysOpFn, SysOpOutput, SysOpResult,
+    };
+    pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
+    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
+    pub use bex_vm_types::SysOp;
+
+    include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
+}
+
 // ============================================================================
 // CallId — opaque per-call identifier
 // ============================================================================

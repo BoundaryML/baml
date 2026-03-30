@@ -13,7 +13,6 @@ use baml_compiler_diagnostics::HirDiagnostic;
 use baml_compiler_syntax::{SyntaxNode, ast};
 use rowan::ast::AstNode;
 
-
 use crate::{
     DeclarativeMeta,
     ast::{
@@ -1233,9 +1232,8 @@ const UA: &[&str] = &["user", "assistant"];
 fn provider_config_for(provider: &str) -> ProviderConfig {
     match provider {
         "anthropic" => {
-            let (opts, defaults) = provider_options!("baml.llm.AnthropicOptions",
-                max_tokens = 4096,
-            );
+            let (opts, defaults) =
+                provider_options!("baml.llm.AnthropicOptions", max_tokens = 4096,);
             ProviderConfig {
                 base_url: Some("https://api.anthropic.com"),
                 provider_options: opts,
@@ -1262,7 +1260,8 @@ fn provider_config_for(provider: &str) -> ProviderConfig {
             ..ProviderConfig::EMPTY
         },
         "azure-openai" => {
-            let (opts, defaults) = provider_options!("baml.llm.AzureOpenAiOptions",
+            let (opts, defaults) = provider_options!(
+                "baml.llm.AzureOpenAiOptions",
                 resource_name,
                 deployment_id,
                 api_version,
@@ -1277,7 +1276,8 @@ fn provider_config_for(provider: &str) -> ProviderConfig {
             }
         }
         "aws-bedrock" => {
-            let (opts, defaults) = provider_options!("baml.llm.BedrockOptions",
+            let (opts, defaults) = provider_options!(
+                "baml.llm.BedrockOptions",
                 region,
                 endpoint_url,
                 access_key_id,

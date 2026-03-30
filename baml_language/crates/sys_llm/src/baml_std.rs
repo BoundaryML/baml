@@ -22,6 +22,8 @@ pub struct PrimitiveClient {
     pub allowed_roles: Vec<String>,
     /// Forward options from `request_body`, pre-converted to JSON.
     pub(crate) extra_body: serde_json::Map<String, serde_json::Value>,
+    /// Resolved provider-specific options (converted from `BexExternalValue`).
+    pub(crate) provider_options: Option<ProviderOptions>,
     pub(crate) options: PrimitiveClientOptions,
 }
 
@@ -58,6 +60,7 @@ impl PrimitiveClient {
             }
             map
         };
+        let provider_options = resolve_provider_options(&options.provider_options);
         Ok(Self {
             name,
             provider,
@@ -65,6 +68,7 @@ impl PrimitiveClient {
             default_role,
             allowed_roles,
             extra_body,
+            provider_options,
             options,
         })
     }
@@ -93,32 +97,10 @@ impl PrimitiveClient {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct AnthropicOptions {
-    pub max_tokens: Option<i64>,
-}
-
-#[derive(Clone, Debug)]
-pub struct AzureOpenAiOptions {
-    pub resource_name: Option<String>,
-    pub deployment_id: Option<String>,
-    pub api_version: String,
-    pub max_tokens: Option<i64>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct BedrockOptions {
-    pub region: Option<String>,
-    pub endpoint_url: Option<String>,
-    pub access_key_id: Option<String>,
-    pub secret_access_key: Option<String>,
-    pub session_token: Option<String>,
-    pub profile: Option<String>,
-    pub stop_sequences: Option<Vec<String>>,
-    pub max_tokens: Option<i64>,
-    pub temperature: Option<f64>,
-    pub top_p: Option<f64>,
-}
+// Provider option structs are generated from llm_types.baml via sys_types.
+pub use sys_types::generated::owned::llm::AnthropicOptions;
+pub use sys_types::generated::owned::llm::AzureOpenAiOptions;
+pub use sys_types::generated::owned::llm::BedrockOptions;
 
 /// Provider-specific options, matching the BAML schema union
 /// `AnthropicOptions | AzureOpenAiOptions | BedrockOptions | null`.
@@ -129,26 +111,30 @@ pub enum ProviderOptions {
     Bedrock(BedrockOptions),
 }
 
-#[derive(Debug, Default)]
-pub struct PrimitiveClientOptions {
-    pub model: Option<String>,
-    // Internal provider feature flag, not user-configurable.
-    // Hardcoded per provider in model_features.rs.
-    pub max_one_system_prompt: Option<bool>,
-    pub supports_streaming: Option<bool>,
-    pub allowed_role_metadata: Option<bex_heap::BexExternalValue>,
-    pub finish_reason_allow_list: Option<Vec<String>>,
-    pub finish_reason_deny_list: Option<Vec<String>>,
-    pub base_url: Option<String>,
-    pub default_role: Option<String>,
-    pub allowed_roles: Option<Vec<String>>,
-    pub remap_roles: Option<indexmap::IndexMap<String, String>>,
-    pub api_key: Option<String>,
-    pub provider_options: Option<ProviderOptions>,
-    pub headers: indexmap::IndexMap<String, String>,
-    pub query_params: indexmap::IndexMap<String, String>,
-    pub request_body: indexmap::IndexMap<String, bex_heap::BexExternalValue>,
+/// Convert a `BexExternalValue` (from the VM) to a typed `ProviderOptions`.
+pub fn resolve_provider_options(val: &bex_heap::BexExternalValue) -> Option<ProviderOptions> {
+    use bex_heap::BexExternalValue;
+    let BexExternalValue::Instance { class_name, .. } = val else {
+        return None;
+    };
+    match class_name.as_str() {
+        "baml.llm.AnthropicOptions" => AnthropicOptions::from_external(val.clone())
+            .ok()
+            .map(ProviderOptions::Anthropic),
+        "baml.llm.AzureOpenAiOptions" => AzureOpenAiOptions::from_external(val.clone())
+            .ok()
+            .map(ProviderOptions::AzureOpenAi),
+        "baml.llm.BedrockOptions" => BedrockOptions::from_external(val.clone())
+            .ok()
+            .map(ProviderOptions::Bedrock),
+        other => unreachable!(
+            "unknown provider options class {other:?}: add it to resolve_provider_options"
+        ),
+    }
 }
+
+/// Generated from `llm_types.baml`. Fields come from the BAML class definition.
+pub use sys_types::generated::owned::llm::PrimitiveClientOptions;
 
 // Provider defaults are now applied at compile time in lower_cst.rs.
 

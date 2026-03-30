@@ -67,7 +67,7 @@ async fn resolve_url(
     client: &crate::baml_std::PrimitiveClient,
     callbacks: Option<&crate::BuildRequestCallbacks>,
 ) -> Result<String, BuildRequestError> {
-    let bedrock_opts = match &client.options.provider_options {
+    let bedrock_opts = match &client.provider_options {
         Some(crate::baml_std::ProviderOptions::Bedrock(opts)) => opts.clone(),
         _ => crate::baml_std::BedrockOptions::default(),
     };
@@ -475,8 +475,7 @@ fn build_inference_config(
     let mut builder = InferenceConfiguration::builder();
     let mut has_config = false;
 
-    if let Some(crate::baml_std::ProviderOptions::Bedrock(bedrock_opts)) =
-        &client.options.provider_options
+    if let Some(crate::baml_std::ProviderOptions::Bedrock(bedrock_opts)) = &client.provider_options
     {
         if let Some(max_tokens) = bedrock_opts.max_tokens {
             let narrow =
@@ -577,6 +576,8 @@ mod tests {
 
     use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 
+    use bex_external_types::AsBexExternalValue;
+
     use super::*;
 
     fn make_client(
@@ -586,13 +587,12 @@ mod tests {
     ) -> crate::baml_std::PrimitiveClient {
         let options = crate::baml_std::PrimitiveClientOptions {
             model: Some(model.to_string()),
-            provider_options: Some(crate::baml_std::ProviderOptions::Bedrock(
-                crate::baml_std::BedrockOptions {
-                    region: region.map(String::from),
-                    endpoint_url: endpoint_url.map(String::from),
-                    ..Default::default()
-                },
-            )),
+            provider_options: crate::baml_std::BedrockOptions {
+                region: region.map(String::from),
+                endpoint_url: endpoint_url.map(String::from),
+                ..Default::default()
+            }
+            .into_bex_external_value(),
             default_role: Some("user".to_string()),
             allowed_roles: Some(vec![
                 "system".to_string(),
@@ -726,15 +726,14 @@ mod tests {
     async fn bedrock_inference_config() {
         let options = crate::baml_std::PrimitiveClientOptions {
             model: Some("anthropic.claude-3-haiku-20240307-v1:0".to_string()),
-            provider_options: Some(crate::baml_std::ProviderOptions::Bedrock(
-                crate::baml_std::BedrockOptions {
-                    region: Some("us-east-1".to_string()),
-                    max_tokens: Some(500),
-                    temperature: Some(0.5),
-                    top_p: Some(0.75),
-                    ..Default::default()
-                },
-            )),
+            provider_options: crate::baml_std::BedrockOptions {
+                region: Some("us-east-1".to_string()),
+                max_tokens: Some(500),
+                temperature: Some(0.5),
+                top_p: Some(0.75),
+                ..Default::default()
+            }
+            .into_bex_external_value(),
             default_role: Some("user".to_string()),
             allowed_roles: Some(vec![
                 "system".to_string(),
@@ -1049,13 +1048,12 @@ mod tests {
     async fn bedrock_max_tokens_overflow_rejected() {
         let options = crate::baml_std::PrimitiveClientOptions {
             model: Some("anthropic.claude-3-haiku-20240307-v1:0".to_string()),
-            provider_options: Some(crate::baml_std::ProviderOptions::Bedrock(
-                crate::baml_std::BedrockOptions {
-                    region: Some("us-east-1".to_string()),
-                    max_tokens: Some(i64::from(i32::MAX) + 1),
-                    ..Default::default()
-                },
-            )),
+            provider_options: crate::baml_std::BedrockOptions {
+                region: Some("us-east-1".to_string()),
+                max_tokens: Some(i64::from(i32::MAX) + 1),
+                ..Default::default()
+            }
+            .into_bex_external_value(),
             default_role: Some("user".to_string()),
             allowed_roles: Some(vec![
                 "system".to_string(),

@@ -551,10 +551,43 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
 }
 
 // ============================================================================
-// Generate IO Traits (main entry point for sys_types codegen)
+// Generate standalone owned structs for specific classes
 // ============================================================================
 
-pub fn generate_io_traits(io_builtins: &[NativeBuiltin], class_defs: &[NativeClassDef]) -> String {
+/// Generate owned Rust structs (with `from_external` and `AsBexExternalValue`)
+/// for a specific set of class names. Used by `sys_types` to generate provider
+/// option types from `llm_types.baml` without pulling in the full IO trait system.
+pub fn generate_owned_structs(class_defs: &[NativeClassDef], class_names: &[&str]) -> String {
+    let filtered: Vec<&NativeClassDef> = class_defs
+        .iter()
+        .filter(|cd| class_names.contains(&cd.name.as_str()))
+        .collect();
+    let class_ns_map = build_class_ns_map(&filtered);
+
+    let mut out = String::new();
+    out.push_str("// Generated from llm_types.baml. Do not edit.\n\n");
+    out.push_str("use super::*;\n\n");
+
+    for cd in &filtered {
+        emit_owned_struct(&mut out, cd, &class_ns_map, "");
+    }
+
+    out
+}
+
+// ============================================================================
+// Generate IO Traits (main entry point for sys_ops codegen)
+// ============================================================================
+
+/// Generate IO traits. `owned_path` controls where owned struct references point.
+/// Pass `"owned"` to include the owned module inline, or an external path like
+/// `"sys_types::generated::owned"` to reference structs from another crate
+/// (skipping the owned module generation).
+pub fn generate_io_traits(
+    io_builtins: &[NativeBuiltin],
+    class_defs: &[NativeClassDef],
+    owned_path: &str,
+) -> String {
     let tree = build_io_namespace_tree(io_builtins);
     let io_class_defs = filter_io_class_defs(io_builtins, class_defs);
     let class_ns_map = build_class_ns_map(&io_class_defs);
@@ -563,13 +596,19 @@ pub fn generate_io_traits(io_builtins: &[NativeBuiltin], class_defs: &[NativeCla
     let mut out = String::new();
 
     emit_view_module(&mut out, &io_class_defs, &class_ns_map, &class_defs_by_ns);
-    emit_owned_module(&mut out, &io_class_defs, &class_ns_map, &class_defs_by_ns);
+    if owned_path == "owned" {
+        emit_owned_module(&mut out, &io_class_defs, &class_ns_map, &class_defs_by_ns);
+    }
     emit_class_traits(&mut out, &tree, &class_ns_map);
     emit_namespace_traits(&mut out, &tree, &class_ns_map);
     emit_root_trait(&mut out, &tree);
     emit_sys_ops_struct(&mut out, io_builtins);
 
-    out
+    if owned_path != "owned" {
+        out.replace("owned::", &format!("{owned_path}::"))
+    } else {
+        out
+    }
 }
 
 // ============================================================================
@@ -706,7 +745,17 @@ fn emit_owned_struct(
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
 
     // Struct definition
+    let has_rust_type = cd
+        .fields
+        .iter()
+        .any(|f| matches!(f.field_type, BamlType::RustType));
+    let derives = if has_rust_type {
+        "#[derive(Clone, Debug)]"
+    } else {
+        "#[derive(Clone, Debug, Default)]"
+    };
     writeln!(out, "        /// Generated from `{}`", cd.source_file).unwrap();
+    writeln!(out, "        {derives}").unwrap();
     writeln!(out, "        pub struct {name} {{").unwrap();
     for field in &cd.fields {
         let rust_ty = owned_rust_type(&field.field_type, class_ns_map);
@@ -1326,7 +1375,7 @@ mod tests {
     #[test]
     fn test_sys_ops_struct_field_names() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "owned");
 
         let expected_fields = [
             "pub baml_fs_open: SysOpFn",
@@ -1349,7 +1398,7 @@ mod tests {
     #[test]
     fn test_owned_fs_file() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "owned");
 
         assert!(code.contains("pub mod fs {"));
         assert!(code.contains("pub struct File {"));
@@ -1359,7 +1408,7 @@ mod tests {
     #[test]
     fn test_owned_http_response() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "owned");
 
         assert!(code.contains("pub mod http {"));
         assert!(
@@ -1380,7 +1429,7 @@ mod tests {
     #[test]
     fn test_view_fs_file() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "owned");
 
         assert!(code.contains("pub struct File<'a>"));
         assert!(code.contains("cls: BexClass<'a>"));
@@ -1394,7 +1443,7 @@ mod tests {
     #[test]
     fn test_class_trait_llm_primitive_client() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "owned");
 
         assert!(
             code.contains("pub trait IoClassLlmPrimitiveClient"),
@@ -1418,7 +1467,7 @@ mod tests {
     #[test]
     fn test_namespace_traits() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "owned");
 
         assert!(
             code.contains("pub trait IoNamespaceFs: IoClassFsFile"),
@@ -1449,7 +1498,7 @@ mod tests {
     #[test]
     fn test_root_trait() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "owned");
 
         assert!(
             code.contains("pub trait IoPackageBaml:"),
@@ -1472,7 +1521,7 @@ mod tests {
     #[test]
     fn test_sys_ops_from_impl() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "owned");
 
         assert!(
             code.contains("pub fn from_impl<T: IoPackageBaml + Send + Sync + 'static>"),

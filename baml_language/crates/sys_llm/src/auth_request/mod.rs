@@ -82,14 +82,10 @@ fn auth_openai(request: &mut HttpRequest, client: &PrimitiveClient, provider: Ll
 mod tests {
     use super::*;
     use crate::baml_std::PrimitiveClientOptions;
+    use bex_external_types::AsBexExternalValue;
 
     fn make_client(provider: &str, options: PrimitiveClientOptions) -> PrimitiveClient {
-        PrimitiveClient::new(
-            "test".to_string(),
-            provider.to_string(),
-            options,
-        )
-        .unwrap()
+        PrimitiveClient::new("test".to_string(), provider.to_string(), options).unwrap()
     }
 
     fn fake_request() -> HttpRequest {
@@ -170,14 +166,13 @@ mod tests {
             "azure-openai",
             PrimitiveClientOptions {
                 api_key: Some("az-key".to_string()),
-                provider_options: Some(crate::baml_std::ProviderOptions::AzureOpenAi(
-                    crate::baml_std::AzureOpenAiOptions {
-                        resource_name: Some("my-resource".to_string()),
-                        deployment_id: Some("gpt-4o".to_string()),
-                        api_version: "2024-02-15-preview".to_string(),
-                        max_tokens: Some(4096),
-                    },
-                )),
+                provider_options: crate::baml_std::AzureOpenAiOptions {
+                    resource_name: Some("my-resource".to_string()),
+                    deployment_id: Some("gpt-4o".to_string()),
+                    api_version: "2024-02-15-preview".to_string(),
+                    max_tokens: Some(4096),
+                }
+                .into_bex_external_value(),
                 ..Default::default()
             },
         );

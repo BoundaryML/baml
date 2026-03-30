@@ -90,9 +90,7 @@ pub(crate) fn build_request(
     let mut extra = client.extra_body.clone();
 
     // Azure: inject max_tokens default if not already set via request_body.
-    if let Some(crate::baml_std::ProviderOptions::AzureOpenAi(azure)) =
-        &client.options.provider_options
-    {
+    if let Some(crate::baml_std::ProviderOptions::AzureOpenAi(azure)) = &client.provider_options {
         if let Some(mt) = azure.max_tokens {
             extra
                 .entry("max_tokens")
@@ -116,9 +114,7 @@ pub(crate) fn build_request(
 }
 
 fn resolve_url(client: &crate::baml_std::PrimitiveClient) -> String {
-    if let Some(crate::baml_std::ProviderOptions::AzureOpenAi(azure)) =
-        &client.options.provider_options
-    {
+    if let Some(crate::baml_std::ProviderOptions::AzureOpenAi(azure)) = &client.provider_options {
         let base = match (
             &client.options.base_url,
             &azure.resource_name,
@@ -322,7 +318,7 @@ mod tests {
     use std::sync::Arc;
 
     use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
-    use bex_external_types::BexExternalValue;
+    use bex_external_types::{AsBexExternalValue, BexExternalValue};
     use indexmap::IndexMap;
 
     use super::*;
@@ -351,12 +347,8 @@ mod tests {
         provider: &str,
         options: crate::baml_std::PrimitiveClientOptions,
     ) -> crate::baml_std::PrimitiveClient {
-        crate::baml_std::PrimitiveClient::new(
-            "test".to_string(),
-            provider.to_string(),
-            options,
-        )
-        .unwrap()
+        crate::baml_std::PrimitiveClient::new("test".to_string(), provider.to_string(), options)
+            .unwrap()
     }
 
     // ========================================================================
@@ -796,14 +788,13 @@ mod tests {
             "azure-openai",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gpt-4o".to_string()),
-                provider_options: Some(crate::baml_std::ProviderOptions::AzureOpenAi(
-                    crate::baml_std::AzureOpenAiOptions {
-                        resource_name: Some("my-resource".to_string()),
-                        deployment_id: Some("gpt-4o".to_string()),
-                        api_version: "2024-02-15-preview".to_string(),
-                        max_tokens: Some(4096),
-                    },
-                )),
+                provider_options: crate::baml_std::AzureOpenAiOptions {
+                    resource_name: Some("my-resource".to_string()),
+                    deployment_id: Some("gpt-4o".to_string()),
+                    api_version: "2024-02-15-preview".to_string(),
+                    max_tokens: Some(4096),
+                }
+                .into_bex_external_value(),
                 ..Default::default()
             },
         );
@@ -832,14 +823,13 @@ mod tests {
                     "max_tokens".to_string(),
                     bex_external_types::BexExternalValue::Int(2048),
                 )]),
-                provider_options: Some(crate::baml_std::ProviderOptions::AzureOpenAi(
-                    crate::baml_std::AzureOpenAiOptions {
-                        resource_name: Some("my-resource".to_string()),
-                        deployment_id: Some("gpt-4o".to_string()),
-                        api_version: "2024-02-15-preview".to_string(),
-                        max_tokens: Some(4096),
-                    },
-                )),
+                provider_options: crate::baml_std::AzureOpenAiOptions {
+                    resource_name: Some("my-resource".to_string()),
+                    deployment_id: Some("gpt-4o".to_string()),
+                    api_version: "2024-02-15-preview".to_string(),
+                    max_tokens: Some(4096),
+                }
+                .into_bex_external_value(),
                 ..Default::default()
             },
         );
@@ -864,14 +854,13 @@ mod tests {
             "azure-openai",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gpt-4o".to_string()),
-                provider_options: Some(crate::baml_std::ProviderOptions::AzureOpenAi(
-                    crate::baml_std::AzureOpenAiOptions {
-                        resource_name: Some("my-resource".to_string()),
-                        deployment_id: Some("gpt-4o".to_string()),
-                        api_version: "2024-02-15-preview".to_string(),
-                        max_tokens: Some(4096),
-                    },
-                )),
+                provider_options: crate::baml_std::AzureOpenAiOptions {
+                    resource_name: Some("my-resource".to_string()),
+                    deployment_id: Some("gpt-4o".to_string()),
+                    api_version: "2024-02-15-preview".to_string(),
+                    max_tokens: Some(4096),
+                }
+                .into_bex_external_value(),
                 request_body: IndexMap::from([(
                     "max_completion_tokens".to_string(),
                     BexExternalValue::Int(2048),
