@@ -28,6 +28,7 @@ use super::BuildRequestError;
 pub(crate) async fn build_request(
     client: &crate::baml_std::PrimitiveClient,
     prompt: &bex_vm_types::PromptAst,
+    callbacks: Option<&crate::BuildRequestCallbacks>,
 ) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     // Convert BAML prompt to SDK types.
     let (system_blocks, messages) = prompt_to_sdk_types(prompt, &client.default_role)?;
@@ -44,6 +45,8 @@ pub(crate) async fn build_request(
     )
     .await?;
 
+    let url = resolve_url(client, callbacks).await?;
+
     let mut headers = indexmap::IndexMap::new();
     headers.insert("content-type".to_string(), "application/json".to_string());
     headers.insert("accept".to_string(), "application/json".to_string());
@@ -53,10 +56,32 @@ pub(crate) async fn build_request(
 
     Ok(crate::baml_std::HttpRequest {
         method: "POST".to_string(),
-        url: client.url.clone(),
+        url,
         headers,
         body,
     })
+}
+
+/// Build the Bedrock URL, resolving the region from options or the AWS provider chain.
+async fn resolve_url(
+    client: &crate::baml_std::PrimitiveClient,
+    callbacks: Option<&crate::BuildRequestCallbacks>,
+) -> Result<String, BuildRequestError> {
+    let bedrock_opts = match &client.options.provider_options {
+        Some(crate::baml_std::ProviderOptions::Bedrock(opts)) => opts.clone(),
+        _ => crate::baml_std::BedrockOptions::default(),
+    };
+
+    if let Some(endpoint) = &bedrock_opts.endpoint_url {
+        let endpoint = endpoint.trim_end_matches('/');
+        return Ok(format!("{endpoint}/model/{}/converse", client.model));
+    }
+
+    let region = crate::auth_request::bedrock::resolve_region(&bedrock_opts, callbacks).await?;
+    Ok(format!(
+        "https://bedrock-runtime.{region}.amazonaws.com/model/{}/converse",
+        client.model
+    ))
 }
 
 // ============================================================================
@@ -638,7 +663,7 @@ mod tests {
         client: &crate::baml_std::PrimitiveClient,
         prompt: Arc<PromptAst>,
     ) -> serde_json::Value {
-        let result = build_request(client, &prompt).await.unwrap();
+        let result = build_request(client, &prompt, None).await.unwrap();
         serde_json::from_str(&result.body).unwrap()
     }
 
@@ -747,7 +772,9 @@ mod tests {
     #[tokio::test]
     async fn bedrock_url_contains_model_and_region() {
         let client = make_default_client();
-        let result = build_request(&client, &msg("user", "hi")).await.unwrap();
+        let result = build_request(&client, &msg("user", "hi"), None)
+            .await
+            .unwrap();
         assert_eq!(
             result.url,
             "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
@@ -761,7 +788,9 @@ mod tests {
             Some("http://localhost:4566"),
             "anthropic.claude-3-haiku-20240307-v1:0",
         );
-        let result = build_request(&client, &msg("user", "hi")).await.unwrap();
+        let result = build_request(&client, &msg("user", "hi"), None)
+            .await
+            .unwrap();
         assert_eq!(
             result.url,
             "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
@@ -960,7 +989,7 @@ mod tests {
                 base64_data: None,
             },
         );
-        let result = build_request(&client, &prompt).await;
+        let result = build_request(&client, &prompt, None).await;
         assert!(result.is_err(), "non-s3 URLs should be rejected");
     }
 
@@ -999,10 +1028,12 @@ mod tests {
             Some("http://localhost:4566/"),
             "anthropic.claude-3-haiku-20240307-v1:0",
         );
-        let result = build_request(&client, &msg("user", "hi")).await.unwrap();
+        let result = build_request(&client, &msg("user", "hi"), None)
+            .await
+            .unwrap();
         assert_eq!(
             result.url,
-            "http://localhost:4566//model/anthropic.claude-3-haiku-20240307-v1:0/converse"
+            "http://localhost:4566/model/anthropic.claude-3-haiku-20240307-v1:0/converse"
         );
     }
 
@@ -1013,7 +1044,9 @@ mod tests {
             Some("http://localhost:4566"),
             "anthropic.claude-3-haiku-20240307-v1:0",
         );
-        let result = build_request(&client, &msg("user", "hi")).await.unwrap();
+        let result = build_request(&client, &msg("user", "hi"), None)
+            .await
+            .unwrap();
         assert!(result.url.starts_with("http://localhost:4566/"));
     }
 
@@ -1045,7 +1078,7 @@ mod tests {
             options.with_defaults(defaults),
         )
         .unwrap();
-        let result = build_request(&client, &msg("user", "hi")).await;
+        let result = build_request(&client, &msg("user", "hi"), None).await;
         assert!(
             matches!(&result, Err(BuildRequestError::InvalidOption { key, .. }) if key == "max_tokens"),
             "expected InvalidOption for max_tokens, got: {result:?}"

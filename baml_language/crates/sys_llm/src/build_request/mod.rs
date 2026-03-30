@@ -32,7 +32,7 @@ pub(crate) async fn build_request(
         | LlmProvider::OpenRouter => openai::chat_completions::build_request(client, &prompt),
         LlmProvider::OpenAiResponses => openai::responses::build_request(client, &prompt),
         LlmProvider::Anthropic => anthropic::build_request(client, &prompt),
-        LlmProvider::AwsBedrock => bedrock::build_request(client, &prompt).await,
+        LlmProvider::AwsBedrock => bedrock::build_request(client, &prompt, callbacks).await,
         LlmProvider::GoogleAi
         | LlmProvider::VertexAi
         | LlmProvider::BamlFallback

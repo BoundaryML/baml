@@ -312,7 +312,7 @@ pub(crate) async fn auth_bedrock(
     };
 
     let credentials = resolve_credentials(&bedrock_opts, callbacks).await?;
-    let region = extract_region_from_url(&request.url)?;
+    let region = resolve_region(&bedrock_opts, callbacks).await?;
 
     let signed_headers = sign_with_credentials(
         &credentials,
@@ -331,17 +331,44 @@ pub(crate) async fn auth_bedrock(
 // Credential resolution
 // ---------------------------------------------------------------------------
 
-/// Extract the AWS region from a Bedrock URL like
-/// `https://bedrock-runtime.us-east-1.amazonaws.com/...`
-fn extract_region_from_url(url: &str) -> Result<String, BuildRequestError> {
-    url.strip_prefix("https://bedrock-runtime.")
-        .and_then(|rest| rest.split('.').next())
-        .map(String::from)
-        .ok_or_else(|| {
-            BuildRequestError::AuthorizationFailed(format!(
-                "could not extract region from Bedrock URL: {url}"
-            ))
+/// Resolve the AWS region from explicit options or the default provider chain.
+pub(crate) async fn resolve_region(
+    opts: &BedrockOptions,
+    callbacks: Option<&BuildRequestCallbacks>,
+) -> Result<String, BuildRequestError> {
+    if let Some(region) = &opts.region {
+        return Ok(region.clone());
+    }
+
+    if let Some(cb) = callbacks {
+        let sdk_config = load_aws_sdk_config_with_callbacks(opts, cb).await;
+        return sdk_config.region().map(|r| r.to_string()).ok_or_else(|| {
+            BuildRequestError::AuthorizationFailed(
+                "AWS region not found in default provider chain".into(),
+            )
+        });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest());
+        if let Some(profile) = &opts.profile {
+            loader = loader.profile_name(profile);
+        }
+        let sdk_config = loader.load().await;
+        sdk_config.region().map(|r| r.to_string()).ok_or_else(|| {
+            BuildRequestError::AuthorizationFailed(
+                "AWS region not found in default provider chain".into(),
+            )
         })
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        Err(BuildRequestError::AuthorizationFailed(
+            "AWS Bedrock on WASM requires an explicit region".into(),
+        ))
+    }
 }
 
 /// Resolve AWS credentials from explicit options or the default provider chain.
@@ -607,18 +634,38 @@ mod tests {
         assert_eq!(call_count.load(Ordering::SeqCst), 0);
     }
 
-    #[test]
-    fn extract_region_from_valid_url() {
-        let region = extract_region_from_url(
-            "https://bedrock-runtime.us-west-2.amazonaws.com/model/m/converse",
-        )
-        .unwrap();
-        assert_eq!(region, "us-west-2");
+    #[tokio::test]
+    async fn resolve_region_from_explicit_option() {
+        let opts = BedrockOptions {
+            region: Some("eu-west-1".into()),
+            ..Default::default()
+        };
+        let region = resolve_region(&opts, None).await.unwrap();
+        assert_eq!(region, "eu-west-1");
     }
 
-    #[test]
-    fn extract_region_from_invalid_url() {
-        let result = extract_region_from_url("https://example.com/foo");
+    #[tokio::test]
+    async fn resolve_region_from_env_via_callbacks() {
+        let mut cb = stub_callbacks();
+        cb.env_read = Arc::new(|key| {
+            Box::pin(async move {
+                if key == "AWS_REGION" {
+                    Ok(Some("ap-southeast-1".into()))
+                } else {
+                    Ok(None)
+                }
+            })
+        });
+        let opts = BedrockOptions::default();
+        let region = resolve_region(&opts, Some(&cb)).await.unwrap();
+        assert_eq!(region, "ap-southeast-1");
+    }
+
+    #[tokio::test]
+    async fn resolve_region_missing_with_empty_env() {
+        let cb = stub_callbacks();
+        let opts = BedrockOptions::default();
+        let result = resolve_region(&opts, Some(&cb)).await;
         assert!(result.is_err());
     }
 

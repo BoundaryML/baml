@@ -115,7 +115,10 @@ pub(crate) fn build_request(
 
     Ok(crate::baml_std::HttpRequest {
         method: "POST".to_string(),
-        url: client.url.clone(),
+        url: format!(
+            "{}/v1/messages",
+            client.options.base_url.as_deref().unwrap_or_default()
+        ),
         headers,
         body: body_str,
     })

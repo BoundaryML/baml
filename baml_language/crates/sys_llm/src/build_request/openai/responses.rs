@@ -96,7 +96,10 @@ pub(crate) fn build_request(
 
     Ok(crate::baml_std::HttpRequest {
         method: "POST".to_string(),
-        url: client.url.clone(),
+        url: format!(
+            "{}/responses",
+            client.options.base_url.as_deref().unwrap_or_default()
+        ),
         headers,
         body: body_str,
     })
@@ -190,7 +193,7 @@ fn responses_media_part(
             let format = audio_format_from_mime(mime);
             Ok(ResponsesContentPart::InputAudio { data, format })
         }),
-        MediaKind::Pdf | MediaKind::Video => media.read_content(|c| {
+        MediaKind::Pdf => media.read_content(|c| {
             let data_url = content_to_url_or_data_url(c, mime)?;
             Ok(ResponsesContentPart::InputFile {
                 file_id: None,
@@ -198,6 +201,9 @@ fn responses_media_part(
                 file_data: Some(data_url),
             })
         }),
+        MediaKind::Video => Err(crate::build_request::BuildRequestError::UnsupportedMedia(
+            "OpenAI Responses API does not support video content".to_string(),
+        )),
         MediaKind::Generic => Err(crate::build_request::BuildRequestError::UnsupportedMedia(
             "generic media kind not supported by OpenAI Responses API".to_string(),
         )),
@@ -462,12 +468,13 @@ mod tests {
             },
             Some("video/mp4"),
         );
-        // Video is handled via the file path (same as PDF in responses)
-        let part = responses_media_part(&media).unwrap();
-        let json = serde_json::to_value(&part).unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({"type": "input_file", "file_data": "data:video/mp4;base64,videodata"})
+        let result = responses_media_part(&media);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("does not support video")
         );
     }
 

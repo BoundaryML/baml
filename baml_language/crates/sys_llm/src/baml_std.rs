@@ -14,8 +14,6 @@ pub enum ClientError {
 pub struct PrimitiveClient {
     pub name: String,
     pub provider: String,
-    /// Fully resolved request URL (`base_url` + provider path suffix).
-    pub url: String,
     /// Resolved model name (falls back to empty string).
     pub model: String,
     /// Resolved `max_tokens` (None if not set by user or provider default).
@@ -35,65 +33,11 @@ impl PrimitiveClient {
         provider: String,
         options: PrimitiveClientOptions,
     ) -> Result<Self, ClientError> {
-        let llm_provider =
-            LlmProvider::from_str(&provider).map_err(|_| ClientError::UnknownProvider {
-                client: name.clone(),
-                provider: provider.clone(),
-            })?;
-        let base_url = options.base_url.clone().unwrap_or_default();
+        let _ = LlmProvider::from_str(&provider).map_err(|_| ClientError::UnknownProvider {
+            client: name.clone(),
+            provider: provider.clone(),
+        })?;
         let model = options.model.clone().unwrap_or_default();
-        let url = match llm_provider {
-            LlmProvider::AzureOpenAi => {
-                let Some(ProviderOptions::AzureOpenAi(azure)) = &options.provider_options else {
-                    return Err(ClientError::MissingOption {
-                        client: name,
-                        option: "api_version".into(),
-                    });
-                };
-                let base = match (
-                    &options.base_url,
-                    &azure.resource_name,
-                    &azure.deployment_id,
-                ) {
-                    (Some(url), _, _) => url.clone(),
-                    (None, Some(rn), Some(did)) => {
-                        format!("https://{rn}.openai.azure.com/openai/deployments/{did}")
-                    }
-                    _ => {
-                        return Err(ClientError::MissingOption {
-                            client: name,
-                            option: "base_url or (resource_name + deployment_id)".into(),
-                        });
-                    }
-                };
-                format!("{base}/chat/completions?api-version={}", azure.api_version)
-            }
-            LlmProvider::AwsBedrock => {
-                let bedrock_opts = match &options.provider_options {
-                    Some(ProviderOptions::Bedrock(opts)) => opts,
-                    _ => &BedrockOptions::default(),
-                };
-                if let Some(endpoint) = &bedrock_opts.endpoint_url {
-                    format!("{endpoint}/model/{model}/converse")
-                } else if let Some(region) = &bedrock_opts.region {
-                    format!("https://bedrock-runtime.{region}.amazonaws.com/model/{model}/converse")
-                } else {
-                    // Region will need to be resolved later; store a placeholder.
-                    // The build_request step will error if region is still unknown.
-                    String::new()
-                }
-            }
-            _ if base_url.is_empty() => {
-                return Err(ClientError::MissingOption {
-                    client: name,
-                    option: "base_url".into(),
-                });
-            }
-            LlmProvider::Anthropic => format!("{base_url}/v1/messages"),
-            LlmProvider::OpenAiResponses => format!("{base_url}/responses"),
-            // OpenAI-compatible providers, strategies, etc.
-            _ => format!("{base_url}/chat/completions"),
-        };
         let allowed_roles = options.allowed_roles.clone().unwrap_or_else(|| {
             vec![
                 "user".to_string(),
@@ -120,7 +64,6 @@ impl PrimitiveClient {
         Ok(Self {
             name,
             provider,
-            url,
             model,
             max_tokens,
             default_role,
