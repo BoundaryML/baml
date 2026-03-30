@@ -203,6 +203,7 @@ pub(crate) fn display_instruction(
         | Instruction::StoreDeref(_)
         | Instruction::LoadCapture(_)
         | Instruction::StoreCapture(_)
+        | Instruction::CaptureRef(_)
         | Instruction::Return => String::new(),
     };
 
@@ -337,7 +338,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Discriminant | Instruction::TypeTag => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
         Instruction::MakeClosure(_, _) | Instruction::MakeCell => Color::Cyan,
-        Instruction::LoadDeref(_) | Instruction::LoadCapture(_) => Color::Blue,
+        Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
+            Color::Blue
+        }
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Color::Green,
     }
 }
@@ -790,6 +793,7 @@ fn display_instruction_textual(
         }
         Instruction::LoadCapture(idx) => format!("load_capture {idx}"),
         Instruction::StoreCapture(idx) => format!("store_capture {idx}"),
+        Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
     }
 }
 

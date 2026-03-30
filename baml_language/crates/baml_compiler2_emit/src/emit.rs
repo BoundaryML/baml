@@ -2070,7 +2070,14 @@ impl PullSink for StackifyCodegen<'_, '_> {
     }
 
     fn load_capture(&mut self, idx: usize) -> Result<(), Self::Error> {
-        self.emit(Instruction::LoadCapture(idx));
+        if self.loading_for_closure_capture {
+            // When building a MakeClosure capture list, we want to forward the
+            // raw cell pointer from this closure's capture slot to the inner
+            // closure — not read through the cell to get the inner value.
+            self.emit(Instruction::CaptureRef(idx));
+        } else {
+            self.emit(Instruction::LoadCapture(idx));
+        }
         Ok(())
     }
 

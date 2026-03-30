@@ -430,6 +430,18 @@ pub enum Instruction {
     ///
     /// Stack: `[value]` -> `[]`
     StoreCapture(usize),
+
+    /// Load the raw cell pointer from a capture slot of the current closure.
+    ///
+    /// Unlike `LoadCapture`, which reads through the cell to obtain the inner
+    /// value, `CaptureRef` pushes the cell object pointer itself.  Used when
+    /// forwarding a captured cell to an inner (nested) closure so both closures
+    /// share the same cell.
+    ///
+    /// The current frame's function must be an `Object::Closure`.
+    ///
+    /// Stack: `[]` -> `[cell_ptr]`
+    CaptureRef(usize),
 }
 
 /// Block notification metadata stored in the Function struct.
@@ -645,6 +657,7 @@ impl std::fmt::Display for Instruction {
             Instruction::StoreDeref(slot) => write!(f, "STORE_DEREF {slot}"),
             Instruction::LoadCapture(idx) => write!(f, "LOAD_CAPTURE {idx}"),
             Instruction::StoreCapture(idx) => write!(f, "STORE_CAPTURE {idx}"),
+            Instruction::CaptureRef(idx) => write!(f, "CAPTURE_REF {idx}"),
         }
     }
 }

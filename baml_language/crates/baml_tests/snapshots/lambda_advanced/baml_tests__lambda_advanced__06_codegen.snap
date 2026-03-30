@@ -63,15 +63,27 @@ function user.test_compose_inferred() -> int[] {
 }
 
 function user.test_deep_capture() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 1
+    store_deref ?1
     load_const 10
-    make_closure .<lambda(test_deep_capture, 0)>, 0
+    load_var a
+    make_closure .<lambda(test_deep_capture, 0)>, 1
     call_indirect
     return
 }
 
 function user.test_deep_capture_inferred() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 1
+    store_deref ?1
     load_const 10
-    make_closure .<lambda(test_deep_capture_inferred, 0)>, 0
+    load_var a
+    make_closure .<lambda(test_deep_capture_inferred, 0)>, 1
     call_indirect
     return
 }

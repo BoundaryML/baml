@@ -294,13 +294,15 @@ fn .<lambda(test_compose_inferred, 1)>(x: null) -> null {
 fn user.test_deep_capture() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int // f
-    let _2: (int) -> int
+    let _1: int // a [captured]
+    let _2: (int) -> int // f
+    let _3: (int) -> int
 
     bb0: {
-        _1 = make_closure lambda[0]();
-        _2 = copy _1;
-        _0 = call copy _2(const 10_i64) -> [bb1];
+        _1 = const 1_i64;
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3(const 10_i64) -> [bb1];
     }
 
     bb1: {
@@ -315,12 +317,12 @@ fn user.test_deep_capture() -> int {
 fn .<lambda(test_deep_capture, 0)>(b: int) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: int // b // param
+    let _1: int // b // param [captured]
     let _2: (int) -> void // g
     let _3: (int) -> void
 
     bb0: {
-        _2 = make_closure lambda[0](const null, copy _1);
+        _2 = make_closure lambda[0](copy capture[0], copy _1);
         _3 = copy _2;
         _0 = call copy _3(const 100_i64) -> [bb1];
     }
@@ -358,13 +360,15 @@ fn .<lambda(<lambda(test_deep_capture, 0)>, 1)>(c: int) -> null {
 fn user.test_deep_capture_inferred() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int // f
-    let _2: (int) -> int
+    let _1: int // a [captured]
+    let _2: (int) -> int // f
+    let _3: (int) -> int
 
     bb0: {
-        _1 = make_closure lambda[0]();
-        _2 = copy _1;
-        _0 = call copy _2(const 10_i64) -> [bb1];
+        _1 = const 1_i64;
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3(const 10_i64) -> [bb1];
     }
 
     bb1: {
@@ -379,12 +383,12 @@ fn user.test_deep_capture_inferred() -> int {
 fn .<lambda(test_deep_capture_inferred, 0)>(b: int) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: int // b // param
+    let _1: int // b // param [captured]
     let _2: (int) -> void // g
     let _3: (int) -> void
 
     bb0: {
-        _2 = make_closure lambda[0](const null, copy _1);
+        _2 = make_closure lambda[0](copy capture[0], copy _1);
         _3 = copy _2;
         _0 = call copy _3(const 100_i64) -> [bb1];
     }
@@ -590,7 +594,7 @@ fn user.test_higher_order_inferred() -> int {
 fn .<lambda(test_higher_order_inferred, 0)>(n: int) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: int // n // param
+    let _1: int // n // param [captured]
     let _2: (int) -> int // adder
 
     bb0: {
@@ -652,7 +656,7 @@ fn user.test_higher_order_return() -> int {
 fn .<lambda(test_higher_order_return, 0)>(n: int) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: int // n // param
+    let _1: int // n // param [captured]
     let _2: (int) -> int // adder
 
     bb0: {
@@ -1980,7 +1984,7 @@ fn user.test_void_lambda_inferred_captures() -> int {
 fn .<lambda(test_void_lambda_inferred_captures, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: int // count
+    let _1: int // count [captured]
     let _2: () -> int // inc
 
     bb0: {

@@ -392,6 +392,14 @@ struct LoweringContext<'db> {
     // Used by `lower_path_expr` to resolve references to captured variables as
     // `Place::Capture(idx)` instead of `Place::Local(_)`.
     capture_indices: Option<HashMap<Name, usize>>,
+
+    // Names that were added to the current lambda's capture list transitively
+    // (i.e. because an inner lambda needed them but they weren't in the HIR
+    // capture list for this lambda).  Populated by `lower_lambda` when building
+    // an inner closure's capture operands.  Collected by the *parent*
+    // `lower_lambda` call after the body is lowered so it can extend the outer
+    // MakeClosure with extra captures.
+    transitive_captures_needed: Vec<Name>,
 }
 
 impl<'db> LoweringContext<'db> {
@@ -615,6 +623,7 @@ impl<'db> LoweringContext<'db> {
             class_type_tags,
             pending_lambdas: Vec::new(),
             capture_indices: None,
+            transitive_captures_needed: Vec::new(),
             type_aliases,
             recursive_aliases,
             watched_locals_stack: Vec::new(),
@@ -772,6 +781,7 @@ impl<'db> LoweringContext<'db> {
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
             capture_indices: None,
+            transitive_captures_needed: Vec::new(),
         }
     }
 
@@ -1136,14 +1146,16 @@ impl LoweringContext<'_> {
         // and attached to the lambda as its `.lambdas` field.
         let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
         let saved_capture_indices = self.capture_indices.take();
+        // Save transitive_captures_needed: after lowering this lambda's body,
+        // newly discovered transitive captures will be in this field.  We save
+        // the parent's list and restore it after collecting.
+        let saved_transitive_captures = std::mem::take(&mut self.transitive_captures_needed);
 
         // Switch to the lambda scope and install capture map.
+        // Always use Some(map) — even for empty HIR captures — so that
+        // add_transitive_capture can extend it at runtime.
         self.current_scope = lambda_scope_id;
-        self.capture_indices = if lambda_capture_indices.is_empty() {
-            None
-        } else {
-            Some(lambda_capture_indices)
-        };
+        self.capture_indices = Some(lambda_capture_indices);
 
         // Set up a fresh builder with the correct arity.
         let arity = func_def.params.len();
@@ -1210,6 +1222,20 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
+        // Mark locals that are captured by nested lambdas with `is_captured = true`.
+        // This mirrors the same step in `lower_function_body` but for lambdas.
+        // Uses the lambda's own scope id (lambda_scope_id) to look up HIR captured_names.
+        {
+            let index = file_semantic_index(self.db, self.file);
+            if let Some(sb) = index.scope_bindings.get(lambda_scope_id.index() as usize) {
+                for captured_name in &sb.captured_names {
+                    if let Some(&local) = self.locals.get(captured_name) {
+                        self.builder.local_decl_mut(local).is_captured = true;
+                    }
+                }
+            }
+        }
+
         // Build the lambda MirFunction.
         // First, collect any nested lambdas that were encountered while lowering
         // this lambda's body (direct children only — saved_pending_lambdas holds
@@ -1230,6 +1256,11 @@ impl LoweringContext<'_> {
         // Attach nested lambdas as direct children.
         lambda_mir.lambdas = nested_lambdas;
 
+        // Collect transitive captures that inner lambda bodies discovered were
+        // needed (names that weren't in hir_captures but that inner lambdas
+        // required via transitive capture).
+        let newly_needed_transitive = std::mem::take(&mut self.transitive_captures_needed);
+
         // Restore parent state.
         self.builder = saved_builder;
         self.body = saved_body;
@@ -1243,30 +1274,58 @@ impl LoweringContext<'_> {
         self.capture_indices = saved_capture_indices;
         // Restore parent's pending_lambdas (siblings of this lambda).
         self.pending_lambdas = saved_pending_lambdas;
+        // Restore the parent's transitive captures (not ours).
+        self.transitive_captures_needed = saved_transitive_captures;
 
-        // Build capture operands from restored parent locals.
+        // Extend hir_captures with any transitively-needed names discovered
+        // during body lowering (for inner lambdas that needed grandparent vars).
+        // Do NOT propagate here — the capture operands building loop below will
+        // handle propagation by pushing to `transitive_captures_needed` when a
+        // name is not found in the current scope's locals or captures.
+        let mut extended_hir_captures = hir_captures;
+        for name in &newly_needed_transitive {
+            if !extended_hir_captures.contains(name) {
+                extended_hir_captures.push(name.clone());
+            }
+        }
+
+        // Build capture operands from restored parent locals/captures.
         // Each captured name must be in the parent's locals map; we pass the cell
         // pointer (the slot itself, not the inner value) via Operand::Copy(Place::Local(local)).
         // The emit phase later replaces this with a LoadVar of the cell slot (not LoadDeref).
-        let capture_operands: Vec<Operand> = hir_captures
-            .iter()
-            .map(|name| {
-                if let Some(&local) = self.locals.get(name) {
-                    Operand::Copy(Place::Local(local))
-                } else if let Some(cap_idx) = self
-                    .capture_indices
-                    .as_ref()
-                    .and_then(|m| m.get(name))
-                    .copied()
-                {
-                    // Transitive capture: the variable is itself a capture in this scope.
-                    Operand::Copy(Place::Capture(cap_idx))
-                } else {
-                    // Variable not found — emit a null placeholder.
-                    Operand::Constant(Constant::Null)
-                }
-            })
-            .collect();
+        //
+        // If a name is not in the parent's locals AND not in the parent's
+        // capture_indices, we add it as a transitive capture of the current
+        // lambda — i.e. the current lambda (f) will need to capture it from ITS
+        // parent, and g will receive it via f's capture slot.
+        let mut capture_operands: Vec<Operand> = Vec::with_capacity(extended_hir_captures.len());
+        for name in &extended_hir_captures {
+            if let Some(&local) = self.locals.get(name) {
+                capture_operands.push(Operand::Copy(Place::Local(local)));
+            } else if let Some(cap_idx) = self
+                .capture_indices
+                .as_ref()
+                .and_then(|m| m.get(name))
+                .copied()
+            {
+                // The variable is itself a capture in the current scope.
+                capture_operands.push(Operand::Copy(Place::Capture(cap_idx)));
+            } else {
+                // Not in current scope's locals or captures.
+                // Add as a new transitive capture of the current lambda so our
+                // parent will pass it through to us, and we can forward it to
+                // the inner lambda.
+                let new_idx = {
+                    let ci = self.capture_indices.get_or_insert_with(HashMap::new);
+                    let idx = ci.len();
+                    ci.insert(name.clone(), idx);
+                    idx
+                };
+                // Signal to our parent lambda that it needs to capture this name.
+                self.transitive_captures_needed.push(name.clone());
+                capture_operands.push(Operand::Copy(Place::Capture(new_idx)));
+            }
+        }
 
         // Push this lambda into the parent's pending_lambdas and emit MakeClosure.
         let lambda_pending_idx = self.pending_lambdas.len();

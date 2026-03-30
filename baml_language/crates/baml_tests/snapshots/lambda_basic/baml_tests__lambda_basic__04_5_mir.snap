@@ -249,7 +249,7 @@ fn user.test_nested() -> int {
 fn .<lambda(test_nested, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: int // x // param
+    let _1: int // x // param [captured]
     let _2: (int) -> int // inner
     let _3: (int) -> int
 

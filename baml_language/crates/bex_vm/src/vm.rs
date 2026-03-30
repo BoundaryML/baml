@@ -2968,6 +2968,24 @@ impl BexVm {
                         };
                         cell.value = value;
                     }
+
+                    Instruction::CaptureRef(idx) => {
+                        // Push the raw cell pointer from captures[idx] without
+                        // reading through the cell.  Used by nested closures to
+                        // forward a shared cell to an inner closure.
+                        let closure_ptr = self.frames[frame_idx].function;
+                        // SAFETY: closure_ptr is the frame's function, valid for
+                        // the duration of this frame.
+                        let obj = unsafe { closure_ptr.get() };
+                        let Object::Closure(closure) = obj else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Closure.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        self.stack.push(closure.captures[idx]);
+                    }
                 }
 
                 Ok(None)
