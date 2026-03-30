@@ -142,6 +142,7 @@ mod tests {
             span: None,
             scope_span: None,
             is_watched: false,
+            is_captured: false,
         }
     }
 
@@ -154,6 +155,7 @@ mod tests {
             span: None,
             scope_span: None,
             is_watched: true,
+            is_captured: false,
         }
     }
 

@@ -317,6 +317,103 @@ impl<'db> SemanticIndexBuilder<'db> {
                 self.pop_scope(); // CatchClause
             }
         }
+
+        // Pass 5 — Lambda scopes: register lambda params in child scopes.
+        for (expr_id, expr) in body.exprs.iter() {
+            let ast::Expr::Lambda(ref func_def) = *expr else {
+                continue;
+            };
+            let lambda_span = source_map.expr_span(expr_id);
+
+            self.push_scope(ScopeKind::Lambda, None, lambda_span);
+            let scope_id = self.current_scope_id();
+
+            // Seed params into the lambda scope's bindings
+            for (idx, param) in func_def.params.iter().enumerate() {
+                self.scope_bindings[scope_id.index() as usize]
+                    .params
+                    .push((param.name.clone(), idx));
+            }
+
+            // Recursively walk the lambda's own ExprBody
+            if let Some(ast::FunctionBodyDef::Expr(ref lambda_body, ref lambda_source_map)) =
+                func_def.body
+            {
+                self.walk_expr_body(lambda_body, lambda_source_map);
+
+                // ── Capture analysis ──────────────────────────────────────────
+                // Identify names referenced in the lambda body that are
+                // defined in ancestor scopes (up to Function boundary).
+                let referenced_names = Self::collect_name_references(lambda_body);
+                let lambda_idx = scope_id.index() as usize;
+
+                let mut captures: Vec<(Name, DefinitionSite)> = Vec::new();
+                let mut seen: std::collections::HashSet<Name> = std::collections::HashSet::new();
+
+                for name in &referenced_names {
+                    // Skip if already recorded as a capture
+                    if seen.contains(name) {
+                        continue;
+                    }
+                    // Skip if defined locally in the lambda scope (param or let-binding)
+                    if Self::scope_defines_name(&self.scope_bindings[lambda_idx], name) {
+                        continue;
+                    }
+
+                    // Walk ancestor scopes to find the defining scope
+                    let mut current = self.scopes[lambda_idx].parent;
+                    while let Some(ancestor_id) = current {
+                        let ancestor_idx = ancestor_id.index() as usize;
+
+                        // Read scope metadata before any mutation to avoid
+                        // simultaneous borrow conflicts on self.scopes and
+                        // self.scope_bindings.
+                        let ancestor_kind = self.scopes[ancestor_idx].kind.clone();
+                        let ancestor_parent = self.scopes[ancestor_idx].parent;
+
+                        // Check if this ancestor defines the name — record the
+                        // DefinitionSite so captures are tied to the specific
+                        // declaration, not just the name (future-proofs for shadowing).
+                        if let Some(def_site) =
+                            Self::scope_definition_site(&self.scope_bindings[ancestor_idx], name)
+                        {
+                            captures.push((name.clone(), def_site));
+                            seen.insert(name.clone());
+                            // Mark the name as captured in the defining scope
+                            self.scope_bindings[ancestor_idx]
+                                .captured_names
+                                .insert(name.clone());
+                            break;
+                        }
+
+                        // Also check if it's already a capture of an intermediate
+                        // lambda (for nested capture chains: inner lambda captures
+                        // from an intermediate lambda that itself captures from the
+                        // parent).
+                        if let Some((_, def_site)) = self.scope_bindings[ancestor_idx]
+                            .captures
+                            .iter()
+                            .find(|(n, _)| n == name)
+                        {
+                            captures.push((name.clone(), *def_site));
+                            seen.insert(name.clone());
+                            break;
+                        }
+
+                        // Stop at Function boundary — don't capture across function defs
+                        if matches!(ancestor_kind, ScopeKind::Function) {
+                            break;
+                        }
+
+                        current = ancestor_parent;
+                    }
+                }
+
+                self.scope_bindings[lambda_idx].captures = captures;
+            }
+
+            self.pop_scope();
+        }
     }
 
     /// Extract the binding name from a pattern, if it has one.
@@ -329,6 +426,39 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::Pattern::TypedBinding { name, .. } if name.as_str() != "_" => Some(name),
             _ => None,
         }
+    }
+
+    /// Collect all single-segment `Expr::Path` names from an `ExprBody`.
+    /// These represent potential variable references (as opposed to multi-segment
+    /// paths like `Foo.bar` which are field accesses or qualified names).
+    fn collect_name_references(body: &ast::ExprBody) -> Vec<Name> {
+        let mut names = Vec::new();
+        for (_expr_id, expr) in body.exprs.iter() {
+            if let ast::Expr::Path(segments) = expr {
+                if segments.len() == 1 {
+                    names.push(segments[0].clone());
+                }
+            }
+        }
+        names
+    }
+
+    /// Check if a name is defined in a scope's bindings (params or let-bindings).
+    fn scope_defines_name(bindings: &ScopeBindings, name: &Name) -> bool {
+        bindings.params.iter().any(|(n, _)| n == name)
+            || bindings.bindings.iter().any(|(n, _, _)| n == name)
+    }
+
+    /// Find the `DefinitionSite` for a name in a scope's bindings.
+    /// Returns the first matching definition (params checked first, then bindings).
+    fn scope_definition_site(bindings: &ScopeBindings, name: &Name) -> Option<DefinitionSite> {
+        if let Some((_, idx)) = bindings.params.iter().find(|(n, _)| n == name) {
+            return Some(DefinitionSite::Parameter(*idx));
+        }
+        if let Some((_, def, _)) = bindings.bindings.iter().find(|(n, _, _)| n == name) {
+            return Some(*def);
+        }
+        None
     }
 
     // ── Item lowering ────────────────────────────────────────────────────────

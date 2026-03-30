@@ -21,7 +21,9 @@ use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, GlobalPool, HeapPtr, Instruction, Object, ObjectIndex, ObjectPool,
     ObjectType, StackIndex, UnaryOp, Value, Variant,
     bytecode::{self, BlockNotification},
-    types::{Function, FunctionType, Future, FutureType, Instance, PendingFuture, Type},
+    types::{
+        Cell, Closure, Function, FunctionType, Future, FutureType, Instance, PendingFuture, Type,
+    },
 };
 use indexmap::IndexMap;
 
@@ -410,6 +412,8 @@ fn value_type_tag(value: &Value) -> i64 {
                 Object::Array(_) => type_tags::LIST,
                 Object::Map(_) => type_tags::MAP,
                 Object::Function(_) => type_tags::FUNCTION,
+                Object::Closure(_) => type_tags::FUNCTION,
+                Object::Cell(_) => type_tags::UNKNOWN,
                 Object::Future(_) => type_tags::FUTURE,
                 Object::Enum(_) => type_tags::ENUM,
                 Object::RustData(_) => type_tags::UNKNOWN,
@@ -488,6 +492,24 @@ impl BexVm {
         );
         // SAFETY: We have &mut self, ensuring exclusive access to this VM's objects
         unsafe { ptr.get_mut() }
+    }
+
+    /// Collect all `HeapPtr`s stored in call frames (frame function pointers).
+    ///
+    /// Used by `bex_engine` to include frame roots in GC root sets.
+    pub fn collect_frame_roots(&self) -> Vec<HeapPtr> {
+        self.frames.iter().map(|f| f.function).collect()
+    }
+
+    /// Update frame function pointers according to a GC forwarding map.
+    ///
+    /// Must be called after a GC cycle to keep frame pointers valid.
+    pub fn apply_frame_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
+        for frame in &mut self.frames {
+            if let Some(&new_ptr) = forwarding.get(&frame.function) {
+                frame.function = new_ptr;
+            }
+        }
     }
 
     /// Convert an `ObjectIndex` to `HeapPtr` (for compile-time objects).
@@ -926,11 +948,28 @@ impl BexVm {
     }
 
     fn allocate_real_locals_for_frame(&mut self, function_ptr: HeapPtr) -> Result<(), VmError> {
-        let Object::Function(function) = self.get_object(function_ptr) else {
-            return Err(RuntimeError::Other("Invalid frame function".to_string()).into());
+        let real_local_count = match self.get_object(function_ptr) {
+            Object::Function(function) => function.real_local_count,
+            Object::Closure(closure) => {
+                // SAFETY: closure.function points to a Function object with
+                // appropriate lifetime guarantees.
+                let func_obj = unsafe { closure.function.get() };
+                match func_obj {
+                    Object::Function(f) => f.real_local_count,
+                    _ => {
+                        return Err(RuntimeError::Other(
+                            "Invalid closure inner function".to_string(),
+                        )
+                        .into());
+                    }
+                }
+            }
+            _ => {
+                return Err(RuntimeError::Other("Invalid frame function".to_string()).into());
+            }
         };
 
-        let new_len = self.stack.len() + function.real_local_count;
+        let new_len = self.stack.len() + real_local_count;
         self.stack.resize(new_len, Value::Null);
         Ok(())
     }
@@ -1080,14 +1119,27 @@ impl BexVm {
         let expected_type = FunctionType::Callable;
         let callee_ptr = self.as_object_ptr(&callee_value, expected_type.into())?;
         let obj = self.get_object(callee_ptr);
-        let Object::Function(callee_fn) = obj else {
-            return Err(InternalError::TypeError {
-                expected: expected_type.into(),
-                got: ObjectType::of(self.get_object(callee_ptr)).into(),
+        match obj {
+            Object::Function(callee_fn) => Ok((callee_ptr, callee_fn.arity)),
+            Object::Closure(closure) => {
+                // SAFETY: closure.function points to a Function object with
+                // appropriate lifetime guarantees.
+                let func_obj = unsafe { closure.function.get() };
+                match func_obj {
+                    Object::Function(callee_fn) => Ok((callee_ptr, callee_fn.arity)),
+                    _ => Err(InternalError::TypeError {
+                        expected: expected_type.into(),
+                        got: ObjectType::of(func_obj).into(),
+                    }
+                    .into()),
+                }
             }
-            .into());
-        };
-        Ok((callee_ptr, callee_fn.arity))
+            _ => Err(InternalError::TypeError {
+                expected: expected_type.into(),
+                got: ObjectType::of(obj).into(),
+            }
+            .into()),
+        }
     }
 
     fn execute_call_from_locals_offset(
@@ -1098,13 +1150,31 @@ impl BexVm {
         frame_idx: &mut usize,
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
-        // Can't call a function if it's not a function ¯\_(ツ)_/¯
-        let Object::Function(callee) = self.get_object(callee_ptr) else {
-            return Err(InternalError::TypeError {
-                expected: FunctionType::Callable.into(),
-                got: ObjectType::of(self.get_object(callee_ptr)).into(),
+        // Resolve the callee: either a plain Function or a Closure wrapping one.
+        let callee = match self.get_object(callee_ptr) {
+            Object::Function(f) => f,
+            Object::Closure(c) => {
+                // SAFETY: closure.function is a compile-time or TLAB-allocated
+                // Function object whose lifetime is at least as long as the closure.
+                let func_obj: &'static Object = unsafe { c.function.get() };
+                match func_obj {
+                    Object::Function(f) => f,
+                    _ => {
+                        return Err(InternalError::TypeError {
+                            expected: FunctionType::Callable.into(),
+                            got: ObjectType::of(func_obj).into(),
+                        }
+                        .into());
+                    }
+                }
             }
-            .into());
+            other => {
+                return Err(InternalError::TypeError {
+                    expected: FunctionType::Callable.into(),
+                    got: ObjectType::of(other).into(),
+                }
+                .into());
+            }
         };
 
         // Compiler should have already checked this so we could
@@ -1334,7 +1404,20 @@ impl BexVm {
         let ptr = self.frames[frame_idx].function;
         // SAFETY: See doc comment above.
         let obj: &'static Object = unsafe { ptr.get() };
-        obj.as_function()
+        match obj {
+            Object::Function(f) => Ok(f),
+            Object::Closure(closure) => {
+                // SAFETY: See doc comment — same lifetime guarantee applies to the
+                // inner function referenced by the closure.
+                let func_obj: &'static Object = unsafe { closure.function.get() };
+                func_obj.as_function()
+            }
+            _ => Err(InternalError::TypeError {
+                expected: FunctionType::Callable.into(),
+                got: ObjectType::of(obj).into(),
+            }
+            .into()),
+        }
     }
 
     /// Main VM execution loop.
@@ -2749,6 +2832,159 @@ impl BexVm {
                         // This instruction should never be executed. If we reach it,
                         // there's a bug in the compiler or type system.
                         return Err(RuntimeError::Unreachable.into());
+                    }
+
+                    Instruction::MakeCell => {
+                        let value = self.stack.ensure_pop()?;
+                        let cell = Object::Cell(Cell { value });
+                        let ptr = self.tlab.alloc(cell);
+                        self.stack.push(Value::Object(ptr));
+                    }
+
+                    Instruction::MakeClosure(obj_idx, capture_count) => {
+                        let mut captures = Vec::with_capacity(capture_count);
+                        for _ in 0..capture_count {
+                            captures.push(self.stack.ensure_pop()?);
+                        }
+                        // Captures were pushed left-to-right, popped right-to-left.
+                        captures.reverse();
+                        let function_ptr = self.idx_to_ptr(obj_idx);
+                        let closure = Object::Closure(Closure {
+                            function: function_ptr,
+                            captures,
+                        });
+                        let ptr = self.tlab.alloc(closure);
+                        self.stack.push(Value::Object(ptr));
+                    }
+
+                    Instruction::LoadDeref(slot) => {
+                        let locals_offset = self.frames[frame_idx].locals_offset;
+                        let cell_value =
+                            self.stack[Self::local_slot_stack_index(locals_offset, slot)];
+                        let Value::Object(cell_ptr) = cell_value else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: self.type_of(&cell_value),
+                            }
+                            .into());
+                        };
+                        // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
+                        let obj = unsafe { cell_ptr.get() };
+                        let Object::Cell(cell) = obj else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        self.stack.push(cell.value);
+                    }
+
+                    Instruction::StoreDeref(slot) => {
+                        let value = self.stack.ensure_pop()?;
+                        let locals_offset = self.frames[frame_idx].locals_offset;
+                        let cell_value =
+                            self.stack[Self::local_slot_stack_index(locals_offset, slot)];
+                        let Value::Object(cell_ptr) = cell_value else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: self.type_of(&cell_value),
+                            }
+                            .into());
+                        };
+                        // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
+                        let obj = unsafe { cell_ptr.get_mut() };
+                        let Object::Cell(cell) = obj else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        cell.value = value;
+                    }
+
+                    Instruction::LoadCapture(idx) => {
+                        let closure_ptr = self.frames[frame_idx].function;
+                        // SAFETY: closure_ptr is the frame's function, valid for
+                        // the duration of this frame.
+                        let obj = unsafe { closure_ptr.get() };
+                        let Object::Closure(closure) = obj else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Closure.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        let cell_value = closure.captures[idx];
+                        let Value::Object(cell_ptr) = cell_value else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: self.type_of(&cell_value),
+                            }
+                            .into());
+                        };
+                        // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
+                        let cell_obj = unsafe { cell_ptr.get() };
+                        let Object::Cell(cell) = cell_obj else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: ObjectType::of(cell_obj).into(),
+                            }
+                            .into());
+                        };
+                        self.stack.push(cell.value);
+                    }
+
+                    Instruction::StoreCapture(idx) => {
+                        let value = self.stack.ensure_pop()?;
+                        let closure_ptr = self.frames[frame_idx].function;
+                        // SAFETY: closure_ptr is the frame's function, valid for
+                        // the duration of this frame.
+                        let obj = unsafe { closure_ptr.get() };
+                        let Object::Closure(closure) = obj else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Closure.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        let cell_value = closure.captures[idx];
+                        let Value::Object(cell_ptr) = cell_value else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: self.type_of(&cell_value),
+                            }
+                            .into());
+                        };
+                        // SAFETY: cell_ptr is a VM-owned Cell object; single-threaded.
+                        let cell_obj = unsafe { cell_ptr.get_mut() };
+                        let Object::Cell(cell) = cell_obj else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Cell.into(),
+                                got: ObjectType::of(cell_obj).into(),
+                            }
+                            .into());
+                        };
+                        cell.value = value;
+                    }
+
+                    Instruction::CaptureRef(idx) => {
+                        // Push the raw cell pointer from captures[idx] without
+                        // reading through the cell.  Used by nested closures to
+                        // forward a shared cell to an inner closure.
+                        let closure_ptr = self.frames[frame_idx].function;
+                        // SAFETY: closure_ptr is the frame's function, valid for
+                        // the duration of this frame.
+                        let obj = unsafe { closure_ptr.get() };
+                        let Object::Closure(closure) = obj else {
+                            return Err(InternalError::TypeError {
+                                expected: ObjectType::Closure.into(),
+                                got: ObjectType::of(obj).into(),
+                            }
+                            .into());
+                        };
+                        self.stack.push(closure.captures[idx]);
                     }
                 }
 

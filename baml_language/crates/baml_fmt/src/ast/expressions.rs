@@ -31,6 +31,7 @@ pub enum Expression {
     MapInitializer(MapLiteral),
     ObjectInitializer(ObjectInitializer),
     RawString(t::RawString),
+    Lambda(Box<LambdaExpr>),
     Unknown(TextRange),
 }
 
@@ -39,7 +40,10 @@ impl Expression {
     pub const fn statement_needs_semicolon(&self) -> bool {
         !matches!(
             self,
-            Expression::If(_) | Expression::Match(_) | Expression::Unknown(_)
+            Expression::If(_)
+                | Expression::Match(_)
+                | Expression::Lambda(_)
+                | Expression::Unknown(_)
         )
     }
 }
@@ -85,6 +89,7 @@ impl FromCST for Expression {
             SyntaxKind::RAW_STRING_LITERAL => {
                 t::RawString::from_cst(elem).map(Expression::RawString)?
             }
+            SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
             _ => Expression::Unknown(elem.text_range()),
         };
         Ok(expr)
@@ -118,6 +123,7 @@ impl Expression {
                     Some(usize::from(raw.span().len()))
                 }
             }
+            Expression::Lambda(_) => None,
             Expression::Unknown(_) => None,
         }
     }
@@ -146,6 +152,7 @@ impl Printable for Expression {
             Expression::MapInitializer(map) => map.print(shape, printer),
             Expression::ObjectInitializer(obj) => obj.print(shape, printer),
             Expression::RawString(raw) => raw.print(shape, printer),
+            Expression::Lambda(lambda) => lambda.print(shape, printer),
             Expression::Unknown(range) => {
                 printer.print_input_range_trimmed_start(*range);
                 PrintInfo::default_multi_lined()
@@ -170,6 +177,7 @@ impl Printable for Expression {
             Expression::MapInitializer(map) => map.leftmost_token(),
             Expression::ObjectInitializer(obj) => obj.leftmost_token(),
             Expression::RawString(raw) => raw.leftmost_token(),
+            Expression::Lambda(lambda) => lambda.leftmost_token(),
             Expression::Unknown(range) => *range,
         }
     }
@@ -191,6 +199,7 @@ impl Printable for Expression {
             Expression::MapInitializer(map) => map.rightmost_token(),
             Expression::ObjectInitializer(obj) => obj.rightmost_token(),
             Expression::RawString(raw) => raw.rightmost_token(),
+            Expression::Lambda(lambda) => lambda.rightmost_token(),
             Expression::Unknown(range) => *range,
         }
     }
@@ -2892,6 +2901,259 @@ impl Printable for ObjectFieldKey {
         }
     }
 }
+
+// ─── Lambda Expression ────────────────────────────────────────────────────────
+
+/// Corresponds to a [`SyntaxKind::GENERIC_PARAM_LIST`] node.
+///
+/// Contains `<T, U>` generic parameter declarations for a lambda expression.
+/// Printed as `<T>` or `<K, V>` etc.
+#[derive(Debug)]
+pub struct GenericParamList {
+    pub open_angle: t::Less,
+    /// Comma-separated type parameter names: `(Word, Comma?)` pairs.
+    pub params: Vec<(t::Word, Option<t::Comma>)>,
+    pub close_angle: t::Greater,
+}
+
+impl FromCST for GenericParamList {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::GENERIC_PARAM_LIST)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let open_angle: t::Less = it.expect_parse()?;
+
+        let mut params = Vec::new();
+        let close_angle = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::GREATER, it.parent));
+            };
+            match elem.kind() {
+                SyntaxKind::GREATER => {
+                    break t::Greater::from_cst(elem)?;
+                }
+                SyntaxKind::GENERIC_PARAM => {
+                    // GENERIC_PARAM contains a single WORD
+                    let param_node = StrongAstError::assert_is_node(elem)?;
+                    let mut param_it = SyntaxNodeIter::new(&param_node);
+                    let word: t::Word = param_it.expect_parse()?;
+                    let comma = it
+                        .next_if_kind(SyntaxKind::COMMA)
+                        .map(t::Comma::from_cst)
+                        .transpose()?;
+                    params.push((word, comma));
+                }
+                _ => {
+                    return Err(StrongAstError::UnexpectedAdditionalElement {
+                        parent: it.parent,
+                        at: elem.text_range(),
+                    });
+                }
+            }
+        };
+
+        it.expect_end()?;
+
+        Ok(GenericParamList {
+            open_angle,
+            params,
+            close_angle,
+        })
+    }
+}
+
+impl KnownKind for GenericParamList {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::GENERIC_PARAM_LIST
+    }
+}
+
+impl Printable for GenericParamList {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_angle);
+        for (i, (word, _comma)) in self.params.iter().enumerate() {
+            printer.print_raw_token(word);
+            if i + 1 < self.params.len() {
+                printer.print_str(", ");
+            }
+        }
+        printer.print_raw_token(&self.close_angle);
+        PrintInfo::default_single_line()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.open_angle.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_angle.span()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::THROWS_CLAUSE`] node.
+///
+/// Contains `throws <type>`.
+#[derive(Debug)]
+pub struct ThrowsClause {
+    pub keyword: t::Throws,
+    pub ty: crate::ast::Type,
+}
+
+impl FromCST for ThrowsClause {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::THROWS_CLAUSE)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+        let keyword: t::Throws = it.expect_parse()?;
+        let ty: crate::ast::Type = it.expect_parse()?;
+        it.expect_end()?;
+
+        Ok(ThrowsClause { keyword, ty })
+    }
+}
+
+impl KnownKind for ThrowsClause {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::THROWS_CLAUSE
+    }
+}
+
+impl Printable for ThrowsClause {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        printer.print_raw_token(&self.keyword);
+        printer.print_str(" ");
+        multi_lined |= printer.print(&self.ty, shape).multi_lined;
+        PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.ty.rightmost_token()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::LAMBDA_EXPR`] node.
+///
+/// Syntax: `[<T, U>] (params) -> [RetType] [throws E] { body }`
+#[derive(Debug)]
+pub struct LambdaExpr {
+    pub generic_params: Option<GenericParamList>,
+    pub param_list: super::FunctionParamList,
+    pub arrow: t::Arrow,
+    pub return_type: Option<crate::ast::Type>,
+    pub throws: Option<ThrowsClause>,
+    pub block: BlockExpr,
+}
+
+#[allow(clippy::redundant_closure_for_method_calls)]
+impl FromCST for LambdaExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::LAMBDA_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        // Optional generic params: <T, U>
+        let generic_params = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::GENERIC_PARAM_LIST)
+        {
+            let elem = it.next().expect("peeked");
+            Some(GenericParamList::from_cst(elem)?)
+        } else {
+            None
+        };
+
+        // Parameter list: (x: int, y: string) or ()
+        let param_list: super::FunctionParamList = it.expect_parse()?;
+
+        // Arrow: ->
+        let arrow: t::Arrow = it.expect_parse()?;
+
+        // Optional return type: TYPE_EXPR before THROWS_CLAUSE or BLOCK_EXPR
+        let return_type = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::TYPE_EXPR) {
+            let elem = it.next().expect("peeked");
+            Some(crate::ast::Type::from_cst(elem)?)
+        } else {
+            None
+        };
+
+        // Optional throws clause
+        let throws = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::THROWS_CLAUSE) {
+            let elem = it.next().expect("peeked");
+            Some(ThrowsClause::from_cst(elem)?)
+        } else {
+            None
+        };
+
+        // Block body
+        let block: BlockExpr = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(LambdaExpr {
+            generic_params,
+            param_list,
+            arrow,
+            return_type,
+            throws,
+            block,
+        })
+    }
+}
+
+impl KnownKind for LambdaExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::LAMBDA_EXPR
+    }
+}
+
+impl Printable for LambdaExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        // Optional generic params: <T>
+        if let Some(ref gp) = self.generic_params {
+            printer.print(gp, shape.clone());
+        }
+
+        // Parameter list
+        printer.print(&self.param_list, shape.clone());
+
+        // Space + arrow
+        printer.print_str(" ");
+        printer.print_raw_token(&self.arrow);
+
+        // Optional return type
+        if let Some(ref ret) = self.return_type {
+            printer.print_str(" ");
+            printer.print(ret, shape.clone());
+        }
+
+        // Optional throws clause
+        if let Some(ref throws) = self.throws {
+            printer.print_str(" ");
+            printer.print(throws, shape.clone());
+        }
+
+        // Space + block
+        printer.print_str(" ");
+        printer.print(&self.block, shape);
+
+        PrintInfo::default_multi_lined()
+    }
+    fn leftmost_token(&self) -> TextRange {
+        if let Some(ref gp) = self.generic_params {
+            gp.leftmost_token()
+        } else {
+            self.param_list.leftmost_token()
+        }
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.block.rightmost_token()
+    }
+}
+
+// ─── PrintChain ───────────────────────────────────────────────────────────────
 
 /// Only used for printing chained expressions.
 ///

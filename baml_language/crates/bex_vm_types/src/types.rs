@@ -628,6 +628,12 @@ pub enum Object {
     /// Enum value object.
     Variant(Variant),
 
+    /// A closure: a function paired with captured variable cells.
+    Closure(Closure),
+
+    /// A mutable cell holding a single captured value.
+    Cell(Cell),
+
     /// Heap allocated string.
     ///
     /// TODO: Add a `Vm::strings` interner to avoid allocating duplicates.
@@ -661,6 +667,24 @@ pub enum Object {
     Sentinel(SentinelKind),
 }
 
+/// A closure: a function object paired with a list of captured variable cells.
+#[derive(Clone, Debug)]
+pub struct Closure {
+    /// Pointer to the underlying `Object::Function`.
+    pub function: HeapPtr,
+    /// Captured cells, one per closed-over variable (each is `Object::Cell`).
+    pub captures: Vec<Value>,
+}
+
+/// A mutable cell wrapping a single captured value.
+///
+/// Variables that are closed over are heap-allocated as `Cell` objects so that
+/// both the enclosing scope and any closures share the same storage.
+#[derive(Clone, Debug)]
+pub struct Cell {
+    pub value: Value,
+}
+
 impl std::fmt::Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -669,6 +693,11 @@ impl std::fmt::Display for Object {
             Object::Instance(instance) => instance.fmt(f),
             Object::Enum(enm) => enm.fmt(f),
             Object::Variant(value) => value.fmt(f),
+            Object::Closure(closure) => {
+                let captures_len = closure.captures.len();
+                write!(f, "<closure captures={captures_len}>")
+            }
+            Object::Cell(cell) => write!(f, "<cell {}>", cell.value),
             Object::String(string) => string.fmt(f),
             Object::Array(array) => write!(f, "<array len={}>", array.len()),
             Object::Map(map) => write!(f, "<map len={}>", map.len()),
@@ -764,6 +793,8 @@ pub enum ObjectType {
     Array,
     Map,
     Function(FunctionType),
+    Closure,
+    Cell,
     Class,
     String,
     Enum,
@@ -778,6 +809,8 @@ impl ObjectType {
     pub fn of(ob: &Object) -> Self {
         match ob {
             Object::Function(func) => Self::Function(FunctionType::from(&func.kind)),
+            Object::Closure(_) => Self::Closure,
+            Object::Cell(_) => Self::Cell,
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,
             Object::Enum(_) => Self::Enum,
@@ -816,6 +849,8 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Array => write!(f, "array"),
             ObjectType::Map => write!(f, "map"),
             ObjectType::Function(function_type) => write!(f, "{function_type}"),
+            ObjectType::Closure => write!(f, "closure"),
+            ObjectType::Cell => write!(f, "cell"),
             ObjectType::Class => write!(f, "class"),
             ObjectType::Enum => write!(f, "enum"),
             ObjectType::Variant => write!(f, "variant"),

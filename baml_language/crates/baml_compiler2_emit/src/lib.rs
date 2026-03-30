@@ -39,6 +39,11 @@ pub(crate) struct MirCodegenContext<'ctx, 'obj> {
     pub enum_object_indices: &'ctx HashMap<String, usize>,
     pub enum_variants: &'ctx HashMap<String, HashMap<String, usize>>,
     pub objects: &'obj mut ObjectPool,
+    /// Maps MIR lambda index → `ObjectPool` index of the compiled lambda `Function`.
+    /// Parallel to `lambda_names`. Empty for non-lambda functions.
+    pub lambda_object_indices: &'ctx [usize],
+    /// Lambda debug names, parallel to `lambda_object_indices`.
+    pub lambda_names: &'ctx [String],
 }
 
 /// Database trait for compiler2 emit queries.
@@ -284,6 +289,21 @@ pub fn generate_project_bytecode(
 
             let mut compiled_fn = match &mir.kind {
                 MirFunctionKind::Bytecode(body) => {
+                    // Compile lambda children first, collecting their ObjectPool indices.
+                    let lambda_info = compile_lambdas_flat(
+                        &mir.lambdas,
+                        &line_starts,
+                        &globals,
+                        &classes,
+                        &class_object_indices,
+                        &enum_object_indices,
+                        &enum_variants,
+                        &mut program.objects,
+                    );
+                    let lambda_obj_indices: Vec<usize> =
+                        lambda_info.iter().map(|(idx, _)| *idx).collect();
+                    let lambda_names_vec: Vec<String> =
+                        lambda_info.iter().map(|(_, name)| name.clone()).collect();
                     let ctx = MirCodegenContext {
                         globals: &globals,
                         classes: &classes,
@@ -291,6 +311,8 @@ pub fn generate_project_bytecode(
                         enum_object_indices: &enum_object_indices,
                         enum_variants: &enum_variants,
                         objects: &mut program.objects,
+                        lambda_object_indices: &lambda_obj_indices,
+                        lambda_names: &lambda_names_vec,
                     };
                     let mut f =
                         compile_mir_function(body, mir.arity, &line_starts, ctx, OptLevel::One);
@@ -773,6 +795,72 @@ fn topological_sort_lets<'db>(
     Ok(sorted.into_iter().map(|i| bindings[i].clone()).collect())
 }
 
+/// Compile a flat list of lambda `MirFunction`s into bytecode `Function` objects
+/// and register them in `objects`.  Returns a parallel `Vec<(obj_idx, name)>`
+/// that can be used to build `lambda_object_indices` and `lambda_names` for the
+/// parent function's `MirCodegenContext`.
+///
+/// "Flat" means we do NOT recurse into nested lambda children here — Phase 3
+/// only supports lambdas at one level of nesting inside a top-level function.
+/// Nested lambda support (lambdas inside lambdas) comes in a later phase.
+#[allow(clippy::too_many_arguments)]
+fn compile_lambdas_flat(
+    lambdas: &[baml_compiler2_mir::MirFunction],
+    line_starts: &[u32],
+    globals: &HashMap<String, usize>,
+    classes: &HashMap<String, HashMap<String, usize>>,
+    class_object_indices: &HashMap<String, usize>,
+    enum_object_indices: &HashMap<String, usize>,
+    enum_variants: &HashMap<String, HashMap<String, usize>>,
+    objects: &mut ObjectPool,
+) -> Vec<(usize, String)> {
+    let mut result = Vec::with_capacity(lambdas.len());
+    for lambda in lambdas {
+        let lambda_name = lambda.item_ref.to_string();
+        let obj_idx = match &lambda.kind {
+            MirFunctionKind::Bytecode(body) => {
+                // Recursively compile any nested lambdas within this lambda.
+                let nested_info = compile_lambdas_flat(
+                    &lambda.lambdas,
+                    line_starts,
+                    globals,
+                    classes,
+                    class_object_indices,
+                    enum_object_indices,
+                    enum_variants,
+                    objects,
+                );
+                let nested_obj_indices: Vec<usize> =
+                    nested_info.iter().map(|(idx, _)| *idx).collect();
+                let nested_names: Vec<String> =
+                    nested_info.iter().map(|(_, name)| name.clone()).collect();
+                let ctx = MirCodegenContext {
+                    globals,
+                    classes,
+                    class_object_indices,
+                    enum_object_indices,
+                    enum_variants,
+                    objects,
+                    lambda_object_indices: &nested_obj_indices,
+                    lambda_names: &nested_names,
+                };
+                let mut f =
+                    compile_mir_function(body, lambda.arity, line_starts, ctx, OptLevel::One);
+                f.name.clone_from(&lambda_name);
+                let idx = objects.len();
+                objects.push(Object::Function(Box::new(f)));
+                idx
+            }
+            MirFunctionKind::Builtin(_) => {
+                // Builtins can't be lambdas — skip.
+                continue;
+            }
+        };
+        result.push((obj_idx, lambda_name));
+    }
+    result
+}
+
 /// Compile the `$init` function that evaluates all let-binding initializers
 /// in dependency order, storing each result via `StoreGlobal`.
 ///
@@ -803,12 +891,27 @@ fn compile_init_function<'db>(
             )));
         };
 
-        // Lower the let initializer through MIR → MirFunctionBody.
+        // Lower the let initializer through MIR → MirFunctionBody (+ any lambda children).
         let maybe_body = lower_let_body(db, *let_loc);
 
         let helper_fn = match maybe_body {
-            Some(mir_body) => {
+            Some((mir_body, lambdas)) => {
                 let line_starts = build_line_starts(file.text(db));
+                // Compile lambda children first and collect their object indices.
+                let lambda_info = compile_lambdas_flat(
+                    &lambdas,
+                    &line_starts,
+                    globals,
+                    classes,
+                    class_object_indices,
+                    enum_object_indices,
+                    enum_variants,
+                    &mut program.objects,
+                );
+                let lambda_let_obj_indices: Vec<usize> =
+                    lambda_info.iter().map(|(idx, _)| *idx).collect();
+                let lambda_let_names: Vec<String> =
+                    lambda_info.iter().map(|(_, name)| name.clone()).collect();
                 let ctx = MirCodegenContext {
                     globals,
                     classes,
@@ -816,6 +919,8 @@ fn compile_init_function<'db>(
                     enum_object_indices,
                     enum_variants,
                     objects: &mut program.objects,
+                    lambda_object_indices: &lambda_let_obj_indices,
+                    lambda_names: &lambda_let_names,
                 };
                 let mut helper =
                     compile_mir_function(&mir_body, 0, &line_starts, ctx, OptLevel::One);

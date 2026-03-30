@@ -332,13 +332,19 @@ struct LoweringContext<'db> {
     catch_context: Option<CatchContext>,
     exit_block: BlockId,
 
-    // Eagerly aggregated type maps from all scopes in the function
-    expr_types: FxHashMap<AstExprId, Tir2Ty>,
-    pat_types: FxHashMap<AstPatId, Tir2Ty>,
+    // Eagerly aggregated type maps from all scopes in the function.
+    // Key is (FileScopeId, AstExprId) to avoid collisions between lambda body
+    // arenas and their parent function body arenas (both start ExprIds at 0).
+    expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+    pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
     // Member resolutions from TIR: ExprId → MemberResolution
     resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MemberResolution<'db>>,
     // Match expressions that TIR determined are exhaustive
     exhaustive_matches: rustc_hash::FxHashSet<AstExprId>,
+
+    // The FileScopeId of the expression body currently being lowered.
+    // Updated when descending into lambda bodies (Phase 3+).
+    current_scope: FileScopeId,
 
     // AST expression body and source map
     body: AstExprBody,
@@ -374,6 +380,26 @@ struct LoweringContext<'db> {
 
     // Counter for generating unique synthetic variable names (e.g. __for_idx, __for_idx_1)
     synthetic_name_counts: HashMap<String, usize>,
+
+    // Lambda functions lowered during body traversal.
+    // Collected here and moved into MirFunction.lambdas at the end of lowering.
+    // Each entry is a fully-lowered MirFunction for one lambda expression.
+    pending_lambdas: Vec<MirFunction>,
+
+    // Capture map for the current lambda body.
+    // `Some(map)` when lowering inside a lambda body; `None` for top-level functions.
+    // Maps captured variable name -> index into the closure's captures array.
+    // Used by `lower_path_expr` to resolve references to captured variables as
+    // `Place::Capture(idx)` instead of `Place::Local(_)`.
+    capture_indices: Option<HashMap<Name, usize>>,
+
+    // Names that were added to the current lambda's capture list transitively
+    // (i.e. because an inner lambda needed them but they weren't in the HIR
+    // capture list for this lambda).  Populated by `lower_lambda` when building
+    // an inner closure's capture operands.  Collected by the *parent*
+    // `lower_lambda` call after the body is lowered so it can extend the outer
+    // MakeClosure with extra captures.
+    transitive_captures_needed: Vec<Name>,
 }
 
 impl<'db> LoweringContext<'db> {
@@ -450,8 +476,8 @@ impl<'db> LoweringContext<'db> {
             index.scope_at_offset(func_span.start(), Some(&func_data.name));
 
         // --- Eagerly aggregate expr_types, pat_types, resolutions, and exhaustive_matches from all scopes ---
-        let mut expr_types: FxHashMap<AstExprId, Tir2Ty> = FxHashMap::default();
-        let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
+        let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
             AstExprId,
             baml_compiler2_tir::inference::MemberResolution<'db>,
@@ -461,8 +487,8 @@ impl<'db> LoweringContext<'db> {
 
         let merge_scope =
             |fsi: FileScopeId,
-             expr_types: &mut FxHashMap<AstExprId, Tir2Ty>,
-             pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
+             expr_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             pat_types: &mut FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
              resolutions: &mut FxHashMap<
                 AstExprId,
                 baml_compiler2_tir::inference::MemberResolution<'db>,
@@ -471,10 +497,10 @@ impl<'db> LoweringContext<'db> {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
-                    expr_types.insert(expr_id, ty.clone());
+                    expr_types.insert((fsi, expr_id), ty.clone());
                 }
                 for (&pat_id, ty) in inference.iter_bindings() {
-                    pat_types.insert(pat_id, ty.clone());
+                    pat_types.insert((fsi, pat_id), ty.clone());
                 }
                 for (&expr_id, res) in inference.iter_resolutions() {
                     resolutions.insert(expr_id, res.clone());
@@ -586,6 +612,7 @@ impl<'db> LoweringContext<'db> {
             pat_types,
             resolutions,
             exhaustive_matches,
+            current_scope: func_scope_id,
             body: expr_body,
             source_map,
             file,
@@ -594,6 +621,9 @@ impl<'db> LoweringContext<'db> {
             class_fields,
             enum_variants,
             class_type_tags,
+            pending_lambdas: Vec::new(),
+            capture_indices: None,
+            transitive_captures_needed: Vec::new(),
             type_aliases,
             recursive_aliases,
             watched_locals_stack: Vec::new(),
@@ -625,8 +655,8 @@ impl<'db> LoweringContext<'db> {
         let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
 
         // --- Eagerly aggregate expr_types, pat_types, resolutions from let scope ---
-        let mut expr_types: FxHashMap<AstExprId, Tir2Ty> = FxHashMap::default();
-        let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
+        let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
             AstExprId,
             baml_compiler2_tir::inference::MemberResolution<'db>,
@@ -636,8 +666,8 @@ impl<'db> LoweringContext<'db> {
 
         let merge_scope =
             |fsi: FileScopeId,
-             expr_types: &mut FxHashMap<AstExprId, Tir2Ty>,
-             pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
+             expr_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             pat_types: &mut FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
              resolutions: &mut FxHashMap<
                 AstExprId,
                 baml_compiler2_tir::inference::MemberResolution<'db>,
@@ -646,10 +676,10 @@ impl<'db> LoweringContext<'db> {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
-                    expr_types.insert(expr_id, ty.clone());
+                    expr_types.insert((fsi, expr_id), ty.clone());
                 }
                 for (&pat_id, ty) in inference.iter_bindings() {
-                    pat_types.insert(pat_id, ty.clone());
+                    pat_types.insert((fsi, pat_id), ty.clone());
                 }
                 for (&expr_id, res) in inference.iter_resolutions() {
                     resolutions.insert(expr_id, res.clone());
@@ -734,6 +764,7 @@ impl<'db> LoweringContext<'db> {
             pat_types,
             resolutions,
             exhaustive_matches,
+            current_scope: let_scope_id,
             body: expr_body,
             source_map,
             file,
@@ -748,6 +779,9 @@ impl<'db> LoweringContext<'db> {
             viz_context: VizContext::new(let_name.to_string()),
             pending_header: None,
             synthetic_name_counts: HashMap::new(),
+            pending_lambdas: Vec::new(),
+            capture_indices: None,
+            transitive_captures_needed: Vec::new(),
         }
     }
 
@@ -767,10 +801,10 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Get the `baml_type::Ty` for an expression by looking up in the aggregated map
-    /// and converting from TIR Ty.
+    /// and converting from TIR Ty. Uses `current_scope` as the `FileScopeId` key.
     fn expr_ty(&self, expr_id: AstExprId) -> Ty {
         self.expr_types
-            .get(&expr_id)
+            .get(&(self.current_scope, expr_id))
             .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
@@ -780,7 +814,7 @@ impl<'db> LoweringContext<'db> {
     /// Get the `baml_type::Ty` for a pattern binding
     fn pat_ty(&self, pat_id: AstPatId) -> Ty {
         self.pat_types
-            .get(&pat_id)
+            .get(&(self.current_scope, pat_id))
             .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
@@ -935,11 +969,32 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
+        // Mark locals that are captured by nested lambdas with `is_captured = true`.
+        // The HIR `ScopeBindings.captured_names` for the function scope records which
+        // names are captured by any descendant lambda. These locals need cell wrapping.
+        {
+            let func_scope_id = self.current_scope;
+            let index = file_semantic_index(self.db, self.file);
+            if let Some(sb) = index.scope_bindings.get(func_scope_id.index() as usize) {
+                for captured_name in &sb.captured_names {
+                    if let Some(&local) = self.locals.get(captured_name) {
+                        self.builder.local_decl_mut(local).is_captured = true;
+                    }
+                }
+            }
+        }
+
         // Take the builder out of self to call `build()` which consumes it
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut mir = builder.build();
         cleanup::cleanup_function(&mut mir);
+
+        // Drain any lambda functions lowered during this function's body into the
+        // MirFunction's lambdas list.  The lambda_idx values in MakeClosure rvalues
+        // index into this vec.
+        mir.lambdas = std::mem::take(&mut self.pending_lambdas);
+
         mir
     }
 
@@ -989,6 +1044,306 @@ impl LoweringContext<'_> {
         let mut body = builder.build_body();
         cleanup::cleanup_function_body(&mut body);
         body
+    }
+
+    /// Lower a lambda expression into a nested `MirFunction` and emit a
+    /// `Rvalue::MakeClosure` assignment into `dest`.
+    ///
+    /// Saves all parent-body state, sets up a fresh builder for the lambda,
+    /// lowers the lambda body, then restores the parent state.  The completed
+    /// `MirFunction` is pushed into `self.pending_lambdas`; its index becomes
+    /// the `lambda_idx` in the emitted `MakeClosure` rvalue.
+    ///
+    /// Captures are empty in Phase 3 (non-capturing lambdas only).
+    #[allow(clippy::cast_possible_truncation)]
+    fn lower_lambda(
+        &mut self,
+        func_def: &baml_compiler2_ast::FunctionDef,
+        expr_id: AstExprId,
+        dest: Place,
+    ) {
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
+
+        // Generate a unique synthetic name for this lambda.
+        let parent_name = self.builder.name().to_string();
+        let lambda_count = self
+            .synthetic_name_counts
+            .entry("__lambda".to_string())
+            .or_insert(0);
+        let lambda_idx_name = *lambda_count;
+        *lambda_count += 1;
+        let lambda_name = format!("<lambda({parent_name}, {lambda_idx_name})>");
+
+        // Find the lambda's FileScopeId from the HIR index.
+        // The HIR builder registered a ScopeKind::Lambda at the lambda expression's span.
+        let lambda_scope_id: FileScopeId = if let Some(ref sm) = self.source_map {
+            let lambda_span = sm.expr_span(expr_id);
+            let index = file_semantic_index(self.db, self.file);
+            // Find the Lambda scope containing this span by searching for it.
+            // We look for a Lambda-kind scope whose range matches the lambda span.
+            let mut found = None;
+            for (i, scope) in index.scopes.iter().enumerate() {
+                if scope.kind == baml_compiler2_hir::scope::ScopeKind::Lambda
+                    && scope.range == lambda_span
+                {
+                    found = Some(FileScopeId::new(i as u32));
+                    break;
+                }
+            }
+            found.unwrap_or(self.current_scope)
+        } else {
+            self.current_scope
+        };
+
+        // Pull out the lambda's body and source map.
+        let (lambda_body, lambda_source_map) = match func_def.body.as_ref() {
+            Some(baml_compiler2_ast::FunctionBodyDef::Expr(body, sm)) => {
+                (body.clone(), Some(sm.clone()))
+            }
+            _ => {
+                // No body — emit a panic stub and return.
+                self.emit_panic_call("lambda without body", expr_id);
+                return;
+            }
+        };
+
+        // Read HIR captures for this lambda scope.
+        // `captures` lists (name, DefinitionSite) pairs that the lambda reads from
+        // enclosing scopes. The DefinitionSite uniquely identifies the declaration
+        // even with shadowing.
+        // We build `capture_indices` (name → index in closure.captures[]) so that
+        // `lower_path_expr` and `lower_lvalue` can emit Place::Capture(idx).
+        let hir_captures: Vec<Name> = {
+            let index = file_semantic_index(self.db, self.file);
+            index
+                .scope_bindings
+                .get(lambda_scope_id.index() as usize)
+                .map(|sb| sb.captures.iter().map(|(name, _)| name.clone()).collect())
+                .unwrap_or_default()
+        };
+        let lambda_capture_indices: HashMap<Name, usize> = hir_captures
+            .iter()
+            .enumerate()
+            .map(|(i, name)| (name.clone(), i))
+            .collect();
+
+        // Save parent state.
+        let saved_builder = std::mem::replace(
+            &mut self.builder,
+            MirBuilder::new(Name::new(&lambda_name), 0),
+        );
+        let saved_body = std::mem::replace(&mut self.body, lambda_body);
+        let saved_source_map = std::mem::replace(&mut self.source_map, lambda_source_map);
+        let saved_locals = std::mem::take(&mut self.locals);
+        let saved_exit_block = self.exit_block;
+        let saved_loop_context = self.loop_context.take();
+        let saved_catch_context = self.catch_context.take();
+        let saved_watched_locals = std::mem::take(&mut self.watched_locals_stack);
+        let saved_current_scope = self.current_scope;
+        // NOTE: synthetic_name_counts is intentionally NOT saved — its counter
+        // keeps incrementing across the whole function for uniqueness.
+        //
+        // pending_lambdas IS saved so each lambda collects only its own direct
+        // children. The lambda body's nested lambdas are collected separately
+        // and attached to the lambda as its `.lambdas` field.
+        let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
+        let saved_capture_indices = self.capture_indices.take();
+        // Save transitive_captures_needed: after lowering this lambda's body,
+        // newly discovered transitive captures will be in this field.  We save
+        // the parent's list and restore it after collecting.
+        let saved_transitive_captures = std::mem::take(&mut self.transitive_captures_needed);
+
+        // Switch to the lambda scope and install capture map.
+        // Always use Some(map) — even for empty HIR captures — so that
+        // add_transitive_capture can extend it at runtime.
+        self.current_scope = lambda_scope_id;
+        self.capture_indices = Some(lambda_capture_indices);
+
+        // Set up a fresh builder with the correct arity.
+        let arity = func_def.params.len();
+        self.builder = MirBuilder::new(Name::new(&lambda_name), arity);
+
+        // Declare return place _0.
+        let pkg_info = file_package(self.db, self.file);
+        let pkg_id = PackageId::new(self.db, pkg_info.package.clone());
+        let pkg_items = package_items(self.db, pkg_id);
+        let ret = self.builder.declare_local(
+            Some(Name::new("_0")),
+            baml_type::Ty::Null {
+                attr: baml_type::TyAttr::default(),
+            },
+            None,
+            false,
+        );
+
+        // Declare parameter locals _1..=_n.
+        for param in &func_def.params {
+            let param_ty = match &param.type_expr {
+                Some(spanned_te) => {
+                    let mut diags = Vec::new();
+                    let tir_ty = lower_type_expr_in_ns(
+                        self.db,
+                        &spanned_te.expr,
+                        pkg_items,
+                        &pkg_info.namespace_path,
+                        &[],
+                        &mut diags,
+                    );
+                    convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
+                }
+                None => baml_type::Ty::Null {
+                    attr: baml_type::TyAttr::default(),
+                },
+            };
+            let local = self
+                .builder
+                .declare_local(Some(param.name.clone()), param_ty, None, false);
+            self.locals.insert(param.name.clone(), local);
+        }
+
+        // Create entry and exit blocks.
+        let entry = self.builder.create_block();
+        let exit_blk = self.builder.create_block();
+        self.exit_block = exit_blk;
+        self.builder.set_current_block(entry);
+
+        // Lower the root expression into the return place.
+        if let Some(root) = self.body.root_expr {
+            self.lower_expr(root, Place::local(ret));
+        } else {
+            self.builder.assign(
+                Place::local(ret),
+                Rvalue::Use(Operand::Constant(Constant::Null)),
+            );
+        }
+
+        // Terminate: goto exit, then return.
+        if !self.builder.is_current_terminated() {
+            self.builder.goto(self.exit_block);
+        }
+        self.builder.set_current_block(self.exit_block);
+        self.builder.return_();
+
+        // Mark locals that are captured by nested lambdas with `is_captured = true`.
+        // This mirrors the same step in `lower_function_body` but for lambdas.
+        // Uses the lambda's own scope id (lambda_scope_id) to look up HIR captured_names.
+        {
+            let index = file_semantic_index(self.db, self.file);
+            if let Some(sb) = index.scope_bindings.get(lambda_scope_id.index() as usize) {
+                for captured_name in &sb.captured_names {
+                    if let Some(&local) = self.locals.get(captured_name) {
+                        self.builder.local_decl_mut(local).is_captured = true;
+                    }
+                }
+            }
+        }
+
+        // Build the lambda MirFunction.
+        // First, collect any nested lambdas that were encountered while lowering
+        // this lambda's body (direct children only — saved_pending_lambdas holds
+        // any lambdas from the parent scope that were already pending before
+        // entering this lambda).
+        let nested_lambdas = std::mem::take(&mut self.pending_lambdas);
+
+        let dummy = MirBuilder::new(Name::new("_dummy"), 0);
+        let lambda_builder = std::mem::replace(&mut self.builder, dummy);
+        let mut lambda_mir = lambda_builder.build();
+        cleanup::cleanup_function(&mut lambda_mir);
+        // Override item_ref with the synthetic name.
+        lambda_mir.item_ref = ItemRef::Free {
+            package: Name::new(""),
+            namespace: vec![],
+            name: Name::new(&lambda_name),
+        };
+        // Attach nested lambdas as direct children.
+        lambda_mir.lambdas = nested_lambdas;
+
+        // Collect transitive captures that inner lambda bodies discovered were
+        // needed (names that weren't in hir_captures but that inner lambdas
+        // required via transitive capture).
+        let newly_needed_transitive = std::mem::take(&mut self.transitive_captures_needed);
+
+        // Restore parent state.
+        self.builder = saved_builder;
+        self.body = saved_body;
+        self.source_map = saved_source_map;
+        self.locals = saved_locals;
+        self.exit_block = saved_exit_block;
+        self.loop_context = saved_loop_context;
+        self.catch_context = saved_catch_context;
+        self.watched_locals_stack = saved_watched_locals;
+        self.current_scope = saved_current_scope;
+        self.capture_indices = saved_capture_indices;
+        // Restore parent's pending_lambdas (siblings of this lambda).
+        self.pending_lambdas = saved_pending_lambdas;
+        // Restore the parent's transitive captures (not ours).
+        self.transitive_captures_needed = saved_transitive_captures;
+
+        // Extend hir_captures with any transitively-needed names discovered
+        // during body lowering (for inner lambdas that needed grandparent vars).
+        // Do NOT propagate here — the capture operands building loop below will
+        // handle propagation by pushing to `transitive_captures_needed` when a
+        // name is not found in the current scope's locals or captures.
+        let mut extended_hir_captures = hir_captures;
+        for name in &newly_needed_transitive {
+            if !extended_hir_captures.contains(name) {
+                extended_hir_captures.push(name.clone());
+            }
+        }
+
+        // Build capture operands from restored parent locals/captures.
+        // Each captured name must be in the parent's locals map; we pass the cell
+        // pointer (the slot itself, not the inner value) via Operand::Copy(Place::Local(local)).
+        // The emit phase later replaces this with a LoadVar of the cell slot (not LoadDeref).
+        //
+        // If a name is not in the parent's locals AND not in the parent's
+        // capture_indices, we add it as a transitive capture of the current
+        // lambda — i.e. the current lambda (f) will need to capture it from ITS
+        // parent, and g will receive it via f's capture slot.
+        let mut capture_operands: Vec<Operand> = Vec::with_capacity(extended_hir_captures.len());
+        for name in &extended_hir_captures {
+            if let Some(&local) = self.locals.get(name) {
+                // Mark the local as captured at the capture site — this is the
+                // definitive place where we know the exact Local being captured,
+                // even in the presence of shadowing (future-proofing).
+                self.builder.local_decl_mut(local).is_captured = true;
+                capture_operands.push(Operand::Copy(Place::Local(local)));
+            } else if let Some(cap_idx) = self
+                .capture_indices
+                .as_ref()
+                .and_then(|m| m.get(name))
+                .copied()
+            {
+                // The variable is itself a capture in the current scope.
+                capture_operands.push(Operand::Copy(Place::Capture(cap_idx)));
+            } else {
+                // Not in current scope's locals or captures.
+                // Add as a new transitive capture of the current lambda so our
+                // parent will pass it through to us, and we can forward it to
+                // the inner lambda.
+                let new_idx = {
+                    let ci = self.capture_indices.get_or_insert_with(HashMap::new);
+                    let idx = ci.len();
+                    ci.insert(name.clone(), idx);
+                    idx
+                };
+                // Signal to our parent lambda that it needs to capture this name.
+                self.transitive_captures_needed.push(name.clone());
+                capture_operands.push(Operand::Copy(Place::Capture(new_idx)));
+            }
+        }
+
+        // Push this lambda into the parent's pending_lambdas and emit MakeClosure.
+        let lambda_pending_idx = self.pending_lambdas.len();
+        self.pending_lambdas.push(lambda_mir);
+
+        self.builder.assign(
+            dest,
+            Rvalue::MakeClosure {
+                lambda_idx: lambda_pending_idx,
+                captures: capture_operands,
+            },
+        );
     }
 }
 
@@ -1112,6 +1467,10 @@ impl LoweringContext<'_> {
                 self.builder.set_current_block(dead);
             }
 
+            AstExpr::Lambda(func_def) => {
+                self.lower_lambda(&func_def, expr_id, dest);
+            }
+
             AstExpr::Missing => {
                 self.emit_panic_call("parse error", expr_id);
             }
@@ -1187,6 +1546,16 @@ impl<'db> LoweringContext<'db> {
                 if let Some(&local) = self.locals.get(&local_name) {
                     self.builder
                         .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
+                } else if let Some(cap_idx) = self
+                    .capture_indices
+                    .as_ref()
+                    .and_then(|m| m.get(&local_name))
+                    .copied()
+                {
+                    // This variable is captured from an enclosing scope.
+                    // Emit a LoadCapture via Place::Capture.
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Capture(cap_idx))));
                 } else {
                     let msg = format!("unresolved local: {local_name}");
                     self.emit_panic_call(&msg, expr_id);
@@ -1206,7 +1575,7 @@ impl<'db> LoweringContext<'db> {
                 // If TIR recorded a type for this expr, it was handled as a package
                 // path intermediate (e.g. `baml` in `baml.HttpMethod.Get`). Emit a
                 // null placeholder — the outer FieldAccess will produce the real value.
-                if self.expr_types.contains_key(&expr_id) {
+                if self.expr_types.contains_key(&(self.current_scope, expr_id)) {
                     self.builder
                         .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
                 } else {
@@ -1220,8 +1589,11 @@ impl<'db> LoweringContext<'db> {
     fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
         let item = def_to_item_ref(self.db, def);
         // Check if this expression's type is EnumVariant
-        if let Some(Tir2Ty::EnumVariant(_qtn, variant, _)) =
-            self.expr_types.get(&expr_id).cloned().as_ref()
+        if let Some(Tir2Ty::EnumVariant(_qtn, variant, _)) = self
+            .expr_types
+            .get(&(self.current_scope, expr_id))
+            .cloned()
+            .as_ref()
         {
             let variant_name = variant.clone();
             // Convert the Free item ref to an EnumType variant
@@ -1415,7 +1787,7 @@ impl LoweringContext<'_> {
                 // Package paths have Unknown type in TIR (baml, baml.Array, etc.)
                 let base_is_value = self
                     .expr_types
-                    .get(base)
+                    .get(&(self.current_scope, *base))
                     .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
                     .unwrap_or(false);
                 if base_is_value {
@@ -1474,8 +1846,33 @@ impl LoweringContext<'_> {
             self.builder
                 .await_(future_place, dest_place, target, unwind);
         } else {
-            self.builder
-                .call(callee_operand, arg_operands, dest, target, unwind);
+            // Call destinations must be Place::Local in MIR. If `dest` is a
+            // projection (Field/Index) or a capture, call into a temp local
+            // first, then assign from the temp to the real destination.
+            match &dest {
+                Place::Local(_) => {
+                    self.builder
+                        .call(callee_operand, arg_operands, dest, target, unwind);
+                }
+                _ => {
+                    let call_ty = self.expr_ty(expr_id);
+                    let tmp = self.builder.temp(call_ty);
+                    self.builder.call(
+                        callee_operand,
+                        arg_operands,
+                        Place::local(tmp),
+                        target,
+                        unwind,
+                    );
+                    self.builder.set_current_block(target);
+                    let after = self.builder.create_block();
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::local(tmp))));
+                    self.builder.goto(after);
+                    self.builder.set_current_block(after);
+                    return;
+                }
+            }
         }
 
         self.builder.set_current_block(target);
@@ -1795,8 +2192,11 @@ impl LoweringContext<'_> {
         }
 
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
-        if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
-            self.expr_types.get(&expr_id).cloned().as_ref()
+        if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) = self
+            .expr_types
+            .get(&(self.current_scope, expr_id))
+            .cloned()
+            .as_ref()
         {
             let enum_ref = ItemRef::EnumType {
                 package: qtn.package().clone(),
@@ -1820,10 +2220,10 @@ impl LoweringContext<'_> {
         // concrete type, this is a real field access whose field type happens to be
         // Unknown (unresolved type annotation). In that case, fall through to emit
         // the field projection.
-        if let Some(Tir2Ty::Unknown { .. }) = self.expr_types.get(&expr_id) {
+        if let Some(Tir2Ty::Unknown { .. }) = self.expr_types.get(&(self.current_scope, expr_id)) {
             let base_is_also_unknown = self
                 .expr_types
-                .get(&base)
+                .get(&(self.current_scope, base))
                 .map(|ty| matches!(ty, Tir2Ty::Unknown { .. }))
                 .unwrap_or(true);
             if base_is_also_unknown {
@@ -2344,6 +2744,14 @@ impl LoweringContext<'_> {
             AstExpr::Path(segments) if segments.len() == 1 => {
                 if let Some(&local) = self.locals.get(&segments[0]) {
                     Place::Local(local)
+                } else if let Some(cap_idx) = self
+                    .capture_indices
+                    .as_ref()
+                    .and_then(|m| m.get(&segments[0]))
+                    .copied()
+                {
+                    // Assignment to a captured variable in a closure body.
+                    Place::Capture(cap_idx)
                 } else {
                     let temp = self.builder.temp(Ty::Null {
                         attr: TyAttr::default(),
@@ -2807,21 +3215,22 @@ impl LoweringContext<'_> {
             AstPattern::EnumVariant { enum_name, variant } => {
                 // Resolve the enum's package from TIR type info when available,
                 // otherwise fall back to the current file's package.
-                let enum_ref =
-                    if let Some(Tir2Ty::EnumVariant(qtn, _, _)) = self.pat_types.get(&pat_id) {
-                        ItemRef::EnumType {
-                            package: qtn.package().clone(),
-                            namespace: qtn.namespace().clone(),
-                            name: qtn.name().clone(),
-                        }
-                    } else {
-                        let pkg_info = file_package(self.db, self.file);
-                        ItemRef::EnumType {
-                            package: pkg_info.package.clone(),
-                            namespace: pkg_info.namespace_path,
-                            name: enum_name,
-                        }
-                    };
+                let enum_ref = if let Some(Tir2Ty::EnumVariant(qtn, _, _)) =
+                    self.pat_types.get(&(self.current_scope, pat_id))
+                {
+                    ItemRef::EnumType {
+                        package: qtn.package().clone(),
+                        namespace: qtn.namespace().clone(),
+                        name: qtn.name().clone(),
+                    }
+                } else {
+                    let pkg_info = file_package(self.db, self.file);
+                    ItemRef::EnumType {
+                        package: pkg_info.package.clone(),
+                        namespace: pkg_info.namespace_path,
+                        name: enum_name,
+                    }
+                };
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
                     left: Operand::Copy(Place::Local(scrutinee)),
@@ -2863,7 +3272,7 @@ impl LoweringContext<'_> {
                 // rather than Null, so catch bindings get the error's type (unknown) not null.
                 let ty = self
                     .pat_types
-                    .get(&pat_id)
+                    .get(&(self.current_scope, pat_id))
                     .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
                     .unwrap_or_else(|| self.builder.local_ty(scrutinee));
                 let local = self
@@ -2965,14 +3374,16 @@ impl LoweringContext<'_> {
 pub fn lower_let_body<'db>(
     db: &'db dyn crate::Db,
     let_loc: LetLoc<'db>,
-) -> Option<MirFunctionBody> {
+) -> Option<(MirFunctionBody, Vec<MirFunction>)> {
     let body = let_body(db, let_loc);
     let source_map = let_body_source_map(db, let_loc);
 
     match body.as_ref() {
         LetBody::Expr(expr_body) => {
             let mut ctx = LoweringContext::new_for_let(db, let_loc, expr_body.clone(), source_map);
-            Some(ctx.lower_let_body_inner())
+            let mir_body = ctx.lower_let_body_inner();
+            let lambdas = std::mem::take(&mut ctx.pending_lambdas);
+            Some((mir_body, lambdas))
         }
         LetBody::Missing => None,
     }
@@ -3000,6 +3411,7 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
             span: None,
             item_ref,
             kind: MirFunctionKind::Builtin(*kind),
+            lambdas: vec![],
         },
         FunctionBody::Missing => MirFunction {
             arity,
@@ -3020,6 +3432,7 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
                         ty: baml_type::Ty::Void {
                             attr: baml_type::TyAttr::default(),
                         },
+                        is_captured: false,
                         span: None,
                         scope_span: None,
                         is_watched: false,
@@ -3028,6 +3441,7 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
                 unwind_error_locals: std::collections::HashMap::new(),
                 viz_nodes: vec![],
             }),
+            lambdas: vec![],
         },
     }
 }

@@ -76,6 +76,7 @@ define_keyword_tokens! {
     "watch" => SyntaxKind::KW_WATCH => Watch;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
+    "throws" => SyntaxKind::KW_THROWS => Throws;
 }
 
 pub trait PunctuationToken: Token {}

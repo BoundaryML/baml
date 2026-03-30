@@ -240,6 +240,7 @@ pub enum SyntaxKind {
     CATCH_ARM,
     CATCH_PATTERN,
     THROW_EXPR,
+    LAMBDA_EXPR,
     THROWS_CLAUSE,
     WHILE_STMT,
     FOR_EXPR,

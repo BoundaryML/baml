@@ -4,7 +4,7 @@
 //! with `no_eq` (always re-runs on file change). Projection queries extract
 //! individual fields with `Arc` equality for Salsa early-cutoff.
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use baml_base::Name;
 use baml_compiler2_ast::{ExprId, PatId, StmtId};
@@ -43,6 +43,14 @@ pub struct ScopeBindings {
     pub bindings: Vec<(Name, DefinitionSite, TextRange)>,
     /// Parameters (for Function/Lambda scopes).
     pub params: Vec<(Name, usize)>, // (name, param_index)
+    /// Variables captured from ancestor scopes (for Lambda scopes only).
+    /// Each entry is `(name, definition_site)` to uniquely identify the
+    /// captured declaration, even in the presence of shadowing.
+    /// Populated by capture analysis in `SemanticIndexBuilder::walk_expr_body`.
+    pub captures: Vec<(Name, DefinitionSite)>,
+    /// Names in this scope that are captured by a descendant lambda.
+    /// Used by MIR lowering to decide which locals need cell wrapping.
+    pub captured_names: HashSet<Name>,
 }
 
 impl ScopeBindings {
@@ -50,6 +58,8 @@ impl ScopeBindings {
         Self {
             bindings: Vec::new(),
             params: Vec::new(),
+            captures: Vec::new(),
+            captured_names: HashSet::new(),
         }
     }
 }

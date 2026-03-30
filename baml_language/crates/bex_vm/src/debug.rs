@@ -197,6 +197,13 @@ pub(crate) fn display_instruction(
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::Unreachable
+        | Instruction::MakeClosure(_, _)
+        | Instruction::MakeCell
+        | Instruction::LoadDeref(_)
+        | Instruction::StoreDeref(_)
+        | Instruction::LoadCapture(_)
+        | Instruction::StoreCapture(_)
+        | Instruction::CaptureRef(_)
         | Instruction::Return => String::new(),
     };
 
@@ -330,6 +337,11 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::VizEnter(_) | Instruction::VizExit(_) => Color::BrightYellow,
         Instruction::Discriminant | Instruction::TypeTag => Color::BrightBlue,
         Instruction::Unreachable => Color::BrightRed,
+        Instruction::MakeClosure(_, _) | Instruction::MakeCell => Color::Cyan,
+        Instruction::LoadDeref(_) | Instruction::LoadCapture(_) | Instruction::CaptureRef(_) => {
+            Color::Blue
+        }
+        Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Color::Green,
     }
 }
 
@@ -764,6 +776,24 @@ fn display_instruction_textual(
         // --- Type introspection ---
         Instruction::Discriminant => "discriminant".to_string(),
         Instruction::TypeTag => "type_tag".to_string(),
+
+        // --- Closures and cells ---
+        Instruction::MakeClosure(obj_idx, count) => {
+            let name = meta_str(&obj_idx.raw());
+            format!("make_closure {name}, {count}")
+        }
+        Instruction::MakeCell => "make_cell".to_string(),
+        Instruction::LoadDeref(slot) => {
+            let name = meta_str(slot);
+            format!("load_deref {name}")
+        }
+        Instruction::StoreDeref(slot) => {
+            let name = meta_str(slot);
+            format!("store_deref {name}")
+        }
+        Instruction::LoadCapture(idx) => format!("load_capture {idx}"),
+        Instruction::StoreCapture(idx) => format!("store_capture {idx}"),
+        Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
     }
 }
 

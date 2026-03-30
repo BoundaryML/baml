@@ -689,6 +689,12 @@ impl<'a> BexValue<'a> {
                     }
                     Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
                     Object::RustData(data) => Ok(BexExternalValue::RustData(data.clone())),
+                    Object::Closure(_) => Err(AccessError::CannotConvertToOwned {
+                        reason: "closure".to_string(),
+                    }),
+                    Object::Cell(_) => Err(AccessError::CannotConvertToOwned {
+                        reason: "cell".to_string(),
+                    }),
                     #[cfg(feature = "heap_debug")]
                     Object::Sentinel(sentinel_kind) => Err(AccessError::CannotConvertToOwned {
                         reason: format!("sentinel: {:?}", sentinel_kind),

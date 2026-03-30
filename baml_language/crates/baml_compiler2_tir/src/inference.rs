@@ -13,7 +13,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use baml_base::Name;
-use baml_compiler2_ast::{ExprId, PatId};
+use baml_compiler2_ast::{AstSourceMap, Expr as AstExpr, ExprBody, ExprId, FunctionDef, PatId};
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
@@ -22,6 +22,7 @@ use baml_compiler2_hir::{
     scope::{ScopeId, ScopeKind},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
+use text_size::TextRange;
 
 use crate::{
     builder::TypeInferenceBuilder,
@@ -180,6 +181,42 @@ impl<'db> ScopeInference<'db> {
 }
 
 // ── Main Salsa Query: Per-Scope Inference ───────────────────────────────────
+
+/// Search for a `Lambda` expression whose source span matches `target_span` in
+/// `body`/`source_map`, recursively descending into nested lambda bodies.
+///
+/// Returns `Some((func_def, lambda_body, lambda_source_map, lambda_expr_id))` when
+/// found; `None` otherwise.
+fn find_lambda_by_span<'a>(
+    body: &'a ExprBody,
+    source_map: &AstSourceMap,
+    target_span: TextRange,
+) -> Option<(&'a FunctionDef, &'a ExprBody, &'a AstSourceMap, ExprId)> {
+    for (expr_id, expr) in body.exprs.iter() {
+        if let AstExpr::Lambda(ref func_def) = *expr {
+            let span = source_map.expr_span(expr_id);
+            if span == target_span {
+                // Found the matching lambda
+                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
+                    ref lambda_body,
+                    ref lambda_sm,
+                )) = func_def.body
+                {
+                    return Some((func_def, lambda_body, lambda_sm, expr_id));
+                }
+            }
+            // Recurse into nested lambda bodies
+            if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(ref nested_body, ref nested_sm)) =
+                func_def.body
+            {
+                if let Some(found) = find_lambda_by_span(nested_body, nested_sm, target_span) {
+                    return Some(found);
+                }
+            }
+        }
+    }
+    None
+}
 
 /// Per-scope type inference — the primary Salsa query for type checking.
 ///
@@ -360,10 +397,133 @@ pub fn infer_scope_types<'db>(
             let _ = found;
         }
         ScopeKind::Lambda => {
-            // Lambda bodies are handled when the enclosing function walks its ExprBody.
-            // When the builder encounters a lambda, it stops — the lambda scope
-            // gets its own infer_scope_types invocation later.
-            // For now, lambda scope inference is a placeholder.
+            // Find the enclosing Function (or Let) scope by walking ancestors.
+            // The Lambda scope does not directly store its body — we must find
+            // the top-level body (Function or Let) and then locate the lambda
+            // expression within it by matching spans.
+            let lambda_span = scope.range;
+            let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
+
+            // Seed captured variables as Ty::Unknown so that the lambda's builder
+            // can resolve references to captures without reporting "unresolved name"
+            // diagnostics. Proper capture types will be propagated in a later phase.
+            let captures = &index.scope_bindings[file_scope.index() as usize].captures;
+            for (capture_name, _def_site) in captures {
+                builder.add_local(
+                    capture_name.clone(),
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                );
+            }
+
+            // Walk ancestors to find a Function or Let scope that has a body.
+            'ancestor_walk: for ancestor_fsi in index.ancestor_scopes(file_scope) {
+                let ancestor_scope = &index.scopes[ancestor_fsi.index() as usize];
+                match &ancestor_scope.kind {
+                    ScopeKind::Function => {
+                        // Find the function by span + name in the item tree
+                        for func_data in item_tree.functions.values() {
+                            if func_data.span != ancestor_scope.range {
+                                continue;
+                            }
+                            if ancestor_scope.name.as_ref() != Some(&func_data.name) {
+                                continue;
+                            }
+                            // Get the function body from item_tree (includes source map)
+                            if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(
+                                ref func_body,
+                                ref func_sm,
+                            )) = func_data.body
+                            {
+                                if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
+                                    find_lambda_by_span(func_body, func_sm, lambda_span)
+                                {
+                                    // Seed builder with lambda params
+                                    let generic_params: Vec<Name> = func_def.generic_params.clone();
+                                    builder.set_generic_params(generic_params.clone());
+                                    for param in &func_def.params {
+                                        let param_ty = param
+                                            .type_expr
+                                            .as_ref()
+                                            .map(|ste| {
+                                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                                    db,
+                                                    &ste.expr,
+                                                    pkg_items,
+                                                    &pkg_info.namespace_path,
+                                                    &generic_params,
+                                                    &mut Vec::new(),
+                                                )
+                                            })
+                                            .unwrap_or(Ty::Unknown {
+                                                attr: TyAttr::default(),
+                                            });
+                                        builder.add_local(param.name.clone(), param_ty);
+                                    }
+                                    // Infer the lambda body
+                                    if let Some(root_expr) = lambda_body.root_expr {
+                                        builder.infer_expr(root_expr, lambda_body);
+                                    }
+                                }
+                            }
+                            break 'ancestor_walk;
+                        }
+                    }
+                    ScopeKind::Let => {
+                        // Find the let binding by span + name in the item tree
+                        for (local_id, let_data) in &item_tree.lets {
+                            if let_data.span != ancestor_scope.range {
+                                continue;
+                            }
+                            if ancestor_scope.name.as_ref() != Some(&let_data.name) {
+                                continue;
+                            }
+                            let let_loc = LetLoc::new(db, file, *local_id);
+                            let body = baml_compiler2_hir::body::let_body(db, let_loc);
+                            let source_map_opt =
+                                baml_compiler2_hir::body::let_body_source_map(db, let_loc);
+                            if let (LetBody::Expr(let_body), Some(let_sm)) =
+                                (body.as_ref(), source_map_opt)
+                            {
+                                if let Some((func_def, lambda_body, _lambda_sm, _lambda_expr_id)) =
+                                    find_lambda_by_span(let_body, &let_sm, lambda_span)
+                                {
+                                    // Seed builder with lambda params
+                                    let generic_params: Vec<Name> = func_def.generic_params.clone();
+                                    builder.set_generic_params(generic_params.clone());
+                                    for param in &func_def.params {
+                                        let param_ty = param
+                                            .type_expr
+                                            .as_ref()
+                                            .map(|ste| {
+                                                crate::lower_type_expr::lower_type_expr_in_ns(
+                                                    db,
+                                                    &ste.expr,
+                                                    pkg_items,
+                                                    &pkg_info.namespace_path,
+                                                    &generic_params,
+                                                    &mut Vec::new(),
+                                                )
+                                            })
+                                            .unwrap_or(Ty::Unknown {
+                                                attr: TyAttr::default(),
+                                            });
+                                        builder.add_local(param.name.clone(), param_ty);
+                                    }
+                                    if let Some(root_expr) = lambda_body.root_expr {
+                                        builder.infer_expr(root_expr, lambda_body);
+                                    }
+                                }
+                            }
+                            break 'ancestor_walk;
+                        }
+                    }
+                    _ => {
+                        // Continue walking up ancestors (e.g., nested lambda inside lambda)
+                    }
+                }
+            }
         }
         ScopeKind::Class => {
             // Class scope: no expressions to type-check.

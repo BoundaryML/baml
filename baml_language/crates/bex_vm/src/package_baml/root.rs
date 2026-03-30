@@ -93,6 +93,10 @@ fn deep_copy_value_recursive(
                 Object::Future(f) => vm.tlab.alloc(Object::Future(f)),
                 Object::Collector(c) => vm.tlab.alloc(Object::Collector(c)),
                 Object::Type(ty) => vm.tlab.alloc(Object::Type(ty)),
+                // Closures and cells are shallow-copied: the captured state is shared
+                // by design (mutation semantics).
+                Object::Closure(c) => vm.tlab.alloc(Object::Closure(c)),
+                Object::Cell(cell) => vm.tlab.alloc(Object::Cell(cell)),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };

@@ -353,6 +353,14 @@ fn simulate_statement_stack(
                     }
                 }
             }
+            Place::Capture(_) => {
+                // StoreCapture: evaluate rvalue (pops 1), no stack-carry interaction.
+                if !simulate_rvalue_pull_stack(value, sim, carried_local, classifications, def_use)
+                {
+                    return false;
+                }
+                sim.pop_n(1)
+            }
             Place::Field { .. } | Place::Index { .. } => {
                 let mut sink = StackCarryPullSink {
                     sim,
@@ -550,6 +558,8 @@ fn simulate_store_place_stack(
                 LocalStoreBehavior::KeepOnStack => true,
             }
         }
+        // Capture stores: pop 1 (same as StoreSlot).
+        Place::Capture(_) => sim.pop_n(1),
         Place::Field { .. } | Place::Index { .. } => false,
     }
 }
@@ -749,6 +759,25 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn make_closure(
+        &mut self,
+        _lambda_idx: usize,
+        capture_count: usize,
+    ) -> Result<(), Self::Error> {
+        // MakeClosure pops `capture_count` capture values and pushes one closure object.
+        if !self.sim.pop_n(capture_count) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
+    fn load_capture(&mut self, _idx: usize) -> Result<(), Self::Error> {
+        // LoadCapture pushes one value onto the stack.
+        self.sim.push();
+        Ok(())
+    }
+
     fn resolve_field_name(&self, _base: &Place, field_idx: usize) -> String {
         format!("{field_idx}")
     }
@@ -800,6 +829,14 @@ impl StackEffectSink for StackCarryPullSink<'_> {
     }
 
     fn assert_top(&mut self) -> Result<(), Self::Error> {
+        if !self.sim.pop_n(1) {
+            return Err(());
+        }
+        Ok(())
+    }
+
+    fn store_capture_value(&mut self, _idx: usize) -> Result<(), Self::Error> {
+        // StoreCapture pops one value (the value to store into the capture cell).
         if !self.sim.pop_n(1) {
             return Err(());
         }

@@ -2493,6 +2493,83 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// Parse a lambda expression:
+    ///   `[<T, U>] (params) -> [RetType] [throws E] { body }`
+    fn parse_lambda_expr(&mut self) {
+        self.with_node(SyntaxKind::LAMBDA_EXPR, |p| {
+            // Optional generic parameters: <T> or <K, V>
+            if p.at(TokenKind::Less) {
+                p.parse_generic_param_list();
+            }
+
+            // Parameter list: (x: int, y: string) or (x, y) or ()
+            // Lambda params have optional type annotations (unlike function params)
+            p.parse_lambda_parameter_list();
+
+            // Arrow is required
+            if !p.eat(TokenKind::Arrow) {
+                p.error_unexpected_token("'->' after lambda parameters".to_string());
+            }
+
+            // Optional return type: anything before `throws` or `{`
+            if !p.at(TokenKind::LBrace) && !p.at(TokenKind::Throws) {
+                p.parse_type();
+            }
+
+            // Optional throws clause
+            if p.at(TokenKind::Throws) {
+                p.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
+                    p.bump(); // throws
+                    p.parse_type();
+                });
+            }
+
+            // Body: block expression (required)
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("lambda body '{'".to_string());
+            }
+        });
+    }
+
+    /// Parse a lambda parameter list where type annotations are optional.
+    fn parse_lambda_parameter_list(&mut self) {
+        self.with_node(SyntaxKind::PARAMETER_LIST, |p| {
+            p.expect(TokenKind::LParen);
+
+            if !p.at(TokenKind::RParen) {
+                p.parse_lambda_parameter();
+
+                while p.eat(TokenKind::Comma) {
+                    if p.at(TokenKind::RParen) {
+                        break; // Trailing comma
+                    }
+                    p.parse_lambda_parameter();
+                }
+            }
+
+            p.expect(TokenKind::RParen);
+        });
+    }
+
+    /// Parse a single lambda parameter with an optional type annotation.
+    fn parse_lambda_parameter(&mut self) {
+        self.with_node(SyntaxKind::PARAMETER, |p| {
+            // Parameter name
+            if p.at(TokenKind::Word) || p.at(TokenKind::Client) {
+                p.bump();
+            } else {
+                p.error_unexpected_token("parameter name".to_string());
+            }
+
+            // Optional type annotation: "name: type"
+            if p.eat(TokenKind::Colon) {
+                p.parse_type();
+            }
+        });
+    }
+
     /// Parse a block expression with statements
     fn parse_block_expr(&mut self) {
         self.with_node(SyntaxKind::BLOCK_EXPR, |p| {
@@ -3482,6 +3559,9 @@ impl<'a> Parser<'a> {
         } else if self.at(TokenKind::Client) {
             // `client` is KW_CLIENT; allow as identifier (e.g. parameter named `client`, `client.execute(...)`)
             self.parse_path_or_ident();
+        } else if self.at(TokenKind::LParen) && self.looks_like_lambda() {
+            // Lambda expression: (params) -> [RetType] { body }
+            self.parse_lambda_expr();
         } else if self.at(TokenKind::LParen) {
             // Parenthesized expression
             self.with_node(SyntaxKind::PAREN_EXPR, |p| {
@@ -3514,6 +3594,9 @@ impl<'a> Parser<'a> {
         {
             // env.FIELD sugar
             self.parse_env_access();
+        } else if self.at(TokenKind::Less) && self.looks_like_generic_lambda() {
+            // Generic lambda expression: <T>(params) -> [RetType] { body }
+            self.parse_lambda_expr();
         } else {
             self.error_unexpected_token("expression".to_string());
             // Consume the unexpected token to avoid infinite loops
@@ -3712,6 +3795,97 @@ impl<'a> Parser<'a> {
         }
 
         false // Default to block
+    }
+
+    /// Check if the current position starts a lambda expression.
+    /// Disambiguates `(` in expression position between parenthesized expr and lambda.
+    ///
+    /// Positive signals:
+    /// - `( )` followed by `->` → zero-param lambda
+    /// - `( Word :` → typed param (tuples won't use `:` after identifiers)
+    /// - `( ... ) ->` → depth-aware paren scan then check for `->` (untyped multi-param)
+    fn looks_like_lambda(&self) -> bool {
+        if !self.at(TokenKind::LParen) {
+            return false;
+        }
+
+        // `( ) ->` → zero-param lambda
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::RParen)
+            && self.peek(2).map(|t| t.kind) == Some(TokenKind::Arrow)
+        {
+            return true;
+        }
+
+        // `( Word :` → typed param → definitely a lambda
+        if self.peek(1).map(|t| t.kind) == Some(TokenKind::Word)
+            && self.peek(2).map(|t| t.kind) == Some(TokenKind::Colon)
+        {
+            return true;
+        }
+
+        // Depth-aware scan: find matching `)`, then check for `->`
+        // This handles `(a, b) -> { ... }` and `(a) -> { ... }`
+        let mut depth: u32 = 0;
+        let mut offset: usize = 0;
+        loop {
+            let Some(token) = self.peek(offset) else {
+                return false;
+            };
+            match token.kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        // Check if `->` follows the closing `)`
+                        return self.peek(offset + 1).map(|t| t.kind) == Some(TokenKind::Arrow);
+                    }
+                }
+                _ => {}
+            }
+            offset += 1;
+            // Safety limit consistent with looks_like_catch_arm_start
+            if offset > 64 {
+                return false;
+            }
+        }
+    }
+
+    /// Check if `<` starts a generic lambda expression.
+    /// `< Word >` or `< Word ,` followed by `(` → generic lambda.
+    fn looks_like_generic_lambda(&self) -> bool {
+        if !self.at(TokenKind::Less) {
+            return false;
+        }
+        // `< Word > (` or `< Word , ... > (`
+        if let Some(t1) = self.peek(1) {
+            if t1.kind != TokenKind::Word {
+                return false;
+            }
+            if let Some(t2) = self.peek(2) {
+                if t2.kind == TokenKind::Greater {
+                    // `< Word >` — check for `(`
+                    return self.peek(3).map(|t| t.kind) == Some(TokenKind::LParen);
+                }
+                if t2.kind == TokenKind::Comma {
+                    // `< Word ,` — multi-param generics, scan for closing `>`
+                    let mut offset = 3;
+                    loop {
+                        match self.peek(offset) {
+                            Some(t) if t.kind == TokenKind::Greater => {
+                                return self.peek(offset + 1).map(|t| t.kind)
+                                    == Some(TokenKind::LParen);
+                            }
+                            Some(_) => offset += 1,
+                            None => return false,
+                        }
+                        if offset > 64 {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        false
     }
 
     /// Parse a map literal in expression context: { "key": value, ... }

@@ -614,6 +614,9 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("throw ".into()));
             spans.extend(expr_desc_spans(*value, body, inference));
         }
+        Expr::Lambda(_) => {
+            spans.push(DetailSpan::Code("<lambda>".into()));
+        }
         Expr::Missing => {
             spans.push(DetailSpan::Code("<missing>".into()));
         }
@@ -1983,6 +1986,7 @@ impl CompilerRunner {
                 }
                 Expr::FieldAccess { base, field } => format!("{}.{field}", expr_desc(*base, body)),
                 Expr::Index { base, .. } => format!("{}[...]", expr_desc(*base, body)),
+                Expr::Lambda(_) => "<lambda>".into(),
                 Expr::Missing => "<missing>".into(),
             }
         }
@@ -4950,6 +4954,8 @@ fn format_vm_value(value: &bex_vm_types::Value, vm: &bex_vm::BexVm) -> String {
                 Object::Future(_) => "<future>".to_string(),
                 Object::Collector(_) => "<collector>".to_string(),
                 Object::Type(ty) => format!("<type: {ty}>"),
+                Object::Closure(c) => format!("<closure captures={}>", c.captures.len()),
+                Object::Cell(c) => format!("<cell {}>", format_vm_value(&c.value, vm)),
                 Object::RustData(_) => "<rust_data>".to_string(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => "<sentinel>".to_string(),

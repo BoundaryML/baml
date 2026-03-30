@@ -245,8 +245,104 @@ pub(crate) mod support {
             Expr::Index { base, index } => {
                 format!("{}[{}]", expr_desc(*base, body), expr_desc(*index, body))
             }
+            Expr::Lambda(func_def) => format_lambda_signature(func_def),
             Expr::Missing => "<missing>".into(),
         }
+    }
+
+    fn format_lambda_signature(func_def: &baml_compiler2_ast::FunctionDef) -> String {
+        let params: Vec<String> = func_def
+            .params
+            .iter()
+            .map(|p| {
+                if let Some(ref te) = p.type_expr {
+                    format!("{}: {}", p.name, type_expr_to_string(&te.expr))
+                } else {
+                    p.name.to_string()
+                }
+            })
+            .collect();
+        let ret = func_def
+            .return_type
+            .as_ref()
+            .map(|te| format!(" {}", type_expr_to_string(&te.expr)))
+            .unwrap_or_default();
+        let throws = func_def
+            .throws
+            .as_ref()
+            .map(|te| format!(" throws {}", type_expr_to_string(&te.expr)))
+            .unwrap_or_default();
+        let generics = if func_def.generic_params.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "<{}>",
+                func_def
+                    .generic_params
+                    .iter()
+                    .map(|n| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        format!(
+            "{generics}({}) ->{ret}{throws} {{ ... }}",
+            params.join(", ")
+        )
+    }
+
+    /// HIR-aware version of `format_lambda_signature` that qualifies type names.
+    fn format_lambda_signature_hir(
+        func_def: &baml_compiler2_ast::FunctionDef,
+        prefix: &str,
+        local_type_names: &std::collections::HashSet<&str>,
+    ) -> String {
+        let qualify = |te: &baml_compiler2_ast::TypeExpr| -> String {
+            let raw = type_expr_to_string(te);
+            if local_type_names.contains(raw.as_str()) {
+                format!("{prefix}{raw}")
+            } else {
+                raw
+            }
+        };
+        let params: Vec<String> = func_def
+            .params
+            .iter()
+            .map(|p| {
+                if let Some(ref te) = p.type_expr {
+                    format!("{}: {}", p.name, qualify(&te.expr))
+                } else {
+                    p.name.to_string()
+                }
+            })
+            .collect();
+        let ret = func_def
+            .return_type
+            .as_ref()
+            .map(|te| format!(" {}", qualify(&te.expr)))
+            .unwrap_or_default();
+        let throws = func_def
+            .throws
+            .as_ref()
+            .map(|te| format!(" throws {}", qualify(&te.expr)))
+            .unwrap_or_default();
+        let generics = if func_def.generic_params.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "<{}>",
+                func_def
+                    .generic_params
+                    .iter()
+                    .map(|n| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        format!(
+            "{generics}({}) ->{ret}{throws} {{ ... }}",
+            params.join(", ")
+        )
     }
 
     /// Like `expr_desc` but enriches Call expressions with type params from inference.
@@ -276,7 +372,11 @@ pub(crate) mod support {
     fn is_compound(expr: &Expr) -> bool {
         matches!(
             expr,
-            Expr::Block { .. } | Expr::If { .. } | Expr::Match { .. } | Expr::Catch { .. }
+            Expr::Block { .. }
+                | Expr::If { .. }
+                | Expr::Match { .. }
+                | Expr::Catch { .. }
+                | Expr::Lambda(_)
         )
     }
 
@@ -361,6 +461,17 @@ pub(crate) mod support {
                     }
                 }
             }
+            Expr::Lambda(func_def) => {
+                let desc = expr_desc(expr_id, body);
+                writeln!(output, "{pad}{desc} : {ty}").ok();
+                // Recursively render the lambda's own ExprBody
+                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lambda_body, _)) =
+                    &func_def.body
+                    && let Some(root) = lambda_body.root_expr
+                {
+                    render_expr_body_untyped(lambda_body, root, indent + 2, output);
+                }
+            }
             Expr::Call { callee, args } => {
                 // Show type params at call site when callee has TypeVars
                 let callee_desc = expr_desc(*callee, body);
@@ -381,11 +492,161 @@ pub(crate) mod support {
                     arg_strs.join(", ")
                 )
                 .ok();
+                // Expand compound arguments (e.g. lambdas) below the call
+                for arg in args {
+                    if is_compound(&body.exprs[*arg]) {
+                        render_expr(*arg, body, inference, indent + 2, output);
+                    }
+                }
             }
             _ => {
                 let desc = expr_desc(expr_id, body);
                 writeln!(output, "{pad}{desc} : {ty}").ok();
             }
+        }
+    }
+
+    /// Render a lambda's ExprBody without type information (since lambda bodies
+    /// have their own ExprBody arena and we don't have a ScopeInference for them).
+    fn render_expr_body_untyped(
+        body: &ExprBody,
+        expr_id: ExprId,
+        indent: usize,
+        output: &mut String,
+    ) {
+        use std::fmt::Write;
+        let pad = " ".repeat(indent);
+        let expr = &body.exprs[expr_id];
+
+        match expr {
+            Expr::Block { stmts, tail_expr } => {
+                writeln!(output, "{pad}{{").ok();
+                for stmt_id in stmts {
+                    render_stmt_untyped(*stmt_id, body, indent + 2, output);
+                }
+                if let Some(tail) = tail_expr {
+                    render_expr_body_untyped(body, *tail, indent + 2, output);
+                }
+                writeln!(output, "{pad}}}").ok();
+            }
+            Expr::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let cond_desc = expr_desc(*condition, body);
+                writeln!(output, "{pad}if ({cond_desc})").ok();
+                render_expr_body_untyped(body, *then_branch, indent + 2, output);
+                if let Some(else_expr) = else_branch {
+                    writeln!(output, "{pad}else").ok();
+                    render_expr_body_untyped(body, *else_expr, indent + 2, output);
+                }
+            }
+            Expr::Lambda(func_def) => {
+                let desc = expr_desc(expr_id, body);
+                writeln!(output, "{pad}{desc}").ok();
+                if let Some(baml_compiler2_ast::FunctionBodyDef::Expr(lb, _)) = &func_def.body
+                    && let Some(root) = lb.root_expr
+                {
+                    render_expr_body_untyped(lb, root, indent + 2, output);
+                }
+            }
+            _ => {
+                let desc = expr_desc(expr_id, body);
+                writeln!(output, "{pad}{desc}").ok();
+            }
+        }
+    }
+
+    fn render_stmt_untyped(
+        stmt_id: baml_compiler2_ast::StmtId,
+        body: &ExprBody,
+        indent: usize,
+        output: &mut String,
+    ) {
+        use std::fmt::Write;
+
+        use baml_compiler2_ast::Stmt;
+        let pad = " ".repeat(indent);
+        let stmt = &body.stmts[stmt_id];
+        match stmt {
+            Stmt::Let {
+                pattern,
+                initializer,
+                ..
+            } => {
+                let pat = pat_desc(*pattern, body);
+                let init = initializer
+                    .map(|e| {
+                        let desc = expr_desc(e, body);
+                        if is_compound(&body.exprs[e]) {
+                            " = ...".to_string()
+                        } else {
+                            format!(" = {desc}")
+                        }
+                    })
+                    .unwrap_or_default();
+                writeln!(output, "{pad}let {pat}{init}").ok();
+                if let Some(e) = *initializer
+                    && is_compound(&body.exprs[e])
+                {
+                    render_expr_body_untyped(body, e, indent + 2, output);
+                }
+            }
+            Stmt::Expr(expr_id) => {
+                render_expr_body_untyped(body, *expr_id, indent, output);
+            }
+            Stmt::For {
+                binding,
+                collection,
+                body: for_body,
+            } => {
+                let pat = pat_desc(*binding, body);
+                let iter_desc = expr_desc(*collection, body);
+                writeln!(output, "{pad}for {pat} in {iter_desc}").ok();
+                render_expr_body_untyped(body, *for_body, indent + 2, output);
+            }
+            Stmt::While {
+                condition,
+                body: while_body,
+                ..
+            } => {
+                let cond = expr_desc(*condition, body);
+                writeln!(output, "{pad}while ({cond})").ok();
+                render_expr_body_untyped(body, *while_body, indent + 2, output);
+            }
+            Stmt::Return(Some(expr_id)) => {
+                let desc = expr_desc(*expr_id, body);
+                writeln!(output, "{pad}return {desc}").ok();
+            }
+            Stmt::Return(None) => {
+                writeln!(output, "{pad}return").ok();
+            }
+            Stmt::Throw { value } => {
+                let desc = expr_desc(*value, body);
+                writeln!(output, "{pad}throw {desc}").ok();
+            }
+            Stmt::Assign { target, value } => {
+                let t = expr_desc(*target, body);
+                let v = expr_desc(*value, body);
+                writeln!(output, "{pad}{t} = {v}").ok();
+            }
+            Stmt::AssignOp { target, op, value } => {
+                let t = expr_desc(*target, body);
+                let v = expr_desc(*value, body);
+                writeln!(output, "{pad}{t} {op:?}= {v}").ok();
+            }
+            Stmt::Break => {
+                writeln!(output, "{pad}break").ok();
+            }
+            Stmt::Continue => {
+                writeln!(output, "{pad}continue").ok();
+            }
+            Stmt::Assert { condition } => {
+                let desc = expr_desc(*condition, body);
+                writeln!(output, "{pad}assert {desc}").ok();
+            }
+            Stmt::Missing | Stmt::HeaderComment { .. } => {}
         }
     }
 
@@ -881,6 +1142,7 @@ pub(crate) mod support {
         use baml_compiler2_hir::{
             file_item_tree,
             file_package::file_package,
+            file_semantic_index,
             loc::{ClassLoc, EnumLoc, TypeAliasLoc},
         };
 
@@ -1170,6 +1432,22 @@ pub(crate) mod support {
                     expr_desc_hir(*base, body, prefix, local_type_names),
                     expr_desc_hir(*index, body, prefix, local_type_names)
                 ),
+                Expr::Lambda(func_def) => {
+                    let sig = format_lambda_signature_hir(func_def, prefix, local_type_names);
+                    let body_desc = func_def
+                        .body
+                        .as_ref()
+                        .map(|b| match b {
+                            baml_compiler2_ast::FunctionBodyDef::Expr(lb, _) => lb
+                                .root_expr
+                                .map(|root| expr_desc_hir(root, lb, prefix, local_type_names))
+                                .unwrap_or_else(|| "<empty>".into()),
+                            _ => "<non-expr>".into(),
+                        })
+                        .unwrap_or_else(|| "<no body>".into());
+                    // Replace "{ ... }" placeholder with actual body
+                    sig.replace("{ ... }", &format!("{{ {body_desc} }}"))
+                }
                 Expr::Missing => "<missing>".into(),
             }
         }
@@ -1387,6 +1665,42 @@ pub(crate) mod support {
             } else {
                 writeln!(output).ok();
             }
+        }
+
+        // ── Lambda capture annotations ──────────────────────────────────────
+        let index = file_semantic_index(db, file);
+        let mut has_captures = false;
+        for (i, scope) in index.scopes.iter().enumerate() {
+            if !matches!(scope.kind, baml_compiler2_hir::scope::ScopeKind::Lambda) {
+                continue;
+            }
+            let bindings = &index.scope_bindings[i];
+            if bindings.captures.is_empty() {
+                continue;
+            }
+            if !has_captures {
+                writeln!(output, "\n--- captures ---").ok();
+                has_captures = true;
+            }
+            // Build a descriptive path for the lambda scope
+            let parent_name = scope
+                .parent
+                .and_then(|pid| {
+                    let parent = &index.scopes[pid.index() as usize];
+                    parent.name.as_ref().map(|n| n.to_string())
+                })
+                .unwrap_or_else(|| "?".into());
+            let params: Vec<&str> = bindings.params.iter().map(|(n, _)| n.as_str()).collect();
+            let capture_names: Vec<&str> =
+                bindings.captures.iter().map(|(n, _)| n.as_str()).collect();
+            writeln!(
+                output,
+                "lambda ({}) in {}: captures [{}]",
+                params.join(", "),
+                parent_name,
+                capture_names.join(", ")
+            )
+            .ok();
         }
 
         output

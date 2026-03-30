@@ -386,6 +386,10 @@ pub enum Expr {
         base: ExprId,
         index: ExprId,
     },
+    /// Lambda expression: anonymous function in expression position.
+    /// Reuses `FunctionDef` with synthetic name `"<anonymous function>"`.
+    /// The lambda's body gets its own `ExprBody` via `FunctionBodyDef::Expr`.
+    Lambda(Box<FunctionDef>),
     Missing,
 }
 

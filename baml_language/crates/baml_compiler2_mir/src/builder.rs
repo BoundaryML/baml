@@ -68,6 +68,11 @@ impl MirBuilder {
         }
     }
 
+    /// Return the function name.
+    pub(crate) fn name(&self) -> &Name {
+        &self.name
+    }
+
     /// Set the source span for the function.
     pub(crate) fn set_span(&mut self, span: Span) {
         self.span = Some(span);
@@ -97,6 +102,7 @@ impl MirBuilder {
             span,
             scope_span: None,
             is_watched,
+            is_captured: false,
         });
         id
     }
@@ -117,6 +123,14 @@ impl MirBuilder {
     /// to catch binding locals when TIR has not populated the pattern type map.
     pub(crate) fn local_ty(&self, local: Local) -> Ty {
         self.locals[local.0].ty.clone()
+    }
+
+    /// Get a mutable reference to a local declaration.
+    ///
+    /// Used by Phase 4 to set `is_captured = true` after lowering the function body
+    /// but before calling `build()`.
+    pub(crate) fn local_decl_mut(&mut self, local: Local) -> &mut LocalDecl {
+        &mut self.locals[local.0]
     }
 
     // ========================================================================
@@ -415,6 +429,7 @@ impl MirBuilder {
                 unwind_error_locals: self.unwind_error_locals,
                 viz_nodes: self.viz_nodes,
             }),
+            lambdas: vec![],
         }
     }
 
@@ -456,6 +471,7 @@ impl MirBuilder {
                 unwind_error_locals: self.unwind_error_locals,
                 viz_nodes: self.viz_nodes,
             }),
+            lambdas: vec![],
         }
     }
 

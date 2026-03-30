@@ -568,6 +568,9 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
                             });
                         }
                         Place::Local(_) => {}
+                        Place::Capture(_) => {
+                            // StoreCapture — no local use to record.
+                        }
                     }
 
                     // Record uses in the rvalue
@@ -642,6 +645,9 @@ fn collect_def_use(body: &MirFunctionBody) -> HashMap<Local, LocalDefUse> {
 fn walk_place_locals(place: &Place, f: &mut impl FnMut(Local)) {
     match place {
         Place::Local(local) => f(*local),
+        Place::Capture(_) => {
+            // Captures are not locals — nothing to walk.
+        }
         Place::Field { base, .. } => walk_place_locals(base, f),
         Place::Index { base, index, .. } => {
             walk_place_locals(base, f);
@@ -687,6 +693,11 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
             walk_place_locals(place, f);
         }
         Rvalue::IsType { operand, .. } => walk_operand_locals(operand, f),
+        Rvalue::MakeClosure { captures, .. } => {
+            for cap in captures {
+                walk_operand_locals(cap, f);
+            }
+        }
     }
 }
 
@@ -880,6 +891,11 @@ fn classify_locals(
         } else if idx > 0 && idx <= arity {
             // Parameters are always real (they come from the caller)
             LocalClassification::Parameter
+        } else if local_decl.is_captured {
+            // Captured locals must always be Real - they need a stable stack slot
+            // so that the cell-wrapping preamble (MakeCell/LoadDeref/StoreDeref) works.
+            // Virtual/CopyOf/PhiLike classification would inline away the slot.
+            LocalClassification::Real
         } else if idx != 0
             && du.uses.is_empty()
             && (local_decl.name.is_none() || is_unused_wildcard)
@@ -1325,6 +1341,7 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
     fn place_has_projection(place: &Place) -> bool {
         match place {
             Place::Local(_) => false,
+            Place::Capture(_) => false,
             Place::Field { .. } | Place::Index { .. } => true,
         }
     }
@@ -1351,6 +1368,7 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
             place_has_projection(place)
         }
         Rvalue::IsType { operand, .. } => operand_has_projection(operand),
+        Rvalue::MakeClosure { captures, .. } => captures.iter().any(operand_has_projection),
     }
 }
 
@@ -1453,9 +1471,12 @@ fn has_side_effect(kind: &StatementKind, rvalue_reads: &HashSet<Local>) -> bool 
 }
 
 /// Get the base local from a place, following field/index projections.
+///
+/// Panics for `Place::Capture` — captures have no base local.
 fn get_base_local(place: &Place) -> Local {
     match place {
         Place::Local(local) => *local,
+        Place::Capture(_) => panic!("Place::Capture has no base local"),
         Place::Field { base, .. } => get_base_local(base),
         Place::Index { base, .. } => get_base_local(base),
     }

@@ -12,8 +12,9 @@ use text_size::{TextRange, TextSize};
 
 use crate::ast::{
     AssignOp, AstSourceMap, BinaryOp, CatchArm, CatchArmId, CatchClause, CatchClauseKind, Expr,
-    ExprBody, ExprId, LetOrigin, Literal, LoopOrigin, MatchArm, MatchArmId, PatId, Pattern,
-    SpreadField, Stmt, StmtId, TypeAnnotId, TypeExpr, UnaryOp,
+    ExprBody, ExprId, FunctionBodyDef, FunctionDef, LetOrigin, Literal, LoopOrigin, MatchArm,
+    MatchArmId, PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId, TypeExpr,
+    UnaryOp,
 };
 
 /// Returns true if `kind` can serve as an identifier token in expression position.
@@ -295,6 +296,7 @@ impl LoweringContext {
             SyntaxKind::ARRAY_LITERAL => self.lower_array_literal(node),
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
             SyntaxKind::MAP_LITERAL => self.lower_map_literal(node),
+            SyntaxKind::LAMBDA_EXPR => self.lower_lambda_expr(node),
             _ => {
                 if let Some(literal) = self.try_lower_literal_token(node) {
                     literal
@@ -1659,6 +1661,92 @@ impl LoweringContext {
         self.alloc_expr(Expr::Map { entries }, node.text_range())
     }
 
+    fn lower_lambda_expr(&mut self, node: &SyntaxNode) -> ExprId {
+        use baml_compiler_syntax::ast;
+
+        // Extract optional generic params: <T>, <K, V>, etc.
+        let generic_params = crate::lower_cst::extract_generic_params(node);
+
+        // Lower parameter list — gives us Vec<Param>
+        let params = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
+            .and_then(ast::ParameterList::cast)
+            .map(|pl| crate::lower_cst::lower_params(&pl))
+            .unwrap_or_default();
+
+        let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
+
+        // Lower optional return type: the TYPE_EXPR that is a direct child of the
+        // lambda node, appearing after PARAMETER_LIST but before THROWS_CLAUSE/BLOCK_EXPR.
+        // We scan children in order, skipping items until after PARAMETER_LIST.
+        let return_type = {
+            let mut after_params = false;
+            let mut found: Option<SpannedTypeExpr> = None;
+            for child in node.children() {
+                match child.kind() {
+                    SyntaxKind::PARAMETER_LIST | SyntaxKind::GENERIC_PARAM_LIST => {
+                        after_params = true;
+                    }
+                    SyntaxKind::THROWS_CLAUSE | SyntaxKind::BLOCK_EXPR => {
+                        break;
+                    }
+                    SyntaxKind::TYPE_EXPR if after_params && found.is_none() => {
+                        if let Some(te) = ast::TypeExpr::cast(child.clone()) {
+                            found = Some(SpannedTypeExpr {
+                                expr: crate::lower_type_expr::lower_type_expr_node(&te),
+                                span: child.text_range(),
+                            });
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            found
+        };
+
+        // Lower optional throws clause
+        let throws = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::THROWS_CLAUSE)
+            .and_then(ast::ThrowsClause::cast)
+            .and_then(|tc| tc.type_expr())
+            .map(|te| SpannedTypeExpr {
+                span: te.syntax().text_range(),
+                expr: crate::lower_type_expr::lower_type_expr_node(&te),
+            });
+
+        // Lower body via a FRESH LoweringContext — lambda gets its own ExprBody.
+        let body = node
+            .children()
+            .find(|n| n.kind() == SyntaxKind::BLOCK_EXPR)
+            .and_then(ast::BlockExpr::cast)
+            .map(|block| {
+                let mut lambda_ctx = LoweringContext::new();
+                for name in &param_names {
+                    lambda_ctx.names_in_scope.insert(name.to_string());
+                }
+                let root_expr = lambda_ctx.lower_block_expr(&block);
+                let (body, source_map) = lambda_ctx.finish(Some(root_expr));
+                FunctionBodyDef::Expr(body, source_map)
+            });
+
+        let func_def = FunctionDef {
+            name: Name::new("<anonymous function>"),
+            generic_params,
+            params,
+            return_type,
+            throws,
+            body,
+            declarative_meta: None,
+            attributes: Vec::new(),
+            span: node.text_range(),
+            name_span: node.text_range(), // synthetic: use the lambda span
+        };
+
+        self.alloc_expr(Expr::Lambda(Box::new(func_def)), node.text_range())
+    }
+
     fn try_lower_paren_token_content(&mut self, node: &SyntaxNode) -> Option<ExprId> {
         // Look for a single meaningful token inside the parentheses
         for elem in node.children_with_tokens() {
@@ -2209,6 +2297,7 @@ fn is_expr_node_kind(kind: SyntaxKind) -> bool {
             | SyntaxKind::RAW_STRING_LITERAL
             | SyntaxKind::OBJECT_LITERAL
             | SyntaxKind::MAP_LITERAL
+            | SyntaxKind::LAMBDA_EXPR
     )
 }
 

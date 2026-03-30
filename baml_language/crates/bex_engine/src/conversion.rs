@@ -202,6 +202,12 @@ impl BexEngine {
                     }
                 })
             }
+            Object::Closure(_) => Err(EngineError::CannotConvert {
+                type_name: "closure".to_string(),
+            }),
+            Object::Cell(_) => Err(EngineError::CannotConvert {
+                type_name: "cell".to_string(),
+            }),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Err(EngineError::CannotSnapshot {
                 type_name: "sentinel".to_string(),

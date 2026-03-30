@@ -37,4 +37,8 @@ impl BamlClassMap for PackageBamlImpl {
             None
         }
     }
+
+    fn map(_map: &IndexMap<String, Value>, _f: &Value) -> Vec<Value> {
+        todo!("map not yet implemented");
+    }
 }

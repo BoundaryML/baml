@@ -773,6 +773,9 @@ impl BexEngine {
             // Update watch state (graph NodeIds, RootState values)
             vm.watch.apply_forwarding(&forwarding);
 
+            // Update frame function pointers (needed for closures)
+            vm.apply_frame_forwarding(&forwarding);
+
             // Invalidate TLAB so next allocation gets chunk from new space
             vm.tlab.invalidate();
         }
@@ -1110,6 +1113,9 @@ impl BexEngine {
         // Watch state (last_assigned/last_notified values that aren't on the stack)
         vm.watch.collect_roots(&mut roots);
 
+        // Frame function pointers (needed once closures are heap-allocated)
+        roots.extend(vm.collect_frame_roots());
+
         // Note: Frame locals are stored in the stack at the locals_offset position,
         // so they're already included in the stack iteration above.
 
@@ -1136,6 +1142,9 @@ impl BexEngine {
 
                 // Update watch state (graph NodeIds, RootState values)
                 vm.watch.apply_forwarding(&forwarding);
+
+                // Update frame function pointers (needed for closures)
+                vm.apply_frame_forwarding(&forwarding);
 
                 // Invalidate TLAB so next allocation gets chunk from new space
                 vm.tlab.invalidate();

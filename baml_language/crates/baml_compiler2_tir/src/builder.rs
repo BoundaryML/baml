@@ -401,6 +401,81 @@ impl<'db> TypeInferenceBuilder<'db> {
                     }
                 }
             }
+            Expr::Lambda(func_def) => {
+                // Synthesis mode: no expected type available.
+                // All param types MUST be annotated; unannotated params produce an error.
+
+                // Combine parent generics with the lambda's own generic params
+                // so that `<T>(x: T) -> T { x }` recognizes T as a TypeVar.
+                let mut all_generic_params = self.generic_params.clone();
+                all_generic_params.extend(func_def.generic_params.iter().cloned());
+
+                let mut param_tys: Vec<(Option<baml_base::Name>, Ty)> = Vec::new();
+
+                for param in &func_def.params {
+                    let param_ty = match &param.type_expr {
+                        Some(te) => {
+                            let mut diags = Vec::new();
+                            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                                self.context.db(),
+                                &te.expr,
+                                self.package_items,
+                                &self.ns_context,
+                                &all_generic_params,
+                                &mut diags,
+                            );
+                            for diag in diags {
+                                self.context.report_at_span(diag, te.span);
+                            }
+                            ty
+                        }
+                        None => {
+                            // No annotation and no expected type → error
+                            self.context.report_simple(
+                                TirTypeError::CannotInferLambdaParamType {
+                                    param_name: param.name.clone(),
+                                },
+                                expr_id,
+                            );
+                            Ty::Unknown {
+                                attr: TyAttr::default(),
+                            }
+                        }
+                    };
+                    param_tys.push((Some(param.name.clone()), param_ty));
+                }
+
+                // Lower optional return type annotation
+                let return_annotation = func_def.return_type.as_ref().map(|te| {
+                    let mut diags = Vec::new();
+                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                        self.context.db(),
+                        &te.expr,
+                        self.package_items,
+                        &self.ns_context,
+                        &all_generic_params,
+                        &mut diags,
+                    );
+                    for diag in diags {
+                        self.context.report_at_span(diag, te.span);
+                    }
+                    ty
+                });
+
+                // Infer the lambda body using save/restore approach
+                let (ret_ty, _lambda_expressions) = self.infer_lambda_body(
+                    func_def,
+                    &param_tys,
+                    return_annotation.as_ref(),
+                    expr_id,
+                );
+
+                Ty::Function {
+                    params: param_tys,
+                    ret: Box::new(ret_ty),
+                    attr: TyAttr::default(),
+                }
+            }
             Expr::Missing => Ty::Unknown {
                 attr: TyAttr::default(),
             },
@@ -615,15 +690,50 @@ impl<'db> TypeInferenceBuilder<'db> {
                             crate::generics::infer_bindings(ret, expected, &mut bindings);
                         }
 
-                        // Phase 1: forward-infer from arguments (high priority, overrides)
-                        for ((_, param_ty), arg) in effective_params.iter().zip(args.iter()) {
+                        // Phase 1: forward-infer from arguments (high priority, overrides).
+                        // Two-pass: first process non-lambda args to bind type vars,
+                        // then process lambda args with resolved bindings. This allows
+                        // `apply((x) -> { x * 2 }, 21)` to bind T=int from `21` before
+                        // checking the lambda against `(T) -> U`.
+                        let param_arg_pairs: Vec<_> =
+                            effective_params.iter().zip(args.iter()).collect();
+
+                        // Pass 1: non-lambda arguments — bind type variables
+                        for ((_, param_ty), arg) in &param_arg_pairs {
+                            if matches!(&body.exprs[**arg], Expr::Lambda(_)) {
+                                continue;
+                            }
                             let substituted = crate::generics::substitute_ty(param_ty, &bindings);
-                            let arg_ty = if crate::generics::contains_typevar(&substituted) {
-                                // TypeVar not yet resolved — just infer, don't check against it
-                                self.infer_expr(*arg, body)
+                            let arg_ty = if !crate::generics::contains_typevar(&substituted) {
+                                self.check_expr(**arg, body, &substituted)
                             } else {
-                                // Fully concrete — use contextual typing
-                                self.check_expr(*arg, body, &substituted)
+                                self.infer_expr(**arg, body)
+                            };
+                            crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
+                        }
+
+                        // Pass 2: lambda arguments — type vars now resolved from pass 1
+                        for ((_, param_ty), arg) in &param_arg_pairs {
+                            if !matches!(&body.exprs[**arg], Expr::Lambda(_)) {
+                                continue;
+                            }
+                            let substituted = crate::generics::substitute_ty(param_ty, &bindings);
+                            let arg_ty = if !crate::generics::contains_typevar(&substituted) {
+                                self.check_expr(**arg, body, &substituted)
+                            } else if let Ty::Function {
+                                params: fn_params, ..
+                            } = &substituted
+                            {
+                                let all_params_concrete = fn_params
+                                    .iter()
+                                    .all(|(_, t)| !crate::generics::contains_typevar(t));
+                                if all_params_concrete {
+                                    self.check_expr(**arg, body, &substituted)
+                                } else {
+                                    self.infer_expr(**arg, body)
+                                }
+                            } else {
+                                self.infer_expr(**arg, body)
                             };
                             crate::generics::infer_bindings(param_ty, &arg_ty, &mut bindings);
                         }
@@ -694,6 +804,123 @@ impl<'db> TypeInferenceBuilder<'db> {
             // Catch: propagate expected type to the base expression
             Expr::Catch { base, clauses } => {
                 self.infer_catch_expr(expr_id, *base, clauses, body, Some(expected))
+            }
+            // Lambda: bidirectional checking against expected function type
+            Expr::Lambda(func_def) => {
+                match expected {
+                    Ty::Function {
+                        params: expected_params,
+                        ret: expected_ret,
+                        ..
+                    } => {
+                        // Checking mode: decompose expected function type.
+                        // Arity check
+                        if func_def.params.len() != expected_params.len() {
+                            self.context.report_simple(
+                                TirTypeError::ArgumentCountMismatch {
+                                    expected: expected_params.len(),
+                                    got: func_def.params.len(),
+                                },
+                                expr_id,
+                            );
+                        }
+
+                        // Determine param types: annotation takes precedence, else use expected
+                        let mut param_tys: Vec<(Option<baml_base::Name>, Ty)> = Vec::new();
+                        for (i, param) in func_def.params.iter().enumerate() {
+                            let expected_param_ty = expected_params
+                                .get(i)
+                                .map(|(_, ty)| ty.clone())
+                                .unwrap_or(Ty::Unknown {
+                                    attr: TyAttr::default(),
+                                });
+
+                            let param_ty = match &param.type_expr {
+                                Some(te) => {
+                                    let mut diags = Vec::new();
+                                    let annotated = crate::lower_type_expr::lower_type_expr_in_ns(
+                                        self.context.db(),
+                                        &te.expr,
+                                        self.package_items,
+                                        &self.ns_context,
+                                        &self.generic_params,
+                                        &mut diags,
+                                    );
+                                    for diag in diags {
+                                        self.context.report_at_span(diag, te.span);
+                                    }
+                                    // Check annotation is compatible with expected
+                                    if !self.is_subtype(&expected_param_ty, &annotated) {
+                                        self.context.report(
+                                            TirTypeError::TypeMismatch {
+                                                expected: expected_param_ty.clone(),
+                                                got: annotated.clone(),
+                                            },
+                                            expr_id,
+                                            Vec::new(),
+                                        );
+                                    }
+                                    annotated
+                                }
+                                None => {
+                                    // Bidirectional inference: use expected param type
+                                    expected_param_ty
+                                }
+                            };
+                            param_tys.push((Some(param.name.clone()), param_ty));
+                        }
+
+                        // Determine return type: annotation > expected
+                        let return_annotation = func_def.return_type.as_ref().map(|te| {
+                            let mut diags = Vec::new();
+                            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
+                                self.context.db(),
+                                &te.expr,
+                                self.package_items,
+                                &self.ns_context,
+                                &self.generic_params,
+                                &mut diags,
+                            );
+                            for diag in diags {
+                                self.context.report_at_span(diag, te.span);
+                            }
+                            ty
+                        });
+                        let effective_ret =
+                            return_annotation.as_ref().unwrap_or(expected_ret.as_ref());
+
+                        // Infer/check the lambda body using save/restore approach
+                        let (ret_ty, _lambda_expressions) = self.infer_lambda_body(
+                            func_def,
+                            &param_tys,
+                            Some(effective_ret),
+                            expr_id,
+                        );
+
+                        let result = Ty::Function {
+                            params: param_tys,
+                            ret: Box::new(ret_ty),
+                            attr: TyAttr::default(),
+                        };
+                        self.record_expr_type(expr_id, result.clone());
+                        result
+                    }
+                    _ => {
+                        // Non-function expected type: fall through to infer-then-check
+                        let inferred = self.infer_expr(expr_id, body);
+                        if !self.is_subtype(&inferred, expected) {
+                            self.context.report(
+                                TirTypeError::TypeMismatch {
+                                    expected: expected.clone(),
+                                    got: inferred.clone(),
+                                },
+                                expr_id,
+                                Vec::new(),
+                            );
+                        }
+                        inferred
+                    }
+                }
             }
             // All other expressions: infer then subtype-check
             _ => {
@@ -1842,7 +2069,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_effective_throws_from_expr(*base, body, out);
                 self.collect_effective_throws_from_expr(*index, body, out);
             }
-            Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
+            Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
         }
     }
 
@@ -1990,7 +2217,7 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::Catch { base, .. } => {
                 self.collect_throw_facts_from_expr(*base, body, out);
             }
-            Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
+            Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
         }
     }
 
@@ -3123,12 +3350,19 @@ impl<'db> TypeInferenceBuilder<'db> {
         let class_data = &item_tree[class_loc.id(db)];
 
         // Bind generic type variables: e.g. {T → int} for Array<int>.
-        let bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
+        let mut bindings = crate::generics::bind_type_vars(&class_data.generic_params, type_args);
 
         // Search methods first.
         for &method_id in &class_data.methods {
             let method_data = &item_tree[method_id];
             if method_data.name == *member_name {
+                // Add method-level generics as TypeVar entries so they survive
+                // lowering and can be resolved by call-site inference.
+                for gp in &method_data.generic_params {
+                    bindings
+                        .entry(gp.clone())
+                        .or_insert_with(|| Ty::TypeVar(gp.clone(), TyAttr::default()));
+                }
                 let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, method_id);
                 let sig = baml_compiler2_hir::signature::function_signature(db, func_loc);
                 let mut diags = Vec::new();
@@ -4010,5 +4244,124 @@ impl<'db> TypeInferenceBuilder<'db> {
             AssignOp::Shl => BinaryOp::Shl,
             AssignOp::Shr => BinaryOp::Shr,
         }
+    }
+
+    /// Infer/check a lambda body using a save/restore approach.
+    ///
+    /// Saves the current locals, `declared_types`, `declared_return_ty`,
+    /// `generic_params`, and `expressions` (to avoid `ExprId` collisions between
+    /// the lambda's arena and the parent's arena). After inference, restores all
+    /// saved state and returns the lambda's expression types separately.
+    ///
+    /// Returns `(inferred_return_ty, lambda_expressions)` where
+    /// `lambda_expressions` contains the expression types for the lambda body
+    /// only (keyed by the lambda's own `ExprId`s, which start at 0).
+    pub fn infer_lambda_body(
+        &mut self,
+        func_def: &baml_compiler2_ast::FunctionDef,
+        param_tys: &[(Option<baml_base::Name>, Ty)],
+        expected_ret: Option<&Ty>,
+        _lambda_expr_id: ExprId,
+    ) -> (Ty, FxHashMap<ExprId, Ty>) {
+        use baml_compiler2_ast::FunctionBodyDef;
+
+        // Get the lambda's ExprBody
+        let Some(FunctionBodyDef::Expr(lambda_body, _source_map)) = &func_def.body else {
+            return (
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+                FxHashMap::default(),
+            );
+        };
+
+        let Some(root_expr) = lambda_body.root_expr else {
+            return (
+                Ty::Void {
+                    attr: TyAttr::default(),
+                },
+                FxHashMap::default(),
+            );
+        };
+
+        // Save current state (including expressions to prevent ExprId collisions)
+        let saved_locals = self.locals.clone();
+        let saved_declared = self.declared_types.clone();
+        let saved_return_ty = self.declared_return_ty.clone();
+        let saved_generic_params = self.generic_params.clone();
+        let saved_expressions = std::mem::take(&mut self.expressions);
+        let saved_bindings = std::mem::take(&mut self.bindings);
+
+        // Extend generic params with the lambda's own generic params
+        let mut new_generic_params = self.generic_params.clone();
+        new_generic_params.extend(func_def.generic_params.iter().cloned());
+        self.generic_params = new_generic_params;
+
+        // Seed lambda params (captures remain accessible via parent locals)
+        for (name_opt, ty) in param_tys {
+            if let Some(name) = name_opt {
+                self.add_local(name.clone(), ty.clone());
+            }
+        }
+
+        // Seed captures from HIR semantic index as Ty::Unknown.
+        //
+        // When `infer_lambda_body` is called from a parent scope (e.g. when the outer
+        // lambda scope infers its body and encounters an inner lambda), captures from
+        // grandparent scopes are NOT visible in `saved_locals`. Look up the lambda
+        // scope by its span and seed its captures as `Ty::Unknown` to suppress false
+        // "unresolved name" diagnostics. Names already in locals are left unchanged.
+        {
+            let db = self.context.db();
+            let file = self.context.scope().file(db);
+            let index = baml_compiler2_ppir::file_semantic_index(db, file);
+            let lambda_span = func_def.span;
+            for (i, scope) in index.scopes.iter().enumerate() {
+                if matches!(scope.kind, baml_compiler2_hir::scope::ScopeKind::Lambda)
+                    && scope.range == lambda_span
+                {
+                    for (capture_name, _def_site) in &index.scope_bindings[i].captures {
+                        if !self.locals.contains_key(capture_name) {
+                            self.locals.insert(
+                                capture_name.clone(),
+                                Ty::Unknown {
+                                    attr: TyAttr::default(),
+                                },
+                            );
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Set return type context for return statement checking inside lambda
+        if let Some(ret) = expected_ret {
+            self.declared_return_ty = Some(ret.clone());
+        } else {
+            self.declared_return_ty = None;
+        }
+
+        // Infer or check the lambda body
+        let ret_ty = if let Some(expected) = expected_ret {
+            if matches!(expected, Ty::Unknown { .. } | Ty::TypeVar(_, _)) {
+                // Expected return is unknown or a type var — just infer
+                self.infer_expr(root_expr, lambda_body)
+            } else {
+                self.check_expr(root_expr, lambda_body, expected)
+            }
+        } else {
+            self.infer_expr(root_expr, lambda_body)
+        };
+
+        // Collect the lambda's expression types and restore parent state
+        let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
+        self.bindings = saved_bindings;
+        self.locals = saved_locals;
+        self.declared_types = saved_declared;
+        self.declared_return_ty = saved_return_ty;
+        self.generic_params = saved_generic_params;
+
+        (ret_ty, lambda_expressions)
     }
 }

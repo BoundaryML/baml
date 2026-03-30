@@ -91,6 +91,9 @@ fn write_bytecode_function(
         } else if i <= func.arity {
             write!(f, " // param")?;
         }
+        if local.is_captured {
+            write!(f, " [captured]")?;
+        }
         writeln!(f)?;
     }
     writeln!(f)?;
@@ -104,6 +107,14 @@ fn write_bytecode_function(
     }
 
     writeln!(f, "}}")?;
+
+    // Recursively display child lambda functions, labeled by index.
+    for (idx, lambda) in func.lambdas.iter().enumerate() {
+        writeln!(f)?;
+        writeln!(f, "// lambda[{idx}]")?;
+        write_function(f, lambda)?;
+    }
+
     Ok(())
 }
 
@@ -350,6 +361,19 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             write!(f, "is_type(")?;
             write_operand(f, operand)?;
             write!(f, ", {ty:?})")
+        }
+        Rvalue::MakeClosure {
+            lambda_idx,
+            captures,
+        } => {
+            write!(f, "make_closure lambda[{lambda_idx}](")?;
+            for (i, cap) in captures.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ", ")?;
+                }
+                write_operand(f, cap)?;
+            }
+            write!(f, ")")
         }
     }
 }

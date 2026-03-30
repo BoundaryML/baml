@@ -75,3 +75,39 @@ pub enum FormatterError {
     #[error("{0}")]
     StrongAstError(#[from] ast::StrongAstError),
 }
+
+#[cfg(test)]
+mod lambda_format_tests {
+    use super::*;
+
+    #[test]
+    fn test_lambda_basic_formatting() {
+        let source = "function test_annotated() -> int {\n    let double = (x: int) -> int { x * 2 }\n    double(21)\n}\n";
+        let options = FormatOptions::default();
+        let formatted =
+            format(source, &options).expect("formatter should succeed on annotated lambda");
+        // Verify idempotency
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_lambda_with_throws_formatting() {
+        let source = "function test_throws() -> int {\n    let risky = (x: int) -> int throws string { x }\n    risky(42)\n}\n";
+        let options = FormatOptions::default();
+        let formatted =
+            format(source, &options).expect("formatter should succeed on lambda with throws");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn test_generic_lambda_formatting() {
+        let source = "function test_generic() -> int {\n    let identity = <T>(x: T) -> T { x }\n    identity(42)\n}\n";
+        let options = FormatOptions::default();
+        let formatted =
+            format(source, &options).expect("formatter should succeed on generic lambda");
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}

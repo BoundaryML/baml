@@ -345,6 +345,15 @@ impl BexHeap {
                     self.debug_assert_valid_value(value);
                 }
             },
+            Object::Closure(closure) => {
+                self.debug_assert_valid_index(closure.function);
+                for value in &closure.captures {
+                    self.debug_assert_valid_value(value);
+                }
+            }
+            Object::Cell(cell) => {
+                self.debug_assert_valid_value(&cell.value);
+            }
             Object::Function(_)
             | Object::Class(_)
             | Object::Enum(_)
