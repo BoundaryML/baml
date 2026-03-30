@@ -336,7 +336,7 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
         }
     }
 
-    pub(crate) fn error_type_resolution(&self, ident: &N) -> ParsingError {
+    pub fn error_type_resolution(&self, ident: &N) -> ParsingError {
         ParsingError {
             reason: format!("Failed to resolve type {ident}"),
             scope: self.scope.clone(),

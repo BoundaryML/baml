@@ -211,6 +211,42 @@ fn baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, ar
     }
 }
 
+fn baml.llm.parse(function_name: string, json: string) -> void {
+    // Locals:
+    let _0: void // _0 // return
+    let _1: string // function_name // param
+    let _2: string // json // param
+    let _3: type // return_type
+    let _4: future<type>
+    let _5: type
+    let _6: future<void>
+
+    bb0: {
+        _4 = dispatch_future const fn baml.llm.get_return_type(copy _1) -> bb1;
+    }
+
+    bb1: {
+        _3 = await _4 -> [bb2];
+    }
+
+    bb2: {
+        _5 = copy _3;
+        _6 = dispatch_future const fn baml.llm.__sap_parse(copy _2, copy _5) -> bb3;
+    }
+
+    bb3: {
+        _0 = await _6 -> [bb4];
+    }
+
+    bb4: {
+        goto -> bb5;
+    }
+
+    bb5: {
+        return;
+    }
+}
+
 fn baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -366,6 +402,8 @@ fn baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client_name:
         return;
     }
 }
+
+fn baml.llm.__sap_parse = builtin(io)
 
 fn baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] {
     // Locals:

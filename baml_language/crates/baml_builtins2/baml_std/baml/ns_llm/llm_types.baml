@@ -292,3 +292,7 @@ function get_jinja_template(function_name: string) -> string throws root.errors.
 function get_return_type(function_name: string) -> type throws root.errors.InvalidArgument {
   $rust_io_function
 }
+
+function __sap_parse<T>(json: string, ty: type) -> T throws root.errors.LlmClient {
+    $rust_io_function
+}

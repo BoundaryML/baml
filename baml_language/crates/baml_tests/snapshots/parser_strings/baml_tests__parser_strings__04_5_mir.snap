@@ -42,6 +42,24 @@ fn user.FormatMessage$build_request(name: string) -> baml.http.Request {
     }
 }
 
+fn user.FormatMessage$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "FormatMessage", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.FormatMessage$render_prompt(name: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -91,6 +109,24 @@ fn user.ProcessText$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "ProcessText", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.ProcessText$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "ProcessText", copy _1) -> [bb1];
     }
 
     bb1: {

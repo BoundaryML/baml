@@ -12,6 +12,9 @@ function user.GetUser() -> user.MyClass  [llm] {
 function user.GetUser$build_request() -> baml.http.Request  [expr] {
   baml.llm.build_request(null, "GetUser", map {  })
 }
+function user.GetUser$parse(json: string) -> user.MyClass  [expr] {
+  baml.llm.parse("GetUser", json)
+}
 function user.GetUser$render_prompt() -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(null, "GetUser", map {  })
 }

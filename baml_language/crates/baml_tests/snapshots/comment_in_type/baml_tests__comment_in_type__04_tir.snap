@@ -14,6 +14,9 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.
 function user.FunctionWithComments$build_request(a: string, b: int) -> baml.http.Request throws never {
   baml.llm.build_request(TestClient, "FunctionWithComments", map { "a": a, "b": b }) : baml.http.Request
 }
+function user.FunctionWithComments$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("FunctionWithComments", json) : string
+}
 function user.CommentAfterArrow() -> string throws never {
   baml.llm.call_llm_function<T>(TestClient, "CommentAfterArrow", map {  }) : string
 }
@@ -22,4 +25,7 @@ function user.CommentAfterArrow$render_prompt() -> baml.llm.PromptAst throws nev
 }
 function user.CommentAfterArrow$build_request() -> baml.http.Request throws never {
   baml.llm.build_request(TestClient, "CommentAfterArrow", map {  }) : baml.http.Request
+}
+function user.CommentAfterArrow$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("CommentAfterArrow", json) : string
 }

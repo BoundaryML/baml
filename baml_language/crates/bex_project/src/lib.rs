@@ -16,7 +16,8 @@ pub use bex_events::EventSink;
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, MediaKind, Ty, TyAttr, try_convert_rust_data,
 };
-pub use sys_types::{CallId, CancellationToken, SysOps};
+pub use sys_ops::SysOps;
+pub use sys_types::{CallId, CancellationToken};
 use thiserror::Error;
 
 mod bex;

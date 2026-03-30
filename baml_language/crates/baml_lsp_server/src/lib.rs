@@ -58,9 +58,9 @@ pub fn version() -> &'static str {
 fn build_playground_sys_ops(
     broadcast_tx: &tokio::sync::broadcast::Sender<WsOutMessage>,
     env_state: &Arc<PlaygroundEnvState>,
-) -> sys_types::SysOps {
+) -> sys_ops::SysOps {
     let http_state = Arc::new(PlaygroundHttpState::new(broadcast_tx.clone()));
-    sys_types::SysOpsBuilder::new()
+    sys_ops::SysOpsBuilder::new()
         .with_fs::<sys_native::NativeSysOps>()
         .with_sys::<sys_native::NativeSysOps>()
         .with_net::<sys_native::NativeSysOps>()
@@ -102,7 +102,7 @@ pub fn run_server(playground_via_browser: bool) -> anyhow::Result<()> {
     let broadcast_tx_for_factory = broadcast_tx.clone();
     let env_state_for_factory = env_state.clone();
     #[allow(clippy::type_complexity)]
-    let sys_op_factory: Arc<dyn Fn(&vfs::VfsPath) -> Arc<sys_types::SysOps> + Send + Sync> =
+    let sys_op_factory: Arc<dyn Fn(&vfs::VfsPath) -> Arc<sys_ops::SysOps> + Send + Sync> =
         Arc::new(move |_path: &vfs::VfsPath| {
             Arc::new(build_playground_sys_ops(
                 &broadcast_tx_for_factory,

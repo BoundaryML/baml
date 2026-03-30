@@ -17,6 +17,9 @@ function user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst th
 function user.FetchDatax$build_request(user_id: string) -> baml.http.Request throws never {
   baml.llm.build_request(VertexGCP, "FetchDatax", map { "user_id": user_id }) : baml.http.Request
 }
+function user.FetchDatax$parse(json: string) -> user.Hi throws never {
+  baml.llm.parse<T>("FetchDatax", json) : user.Hi
+}
 class user.Hi$stream {
   name: null | string
 }

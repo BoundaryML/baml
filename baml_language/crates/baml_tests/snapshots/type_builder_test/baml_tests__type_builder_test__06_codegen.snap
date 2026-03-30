@@ -49,6 +49,13 @@ function user.Fn$build_request() -> baml.http.Request {
     return
 }
 
+function user.Fn$parse(json: string) -> string {
+    load_const "Fn"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
 function user.Fn$render_prompt() -> baml.llm.PromptAst {
     alloc_instance baml.llm.Client
     copy 0

@@ -354,6 +354,69 @@ pub(crate) fn synthesize_llm_builtin_call(
     (body, source_map)
 }
 
+/// Synthesize a `baml.llm.parse("FunctionName", json)` call.
+///
+/// Unlike `synthesize_llm_builtin_call`, there is no client argument and
+/// the second argument is a single `json` identifier (a path expression)
+/// rather than a map of parent params.
+pub(crate) fn synthesize_llm_parse_call(
+    function_name: &str,
+    span: text_size::TextRange,
+) -> (crate::ast::ExprBody, crate::ast::AstSourceMap) {
+    use la_arena::Arena;
+
+    use crate::ast::{AstSourceMap, Expr, ExprBody, Literal};
+
+    let mut exprs = Arena::new();
+    let mut expr_spans = Arena::new();
+
+    let mut alloc = |expr: Expr| -> crate::ast::ExprId {
+        let id = exprs.alloc(expr);
+        expr_spans.alloc(span);
+        id
+    };
+
+    // 1. Function name literal: "FunctionName"
+    let fn_name_expr = alloc(Expr::Literal(Literal::String(function_name.to_string())));
+
+    // 2. `json` parameter reference
+    let json_expr = alloc(Expr::Path(vec![Name::new("json")]));
+
+    // 3. Callee: baml.llm.parse
+    let callee = alloc(Expr::Path(vec![
+        Name::new("baml"),
+        Name::new("llm"),
+        Name::new("parse"),
+    ]));
+
+    let call = alloc(Expr::Call {
+        callee,
+        args: vec![fn_name_expr, json_expr],
+    });
+
+    let body = ExprBody {
+        exprs,
+        stmts: Arena::new(),
+        patterns: Arena::new(),
+        match_arms: Arena::new(),
+        catch_arms: Arena::new(),
+        type_annotations: Arena::new(),
+        root_expr: Some(call),
+    };
+
+    let source_map = AstSourceMap {
+        expr_spans,
+        stmt_spans: Arena::new(),
+        pattern_spans: Arena::new(),
+        match_arm_spans: Arena::new(),
+        type_annotation_spans: Arena::new(),
+        catch_arm_spans: Arena::new(),
+        field_access_member_spans: std::collections::HashMap::new(),
+    };
+
+    (body, source_map)
+}
+
 fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
     use baml_compiler_syntax::{
         SyntaxKind,

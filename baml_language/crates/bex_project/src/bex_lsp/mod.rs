@@ -148,7 +148,7 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
-    ) -> Result<Box<dyn crate::Bex>, crate::RuntimeError>;
+    ) -> Result<Arc<dyn crate::Bex>, crate::RuntimeError>;
 
     fn request_playground_state(&self);
 
@@ -181,4 +181,5 @@ pub trait BexLsp: Send + Sync + notification::BexLspNotification + request::BexL
     fn request_cursor_context(&self, file_path: &str, line: u32, column: u32);
 }
 
+use ::std::sync::Arc;
 pub use multi_project::{LspClientSenderTrait, new_lsp};

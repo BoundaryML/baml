@@ -158,7 +158,7 @@ test_partial_deserializer!(
 test_deserializer!(
     test_map_parse_as_narrower_value,
     r#"{"a": 1}"#,
-    baml_tyannotated!(map<string, (int | null)> @parse_as(map<string, int>)),
+    baml_tyannotated!(map<string, (int | null) @parse_without_null>),
     baml_db!{},
     {"a": 1}
 );
@@ -167,7 +167,7 @@ test_deserializer!(
 test_partial_deserializer!(
     test_map_parse_as_partial,
     r#"{"a": 1"#,
-    baml_tyannotated!(map<string, (int | null)> @parse_as(map<string, int>)),
+    baml_tyannotated!(map<string, (int | null) @parse_without_null>),
     baml_db!{},
     {"a": 1}
 );
@@ -176,7 +176,7 @@ test_partial_deserializer!(
 test_deserializer!(
     test_map_parse_as_rejects_null_value,
     r#"{"a": null}"#,
-    baml_tyannotated!(map<string, (int | null)> @parse_as(map<string, int>)),
+    baml_tyannotated!(map<string, (int | null) @parse_without_null>),
     baml_db! {},
     {}
 );

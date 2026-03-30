@@ -122,6 +122,7 @@ impl TestArgs {
         // Create the engine with native (tokio-based) sys ops.
         let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), None)
             .map_err(|e| anyhow!("Failed to create engine: {e:?}"))?;
+        let engine = Arc::new(engine);
 
         // Create a tokio runtime for async execution.
         let rt = tokio::runtime::Runtime::new().context("Failed to create tokio runtime")?;

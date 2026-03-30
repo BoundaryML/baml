@@ -512,39 +512,3 @@ Actions:
 // - test_streaming_not_null_list_partial_2 (uses streaming behavior annotations)
 // - test_streaming_not_null_list_partial_3_0 (uses streaming behavior annotations)
 // - test_streaming_not_null_list_partial_3_1 (uses streaming behavior annotations)
-
-// ============================================================================
-// Class-level parse_as tests
-//
-// parse_as on a class redirects parsing to a different class (e.g. a streaming
-// variant with more lenient fields).
-// ============================================================================
-
-fn class_parse_as_db() -> TypeRefDb<'static, &'static str> {
-    baml_db! {
-        class Foo {
-            name: string,
-        }
-        class FooStream {
-            name: (string | null) @class_completed_field_missing(null) @class_in_progress_field_missing(null),
-        }
-    }
-}
-
-// Class parse_as redirects to streaming variant - complete value
-test_deserializer!(
-    test_class_parse_as_stream_variant,
-    r#"{"name": "Alice"}"#,
-    baml_tyannotated!(Foo @parse_as(FooStream)),
-    class_parse_as_db(),
-    {"name": "Alice"}
-);
-
-// Class parse_as to streaming variant - missing field uses FooStream's default
-test_deserializer!(
-    test_class_parse_as_stream_variant_missing,
-    r#"{}"#,
-    baml_tyannotated!(Foo @parse_as(FooStream)),
-    class_parse_as_db(),
-    {"name": null}
-);

@@ -21,7 +21,7 @@ where
     pub flags: DeserializerConditions<'s, 'v, 't, N>,
     /// The type that was deserialized to produce this value.
     ///
-    /// May also be a subtype, such as from [`TypeAnnotations::parse_as`].
+    /// May also be a subtype of the expected type.
     pub ty: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
 }
 impl<'s, 'v, 't, N: TypeIdent> DeserializerMeta<'s, 'v, 't, N> {

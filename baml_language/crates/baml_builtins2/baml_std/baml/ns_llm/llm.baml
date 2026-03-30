@@ -49,6 +49,12 @@ function build_request(client: Client, function_name: string, args: map<string, 
   primitive_client.build_request(specialized_prompt)
 }
 
+/// unsafe to call directly since we cannot guarantee that the return type is correct
+function parse<T>(function_name: string, json: string) -> T {
+  let return_type = get_return_type(function_name);
+  __sap_parse(json, return_type)
+}
+
 function call_llm_function<T>(client: Client, function_name: string, args: map<string, unknown>) -> T {
   let jinja_string = get_jinja_template(function_name);
 

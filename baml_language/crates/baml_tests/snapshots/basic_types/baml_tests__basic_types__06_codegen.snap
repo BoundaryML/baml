@@ -17,6 +17,13 @@ function user.GetMixedList$build_request() -> baml.http.Request {
     return
 }
 
+function user.GetMixedList$parse(json: string) -> int | string[] {
+    load_const "GetMixedList"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
 function user.GetMixedList$render_prompt() -> baml.llm.PromptAst {
     load_const null
     load_const "GetMixedList"
@@ -41,6 +48,13 @@ function user.GetMixedMap$build_request() -> baml.http.Request {
     return
 }
 
+function user.GetMixedMap$parse(json: string) -> map<string, int | string> {
+    load_const "GetMixedMap"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
 function user.GetMixedMap$render_prompt() -> baml.llm.PromptAst {
     load_const null
     load_const "GetMixedMap"
@@ -62,6 +76,13 @@ function user.GetStatus$build_request() -> baml.http.Request {
     load_const "GetStatus"
     alloc_map 0
     call baml.llm.build_request
+    return
+}
+
+function user.GetStatus$parse(json: string) -> Status {
+    load_const "GetStatus"
+    load_var json
+    call baml.llm.parse
     return
 }
 
@@ -122,6 +143,13 @@ function user.GetUser$build_request(id: int) -> baml.http.Request {
     load_const "id"
     alloc_map 1
     call baml.llm.build_request
+    return
+}
+
+function user.GetUser$parse(json: string) -> User {
+    load_const "GetUser"
+    load_var json
+    call baml.llm.parse
     return
 }
 

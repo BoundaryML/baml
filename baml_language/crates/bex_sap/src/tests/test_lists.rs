@@ -157,7 +157,7 @@ test_partial_deserializer!(
 test_deserializer!(
     test_array_parse_as_narrower_element,
     r#"[1, 2, 3]"#,
-    baml_tyannotated!([(int | null)] @parse_as([int])),
+    baml_tyannotated!([(int | null) @parse_without_null]),
     baml_db! {},
     [1, 2, 3]
 );
@@ -166,7 +166,7 @@ test_deserializer!(
 test_partial_deserializer!(
     test_array_parse_as_partial,
     r#"[1, 2"#,
-    baml_tyannotated!([(int | null)] @parse_as([int])),
+    baml_tyannotated!([(int | null) @parse_without_null]),
     baml_db! {},
     [1, 2]
 );
@@ -175,7 +175,7 @@ test_partial_deserializer!(
 test_deserializer!(
     test_array_parse_as_rejects_null_element,
     r#"[1, null, 3]"#,
-    baml_tyannotated!([(int | null)] @parse_as([int])),
+    baml_tyannotated!([(int | null) @parse_without_null]),
     baml_db! {},
     [1, 3]
 );

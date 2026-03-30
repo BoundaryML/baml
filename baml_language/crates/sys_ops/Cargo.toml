@@ -1,22 +1,25 @@
 [package]
-name = "sys_types"
+name = "sys_ops"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Includes core types needed for defining and implementing sys ops"
+description = "Includes definitions and some blanket impls for sys ops"
+
+[build-dependencies]
+baml_builtins2 = { workspace = true }
+baml_builtins2_codegen = { workspace = true }
 
 [dependencies]
+baml_builtins = { workspace = true }
 baml_type = { workspace = true }
 bex_external_types = { workspace = true }
 bex_heap = { workspace = true }
 bex_vm_types = { workspace = true }
-async-trait = { workspace = true }
+sys_llm = { workspace = true }
+sys_types = { workspace = true }
 indexmap = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = [ "sync" ] }
-tokio-util = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "rt", "macros" ] }

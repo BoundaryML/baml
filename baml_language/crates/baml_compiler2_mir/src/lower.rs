@@ -320,7 +320,7 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_tir::{
     inference::infer_scope_types,
-    resolve::{ResolvedName, resolve_name_at},
+    resolve::{ResolvedName, resolve_name_at_in_scope},
 };
 use rustc_hash::FxHashMap;
 
@@ -345,6 +345,9 @@ struct LoweringContext<'db> {
     source_map: Option<AstSourceMap>,
     file: baml_base::SourceFile,
     func_loc: Option<FunctionLoc<'db>>,
+    /// Raw function name from the item tree (e.g. `"Foo$render_prompt"`).
+    /// Used to disambiguate companion scopes that share the same span.
+    scope_func_name: Option<Name>,
 
     // Schema maps built from PackageItems.
     // class_fields and class_type_tags are keyed by TypeName (name + module_path)
@@ -587,6 +590,7 @@ impl<'db> LoweringContext<'db> {
             source_map,
             file,
             func_loc: Some(func_loc),
+            scope_func_name: Some(func_data.name.clone()),
             class_fields,
             enum_variants,
             class_type_tags,
@@ -734,6 +738,7 @@ impl<'db> LoweringContext<'db> {
             source_map,
             file,
             func_loc: None,
+            scope_func_name: Some(let_name.clone()),
             class_fields,
             enum_variants,
             class_type_tags,
@@ -1168,7 +1173,13 @@ impl<'db> LoweringContext<'db> {
             .map(|sm| sm.expr_span(expr_id).start())
             .unwrap_or_default();
 
-        let resolved = resolve_name_at(self.db, self.file, span_start, name);
+        let resolved = resolve_name_at_in_scope(
+            self.db,
+            self.file,
+            span_start,
+            name,
+            self.scope_func_name.as_ref(),
+        );
         match resolved {
             ResolvedName::Local {
                 name: local_name, ..
@@ -1481,7 +1492,13 @@ impl LoweringContext<'_> {
                     .as_ref()
                     .map(|sm| sm.expr_span(callee).start())
                     .unwrap_or_default();
-                let resolved = resolve_name_at(self.db, self.file, span_start, &segments[0]);
+                let resolved = resolve_name_at_in_scope(
+                    self.db,
+                    self.file,
+                    span_start,
+                    &segments[0],
+                    self.scope_func_name.as_ref(),
+                );
                 match resolved {
                     ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
                     ResolvedName::Item(Definition::Function(fl)) => Some(fl),

@@ -11,6 +11,9 @@ function user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptA
 function user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request throws never {
   baml.llm.build_request(baml.llm.Client { name: "openai/gpt-4o-mini", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "TypeBuilderFn", map { "from_text": from_text }) : baml.http.Request
 }
+function user.TypeBuilderFn$parse(json: string) -> user.Resume throws never {
+  baml.llm.parse<T>("TypeBuilderFn", json) : user.Resume
+}
 class user.Resume {
   name: string
 }

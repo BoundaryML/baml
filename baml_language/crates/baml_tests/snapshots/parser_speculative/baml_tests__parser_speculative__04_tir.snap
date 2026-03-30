@@ -4,7 +4,7 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.Ambiguous(input: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "Ambiguous", map { "input": input }) : string
-  !! 0..220: unresolved name: GPT4
+  !! 89..220: unresolved name: GPT4
 }
 function user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "Ambiguous", map { "input": input }) : baml.llm.PromptAst
@@ -14,9 +14,12 @@ function user.Ambiguous$build_request(input: string) -> baml.http.Request throws
   baml.llm.build_request(GPT4, "Ambiguous", map { "input": input }) : baml.http.Request
   !! 0..220: unresolved name: GPT4
 }
+function user.Ambiguous$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("Ambiguous", json) : string
+}
 function user.AnotherLLM(input: string) -> string throws never {
   baml.llm.call_llm_function<T>(null, "AnotherLLM", map { "input": input }) : string
-  !! 220..421: type mismatch: expected baml.llm.Client, got null
+  !! 309..421: type mismatch: expected baml.llm.Client, got null
 }
 function user.AnotherLLM$render_prompt(input: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(null, "AnotherLLM", map { "input": input }) : baml.llm.PromptAst
@@ -25,6 +28,9 @@ function user.AnotherLLM$render_prompt(input: string) -> baml.llm.PromptAst thro
 function user.AnotherLLM$build_request(input: string) -> baml.http.Request throws never {
   baml.llm.build_request(null, "AnotherLLM", map { "input": input }) : baml.http.Request
   !! 220..421: type mismatch: expected baml.llm.Client, got null
+}
+function user.AnotherLLM$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("AnotherLLM", json) : string
 }
 class user.JsonData {
   field1: int
@@ -50,15 +56,18 @@ function user.ExtractData(text: string) -> user.JsonData throws never {
 }
 function user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "ExtractData", map { "text": text }) : baml.llm.PromptAst
-  !! 46..146: unresolved name: GPT4
+  !! 0..146: unresolved name: GPT4
 }
 function user.ExtractData$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "ExtractData", map { "text": text }) : baml.http.Request
-  !! 46..146: unresolved name: GPT4
+  !! 0..146: unresolved name: GPT4
+}
+function user.ExtractData$parse(json: string) -> user.JsonData throws never {
+  baml.llm.parse<T>("ExtractData", json) : user.JsonData
 }
 function user.LLMAnalyze(text: string) -> user.Analysis throws never {
   baml.llm.call_llm_function<T>(GPT4, "LLMAnalyze", map { "text": text }) : user.Analysis
-  !! 0..242: unresolved name: GPT4
+  !! 96..242: unresolved name: GPT4
 }
 function user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "LLMAnalyze", map { "text": text }) : baml.llm.PromptAst
@@ -67,6 +76,9 @@ function user.LLMAnalyze$render_prompt(text: string) -> baml.llm.PromptAst throw
 function user.LLMAnalyze$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "LLMAnalyze", map { "text": text }) : baml.http.Request
   !! 0..242: unresolved name: GPT4
+}
+function user.LLMAnalyze$parse(json: string) -> user.Analysis throws never {
+  baml.llm.parse<T>("LLMAnalyze", json) : user.Analysis
 }
 class user.Analysis {
   sentiment: string
@@ -102,11 +114,14 @@ function user.ChainedProcess(input: string) -> string throws never {
 }
 function user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "ChainedProcess", map { "input": input }) : baml.llm.PromptAst
-  !! 724..860: unresolved name: GPT4
+  !! 674..860: unresolved name: GPT4
 }
 function user.ChainedProcess$build_request(input: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "ChainedProcess", map { "input": input }) : baml.http.Request
-  !! 724..860: unresolved name: GPT4
+  !! 674..860: unresolved name: GPT4
+}
+function user.ChainedProcess$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("ChainedProcess", json) : string
 }
 function user.SimpleCalc(a: int, b: int) -> int throws never {
   { : never

@@ -6,9 +6,11 @@ mod wasm_helpers;
 
 use std::collections::HashMap;
 
-/// Factory that creates [`sys_types::SysOps`] for a given project root.
+use ::std::sync::Arc;
+
+/// Factory that creates [`sys_ops::SysOps`] for a given project root.
 type SysOpFactory =
-    std::sync::Arc<dyn Fn(&vfs::VfsPath) -> std::sync::Arc<sys_types::SysOps> + Send + Sync>;
+    std::sync::Arc<dyn Fn(&vfs::VfsPath) -> std::sync::Arc<sys_ops::SysOps> + Send + Sync>;
 
 use crate::{
     RuntimeError,
@@ -224,7 +226,7 @@ impl BexMulitProject {
     fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
-    ) -> Result<Box<dyn crate::Bex>, RuntimeError> {
+    ) -> Result<Arc<dyn crate::Bex>, RuntimeError> {
         let project = {
             let projects = self.projects.lock().unwrap();
             projects
@@ -235,7 +237,7 @@ impl BexMulitProject {
                 .clone()
         };
         let bex = project.project.get_bex()?;
-        Ok(Box::new(bex))
+        Ok(bex)
     }
 
     fn get_baml_project_root(path: &vfs::VfsPath) -> Result<vfs::VfsPath, LspError> {
@@ -580,7 +582,7 @@ impl super::BexLsp for BexMulitProject {
     fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
-    ) -> Result<Box<dyn crate::Bex>, crate::RuntimeError> {
+    ) -> Result<Arc<dyn crate::Bex>, crate::RuntimeError> {
         self.get_bex_for_project(project_root)
     }
 

@@ -43,10 +43,12 @@ namespace baml.llm:
   class PrimitiveClientOptions { methods: [] }
   class PromptAst { methods: [] }
   class RetryPolicy { methods: [] }
+  function __sap_parse<T>
   function build_request
   function call_llm_function<T>
   function get_jinja_template
   function get_return_type
+  function parse<T>
   function render_prompt
 namespace baml.math:
   function trunc

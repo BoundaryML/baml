@@ -316,9 +316,9 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Three conflicts: greet, greet$render_prompt, greet$build_request
+        // Four conflicts: greet, greet$render_prompt, greet$build_request, greet$parse
         // Each LLM function expands to companions, all duplicated across 3 files.
-        assert_eq!(ns.conflicts().len(), 3);
+        assert_eq!(ns.conflicts().len(), 4);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
         }

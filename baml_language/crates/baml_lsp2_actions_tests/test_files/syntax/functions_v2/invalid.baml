@@ -60,6 +60,17 @@ function FooBar(arg) -> bar {
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
+// Error: unresolved name: Bar
+//    ╭─[ functions_v2_invalid.baml:1:1 ]
+//    │
+//  1 │ ╭─▶ function Foo() -> {
+//    ┆ ┆   
+//  4 │ ├─▶ }
+//    │ │       
+//    │ ╰─────── unresolved name: Bar
+//    │     
+//    │     Note: Error code: E0001
+// ───╯
 // Error: unresolved type: bar
 //    ╭─[ functions_v2_invalid.baml:6:24 ]
 //    │

@@ -14,17 +14,24 @@ function user.HelloWorld(name: string) -> string {
 function user.HelloWorld$build_request(name: string) -> baml.http.Request {
     load_const null
     load_const "HelloWorld"
-    load_const null
+    load_var name
     load_const "name"
     alloc_map 1
     call baml.llm.build_request
     return
 }
 
+function user.HelloWorld$parse(json: string) -> string {
+    load_const "HelloWorld"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
 function user.HelloWorld$render_prompt(name: string) -> baml.llm.PromptAst {
     load_const null
     load_const "HelloWorld"
-    load_const null
+    load_var name
     load_const "name"
     alloc_map 1
     call baml.llm.render_prompt
