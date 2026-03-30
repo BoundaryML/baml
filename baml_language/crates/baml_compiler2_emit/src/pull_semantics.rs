@@ -52,6 +52,10 @@ pub(crate) trait PullSink {
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
+    /// Load a captured variable from the current closure's captures array.
+    /// Emits `LoadCapture(idx)` in the bytecode emitter.
+    fn load_capture(&mut self, idx: usize) -> Result<(), Self::Error>;
+
     /// Resolve the field name for a `Place::Field { base, field }` access.
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String;
 
@@ -64,6 +68,10 @@ pub(crate) trait StackEffectSink: PullSink {
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
     fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error>;
+
+    /// Store a value into a captured variable (via the closure's captures array).
+    /// Emits `StoreCapture(idx)` in the bytecode emitter.
+    fn store_capture_value(&mut self, idx: usize) -> Result<(), Self::Error>;
 
     fn push_watch_channel(
         &mut self,
@@ -127,7 +135,7 @@ pub(crate) fn local_store_behavior(class: LocalClassification) -> LocalStoreBeha
 /// Shared evaluation order for projection stores (`base/index -> value -> store`).
 ///
 /// Returns `Ok(true)` when `destination` is a projection and was handled here.
-/// Returns `Ok(false)` for `Place::Local(_)`.
+/// Returns `Ok(false)` for `Place::Local(_)` or `Place::Capture(_)`.
 pub(crate) fn walk_projection_store<S: StackEffectSink>(
     sink: &mut S,
     destination: &Place,
@@ -149,6 +157,8 @@ pub(crate) fn walk_projection_store<S: StackEffectSink>(
             Ok(true)
         }
         Place::Local(_) => Ok(false),
+        // Place::Capture stores are handled by the caller (emit StoreCapture).
+        Place::Capture(_) => Ok(false),
     }
 }
 
@@ -294,6 +304,7 @@ pub(crate) fn walk_place_pull<S: PullSink>(sink: &mut S, place: &Place) -> Resul
             LocalPullAction::Done => Ok(()),
             LocalPullAction::Inline(rvalue) => walk_rvalue_pull(sink, &rvalue),
         },
+        Place::Capture(idx) => sink.load_capture(*idx),
         Place::Field { base, field } => {
             let name = sink.resolve_field_name(base, *field);
             walk_place_pull(sink, base)?;

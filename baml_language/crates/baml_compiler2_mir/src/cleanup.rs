@@ -168,6 +168,7 @@ fn collect_place_index_locals(body: &MirFunctionBody) -> HashSet<Local> {
     fn scan_place(p: &Place, set: &mut HashSet<Local>) {
         match p {
             Place::Local(_) => {}
+            Place::Capture(_) => {}
             Place::Field { base, .. } => {
                 // The base local of a field projection can't be replaced with a constant.
                 if let Place::Local(l) = base.as_ref() {
@@ -292,7 +293,10 @@ fn count_local_defs(body: &MirFunctionBody) -> Vec<usize> {
     for block in &body.blocks {
         for stmt in &block.statements {
             if let crate::StatementKind::Assign { destination, .. } = &stmt.kind {
-                defs[destination.base_local().0] += 1;
+                // Place::Capture has no local base — skip def counting for capture stores.
+                if !matches!(destination, Place::Capture(_)) {
+                    defs[destination.base_local().0] += 1;
+                }
             }
         }
         // Terminator destinations also count as definitions.
@@ -335,6 +339,10 @@ fn count_in_place(p: &Place, uses: &mut [usize]) {
         match cur {
             Place::Local(l) => {
                 uses[l.0] += 1;
+                break;
+            }
+            Place::Capture(_) => {
+                // Captures have no local base — nothing to count.
                 break;
             }
             Place::Field { base, .. } => cur = base,
@@ -393,8 +401,10 @@ fn count_in_statement(stmt: &crate::Statement, uses: &mut [usize]) {
     match &stmt.kind {
         crate::StatementKind::Assign { destination, value } => {
             // Count the destination place (for field/index projections)
-            // but NOT for plain Local — that's a def, not a use
-            if !matches!(destination, Place::Local(_)) {
+            // but NOT for plain Local — that's a def, not a use.
+            // Place::Capture is a store through a cell — the capture index is
+            // not a local, so no local use to count here.
+            if !matches!(destination, Place::Local(_) | Place::Capture(_)) {
                 count_in_place(destination, uses);
             }
             count_in_rvalue(value, uses);
@@ -424,7 +434,7 @@ fn count_in_terminator(term: &Terminator, uses: &mut [usize]) {
     // destinations. But if the destination is a projection (Field/Index), the
     // base local IS being read (partial update), so count it.
     let count_dest_place = |p: &Place, uses: &mut [usize]| {
-        if !matches!(p, Place::Local(_)) {
+        if !matches!(p, Place::Local(_) | Place::Capture(_)) {
             count_in_place(p, uses);
         }
     };
@@ -608,6 +618,9 @@ fn apply_subst_to_place_locals(p: &mut Place, subst: &HashMap<Local, Operand>) {
                 *l = *new_l;
             }
         }
+        Place::Capture(_) => {
+            // Captures are indexed into the closure's capture array — no local to substitute.
+        }
         Place::Field { base, .. } => {
             apply_subst_to_place_locals(base, subst);
         }
@@ -790,6 +803,9 @@ fn remap_local(l: &mut Local, map: &[Option<Local>]) {
 fn remap_place(p: &mut Place, map: &[Option<Local>]) {
     match p {
         Place::Local(l) => remap_local(l, map),
+        Place::Capture(_) => {
+            // Capture indices index into the closure's captures array — no local to remap.
+        }
         Place::Field { base, .. } => remap_place(base, map),
         Place::Index { base, index, .. } => {
             remap_local(index, map);
@@ -968,6 +984,10 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
             match cur {
                 Place::Local(l) => {
                     check_local(*l, ctx);
+                    break;
+                }
+                Place::Capture(_) => {
+                    // Capture index — no local to check.
                     break;
                 }
                 Place::Field { base, .. } => cur = base,

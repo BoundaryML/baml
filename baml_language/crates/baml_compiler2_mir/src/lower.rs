@@ -385,6 +385,13 @@ struct LoweringContext<'db> {
     // Collected here and moved into MirFunction.lambdas at the end of lowering.
     // Each entry is a fully-lowered MirFunction for one lambda expression.
     pending_lambdas: Vec<MirFunction>,
+
+    // Capture map for the current lambda body.
+    // `Some(map)` when lowering inside a lambda body; `None` for top-level functions.
+    // Maps captured variable name -> index into the closure's captures array.
+    // Used by `lower_path_expr` to resolve references to captured variables as
+    // `Place::Capture(idx)` instead of `Place::Local(_)`.
+    capture_indices: Option<HashMap<Name, usize>>,
 }
 
 impl<'db> LoweringContext<'db> {
@@ -607,6 +614,7 @@ impl<'db> LoweringContext<'db> {
             enum_variants,
             class_type_tags,
             pending_lambdas: Vec::new(),
+            capture_indices: None,
             type_aliases,
             recursive_aliases,
             watched_locals_stack: Vec::new(),
@@ -763,6 +771,7 @@ impl<'db> LoweringContext<'db> {
             pending_header: None,
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
+            capture_indices: None,
         }
     }
 
@@ -950,6 +959,21 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(self.exit_block);
         self.builder.return_();
 
+        // Mark locals that are captured by nested lambdas with `is_captured = true`.
+        // The HIR `ScopeBindings.captured_names` for the function scope records which
+        // names are captured by any descendant lambda. These locals need cell wrapping.
+        {
+            let func_scope_id = self.current_scope;
+            let index = file_semantic_index(self.db, self.file);
+            if let Some(sb) = index.scope_bindings.get(func_scope_id.index() as usize) {
+                for captured_name in &sb.captured_names {
+                    if let Some(&local) = self.locals.get(captured_name) {
+                        self.builder.local_decl_mut(local).is_captured = true;
+                    }
+                }
+            }
+        }
+
         // Take the builder out of self to call `build()` which consumes it
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
@@ -1073,6 +1097,24 @@ impl LoweringContext<'_> {
             }
         };
 
+        // Read HIR captures for this lambda scope.
+        // `captures` lists names that the lambda reads from enclosing scopes.
+        // We build `capture_indices` (name → index in closure.captures[]) so that
+        // `lower_path_expr` and `lower_lvalue` can emit Place::Capture(idx).
+        let hir_captures: Vec<Name> = {
+            let index = file_semantic_index(self.db, self.file);
+            index
+                .scope_bindings
+                .get(lambda_scope_id.index() as usize)
+                .map(|sb| sb.captures.clone())
+                .unwrap_or_default()
+        };
+        let lambda_capture_indices: HashMap<Name, usize> = hir_captures
+            .iter()
+            .enumerate()
+            .map(|(i, name)| (name.clone(), i))
+            .collect();
+
         // Save parent state.
         let saved_builder = std::mem::replace(
             &mut self.builder,
@@ -1093,9 +1135,15 @@ impl LoweringContext<'_> {
         // children. The lambda body's nested lambdas are collected separately
         // and attached to the lambda as its `.lambdas` field.
         let saved_pending_lambdas = std::mem::take(&mut self.pending_lambdas);
+        let saved_capture_indices = self.capture_indices.take();
 
-        // Switch to the lambda scope.
+        // Switch to the lambda scope and install capture map.
         self.current_scope = lambda_scope_id;
+        self.capture_indices = if lambda_capture_indices.is_empty() {
+            None
+        } else {
+            Some(lambda_capture_indices)
+        };
 
         // Set up a fresh builder with the correct arity.
         let arity = func_def.params.len();
@@ -1192,8 +1240,33 @@ impl LoweringContext<'_> {
         self.catch_context = saved_catch_context;
         self.watched_locals_stack = saved_watched_locals;
         self.current_scope = saved_current_scope;
+        self.capture_indices = saved_capture_indices;
         // Restore parent's pending_lambdas (siblings of this lambda).
         self.pending_lambdas = saved_pending_lambdas;
+
+        // Build capture operands from restored parent locals.
+        // Each captured name must be in the parent's locals map; we pass the cell
+        // pointer (the slot itself, not the inner value) via Operand::Copy(Place::Local(local)).
+        // The emit phase later replaces this with a LoadVar of the cell slot (not LoadDeref).
+        let capture_operands: Vec<Operand> = hir_captures
+            .iter()
+            .map(|name| {
+                if let Some(&local) = self.locals.get(name) {
+                    Operand::Copy(Place::Local(local))
+                } else if let Some(cap_idx) = self
+                    .capture_indices
+                    .as_ref()
+                    .and_then(|m| m.get(name))
+                    .copied()
+                {
+                    // Transitive capture: the variable is itself a capture in this scope.
+                    Operand::Copy(Place::Capture(cap_idx))
+                } else {
+                    // Variable not found — emit a null placeholder.
+                    Operand::Constant(Constant::Null)
+                }
+            })
+            .collect();
 
         // Push this lambda into the parent's pending_lambdas and emit MakeClosure.
         let lambda_pending_idx = self.pending_lambdas.len();
@@ -1203,7 +1276,7 @@ impl LoweringContext<'_> {
             dest,
             Rvalue::MakeClosure {
                 lambda_idx: lambda_pending_idx,
-                captures: vec![], // no captures in Phase 3
+                captures: capture_operands,
             },
         );
     }
@@ -1408,6 +1481,16 @@ impl<'db> LoweringContext<'db> {
                 if let Some(&local) = self.locals.get(&local_name) {
                     self.builder
                         .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
+                } else if let Some(cap_idx) = self
+                    .capture_indices
+                    .as_ref()
+                    .and_then(|m| m.get(&local_name))
+                    .copied()
+                {
+                    // This variable is captured from an enclosing scope.
+                    // Emit a LoadCapture via Place::Capture.
+                    self.builder
+                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Capture(cap_idx))));
                 } else {
                     let msg = format!("unresolved local: {local_name}");
                     self.emit_panic_call(&msg, expr_id);
@@ -2571,6 +2654,14 @@ impl LoweringContext<'_> {
             AstExpr::Path(segments) if segments.len() == 1 => {
                 if let Some(&local) = self.locals.get(&segments[0]) {
                     Place::Local(local)
+                } else if let Some(cap_idx) = self
+                    .capture_indices
+                    .as_ref()
+                    .and_then(|m| m.get(&segments[0]))
+                    .copied()
+                {
+                    // Assignment to a captured variable in a closure body.
+                    Place::Capture(cap_idx)
                 } else {
                     let temp = self.builder.temp(Ty::Null {
                         attr: TyAttr::default(),

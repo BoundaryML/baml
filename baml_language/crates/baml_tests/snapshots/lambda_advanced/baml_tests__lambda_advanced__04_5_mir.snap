@@ -70,14 +70,16 @@ fn user.test_capture_in_map_inferred() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: int[]
-    let _3: (int) -> int
+    let _2: int // factor [captured]
+    let _3: int[]
+    let _4: (int) -> int
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
-        _2 = copy _1;
-        _3 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _2, copy _3) -> [bb1];
+        _2 = const 10_i64;
+        _3 = copy _1;
+        _4 = make_closure lambda[0](copy _2);
+        _0 = call const fn baml.Array.map(copy _3, copy _4) -> [bb1];
     }
 
     bb1: {
@@ -93,27 +95,31 @@ fn .<lambda(test_capture_in_map_inferred, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: null // x // param
-    let _2: null
+    let _2: void
 
     bb0: {
-        _2 = call const fn baml.sys.panic(const "unresolved local: factor") -> [bb1];
+        _2 = copy capture[0];
+        _0 = copy _1 * copy _2;
+        goto -> bb1;
     }
 
     bb1: {
-        unreachable;
+        return;
     }
 }
 
 fn user.test_capture_lambda_inferred() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int // double
-    let _2: (int) -> int
+    let _1: (int, int) -> int // multiply [captured]
+    let _2: (int) -> int // double
+    let _3: (int) -> int
 
     bb0: {
-        _1 = make_closure lambda[1]();
-        _2 = copy _1;
-        _0 = call copy _2(const 21_i64) -> [bb1];
+        _1 = make_closure lambda[0]();
+        _2 = make_closure lambda[1](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3(const 21_i64) -> [bb1];
     }
 
     bb1: {
@@ -145,14 +151,19 @@ fn .<lambda(test_capture_lambda_inferred, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // x // param
-    let _2: null
+    let _2: void
 
     bb0: {
-        _2 = call const fn baml.sys.panic(const "unresolved local: multiply") -> [bb1];
+        _2 = copy capture[0];
+        _0 = call copy _2(copy _1, const 2_i64) -> [bb1];
     }
 
     bb1: {
-        unreachable;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
     }
 }
 
@@ -309,7 +320,7 @@ fn .<lambda(test_deep_capture, 0)>(b: int) -> null {
     let _3: (int) -> void
 
     bb0: {
-        _2 = make_closure lambda[0]();
+        _2 = make_closure lambda[0](const null, copy _1);
         _3 = copy _2;
         _0 = call copy _3(const 100_i64) -> [bb1];
     }
@@ -327,14 +338,20 @@ fn .<lambda(<lambda(test_deep_capture, 0)>, 1)>(c: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // c // param
-    let _2: null
+    let _2: void
+    let _3: void
+    let _4: void
 
     bb0: {
-        _2 = call const fn baml.sys.panic(const "unresolved local: a") -> [bb1];
+        _3 = copy capture[0];
+        _4 = copy capture[1];
+        _2 = copy _3 + copy _4;
+        _0 = copy _2 + copy _1;
+        goto -> bb1;
     }
 
     bb1: {
-        unreachable;
+        return;
     }
 }
 
@@ -367,7 +384,7 @@ fn .<lambda(test_deep_capture_inferred, 0)>(b: int) -> null {
     let _3: (int) -> void
 
     bb0: {
-        _2 = make_closure lambda[0]();
+        _2 = make_closure lambda[0](const null, copy _1);
         _3 = copy _2;
         _0 = call copy _3(const 100_i64) -> [bb1];
     }
@@ -385,14 +402,20 @@ fn .<lambda(<lambda(test_deep_capture_inferred, 0)>, 1)>(c: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // c // param
-    let _2: null
+    let _2: void
+    let _3: void
+    let _4: void
 
     bb0: {
-        _2 = call const fn baml.sys.panic(const "unresolved local: a") -> [bb1];
+        _3 = copy capture[0];
+        _4 = copy capture[1];
+        _2 = copy _3 + copy _4;
+        _0 = copy _2 + copy _1;
+        goto -> bb1;
     }
 
     bb1: {
-        unreachable;
+        return;
     }
 }
 
@@ -571,7 +594,7 @@ fn .<lambda(test_higher_order_inferred, 0)>(n: int) -> null {
     let _2: (int) -> int // adder
 
     bb0: {
-        _2 = make_closure lambda[0]();
+        _2 = make_closure lambda[0](copy _1);
         _0 = copy _2;
         goto -> bb1;
     }
@@ -585,14 +608,16 @@ fn .<lambda(<lambda(test_higher_order_inferred, 0)>, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // x // param
-    let _2: null
+    let _2: void
 
     bb0: {
-        _2 = call const fn baml.sys.panic(const "unresolved local: n") -> [bb1];
+        _2 = copy capture[0];
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
     }
 
     bb1: {
-        unreachable;
+        return;
     }
 }
 
@@ -631,7 +656,7 @@ fn .<lambda(test_higher_order_return, 0)>(n: int) -> null {
     let _2: (int) -> int // adder
 
     bb0: {
-        _2 = make_closure lambda[0]();
+        _2 = make_closure lambda[0](copy _1);
         _0 = copy _2;
         goto -> bb1;
     }
@@ -645,14 +670,16 @@ fn .<lambda(<lambda(test_higher_order_return, 0)>, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // x // param
-    let _2: null
+    let _2: void
 
     bb0: {
-        _2 = call const fn baml.sys.panic(const "unresolved local: n") -> [bb1];
+        _2 = copy capture[0];
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
     }
 
     bb1: {
-        unreachable;
+        return;
     }
 }
 
@@ -1499,14 +1526,16 @@ fn user.test_map_with_capture() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[] // items
-    let _2: int[]
-    let _3: (int) -> int
+    let _2: int // factor [captured]
+    let _3: int[]
+    let _4: (int) -> int
 
     bb0: {
         _1 = [const 1_i64, const 2_i64, const 3_i64];
-        _2 = copy _1;
-        _3 = make_closure lambda[0]();
-        _0 = call const fn baml.Array.map(copy _2, copy _3) -> [bb1];
+        _2 = const 10_i64;
+        _3 = copy _1;
+        _4 = make_closure lambda[0](copy _2);
+        _0 = call const fn baml.Array.map(copy _3, copy _4) -> [bb1];
     }
 
     bb1: {
@@ -1522,14 +1551,16 @@ fn .<lambda(test_map_with_capture, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: null // x // param
-    let _2: null
+    let _2: void
 
     bb0: {
-        _2 = call const fn baml.sys.panic(const "unresolved local: factor") -> [bb1];
+        _2 = copy capture[0];
+        _0 = copy _1 * copy _2;
+        goto -> bb1;
     }
 
     bb1: {
-        unreachable;
+        return;
     }
 }
 
@@ -1862,7 +1893,7 @@ fn .<lambda(test_two_transforms_inferred, 2)>(x: int) -> null {
 fn user.test_void_lambda_inferred() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: int // count
+    let _1: int // count [captured]
     let _2: () -> void // inc
     let _3: void
     let _4: () -> void
@@ -1871,7 +1902,7 @@ fn user.test_void_lambda_inferred() -> int {
 
     bb0: {
         _1 = const 0_i64;
-        _2 = make_closure lambda[0]();
+        _2 = make_closure lambda[0](copy _1);
         _4 = copy _2;
         _3 = call copy _4() -> [bb1];
     }
@@ -1894,10 +1925,9 @@ fn user.test_void_lambda_inferred() -> int {
 fn .<lambda(test_void_lambda_inferred, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: null
 
     bb0: {
-        _1 = copy _1 + const 1_i64;
+        capture[0] = copy capture[0] + const 1_i64;
         _0 = const null;
         goto -> bb1;
     }
@@ -1950,11 +1980,13 @@ fn user.test_void_lambda_inferred_captures() -> int {
 fn .<lambda(test_void_lambda_inferred_captures, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: () -> int // inc
+    let _1: int // count
+    let _2: () -> int // inc
 
     bb0: {
-        _1 = make_closure lambda[0]();
-        _0 = copy _1;
+        _1 = const 0_i64;
+        _2 = make_closure lambda[0](copy _1);
+        _0 = copy _2;
         goto -> bb1;
     }
 
@@ -1966,15 +1998,14 @@ fn .<lambda(test_void_lambda_inferred_captures, 0)>() -> null {
 fn .<lambda(<lambda(test_void_lambda_inferred_captures, 0)>, 1)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: null
-    let _2: null
 
     bb0: {
-        _1 = copy _1 + const 1_i64;
-        _2 = call const fn baml.sys.panic(const "unresolved local: count") -> [bb1];
+        capture[0] = copy capture[0] + const 1_i64;
+        _0 = copy capture[0];
+        goto -> bb1;
     }
 
     bb1: {
-        unreachable;
+        return;
     }
 }

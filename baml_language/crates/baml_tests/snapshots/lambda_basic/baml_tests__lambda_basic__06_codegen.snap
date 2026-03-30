@@ -9,8 +9,14 @@ function user.test_annotated() -> int {
 }
 
 function user.test_capture() -> int {
+    load_var ?1
+    make_cell
+    store_var ?1
+    load_const 10
+    store_deref ?1
     load_const 32
-    make_closure .<lambda(test_capture, 0)>, 0
+    load_var offset
+    make_closure .<lambda(test_capture, 0)>, 1
     call_indirect
     return
 }

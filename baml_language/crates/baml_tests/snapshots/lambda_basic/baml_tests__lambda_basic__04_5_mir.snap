@@ -41,13 +41,15 @@ fn .<lambda(test_annotated, 0)>(x: int) -> null {
 fn user.test_capture() -> int {
     // Locals:
     let _0: int // _0 // return
-    let _1: (int) -> int // add_offset
-    let _2: (int) -> int
+    let _1: int // offset [captured]
+    let _2: (int) -> int // add_offset
+    let _3: (int) -> int
 
     bb0: {
-        _1 = make_closure lambda[0]();
-        _2 = copy _1;
-        _0 = call copy _2(const 32_i64) -> [bb1];
+        _1 = const 10_i64;
+        _2 = make_closure lambda[0](copy _1);
+        _3 = copy _2;
+        _0 = call copy _3(const 32_i64) -> [bb1];
     }
 
     bb1: {
@@ -63,14 +65,16 @@ fn .<lambda(test_capture, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // x // param
-    let _2: null
+    let _2: void
 
     bb0: {
-        _2 = call const fn baml.sys.panic(const "unresolved local: offset") -> [bb1];
+        _2 = copy capture[0];
+        _0 = copy _1 + copy _2;
+        goto -> bb1;
     }
 
     bb1: {
-        unreachable;
+        return;
     }
 }
 
@@ -250,7 +254,7 @@ fn .<lambda(test_nested, 0)>(x: int) -> null {
     let _3: (int) -> int
 
     bb0: {
-        _2 = make_closure lambda[0]();
+        _2 = make_closure lambda[0](copy _1);
         _3 = copy _2;
         _0 = call copy _3(const 1_i64) -> [bb1];
     }
@@ -268,14 +272,16 @@ fn .<lambda(<lambda(test_nested, 0)>, 1)>(y: int) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: int // y // param
-    let _2: null
+    let _2: void
 
     bb0: {
-        _2 = call const fn baml.sys.panic(const "unresolved local: x") -> [bb1];
+        _2 = copy capture[0];
+        _0 = copy _2 + copy _1;
+        goto -> bb1;
     }
 
     bb1: {
-        unreachable;
+        return;
     }
 }
 

@@ -224,6 +224,17 @@ struct StackifyCodegen<'ctx, 'obj> {
     /// Names for each lambda (parallel to `lambda_object_indices`).
     /// Used for debug metadata in `MakeClosure` instructions.
     lambda_names: Vec<String>,
+
+    /// Set of locals that are captured by child lambdas and need cell wrapping.
+    /// Derived from `LocalDecl.is_captured` during `compile()`.
+    /// Reads/writes of these locals use `LoadDeref`/`StoreDeref` instead of
+    /// `LoadVar`/`StoreVar`.
+    captured_locals: HashSet<Local>,
+
+    /// When `true`, the current operand load is for a `MakeClosure` capture operand.
+    /// In that case, captured locals are loaded with `LoadVar` (to pass the cell
+    /// pointer itself) rather than `LoadDeref` (which would dereference the cell).
+    loading_for_closure_capture: bool,
 }
 
 impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
@@ -266,6 +277,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
             lambda_names: ctx.lambda_names.to_vec(),
+            captured_locals: HashSet::new(),
+            loading_for_closure_capture: false,
         }
     }
 
@@ -282,6 +295,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn resolve_place_type(&self, place: &Place) -> Option<Ty> {
         match place {
             Place::Local(local) => self.local_types.get(local).cloned(),
+            Place::Capture(_) => None, // Capture type not tracked in local_types
             Place::Field { base, field } => {
                 let base_ty = self.resolve_place_type(base)?;
                 match &base_ty {
@@ -337,6 +351,37 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         let mir = self.body;
         // 1. Allocate stack slots only for real locals
         self.allocate_real_locals(mir);
+
+        // Collect captured locals for LoadDeref/StoreDeref emission.
+        self.captured_locals = mir
+            .locals
+            .iter()
+            .enumerate()
+            .filter(|(_, decl)| decl.is_captured)
+            .filter_map(|(i, _)| {
+                let local = Local(i);
+                self.local_slots.contains_key(&local).then_some(local)
+            })
+            .collect();
+
+        // Emit cell-wrapping preamble: for each captured Real local, wrap the
+        // initial value in a Cell so that lambdas can share and mutate it.
+        // Emit at the start of the entry block before any user instructions.
+        // Note: Parameters that are captured also need cell wrapping.
+        for (i, local_decl) in mir.locals.iter().enumerate() {
+            if local_decl.is_captured {
+                let local = Local(i);
+                if let Some(&slot) = self.local_slots.get(&local) {
+                    // Load the current value (either 0 for uninitialized or param value),
+                    // wrap in a Cell, and store back.
+                    let inst = self.emit(Instruction::LoadVar(slot));
+                    self.set_var_operand(inst, slot);
+                    self.emit(Instruction::MakeCell);
+                    let inst = self.emit(Instruction::StoreVar(slot));
+                    self.set_var_operand(inst, slot);
+                }
+            }
+        }
 
         // Build local type map for field name resolution (debug info).
         for (i, local_decl) in mir.locals.iter().enumerate() {
@@ -765,6 +810,11 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                             unwrap_infallible(self.watch_local(*local));
                         }
                     }
+                    Place::Capture(idx) => {
+                        // Capture store: evaluate rvalue, then StoreCapture.
+                        self.emit_rvalue_pull(value);
+                        unwrap_infallible(self.store_capture_value(*idx));
+                    }
                     Place::Field { .. } | Place::Index { .. } => unreachable!(),
                 }
             }
@@ -831,6 +881,23 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
 
     /// Emit an rvalue using the pull model.
     fn emit_rvalue_pull(&mut self, rvalue: &Rvalue) {
+        // MakeClosure is handled specially: capture operands must load the cell
+        // pointer itself (LoadVar), not dereference through the cell (LoadDeref).
+        // Set the flag so pull_local emits LoadVar for captured locals.
+        if let Rvalue::MakeClosure {
+            lambda_idx,
+            captures,
+        } = rvalue
+        {
+            let prev = self.loading_for_closure_capture;
+            self.loading_for_closure_capture = true;
+            for capture in captures {
+                self.emit_operand_pull(capture);
+            }
+            self.loading_for_closure_capture = prev;
+            unwrap_infallible(self.make_closure(*lambda_idx, captures.len()));
+            return;
+        }
         unwrap_infallible(pull_semantics::walk_rvalue_pull(self, rvalue));
     }
 
@@ -938,10 +1005,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let classification = self.analysis.classifications[local];
                 match pull_semantics::local_store_behavior(classification) {
                     LocalStoreBehavior::StoreSlot => {
-                        // Real locals get stored to their slot
                         let slot = self.local_slots[local];
-                        let inst = self.emit(Instruction::StoreVar(slot));
-                        self.set_var_operand(inst, slot);
+                        if self.captured_locals.contains(local) {
+                            // Captured local: store through the cell.
+                            self.emit(Instruction::StoreDeref(slot));
+                        } else {
+                            // Normal local: direct slot store.
+                            let inst = self.emit(Instruction::StoreVar(slot));
+                            self.set_var_operand(inst, slot);
+                        }
                     }
                     LocalStoreBehavior::KeepOnStack => {
                         // PhiLike/ReturnPhi: keep value on stack (no-op) - value goes to join/return.
@@ -952,6 +1024,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                         self.emit(Instruction::Pop(1));
                     }
                 }
+            }
+            Place::Capture(idx) => {
+                // StoreCapture for lambda body capture stores.
+                self.emit(Instruction::StoreCapture(*idx));
             }
             Place::Field { .. } | Place::Index { .. } => {
                 unreachable!(
@@ -1540,6 +1616,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
     fn collect_locals_in_place(place: &Place, out: &mut Vec<Local>) {
         match place {
             Place::Local(local) => out.push(*local),
+            Place::Capture(_) => {}
             Place::Field { base, .. } => Self::collect_locals_in_place(base, out),
             Place::Index { base, index, .. } => {
                 Self::collect_locals_in_place(base, out);
@@ -1598,7 +1675,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             StatementKind::Assign { destination, value } => {
                 Self::collect_locals_in_rvalue(value, out);
                 match destination {
-                    Place::Local(_) => {}
+                    Place::Local(_) | Place::Capture(_) => {}
                     Place::Field { base, .. } => Self::collect_locals_in_place(base, out),
                     Place::Index { base, index, .. } => {
                         Self::collect_locals_in_place(base, out);
@@ -1755,6 +1832,14 @@ impl PullSink for StackifyCodegen<'_, '_> {
                     .as_ref()
                     .map(|def| def.rvalue.clone())
                     .unwrap_or_else(|| panic!("virtual local {local} without definition"));
+                // MakeClosure must be handled specially: its captures need to load
+                // cell pointers (LoadVar) not cell values (LoadDeref). We intercept
+                // here so that `emit_rvalue_pull` (which sets loading_for_closure_capture)
+                // is called rather than the generic `walk_rvalue_pull` inlining path.
+                if matches!(rvalue, Rvalue::MakeClosure { .. }) {
+                    self.emit_rvalue_pull(&rvalue);
+                    return Ok(LocalPullAction::Done);
+                }
                 LocalPullAction::Inline(Box::new(rvalue))
             }
             LocalClassification::PhiLike
@@ -1764,16 +1849,26 @@ impl PullSink for StackifyCodegen<'_, '_> {
                 // Copy propagation: load from source slot directly.
                 let source = self.analysis.resolve_copy_source(local);
                 let slot = self.local_slots[&source];
-                let inst = self.emit(Instruction::LoadVar(slot));
-                self.set_var_operand(inst, slot);
+                if self.captured_locals.contains(&source) && !self.loading_for_closure_capture {
+                    self.emit(Instruction::LoadDeref(slot));
+                } else {
+                    let inst = self.emit(Instruction::LoadVar(slot));
+                    self.set_var_operand(inst, slot);
+                }
                 LocalPullAction::Done
             }
             LocalClassification::Parameter
             | LocalClassification::Real
             | LocalClassification::Dead => {
                 let slot = self.local_slots[&local];
-                let inst = self.emit(Instruction::LoadVar(slot));
-                self.set_var_operand(inst, slot);
+                if self.captured_locals.contains(&local) && !self.loading_for_closure_capture {
+                    // Captured local: load the value through the cell.
+                    self.emit(Instruction::LoadDeref(slot));
+                } else {
+                    // Normal local or loading cell pointer for MakeClosure.
+                    let inst = self.emit(Instruction::LoadVar(slot));
+                    self.set_var_operand(inst, slot);
+                }
                 LocalPullAction::Done
             }
         };
@@ -1974,6 +2069,11 @@ impl PullSink for StackifyCodegen<'_, '_> {
         Ok(())
     }
 
+    fn load_capture(&mut self, idx: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::LoadCapture(idx));
+        Ok(())
+    }
+
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String {
         let class_name = match self.resolve_place_type(base) {
             Some(Ty::Class(tn, _)) => tn.display_name.to_string(),
@@ -2006,6 +2106,11 @@ impl StackEffectSink for StackifyCodegen<'_, '_> {
 
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error> {
         self.emit(Instruction::Pop(n));
+        Ok(())
+    }
+
+    fn store_capture_value(&mut self, idx: usize) -> Result<(), Self::Error> {
+        self.emit(Instruction::StoreCapture(idx));
         Ok(())
     }
 

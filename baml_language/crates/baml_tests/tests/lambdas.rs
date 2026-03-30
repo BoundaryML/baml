@@ -1,7 +1,7 @@
-//! Execution tests for lambda expressions (non-capturing, Phase 3).
+//! Execution tests for lambda expressions (Phase 3 non-capturing, Phase 4 capturing).
 //!
-//! These tests verify that non-capturing lambdas compile to correct bytecode
-//! and execute at runtime, returning the expected values.
+//! These tests verify that lambdas compile to correct bytecode and execute at
+//! runtime, returning the expected values.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
@@ -70,6 +70,60 @@ async fn inferred_return_type_lambda() {
         function main() -> int {
             let double = (x: int) -> { x * 2 }
             double(21)
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+// ============================================================================
+// Phase 4: Capturing Lambdas
+// ============================================================================
+
+/// Lambda capturing a local variable from the enclosing function.
+/// let base = 10; let add_base = (x: int) -> int { x + base }; add_base(5) returns 15
+#[tokio::test]
+async fn lambda_captures_local_variable() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let base = 10
+            let add_base = (x: int) -> int { x + base }
+            add_base(5)
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(15)));
+}
+
+/// Lambda capturing a parameter from the enclosing function.
+/// function f(n: int) -> int { let double = () -> int { n * 2 }; double() }
+/// f(21) returns 42
+#[tokio::test]
+async fn lambda_captures_function_parameter() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let n = 21
+            let double = () -> int { n * 2 }
+            double()
+        }
+    "
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+/// Lambda capturing multiple variables.
+/// let a = 10; let b = 5; let compute = () -> int { a * b - 8 }; compute() returns 42
+#[tokio::test]
+async fn lambda_captures_multiple_variables() {
+    let output = baml_test!(
+        "
+        function main() -> int {
+            let a = 10
+            let b = 5
+            let compute = () -> int { a * b - 8 }
+            compute()
         }
     "
     );

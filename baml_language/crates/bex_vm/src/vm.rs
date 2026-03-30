@@ -2859,7 +2859,8 @@ impl BexVm {
 
                     Instruction::LoadDeref(slot) => {
                         let locals_offset = self.frames[frame_idx].locals_offset;
-                        let cell_value = self.stack[locals_offset + slot];
+                        let cell_value =
+                            self.stack[Self::local_slot_stack_index(locals_offset, slot)];
                         let Value::Object(cell_ptr) = cell_value else {
                             return Err(InternalError::TypeError {
                                 expected: ObjectType::Cell.into(),
@@ -2882,7 +2883,8 @@ impl BexVm {
                     Instruction::StoreDeref(slot) => {
                         let value = self.stack.ensure_pop()?;
                         let locals_offset = self.frames[frame_idx].locals_offset;
-                        let cell_value = self.stack[locals_offset + slot];
+                        let cell_value =
+                            self.stack[Self::local_slot_stack_index(locals_offset, slot)];
                         let Value::Object(cell_ptr) = cell_value else {
                             return Err(InternalError::TypeError {
                                 expected: ObjectType::Cell.into(),

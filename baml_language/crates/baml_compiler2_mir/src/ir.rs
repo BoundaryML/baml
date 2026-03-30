@@ -399,6 +399,13 @@ pub enum Place {
         index: Local,
         kind: IndexKind,
     },
+
+    /// A captured variable in a closure body, by capture index.
+    ///
+    /// `Capture(idx)` refers to the `idx`-th capture in the enclosing
+    /// `Object::Closure.captures` array.  Reads emit `LoadCapture(idx)` and
+    /// writes emit `StoreCapture(idx)`.  Only valid inside a lambda body.
+    Capture(usize),
 }
 
 impl Place {
@@ -425,10 +432,13 @@ impl Place {
     }
 
     /// Get the base local of this place.
+    ///
+    /// Panics for `Place::Capture` — captures have no local base.
     pub fn base_local(&self) -> Local {
         match self {
             Place::Local(l) => *l,
             Place::Field { base, .. } | Place::Index { base, .. } => base.base_local(),
+            Place::Capture(_) => panic!("Place::Capture has no base local"),
         }
     }
 }
@@ -439,6 +449,7 @@ impl fmt::Display for Place {
             Place::Local(l) => write!(f, "{l}"),
             Place::Field { base, field } => write!(f, "{base}.{field}"),
             Place::Index { base, index, .. } => write!(f, "{base}[{index}]"),
+            Place::Capture(idx) => write!(f, "capture[{idx}]"),
         }
     }
 }

@@ -125,6 +125,14 @@ impl MirBuilder {
         self.locals[local.0].ty.clone()
     }
 
+    /// Get a mutable reference to a local declaration.
+    ///
+    /// Used by Phase 4 to set `is_captured = true` after lowering the function body
+    /// but before calling `build()`.
+    pub(crate) fn local_decl_mut(&mut self, local: Local) -> &mut LocalDecl {
+        &mut self.locals[local.0]
+    }
+
     // ========================================================================
     // Block Management
     // ========================================================================
