@@ -605,37 +605,6 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
 }
 
 // ============================================================================
-// Generate standalone owned structs for specific classes
-// ============================================================================
-
-/// Generate owned Rust structs (with `from_external` and `AsBexExternalValue`)
-/// for a specific set of class names. Used by `sys_types` to generate provider
-/// option types from `llm_types.baml` without pulling in the full IO trait system.
-///
-/// NOTE: This only works for flat classes (all-primitive fields). If a selected
-/// class references another named class, the field will resolve incorrectly
-/// because we don't emit the `owned::{ns}` module tree here. Extend this to
-/// compute the transitive class set if that becomes necessary.
-pub fn generate_owned_structs(class_defs: &[NativeClassDef], class_names: &[&str]) -> String {
-    let filtered: Vec<&NativeClassDef> = class_defs
-        .iter()
-        .filter(|cd| class_names.contains(&cd.name.as_str()))
-        .collect();
-    let class_ns_map = build_class_ns_map(&filtered);
-
-    let paths = CodegenPaths::inline();
-    let mut out = String::new();
-    out.push_str("// Generated from llm_types.baml. Do not edit.\n\n");
-    out.push_str("use super::*;\n\n");
-
-    for cd in &filtered {
-        emit_owned_struct(&mut out, cd, &class_ns_map, "", &paths);
-    }
-
-    out
-}
-
-// ============================================================================
 // Generate IO Traits (main entry point for sys_ops codegen)
 // ============================================================================
 
@@ -667,7 +636,7 @@ pub fn generate_io_structs(io_builtins: &[NativeBuiltin], class_defs: &[NativeCl
     out
 }
 
-/// Generate IO trait hierarchy and SysOps dispatch struct.
+/// Generate IO trait hierarchy and `SysOps` dispatch struct.
 ///
 /// `structs_path` controls where struct references (both `view::` and `owned::`)
 /// point. Pass `"self"` to include the struct modules inline, or an external

@@ -234,7 +234,7 @@ fn openai_media_part(
         }),
         MediaKind::Audio => media.read_content(|c| {
             let data = content_to_base64(c)?;
-            let format = audio_format_from_mime(mime);
+            let format = audio_format_from_mime(mime)?;
             Ok(ContentPart::InputAudio {
                 input_audio: InputAudio { data, format },
             })
@@ -296,14 +296,15 @@ fn content_to_base64(
 }
 
 /// Derive the `OpenAI` audio format string from a MIME type.
-fn audio_format_from_mime(mime: &str) -> String {
+///
+/// Chat Completions only accepts `wav` and `mp3` for `input_audio.format`.
+fn audio_format_from_mime(mime: &str) -> Result<String, crate::build_request::BuildRequestError> {
     match mime {
-        "audio/wav" | "audio/x-wav" => "wav".to_string(),
-        "audio/mp3" | "audio/mpeg" => "mp3".to_string(),
-        "audio/flac" | "audio/x-flac" => "flac".to_string(),
-        "audio/ogg" => "ogg".to_string(),
-        "audio/webm" => "webm".to_string(),
-        other => other.to_string(),
+        "audio/wav" | "audio/x-wav" => Ok("wav".to_string()),
+        "audio/mp3" | "audio/mpeg" => Ok("mp3".to_string()),
+        other => Err(crate::build_request::BuildRequestError::UnsupportedMedia(
+            format!("OpenAI Chat Completions input_audio only supports wav and mp3, got: {other}"),
+        )),
     }
 }
 

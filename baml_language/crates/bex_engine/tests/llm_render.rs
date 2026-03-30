@@ -26,6 +26,7 @@ async fn test_render_prompt_directly() {
     let client =
         sys_llm::baml_std::PrimitiveClient::new("test".to_string(), "openai".to_string(), {
             sys_llm::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
                 default_role: Some("user".to_string()),
                 allowed_roles: Some(vec![
                     "user".to_string(),
@@ -83,6 +84,7 @@ You are a helpful assistant.
     let client =
         sys_llm::baml_std::PrimitiveClient::new("test".to_string(), "openai".to_string(), {
             sys_llm::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
                 default_role: Some("user".to_string()),
                 allowed_roles: Some(vec![
                     "user".to_string(),
