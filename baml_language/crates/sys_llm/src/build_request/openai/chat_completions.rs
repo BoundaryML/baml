@@ -105,10 +105,44 @@ pub(crate) fn build_request(
 
     Ok(crate::baml_std::HttpRequest {
         method: "POST".to_string(),
-        url: client.url.clone(),
+        url: resolve_url(client)?,
         headers,
         body: body_str,
     })
+}
+
+fn resolve_url(
+    client: &crate::baml_std::PrimitiveClient,
+) -> Result<String, crate::build_request::BuildRequestError> {
+    if let Some(base_url) = &client.options.base_url {
+        // Azure needs api-version query param.
+        if let Some(crate::baml_std::ProviderOptions::AzureOpenAi(azure)) =
+            &client.options.provider_options
+        {
+            return Ok(format!(
+                "{base_url}/chat/completions?api-version={}",
+                azure.api_version
+            ));
+        }
+        return Ok(format!("{base_url}/chat/completions"));
+    }
+
+    // No base_url: Azure can build from resource_name + deployment_id.
+    if let Some(crate::baml_std::ProviderOptions::AzureOpenAi(azure)) =
+        &client.options.provider_options
+    {
+        if let (Some(rn), Some(did)) = (&azure.resource_name, &azure.deployment_id) {
+            return Ok(format!(
+                "https://{rn}.openai.azure.com/openai/deployments/{did}/chat/completions?api-version={}",
+                azure.api_version
+            ));
+        }
+    }
+
+    Ok(format!(
+        "{}/chat/completions",
+        client.options.base_url.as_deref().unwrap_or_default()
+    ))
 }
 
 // ============================================================================
@@ -216,7 +250,7 @@ fn openai_media_part(
                 input_audio: InputAudio { data, format },
             })
         }),
-        MediaKind::Pdf | MediaKind::Video => media.read_content(|c| {
+        MediaKind::Pdf => media.read_content(|c| {
             let data_url = content_to_data_url(c, mime)?;
             Ok(ContentPart::File {
                 file: FileRef {
@@ -226,6 +260,9 @@ fn openai_media_part(
                 },
             })
         }),
+        MediaKind::Video => Err(crate::build_request::BuildRequestError::UnsupportedMedia(
+            "OpenAI Chat Completions does not support video content".to_string(),
+        )),
         MediaKind::Generic => Err(crate::build_request::BuildRequestError::UnsupportedMedia(
             "generic media kind not supported by OpenAI Chat Completions".to_string(),
         )),
@@ -637,12 +674,13 @@ mod tests {
             },
             Some("video/mp4"),
         );
-        // Video is handled via the file path (same as PDF), so it should succeed
-        let part = openai_media_part(&media).unwrap();
-        let json = serde_json::to_value(&part).unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({"type": "file", "file": {"file_data": "data:video/mp4;base64,videodata"}})
+        let result = openai_media_part(&media);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("does not support video")
         );
     }
 

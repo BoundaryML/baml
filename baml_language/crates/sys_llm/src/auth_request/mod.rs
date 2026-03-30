@@ -9,7 +9,7 @@
 //! refreshed independently of request building (e.g. short-lived STS tokens,
 //! OAuth token refresh, or vault-based secret retrieval).
 
-mod bedrock;
+pub(crate) mod bedrock;
 
 use crate::{
     LlmProvider,
