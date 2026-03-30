@@ -5,7 +5,7 @@
 
 use baml_base::Name;
 
-use crate::{FieldAttr, Ty, TyAttr};
+use crate::{Ty, TyAttr};
 
 /// Top-level container for all schema definitions.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,7 +35,6 @@ pub struct FieldDef {
     pub description: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
-    pub field_attr: FieldAttr,
 }
 
 /// An enum definition with propagated attributes.

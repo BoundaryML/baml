@@ -8,6 +8,43 @@ use crate::send_wrapper::SendWrapper;
 #[derive(Tsify, Serialize)]
 #[tsify(into_wasm_abi)]
 #[serde(rename_all = "camelCase")]
+pub struct FunctionInfo {
+    pub name: String,
+    pub kind: FunctionKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<LlmCapabilities>,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub enum FunctionKind {
+    Llm,
+    Expr,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct LlmCapabilities {
+    pub render_prompt: bool,
+    pub build_request: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_name: Option<String>,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct TestInfo {
+    pub name: String,
+    pub function_name: String,
+    pub args_json: String,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectDiagnostic {
     pub severity: String,
     pub message: String,
@@ -18,7 +55,8 @@ pub struct ProjectDiagnostic {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectUpdate {
     pub is_bex_current: bool,
-    pub functions: Vec<String>,
+    pub functions: Vec<FunctionInfo>,
+    pub tests: Vec<TestInfo>,
     pub diagnostics: Vec<ProjectDiagnostic>,
 }
 
@@ -38,6 +76,13 @@ pub enum PlaygroundNotification {
         project: String,
         function_name: Option<String>,
     },
+    #[serde(rename_all = "camelCase")]
+    ControlFlowGraphResult {
+        function_name: String,
+        graph: Option<serde_json::Value>,
+    },
+    #[serde(rename_all = "camelCase")]
+    CursorContext { context: serde_json::Value },
 }
 
 impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
@@ -51,7 +96,31 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                     project,
                     update: ProjectUpdate {
                         is_bex_current: update.is_bex_current,
-                        functions: update.functions,
+                        functions: update
+                            .functions
+                            .into_iter()
+                            .map(|f| FunctionInfo {
+                                name: f.name,
+                                kind: match f.kind {
+                                    bex_project::FunctionKind::Llm => FunctionKind::Llm,
+                                    bex_project::FunctionKind::Expr => FunctionKind::Expr,
+                                },
+                                capabilities: f.capabilities.map(|c| LlmCapabilities {
+                                    render_prompt: c.render_prompt,
+                                    build_request: c.build_request,
+                                    client_name: c.client_name,
+                                }),
+                            })
+                            .collect(),
+                        tests: update
+                            .tests
+                            .into_iter()
+                            .map(|t| TestInfo {
+                                name: t.name,
+                                function_name: t.function_name,
+                                args_json: t.args_json,
+                            })
+                            .collect(),
                         diagnostics: update
                             .diagnostics
                             .into_iter()
@@ -70,6 +139,16 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                 project,
                 function_name,
             },
+            bex_project::PlaygroundNotification::ControlFlowGraphResult {
+                function_name,
+                graph,
+            } => PlaygroundNotification::ControlFlowGraphResult {
+                function_name,
+                graph,
+            },
+            bex_project::PlaygroundNotification::CursorContext { context } => {
+                PlaygroundNotification::CursorContext { context }
+            }
         }
     }
 }

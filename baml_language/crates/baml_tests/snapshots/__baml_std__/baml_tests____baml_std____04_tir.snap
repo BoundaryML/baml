@@ -10,10 +10,14 @@ class baml.Array {
 }
 class baml.Map {
 }
+class baml.Array$stream {
+}
+class baml.Map$stream {
+}
 
 --- <builtin>/baml/core.baml ---
 
---- <builtin>/baml/env/env.baml ---
+--- <builtin>/baml/ns_env/env.baml ---
 function baml.env.get_or_panic(key: string) -> string throws never {
   { : "" | string
     let val = get(key) : string?
@@ -29,7 +33,7 @@ function baml.env.get_or_panic(key: string) -> string throws never {
   }
 }
 
---- <builtin>/baml/errors/errors.baml ---
+--- <builtin>/baml/ns_errors/errors.baml ---
 class baml.errors.InvalidArgument {
   message: string
 }
@@ -61,13 +65,47 @@ class baml.errors.DevOther {
 class baml.errors.HostPanic {
   message: string
 }
+class baml.errors.InvalidArgument$stream {
+  message: null | string
+}
+class baml.errors.Io$stream {
+  message: null | string
+}
+class baml.errors.Timeout$stream {
+  message: null | string
+  duration_ms: null | int
+}
+class baml.errors.Unsupported$stream {
+  message: null | string
+}
+class baml.errors.AccessError$stream {
+  message: null | string
+}
+class baml.errors.RenderPrompt$stream {
+  message: null | string
+}
+class baml.errors.NotImplemented$stream {
+  message: null | string
+}
+class baml.errors.LlmClient$stream {
+  message: null | string
+}
+class baml.errors.DevOther$stream {
+  message: null | string
+}
+class baml.errors.HostPanic$stream {
+  message: null | string
+}
 
---- <builtin>/baml/fs/fs.baml ---
+--- <builtin>/baml/ns_fs/fs.baml ---
 class baml.fs.File {
   _handle: $rust_type
 }
+class baml.fs.File$stream {
+  _handle: $rust_type
+}
 
---- <builtin>/baml/http/http.baml ---
+--- <builtin>/baml/ns_http/http.baml ---
 class baml.http.Request {
   method: string
   url: string
@@ -85,8 +123,20 @@ function baml.http.Response.ok(self: baml.http.Response) -> bool throws never {
     self.status_code Ge 200 And self.status_code Lt 300 : bool
   }
 }
+class baml.http.Request$stream {
+  method: null | string
+  url: null | string
+  headers: map<string, string>
+  body: null | string
+}
+class baml.http.Response$stream {
+  status_code: null | int
+  headers: map<string, string>
+  url: null | string
+  _body: $rust_type
+}
 
---- <builtin>/baml/llm/llm.baml ---
+--- <builtin>/baml/ns_llm/llm.baml ---
 class baml.llm.OrchestrationStep {
   primitive_client: baml.llm.PrimitiveClient
   delay_ms: int
@@ -138,16 +188,38 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
     primitive_client.build_request(specialized_prompt) : baml.http.Request
   }
 }
+function baml.llm.parse<T>(function_name: string, json: string) -> T throws never {
+  { : T
+    let return_type = get_return_type(function_name) : type
+    __sap_parse<T>(json, return_type) : T
+  }
+}
 function baml.llm.call_llm_function<T>(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> T throws never {
   { : T
     let jinja_string = get_jinja_template(function_name) : string
-    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : unknown
+    let context = ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name } : baml.llm.ExecutionContext
     let result = client.execute<T>(context, 0) : T
     result : T
   }
 }
+class baml.llm.OrchestrationStep$stream {
+  primitive_client: null | baml.llm.PrimitiveClient$stream
+  delay_ms: null | int
+}
+class baml.llm.ExecutionResult$stream {
+  ok: null | bool
+  value: unknown
+}
+class baml.llm.ExecutionContext$stream {
+  jinja_string: null | string
+  args: map<string, unknown>
+  function_name: null | string
+}
+class baml.llm.PlannerState$stream {
+  rr_client_names: string[]
+}
 
---- <builtin>/baml/llm/llm_types.baml ---
+--- <builtin>/baml/ns_llm/llm_types.baml ---
 class baml.llm.PromptAst {
   _data: $rust_type
 }
@@ -179,18 +251,18 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
 }
 function baml.llm.Client.build_attempt(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
-    let planner_state = PlannerState { rr_client_names: [] } : unknown
+    let planner_state = PlannerState { rr_client_names: [] } : baml.llm.PlannerState
     self.build_attempt_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
 function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner_state: baml.llm.PlannerState) -> baml.llm.OrchestrationStep[] throws never {
-  { : unknown[] | baml.llm.OrchestrationStep[] | never[]
-    match (self.client_type : baml.llm.ClientType) : unknown[] | baml.llm.OrchestrationStep[] | never[]
+  { : baml.llm.OrchestrationStep[] | never[]
+    match (self.client_type : baml.llm.ClientType) : baml.llm.OrchestrationStep[] | never[]
       ClientType.Primitive =>
-        { : unknown[]
+        { : baml.llm.OrchestrationStep[]
           let resolve_fn = self.get_constructor() : () -> baml.llm.PrimitiveClient
           let primitive = resolve_fn() : baml.llm.PrimitiveClient
-          [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }] : unknown[]
+          [OrchestrationStep { primitive_client: primitive, delay_ms: 0 }] : baml.llm.OrchestrationStep[]
         }
       ClientType.Fallback =>
         { : baml.llm.OrchestrationStep[]
@@ -220,7 +292,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
 }
 function baml.llm.Client.build_plan(self: baml.llm.Client) -> baml.llm.OrchestrationStep[] throws never {
   { : baml.llm.OrchestrationStep[]
-    let planner_state = PlannerState { rr_client_names: [] } : unknown
+    let planner_state = PlannerState { rr_client_names: [] } : baml.llm.PlannerState
     self.build_plan_with_state(planner_state) : baml.llm.OrchestrationStep[]
   }
 }
@@ -390,10 +462,50 @@ class baml.llm.PrimitiveClient {
   provider: string
   options: baml.llm.PrimitiveClientOptions
 }
+class baml.llm.PromptAst$stream {
+  _data: $rust_type
+}
+class baml.llm.RetryPolicy$stream {
+  max_retries: null | int
+  initial_delay_ms: null | int
+  multiplier: null | float
+  max_delay_ms: null | int
+}
+class baml.llm.Client$stream {
+  name: null | string
+  client_type: null | baml.llm.ClientType
+  sub_clients: baml.llm.Client$stream[]
+  retry: null | baml.llm.RetryPolicy$stream
+  counter: null | int
+}
+class baml.llm.PrimitiveClientOptions$stream {
+  model: string | null
+  base_url: string | null
+  default_role: string | null
+  allowed_roles: string[] | null
+  remap_roles: map<string, string> | null
+  api_key: string | null
+  provider_options: baml.llm.AnthropicOptions$stream | baml.llm.AzureOpenAiOptions$stream | null
+  headers: map<string, string>
+  query_params: map<string, string>
+  request_body: map<string, unknown>
+}
+class baml.llm.AzureOpenAiOptions$stream {
+  resource_name: null | string
+  api_version: null | string
+}
+class baml.llm.AnthropicOptions$stream {
+  anthropic_version: string | null
+}
+class baml.llm.PrimitiveClient$stream {
+  name: null | string
+  provider: null | string
+  options: null | baml.llm.PrimitiveClientOptions$stream
+}
 
---- <builtin>/baml/math/math.baml ---
+--- <builtin>/baml/ns_math/math.baml ---
 
---- <builtin>/baml/media/media.baml ---
+--- <builtin>/baml/ns_media/media.baml ---
 class baml.media.Pdf {
   _data: $rust_type
 }
@@ -406,16 +518,33 @@ class baml.media.Video {
 class baml.media.Image {
   _data: $rust_type
 }
+class baml.media.Pdf$stream {
+  _data: $rust_type
+}
+class baml.media.Audio$stream {
+  _data: $rust_type
+}
+class baml.media.Video$stream {
+  _data: $rust_type
+}
+class baml.media.Image$stream {
+  _data: $rust_type
+}
 
---- <builtin>/baml/net/net.baml ---
+--- <builtin>/baml/ns_net/net.baml ---
 class baml.net.Socket {
   _handle: $rust_type
 }
+class baml.net.Socket$stream {
+  _handle: $rust_type
+}
+
+--- <builtin>/baml/ns_sys/sys.baml ---
+
+--- <builtin>/baml/ns_unstable/unstable.baml ---
 
 --- <builtin>/baml/string.baml ---
 class baml.String {
 }
-
---- <builtin>/baml/sys/sys.baml ---
-
---- <builtin>/baml/unstable/unstable.baml ---
+class baml.String$stream {
+}

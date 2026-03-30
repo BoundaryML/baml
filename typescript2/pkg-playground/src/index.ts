@@ -24,6 +24,7 @@ export type {
   WorkerOutMessage,
   WorkerInMessage,
   WorkerInitMessage,
+  ControlFlowGraph,
   DiagnosticEntry,
   FetchLogEntry,
   EnvVarRequest,
@@ -31,3 +32,6 @@ export type {
   ProjectUpdate,
   RunEntry,
 } from './worker-protocol';
+
+// Utility
+export { cn } from './lib/utils';

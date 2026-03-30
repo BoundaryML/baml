@@ -163,11 +163,10 @@ function user.iterator_style_for_loop() -> int throws never {
     let result = 0 : 0 -> int
     for i in [1, 2, 3]
       { : void
-        result Add= i : unknown
+        result Add= i : int
       }
     return result : int
   }
-  !! 228..234: operator `Add` cannot be applied to `int` and `1 | 2 | 3`
 }
 function user.nested_for_loop() -> int throws never {
   { : never
@@ -176,12 +175,11 @@ function user.nested_for_loop() -> int throws never {
       { : void
         for j in [4, 5, 6]
           { : void
-            result Add= i Mul j : unknown
+            result Add= i Mul j : int
           }
       }
     return result : int
   }
-  !! 396..401: operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
 }
 function user.ConditionalLogic(age: int) -> string throws never {
   { : never
@@ -212,6 +210,10 @@ function user.let_statements() -> int throws never {
 class user.Point {
   x: int
   y: int
+}
+class user.Point$stream {
+  x: null | int
+  y: null | int
 }
 function user.simple_while_loop() -> int throws never {
   { : never

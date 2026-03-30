@@ -29,13 +29,13 @@ function baml.values(self: ?) -> baml.V[]  [builtin]
 function baml.deep_copy(value: baml.T) -> baml.T  [builtin]
 function baml.deep_equals(a: baml.T, b: baml.T) -> bool  [builtin]
 
---- <builtin>/baml/env/env.baml ---
+--- <builtin>/baml/ns_env/env.baml ---
 function baml.env.get(key: string) -> string?  [builtin]
 function baml.env.get_or_panic(key: string) -> string  [expr] {
   { let val = get(key) } if (val Eq null) { root.sys.panic("env var not found: " Add key) } "" else {  } val
 }
 
---- <builtin>/baml/errors/errors.baml ---
+--- <builtin>/baml/ns_errors/errors.baml ---
 class baml.errors.AccessError {
   message: string
 }
@@ -68,7 +68,7 @@ class baml.errors.Unsupported {
   message: string
 }
 
---- <builtin>/baml/fs/fs.baml ---
+--- <builtin>/baml/ns_fs/fs.baml ---
 class baml.fs.File {
   _handle: $rust_type
 }
@@ -76,7 +76,7 @@ function baml.fs.close(self: ?) -> null  [builtin]
 function baml.fs.open(path: string) -> baml.fs.File  [builtin]
 function baml.fs.read(self: ?) -> string  [builtin]
 
---- <builtin>/baml/http/http.baml ---
+--- <builtin>/baml/ns_http/http.baml ---
 class baml.http.Request {
   method: string
   url: string
@@ -96,7 +96,7 @@ function baml.http.ok(self: ?) -> bool  [expr] {
 function baml.http.send(request: baml.http.Request) -> baml.http.Response  [builtin]
 function baml.http.text(self: ?) -> string  [builtin]
 
---- <builtin>/baml/llm/llm.baml ---
+--- <builtin>/baml/ns_llm/llm.baml ---
 class baml.llm.ExecutionContext {
   jinja_string: string
   args: map<string, unknown>
@@ -119,6 +119,9 @@ function baml.llm.build_request(client: baml.llm.Client, function_name: string, 
 function baml.llm.call_llm_function(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.T  [expr] {
   { let jinja_string = get_jinja_template(function_name); let context = baml.llm.ExecutionContext { jinja_string: jinja_string, args: args, function_name: function_name }; let result: baml.llm.T = client.execute(context, 0) } result
 }
+function baml.llm.parse(function_name: string, json: string) -> baml.llm.T  [expr] {
+  { let return_type = get_return_type(function_name) } __sap_parse(json, return_type)
+}
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst  [expr] {
   { let jinja_string = get_jinja_template(function_name); let primitive_client = client.to_primitive_client(); let prompt = primitive_client.render_prompt(jinja_string, args) } primitive_client.specialize_prompt(prompt)
 }
@@ -129,7 +132,7 @@ function baml.llm.rr_pick_index(self: ?, client_name: string, counter: int, sub_
   { let local_offset = self.rr_local_offset(client_name); self.rr_client_names.push(client_name) } counter Add local_offset Mod sub_client_count
 }
 
---- <builtin>/baml/llm/llm_types.baml ---
+--- <builtin>/baml/ns_llm/llm_types.baml ---
 class baml.llm.AnthropicOptions {
   anthropic_version: string | null
 }
@@ -171,6 +174,7 @@ class baml.llm.RetryPolicy {
   max_delay_ms: int
 }
 enum baml.llm.ClientType {Primitive, Fallback, RoundRobin}
+function baml.llm.__sap_parse(json: string, ty: type) -> baml.llm.T  [builtin]
 function baml.llm.build_attempt(self: ?) -> baml.llm.OrchestrationStep[]  [expr] {
   { let planner_state = PlannerState { rr_client_names: [] } } self.build_attempt_with_state(planner_state)
 }
@@ -200,10 +204,10 @@ function baml.llm.to_primitive_client(self: ?) -> baml.llm.PrimitiveClient  [exp
   {  } if (self.name.includes("/")) { throw InvalidArgument { message: "Invalid short han..." Add self.name } } else {  } self.get_constructor()()
 }
 
---- <builtin>/baml/math/math.baml ---
+--- <builtin>/baml/ns_math/math.baml ---
 function baml.math.trunc(value: float) -> int  [builtin]
 
---- <builtin>/baml/media/media.baml ---
+--- <builtin>/baml/ns_media/media.baml ---
 class baml.media.Audio {
   _data: $rust_type
 }
@@ -245,13 +249,21 @@ function baml.media.url(self: ?) -> string?  [builtin]
 function baml.media.url(self: ?) -> string?  [builtin]
 function baml.media.url(self: ?) -> string?  [builtin]
 
---- <builtin>/baml/net/net.baml ---
+--- <builtin>/baml/ns_net/net.baml ---
 class baml.net.Socket {
   _handle: $rust_type
 }
 function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.connect(addr: string) -> baml.net.Socket  [builtin]
 function baml.net.read(self: ?) -> string  [builtin]
+
+--- <builtin>/baml/ns_sys/sys.baml ---
+function baml.sys.panic(message: string) -> null  [builtin]
+function baml.sys.shell(command: string) -> string  [builtin]
+function baml.sys.sleep(ms: int) -> null  [builtin]
+
+--- <builtin>/baml/ns_unstable/unstable.baml ---
+function baml.unstable.string(value: baml.unstable.T) -> string  [builtin]
 
 --- <builtin>/baml/string.baml ---
 class baml.String {
@@ -270,11 +282,3 @@ function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
 function baml.toLowerCase(self: ?) -> string  [builtin]
 function baml.toUpperCase(self: ?) -> string  [builtin]
 function baml.trim(self: ?) -> string  [builtin]
-
---- <builtin>/baml/sys/sys.baml ---
-function baml.sys.panic(message: string) -> null  [builtin]
-function baml.sys.shell(command: string) -> string  [builtin]
-function baml.sys.sleep(ms: int) -> null  [builtin]
-
---- <builtin>/baml/unstable/unstable.baml ---
-function baml.unstable.string(value: baml.unstable.T) -> string  [builtin]

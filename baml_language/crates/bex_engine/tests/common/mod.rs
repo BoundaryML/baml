@@ -72,8 +72,10 @@ pub(crate) async fn assert_engine_executes(input: EngineProgram) -> anyhow::Resu
     let source = input.source.replace("{ROOT}", &root_path);
 
     let snapshot = compile_for_engine(&source);
-    let engine = BexEngine::new(snapshot, Arc::new(sys_types::SysOps::native()), None)
-        .expect("Failed to create engine");
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), None)
+            .expect("Failed to create engine"),
+    );
 
     let result = engine
         .call_function(
@@ -198,8 +200,10 @@ function get_prompt() -> baml.llm.PromptAst {{
     // (i.e. deterministic across independent engine instances).
     for i in 0..3 {
         let snapshot = compile_for_engine(&source);
-        let engine = BexEngine::new(snapshot, Arc::new(sys_types::SysOps::native()), None)
-            .expect("Failed to create engine");
+        let engine = Arc::new(
+            BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), None)
+                .expect("Failed to create engine"),
+        );
 
         let result = engine
             .call_function(

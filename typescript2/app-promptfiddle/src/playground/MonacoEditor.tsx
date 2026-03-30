@@ -684,6 +684,26 @@ export const MonacoEditor: FC<MonacoEditorProps> = ({ files, onFilesChange, heig
       });
       disposables.push({ dispose: () => changeSubscription.dispose() });
 
+      // Cursor position tracking for playground navigation
+      let cursorDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+      const cursorSubscription = vscode.window.onDidChangeTextEditorSelection((e: import('vscode').TextEditorSelectionChangeEvent) => {
+        const filename = uriToFilename(e.textEditor.document.uri);
+        if (!filename || !filename.endsWith('.baml')) return;
+
+        clearTimeout(cursorDebounceTimer);
+        cursorDebounceTimer = setTimeout(() => {
+          const pos = e.selections[0]?.active;
+          if (!pos) return;
+          workerRef.current?.postMessage({
+            type: 'cursorPosition',
+            file: filename,
+            line: pos.line,        // VS Code API is 0-indexed, matches lsp_types::Position
+            column: pos.character,  // VS Code API is 0-indexed, matches lsp_types::Position
+          });
+        }, 50);
+      });
+      disposables.push({ dispose: () => { clearTimeout(cursorDebounceTimer); cursorSubscription.dispose(); } });
+
       // Listen for file creation/deletion at the FS level
       const fsWatcher = fileSystemProvider.onDidChangeFile((events) => {
         for (const event of events) {

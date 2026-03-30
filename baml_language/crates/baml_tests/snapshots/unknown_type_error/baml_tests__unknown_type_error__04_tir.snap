@@ -12,7 +12,7 @@ function user.Bar(x: unknown) -> int throws never {
   { : 1
     1 : 1
   }
-  !! 208..229: unresolved type: unknown_param_type
+  !! 210..229: unresolved type: unknown_param_type
 }
 function user.Baz() -> unknown? throws never {
   { : null

@@ -211,8 +211,9 @@ pub async fn run_test(
     let positional_args = resolve_args(&program, entry, args);
 
     // Create engine and execute.
-    let engine = BexEngine::new(program, Arc::new(sys_types::SysOps::native()), None)
+    let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), None)
         .expect("Failed to create BexEngine");
+    let engine = Arc::new(engine);
 
     let result = engine
         .call_function(

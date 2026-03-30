@@ -65,11 +65,7 @@ impl BamlProject {
     /// 3. Only recompute when function signatures change (not body edits)
     #[wasm_bindgen]
     pub fn function_names(&self) -> Vec<String> {
-        if let Some(project) = self.db.project() {
-            let symbols = list_functions(&self.db, project);
-            symbols.into_iter().map(|s| s.name).collect()
-        } else {
-            vec![]
-        }
+        let symbols = list_functions(&self.db);
+        symbols.into_iter().map(|s| s.name).collect()
     }
 }

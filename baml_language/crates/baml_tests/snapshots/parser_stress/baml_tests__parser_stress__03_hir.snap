@@ -5138,6 +5138,9 @@ function user.Process1(input: string) -> string  [llm] {
 function user.Process1$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process1", map { "input": input })
 }
+function user.Process1$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process1", json)
+}
 function user.Process1$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process1", map { "input": input })
 }
@@ -5146,6 +5149,9 @@ function user.Process10(input: string) -> string  [llm] {
 }
 function user.Process10$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process10", map { "input": input })
+}
+function user.Process10$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process10", json)
 }
 function user.Process10$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process10", map { "input": input })
@@ -5156,6 +5162,9 @@ function user.Process100(input: string) -> string  [llm] {
 function user.Process100$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process100", map { "input": input })
 }
+function user.Process100$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process100", json)
+}
 function user.Process100$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process100", map { "input": input })
 }
@@ -5164,6 +5173,9 @@ function user.Process11(input: string) -> string  [llm] {
 }
 function user.Process11$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process11", map { "input": input })
+}
+function user.Process11$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process11", json)
 }
 function user.Process11$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process11", map { "input": input })
@@ -5174,6 +5186,9 @@ function user.Process12(input: string) -> string  [llm] {
 function user.Process12$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process12", map { "input": input })
 }
+function user.Process12$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process12", json)
+}
 function user.Process12$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process12", map { "input": input })
 }
@@ -5182,6 +5197,9 @@ function user.Process13(input: string) -> string  [llm] {
 }
 function user.Process13$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process13", map { "input": input })
+}
+function user.Process13$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process13", json)
 }
 function user.Process13$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process13", map { "input": input })
@@ -5192,6 +5210,9 @@ function user.Process14(input: string) -> string  [llm] {
 function user.Process14$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process14", map { "input": input })
 }
+function user.Process14$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process14", json)
+}
 function user.Process14$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process14", map { "input": input })
 }
@@ -5200,6 +5221,9 @@ function user.Process15(input: string) -> string  [llm] {
 }
 function user.Process15$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process15", map { "input": input })
+}
+function user.Process15$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process15", json)
 }
 function user.Process15$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process15", map { "input": input })
@@ -5210,6 +5234,9 @@ function user.Process16(input: string) -> string  [llm] {
 function user.Process16$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process16", map { "input": input })
 }
+function user.Process16$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process16", json)
+}
 function user.Process16$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process16", map { "input": input })
 }
@@ -5218,6 +5245,9 @@ function user.Process17(input: string) -> string  [llm] {
 }
 function user.Process17$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process17", map { "input": input })
+}
+function user.Process17$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process17", json)
 }
 function user.Process17$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process17", map { "input": input })
@@ -5228,6 +5258,9 @@ function user.Process18(input: string) -> string  [llm] {
 function user.Process18$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process18", map { "input": input })
 }
+function user.Process18$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process18", json)
+}
 function user.Process18$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process18", map { "input": input })
 }
@@ -5236,6 +5269,9 @@ function user.Process19(input: string) -> string  [llm] {
 }
 function user.Process19$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process19", map { "input": input })
+}
+function user.Process19$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process19", json)
 }
 function user.Process19$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process19", map { "input": input })
@@ -5246,6 +5282,9 @@ function user.Process2(input: string) -> string  [llm] {
 function user.Process2$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process2", map { "input": input })
 }
+function user.Process2$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process2", json)
+}
 function user.Process2$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process2", map { "input": input })
 }
@@ -5254,6 +5293,9 @@ function user.Process20(input: string) -> string  [llm] {
 }
 function user.Process20$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process20", map { "input": input })
+}
+function user.Process20$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process20", json)
 }
 function user.Process20$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process20", map { "input": input })
@@ -5264,6 +5306,9 @@ function user.Process21(input: string) -> string  [llm] {
 function user.Process21$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process21", map { "input": input })
 }
+function user.Process21$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process21", json)
+}
 function user.Process21$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process21", map { "input": input })
 }
@@ -5272,6 +5317,9 @@ function user.Process22(input: string) -> string  [llm] {
 }
 function user.Process22$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process22", map { "input": input })
+}
+function user.Process22$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process22", json)
 }
 function user.Process22$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process22", map { "input": input })
@@ -5282,6 +5330,9 @@ function user.Process23(input: string) -> string  [llm] {
 function user.Process23$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process23", map { "input": input })
 }
+function user.Process23$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process23", json)
+}
 function user.Process23$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process23", map { "input": input })
 }
@@ -5290,6 +5341,9 @@ function user.Process24(input: string) -> string  [llm] {
 }
 function user.Process24$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process24", map { "input": input })
+}
+function user.Process24$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process24", json)
 }
 function user.Process24$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process24", map { "input": input })
@@ -5300,6 +5354,9 @@ function user.Process25(input: string) -> string  [llm] {
 function user.Process25$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process25", map { "input": input })
 }
+function user.Process25$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process25", json)
+}
 function user.Process25$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process25", map { "input": input })
 }
@@ -5308,6 +5365,9 @@ function user.Process26(input: string) -> string  [llm] {
 }
 function user.Process26$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process26", map { "input": input })
+}
+function user.Process26$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process26", json)
 }
 function user.Process26$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process26", map { "input": input })
@@ -5318,6 +5378,9 @@ function user.Process27(input: string) -> string  [llm] {
 function user.Process27$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process27", map { "input": input })
 }
+function user.Process27$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process27", json)
+}
 function user.Process27$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process27", map { "input": input })
 }
@@ -5326,6 +5389,9 @@ function user.Process28(input: string) -> string  [llm] {
 }
 function user.Process28$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process28", map { "input": input })
+}
+function user.Process28$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process28", json)
 }
 function user.Process28$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process28", map { "input": input })
@@ -5336,6 +5402,9 @@ function user.Process29(input: string) -> string  [llm] {
 function user.Process29$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process29", map { "input": input })
 }
+function user.Process29$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process29", json)
+}
 function user.Process29$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process29", map { "input": input })
 }
@@ -5344,6 +5413,9 @@ function user.Process3(input: string) -> string  [llm] {
 }
 function user.Process3$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process3", map { "input": input })
+}
+function user.Process3$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process3", json)
 }
 function user.Process3$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process3", map { "input": input })
@@ -5354,6 +5426,9 @@ function user.Process30(input: string) -> string  [llm] {
 function user.Process30$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process30", map { "input": input })
 }
+function user.Process30$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process30", json)
+}
 function user.Process30$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process30", map { "input": input })
 }
@@ -5362,6 +5437,9 @@ function user.Process31(input: string) -> string  [llm] {
 }
 function user.Process31$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process31", map { "input": input })
+}
+function user.Process31$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process31", json)
 }
 function user.Process31$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process31", map { "input": input })
@@ -5372,6 +5450,9 @@ function user.Process32(input: string) -> string  [llm] {
 function user.Process32$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process32", map { "input": input })
 }
+function user.Process32$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process32", json)
+}
 function user.Process32$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process32", map { "input": input })
 }
@@ -5380,6 +5461,9 @@ function user.Process33(input: string) -> string  [llm] {
 }
 function user.Process33$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process33", map { "input": input })
+}
+function user.Process33$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process33", json)
 }
 function user.Process33$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process33", map { "input": input })
@@ -5390,6 +5474,9 @@ function user.Process34(input: string) -> string  [llm] {
 function user.Process34$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process34", map { "input": input })
 }
+function user.Process34$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process34", json)
+}
 function user.Process34$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process34", map { "input": input })
 }
@@ -5398,6 +5485,9 @@ function user.Process35(input: string) -> string  [llm] {
 }
 function user.Process35$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process35", map { "input": input })
+}
+function user.Process35$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process35", json)
 }
 function user.Process35$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process35", map { "input": input })
@@ -5408,6 +5498,9 @@ function user.Process36(input: string) -> string  [llm] {
 function user.Process36$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process36", map { "input": input })
 }
+function user.Process36$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process36", json)
+}
 function user.Process36$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process36", map { "input": input })
 }
@@ -5416,6 +5509,9 @@ function user.Process37(input: string) -> string  [llm] {
 }
 function user.Process37$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process37", map { "input": input })
+}
+function user.Process37$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process37", json)
 }
 function user.Process37$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process37", map { "input": input })
@@ -5426,6 +5522,9 @@ function user.Process38(input: string) -> string  [llm] {
 function user.Process38$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process38", map { "input": input })
 }
+function user.Process38$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process38", json)
+}
 function user.Process38$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process38", map { "input": input })
 }
@@ -5434,6 +5533,9 @@ function user.Process39(input: string) -> string  [llm] {
 }
 function user.Process39$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process39", map { "input": input })
+}
+function user.Process39$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process39", json)
 }
 function user.Process39$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process39", map { "input": input })
@@ -5444,6 +5546,9 @@ function user.Process4(input: string) -> string  [llm] {
 function user.Process4$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process4", map { "input": input })
 }
+function user.Process4$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process4", json)
+}
 function user.Process4$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process4", map { "input": input })
 }
@@ -5452,6 +5557,9 @@ function user.Process40(input: string) -> string  [llm] {
 }
 function user.Process40$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process40", map { "input": input })
+}
+function user.Process40$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process40", json)
 }
 function user.Process40$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process40", map { "input": input })
@@ -5462,6 +5570,9 @@ function user.Process41(input: string) -> string  [llm] {
 function user.Process41$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process41", map { "input": input })
 }
+function user.Process41$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process41", json)
+}
 function user.Process41$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process41", map { "input": input })
 }
@@ -5470,6 +5581,9 @@ function user.Process42(input: string) -> string  [llm] {
 }
 function user.Process42$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process42", map { "input": input })
+}
+function user.Process42$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process42", json)
 }
 function user.Process42$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process42", map { "input": input })
@@ -5480,6 +5594,9 @@ function user.Process43(input: string) -> string  [llm] {
 function user.Process43$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process43", map { "input": input })
 }
+function user.Process43$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process43", json)
+}
 function user.Process43$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process43", map { "input": input })
 }
@@ -5488,6 +5605,9 @@ function user.Process44(input: string) -> string  [llm] {
 }
 function user.Process44$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process44", map { "input": input })
+}
+function user.Process44$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process44", json)
 }
 function user.Process44$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process44", map { "input": input })
@@ -5498,6 +5618,9 @@ function user.Process45(input: string) -> string  [llm] {
 function user.Process45$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process45", map { "input": input })
 }
+function user.Process45$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process45", json)
+}
 function user.Process45$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process45", map { "input": input })
 }
@@ -5506,6 +5629,9 @@ function user.Process46(input: string) -> string  [llm] {
 }
 function user.Process46$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process46", map { "input": input })
+}
+function user.Process46$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process46", json)
 }
 function user.Process46$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process46", map { "input": input })
@@ -5516,6 +5642,9 @@ function user.Process47(input: string) -> string  [llm] {
 function user.Process47$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process47", map { "input": input })
 }
+function user.Process47$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process47", json)
+}
 function user.Process47$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process47", map { "input": input })
 }
@@ -5524,6 +5653,9 @@ function user.Process48(input: string) -> string  [llm] {
 }
 function user.Process48$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process48", map { "input": input })
+}
+function user.Process48$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process48", json)
 }
 function user.Process48$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process48", map { "input": input })
@@ -5534,6 +5666,9 @@ function user.Process49(input: string) -> string  [llm] {
 function user.Process49$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process49", map { "input": input })
 }
+function user.Process49$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process49", json)
+}
 function user.Process49$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process49", map { "input": input })
 }
@@ -5542,6 +5677,9 @@ function user.Process5(input: string) -> string  [llm] {
 }
 function user.Process5$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process5", map { "input": input })
+}
+function user.Process5$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process5", json)
 }
 function user.Process5$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process5", map { "input": input })
@@ -5552,6 +5690,9 @@ function user.Process50(input: string) -> string  [llm] {
 function user.Process50$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process50", map { "input": input })
 }
+function user.Process50$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process50", json)
+}
 function user.Process50$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process50", map { "input": input })
 }
@@ -5560,6 +5701,9 @@ function user.Process51(input: string) -> string  [llm] {
 }
 function user.Process51$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process51", map { "input": input })
+}
+function user.Process51$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process51", json)
 }
 function user.Process51$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process51", map { "input": input })
@@ -5570,6 +5714,9 @@ function user.Process52(input: string) -> string  [llm] {
 function user.Process52$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process52", map { "input": input })
 }
+function user.Process52$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process52", json)
+}
 function user.Process52$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process52", map { "input": input })
 }
@@ -5578,6 +5725,9 @@ function user.Process53(input: string) -> string  [llm] {
 }
 function user.Process53$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process53", map { "input": input })
+}
+function user.Process53$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process53", json)
 }
 function user.Process53$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process53", map { "input": input })
@@ -5588,6 +5738,9 @@ function user.Process54(input: string) -> string  [llm] {
 function user.Process54$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process54", map { "input": input })
 }
+function user.Process54$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process54", json)
+}
 function user.Process54$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process54", map { "input": input })
 }
@@ -5596,6 +5749,9 @@ function user.Process55(input: string) -> string  [llm] {
 }
 function user.Process55$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process55", map { "input": input })
+}
+function user.Process55$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process55", json)
 }
 function user.Process55$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process55", map { "input": input })
@@ -5606,6 +5762,9 @@ function user.Process56(input: string) -> string  [llm] {
 function user.Process56$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process56", map { "input": input })
 }
+function user.Process56$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process56", json)
+}
 function user.Process56$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process56", map { "input": input })
 }
@@ -5614,6 +5773,9 @@ function user.Process57(input: string) -> string  [llm] {
 }
 function user.Process57$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process57", map { "input": input })
+}
+function user.Process57$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process57", json)
 }
 function user.Process57$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process57", map { "input": input })
@@ -5624,6 +5786,9 @@ function user.Process58(input: string) -> string  [llm] {
 function user.Process58$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process58", map { "input": input })
 }
+function user.Process58$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process58", json)
+}
 function user.Process58$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process58", map { "input": input })
 }
@@ -5632,6 +5797,9 @@ function user.Process59(input: string) -> string  [llm] {
 }
 function user.Process59$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process59", map { "input": input })
+}
+function user.Process59$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process59", json)
 }
 function user.Process59$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process59", map { "input": input })
@@ -5642,6 +5810,9 @@ function user.Process6(input: string) -> string  [llm] {
 function user.Process6$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process6", map { "input": input })
 }
+function user.Process6$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process6", json)
+}
 function user.Process6$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process6", map { "input": input })
 }
@@ -5650,6 +5821,9 @@ function user.Process60(input: string) -> string  [llm] {
 }
 function user.Process60$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process60", map { "input": input })
+}
+function user.Process60$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process60", json)
 }
 function user.Process60$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process60", map { "input": input })
@@ -5660,6 +5834,9 @@ function user.Process61(input: string) -> string  [llm] {
 function user.Process61$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process61", map { "input": input })
 }
+function user.Process61$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process61", json)
+}
 function user.Process61$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process61", map { "input": input })
 }
@@ -5668,6 +5845,9 @@ function user.Process62(input: string) -> string  [llm] {
 }
 function user.Process62$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process62", map { "input": input })
+}
+function user.Process62$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process62", json)
 }
 function user.Process62$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process62", map { "input": input })
@@ -5678,6 +5858,9 @@ function user.Process63(input: string) -> string  [llm] {
 function user.Process63$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process63", map { "input": input })
 }
+function user.Process63$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process63", json)
+}
 function user.Process63$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process63", map { "input": input })
 }
@@ -5686,6 +5869,9 @@ function user.Process64(input: string) -> string  [llm] {
 }
 function user.Process64$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process64", map { "input": input })
+}
+function user.Process64$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process64", json)
 }
 function user.Process64$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process64", map { "input": input })
@@ -5696,6 +5882,9 @@ function user.Process65(input: string) -> string  [llm] {
 function user.Process65$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process65", map { "input": input })
 }
+function user.Process65$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process65", json)
+}
 function user.Process65$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process65", map { "input": input })
 }
@@ -5704,6 +5893,9 @@ function user.Process66(input: string) -> string  [llm] {
 }
 function user.Process66$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process66", map { "input": input })
+}
+function user.Process66$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process66", json)
 }
 function user.Process66$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process66", map { "input": input })
@@ -5714,6 +5906,9 @@ function user.Process67(input: string) -> string  [llm] {
 function user.Process67$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process67", map { "input": input })
 }
+function user.Process67$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process67", json)
+}
 function user.Process67$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process67", map { "input": input })
 }
@@ -5722,6 +5917,9 @@ function user.Process68(input: string) -> string  [llm] {
 }
 function user.Process68$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process68", map { "input": input })
+}
+function user.Process68$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process68", json)
 }
 function user.Process68$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process68", map { "input": input })
@@ -5732,6 +5930,9 @@ function user.Process69(input: string) -> string  [llm] {
 function user.Process69$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process69", map { "input": input })
 }
+function user.Process69$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process69", json)
+}
 function user.Process69$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process69", map { "input": input })
 }
@@ -5740,6 +5941,9 @@ function user.Process7(input: string) -> string  [llm] {
 }
 function user.Process7$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process7", map { "input": input })
+}
+function user.Process7$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process7", json)
 }
 function user.Process7$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process7", map { "input": input })
@@ -5750,6 +5954,9 @@ function user.Process70(input: string) -> string  [llm] {
 function user.Process70$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process70", map { "input": input })
 }
+function user.Process70$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process70", json)
+}
 function user.Process70$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process70", map { "input": input })
 }
@@ -5758,6 +5965,9 @@ function user.Process71(input: string) -> string  [llm] {
 }
 function user.Process71$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process71", map { "input": input })
+}
+function user.Process71$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process71", json)
 }
 function user.Process71$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process71", map { "input": input })
@@ -5768,6 +5978,9 @@ function user.Process72(input: string) -> string  [llm] {
 function user.Process72$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process72", map { "input": input })
 }
+function user.Process72$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process72", json)
+}
 function user.Process72$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process72", map { "input": input })
 }
@@ -5776,6 +5989,9 @@ function user.Process73(input: string) -> string  [llm] {
 }
 function user.Process73$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process73", map { "input": input })
+}
+function user.Process73$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process73", json)
 }
 function user.Process73$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process73", map { "input": input })
@@ -5786,6 +6002,9 @@ function user.Process74(input: string) -> string  [llm] {
 function user.Process74$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process74", map { "input": input })
 }
+function user.Process74$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process74", json)
+}
 function user.Process74$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process74", map { "input": input })
 }
@@ -5794,6 +6013,9 @@ function user.Process75(input: string) -> string  [llm] {
 }
 function user.Process75$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process75", map { "input": input })
+}
+function user.Process75$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process75", json)
 }
 function user.Process75$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process75", map { "input": input })
@@ -5804,6 +6026,9 @@ function user.Process76(input: string) -> string  [llm] {
 function user.Process76$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process76", map { "input": input })
 }
+function user.Process76$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process76", json)
+}
 function user.Process76$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process76", map { "input": input })
 }
@@ -5812,6 +6037,9 @@ function user.Process77(input: string) -> string  [llm] {
 }
 function user.Process77$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process77", map { "input": input })
+}
+function user.Process77$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process77", json)
 }
 function user.Process77$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process77", map { "input": input })
@@ -5822,6 +6050,9 @@ function user.Process78(input: string) -> string  [llm] {
 function user.Process78$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process78", map { "input": input })
 }
+function user.Process78$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process78", json)
+}
 function user.Process78$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process78", map { "input": input })
 }
@@ -5830,6 +6061,9 @@ function user.Process79(input: string) -> string  [llm] {
 }
 function user.Process79$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process79", map { "input": input })
+}
+function user.Process79$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process79", json)
 }
 function user.Process79$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process79", map { "input": input })
@@ -5840,6 +6074,9 @@ function user.Process8(input: string) -> string  [llm] {
 function user.Process8$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process8", map { "input": input })
 }
+function user.Process8$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process8", json)
+}
 function user.Process8$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process8", map { "input": input })
 }
@@ -5848,6 +6085,9 @@ function user.Process80(input: string) -> string  [llm] {
 }
 function user.Process80$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process80", map { "input": input })
+}
+function user.Process80$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process80", json)
 }
 function user.Process80$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process80", map { "input": input })
@@ -5858,6 +6098,9 @@ function user.Process81(input: string) -> string  [llm] {
 function user.Process81$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process81", map { "input": input })
 }
+function user.Process81$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process81", json)
+}
 function user.Process81$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process81", map { "input": input })
 }
@@ -5866,6 +6109,9 @@ function user.Process82(input: string) -> string  [llm] {
 }
 function user.Process82$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process82", map { "input": input })
+}
+function user.Process82$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process82", json)
 }
 function user.Process82$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process82", map { "input": input })
@@ -5876,6 +6122,9 @@ function user.Process83(input: string) -> string  [llm] {
 function user.Process83$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process83", map { "input": input })
 }
+function user.Process83$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process83", json)
+}
 function user.Process83$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process83", map { "input": input })
 }
@@ -5884,6 +6133,9 @@ function user.Process84(input: string) -> string  [llm] {
 }
 function user.Process84$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process84", map { "input": input })
+}
+function user.Process84$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process84", json)
 }
 function user.Process84$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process84", map { "input": input })
@@ -5894,6 +6146,9 @@ function user.Process85(input: string) -> string  [llm] {
 function user.Process85$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process85", map { "input": input })
 }
+function user.Process85$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process85", json)
+}
 function user.Process85$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process85", map { "input": input })
 }
@@ -5902,6 +6157,9 @@ function user.Process86(input: string) -> string  [llm] {
 }
 function user.Process86$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process86", map { "input": input })
+}
+function user.Process86$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process86", json)
 }
 function user.Process86$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process86", map { "input": input })
@@ -5912,6 +6170,9 @@ function user.Process87(input: string) -> string  [llm] {
 function user.Process87$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process87", map { "input": input })
 }
+function user.Process87$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process87", json)
+}
 function user.Process87$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process87", map { "input": input })
 }
@@ -5920,6 +6181,9 @@ function user.Process88(input: string) -> string  [llm] {
 }
 function user.Process88$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process88", map { "input": input })
+}
+function user.Process88$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process88", json)
 }
 function user.Process88$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process88", map { "input": input })
@@ -5930,6 +6194,9 @@ function user.Process89(input: string) -> string  [llm] {
 function user.Process89$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process89", map { "input": input })
 }
+function user.Process89$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process89", json)
+}
 function user.Process89$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process89", map { "input": input })
 }
@@ -5938,6 +6205,9 @@ function user.Process9(input: string) -> string  [llm] {
 }
 function user.Process9$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process9", map { "input": input })
+}
+function user.Process9$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process9", json)
 }
 function user.Process9$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process9", map { "input": input })
@@ -5948,6 +6218,9 @@ function user.Process90(input: string) -> string  [llm] {
 function user.Process90$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process90", map { "input": input })
 }
+function user.Process90$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process90", json)
+}
 function user.Process90$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process90", map { "input": input })
 }
@@ -5956,6 +6229,9 @@ function user.Process91(input: string) -> string  [llm] {
 }
 function user.Process91$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process91", map { "input": input })
+}
+function user.Process91$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process91", json)
 }
 function user.Process91$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process91", map { "input": input })
@@ -5966,6 +6242,9 @@ function user.Process92(input: string) -> string  [llm] {
 function user.Process92$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process92", map { "input": input })
 }
+function user.Process92$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process92", json)
+}
 function user.Process92$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process92", map { "input": input })
 }
@@ -5974,6 +6253,9 @@ function user.Process93(input: string) -> string  [llm] {
 }
 function user.Process93$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process93", map { "input": input })
+}
+function user.Process93$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process93", json)
 }
 function user.Process93$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process93", map { "input": input })
@@ -5984,6 +6266,9 @@ function user.Process94(input: string) -> string  [llm] {
 function user.Process94$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process94", map { "input": input })
 }
+function user.Process94$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process94", json)
+}
 function user.Process94$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process94", map { "input": input })
 }
@@ -5992,6 +6277,9 @@ function user.Process95(input: string) -> string  [llm] {
 }
 function user.Process95$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process95", map { "input": input })
+}
+function user.Process95$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process95", json)
 }
 function user.Process95$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process95", map { "input": input })
@@ -6002,6 +6290,9 @@ function user.Process96(input: string) -> string  [llm] {
 function user.Process96$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process96", map { "input": input })
 }
+function user.Process96$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process96", json)
+}
 function user.Process96$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process96", map { "input": input })
 }
@@ -6010,6 +6301,9 @@ function user.Process97(input: string) -> string  [llm] {
 }
 function user.Process97$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process97", map { "input": input })
+}
+function user.Process97$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process97", json)
 }
 function user.Process97$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process97", map { "input": input })
@@ -6020,6 +6314,9 @@ function user.Process98(input: string) -> string  [llm] {
 function user.Process98$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process98", map { "input": input })
 }
+function user.Process98$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process98", json)
+}
 function user.Process98$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process98", map { "input": input })
 }
@@ -6028,6 +6325,9 @@ function user.Process99(input: string) -> string  [llm] {
 }
 function user.Process99$build_request(input: string) -> baml.http.Request  [expr] {
   baml.llm.build_request(GPT4, "Process99", map { "input": input })
+}
+function user.Process99$parse(json: string) -> string  [expr] {
+  baml.llm.parse("Process99", json)
 }
 function user.Process99$render_prompt(input: string) -> baml.llm.PromptAst  [expr] {
   baml.llm.render_prompt(GPT4, "Process99", map { "input": input })

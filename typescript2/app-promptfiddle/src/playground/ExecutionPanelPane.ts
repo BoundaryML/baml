@@ -111,7 +111,7 @@ export async function registerExecutionPanelPane(): Promise<void> {
       el.style.overflow = 'hidden';
       el.style.display = 'flex';
       el.style.flexDirection = 'column';
-      el.className = 'font-vsc text-vsc-text bg-vsc-panel';
+      el.className = 'playground-root font-vsc text-vsc-text bg-vsc-panel';
       this._el = el;
 
       this.reactRoot = createRoot(el);

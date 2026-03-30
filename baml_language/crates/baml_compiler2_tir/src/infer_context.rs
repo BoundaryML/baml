@@ -65,7 +65,10 @@ pub enum TirTypeError {
         operand: Ty,
     },
     /// A type name in a type annotation could not be resolved.
-    UnresolvedType { name: Name },
+    UnresolvedType {
+        name: Name,
+        suggestions: Vec<String>,
+    },
     /// Wrong number of arguments in a function call.
     ArgumentCountMismatch { expected: usize, got: usize },
     /// Function body ends without returning a value.
@@ -146,8 +149,22 @@ impl fmt::Display for TirTypeError {
             TirTypeError::InvalidUnaryOp { op, operand } => {
                 write!(f, "operator `{op:?}` cannot be applied to `{operand}`")
             }
-            TirTypeError::UnresolvedType { name } => {
-                write!(f, "unresolved type: {name}")
+            TirTypeError::UnresolvedType { name, suggestions } => {
+                if suggestions.is_empty() {
+                    write!(f, "unresolved type: {name}")
+                } else if suggestions.len() == 1 {
+                    write!(
+                        f,
+                        "unresolved type: {name}. Did you mean `{}`?",
+                        suggestions[0]
+                    )
+                } else {
+                    write!(
+                        f,
+                        "unresolved type: {name}. Did you mean one of these: `{}`?",
+                        suggestions.join("`, `")
+                    )
+                }
             }
             TirTypeError::ArgumentCountMismatch { expected, got } => {
                 write!(f, "expected {expected} argument(s), got {got}")
@@ -228,6 +245,8 @@ pub enum RelatedLocation<'db> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DiagnosticLocation {
     Expr(ExprId),
+    /// The member-name portion of a `FieldAccess` expression (after the dot).
+    ExprMember(ExprId),
     Stmt(StmtId),
     TypeAnnot(TypeAnnotId),
     Span(TextRange),
@@ -257,6 +276,9 @@ impl TirDiagnostic<'_> {
             DiagnosticLocation::Expr(id) => {
                 source_map.map(|sm| sm.expr_span(*id)).unwrap_or_default()
             }
+            DiagnosticLocation::ExprMember(id) => source_map
+                .map(|sm| sm.field_access_member_span(*id))
+                .unwrap_or_default(),
             DiagnosticLocation::Stmt(id) => {
                 source_map.map(|sm| sm.stmt_span(*id)).unwrap_or_default()
             }
@@ -361,6 +383,29 @@ impl<'db> InferContext<'db> {
     /// Convenience: report an error with no related locations.
     pub fn report_simple(&self, error: TirTypeError, at: ExprId) {
         self.report(error, at, Vec::new());
+    }
+
+    /// Report a type error at the member-name portion of a `FieldAccess` expression.
+    pub fn report_at_member(
+        &self,
+        error: TirTypeError,
+        at: ExprId,
+        related: Vec<(RelatedLocation<'db>, &'static str)>,
+    ) {
+        self.diagnostics
+            .borrow_mut()
+            .diagnostics
+            .push(TirDiagnostic {
+                error,
+                severity: DiagnosticSeverity::Error,
+                primary: DiagnosticLocation::ExprMember(at),
+                related,
+            });
+    }
+
+    /// Convenience: report at member with no related locations.
+    pub fn report_at_member_simple(&self, error: TirTypeError, at: ExprId) {
+        self.report_at_member(error, at, Vec::new());
     }
 
     /// Report a type error at a type annotation location.

@@ -6,6 +6,7 @@ pub mod jsonish;
 pub mod sap_model;
 #[cfg(test)]
 mod tests;
+pub mod to_external;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StreamingMode {

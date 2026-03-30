@@ -13,7 +13,7 @@ use text_size::{TextRange, TextSize};
 use crate::{
     contributions::FileSymbolContributions,
     diagnostic::Hir2Diagnostic,
-    item_tree::ItemTree,
+    item_tree::{ItemTree, ItemTreeSourceMap},
     scope::{FileScopeId, Scope, ScopeId},
 };
 
@@ -100,6 +100,9 @@ pub struct FileSemanticIndex<'db> {
     /// Per-file item tree — maps `LocalItemId` to item data.
     pub item_tree: Arc<ItemTree>,
 
+    /// Source map for item tree — field/variant name spans.
+    pub item_tree_source_map: Arc<ItemTreeSourceMap>,
+
     /// Names this file contributes to its package namespace.
     pub symbol_contributions: Arc<FileSymbolContributions<'db>>,
 
@@ -142,17 +145,47 @@ impl FileSemanticIndex<'_> {
     /// Scopes are in DFS pre-order. We walk in reverse (deepest first)
     /// to find the innermost match, preferring deeper (later) scopes.
     ///
-    /// When `name` is `Some`, only return a scope whose `name` field
-    /// matches. This disambiguates companion functions that share the
-    /// same span as their parent.
+    /// When `name` is `Some`, find the named scope first, then return
+    /// the deepest **descendant** of that scope at the offset. This
+    /// disambiguates companion functions that share the same span as
+    /// their parent while still resolving bindings in inner scopes
+    /// (match arms, blocks, catch clauses, etc.).
     pub fn scope_at_offset(&self, offset: TextSize, name: Option<&Name>) -> FileScopeId {
-        for (i, scope) in self.scopes.iter().enumerate().rev() {
-            if scope.range.contains(offset) || scope.range.end() == offset {
-                if let Some(n) = name {
-                    if scope.name.as_ref() != Some(n) {
-                        continue;
+        if let Some(n) = name {
+            // Find the named scope that contains the offset.
+            let named_idx = self.scopes.iter().enumerate().rev().find_map(|(i, scope)| {
+                if (scope.range.contains(offset) || scope.range.end() == offset)
+                    && scope.name.as_ref() == Some(n)
+                {
+                    Some(i)
+                } else {
+                    None
+                }
+            });
+
+            if let Some(idx) = named_idx {
+                let named = &self.scopes[idx];
+                let desc_start = named.descendants.start.index() as usize;
+                let desc_end = named.descendants.end.index() as usize;
+
+                // Search descendants in reverse (deepest first) for one containing offset.
+                for i in (desc_start..desc_end).rev() {
+                    let scope = &self.scopes[i];
+                    if scope.range.contains(offset) || scope.range.end() == offset {
+                        #[allow(clippy::cast_possible_truncation)]
+                        return FileScopeId::new(i as u32);
                     }
                 }
+
+                // No descendant matched — return the named scope itself.
+                #[allow(clippy::cast_possible_truncation)]
+                return FileScopeId::new(idx as u32);
+            }
+        }
+
+        // No name filter — original behavior: find deepest scope at offset.
+        for (i, scope) in self.scopes.iter().enumerate().rev() {
+            if scope.range.contains(offset) || scope.range.end() == offset {
                 #[allow(clippy::cast_possible_truncation)]
                 return FileScopeId::new(i as u32);
             }

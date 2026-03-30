@@ -24,13 +24,17 @@ const App: React.FC = () => {
 
   if (!port) {
     return (
-      <main className="w-screen h-screen overflow-hidden flex flex-col items-center justify-center text-sm text-gray-400 gap-2">
+      <main className="playground-root w-screen h-screen overflow-hidden flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
         <p>Connecting to playground server...</p>
       </main>
     );
   }
 
-  return <ExecutionPanel port={port} />;
+  return (
+    <div className="playground-root h-screen w-screen overflow-hidden">
+      <ExecutionPanel port={port} />
+    </div>
+  );
 };
 
 export default App;

@@ -195,7 +195,6 @@ pub fn generate_project_bytecode(
                     description: None,
                     alias: None,
                     skip: false,
-                    field_attr: baml_type::FieldAttr::default(),
                 });
             }
 

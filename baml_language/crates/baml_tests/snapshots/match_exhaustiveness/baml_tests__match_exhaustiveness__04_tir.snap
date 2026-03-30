@@ -915,3 +915,40 @@ function user.JumpTableClassTypeTag(pet: user.Cat | user.Dog | user.Bird | user.
         "fish" : "fish"
   }
 }
+class user.Success$stream {
+  data: null | string
+}
+class user.Failure$stream {
+  reason: null | string
+}
+type user.Result$stream = user.Success$stream | user.Failure$stream
+class user.Pending$stream {
+  eta: null | int
+}
+type user.FullResult$stream = user.Success$stream | user.Failure$stream | user.Pending$stream
+type user.AlwaysTrue$stream = true
+type user.AlwaysFalse$stream = false
+type user.CustomBool$stream = true | false
+type user.Role$stream = "user" | "assistant" | "system"
+type user.HttpOk$stream = 200
+type user.HttpCreated$stream = 201
+type user.SuccessCode$stream = 200 | 201 | 204
+type user.MaybeResult$stream = null | user.Result$stream
+type user.MaybeOk$stream = null | 200
+type user.MixedLiterals$stream = 200 | "success" | true
+type user.OkCode$stream = 200
+type user.OkOrCreated$stream = user.OkCode$stream | 201
+type user.DoubleMaybe$stream = null | user.MaybeResult$stream
+type user.SuccessOr200$stream = user.Success$stream | 200
+class user.Cat$stream {
+  name: null | string
+}
+class user.Dog$stream {
+  name: null | string
+}
+class user.Bird$stream {
+  name: null | string
+}
+class user.Fish$stream {
+  name: null | string
+}

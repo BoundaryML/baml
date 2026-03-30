@@ -16,10 +16,18 @@ bundle-http = [ "dep:reqwest" ]
 baml_type = { workspace = true }
 bex_heap = { workspace = true }
 bex_resource_types = { workspace = true }
+sys_ops = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
 reqwest = { workspace = true, features = [ "rustls" ], optional = true }
-tokio = { workspace = true, features = [ "sync", "fs", "net", "process", "io-util", "time" ] }
+tokio = { workspace = true, features = [
+  "sync",
+  "fs",
+  "net",
+  "process",
+  "io-util",
+  "time",
+] }
 
 [lints]
 workspace = true

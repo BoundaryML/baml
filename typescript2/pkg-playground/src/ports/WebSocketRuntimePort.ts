@@ -20,16 +20,21 @@ type WsOutMessage =
   | { type: 'ready' }
   | { type: 'playgroundNotification'; notification: PlaygroundNotification }
   | { type: 'callFunctionResult'; id: number; result: string }
-  | { type: 'callFunctionError'; id: number; error: string }
+  | { type: 'callFunctionError'; id: number; error: string; cancelled?: boolean }
   | { type: 'envVarRequest'; id: number; variable: string }
   | { type: 'fetchLogNew'; callId: number; id: number; method: string; url: string; requestHeaders: Record<string, string>; requestBody: string }
-  | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string };
+  | { type: 'fetchLogUpdate'; callId: number; logId: number; status?: number; durationMs?: number; responseBody?: string; error?: string; responseHeaders?: Record<string, string> }
+  | { type: 'controlFlowGraphResult'; functionName: string; graph: unknown | null }
+  | { type: 'cursorContext'; context: unknown };
 
 /** Client → Server message shapes (must match playground_ws.rs WsInMessage) */
 type WsInMessage =
   | { type: 'callFunction'; id: number; project: string; name: string; argsProto: string }
+  | { type: 'cancelCall'; id: number; project: string }
   | { type: 'envVarResponse'; id: number; value: string | undefined; variable?: string }
-  | { type: 'requestState' };
+  | { type: 'requestState' }
+  | { type: 'requestControlFlowGraph'; project: string; functionName: string }
+  | { type: 'cursorPosition'; file: string; line: number; column: number };
 
 const MAX_RECONNECT_DELAY = 5000;
 
@@ -161,6 +166,8 @@ export class WebSocketRuntimePort implements RuntimePort {
           name: msg.name,
           argsProto: uint8ArrayToBase64(msg.argsProto),
         };
+      case 'cancelCall':
+        return { type: 'cancelCall', id: msg.id, project: msg.project };
       case 'envVarResponse':
         return {
           type: 'envVarResponse',
@@ -178,6 +185,19 @@ export class WebSocketRuntimePort implements RuntimePort {
         return null; // handled locally, not sent to server
       case 'requestState':
         return { type: 'requestState' };
+      case 'requestControlFlowGraph':
+        return {
+          type: 'requestControlFlowGraph',
+          project: msg.project,
+          functionName: msg.functionName,
+        };
+      case 'cursorPosition':
+        return {
+          type: 'cursorPosition',
+          file: msg.file,
+          line: msg.line,
+          column: msg.column,
+        };
       case 'clearHandles':
         return null; // handles live in the Rust process; no TS-side cleanup needed
       case 'dispose':
@@ -222,7 +242,7 @@ export class WebSocketRuntimePort implements RuntimePort {
         }
       }
       case 'callFunctionError':
-        return { type: 'callFunctionError', id: raw.id, error: raw.error };
+        return { type: 'callFunctionError', id: raw.id, error: raw.error, cancelled: raw.cancelled };
       case 'envVarRequest':
         return { type: 'envVarRequest', id: raw.id, variable: raw.variable };
       case 'fetchLogNew':
@@ -240,6 +260,7 @@ export class WebSocketRuntimePort implements RuntimePort {
             responseBody: null,
             error: null,
             durationMs: null,
+            responseHeaders: null,
           },
         };
       case 'fetchLogUpdate':
@@ -251,7 +272,19 @@ export class WebSocketRuntimePort implements RuntimePort {
             ...(raw.durationMs !== undefined ? { durationMs: raw.durationMs } : {}),
             ...(raw.responseBody !== undefined ? { responseBody: raw.responseBody } : {}),
             ...(raw.error !== undefined ? { error: raw.error } : {}),
+            ...(raw.responseHeaders !== undefined ? { responseHeaders: raw.responseHeaders } : {}),
           },
+        };
+      case 'controlFlowGraphResult':
+        return {
+          type: 'controlFlowGraphResult',
+          functionName: raw.functionName,
+          graph: (raw.graph ?? null) as import('../worker-protocol').ControlFlowGraph | null,
+        };
+      case 'cursorContext':
+        return {
+          type: 'cursorContext',
+          context: raw.context as import('../worker-protocol').CursorContext,
         };
       default:
         return null;

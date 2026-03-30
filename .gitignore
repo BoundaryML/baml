@@ -185,3 +185,6 @@ _site/
 # claude
 .claude/
 rpi/
+
+# Riptide artifacts (cloud-synced)
+.humanlayer/tasks/

@@ -20,7 +20,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     lower_type_expr::{lower_type_expr_in_ns, qualify_def},
     throw_inference::{FunctionThrowSets, function_throw_sets},
-    ty::{QualifiedTypeName, Ty},
+    ty::{QualifiedTypeName, Ty, TyAttr},
 };
 
 // ── Data types ─────────────────────────────────────────────────────────────
@@ -149,48 +149,16 @@ unsafe impl salsa::Update for PackageResolutionContext<'_> {
 // ── PackageInterface lookup helpers ────────────────────────────────────────
 
 impl PackageInterface {
-    /// Look up a type by path, using the same namespace-prefix-split logic as `PackageItems`.
-    pub fn lookup_type(&self, path: &[Name]) -> Option<&ExportedType> {
-        if path.is_empty() {
-            return None;
-        }
-        for split in (0..path.len()).rev() {
-            let ns_path = &path[..split];
-            let name = &path[split];
-            if let Some(ns) = self.types.get(ns_path) {
-                if let Some(exported) = ns.get(name) {
-                    return Some(exported);
-                }
-            }
-        }
-        None
+    /// Look up a type by explicit namespace and item name.
+    ///
+    /// Single hash lookup — no split-loop ambiguity.
+    pub fn lookup_type(&self, namespace: &[Name], item: &Name) -> Option<&ExportedType> {
+        self.types.get(namespace)?.get(item)
     }
 
-    /// Look up a function by path.
-    pub fn lookup_function(&self, path: &[Name]) -> Option<&ExportedFunction> {
-        if path.is_empty() {
-            return None;
-        }
-        for split in (0..path.len()).rev() {
-            let ns_path = &path[..split];
-            let name = &path[split];
-            if let Some(ns) = self.functions.get(ns_path) {
-                if let Some(exported) = ns.get(name) {
-                    return Some(exported);
-                }
-            }
-        }
-        None
-    }
-
-    /// Look up a type by short name across all namespaces.
-    pub fn lookup_type_any_ns(&self, name: &Name) -> Option<&ExportedType> {
-        for ns in self.types.values() {
-            if let Some(exported) = ns.get(name) {
-                return Some(exported);
-            }
-        }
-        None
+    /// Look up a function by explicit namespace and item name.
+    pub fn lookup_function(&self, namespace: &[Name], item: &Name) -> Option<&ExportedFunction> {
+        self.functions.get(namespace)?.get(item)
     }
 }
 
@@ -206,9 +174,9 @@ impl ExportedType {
     /// Convert to a Ty (for type resolution results).
     pub fn to_ty(&self) -> Ty {
         match self {
-            ExportedType::Class { qtn, .. } => Ty::Class(qtn.clone()),
-            ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone()),
-            ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone()),
+            ExportedType::Class { qtn, .. } => Ty::Class(qtn.clone(), TyAttr::default()),
+            ExportedType::Enum { qtn, .. } => Ty::Enum(qtn.clone(), TyAttr::default()),
+            ExportedType::TypeAlias { qtn, .. } => Ty::TypeAlias(qtn.clone(), TyAttr::default()),
         }
     }
 }
@@ -248,7 +216,12 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             );
                             fields.push((field.name.clone(), field_ty));
                         } else {
-                            fields.push((field.name.clone(), Ty::Unknown));
+                            fields.push((
+                                field.name.clone(),
+                                Ty::Unknown {
+                                    attr: TyAttr::default(),
+                                },
+                            ));
                         }
                     }
 
@@ -270,7 +243,7 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                         let mut params = Vec::new();
                         for (param_name, param_te) in &sig.params {
                             let param_ty = if param_name.as_str() == "self"
-                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
+                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
                                 build_self_type_for_class(class_data, ns_path)
                             } else {
@@ -286,16 +259,21 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                             params.push((param_name.clone(), param_ty));
                         }
 
-                        let return_type = sig.return_type.as_ref().map_or(Ty::Unknown, |te| {
-                            lower_type_expr_in_ns(
-                                db,
-                                te,
-                                pkg_items,
-                                &class_ns,
-                                &all_generic_params,
-                                &mut diags,
-                            )
-                        });
+                        let return_type = sig.return_type.as_ref().map_or(
+                            Ty::Unknown {
+                                attr: TyAttr::default(),
+                            },
+                            |te| {
+                                lower_type_expr_in_ns(
+                                    db,
+                                    te,
+                                    pkg_items,
+                                    &class_ns,
+                                    &all_generic_params,
+                                    &mut diags,
+                                )
+                            },
+                        );
 
                         let throws = sig.throws.as_ref().map(|te| {
                             lower_type_expr_in_ns(
@@ -351,7 +329,9 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                         .map(|te| {
                             lower_type_expr_in_ns(db, &te.expr, pkg_items, &ta_ns, &[], &mut diags)
                         })
-                        .unwrap_or(Ty::Unknown);
+                        .unwrap_or(Ty::Unknown {
+                            attr: TyAttr::default(),
+                        });
                     let qtn = qualify_def(db, *def, name);
                     ExportedType::TypeAlias { qtn, resolved }
                 }
@@ -388,16 +368,21 @@ pub fn package_interface<'db>(db: &'db dyn crate::Db, pkg_id: PackageId<'db>) ->
                 params.push((param_name.clone(), param_ty));
             }
 
-            let return_type = sig.return_type.as_ref().map_or(Ty::Unknown, |te| {
-                lower_type_expr_in_ns(
-                    db,
-                    te,
-                    pkg_items,
-                    &func_ns,
-                    &func_data.generic_params,
-                    &mut diags,
-                )
-            });
+            let return_type = sig.return_type.as_ref().map_or(
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+                |te| {
+                    lower_type_expr_in_ns(
+                        db,
+                        te,
+                        pkg_items,
+                        &func_ns,
+                        &func_data.generic_params,
+                        &mut diags,
+                    )
+                },
+            );
 
             let throws = sig.throws.as_ref().map(|te| {
                 lower_type_expr_in_ns(
@@ -446,12 +431,23 @@ fn build_self_type_for_class(
 ) -> Ty {
     // For known builtin containers, return the corresponding Ty variant
     match class_data.name.as_str() {
-        "Array" if class_data.generic_params.len() == 1 => {
-            Ty::List(Box::new(Ty::TypeVar(class_data.generic_params[0].clone())))
-        }
+        "Array" if class_data.generic_params.len() == 1 => Ty::List(
+            Box::new(Ty::TypeVar(
+                class_data.generic_params[0].clone(),
+                TyAttr::default(),
+            )),
+            TyAttr::default(),
+        ),
         "Map" if class_data.generic_params.len() == 2 => Ty::Map(
-            Box::new(Ty::TypeVar(class_data.generic_params[0].clone())),
-            Box::new(Ty::TypeVar(class_data.generic_params[1].clone())),
+            Box::new(Ty::TypeVar(
+                class_data.generic_params[0].clone(),
+                TyAttr::default(),
+            )),
+            Box::new(Ty::TypeVar(
+                class_data.generic_params[1].clone(),
+                TyAttr::default(),
+            )),
+            TyAttr::default(),
         ),
         _ => {
             let qtn = QualifiedTypeName::new_with_generic_params(
@@ -460,7 +456,7 @@ fn build_self_type_for_class(
                 class_data.name.clone(),
                 class_data.generic_params.clone(),
             );
-            Ty::Class(qtn)
+            Ty::Class(qtn, TyAttr::default())
         }
     }
 }
@@ -522,31 +518,40 @@ impl<'db> PackageResolutionContext<'db> {
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<(ResolvedSource, Ty)> {
+        let item = path.last()?;
         // Try namespace-qualified path first
         if !ns_context.is_empty() {
-            let mut qualified = ns_context.to_vec();
-            qualified.extend_from_slice(path);
-            if let Some(result) = self.resolve_type_in_own_then_deps(db, &qualified) {
+            let ns: Vec<_> = ns_context
+                .iter()
+                .chain(path[..path.len() - 1].iter())
+                .cloned()
+                .collect();
+            if let Some(result) = self.resolve_type_in_own_then_deps(db, &ns, item) {
                 return Some(result);
             }
         }
 
-        // Try unqualified path
-        if let Some(result) = self.resolve_type_in_own_then_deps(db, path) {
-            return Some(result);
+        // When ns_context is empty, try unqualified path (same-namespace for root files)
+        if ns_context.is_empty() {
+            if let Some(result) =
+                self.resolve_type_in_own_then_deps(db, &path[..path.len() - 1], item)
+            {
+                return Some(result);
+            }
         }
+        // No bare fallback from non-root namespaces — cross-namespace requires explicit qualification
 
         // Try package-prefixed path (first segment is package name)
         if path.len() >= 2 {
             if path[0].as_str() == "root" {
-                if let Some(def) = self.own_items.lookup_type(&path[1..]) {
+                if let Some(def) = self.own_items.lookup_type(&path[1..path.len() - 1], item) {
                     let ty = def_to_ty(db, def);
                     return Some((ResolvedSource::Item, ty));
                 }
             }
             for (dep_name, dep_iface) in &self.dep_interfaces {
                 if &path[0] == dep_name {
-                    if let Some(exported) = dep_iface.lookup_type(&path[1..]) {
+                    if let Some(exported) = dep_iface.lookup_type(&path[1..path.len() - 1], item) {
                         return Some((ResolvedSource::Builtin, exported.to_ty()));
                     }
                 }
@@ -559,14 +564,15 @@ impl<'db> PackageResolutionContext<'db> {
     fn resolve_type_in_own_then_deps(
         &self,
         db: &'db dyn crate::Db,
-        path: &[Name],
+        namespace: &[Name],
+        item: &Name,
     ) -> Option<(ResolvedSource, Ty)> {
-        if let Some(def) = self.own_items.lookup_type(path) {
+        if let Some(def) = self.own_items.lookup_type(namespace, item) {
             let ty = def_to_ty(db, def);
             return Some((ResolvedSource::Item, ty));
         }
         for (_dep_name, dep_iface) in &self.dep_interfaces {
-            if let Some(exported) = dep_iface.lookup_type(path) {
+            if let Some(exported) = dep_iface.lookup_type(namespace, item) {
                 return Some((ResolvedSource::Builtin, exported.to_ty()));
             }
         }
@@ -576,22 +582,55 @@ impl<'db> PackageResolutionContext<'db> {
     /// Resolve a function/value by path. Returns the Definition for own-package values.
     pub fn resolve_value(
         &self,
-        _db: &'db dyn crate::Db,
+        db: &'db dyn crate::Db,
         path: &[Name],
         ns_context: &[Name],
     ) -> Option<(ResolvedSource, Definition<'db>)> {
+        let item = path.last()?;
         if !ns_context.is_empty() {
-            let mut qualified = ns_context.to_vec();
-            qualified.extend_from_slice(path);
-            if let Some(result) = self.resolve_value_in_own(&qualified) {
+            let ns: Vec<_> = ns_context
+                .iter()
+                .chain(path[..path.len() - 1].iter())
+                .cloned()
+                .collect();
+            if let Some(result) = self.resolve_value_in_own(&ns, item) {
                 return Some(result);
             }
         }
-        self.resolve_value_in_own(path)
+        // When ns_context is empty, try unqualified path (same-namespace for root files)
+        if ns_context.is_empty() {
+            if let Some(result) = self.resolve_value_in_own(&path[..path.len() - 1], item) {
+                return Some(result);
+            }
+        }
+        // No bare fallback from non-root namespaces — cross-namespace requires explicit qualification
+        // root.* prefix handling (parity with resolve_type)
+        if path.len() >= 2 {
+            if path[0].as_str() == "root" {
+                if let Some(def) = self.own_items.lookup_value(&path[1..path.len() - 1], item) {
+                    return Some((ResolvedSource::Item, def));
+                }
+            }
+            // dep-prefixed search (parity with resolve_type)
+            for (dep_name, _dep_iface) in &self.dep_interfaces {
+                if &path[0] == dep_name {
+                    let dep_pkg_id = PackageId::new(db, dep_name.clone());
+                    let dep_items = package_items(db, dep_pkg_id);
+                    if let Some(def) = dep_items.lookup_value(&path[1..path.len() - 1], item) {
+                        return Some((ResolvedSource::Builtin, def));
+                    }
+                }
+            }
+        }
+        None
     }
 
-    fn resolve_value_in_own(&self, path: &[Name]) -> Option<(ResolvedSource, Definition<'db>)> {
-        if let Some(def) = self.own_items.lookup_value(path) {
+    fn resolve_value_in_own(
+        &self,
+        namespace: &[Name],
+        item: &Name,
+    ) -> Option<(ResolvedSource, Definition<'db>)> {
+        if let Some(def) = self.own_items.lookup_value(namespace, item) {
             return Some((ResolvedSource::Item, def));
         }
         None
@@ -609,10 +648,12 @@ impl<'db> PackageResolutionContext<'db> {
         if class_pkg.as_str() == self.own_package_name.as_str() {
             self.lookup_own_class_fields(db, class_name)
         } else {
-            for (_dep_name, dep_iface) in &self.dep_interfaces {
-                let short = unqualify(class_name);
+            for (dep_name, dep_iface) in &self.dep_interfaces {
+                if dep_name != class_pkg {
+                    continue;
+                }
                 if let Some(ExportedType::Class { fields, .. }) =
-                    dep_iface.lookup_type_any_ns(&short)
+                    dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
                     return fields.clone();
                 }
@@ -632,13 +673,15 @@ impl<'db> PackageResolutionContext<'db> {
         if class_pkg.as_str() == self.own_package_name.as_str() {
             self.lookup_own_class_method(db, class_name, method_name)
         } else {
-            for (_dep_name, dep_iface) in &self.dep_interfaces {
-                let short = unqualify(class_name);
+            for (dep_name, dep_iface) in &self.dep_interfaces {
+                if dep_name != class_pkg {
+                    continue;
+                }
                 if let Some(ExportedType::Class {
                     methods,
                     generic_params,
                     ..
-                }) = dep_iface.lookup_type_any_ns(&short)
+                }) = dep_iface.lookup_type(class_name.namespace(), class_name.name())
                 {
                     if let Some(method) = methods.iter().find(|m| &m.name == method_name) {
                         return Some(ResolvedMethod {
@@ -665,8 +708,10 @@ impl<'db> PackageResolutionContext<'db> {
         db: &'db dyn crate::Db,
         class_name: &QualifiedTypeName,
     ) -> Vec<(Name, Ty)> {
-        let short = unqualify(class_name);
-        let Some(def) = self.own_items.lookup_type_any_ns(&short) else {
+        let Some(def) = self
+            .own_items
+            .lookup_type(class_name.namespace(), class_name.name())
+        else {
             return Vec::new();
         };
         let Definition::Class(class_loc) = def else {
@@ -689,7 +734,12 @@ impl<'db> PackageResolutionContext<'db> {
                 );
                 fields.push((field.name.clone(), field_ty));
             } else {
-                fields.push((field.name.clone(), Ty::Unknown));
+                fields.push((
+                    field.name.clone(),
+                    Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
+                ));
             }
         }
         fields
@@ -701,8 +751,9 @@ impl<'db> PackageResolutionContext<'db> {
         class_name: &QualifiedTypeName,
         method_name: &Name,
     ) -> Option<ResolvedMethod> {
-        let short = unqualify(class_name);
-        let def = self.own_items.lookup_type_any_ns(&short)?;
+        let def = self
+            .own_items
+            .lookup_type(class_name.namespace(), class_name.name())?;
         let Definition::Class(class_loc) = def else {
             return None;
         };
@@ -736,9 +787,21 @@ impl<'db> PackageResolutionContext<'db> {
                 );
                 params.push((param_name.clone(), param_ty));
             }
-            let return_type = sig.return_type.as_ref().map_or(Ty::Unknown, |te| {
-                lower_type_expr_in_ns(db, te, self.own_items, &ns, &all_generic_params, &mut diags)
-            });
+            let return_type = sig.return_type.as_ref().map_or(
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+                |te| {
+                    lower_type_expr_in_ns(
+                        db,
+                        te,
+                        self.own_items,
+                        &ns,
+                        &all_generic_params,
+                        &mut diags,
+                    )
+                },
+            );
             let throws = sig.throws.as_ref().map(|te| {
                 lower_type_expr_in_ns(db, te, self.own_items, &ns, &all_generic_params, &mut diags)
             });
@@ -783,16 +846,18 @@ fn def_to_ty<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ty {
             let data = &item_tree[loc.id(db)];
             data.name.clone()
         }
-        _ => return Ty::Unknown,
+        _ => {
+            return Ty::Unknown {
+                attr: TyAttr::default(),
+            };
+        }
     };
     match def {
-        Definition::Class(_) => Ty::Class(qualify_def(db, def, &name)),
-        Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name)),
-        Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, &name)),
-        _ => Ty::Unknown,
+        Definition::Class(_) => Ty::Class(qualify_def(db, def, &name), TyAttr::default()),
+        Definition::Enum(_) => Ty::Enum(qualify_def(db, def, &name), TyAttr::default()),
+        Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, &name), TyAttr::default()),
+        _ => Ty::Unknown {
+            attr: TyAttr::default(),
+        },
     }
-}
-
-fn unqualify(qtn: &QualifiedTypeName) -> Name {
-    qtn.name().clone()
 }

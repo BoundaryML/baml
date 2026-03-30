@@ -154,6 +154,17 @@ function Foo6(arg: int) -> float {
 //     │ Note: Error code: E0010
 // ────╯
 // Error: unresolved name: Foo
+//    ╭─[ functions_v2_invalid2.baml:1:33 ]
+//    │
+//  1 │ ╭─▶ function Foo1(arg: int) -> float {
+//    ┆ ┆   
+//  3 │ ├─▶ }
+//    │ │       
+//    │ ╰─────── unresolved name: Foo
+//    │     
+//    │     Note: Error code: E0001
+// ───╯
+// Error: unresolved name: Foo
 //    ╭─[ functions_v2_invalid2.baml:1:1 ]
 //    │
 //  1 │ ╭─▶ function Foo1(arg: int) -> float {
@@ -175,12 +186,45 @@ function Foo6(arg: int) -> float {
 //    │     
 //    │     Note: Error code: E0001
 // ───╯
+// Error: type mismatch: expected baml.llm.Client, got null
+//    ╭─[ functions_v2_invalid2.baml:3:2 ]
+//    │
+//  3 │ ╭─▶ }
+//    ┆ ┆   
+//  7 │ ├─▶ }
+//    │ │       
+//    │ ╰─────── type mismatch: expected baml.llm.Client, got null
+//    │     
+//    │     Note: Error code: E0001
+// ───╯
+// Error: unresolved name: bar
+//     ╭─[ functions_v2_invalid2.baml:9:33 ]
+//     │
+//   9 │ ╭─▶ function Foo3(arg: int) -> float {
+//     ┆ ┆   
+//  12 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── unresolved name: bar
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
 // Error: unresolved name: bar
 //     ╭─[ functions_v2_invalid2.baml:7:2 ]
 //     │
 //   7 │ ╭─▶ }
 //     ┆ ┆   
 //  12 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── unresolved name: bar
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Error: unresolved name: bar
+//     ╭─[ functions_v2_invalid2.baml:15:33 ]
+//     │
+//  15 │ ╭─▶ function Foo4(arg: int) -> float {
+//     ┆ ┆   
+//  18 │ ├─▶ }
 //     │ │       
 //     │ ╰─────── unresolved name: bar
 //     │     
@@ -198,11 +242,33 @@ function Foo6(arg: int) -> float {
 //     │     Note: Error code: E0001
 // ────╯
 // Error: type mismatch: expected baml.llm.Client, got null
+//     ╭─[ functions_v2_invalid2.baml:21:33 ]
+//     │
+//  21 │ ╭─▶ function Foo5(arg: int) -> float {
+//     ┆ ┆   
+//  24 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── type mismatch: expected baml.llm.Client, got null
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Error: type mismatch: expected baml.llm.Client, got null
 //     ╭─[ functions_v2_invalid2.baml:18:2 ]
 //     │
 //  18 │ ╭─▶ }
 //     ┆ ┆   
 //  24 │ ├─▶ }
+//     │ │       
+//     │ ╰─────── type mismatch: expected baml.llm.Client, got null
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Error: type mismatch: expected baml.llm.Client, got null
+//     ╭─[ functions_v2_invalid2.baml:27:33 ]
+//     │
+//  27 │ ╭─▶ function Foo6(arg: int) -> float {
+//     ┆ ┆   
+//  30 │ ├─▶ }
 //     │ │       
 //     │ ╰─────── type mismatch: expected baml.llm.Client, got null
 //     │     

@@ -21,6 +21,13 @@ function user.Ambiguous$build_request(input: string) -> baml.http.Request {
     return
 }
 
+function user.Ambiguous$parse(json: string) -> string {
+    load_const "Ambiguous"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
 function user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
     load_const null
     load_const "Ambiguous"
@@ -48,6 +55,13 @@ function user.AnotherLLM$build_request(input: string) -> baml.http.Request {
     load_const "input"
     alloc_map 1
     call baml.llm.build_request
+    return
+}
+
+function user.AnotherLLM$parse(json: string) -> string {
+    load_const "AnotherLLM"
+    load_var json
+    call baml.llm.parse
     return
 }
 
@@ -81,6 +95,13 @@ function user.ChainedProcess$build_request(input: string) -> baml.http.Request {
     return
 }
 
+function user.ChainedProcess$parse(json: string) -> string {
+    load_const "ChainedProcess"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
 function user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst {
     load_const null
     load_const "ChainedProcess"
@@ -111,6 +132,13 @@ function user.ExtractData$build_request(text: string) -> baml.http.Request {
     return
 }
 
+function user.ExtractData$parse(json: string) -> JsonData {
+    load_const "ExtractData"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
 function user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
     load_const null
     load_const "ExtractData"
@@ -138,6 +166,13 @@ function user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
     load_const "text"
     alloc_map 1
     call baml.llm.build_request
+    return
+}
+
+function user.LLMAnalyze$parse(json: string) -> Analysis {
+    load_const "LLMAnalyze"
+    load_var json
+    call baml.llm.parse
     return
 }
 

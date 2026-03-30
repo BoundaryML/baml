@@ -17,7 +17,7 @@ function user.Headers() -> string throws never {
     let z = x Add y : int
     z.to_string() : unknown
   }
-  !! 319..335: unresolved member: int.to_string
+  !! 326..335: unresolved member: int.to_string
 }
 function user.IfElseWithHeaders(flag: bool) -> string throws never {
   { : "yes" | "no"
@@ -129,4 +129,7 @@ function user.LlmFunction$render_prompt(input: string) -> baml.llm.PromptAst thr
 }
 function user.LlmFunction$build_request(input: string) -> baml.http.Request throws never {
   baml.llm.build_request(TestClient, "LlmFunction", map { "input": input }) : baml.http.Request
+}
+function user.LlmFunction$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("LlmFunction", json) : string
 }

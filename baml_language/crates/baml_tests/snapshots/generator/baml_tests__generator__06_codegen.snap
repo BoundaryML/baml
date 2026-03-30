@@ -17,6 +17,13 @@ function user.GetUser$build_request() -> baml.http.Request {
     return
 }
 
+function user.GetUser$parse(json: string) -> MyClass {
+    load_const "GetUser"
+    load_var json
+    call baml.llm.parse
+    return
+}
+
 function user.GetUser$render_prompt() -> baml.llm.PromptAst {
     load_const null
     load_const "GetUser"

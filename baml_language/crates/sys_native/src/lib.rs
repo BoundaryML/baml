@@ -15,7 +15,8 @@
 mod io_impls;
 pub mod registry;
 
-pub use sys_types::{CallId, CompletionHandle, OpError, SysOp, SysOpContext, SysOps, io};
+pub use sys_ops::{SysOps, io};
+pub use sys_types::{CallId, CompletionHandle, OpError, SysOp, SysOpContext};
 
 /// The native Tokio-based `sys_op` provider.
 ///

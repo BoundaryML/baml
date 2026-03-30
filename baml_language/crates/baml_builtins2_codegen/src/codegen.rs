@@ -202,6 +202,7 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     let inner2 = "    ".repeat(depth + 2);
 
     // Struct definition
+    writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
     writeln!(out, "{indent}pub struct {class_name}<'a> {{").unwrap();
     writeln!(out, "{inner}pub instance: &'a Instance,").unwrap();
     writeln!(out, "{indent}}}\n").unwrap();
@@ -447,6 +448,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     let inner2 = "    ".repeat(depth + 2);
 
     // Struct definition with owned fields
+    writeln!(out, "{indent}/// Generated from `{}`", def.source_file).unwrap();
     writeln!(out, "{indent}pub struct {class_name} {{").unwrap();
     for field in &def.fields {
         let rust_type = copy_field_type(&field.field_type);
@@ -616,6 +618,9 @@ fn emit_class_trait(
     dispatch_name: &str,
     entries: &[BuiltinEntry],
 ) {
+    if let Some(first) = entries.first() {
+        writeln!(out, "/// Generated from `{}`", first.builtin.source_file).unwrap();
+    }
     writeln!(out, "pub trait {trait_name} {{").unwrap();
 
     for entry in entries {

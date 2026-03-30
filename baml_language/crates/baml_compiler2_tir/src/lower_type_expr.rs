@@ -8,7 +8,7 @@ use baml_compiler2_hir::{
 
 use crate::{
     infer_context::TirTypeError,
-    ty::{Freshness, PrimitiveType, QualifiedTypeName, Ty},
+    ty::{Freshness, PrimitiveType, QualifiedTypeName, Ty, TyAttr},
 };
 
 /// Resolve an AST `TypeExpr` to a `Ty` using package-level name resolution.
@@ -50,17 +50,17 @@ pub fn lower_type_expr_in_ns(
     diagnostics: &mut Vec<TirTypeError>,
 ) -> Ty {
     match type_expr {
-        TypeExpr::Path(segments) => {
+        TypeExpr::Path { segments, .. } => {
+            let item = segments.last().expect("non-empty path");
+            let seg_ns = &segments[..segments.len() - 1];
             // When we have a namespace context, try the qualified path first.
-            // e.g. for ns_context=["fs"], segments=["File"], try ["fs", "File"].
+            // e.g. for ns_context=["fs"], segments=["File"], try namespace ["fs"] item "File".
             let resolved = if !ns_context.is_empty() {
-                let qualified: Vec<baml_base::Name> =
-                    ns_context.iter().chain(segments.iter()).cloned().collect();
-                package_items
-                    .lookup_type(&qualified)
-                    .or_else(|| package_items.lookup_type(segments))
+                let ns: Vec<baml_base::Name> =
+                    ns_context.iter().chain(seg_ns.iter()).cloned().collect();
+                package_items.lookup_type(&ns, item)
             } else {
-                package_items.lookup_type(segments)
+                package_items.lookup_type(seg_ns, item)
             };
             // Cross-package fallback: if not found in the current package and
             // the first segment is a known package name, look in that package
@@ -69,11 +69,11 @@ pub fn lower_type_expr_in_ns(
             let resolved = resolved.or_else(|| {
                 if segments.len() >= 2 {
                     if segments[0].as_str() == "root" {
-                        package_items.lookup_type(&segments[1..])
+                        package_items.lookup_type(&segments[1..segments.len() - 1], item)
                     } else {
                         let pkg_id = PackageId::new(db, segments[0].clone());
                         let pkg = baml_compiler2_ppir::package_items(db, pkg_id);
-                        pkg.lookup_type(&segments[1..])
+                        pkg.lookup_type(&segments[1..segments.len() - 1], item)
                     }
                 } else {
                     None
@@ -83,61 +83,106 @@ pub fn lower_type_expr_in_ns(
             if let Some(def) = resolved {
                 let short = segments.last().expect("non-empty path");
                 match def {
-                    Definition::Class(_) => Ty::Class(qualify_def(db, def, short)),
-                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, short)),
-                    Definition::TypeAlias(_) => Ty::TypeAlias(qualify_def(db, def, short)),
+                    Definition::Class(_) => {
+                        Ty::Class(qualify_def(db, def, short), TyAttr::default())
+                    }
+                    Definition::Enum(_) => Ty::Enum(qualify_def(db, def, short), TyAttr::default()),
+                    Definition::TypeAlias(_) => {
+                        Ty::TypeAlias(qualify_def(db, def, short), TyAttr::default())
+                    }
                     // Let bindings are values, not types — produce Unknown in a type position.
-                    _ => Ty::Unknown,
+                    _ => Ty::Unknown {
+                        attr: TyAttr::default(),
+                    },
                 }
             } else {
                 // Check if this is a generic type parameter (e.g. T, K, V).
                 if segments.len() == 1 {
                     if generic_params.iter().any(|p| *p == segments[0]) {
-                        return Ty::TypeVar(segments[0].clone());
+                        return Ty::TypeVar(segments[0].clone(), TyAttr::default());
                     }
                 }
-                let name = segments
+                let name_str = segments
                     .iter()
                     .map(smol_str::SmolStr::as_str)
                     .collect::<Vec<_>>()
                     .join(".");
+                // Scan all namespaces for the item name to build "did you mean" suggestions.
+                // Only do this for single-segment bare names — multi-segment paths already
+                // encode the intended namespace.
+                let mut suggestions = Vec::new();
+                if segments.len() == 1 {
+                    for (ns_path, ns_items) in &package_items.namespaces {
+                        if ns_items.types.contains_key(item) {
+                            if ns_path.is_empty() {
+                                suggestions.push(format!("root.{item}"));
+                            } else {
+                                let ns_str = ns_path
+                                    .iter()
+                                    .map(smol_str::SmolStr::as_str)
+                                    .collect::<Vec<_>>()
+                                    .join(".");
+                                suggestions.push(format!("root.{ns_str}.{item}"));
+                            }
+                        }
+                    }
+                    suggestions.sort();
+                }
                 diagnostics.push(TirTypeError::UnresolvedType {
-                    name: baml_base::Name::new(&name),
+                    name: baml_base::Name::new(&name_str),
+                    suggestions,
                 });
-                Ty::Unknown
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                }
             }
         }
-        TypeExpr::Int => Ty::Primitive(PrimitiveType::Int),
-        TypeExpr::Float => Ty::Primitive(PrimitiveType::Float),
-        TypeExpr::String => Ty::Primitive(PrimitiveType::String),
-        TypeExpr::Bool => Ty::Primitive(PrimitiveType::Bool),
-        TypeExpr::Null => Ty::Primitive(PrimitiveType::Null),
-        TypeExpr::Never => Ty::Never,
-        TypeExpr::Media(kind) => Ty::Primitive(match kind {
-            baml_base::MediaKind::Image => PrimitiveType::Image,
-            baml_base::MediaKind::Audio => PrimitiveType::Audio,
-            baml_base::MediaKind::Video => PrimitiveType::Video,
-            baml_base::MediaKind::Pdf => PrimitiveType::Pdf,
-            // Generic media — treated as unknown for type resolution purposes
-            baml_base::MediaKind::Generic => return Ty::Unknown,
-        }),
-        TypeExpr::Optional(inner) => Ty::Optional(Box::new(lower_type_expr_in_ns(
-            db,
-            inner,
-            package_items,
-            ns_context,
-            generic_params,
-            diagnostics,
-        ))),
-        TypeExpr::List(inner) => Ty::List(Box::new(lower_type_expr_in_ns(
-            db,
-            inner,
-            package_items,
-            ns_context,
-            generic_params,
-            diagnostics,
-        ))),
-        TypeExpr::Map { key, value } => Ty::Map(
+        TypeExpr::Int { .. } => Ty::Primitive(PrimitiveType::Int, TyAttr::default()),
+        TypeExpr::Float { .. } => Ty::Primitive(PrimitiveType::Float, TyAttr::default()),
+        TypeExpr::String { .. } => Ty::Primitive(PrimitiveType::String, TyAttr::default()),
+        TypeExpr::Bool { .. } => Ty::Primitive(PrimitiveType::Bool, TyAttr::default()),
+        TypeExpr::Null { .. } => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
+        TypeExpr::Never { .. } => Ty::Never {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Media { kind, .. } => Ty::Primitive(
+            match kind {
+                baml_base::MediaKind::Image => PrimitiveType::Image,
+                baml_base::MediaKind::Audio => PrimitiveType::Audio,
+                baml_base::MediaKind::Video => PrimitiveType::Video,
+                baml_base::MediaKind::Pdf => PrimitiveType::Pdf,
+                // Generic media — treated as unknown for type resolution purposes
+                baml_base::MediaKind::Generic => {
+                    return Ty::Unknown {
+                        attr: TyAttr::default(),
+                    };
+                }
+            },
+            TyAttr::default(),
+        ),
+        TypeExpr::Optional { inner, .. } => Ty::Optional(
+            Box::new(lower_type_expr_in_ns(
+                db,
+                inner,
+                package_items,
+                ns_context,
+                generic_params,
+                diagnostics,
+            )),
+            TyAttr::default(),
+        ),
+        TypeExpr::List { inner, .. } => Ty::List(
+            Box::new(lower_type_expr_in_ns(
+                db,
+                inner,
+                package_items,
+                ns_context,
+                generic_params,
+                diagnostics,
+            )),
+            TyAttr::default(),
+        ),
+        TypeExpr::Map { key, value, .. } => Ty::Map(
             Box::new(lower_type_expr_in_ns(
                 db,
                 key,
@@ -154,8 +199,11 @@ pub fn lower_type_expr_in_ns(
                 generic_params,
                 diagnostics,
             )),
+            TyAttr::default(),
         ),
-        TypeExpr::Union(members) => Ty::Union(
+        TypeExpr::Union {
+            variants: members, ..
+        } => Ty::Union(
             members
                 .iter()
                 .map(|m| {
@@ -169,8 +217,9 @@ pub fn lower_type_expr_in_ns(
                     )
                 })
                 .collect(),
+            TyAttr::default(),
         ),
-        TypeExpr::Function { params, ret } => Ty::Function {
+        TypeExpr::Function { params, ret, .. } => Ty::Function {
             params: params
                 .iter()
                 .map(|p| {
@@ -195,14 +244,25 @@ pub fn lower_type_expr_in_ns(
                 generic_params,
                 diagnostics,
             )),
+            attr: TyAttr::default(),
         },
-        TypeExpr::Literal(lit) => Ty::Literal(lit.clone(), Freshness::Regular),
-        TypeExpr::BuiltinUnknown => Ty::BuiltinUnknown,
-        TypeExpr::Error | TypeExpr::Unknown => Ty::Unknown,
+        TypeExpr::Literal { value: lit, .. } => {
+            Ty::Literal(lit.clone(), Freshness::Regular, TyAttr::default())
+        }
+        TypeExpr::BuiltinUnknown { .. } => Ty::BuiltinUnknown {
+            attr: TyAttr::default(),
+        },
+        TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => Ty::Unknown {
+            attr: TyAttr::default(),
+        },
         // Dedicated Ty::Type variant — see ty.rs doc comment for design rationale.
-        TypeExpr::Type => Ty::Type,
+        TypeExpr::Type { .. } => Ty::Type {
+            attr: TyAttr::default(),
+        },
         // `$rust_type` — opaque Rust-managed state field type.
-        TypeExpr::Rust => Ty::RustType,
+        TypeExpr::Rust { .. } => Ty::RustType {
+            attr: TyAttr::default(),
+        },
     }
 }
 

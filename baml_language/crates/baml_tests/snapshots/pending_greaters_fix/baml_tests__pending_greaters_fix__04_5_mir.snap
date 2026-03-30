@@ -42,6 +42,24 @@ fn user.BadParam$build_request(x: map<string, int>) -> baml.http.Request {
     }
 }
 
+fn user.BadParam$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "BadParam", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.BadParam$render_prompt(x: map<string, int>) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -89,6 +107,24 @@ fn user.BadReturnType$build_request() -> baml.http.Request {
     bb0: {
         _1 = {  };
         _0 = call const fn baml.llm.build_request(const null, const "BadReturnType", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.BadReturnType$parse(json: string) -> map<string, int> {
+    // Locals:
+    let _0: map<string, int> // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "BadReturnType", copy _1) -> [bb1];
     }
 
     bb1: {

@@ -6,9 +6,11 @@ mod wasm_helpers;
 
 use std::collections::HashMap;
 
-/// Factory that creates [`sys_types::SysOps`] for a given project root.
+use ::std::sync::Arc;
+
+/// Factory that creates [`sys_ops::SysOps`] for a given project root.
 type SysOpFactory =
-    std::sync::Arc<dyn Fn(&vfs::VfsPath) -> std::sync::Arc<sys_types::SysOps> + Send + Sync>;
+    std::sync::Arc<dyn Fn(&vfs::VfsPath) -> std::sync::Arc<sys_ops::SysOps> + Send + Sync>;
 
 use crate::{
     RuntimeError,
@@ -224,7 +226,7 @@ impl BexMulitProject {
     fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
-    ) -> Result<Box<dyn crate::Bex>, RuntimeError> {
+    ) -> Result<Arc<dyn crate::Bex>, RuntimeError> {
         let project = {
             let projects = self.projects.lock().unwrap();
             projects
@@ -235,7 +237,7 @@ impl BexMulitProject {
                 .clone()
         };
         let bex = project.project.get_bex()?;
-        Ok(Box::new(bex))
+        Ok(bex)
     }
 
     fn get_baml_project_root(path: &vfs::VfsPath) -> Result<vfs::VfsPath, LspError> {
@@ -511,17 +513,40 @@ impl BexMulitProject {
 
         let db_guard = project.project.db.lock().unwrap();
         let db = db_guard.db();
-        let functions = match db_guard.project() {
-            Some(p) => baml_project::list_functions(db, p)
-                .into_iter()
-                .map(|f| f.name)
-                .collect(),
-            None => vec![],
-        };
+        let functions = baml_project::list_functions_with_metadata(db)
+            .into_iter()
+            .map(|f| crate::bex_lsp::FunctionInfo {
+                name: f.name,
+                kind: if f.is_llm {
+                    crate::bex_lsp::FunctionKind::Llm
+                } else {
+                    crate::bex_lsp::FunctionKind::Expr
+                },
+                capabilities: if f.is_llm {
+                    Some(crate::bex_lsp::LlmCapabilities {
+                        render_prompt: true,
+                        build_request: true,
+                        client_name: f.client_name,
+                    })
+                } else {
+                    None
+                },
+            })
+            .collect();
+
+        let tests = baml_project::list_tests_with_metadata(db)
+            .into_iter()
+            .map(|t| crate::bex_lsp::TestInfo {
+                name: t.name,
+                function_name: t.function_name,
+                args_json: t.args_json,
+            })
+            .collect();
 
         crate::bex_lsp::ProjectUpdate {
             is_bex_current,
             functions,
+            tests,
             diagnostics,
         }
     }
@@ -557,7 +582,7 @@ impl super::BexLsp for BexMulitProject {
     fn get_bex_for_project(
         &self,
         project_root: &crate::fs::FsPath,
-    ) -> Result<Box<dyn crate::Bex>, crate::RuntimeError> {
+    ) -> Result<Arc<dyn crate::Bex>, crate::RuntimeError> {
         self.get_bex_for_project(project_root)
     }
 
@@ -576,6 +601,88 @@ impl super::BexLsp for BexMulitProject {
                 },
             );
         }
+    }
+
+    fn ast_control_flow_graph(
+        &self,
+        function_name: &str,
+    ) -> Option<baml_compiler2_visualization::control_flow::ControlFlowGraph> {
+        let projects = self.projects.lock().ok()?;
+        for project in projects.values() {
+            let db = project.project.db.lock().ok()?;
+            if let Some(graph) = db.ast_control_flow_graph(function_name) {
+                return Some(graph);
+            }
+        }
+        None
+    }
+
+    fn request_control_flow_graph(&self, function_name: &str) {
+        let graph = self.ast_control_flow_graph(function_name);
+        let graph = graph.map(|g| {
+            baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(&g)
+        });
+        let graph_json = graph.as_ref().and_then(|g| serde_json::to_value(g).ok());
+        self.playground_sender.send_playground_notification(
+            crate::bex_lsp::PlaygroundNotification::ControlFlowGraphResult {
+                function_name: function_name.to_string(),
+                graph: graph_json,
+            },
+        );
+    }
+
+    fn playground_cursor_context(
+        &self,
+        file_path: &str,
+        line: u32,
+        column: u32,
+    ) -> baml_project::CursorContext {
+        let empty = baml_project::CursorContext {
+            function_name: None,
+            is_workflow: false,
+            workflow_memberships: vec![],
+            source_expr_id: None,
+            source_expr_candidates: vec![],
+            test_name: None,
+        };
+
+        let Ok(projects) = self.projects.lock() else {
+            return empty;
+        };
+
+        for project in projects.values() {
+            let Ok(db) = project.project.db.lock() else {
+                continue;
+            };
+
+            // Convert line/column to byte offset using the source file text.
+            // The file_path from Monaco may be relative — find matching file.
+            let Some(source_file) = db.find_source_file(file_path) else {
+                continue;
+            };
+
+            let text: &str = source_file.text(&*db);
+            let position = lsp_types::Position {
+                line,
+                character: column,
+            };
+            let byte_offset = u32::try_from(baml_project::position::lsp_position_to_offset(
+                text, &position,
+            ))
+            .unwrap_or(0);
+
+            return db.playground_cursor_context(file_path, byte_offset);
+        }
+
+        empty
+    }
+
+    fn request_cursor_context(&self, file_path: &str, line: u32, column: u32) {
+        let ctx = self.playground_cursor_context(file_path, line, column);
+        let ctx_json = serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null);
+        self.playground_sender.send_playground_notification(
+            crate::bex_lsp::PlaygroundNotification::CursorContext { context: ctx_json },
+        );
     }
 }
 

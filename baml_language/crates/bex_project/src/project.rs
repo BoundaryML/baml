@@ -1,5 +1,5 @@
 use bex_engine::BexEngine;
-use sys_types::SysOps;
+use sys_ops::SysOps;
 
 use crate::RuntimeError;
 
@@ -142,10 +142,25 @@ impl BexProject {
 
     fn update_bex(&self) -> Result<(), RuntimeError> {
         self.set_bex_outdated();
-        let bytecode = self.get_bytecode()?;
-        let runtime = BexEngine::new(bytecode, self.sys_ops.clone(), self.event_sink.clone())
-            .map_err(RuntimeError::Engine)?;
+        let bytecode = match self.get_bytecode() {
+            Ok(bc) => bc,
+            Err(e) => {
+                log::warn!("update_bex: get_bytecode failed: {e}");
+                return Err(RuntimeError::Compilation {
+                    message: format!("get_bytecode failed: {e}"),
+                });
+            }
+        };
+        let runtime = match BexEngine::new(bytecode, self.sys_ops.clone(), self.event_sink.clone())
+        {
+            Ok(r) => r,
+            Err(e) => {
+                log::warn!("update_bex: BexEngine::new failed: {e}");
+                return Err(RuntimeError::Engine(e));
+            }
+        };
         self.set_current_bex(runtime);
+        log::info!("update_bex: success");
         Ok(())
     }
 }

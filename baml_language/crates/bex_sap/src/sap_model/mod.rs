@@ -35,6 +35,11 @@ impl TypeIdent for usize {}
 
 /// Stores all the "named" types (classes, enums, and type aliases) for lookup.
 pub struct TypeRefDb<'t, N: TypeIdent> {
+    /// Types in the database are stored by name.
+    ///
+    /// They do not have annotations attached to their top-level type.
+    /// If there are annotations, they should be lifted by the conversion process (or earlier)
+    /// onto any place where the name is used.
     types: IndexMap<N, TyResolved<'t, N>>,
 }
 
@@ -46,12 +51,20 @@ impl<N: TypeIdent> Default for TypeRefDb<'_, N> {
     }
 }
 impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Tries to add a type to the database. Returns an error if the identifier is already in use.
+    #[cfg(any(test, feature = "manual_db"))]
+    #[inline]
     pub fn try_add(&mut self, ident: N, ty: TyResolved<'t, N>) -> Result<(), &TyResolved<'t, N>> {
+        self.try_add_inner(ident, ty)
+    }
+
+    /// Private version of [`TypeRefDb::try_add`], not locked behind a feature flag.
+    fn try_add_inner(&mut self, ident: N, ty: TyResolved<'t, N>) -> Result<(), &TyResolved<'t, N>> {
         match self.types.entry(ident) {
             indexmap::map::Entry::Occupied(entry) => Err(entry.into_mut()),
             indexmap::map::Entry::Vacant(entry) => {
@@ -74,10 +87,6 @@ impl<'t, N: TypeIdent> TypeRefDb<'t, N> {
             Ty::ResolvedRef(ty) => Ok(*ty),
             Ty::Unresolved(ident) => self.types.get(ident).map(TyResolved::as_ref).ok_or(ident),
         }
-    }
-
-    pub fn resolved_from_ident(&'t self, ident: &N) -> Option<TyResolvedRef<'t, N>> {
-        self.types.get(ident).map(TyResolved::as_ref)
     }
 
     /// Like [`TypeRefDb::resolve`], but maps the result to keep the type annotations.
@@ -118,6 +127,7 @@ pub enum TyResolved<'t, N: TypeIdent> {
     Map(MapTy<'t, N>),
     Class(ClassTy<'t, N>),
     Enum(EnumTy<'t, N>),
+    EnumVariant(EnumVariantTy<'t, N>),
     Union(UnionTy<'t, N>),
     /// A type that tells you if it is completed or not.
     StreamState(StreamStateTy<'t, N>),
@@ -165,6 +175,7 @@ impl<'t, N: TypeIdent> TyResolved<'t, N> {
             TyResolved::Map(m) => TyResolvedRef::Map(m),
             TyResolved::Class(c) => TyResolvedRef::Class(c),
             TyResolved::Enum(e) => TyResolvedRef::Enum(e),
+            TyResolved::EnumVariant(e) => TyResolvedRef::EnumVariant(e),
             TyResolved::Union(u) => TyResolvedRef::Union(u),
             TyResolved::StreamState(s) => TyResolvedRef::StreamState(s),
         }
@@ -190,6 +201,7 @@ pub enum TyResolvedRef<'t, N: TypeIdent> {
     Map(&'t MapTy<'t, N>),
     Class(&'t ClassTy<'t, N>),
     Enum(&'t EnumTy<'t, N>),
+    EnumVariant(&'t EnumVariantTy<'t, N>),
     Union(&'t UnionTy<'t, N>),
     /// A type that tells you if it is completed or not.
     StreamState(&'t StreamStateTy<'t, N>),
@@ -267,6 +279,7 @@ impl<'t, N: TypeIdent> TyResolvedRef<'t, N> {
             }
             (TyResolvedRef::Class(a), TyResolvedRef::Class(b)) => a.name == b.name,
             (TyResolvedRef::Enum(a), TyResolvedRef::Enum(b)) => a.name == b.name,
+            (TyResolvedRef::EnumVariant(a), TyResolvedRef::EnumVariant(b)) => a == b,
             _ => false,
         }
     }
@@ -630,6 +643,24 @@ impl<N: TypeIdent> PartialEq for EnumTy<'_, N> {
 }
 
 /// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
+#[derive(Clone)]
+pub struct EnumVariantTy<'t, N: TypeIdent> {
+    pub name: N,
+    pub value: AnnotatedEnumVariant<'t>,
+}
+impl<'s, 'v, 't, N: TypeIdent + 't> TypeValue<'s, 'v, 't> for EnumVariantTy<'t, N>
+where
+    's: 'v,
+{
+    type Value = BamlEnum<'t, N>;
+}
+impl<N: TypeIdent> PartialEq for EnumVariantTy<'_, N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.value.name == other.value.name
+    }
+}
+
+/// Where `N` is the type used by the host to identify named types (e.g. class/enum names).
 #[derive(Clone, PartialEq)]
 pub struct UnionTy<'t, N: TypeIdent> {
     pub variants: Vec<AnnotatedTy<'t, N>>,
@@ -675,22 +706,11 @@ pub struct TypeAnnotations<'t, N: TypeIdent> {
     /// If `Some("Loading...")`, then `"Loading..."` should be used until done.
     pub in_progress: Option<AttrLiteral<'t, N>>,
 
-    /// The "done" type to parse as ("done" to SAP, may still be partial if generated for streaming).
-    /// Must be a subtype of the annotated type.
-    /// The annotated type may or may not be a supertype, as it is the union of this type and all 'default' values
-    /// that could replace it during streaming.
+    /// If true, then `null` values should be rejected even if the annotated type is nullable.
     ///
-    /// Set to `None` if and only if the `parse_as` type is the same as the annotated type.
-    ///
-    /// ## Examples
-    /// ```baml,ignore
-    /// type A = int; // results in
-    /// type stream.A = int | null @parse_as(int) @in_progress(null);
-    ///
-    /// type B = string; // results in
-    /// type stream.B = string; // both `None` because `string` can be partial
-    /// ```
-    pub parse_as: Option<Box<AnnotatedTy<'t, N>>>,
+    /// This is used to indicate that while fill-in values may be `null`,
+    /// a value from the input stream may not be parsed as `null`.
+    pub parse_without_null: bool,
 
     /// The set of assertions that should be run on the value.
     /// Note that if the value is filled by some default (such as [`TypeAnnotations::in_progress`]),
@@ -701,7 +721,7 @@ impl<N: TypeIdent> Default for TypeAnnotations<'_, N> {
     fn default() -> Self {
         Self {
             in_progress: None,
-            parse_as: None,
+            parse_without_null: false,
             asserts: Vec::new(),
         }
     }

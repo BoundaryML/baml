@@ -12,10 +12,8 @@ use std::{
 };
 
 use bex_heap::BexHeap;
-use sys_types::{
-    CallId, SysOpContext, SysOpOutput,
-    io::{self, owned},
-};
+use sys_ops::io::{self, owned};
+use sys_types::{CallId, SysOpContext, SysOpOutput};
 use tokio::sync::broadcast;
 
 use crate::playground_ws::WsOutMessage;
@@ -82,6 +80,7 @@ impl io::IoClassHttpResponse for PlaygroundHttp {
                         log_id: fetch_id,
                         status: None,
                         duration_ms: None,
+                        response_headers: None,
                         response_body: Some(text.clone()),
                         error: None,
                     });
@@ -135,6 +134,11 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                             .lock()
                             .unwrap()
                             .insert(response_body_key(resp), (cid, fetch_id));
+                        let headers: HashMap<String, String> = resp
+                            .headers
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
                             call_id: cid,
                             log_id: fetch_id,
@@ -142,6 +146,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                             duration_ms: Some(elapsed),
                             response_body: None,
                             error: None,
+                            response_headers: Some(headers),
                         });
                     }
                     Err(e) => {
@@ -152,6 +157,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                             duration_ms: Some(elapsed),
                             response_body: None,
                             error: Some(format!("{e}")),
+                            response_headers: None,
                         });
                     }
                 }
@@ -166,6 +172,11 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                             .lock()
                             .unwrap()
                             .insert(response_body_key(resp), (cid, fetch_id));
+                        let headers: HashMap<String, String> = resp
+                            .headers
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect();
                         let _ = state.broadcast_tx.send(WsOutMessage::FetchLogUpdate {
                             call_id: cid,
                             log_id: fetch_id,
@@ -173,6 +184,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                             duration_ms: Some(elapsed),
                             response_body: None,
                             error: None,
+                            response_headers: Some(headers),
                         });
                     }
                     Err(e) => {
@@ -183,6 +195,7 @@ impl io::IoNamespaceHttp for PlaygroundHttp {
                             duration_ms: Some(elapsed),
                             response_body: None,
                             error: Some(format!("{e}")),
+                            response_headers: None,
                         });
                     }
                 }

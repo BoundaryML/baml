@@ -94,12 +94,12 @@ function NestedIfStatements() -> string {
 //     │ 
 //     │ Note: Error code: E0012
 // ────╯
-// Error: type mismatch: expected string, got 2 | 13
+// Error: type mismatch: expected string, got int
 //     ╭─[ headers_nested_if_statements.baml:58:5 ]
 //     │
 //  58 │     e
 //     │     ┬  
-//     │     ╰── type mismatch: expected string, got 2 | 13
+//     │     ╰── type mismatch: expected string, got int
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

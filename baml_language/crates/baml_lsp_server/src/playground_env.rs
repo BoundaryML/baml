@@ -50,7 +50,7 @@ impl PlaygroundEnvState {
 /// `IoNamespaceEnv` implementation that asks the webview for every env var.
 pub struct PlaygroundEnv(pub Arc<PlaygroundEnvState>);
 
-impl sys_types::io::IoNamespaceEnv for PlaygroundEnv {
+impl sys_ops::io::IoNamespaceEnv for PlaygroundEnv {
     fn get(
         &self,
         _heap: &Arc<BexHeap>,

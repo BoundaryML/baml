@@ -102,89 +102,89 @@ pub fn convert_tir2_ty(
     type_aliases: &HashMap<QualifiedTypeName, Tir2Ty>,
     recursive_aliases: &HashSet<QualifiedTypeName>,
 ) -> Ty {
-    let attr = TyAttr::default();
+    let attr = ty.attr().clone();
     match ty {
         // Primitives
-        Tir2Ty::Primitive(PrimitiveType::Int) => Ty::Int { attr },
-        Tir2Ty::Primitive(PrimitiveType::Float) => Ty::Float { attr },
-        Tir2Ty::Primitive(PrimitiveType::String) => Ty::String { attr },
-        Tir2Ty::Primitive(PrimitiveType::Bool) => Ty::Bool { attr },
-        Tir2Ty::Primitive(PrimitiveType::Null) => Ty::Null { attr },
-        Tir2Ty::Primitive(PrimitiveType::Image) => Ty::Media(MediaKind::Image, attr),
-        Tir2Ty::Primitive(PrimitiveType::Audio) => Ty::Media(MediaKind::Audio, attr),
-        Tir2Ty::Primitive(PrimitiveType::Video) => Ty::Media(MediaKind::Video, attr),
-        Tir2Ty::Primitive(PrimitiveType::Pdf) => Ty::Media(MediaKind::Pdf, attr),
+        Tir2Ty::Primitive(PrimitiveType::Int, attr) => Ty::Int { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Float, attr) => Ty::Float { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::String, attr) => Ty::String { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Bool, attr) => Ty::Bool { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Null, attr) => Ty::Null { attr: attr.clone() },
+        Tir2Ty::Primitive(PrimitiveType::Image, attr) => Ty::Media(MediaKind::Image, attr.clone()),
+        Tir2Ty::Primitive(PrimitiveType::Audio, attr) => Ty::Media(MediaKind::Audio, attr.clone()),
+        Tir2Ty::Primitive(PrimitiveType::Video, attr) => Ty::Media(MediaKind::Video, attr.clone()),
+        Tir2Ty::Primitive(PrimitiveType::Pdf, attr) => Ty::Media(MediaKind::Pdf, attr.clone()),
 
         // Named types
-        Tir2Ty::Class(qtn) => Ty::Class(qtn_to_type_name(qtn), attr),
-        Tir2Ty::Enum(qtn) => Ty::Enum(qtn_to_type_name(qtn), attr),
-        Tir2Ty::TypeAlias(qtn) => {
+        Tir2Ty::Class(qtn, attr) => Ty::Class(qtn_to_type_name(qtn), attr.clone()),
+        Tir2Ty::Enum(qtn, attr) => Ty::Enum(qtn_to_type_name(qtn), attr.clone()),
+        Tir2Ty::TypeAlias(qtn, attr) => {
             if recursive_aliases.contains(qtn) {
                 // Keep recursive aliases opaque — they need runtime resolution
-                Ty::TypeAlias(qtn_to_type_name(qtn), attr)
+                Ty::TypeAlias(qtn_to_type_name(qtn), attr.clone())
             } else if let Some(target) = type_aliases.get(qtn) {
                 // Expand non-recursive aliases inline
                 convert_tir2_ty(target, type_aliases, recursive_aliases)
             } else {
                 // Unknown alias (e.g. from another package) — keep opaque
-                Ty::TypeAlias(qtn_to_type_name(qtn), attr)
+                Ty::TypeAlias(qtn_to_type_name(qtn), attr.clone())
             }
         }
 
         // EnumVariant → preserve variant-level type info
-        Tir2Ty::EnumVariant(qtn, variant) => {
-            Ty::EnumVariant(qtn_to_type_name(qtn), variant.clone(), attr)
+        Tir2Ty::EnumVariant(qtn, variant, attr) => {
+            Ty::EnumVariant(qtn_to_type_name(qtn), variant.clone(), attr.clone())
         }
 
         // Containers
-        Tir2Ty::List(inner) => Ty::List(
+        Tir2Ty::List(inner, attr) => Ty::List(
             Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr,
+            attr.clone(),
         ),
-        Tir2Ty::Map(k, v) => Ty::Map {
+        Tir2Ty::Map(k, v, attr) => Ty::Map {
             key: Box::new(convert_tir2_ty(k, type_aliases, recursive_aliases)),
             value: Box::new(convert_tir2_ty(v, type_aliases, recursive_aliases)),
-            attr,
+            attr: attr.clone(),
         },
-        Tir2Ty::Union(members) => Ty::Union(
+        Tir2Ty::Union(members, attr) => Ty::Union(
             members
                 .iter()
                 .map(|m| convert_tir2_ty(m, type_aliases, recursive_aliases))
                 .collect(),
-            attr,
+            attr.clone(),
         ),
-        Tir2Ty::Optional(inner) => Ty::Optional(
+        Tir2Ty::Optional(inner, attr) => Ty::Optional(
             Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr,
+            attr.clone(),
         ),
-        Tir2Ty::Literal(lit, _freshness) => Ty::Literal(lit.clone(), attr),
+        Tir2Ty::Literal(lit, _freshness, attr) => Ty::Literal(lit.clone(), attr.clone()),
 
         // Evolving containers → freeze to regular containers
-        Tir2Ty::EvolvingList(inner) => Ty::List(
+        Tir2Ty::EvolvingList(inner, attr) => Ty::List(
             Box::new(convert_tir2_ty(inner, type_aliases, recursive_aliases)),
-            attr,
+            attr.clone(),
         ),
-        Tir2Ty::EvolvingMap(k, v) => Ty::Map {
+        Tir2Ty::EvolvingMap(k, v, attr) => Ty::Map {
             key: Box::new(convert_tir2_ty(k, type_aliases, recursive_aliases)),
             value: Box::new(convert_tir2_ty(v, type_aliases, recursive_aliases)),
-            attr,
+            attr: attr.clone(),
         },
 
         // Functions — drop param names
-        Tir2Ty::Function { params, ret } => Ty::Function {
+        Tir2Ty::Function { params, ret, attr } => Ty::Function {
             params: params
                 .iter()
                 .map(|(_, t)| convert_tir2_ty(t, type_aliases, recursive_aliases))
                 .collect(),
             ret: Box::new(convert_tir2_ty(ret, type_aliases, recursive_aliases)),
-            attr,
+            attr: attr.clone(),
         },
 
         // Bottom / sentinel types
-        Tir2Ty::Never => Ty::Void { attr },
-        Tir2Ty::Void => Ty::Void { attr },
-        Tir2Ty::BuiltinUnknown => Ty::BuiltinUnknown { attr },
-        Tir2Ty::RustType => {
+        Tir2Ty::Never { attr } => Ty::Void { attr: attr.clone() },
+        Tir2Ty::Void { attr } => Ty::Void { attr: attr.clone() },
+        Tir2Ty::BuiltinUnknown { attr } => Ty::BuiltinUnknown { attr: attr.clone() },
+        Tir2Ty::RustType { attr } => {
             // RustType is an opaque sentinel — map to Opaque with a synthetic name
             Ty::Opaque(
                 TypeName {
@@ -192,10 +192,10 @@ pub fn convert_tir2_ty(
                     module_path: vec![Name::new("baml"), Name::new("rust")],
                     display_name: Name::new("RustType"),
                 },
-                attr,
+                attr.clone(),
             )
         }
-        Tir2Ty::Type => {
+        Tir2Ty::Type { attr } => {
             // The `type` metatype maps to the same opaque representation as v1.
             // See Ty::type_type() in baml_type/src/lib.rs.
             Ty::Opaque(
@@ -204,14 +204,14 @@ pub fn convert_tir2_ty(
                     module_path: vec![Name::new("baml"), Name::new("reflect")],
                     display_name: Name::new("type"),
                 },
-                attr,
+                attr.clone(),
             )
         }
-        Tir2Ty::Unknown => Ty::Void { attr }, // error recovery
-        Tir2Ty::Error => Ty::Void { attr },   // error recovery
+        Tir2Ty::Unknown { attr } => Ty::Void { attr: attr.clone() }, // error recovery
+        Tir2Ty::Error { attr } => Ty::Void { attr: attr.clone() },   // error recovery
         // TypeVar should never reach MIR — it is erased to Unknown before VIR.
         // Map defensively to Void as error recovery.
-        Tir2Ty::TypeVar(_) => Ty::Void { attr },
+        Tir2Ty::TypeVar(..) => Ty::Void { attr },
     }
 }
 
@@ -260,32 +260,42 @@ pub fn def_to_item_ref<'db>(db: &'db dyn crate::Db, def: Definition<'db>) -> Ite
     }
 }
 
-/// Convert a `MethodResolution` (from TIR) into an `ItemRef` (for MIR).
-fn resolution_to_item_ref(res: &baml_compiler2_tir::inference::MethodResolution<'_>) -> ItemRef {
-    use baml_compiler2_tir::inference::MethodResolution;
+/// Convert a `MemberResolution` (from TIR) into an `ItemRef` (for MIR).
+///
+/// Only `Method` and `Free` variants are callable — callers must guard against
+/// `Field` and `Variant` variants before calling this function.
+fn resolution_to_item_ref(
+    db: &dyn crate::Db,
+    res: &baml_compiler2_tir::inference::MemberResolution<'_>,
+) -> Option<ItemRef> {
+    use baml_compiler2_tir::inference::MemberResolution;
     match res {
-        MethodResolution::Free {
-            package,
-            namespace,
-            name,
-            ..
-        } => ItemRef::Free {
-            package: package.clone(),
-            namespace: namespace.clone(),
-            name: name.clone(),
-        },
-        MethodResolution::Method {
-            package,
-            namespace,
-            class,
-            name,
-            ..
-        } => ItemRef::Method {
-            package: package.clone(),
-            namespace: namespace.clone(),
-            class: class.clone(),
-            name: name.clone(),
-        },
+        MemberResolution::Free { func_loc } => {
+            let pkg_info = file_package(db, func_loc.file(db));
+            let item_tree = file_item_tree(db, func_loc.file(db));
+            let func_data = &item_tree[func_loc.id(db)];
+            Some(ItemRef::Free {
+                package: pkg_info.package,
+                namespace: pkg_info.namespace_path,
+                name: func_data.name.clone(),
+            })
+        }
+        MemberResolution::Method {
+            class_loc,
+            func_loc,
+        } => {
+            let pkg_info = file_package(db, class_loc.file(db));
+            let item_tree = file_item_tree(db, class_loc.file(db));
+            let class_data = &item_tree[class_loc.id(db)];
+            let func_data = &item_tree[func_loc.id(db)];
+            Some(ItemRef::Method {
+                package: pkg_info.package,
+                namespace: pkg_info.namespace_path,
+                class: class_data.name.clone(),
+                name: func_data.name.clone(),
+            })
+        }
+        MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
     }
 }
 
@@ -310,7 +320,7 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_tir::{
     inference::infer_scope_types,
-    resolve::{ResolvedName, resolve_name_at},
+    resolve::{ResolvedName, resolve_name_at_in_scope},
 };
 use rustc_hash::FxHashMap;
 
@@ -325,8 +335,8 @@ struct LoweringContext<'db> {
     // Eagerly aggregated type maps from all scopes in the function
     expr_types: FxHashMap<AstExprId, Tir2Ty>,
     pat_types: FxHashMap<AstPatId, Tir2Ty>,
-    // Method resolutions from TIR: ExprId → MethodResolution
-    resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MethodResolution<'db>>,
+    // Member resolutions from TIR: ExprId → MemberResolution
+    resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MemberResolution<'db>>,
     // Match expressions that TIR determined are exhaustive
     exhaustive_matches: rustc_hash::FxHashSet<AstExprId>,
 
@@ -335,6 +345,9 @@ struct LoweringContext<'db> {
     source_map: Option<AstSourceMap>,
     file: baml_base::SourceFile,
     func_loc: Option<FunctionLoc<'db>>,
+    /// Raw function name from the item tree (e.g. `"Foo$render_prompt"`).
+    /// Used to disambiguate companion scopes that share the same span.
+    scope_func_name: Option<Name>,
 
     // Schema maps built from PackageItems.
     // class_fields and class_type_tags are keyed by TypeName (name + module_path)
@@ -441,7 +454,7 @@ impl<'db> LoweringContext<'db> {
         let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
             AstExprId,
-            baml_compiler2_tir::inference::MethodResolution<'db>,
+            baml_compiler2_tir::inference::MemberResolution<'db>,
         > = FxHashMap::default();
         let mut exhaustive_matches: rustc_hash::FxHashSet<AstExprId> =
             rustc_hash::FxHashSet::default();
@@ -452,7 +465,7 @@ impl<'db> LoweringContext<'db> {
              pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
              resolutions: &mut FxHashMap<
                 AstExprId,
-                baml_compiler2_tir::inference::MethodResolution<'db>,
+                baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
              exhaustive_matches: &mut rustc_hash::FxHashSet<AstExprId>| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
@@ -577,6 +590,7 @@ impl<'db> LoweringContext<'db> {
             source_map,
             file,
             func_loc: Some(func_loc),
+            scope_func_name: Some(func_data.name.clone()),
             class_fields,
             enum_variants,
             class_type_tags,
@@ -615,7 +629,7 @@ impl<'db> LoweringContext<'db> {
         let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
             AstExprId,
-            baml_compiler2_tir::inference::MethodResolution<'db>,
+            baml_compiler2_tir::inference::MemberResolution<'db>,
         > = FxHashMap::default();
         let mut exhaustive_matches: rustc_hash::FxHashSet<AstExprId> =
             rustc_hash::FxHashSet::default();
@@ -626,7 +640,7 @@ impl<'db> LoweringContext<'db> {
              pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
              resolutions: &mut FxHashMap<
                 AstExprId,
-                baml_compiler2_tir::inference::MethodResolution<'db>,
+                baml_compiler2_tir::inference::MemberResolution<'db>,
             >,
              exhaustive_matches: &mut rustc_hash::FxHashSet<AstExprId>| {
                 let scope_id = index.scope_ids[fsi.index() as usize];
@@ -724,6 +738,7 @@ impl<'db> LoweringContext<'db> {
             source_map,
             file,
             func_loc: None,
+            scope_func_name: Some(let_name.clone()),
             class_fields,
             enum_variants,
             class_type_tags,
@@ -776,12 +791,19 @@ impl<'db> LoweringContext<'db> {
     /// Used for `TypedBinding` patterns where TIR may not have populated the
     /// bindings map (e.g. catch arm and match arm patterns).
     fn resolve_type_annotation(&self, ty_expr: &baml_compiler2_ast::TypeExpr) -> Ty {
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr;
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
         let pkg_info = file_package(self.db, self.file);
         let pkg_id = PackageId::new(self.db, pkg_info.package);
         let pkg_items = package_items(self.db, pkg_id);
         let mut diags = Vec::new();
-        let tir_ty = lower_type_expr(self.db, ty_expr, pkg_items, &[], &mut diags);
+        let tir_ty = lower_type_expr_in_ns(
+            self.db,
+            ty_expr,
+            pkg_items,
+            &pkg_info.namespace_path,
+            &[],
+            &mut diags,
+        );
         convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
     }
 }
@@ -790,7 +812,7 @@ impl<'db> LoweringContext<'db> {
 
 impl LoweringContext<'_> {
     fn lower_function_body(&mut self) -> MirFunction {
-        use baml_compiler2_tir::lower_type_expr::lower_type_expr;
+        use baml_compiler2_tir::lower_type_expr::lower_type_expr_in_ns;
 
         let func_loc = self
             .func_loc
@@ -807,7 +829,14 @@ impl LoweringContext<'_> {
             .as_ref()
             .map(|te| {
                 let mut diags = Vec::new();
-                let tir_ty = lower_type_expr(self.db, te, pkg_items, &[], &mut diags);
+                let tir_ty = lower_type_expr_in_ns(
+                    self.db,
+                    te,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &[],
+                    &mut diags,
+                );
                 convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
             })
             .unwrap_or(Ty::Null {
@@ -838,26 +867,42 @@ impl LoweringContext<'_> {
         // which correctly resolves to the enclosing class type.
         for (param_name, param_te) in &sig.params {
             let param_ty = if param_name.as_str() == "self"
-                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
+                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
             {
                 // self parameter: TIR resolves this via enclosing class lookup.
                 // Read the same resolution here.
                 enclosing_class_name
                     .as_ref()
                     .and_then(|cn| {
-                        pkg_items.lookup_type(std::slice::from_ref(cn)).map(|def| {
-                            let tir_ty = baml_compiler2_tir::ty::Ty::Class(
-                                baml_compiler2_tir::lower_type_expr::qualify_def(self.db, def, cn),
-                            );
-                            convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
-                        })
+                        pkg_items
+                            .lookup_type(&pkg_info.namespace_path, cn)
+                            .map(|def| {
+                                let tir_ty = baml_compiler2_tir::ty::Ty::Class(
+                                    baml_compiler2_tir::lower_type_expr::qualify_def(
+                                        self.db, def, cn,
+                                    ),
+                                    baml_compiler2_tir::ty::TyAttr::default(),
+                                );
+                                convert_tir2_ty(
+                                    &tir_ty,
+                                    &self.type_aliases,
+                                    &self.recursive_aliases,
+                                )
+                            })
                     })
                     .unwrap_or(Ty::Null {
                         attr: TyAttr::default(),
                     })
             } else {
                 let mut diags = Vec::new();
-                let tir_ty = lower_type_expr(self.db, param_te, pkg_items, &[], &mut diags);
+                let tir_ty = lower_type_expr_in_ns(
+                    self.db,
+                    param_te,
+                    pkg_items,
+                    &pkg_info.namespace_path,
+                    &[],
+                    &mut diags,
+                );
                 convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases)
             };
             let local = self
@@ -1099,12 +1144,21 @@ impl<'db> LoweringContext<'db> {
         // Multi-segment paths (e.g. baml.llm.render_prompt) — check TIR resolution first
         if segments.len() > 1 {
             if let Some(resolution) = self.resolutions.get(&expr_id).cloned() {
-                let item = resolution_to_item_ref(&resolution);
-                self.builder.assign(
-                    dest,
-                    Rvalue::Use(Operand::Constant(Constant::Function(item))),
-                );
-                return;
+                use baml_compiler2_tir::inference::MemberResolution;
+                match &resolution {
+                    MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
+                        if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                            self.builder.assign(
+                                dest,
+                                Rvalue::Use(Operand::Constant(Constant::Function(item))),
+                            );
+                            return;
+                        }
+                    }
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                        // Not a callable — fall through to null placeholder
+                    }
+                }
             }
             self.builder
                 .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
@@ -1119,7 +1173,13 @@ impl<'db> LoweringContext<'db> {
             .map(|sm| sm.expr_span(expr_id).start())
             .unwrap_or_default();
 
-        let resolved = resolve_name_at(self.db, self.file, span_start, name);
+        let resolved = resolve_name_at_in_scope(
+            self.db,
+            self.file,
+            span_start,
+            name,
+            self.scope_func_name.as_ref(),
+        );
         match resolved {
             ResolvedName::Local {
                 name: local_name, ..
@@ -1160,7 +1220,7 @@ impl<'db> LoweringContext<'db> {
     fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
         let item = def_to_item_ref(self.db, def);
         // Check if this expression's type is EnumVariant
-        if let Some(Tir2Ty::EnumVariant(_qtn, variant)) =
+        if let Some(Tir2Ty::EnumVariant(_qtn, variant, _)) =
             self.expr_types.get(&expr_id).cloned().as_ref()
         {
             let variant_name = variant.clone();
@@ -1339,17 +1399,24 @@ impl LoweringContext<'_> {
             }
         }
 
-        // Check if callee is a method call (FieldAccess with a MethodResolution).
+        // Check if callee is a method call (FieldAccess with a MemberResolution::Method/Free).
+        // Field and Variant resolutions are not callable — treat them like unresolved accesses.
         // If the base is a real value (not a package namespace), prepend it as self.
         let (callee_operand, arg_operands) = if let AstExpr::FieldAccess { base, .. } = &callee_expr
         {
-            if self.resolutions.contains_key(&callee) {
+            if self.resolutions.get(&callee).is_some_and(|r| {
+                use baml_compiler2_tir::inference::MemberResolution;
+                matches!(
+                    r,
+                    MemberResolution::Method { .. } | MemberResolution::Free { .. }
+                )
+            }) {
                 // Check if base is a value receiver or a package path.
                 // Package paths have Unknown type in TIR (baml, baml.Array, etc.)
                 let base_is_value = self
                     .expr_types
                     .get(base)
-                    .map(|ty| !matches!(ty, Tir2Ty::Unknown))
+                    .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
                     .unwrap_or(false);
                 if base_is_value {
                     // Method call: arr.length() — prepend receiver as self
@@ -1425,7 +1492,13 @@ impl LoweringContext<'_> {
                     .as_ref()
                     .map(|sm| sm.expr_span(callee).start())
                     .unwrap_or_default();
-                let resolved = resolve_name_at(self.db, self.file, span_start, &segments[0]);
+                let resolved = resolve_name_at_in_scope(
+                    self.db,
+                    self.file,
+                    span_start,
+                    &segments[0],
+                    self.scope_func_name.as_ref(),
+                );
                 match resolved {
                     ResolvedName::Builtin(Definition::Function(fl)) => Some(fl),
                     ResolvedName::Item(Definition::Function(fl)) => Some(fl),
@@ -1433,10 +1506,11 @@ impl LoweringContext<'_> {
                 }
             } else {
                 // Multi-segment: check TIR resolution
-                use baml_compiler2_tir::inference::MethodResolution;
-                self.resolutions.get(&callee).map(|res| match res {
-                    MethodResolution::Free { func_loc, .. } => *func_loc,
-                    MethodResolution::Method { func_loc, .. } => *func_loc,
+                use baml_compiler2_tir::inference::MemberResolution;
+                self.resolutions.get(&callee).and_then(|res| match res {
+                    MemberResolution::Free { func_loc } => Some(*func_loc),
+                    MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
                 })
             };
             if let Some(fl) = func_loc {
@@ -1449,11 +1523,12 @@ impl LoweringContext<'_> {
 
         // ── NEW: FieldAccess callee (e.g. f.read, sock.recv) ──────────────────
         if let AstExpr::FieldAccess { .. } = &self.body.exprs[callee] {
-            use baml_compiler2_tir::inference::MethodResolution;
+            use baml_compiler2_tir::inference::MemberResolution;
             if let Some(resolution) = self.resolutions.get(&callee) {
                 let func_loc = match resolution {
-                    MethodResolution::Method { func_loc, .. } => Some(*func_loc),
-                    MethodResolution::Free { func_loc, .. } => Some(*func_loc),
+                    MemberResolution::Method { func_loc, .. } => Some(*func_loc),
+                    MemberResolution::Free { func_loc } => Some(*func_loc),
+                    MemberResolution::Field { .. } | MemberResolution::Variant { .. } => None,
                 };
                 if let Some(fl) = func_loc {
                     let body = function_body(self.db, fl);
@@ -1699,18 +1774,28 @@ impl LoweringContext<'_> {
         field: &Name,
         dest: Place,
     ) {
-        // Check if TIR resolved this to a method — if so, emit a function constant
+        // Check if TIR resolved this to a method or free function — if so, emit a function constant.
+        // Field and Variant resolutions fall through to the existing lowering paths below.
         if let Some(resolution) = self.resolutions.get(&expr_id).cloned() {
-            let item = resolution_to_item_ref(&resolution);
-            self.builder.assign(
-                dest,
-                Rvalue::Use(Operand::Constant(Constant::Function(item))),
-            );
-            return;
+            use baml_compiler2_tir::inference::MemberResolution;
+            match &resolution {
+                MemberResolution::Method { .. } | MemberResolution::Free { .. } => {
+                    if let Some(item) = resolution_to_item_ref(self.db, &resolution) {
+                        self.builder.assign(
+                            dest,
+                            Rvalue::Use(Operand::Constant(Constant::Function(item))),
+                        );
+                        return;
+                    }
+                }
+                MemberResolution::Field { .. } | MemberResolution::Variant { .. } => {
+                    // Fall through — handled by the existing field/enum-variant lowering below
+                }
+            }
         }
 
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
-        if let Some(Tir2Ty::EnumVariant(qtn, variant)) =
+        if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
             self.expr_types.get(&expr_id).cloned().as_ref()
         {
             let enum_ref = ItemRef::EnumType {
@@ -1735,11 +1820,11 @@ impl LoweringContext<'_> {
         // concrete type, this is a real field access whose field type happens to be
         // Unknown (unresolved type annotation). In that case, fall through to emit
         // the field projection.
-        if let Some(Tir2Ty::Unknown) = self.expr_types.get(&expr_id) {
+        if let Some(Tir2Ty::Unknown { .. }) = self.expr_types.get(&expr_id) {
             let base_is_also_unknown = self
                 .expr_types
                 .get(&base)
-                .map(|ty| matches!(ty, Tir2Ty::Unknown))
+                .map(|ty| matches!(ty, Tir2Ty::Unknown { .. }))
                 .unwrap_or(true);
             if base_is_also_unknown {
                 self.builder
@@ -1776,12 +1861,16 @@ impl LoweringContext<'_> {
             );
         } else {
             if let Ty::Class(ref tn, _) = base_ty {
-                panic!(
-                    "internal compiler error: MIR failed to resolve field access \
-                     .{} against class definition '{}' (module_path: {:?}). \
-                     This class should be in class_fields but isn't.",
-                    field_str, tn.name, tn.module_path,
+                self.emit_panic_call(
+                    &format!(
+                        "internal compiler error: MIR failed to resolve field access \
+                         .{} against class definition '{}' (module_path: {:?}). \
+                         This class should be in class_fields but isn't.",
+                        field_str, tn.name, tn.module_path,
+                    ),
+                    expr_id,
                 );
+                return;
             }
             // Dynamic map access — only valid for map types, unknown, etc.
             let key_local = self.builder.temp(Ty::String {
@@ -2276,12 +2365,20 @@ impl LoweringContext<'_> {
                             };
                         }
                     }
-                    panic!(
-                        "internal compiler error: MIR failed to resolve field access \
-                         .{} against class definition '{}' (module_path: {:?}). \
-                         This class should be in class_fields but isn't.",
-                        field_name, tn.name, tn.module_path,
+                    self.emit_panic_call(
+                        &format!(
+                            "internal compiler error: MIR failed to resolve field access \
+                             .{} against class definition '{}' (module_path: {:?}). \
+                             This class should be in class_fields but isn't.",
+                            field_name, tn.name, tn.module_path,
+                        ),
+                        base_id,
                     );
+                    // Dead code after panic — return a dummy place
+                    let dead = self.builder.temp(Ty::Null {
+                        attr: TyAttr::default(),
+                    });
+                    return Place::Local(dead);
                 }
                 // Dynamic map access — only valid for map types, unknown, etc.
                 let key_local = self.builder.temp(Ty::String {
@@ -2711,7 +2808,7 @@ impl LoweringContext<'_> {
                 // Resolve the enum's package from TIR type info when available,
                 // otherwise fall back to the current file's package.
                 let enum_ref =
-                    if let Some(Tir2Ty::EnumVariant(qtn, _)) = self.pat_types.get(&pat_id) {
+                    if let Some(Tir2Ty::EnumVariant(qtn, _, _)) = self.pat_types.get(&pat_id) {
                         ItemRef::EnumType {
                             package: qtn.package().clone(),
                             namespace: qtn.namespace().clone(),

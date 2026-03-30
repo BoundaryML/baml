@@ -1,0 +1,48 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Response"
+    L_BRACE "{"
+    FIELD
+      WORD "text"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "UseConfig"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "cfg"
+        COLON ":"
+        TYPE_EXPR "root.Config"
+          WORD "root"
+          DOT "."
+          WORD "Config"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "Response"
+      WORD "Response"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OBJECT_LITERAL
+          WORD "Response"
+          L_BRACE "{"
+          OBJECT_FIELD
+            WORD "text"
+            COLON ":"
+            PATH_EXPR "cfg.key"
+              WORD "cfg"
+              DOT "."
+              WORD "key"
+          R_BRACE "}"
+        R_BRACE "}"
+
+=== ERRORS ===
+None

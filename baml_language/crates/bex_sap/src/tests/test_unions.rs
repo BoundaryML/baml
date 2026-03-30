@@ -238,7 +238,7 @@ test_deserializer!(
 test_deserializer!(
     test_union_multi_parse_as,
     r#"42"#,
-    baml_tyannotated!((string | int | null) @parse_as((string | int))),
+    baml_tyannotated!((string | int | null) @parse_without_null),
     baml_db! {},
     42
 );
@@ -247,7 +247,7 @@ test_deserializer!(
 test_deserializer!(
     test_union_multi_parse_as_string,
     r#""hello""#,
-    baml_tyannotated!((string | int | null) @parse_as((string | int))),
+    baml_tyannotated!((string | int | null) @parse_without_null),
     baml_db! {},
     "hello"
 );
@@ -256,6 +256,6 @@ test_deserializer!(
 test_failing_deserializer!(
     test_union_multi_parse_as_rejects_null,
     r#"null"#,
-    baml_tyannotated!((string | int | null) @parse_as((string | int))),
+    baml_tyannotated!((string | int | null) @parse_without_null),
     baml_db! {}
 );

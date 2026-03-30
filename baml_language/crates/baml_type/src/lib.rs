@@ -15,6 +15,7 @@ pub use baml_base::{Literal, MediaKind, Name, Span};
 
 mod attr;
 mod defs;
+pub mod simplify_sap;
 pub mod typetag;
 pub use attr::*;
 pub use defs::*;

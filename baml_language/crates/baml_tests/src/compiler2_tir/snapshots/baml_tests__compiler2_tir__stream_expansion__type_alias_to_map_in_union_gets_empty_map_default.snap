@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/compiler2_tir/stream_expansion.rs
+expression: "render_tir(&db, file)"
+---
+type user.Config = map<string, string>
+class user.WithMapAlias {
+  settings: user.Config | int
+}
+type user.Config$stream = map<string, string>
+class user.WithMapAlias$stream {
+  settings: user.Config$stream | int
+}

@@ -148,30 +148,60 @@ function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<s
     baml.env.get_or_panic("DATABASE_URL") : string
     user.name : string
   }
-  !! 1809..1862: unresolved member: string.len
-  !! 1865..1879: unresolved member: user.ChainItem[].len
-  !! 1882..1949: unresolved member: user.ChainItem[].get
-  !! 1953..2143: unresolved member: user.ChainItem[].get
-  !! 2309..2508: unresolved member: user.ChainItem[].get
-  !! 3397..3449: unresolved member: string.len
-  !! 3464..3580: unresolved member: string.len
-  !! 3649..3769: unresolved member: string.len
-  !! 3820..3898: unresolved member: user.ChainItem[].get
-  !! 3899..3921: unresolved member: user.ChainItem[].len
-  !! 3929..3952: unresolved member: user.ChainItem[].len
-  !! 3960..3983: unresolved member: user.ChainItem[].len
+  !! 1859..1862: unresolved member: string.len
+  !! 1876..1879: unresolved member: user.ChainItem[].len
+  !! 1946..1949: unresolved member: user.ChainItem[].get
+  !! 2140..2143: unresolved member: user.ChainItem[].get
+  !! 2505..2508: unresolved member: user.ChainItem[].get
+  !! 3446..3449: unresolved member: string.len
+  !! 3577..3580: unresolved member: string.len
+  !! 3766..3769: unresolved member: string.len
+  !! 3895..3898: unresolved member: user.ChainItem[].get
+  !! 3918..3921: unresolved member: user.ChainItem[].len
+  !! 3949..3952: unresolved member: user.ChainItem[].len
+  !! 3980..3983: unresolved member: user.ChainItem[].len
   !! 3997..4155: expected 2 argument(s), got 3
-  !! 4085..4108: unresolved member: user.ChainItem[].len
-  !! 4156..4569: unresolved member: string.len
-  !! 4846..5308: unresolved member: string.len
-  !! 5624..5900: unresolved member: user.ChainItem[].get
-  !! 5921..5981: unresolved member: user.ChainItem[].len
-  !! 5989..6012: unresolved member: user.ChainItem[].len
-  !! 6234..6249: unresolved member: int[][].len
-  !! 6257..6275: unresolved member: int[].len
-  !! 6364..6382: unresolved member: user.ChainItem[].get
-  !! 6392..6467: unresolved member: string.len
-  !! 6493..6516: unresolved member: string.len
+  !! 4105..4108: unresolved member: user.ChainItem[].len
+  !! 4566..4569: unresolved member: string.len
+  !! 5305..5308: unresolved member: string.len
+  !! 5897..5900: unresolved member: user.ChainItem[].get
+  !! 5978..5981: unresolved member: user.ChainItem[].len
+  !! 6009..6012: unresolved member: user.ChainItem[].len
+  !! 6246..6249: unresolved member: int[][].len
+  !! 6272..6275: unresolved member: int[].len
+  !! 6379..6382: unresolved member: user.ChainItem[].get
+  !! 6464..6467: unresolved member: string.len
+  !! 6513..6516: unresolved member: string.len
+}
+class user.ChainUser$stream {
+  name: null | string
+  profile: null | user.ChainProfile$stream
+  tags: string[]
+  scores: int[][]
+}
+class user.ChainProfile$stream {
+  bio: null | string
+  settings: null | user.ChainSettings$stream
+  items: user.ChainItem$stream[]
+}
+class user.ChainSettings$stream {
+  theme: null | string
+  notifications: null | bool
+  preferences: null | user.ChainPreferences$stream
+}
+class user.ChainPreferences$stream {
+  color: null | string
+  font: null | string
+  size: null | int
+}
+class user.ChainItem$stream {
+  label: null | string
+  value: null | int
+  metadata: null | user.ChainMetadata$stream
+}
+class user.ChainMetadata$stream {
+  created_at: null | string
+  tags: string[]
 }
 class user.EmptyClass {
 }
@@ -188,16 +218,16 @@ class user.ColonFields {
   age: int
 }
 class user.SingleAttrField {
-  name: string
+  name: string @description("The user's name")
 }
 class user.MultiAttrField {
-  name: string
-  summary: string?
+  name: string @description("The user's name") @alias("user_name")
+  summary: string? @description("A summary") @alias("sum") @stream.done @stream.not_null
 }
 class user.LongAttrField {
-  name: string
-  data: map<string, int | string | bool>
-  config: map<string, map<string, int | string | bool | null>>
+  name: string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
+  data: map<string, int | string | bool> @description("complex data") @alias("payload") @stream.done
+  config: map<string, map<string, int | string | bool | null>> @description("deeply nested config structure for testing wrapping")
 }
 class user.LongFieldTypes {
   very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
@@ -233,22 +263,22 @@ class user.TriviaClassBlock {
   name: string
 }
 class user.TriviaFieldAttrs {
-  name: string
+  name: string @description("the name")
 }
 class user.TriviaFieldAttrsBlock {
-  name: string
+  name: string @description("the name")
 }
 class user.TriviaLongFieldType {
-  data: map<string, int | string | bool | float | null>
+  data: map<string, int | string | bool | float | null> @description("a long description")
 }
 class user.TriviaLongFieldTypeBlock {
-  data: map<string, int | string | bool | float | null>
+  data: map<string, int | string | bool | float | null> @description("a long description")
 }
 class user.TriviaMultiAttr {
-  name: string
+  name: string @description("name") @alias("user_name") @stream.done
 }
 class user.TriviaMultiAttrBlock {
-  name: string
+  name: string @description("name") @alias("user_name") @stream.done
 }
 class user.A {
   x: int
@@ -257,15 +287,15 @@ class user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredChara
   x: int
 }
 class user.AttributeVariety {
-  a: string
-  b: string
-  c: string
+  a: string @skip
+  b: string @alias("alt_name")
+  c: string @description("desc")
   d: string
   e: string
   f: string
 }
 class user.ExtraWhitespace {
-  name: string
+  name: string @description("name") @alias("n")
   age: int
 }
 class user.ManyFields {
@@ -319,6 +349,144 @@ class user.DeepLevel2 {
 }
 class user.DeepLevel3 {
   data: string
+  nested: map<string, map<string, int>>
+}
+class user.EmptyClass$stream {
+}
+class user.SingleField$stream {
+  name: null | string
+}
+class user.MultiField$stream {
+  name: null | string
+  age: null | int
+  active: null | bool
+}
+class user.ColonFields$stream {
+  name: null | string
+  age: null | int
+}
+class user.SingleAttrField$stream {
+  name: null | string @description("The user's name")
+}
+class user.MultiAttrField$stream {
+  name: null | string @description("The user's name") @alias("user_name")
+  summary: null | string @description("A summary") @alias("sum")
+}
+class user.LongAttrField$stream {
+  name: null | string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
+  data: map<string, int | string | bool> @description("complex data") @alias("payload")
+  config: map<string, map<string, int | string | bool | null>> @description("deeply nested config structure for testing wrapping")
+}
+class user.LongFieldTypes$stream {
+  very_long_field_name_that_takes_up_space: int | string | bool | float | null | int[] | string[]
+  another_long_field: map<string, map<string, map<string, int | string | bool | float | null>>>
+  callback_field: unknown
+  deeply_nested: null | (int | string | bool | float | null)[]
+}
+class user.TypeVariety$stream {
+  simple: null | string
+  optional: null | string
+  array: int[]
+  nested_array: int[][]
+  union_type: null | int | string
+  optional_union: null | int | string
+  union_array: (int | string)[]
+  generic: map<string, int>
+  complex_generic: map<string, int | string | bool>
+  deep_generic: map<string, map<string, int[]>>
+  fn_type: unknown
+  paren_union_array: (int | string | bool)[]
+  triple_nested: map<string, map<string, map<string, int>>>
+}
+class user.DynamicClass$stream {
+  name: null | string
+}
+class user.MultiBlockAttr$stream {
+  name: null | string
+}
+class user.TriviaClass$stream {
+  name: null | string
+}
+class user.TriviaClassBlock$stream {
+  name: null | string
+}
+class user.TriviaFieldAttrs$stream {
+  name: null | string @description("the name")
+}
+class user.TriviaFieldAttrsBlock$stream {
+  name: null | string @description("the name")
+}
+class user.TriviaLongFieldType$stream {
+  data: map<string, int | string | bool | float | null> @description("a long description")
+}
+class user.TriviaLongFieldTypeBlock$stream {
+  data: map<string, int | string | bool | float | null> @description("a long description")
+}
+class user.TriviaMultiAttr$stream {
+  name: null | string @description("name") @alias("user_name")
+}
+class user.TriviaMultiAttrBlock$stream {
+  name: null | string @description("name") @alias("user_name")
+}
+class user.A$stream {
+  x: null | int
+}
+class user.ThisIsAnExtremelyLongClassNameThatDefinitelyExceedsTheOneHundredCharacterLineLimitAllByItself$stream {
+  x: null | int
+}
+class user.AttributeVariety$stream {
+  a: null | string @skip
+  b: null | string @alias("alt_name")
+  c: null | string @description("desc")
+  d: null | string
+  e: null | string
+  f: null | string
+}
+class user.ExtraWhitespace$stream {
+  name: null | string @description("name") @alias("n")
+  age: null | int
+}
+class user.ManyFields$stream {
+  field1: null | int
+  field2: null | int
+  field3: null | int
+  field4: null | int
+  field5: null | int
+  field6: null | int
+  field7: null | int
+  field8: null | int
+  field9: null | int
+  field10: null | int
+}
+class user.Outer$stream {
+  inner: null | user.InnerNested$stream
+  list: user.InnerNested$stream[]
+  optional: null | user.InnerNested$stream
+  mapping: map<string, user.InnerNested$stream>
+}
+class user.InnerNested$stream {
+  value: null | int
+}
+class user.WithMethod$stream {
+  name: null | string
+}
+class user.WithLongMethod$stream {
+  name: null | string
+}
+class user.DeepOuter$stream {
+  level1: null | user.DeepLevel1$stream
+}
+class user.DeepLevel1$stream {
+  level2: null | user.DeepLevel2$stream
+  items: user.DeepLevel2$stream[]
+  mapping: map<string, user.DeepLevel2$stream>
+}
+class user.DeepLevel2$stream {
+  level3: null | user.DeepLevel3$stream
+  value: int | string | bool | float | null
+}
+class user.DeepLevel3$stream {
+  data: null | string
   nested: map<string, map<string, int>>
 }
 function user.BasicClient$new() -> ? throws never {
@@ -398,6 +566,9 @@ function user.TestTarget$render_prompt() -> baml.llm.PromptAst throws never {
 }
 function user.TestTarget$build_request() -> baml.http.Request throws never {
   baml.llm.build_request(BasicClient, "TestTarget", map {  }) : baml.http.Request
+}
+function user.TestTarget$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("TestTarget", json) : string
 }
 function user.C$new() -> ? throws never {
   baml.llm.PrimitiveClient { name: "C", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: "gpt-4", base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } } : unknown
@@ -617,7 +788,7 @@ function user.DeeplyNestedBody(a: int, b: int, c: int) -> int throws never {
   }
 }
 function user.ManyNestedExprs(items: int[]) -> int throws never {
-  { : unknown
+  { : int
     let a = items[0] : int
     let b = items[1] : int
     let c = : int
@@ -629,20 +800,19 @@ function user.ManyNestedExprs(items: int[]) -> int throws never {
         { : int
           b : int
         }
-    let d = : 1 | int
+    let d = : 1 | int -> int
       match (c : int) : 1 | int
         0 =>
           1 : 1
         _ =>
           c Mul 2 : int
-    let e = : unknown
-      { : unknown
-        let inner = d Add a : unknown
-        inner Mul inner : unknown
+    let e = : int
+      { : int
+        let inner = d Add a : int
+        inner Mul inner : int
       }
-    e Add d Add c Add b Add a : unknown
+    e Add d Add c Add b Add a : int
   }
-  !! 10192..10197: operator `Add` cannot be applied to `1 | int` and `int`
 }
 function user.NestedLoops(matrix: int[][]) -> int throws never {
   { : never
@@ -701,7 +871,7 @@ function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int throws nev
 }
 function user.LlmBasic(name: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmBasic", map { "name": name }) : string
-  !! 11234..11368: unresolved name: GPT4
+  !! 11311..11368: unresolved name: GPT4
 }
 function user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "LlmBasic", map { "name": name }) : baml.llm.PromptAst
@@ -711,9 +881,12 @@ function user.LlmBasic$build_request(name: string) -> baml.http.Request throws n
   baml.llm.build_request(GPT4, "LlmBasic", map { "name": name }) : baml.http.Request
   !! 11234..11368: unresolved name: GPT4
 }
+function user.LlmBasic$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("LlmBasic", json) : string
+}
 function user.LlmMultiLine(text: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmMultiLine", map { "text": text }) : string
-  !! 11368..11593: unresolved name: GPT4
+  !! 11471..11593: unresolved name: GPT4
 }
 function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "LlmMultiLine", map { "text": text }) : baml.llm.PromptAst
@@ -722,6 +895,9 @@ function user.LlmMultiLine$render_prompt(text: string) -> baml.llm.PromptAst thr
 function user.LlmMultiLine$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "LlmMultiLine", map { "text": text }) : baml.http.Request
   !! 11368..11593: unresolved name: GPT4
+}
+function user.LlmMultiLine$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("LlmMultiLine", json) : string
 }
 function user.LlmStringClient(text: string) -> string throws never {
   baml.llm.call_llm_function<T>(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "LlmStringClient", map { "text": text }) : string
@@ -732,9 +908,12 @@ function user.LlmStringClient$render_prompt(text: string) -> baml.llm.PromptAst 
 function user.LlmStringClient$build_request(text: string) -> baml.http.Request throws never {
   baml.llm.build_request(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "LlmStringClient", map { "text": text }) : baml.http.Request
 }
+function user.LlmStringClient$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("LlmStringClient", json) : string
+}
 function user.LlmReversedOrder(text: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmReversedOrder", map { "text": text }) : string
-  !! 11758..11928: unresolved name: GPT4
+  !! 11871..11928: unresolved name: GPT4
 }
 function user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "LlmReversedOrder", map { "text": text }) : baml.llm.PromptAst
@@ -744,17 +923,23 @@ function user.LlmReversedOrder$build_request(text: string) -> baml.http.Request 
   baml.llm.build_request(GPT4, "LlmReversedOrder", map { "text": text }) : baml.http.Request
   !! 11758..11928: unresolved name: GPT4
 }
+function user.LlmReversedOrder$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("LlmReversedOrder", json) : string
+}
 function user.LlmWithLongSignature(first_context: string, second_context: string, third_context: string, user_query: string) -> string throws never {
   baml.llm.call_llm_function<T>(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : string
   !! 12113..12264: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst throws never {
   baml.llm.render_prompt(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.llm.PromptAst
-  !! 12113..12264: unresolved name: GPT4
+  !! 11928..12264: unresolved name: GPT4
 }
 function user.LlmWithLongSignature$build_request(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.http.Request throws never {
   baml.llm.build_request(GPT4, "LlmWithLongSignature", map { "first_context": first_context, "second_context": second_context, "third_context": third_context, "user_query": user_query }) : baml.http.Request
-  !! 12113..12264: unresolved name: GPT4
+  !! 11928..12264: unresolved name: GPT4
+}
+function user.LlmWithLongSignature$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("LlmWithLongSignature", json) : string
 }
 function user.ExtraWhitespace(a: int, b: int) -> int throws never {
   { : int
@@ -851,13 +1036,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
       }
     for x in [1, 2, 3, 4, 5]
       { : void
-        result Add= x : unknown
+        result Add= x : int
       }
     for i in [1, 2, 3]
       { : void
         for j in [4, 5, 6]
           { : void
-            result Add= i Mul j : unknown
+            result Add= i Mul j : int
           }
       }
     { : void
@@ -948,7 +1133,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           { : void
             for k in [7, 8, 9]
               { : void
-                result Add= i Mul j Mul k : unknown
+                result Add= i Mul j Mul k : int
               }
           }
       }
@@ -977,7 +1162,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
         for j in [10, 20, 30, 40, 50]
           { : void
             let val = : int
-              match (i Mul j : unknown) : int
+              match (i Mul j : int) : int
                 0 =>
                   { : never
                     break
@@ -1005,7 +1190,7 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
                   let lvl4 = 0 : 0 -> int
                   while lvl4 Lt 2
                     { : void
-                      result Add= lvl1 Add lvl2 Add lvl3 Add lvl4 : unknown
+                      result Add= lvl1 Add lvl2 Add lvl3 Add lvl4 : int
                       lvl4 Add= 1 : int
                     }
                 }
@@ -1027,22 +1212,22 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
       { : void
         for j in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
           { : void
-            let computation = : unknown | 0
-              if (i Mul j Gt 500 And i Add j Lt 100 : bool) : unknown | 0
-                { : unknown
-                  match (i Mod 3 : unknown) : unknown
+            let computation = : int | 0 -> int
+              if (i Mul j Gt 500 And i Add j Lt 100 : bool) : int | 0
+                { : int
+                  match (i Mod 3 : int) : int
                     0 =>
-                      i Mul j Add result : unknown
+                      i Mul j Add result : int
                     1 =>
-                      i Mul j Sub result : unknown
+                      i Mul j Sub result : int
                     _ =>
-                      i Mul j : unknown
+                      i Mul j : int
                 }
               else
                 { : 0
                   0 : 0
                 }
-            result Add= computation : unknown
+            result Add= computation : int
           }
       }
     while a Lt 10
@@ -1074,20 +1259,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
     let another_extremely_long_variable_name = a Mul a Add result Mul result Add a Mul result Add a Add result Add a Mul a Mul a Add result Mul result Mul result Add a Mul result Mul a Add result Mul a Mul result : int
     return result : int
   }
-  !! 2013..2019: operator `Add` cannot be applied to `int` and `1 | 2 | 3 | 4 | 5`
-  !! 2158..2163: operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
-  !! 11405..11410: operator `Mul` cannot be applied to `1 | 2 | 3` and `4 | 5 | 6`
-  !! 12049..12054: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5` and `10 | 20 | 30 | 40 | 50`
   !! 12080..12107: unreachable code: 1 statement(s) after diverging statement
   !! 12187..12217: unreachable code: 1 statement(s) after diverging statement
-  !! 12644..12655: operator `Add` cannot be applied to `int` and `1 | 2`
-  !! 13267..13272: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-  !! 13282..13287: operator `Add` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-  !! 13320..13325: operator `Mod` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `3`
-  !! 13354..13359: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-  !! 13395..13400: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-  !! 13436..13441: operator `Mul` cannot be applied to `1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10` and `10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100`
-  !! 13526..13532: operator `Add` cannot be applied to `int` and `unknown | 0`
 }
 function user.AssertStmts(x: int, y: int) -> int throws never {
   { : int
@@ -1255,10 +1428,10 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
     match (s : user.MatchStatus) : "this arm has many long enum variant names that together push past the limit easily"
       MatchStatus.Active | MatchStatus.Inactive | MatchStatus.Pending =>
         "this arm has many..." : "this arm has many long enum variant names that together push past the limit easily"
-    match (x : int) : "this is the true branch with a very long string" | "this is the false branch also very long" | "short"
+    match (x : int) : string | "short"
       0 =>
-        { : "this is the true branch with a very long string" | "this is the false branch also very long"
-          let result = : "this is the true branch with a very long string" | "this is the false branch also very long"
+        { : string
+          let result = : "this is the true branch with a very long string" | "this is the false branch also very long" -> string
             if (b : bool) : "this is the true branch with a very long string" | "this is the false branch also very long"
               { : "this is the true branch with a very long string"
                 "this is the true ..." : "this is the true branch with a very long string"
@@ -1267,7 +1440,7 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
               { : "this is the false branch also very long"
                 "this is the false..." : "this is the false branch also very long"
               }
-          result : "this is the true branch with a very long string" | "this is the false branch also very long"
+          result : string
         }
       _ =>
         "short" : "short"
@@ -1367,6 +1540,13 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
   !! 8388..8393: operator `Mul` cannot be applied to `int` and `bool`
   !! 8400..8405: operator `Mul` cannot be applied to `bool` and `int`
 }
+class user.MatchSuccess$stream {
+  data: null | string
+}
+class user.MatchFailure$stream {
+  reason: null | string
+}
+type user.MatchResult$stream = user.MatchSuccess$stream | user.MatchFailure$stream
 class user.OtherPoint {
   x: int
   y: int
@@ -1491,6 +1671,19 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
     a Add b : int
   }
 }
+class user.OtherPoint$stream {
+  x: null | int
+  y: null | int
+}
+class user.OtherVec$stream {
+  p: null | user.OtherPoint$stream
+  q: null | user.OtherPoint$stream
+}
+class user.OtherTriple$stream {
+  a: null | user.OtherVec$stream
+  b: null | user.OtherVec$stream
+  c: null | user.OtherVec$stream
+}
 type user.SimpleAlias = int
 type user.AliasChain = user.SimpleAlias
 type user.Name = string
@@ -1559,3 +1752,71 @@ type user.TriviaArray = int[]
 type user.TriviaParen = (int | string)[]
 type user.T = int
 type user.ExtraWhitespace = int | string | bool | float | null
+type user.SimpleAlias$stream = int
+type user.AliasChain$stream = user.SimpleAlias$stream
+type user.Name$stream = string
+type user.Role$stream = "user" | "assistant" | "system"
+type user.HttpOk$stream = 200
+type user.AlwaysTrue$stream = true
+type user.SuccessCode$stream = 200 | 201 | 204
+type user.MixedLiterals$stream = 200 | "success" | true
+type user.MaybeInt$stream = null | int
+type user.IntList$stream = int[]
+type user.Matrix$stream = int[][]
+type user.StringMap$stream = map<string, int>
+type user.ComplexMap$stream = map<string, int | string | bool>
+type user.NestedMap$stream = map<string, map<string, int[]>>
+type user.ParenUnion$stream = (int | string)[]
+type user.OptionalUnion$stream = null | int | string
+type user.Json$stream = int | float | string | bool | null | user.Json$stream[] | map<string, user.Json$stream>
+type user.IntToInt$stream = unknown
+type user.BinaryOp$stream = unknown
+type user.UnnamedParams$stream = unknown
+type user.Producer$stream = unknown
+type user.Curried$stream = unknown
+type user.ComplexFn$stream = unknown
+type user.UnionParamFn$stream = unknown
+type user.FnFactory$stream = unknown
+type user.LongUnion$stream = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india" | "juliet" | "kilo" | "lima"
+type user.WideUnion$stream = int | string | bool | float | null | int[] | string[] | bool[] | map<string, int> | map<string, string>
+type user.ThisIsAnExtremelyLongTypeAliasNameThatDefinitelyExceedsLimit$stream = int | string | bool | float | null
+type user.VeryLongNamePlusLongUnion$stream = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel" | "india"
+type user.DeepGeneric$stream = map<string, map<string, map<string, map<string, int | string | bool | float | null>>>>
+type user.DeepFnType$stream = unknown
+type user.LongParamFn$stream = unknown
+type user.NestedParenUnion$stream = (int | string | bool | float)[]
+type user.DeepParenUnion$stream = null | (int | string | bool | float | null | int[])[]
+type user.Tree$stream = string | map<string, user.Tree$stream> | user.Tree$stream[] | map<string, map<string, user.Tree$stream | string | int | null>>
+type user.OptionalArray$stream = (null | int)[]
+type user.ArrayOptional$stream = null | int[]
+type user.DoubleOptional$stream = null | null | int
+type user.DoubleArray$stream = int[][]
+type user.ComplexPostfix$stream = (null | int | string)[][]
+type user.DeepPostfix$stream = null | (null | int | string | bool | float)[][]
+type user.Constrained$stream = int
+type user.ConstrainedLong$stream = map<string, int | string | bool>
+class user.TypeAliasSuccess$stream {
+  data: null | string
+}
+class user.TypeAliasFailure$stream {
+  reason: null | string
+}
+type user.Result$stream = user.TypeAliasSuccess$stream | user.TypeAliasFailure$stream
+type user.MaybeResult$stream = null | user.Result$stream
+type user.TriviaAlias$stream = int
+type user.TriviaAliasBlock$stream = int
+type user.TriviaUnion$stream = int | string | bool
+type user.TriviaUnionBlock$stream = int | string | bool
+type user.TriviaLongUnion$stream = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
+type user.TriviaLongUnionBlock$stream = "alpha" | "bravo" | "charlie" | "delta" | "echo" | "foxtrot" | "golf" | "hotel"
+type user.TriviaGeneric$stream = map<string, int>
+type user.TriviaGenericBlock$stream = map<string, int>
+type user.TriviaDeepGeneric$stream = map<string, map<string, map<string, int | string>>>
+type user.TriviaFnType$stream = unknown
+type user.TriviaFnTypeBlock$stream = unknown
+type user.TriviaLongFnType$stream = unknown
+type user.TriviaOptional$stream = null | int
+type user.TriviaArray$stream = int[]
+type user.TriviaParen$stream = (int | string)[]
+type user.T$stream = int
+type user.ExtraWhitespace$stream = int | string | bool | float | null

@@ -40,6 +40,24 @@ fn user.GetUser$build_request() -> baml.http.Request {
     }
 }
 
+fn user.GetUser$parse(json: string) -> MyClass {
+    // Locals:
+    let _0: MyClass // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "GetUser", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.GetUser$render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return

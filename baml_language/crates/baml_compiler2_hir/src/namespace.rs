@@ -209,16 +209,23 @@ pub fn namespace_items<'db>(
     for (name, contribs) in value_defs {
         values.insert(name.clone(), contribs[0].definition);
         if contribs.len() > 1 {
-            conflicts.push(NameConflict {
-                name,
-                entries: contribs
-                    .into_iter()
-                    .map(|c| ConflictEntry {
-                        definition: c.definition,
-                        name_span: c.name_span,
-                    })
-                    .collect(),
-            });
+            // Tests are function-scoped (identity is functionName/testName),
+            // so same-named tests for different functions are not conflicts.
+            let all_tests = contribs
+                .iter()
+                .all(|c| matches!(c.definition, Definition::Test(_)));
+            if !all_tests {
+                conflicts.push(NameConflict {
+                    name,
+                    entries: contribs
+                        .into_iter()
+                        .map(|c| ConflictEntry {
+                            definition: c.definition,
+                            name_span: c.name_span,
+                        })
+                        .collect(),
+                });
+            }
         }
     }
 

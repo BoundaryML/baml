@@ -208,6 +208,7 @@ async fn handle_ws_in_message(
                     let err_msg = WsOutMessage::CallFunctionError {
                         id,
                         error: format!("Invalid base64: {e}"),
+                        cancelled: None,
                     };
                     if let Some(ws_msg) = to_ws_text(&err_msg) {
                         let _ = sink.send(ws_msg).await;
@@ -223,6 +224,7 @@ async fn handle_ws_in_message(
                     let err_msg = WsOutMessage::CallFunctionError {
                         id,
                         error: format!("Failed to decode arguments: {e}"),
+                        cancelled: None,
                     };
                     if let Some(ws_msg) = to_ws_text(&err_msg) {
                         let _ = sink.send(ws_msg).await;
@@ -240,6 +242,7 @@ async fn handle_ws_in_message(
                     let err_msg = WsOutMessage::CallFunctionError {
                         id,
                         error: format!("Failed to convert arguments: {e}"),
+                        cancelled: None,
                     };
                     if let Some(ws_msg) = to_ws_text(&err_msg) {
                         let _ = sink.send(ws_msg).await;
@@ -258,6 +261,7 @@ async fn handle_ws_in_message(
                 WsOutMessage::CallFunctionError {
                     id,
                     error: format!("Failed to get Bex for project: {e}"),
+                    cancelled: None,
                 }
             }) {
                 Ok(bex) => bex,
@@ -285,16 +289,38 @@ async fn handle_ws_in_message(
                             Err(e) => WsOutMessage::CallFunctionError {
                                 id,
                                 error: format!("Failed to encode result: {e}"),
+                                cancelled: None,
                             },
                         }
                     }
-                    Err(e) => WsOutMessage::CallFunctionError {
-                        id,
-                        error: format!("{e}"),
-                    },
+                    Err(e) => {
+                        let is_cancelled = matches!(
+                            &e,
+                            bex_project::RuntimeError::Engine(bex_project::EngineError::Cancelled)
+                        );
+                        WsOutMessage::CallFunctionError {
+                            id,
+                            error: format!("{e}"),
+                            cancelled: if is_cancelled { Some(true) } else { None },
+                        }
+                    }
                 };
                 let _ = broadcast_tx.send(out);
             });
+        }
+
+        WsInMessage::CancelCall { id, project } => {
+            let fs_path = bex_project::FsPath::from_str(project);
+            match state.bex.get_bex_for_project(&fs_path) {
+                Ok(bex) => {
+                    if let Err(e) = bex.cancel_function_call(sys_types::CallId(id)) {
+                        tracing::warn!("cancel_function_call failed: {e}");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("CancelCall: no bex for project: {e}");
+                }
+            }
         }
 
         WsInMessage::EnvVarResponse { id, value, .. } => {
@@ -303,6 +329,37 @@ async fn handle_ws_in_message(
 
         WsInMessage::RequestState => {
             state.bex.request_playground_state();
+        }
+
+        WsInMessage::RequestControlFlowGraph {
+            project: _,
+            function_name,
+        } => {
+            let graph = state.bex.ast_control_flow_graph(&function_name);
+            let graph = graph.map(|g| {
+                baml_compiler2_visualization::control_flow::prepare_control_flow_graph_for_visualization(&g)
+            });
+            let graph_json = graph.as_ref().and_then(|g| serde_json::to_value(g).ok());
+            let msg = WsOutMessage::ControlFlowGraphResult {
+                function_name,
+                graph: graph_json,
+            };
+            if let Some(ws_msg) = to_ws_text(&msg)
+                && sink.send(ws_msg).await.is_err()
+            {
+                tracing::warn!("Failed to send control flow graph result");
+            }
+        }
+
+        WsInMessage::CursorPosition { file, line, column } => {
+            let ctx = state.bex.playground_cursor_context(&file, line, column);
+            let ctx_json = serde_json::to_value(&ctx).unwrap_or(serde_json::Value::Null);
+            let msg = WsOutMessage::CursorContext { context: ctx_json };
+            if let Some(ws_msg) = to_ws_text(&msg)
+                && sink.send(ws_msg).await.is_err()
+            {
+                tracing::warn!("Failed to send cursor context");
+            }
         }
     }
 }

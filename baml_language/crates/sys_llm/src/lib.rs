@@ -18,6 +18,7 @@ pub(crate) mod types;
 
 use std::str::FromStr;
 
+use ::core::ops::Deref;
 use bex_external_types::BexExternalValue;
 // Used by bex_engine tests
 pub use jinja::{
@@ -97,6 +98,7 @@ pub fn execute_parse_response_from_owned(
     client: &baml_std::PrimitiveClient,
     response: &str,
     return_type: &baml_type::Ty,
+    ctx: &::sys_types::SysOpContext,
 ) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
     let response = parse_response::parse_response(
         LlmProvider::from_str(&client.provider)
@@ -112,18 +114,64 @@ pub fn execute_parse_response_from_owned(
         )));
     }
 
-    match return_type {
-        baml_type::Ty::String { .. } => Ok(bex_external_types::BexExternalValue::String(
-            response.content,
-        )),
-        _ => Err(LlmOpError::NotImplemented {
-            message: format!("Unsupported return type: {return_type:?}"),
-        }),
-    }
+    let is_done = response.finish_reason_raw.is_some();
+    execute_sap_parse(&response.content, return_type, ctx, is_done)
+}
+
+pub fn execute_sap_parse(
+    json: &str,
+    ty: &baml_type::Ty,
+    ctx: &::sys_types::SysOpContext,
+    is_done: bool,
+) -> Result<bex_external_types::BexExternalValue, LlmOpError> {
+    // === Jsonish ===
+    let jsonish_options = ::bex_sap::jsonish::ParseOptions::default();
+    let jsonish = ::bex_sap::jsonish::parse(json, jsonish_options, is_done)
+        .map_err(LlmOpError::JsonishError)?;
+
+    // === SAP type conversion ===
+    // TODO: a lot of caching
+    let type_alias_definitions = ctx
+        .type_alias_definitions
+        .deref()
+        .clone()
+        .into_iter()
+        .collect();
+    let type_ctx = ::bex_sap::sap_model::TypeCtx::new(
+        &ctx.class_definitions,
+        ctx.enum_definitions.clone(),
+        &type_alias_definitions,
+    );
+    let db = type_ctx
+        .build_db()
+        .map_err(|e| LlmOpError::Other(format!("Failed to build type database: {e}")))?;
+    let target = type_ctx
+        .convert_ty(ty)
+        .map_err(|e| LlmOpError::Other(format!("Failed to convert target type: {e}")))?;
+
+    // === SAP parsing ===
+    let parse_ctx = ::bex_sap::deserializer::coercer::ParsingContext::new(&db);
+    let target = db
+        .resolve_with_meta(target.as_ref())
+        .map_err(|n| parse_ctx.error_type_resolution(n))
+        .map_err(LlmOpError::SapError)?;
+    let parsed = ::bex_sap::sap_model::TyResolvedRef::coerce(&parse_ctx, target, &jsonish)
+        .map_err(LlmOpError::SapError)?;
+    let Some(parsed) = parsed else {
+        // TODO: streaming currently does not exist
+        return Err(LlmOpError::Other("NO YIELD".to_string()));
+    };
+
+    // === Convert back to baml ===
+    let converted = ::bex_sap::to_external::baml_value_to_external(&parsed);
+    Ok(converted)
 }
 
 #[cfg(test)]
 mod tests {
+    use ::baml_base::TyAttr;
+    use ::sys_types::SysOpContext;
+
     use super::execute_parse_response_from_owned;
     use crate::baml_std;
 
@@ -161,13 +209,16 @@ mod tests {
             ..Default::default()
         });
 
+        let ctx = SysOpContext::empty();
+
         // "stop" is allowed.
         let allowed = execute_parse_response_from_owned(
             &allow_client,
             response_stop,
-            &baml_type::Ty::String {
-                attr: baml_type::TyAttr::default(),
+            &::baml_type::Ty::String {
+                attr: TyAttr::default(),
             },
+            &ctx,
         );
         assert!(allowed.is_ok());
 
@@ -175,9 +226,10 @@ mod tests {
         let blocked = execute_parse_response_from_owned(
             &allow_client,
             response_length,
-            &baml_type::Ty::String {
-                attr: baml_type::TyAttr::default(),
+            &::baml_type::Ty::String {
+                attr: TyAttr::default(),
             },
+            &ctx,
         );
         assert!(blocked.is_err());
 
@@ -190,9 +242,10 @@ mod tests {
         let denied = execute_parse_response_from_owned(
             &deny_client,
             response_length,
-            &baml_type::Ty::String {
-                attr: baml_type::TyAttr::default(),
+            &::baml_type::Ty::String {
+                attr: TyAttr::default(),
             },
+            &ctx,
         );
         assert!(denied.is_err());
     }

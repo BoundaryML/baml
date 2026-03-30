@@ -77,12 +77,12 @@ fn user.CatchWithFallback(x: int) -> string {
     }
 
     bb1: {
-        _3 = is_type(copy _2, String { attr: TyAttr(None) });
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _3 -> [bb5, bb2];
     }
 
     bb2: {
-        _4 = is_type(copy _2, Int { attr: TyAttr(None) });
+        _4 = is_type(copy _2, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _4 -> [bb4, bb3];
     }
 
@@ -125,7 +125,7 @@ fn user.CatchWithTypedArm(x: int) -> string {
     }
 
     bb1: {
-        _3 = is_type(copy _2, String { attr: TyAttr(None) });
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _3 -> [bb3, bb2];
     }
 
@@ -164,12 +164,12 @@ fn user.ChainedCatchClauses(x: int) -> string {
     }
 
     bb1: {
-        _3 = is_type(copy _2, String { attr: TyAttr(None) });
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _3 -> [bb5, bb2];
     }
 
     bb2: {
-        _4 = is_type(copy _2, Int { attr: TyAttr(None) });
+        _4 = is_type(copy _2, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _4 -> [bb4, bb3];
     }
 
@@ -271,12 +271,12 @@ fn user.MultipleCatchArms(x: int) -> string {
     }
 
     bb1: {
-        _3 = is_type(copy _2, String { attr: TyAttr(None) });
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _3 -> [bb5, bb2];
     }
 
     bb2: {
-        _4 = is_type(copy _2, Int { attr: TyAttr(None) });
+        _4 = is_type(copy _2, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _4 -> [bb4, bb3];
     }
 
@@ -311,7 +311,7 @@ fn user.NestedCatch(x: int) -> string {
     // Locals:
     let _0: string // _0 // return
     let _1: int // x // param
-    let _2: string | "inner caught" // inner
+    let _2: string // inner
     let _3: unknown
     let _4: unknown
 
@@ -370,7 +370,7 @@ fn user.SingleCatchTyped(x: int) -> string {
     }
 
     bb1: {
-        _3 = is_type(copy _2, String { attr: TyAttr(None) });
+        _3 = is_type(copy _2, String { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _3 -> [bb3, bb2];
     }
 

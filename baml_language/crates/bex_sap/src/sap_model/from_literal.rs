@@ -14,9 +14,9 @@ use crate::{
     sap_model::{
         AnnotatedField, ArrayTy, AttrLiteral, BamlArray, BamlBool, BamlClass, BamlEnum, BamlFloat,
         BamlInt, BamlMap, BamlNull, BamlPrimitive, BamlStreamState, BamlString, BamlValue,
-        BoolLiteralTy, BoolTy, ClassTy, EnumTy, FloatTy, IntLiteralTy, IntTy, LiteralTy, MapTy,
-        MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy, Ty, TyResolvedRef,
-        TyWithMeta, TypeIdent, TypeName as _, TypeValue, UnionTy,
+        BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy,
+        LiteralTy, MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy,
+        TyResolvedRef, TypeIdent, TypeName as _, TypeValue, UnionTy,
     },
 };
 
@@ -310,7 +310,7 @@ where
                     BamlValue::Enum(e) => Cow::Borrowed(e.value), // uses variant name, not aliases
                     _ => return Err(ctx.error_internal("key must be a string-like type")),
                 };
-                let value = self.value.ty.from_literal(value, ctx)?;
+                let value = value_ty.ty.from_literal(value, ctx)?;
                 let meta = DeserializerMeta {
                     flags: DeserializerConditions::new(),
                     ty: value_ty.clone(),
@@ -431,6 +431,41 @@ where
     }
 }
 
+impl<'s, 'v, 't, N: TypeIdent + 't> FromLiteral<'s, 'v, 't, N> for EnumVariantTy<'t, N>
+where
+    's: 'v,
+{
+    fn from_literal(
+        &'t self,
+        literal: &AttrLiteral<'t, N>,
+        ctx: &ParsingContext<'s, 'v, 't, N>,
+    ) -> Result<Self::Value, ParsingError> {
+        let (enum_name, variant_name) = match literal {
+            AttrLiteral::EnumVariant {
+                enum_name,
+                variant_name,
+            } if **enum_name == self.name => (enum_name, variant_name),
+            _ => {
+                return Err(ctx.error_internal(format!(
+                    "attribute literal must match the type: {}",
+                    self.type_name()
+                )));
+            }
+        };
+
+        if self.value.name == *variant_name {
+            Ok(BamlEnum {
+                name: &self.name,
+                value: &self.value.name,
+            })
+        } else {
+            Err(ctx.error_internal(format!(
+                "unknown enum variant '{enum_name}.{variant_name}' in attribute literal"
+            )))
+        }
+    }
+}
+
 impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for UnionTy<'t, N>
 where
     't: 's,
@@ -441,8 +476,12 @@ where
         literal: &AttrLiteral<'t, N>,
         ctx: &ParsingContext<'s, 'v, 't, N>,
     ) -> Result<Self::Value, ParsingError> {
-        for TyWithMeta { ty, .. } in &self.variants {
-            if let Ok(value) = ty.from_literal(literal, ctx) {
+        for variant in &self.variants {
+            let variant = ctx
+                .db
+                .resolve_with_meta(variant.as_ref())
+                .map_err(|ident| ctx.error_type_resolution(ident))?;
+            if let Ok(value) = variant.ty.from_literal(literal, ctx) {
                 return Ok(value);
             }
         }
@@ -469,7 +508,7 @@ where
             .map_err(|ident| ctx.error_type_resolution(ident))?;
         match literal {
             AttrLiteral::StreamStateComplete(value) => {
-                let value = self.value.ty.from_literal(&**value, ctx)?;
+                let value = inner_ty.ty.from_literal(&**value, ctx)?;
                 let value = BamlValueWithFlags::new(
                     value,
                     DeserializerMeta {
@@ -480,7 +519,7 @@ where
                 Ok(BamlStreamState::Complete(Box::new(value)))
             }
             AttrLiteral::StreamStateIncomplete(value) => {
-                let value = self.value.ty.from_literal(&**value, ctx)?;
+                let value = inner_ty.ty.from_literal(&**value, ctx)?;
                 let value = BamlValueWithFlags::new(
                     value,
                     DeserializerMeta {
@@ -491,7 +530,7 @@ where
                 Ok(BamlStreamState::Incomplete(Box::new(value)))
             }
             AttrLiteral::StreamStatePending(value) => {
-                let value = self.value.ty.from_literal(&**value, ctx)?;
+                let value = inner_ty.ty.from_literal(&**value, ctx)?;
                 let value = BamlValueWithFlags::new(
                     value,
                     DeserializerMeta {
@@ -577,28 +616,11 @@ where
             TyResolvedRef::Map(ty) => ty.from_literal(literal, ctx).map(BamlValue::Map),
             TyResolvedRef::Class(ty) => ty.from_literal(literal, ctx).map(BamlValue::Class),
             TyResolvedRef::Enum(ty) => ty.from_literal(literal, ctx).map(BamlValue::Enum),
+            TyResolvedRef::EnumVariant(ty) => ty.from_literal(literal, ctx).map(BamlValue::Enum),
             TyResolvedRef::Union(ty) => ty.from_literal(literal, ctx),
             TyResolvedRef::StreamState(ty) => {
                 ty.from_literal(literal, ctx).map(BamlValue::StreamState)
             }
         }
-    }
-}
-
-impl<'s, 'v, 't, N: TypeIdent> FromLiteral<'s, 'v, 't, N> for Ty<'t, N>
-where
-    't: 's,
-    's: 'v,
-{
-    fn from_literal(
-        &'t self,
-        literal: &AttrLiteral<'t, N>,
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-    ) -> Result<Self::Value, ParsingError> {
-        let resolved = ctx
-            .db
-            .resolve(self)
-            .map_err(|ident| ctx.error_type_resolution(ident))?;
-        TyResolvedRef::from_literal(resolved, literal, ctx)
     }
 }

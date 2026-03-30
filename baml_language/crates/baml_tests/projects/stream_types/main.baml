@@ -1,6 +1,3 @@
-// Test default stream type expansion for all type categories.
-// No explicit annotations — verifies default D/S computation and stream_* generation.
-
 // ── Primitives ──────────────────────────────────────────────
 
 class Primitives {

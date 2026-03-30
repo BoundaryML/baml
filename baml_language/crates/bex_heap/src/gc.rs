@@ -525,7 +525,6 @@ mod tests {
                 description: None,
                 alias: None,
                 skip: false,
-                field_attr: Default::default(),
             }],
             description: None,
             alias: None,

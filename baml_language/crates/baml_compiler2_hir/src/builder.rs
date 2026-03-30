@@ -44,6 +44,7 @@ pub struct SemanticIndexBuilder<'db> {
     expr_scopes: Vec<(ast::ExprId, FileScopeId)>,
 
     item_tree: ItemTree,
+    item_tree_source_map: crate::item_tree::ItemTreeSourceMap,
     type_contributions: Vec<(Name, Contribution<'db>)>,
     value_contributions: Vec<(Name, Contribution<'db>)>,
     diagnostics: Vec<Hir2Diagnostic>,
@@ -60,6 +61,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             class_depth: 0,
             expr_scopes: Vec::new(),
             item_tree: ItemTree::new(),
+            item_tree_source_map: crate::item_tree::ItemTreeSourceMap::default(),
             type_contributions: Vec::new(),
             value_contributions: Vec::new(),
             diagnostics: Vec::new(),
@@ -129,6 +131,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             scope_bindings: self.scope_bindings,
             scope_ids,
             item_tree: Arc::new(self.item_tree),
+            item_tree_source_map: Arc::new(self.item_tree_source_map),
             symbol_contributions: Arc::new(FileSymbolContributions {
                 types: self.type_contributions,
                 values: self.value_contributions,
@@ -349,6 +352,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_function(&mut self, f: &ast::FunctionDef) -> LocalItemId<FunctionMarker> {
         let local_id = self.item_tree.alloc_function(f);
+        ItemTree::collect_function_span(&mut self.item_tree_source_map, local_id, f);
         let loc = FunctionLoc::new(self.db, self.file, local_id);
 
         // Only contribute as a top-level symbol if not inside a class.
@@ -382,6 +386,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_class(&mut self, c: &ast::ClassDef) {
         let local_id = self.item_tree.alloc_class(c);
+        ItemTree::collect_class_spans(&mut self.item_tree_source_map, local_id, c);
         let loc = ClassLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             c.name.clone(),
@@ -428,6 +433,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn lower_enum(&mut self, e: &ast::EnumDef) {
         let local_id = self.item_tree.alloc_enum(e);
+        ItemTree::collect_enum_spans(&mut self.item_tree_source_map, local_id, e);
         let loc = EnumLoc::new(self.db, self.file, local_id);
         self.type_contributions.push((
             e.name.clone(),
@@ -798,15 +804,17 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn type_expr_contains_rust(type_expr: &ast::TypeExpr) -> bool {
         match type_expr {
-            ast::TypeExpr::Rust => true,
-            ast::TypeExpr::Optional(inner) | ast::TypeExpr::List(inner) => {
+            ast::TypeExpr::Rust { .. } => true,
+            ast::TypeExpr::Optional { inner, .. } | ast::TypeExpr::List { inner, .. } => {
                 Self::type_expr_contains_rust(inner)
             }
-            ast::TypeExpr::Map { key, value } => {
+            ast::TypeExpr::Map { key, value, .. } => {
                 Self::type_expr_contains_rust(key) || Self::type_expr_contains_rust(value)
             }
-            ast::TypeExpr::Union(types) => types.iter().any(Self::type_expr_contains_rust),
-            ast::TypeExpr::Function { params, ret } => {
+            ast::TypeExpr::Union { variants, .. } => {
+                variants.iter().any(Self::type_expr_contains_rust)
+            }
+            ast::TypeExpr::Function { params, ret, .. } => {
                 params
                     .iter()
                     .any(|param| Self::type_expr_contains_rust(&param.ty))
@@ -818,7 +826,7 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn collect_invalid_builtin_throw_types(type_expr: &ast::TypeExpr, invalid: &mut Vec<String>) {
         match type_expr {
-            ast::TypeExpr::Path(segments) => {
+            ast::TypeExpr::Path { segments, .. } => {
                 let is_builtin_error = segments.len() >= 3
                     && (segments[0].as_str() == "baml" || segments[0].as_str() == "root")
                     && segments[1].as_str() == "errors";
@@ -826,8 +834,8 @@ impl<'db> SemanticIndexBuilder<'db> {
                     invalid.push(Self::render_type_expr(type_expr));
                 }
             }
-            ast::TypeExpr::Union(types) => {
-                for ty in types {
+            ast::TypeExpr::Union { variants, .. } => {
+                for ty in variants {
                     Self::collect_invalid_builtin_throw_types(ty, invalid);
                 }
             }
@@ -837,32 +845,32 @@ impl<'db> SemanticIndexBuilder<'db> {
 
     fn render_type_expr(type_expr: &ast::TypeExpr) -> String {
         match type_expr {
-            ast::TypeExpr::Path(segments) => segments
+            ast::TypeExpr::Path { segments, .. } => segments
                 .iter()
                 .map(Name::as_str)
                 .collect::<Vec<_>>()
                 .join("."),
-            ast::TypeExpr::Int => "int".to_string(),
-            ast::TypeExpr::Float => "float".to_string(),
-            ast::TypeExpr::String => "string".to_string(),
-            ast::TypeExpr::Bool => "bool".to_string(),
-            ast::TypeExpr::Null => "null".to_string(),
-            ast::TypeExpr::Never => "never".to_string(),
-            ast::TypeExpr::Media(kind) => kind.to_string(),
-            ast::TypeExpr::Optional(inner) => format!("{}?", Self::render_type_expr(inner)),
-            ast::TypeExpr::List(inner) => format!("{}[]", Self::render_type_expr(inner)),
-            ast::TypeExpr::Map { key, value } => format!(
+            ast::TypeExpr::Int { .. } => "int".to_string(),
+            ast::TypeExpr::Float { .. } => "float".to_string(),
+            ast::TypeExpr::String { .. } => "string".to_string(),
+            ast::TypeExpr::Bool { .. } => "bool".to_string(),
+            ast::TypeExpr::Null { .. } => "null".to_string(),
+            ast::TypeExpr::Never { .. } => "never".to_string(),
+            ast::TypeExpr::Media { kind, .. } => kind.to_string(),
+            ast::TypeExpr::Optional { inner, .. } => format!("{}?", Self::render_type_expr(inner)),
+            ast::TypeExpr::List { inner, .. } => format!("{}[]", Self::render_type_expr(inner)),
+            ast::TypeExpr::Map { key, value, .. } => format!(
                 "map<{}, {}>",
                 Self::render_type_expr(key),
                 Self::render_type_expr(value)
             ),
-            ast::TypeExpr::Union(types) => types
+            ast::TypeExpr::Union { variants, .. } => variants
                 .iter()
                 .map(Self::render_type_expr)
                 .collect::<Vec<_>>()
                 .join(" | "),
-            ast::TypeExpr::Literal(literal) => literal.to_string(),
-            ast::TypeExpr::Function { params, ret } => format!(
+            ast::TypeExpr::Literal { value, .. } => value.to_string(),
+            ast::TypeExpr::Function { params, ret, .. } => format!(
                 "({}) -> {}",
                 params
                     .iter()
@@ -874,11 +882,11 @@ impl<'db> SemanticIndexBuilder<'db> {
                     .join(", "),
                 Self::render_type_expr(ret)
             ),
-            ast::TypeExpr::BuiltinUnknown => "unknown".to_string(),
-            ast::TypeExpr::Type => "type".to_string(),
-            ast::TypeExpr::Rust => "$rust_type".to_string(),
-            ast::TypeExpr::Error => "<error>".to_string(),
-            ast::TypeExpr::Unknown => "<unknown>".to_string(),
+            ast::TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
+            ast::TypeExpr::Type { .. } => "type".to_string(),
+            ast::TypeExpr::Rust { .. } => "$rust_type".to_string(),
+            ast::TypeExpr::Error { .. } => "<error>".to_string(),
+            ast::TypeExpr::Unknown { .. } => "<unknown>".to_string(),
         }
     }
 }

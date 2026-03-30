@@ -3,6 +3,18 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
   [type] Error: type mismatch: expected baml.llm.Client, got null
+    ╭─[ valid_generator.baml:18:2 ]
+    │
+ 18 │ ╭─▶ }
+    ┆ ┆   
+ 23 │ ├─▶ }
+    │ │       
+    │ ╰─────── type mismatch: expected baml.llm.Client, got null
+    │     
+    │     Note: Error code: E0001
+────╯
+
+  [type] Error: type mismatch: expected baml.llm.Client, got null
     ╭─[ valid_generator.baml:20:30 ]
     │
  20 │ ╭─▶ function GetUser() -> MyClass {

@@ -80,18 +80,14 @@ pub fn extract_native_builtins()
             continue;
         }
 
-        // Build the namespace prefix from the file's package and namespace slices.
-        // e.g. package="baml", namespace=["math"] → "baml.math"
-        //      package="baml", namespace=[]        → "baml"
-        //      package="env",  namespace=[]        → "env"
-        let namespace_prefix = if builtin_file.namespace.is_empty() {
+        // Build the namespace prefix from the file's package and path-derived namespace.
+        // e.g. package="baml", ns_path=["math"] → "baml.math"
+        //      package="baml", ns_path=[]        → "baml"
+        let ns_path = builtin_file.namespace_path();
+        let namespace_prefix = if ns_path.is_empty() {
             builtin_file.package.to_string()
         } else {
-            format!(
-                "{}.{}",
-                builtin_file.package,
-                builtin_file.namespace.join(".")
-            )
+            format!("{}.{}", builtin_file.package, ns_path.join("."))
         };
 
         for item in &items {
@@ -101,11 +97,12 @@ pub fn extract_native_builtins()
                         class_def,
                         &namespace_prefix,
                         &cst_root,
+                        &path,
                         &mut vm_builtins,
                         &mut io_builtins,
                     );
                     if let Some(class_def_record) =
-                        extract_class_fields(class_def, &namespace_prefix)
+                        extract_class_fields(class_def, &namespace_prefix, &path)
                     {
                         class_defs.push(class_def_record);
                     }
@@ -115,6 +112,7 @@ pub fn extract_native_builtins()
                         func_def,
                         &namespace_prefix,
                         &cst_root,
+                        &path,
                         &mut vm_builtins,
                         &mut io_builtins,
                     );
@@ -141,6 +139,7 @@ fn extract_from_class(
     class_def: &ClassDef,
     namespace_prefix: &str,
     cst_root: &SyntaxNode,
+    source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
 ) {
@@ -249,6 +248,7 @@ fn extract_from_class(
             vm_usage,
             pipeline,
             throws,
+            source_file: source_file.to_string(),
         };
 
         match pipeline {
@@ -262,7 +262,11 @@ fn extract_from_class(
 ///
 /// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String)
 /// since they don't use `Object::Instance`.
-fn extract_class_fields(class_def: &ClassDef, namespace_prefix: &str) -> Option<NativeClassDef> {
+fn extract_class_fields(
+    class_def: &ClassDef,
+    namespace_prefix: &str,
+    source_file: &str,
+) -> Option<NativeClassDef> {
     let class_name = class_def.name.as_str();
 
     // Skip classes with dedicated Object variants — they are not Instance-based.
@@ -305,6 +309,7 @@ fn extract_class_fields(class_def: &ClassDef, namespace_prefix: &str) -> Option<
         namespace_prefix: namespace_prefix.to_string(),
         generic_params,
         fields,
+        source_file: source_file.to_string(),
     })
 }
 
@@ -313,6 +318,7 @@ fn extract_from_free_function(
     func_def: &FunctionDef,
     namespace_prefix: &str,
     cst_root: &SyntaxNode,
+    source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
 ) {
@@ -380,6 +386,7 @@ fn extract_from_free_function(
         vm_usage,
         pipeline,
         throws,
+        source_file: source_file.to_string(),
     };
 
     match pipeline {
@@ -413,7 +420,7 @@ fn extract_throws(func: &FunctionDef) -> Vec<String> {
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
     match ty {
-        TypeExpr::Path(segments) => {
+        TypeExpr::Path { segments, .. } => {
             let path: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
             if path.len() >= 3 && (path[0] == "baml" || path[0] == "root") && path[1] == "errors" {
                 vec![path[2..].join(".")]
@@ -427,7 +434,9 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
                 ]
             }
         }
-        TypeExpr::Union(members) => members.iter().flat_map(extract_throw_categories).collect(),
+        TypeExpr::Union { variants, .. } => {
+            variants.iter().flat_map(extract_throw_categories).collect()
+        }
         _ => vec![],
     }
 }
@@ -465,14 +474,14 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     match ty {
-        TypeExpr::Int => BamlType::Int,
-        TypeExpr::Float => BamlType::Float,
-        TypeExpr::String => BamlType::String,
-        TypeExpr::Bool => BamlType::Bool,
-        TypeExpr::Null => BamlType::Null,
-        TypeExpr::Never => BamlType::Null,
+        TypeExpr::Int { .. } => BamlType::Int,
+        TypeExpr::Float { .. } => BamlType::Float,
+        TypeExpr::String { .. } => BamlType::String,
+        TypeExpr::Bool { .. } => BamlType::Bool,
+        TypeExpr::Null { .. } => BamlType::Null,
+        TypeExpr::Never { .. } => BamlType::Null,
 
-        TypeExpr::Media(kind) => {
+        TypeExpr::Media { kind, .. } => {
             // Map MediaKind to the class name string.
             let name = match kind {
                 baml_base::MediaKind::Image => "Image",
@@ -484,18 +493,20 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             BamlType::Media(name.to_string())
         }
 
-        TypeExpr::Optional(inner) => {
+        TypeExpr::Optional { inner, .. } => {
             BamlType::Optional(Box::new(type_expr_to_baml_type(inner, generics)))
         }
 
-        TypeExpr::List(inner) => BamlType::List(Box::new(type_expr_to_baml_type(inner, generics))),
+        TypeExpr::List { inner, .. } => {
+            BamlType::List(Box::new(type_expr_to_baml_type(inner, generics)))
+        }
 
-        TypeExpr::Map { key, value } => BamlType::Map(
+        TypeExpr::Map { key, value, .. } => BamlType::Map(
             Box::new(type_expr_to_baml_type(key, generics)),
             Box::new(type_expr_to_baml_type(value, generics)),
         ),
 
-        TypeExpr::Path(segments) => {
+        TypeExpr::Path { segments, .. } => {
             // Single-segment path may be a generic type param or a named type.
             if segments.len() == 1 {
                 let name = segments[0].as_str();
@@ -515,10 +526,10 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             }
         }
 
-        TypeExpr::Union(variants) => {
+        TypeExpr::Union { variants, .. } => {
             let non_null: Vec<_> = variants
                 .iter()
-                .filter(|v| !matches!(v, TypeExpr::Null))
+                .filter(|v| !matches!(v, TypeExpr::Null { .. }))
                 .collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
@@ -526,13 +537,13 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
                 BamlType::Named("union".to_string())
             }
         }
-        TypeExpr::Literal(_) => BamlType::Named("literal".to_string()),
+        TypeExpr::Literal { .. } => BamlType::Named("literal".to_string()),
         TypeExpr::Function { .. } => BamlType::Named("function".to_string()),
-        TypeExpr::BuiltinUnknown | TypeExpr::Unknown | TypeExpr::Error => {
+        TypeExpr::BuiltinUnknown { .. } | TypeExpr::Unknown { .. } | TypeExpr::Error { .. } => {
             BamlType::Named("unknown".to_string())
         }
-        TypeExpr::Type => BamlType::Named("type".to_string()),
-        TypeExpr::Rust => BamlType::RustType,
+        TypeExpr::Type { .. } => BamlType::Named("type".to_string()),
+        TypeExpr::Rust { .. } => BamlType::RustType,
     }
 }
 
@@ -782,6 +793,7 @@ mod tests {
             vm_usage: VmUsage::None,
             pipeline: BuiltinPipeline::Io,
             throws: vec![],
+            source_file: String::new(),
         };
         assert_eq!(make("baml.fs.open").sys_op_variant_name(), "BamlFsOpen");
         assert_eq!(

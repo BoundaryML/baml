@@ -1516,6 +1516,24 @@ fn user.TestTarget$build_request() -> baml.http.Request {
     }
 }
 
+fn user.TestTarget$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "TestTarget", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.TestTarget$render_prompt() -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2041,6 +2059,24 @@ fn user.LlmBasic$build_request(name: string) -> baml.http.Request {
     }
 }
 
+fn user.LlmBasic$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LlmBasic", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.LlmBasic$render_prompt(name: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2090,6 +2126,24 @@ fn user.LlmMultiLine$build_request(text: string) -> baml.http.Request {
     bb0: {
         _2 = { const "text": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "LlmMultiLine", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmMultiLine$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LlmMultiLine", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2161,6 +2215,24 @@ fn user.LlmReversedOrder$build_request(text: string) -> baml.http.Request {
     }
 }
 
+fn user.LlmReversedOrder$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LlmReversedOrder", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.LlmReversedOrder$render_prompt(text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2218,6 +2290,24 @@ fn user.LlmStringClient$build_request(text: string) -> baml.http.Request {
         _2 = baml.llm.Client { const "openai/gpt-4o", const baml.llm.ClientType.Primitive, copy _3, const null, const 0_i64 };
         _4 = { const "text": copy _1 };
         _0 = call const fn baml.llm.build_request(copy _2, const "LlmStringClient", copy _4) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LlmStringClient$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LlmStringClient", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2299,6 +2389,24 @@ fn user.LlmWithLongSignature$build_request(first_context: string, second_context
     }
 }
 
+fn user.LlmWithLongSignature$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LlmWithLongSignature", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.LlmWithLongSignature$render_prompt(first_context: string, second_context: string, third_context: string, user_query: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2368,19 +2476,19 @@ fn user.ManyNestedExprs(items: int[]) -> int {
     let _7: bool
     let _8: int
     let _9: int
-    let _10: 1 | int // d
+    let _10: int // d
     let _11: int
-    let _12: void // e
-    let _13: void // inner
-    let _14: 1 | int
+    let _12: int // e
+    let _13: int // inner
+    let _14: int
     let _15: int
-    let _16: void
-    let _17: void
-    let _18: void
-    let _19: void
-    let _20: void
-    let _21: void
-    let _22: 1 | int
+    let _16: int
+    let _17: int
+    let _18: int
+    let _19: int
+    let _20: int
+    let _21: int
+    let _22: int
     let _23: int
     let _24: int
     let _25: int
@@ -3451,84 +3559,84 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _4: bool
     let _5: int
     let _6: bool
-    let _7: int
-    let _8: bool
-    let _9: int
-    let _10: bool
-    let _11: int
-    let _12: bool
-    let _13: int
+    let _7: bool
+    let _8: int
+    let _9: bool
+    let _10: int
+    let _11: bool
+    let _12: int
+    let _13: bool
     let _14: int
-    let _15: bool
-    let _16: int
-    let _17: bool
-    let _18: int
-    let _19: int // result
-    let _20: int // i
-    let _21: bool
-    let _22: int
+    let _15: int
+    let _16: bool
+    let _17: int
+    let _18: bool
+    let _19: int
+    let _20: int // result
+    let _21: int // i
+    let _22: bool
     let _23: int
-    let _24: int // i
-    let _25: bool
-    let _26: int
-    let _27: int
-    let _28: int // __for_idx
+    let _24: int
+    let _25: int // i
+    let _26: bool
+    let _27: bool
+    let _28: int
     let _29: int
-    let _30: bool
+    let _30: int // __for_idx
     let _31: int
-    let _32: int // item
+    let _32: bool
     let _33: int
-    let _34: 1 | 2 | 3 | 4 | 5[]
-    let _35: int // __for_idx_1
-    let _36: int
-    let _37: bool
-    let _38: 1 | 2 | 3 | 4 | 5
-    let _39: 1 | 2 | 3 | 4 | 5 // x
-    let _40: void
-    let _41: 1 | 2 | 3[]
-    let _42: int // __for_idx_2
-    let _43: int
-    let _44: bool
-    let _45: 1 | 2 | 3
-    let _46: 1 | 2 | 3 // i
-    let _47: 4 | 5 | 6[]
-    let _48: int // __for_idx_3
-    let _49: int
-    let _50: bool
-    let _51: 4 | 5 | 6
-    let _52: 4 | 5 | 6 // j
-    let _53: void
-    let _54: 1 | 2 | 3
-    let _55: 4 | 5 | 6
-    let _56: int // i
-    let _57: bool
-    let _58: int
-    let _59: int
-    let _60: int // i
-    let _61: bool
-    let _62: int
-    let _63: int
-    let _64: int // __for_idx_4
+    let _34: int // item
+    let _35: int
+    let _36: 1 | 2 | 3 | 4 | 5[]
+    let _37: int // __for_idx_1
+    let _38: int
+    let _39: bool
+    let _40: 1 | 2 | 3 | 4 | 5
+    let _41: 1 | 2 | 3 | 4 | 5 // x
+    let _42: int
+    let _43: 1 | 2 | 3[]
+    let _44: int // __for_idx_2
+    let _45: int
+    let _46: bool
+    let _47: 1 | 2 | 3
+    let _48: 1 | 2 | 3 // i
+    let _49: 4 | 5 | 6[]
+    let _50: int // __for_idx_3
+    let _51: int
+    let _52: bool
+    let _53: 4 | 5 | 6
+    let _54: 4 | 5 | 6 // j
+    let _55: int
+    let _56: 1 | 2 | 3
+    let _57: 4 | 5 | 6
+    let _58: int // i
+    let _59: bool
+    let _60: int
+    let _61: int
+    let _62: int // i
+    let _63: bool
+    let _64: int
     let _65: int
-    let _66: bool
+    let _66: int // __for_idx_4
     let _67: int
-    let _68: int // item
+    let _68: bool
     let _69: int
-    let _70: int // __for_idx_5
+    let _70: int // item
     let _71: int
-    let _72: bool
+    let _72: int // __for_idx_5
     let _73: int
-    let _74: int // item
+    let _74: bool
     let _75: int
-    let _76: bool
-    let _77: bool
+    let _76: int // item
+    let _77: int
     let _78: bool
     let _79: bool
     let _80: bool
     let _81: bool
-    let _82: int
-    let _83: int
-    let _84: int
+    let _82: bool
+    let _83: bool
+    let _84: bool
     let _85: int
     let _86: int
     let _87: int
@@ -3539,19 +3647,19 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _92: int
     let _93: int
     let _94: int
-    let _95: bool
-    let _96: bool
-    let _97: bool
+    let _95: int
+    let _96: int
+    let _97: int
     let _98: bool
     let _99: bool
     let _100: bool
     let _101: bool
     let _102: bool
     let _103: bool
-    let _104: int
-    let _105: int
-    let _106: int
-    let _107: int
+    let _104: bool
+    let _105: bool
+    let _106: bool
+    let _107: bool
     let _108: int
     let _109: int
     let _110: int
@@ -3572,279 +3680,279 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _125: int
     let _126: int
     let _127: int
-    let _128: int // very_long_variable_name
-    let _129: bool
+    let _128: int
+    let _129: int
     let _130: int
     let _131: int
-    let _132: int // extremely_long_loop_counter_variable
-    let _133: int
-    let _134: int
+    let _132: int // very_long_variable_name
+    let _133: bool
+    let _134: bool
     let _135: int
     let _136: int
-    let _137: int
+    let _137: int // extremely_long_loop_counter_variable
     let _138: int
-    let _139: bool
-    let _140: bool
+    let _139: int
+    let _140: int
     let _141: int
     let _142: int
     let _143: int
-    let _144: void
-    let _145: void
-    let _146: void
-    let _147: "very long string one" | "very long string two" | "very long string three" | "very long string four"[]
-    let _148: int // __for_idx_6
+    let _144: bool
+    let _145: bool
+    let _146: bool
+    let _147: int
+    let _148: int
     let _149: int
-    let _150: bool
-    let _151: "very long string one" | "very long string two" | "very long string three" | "very long string four"
-    let _152: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
-    let _153: int // __for_idx_7
-    let _154: int
-    let _155: bool
-    let _156: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
-    let _157: bool
-    let _158: bool
-    let _159: bool
-    let _160: bool
+    let _150: void
+    let _151: void
+    let _152: void
+    let _153: "very long string one" | "very long string two" | "very long string three" | "very long string four"[]
+    let _154: int // __for_idx_6
+    let _155: int
+    let _156: bool
+    let _157: "very long string one" | "very long string two" | "very long string three" | "very long string four"
+    let _158: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
+    let _159: int // __for_idx_7
+    let _160: int
     let _161: bool
-    let _162: bool
-    let _163: int
-    let _164: int
-    let _165: int
-    let _166: int
-    let _167: int
-    let _168: int
-    let _169: int
+    let _162: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
+    let _163: bool
+    let _164: bool
+    let _165: bool
+    let _166: bool
+    let _167: bool
+    let _168: bool
+    let _169: bool
     let _170: int
     let _171: int
     let _172: int
     let _173: int
     let _174: int
     let _175: int
-    let _176: bool
-    let _177: bool
-    let _178: bool
-    let _179: bool
-    let _180: bool
-    let _181: bool
+    let _176: int
+    let _177: int
+    let _178: int
+    let _179: int
+    let _180: int
+    let _181: int
     let _182: int
-    let _183: int
-    let _184: int
-    let _185: int
-    let _186: int
-    let _187: int
-    let _188: int
-    let _189: int
+    let _183: bool
+    let _184: bool
+    let _185: bool
+    let _186: bool
+    let _187: bool
+    let _188: bool
+    let _189: bool
     let _190: int
     let _191: int
     let _192: int
     let _193: int
     let _194: int
-    let _195: int // extremely_long_loop_counter_variable
+    let _195: int
     let _196: int
     let _197: int
     let _198: int
     let _199: int
     let _200: int
     let _201: int
-    let _202: bool
-    let _203: bool
+    let _202: int
+    let _203: int // extremely_long_loop_counter_variable
     let _204: int
     let _205: int
     let _206: int
-    let _207: void
-    let _208: void
-    let _209: void
-    let _210: int // extremely_long_loop_counter_variable
-    let _211: int
-    let _212: int
+    let _207: int
+    let _208: int
+    let _209: int
+    let _210: bool
+    let _211: bool
+    let _212: bool
     let _213: int
     let _214: int
     let _215: int
-    let _216: int
-    let _217: bool
-    let _218: bool
-    let _219: int
+    let _216: void
+    let _217: void
+    let _218: void
+    let _219: int // extremely_long_loop_counter_variable
     let _220: int
     let _221: int
-    let _222: void
-    let _223: void
-    let _224: void
-    let _225: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
-    let _226: int // __for_idx_8
-    let _227: int
+    let _222: int
+    let _223: int
+    let _224: int
+    let _225: int
+    let _226: bool
+    let _227: bool
     let _228: bool
-    let _229: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
-    let _230: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
-    let _231: int // __for_idx_9
-    let _232: int
-    let _233: bool
-    let _234: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
-    let _235: 1 | 2 | 3[]
-    let _236: int // __for_idx_10
+    let _229: int
+    let _230: int
+    let _231: int
+    let _232: void
+    let _233: void
+    let _234: void
+    let _235: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
+    let _236: int // __for_idx_8
     let _237: int
     let _238: bool
-    let _239: 1 | 2 | 3
-    let _240: 1 | 2 | 3 // i
-    let _241: 4 | 5 | 6[]
-    let _242: int // __for_idx_11
-    let _243: int
-    let _244: bool
-    let _245: 4 | 5 | 6
-    let _246: 4 | 5 | 6 // j
-    let _247: 7 | 8 | 9[]
-    let _248: int // __for_idx_12
-    let _249: int
-    let _250: bool
-    let _251: 7 | 8 | 9
-    let _252: 7 | 8 | 9 // k
-    let _253: void
-    let _254: void
-    let _255: 1 | 2 | 3
-    let _256: 4 | 5 | 6
-    let _257: 7 | 8 | 9
-    let _258: int // outer
-    let _259: bool
-    let _260: int
-    let _261: int // middle
-    let _262: bool
+    let _239: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
+    let _240: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"[]
+    let _241: int // __for_idx_9
+    let _242: int
+    let _243: bool
+    let _244: "alpha bravo charlie" | "delta echo foxtrot" | "golf hotel india" | "juliet kilo lima" | "mike november oscar" | "papa quebec romeo"
+    let _245: 1 | 2 | 3[]
+    let _246: int // __for_idx_10
+    let _247: int
+    let _248: bool
+    let _249: 1 | 2 | 3
+    let _250: 1 | 2 | 3 // i
+    let _251: 4 | 5 | 6[]
+    let _252: int // __for_idx_11
+    let _253: int
+    let _254: bool
+    let _255: 4 | 5 | 6
+    let _256: 4 | 5 | 6 // j
+    let _257: 7 | 8 | 9[]
+    let _258: int // __for_idx_12
+    let _259: int
+    let _260: bool
+    let _261: 7 | 8 | 9
+    let _262: 7 | 8 | 9 // k
     let _263: int
-    let _264: int // inner
-    let _265: bool
-    let _266: int
-    let _267: int
-    let _268: int
-    let _269: int
+    let _264: int
+    let _265: 1 | 2 | 3
+    let _266: 4 | 5 | 6
+    let _267: 7 | 8 | 9
+    let _268: int // outer
+    let _269: bool
     let _270: int
-    let _271: int
-    let _272: 1 | 2 | 3 | 4 | 5[]
-    let _273: int // __for_idx_13
-    let _274: int
+    let _271: int // middle
+    let _272: bool
+    let _273: int
+    let _274: int // inner
     let _275: bool
-    let _276: 1 | 2 | 3 | 4 | 5
-    let _277: 1 | 2 | 3 | 4 | 5 // i
-    let _278: bool
-    let _279: 1 | 2 | 3 | 4 | 5
-    let _280: 10 | 20 | 30 | 40 | 50[]
-    let _281: int // __for_idx_14
-    let _282: int
-    let _283: bool
-    let _284: 10 | 20 | 30 | 40 | 50
-    let _285: 10 | 20 | 30 | 40 | 50 // j
-    let _286: int // val
-    let _287: void
-    let _288: 1 | 2 | 3 | 4 | 5
-    let _289: 10 | 20 | 30 | 40 | 50
-    let _290: bool
-    let _291: bool
-    let _292: int // n
+    let _276: int
+    let _277: int
+    let _278: int
+    let _279: int
+    let _280: int
+    let _281: int
+    let _282: 1 | 2 | 3 | 4 | 5[]
+    let _283: int // __for_idx_13
+    let _284: int
+    let _285: bool
+    let _286: 1 | 2 | 3 | 4 | 5
+    let _287: 1 | 2 | 3 | 4 | 5 // i
+    let _288: bool
+    let _289: 1 | 2 | 3 | 4 | 5
+    let _290: 10 | 20 | 30 | 40 | 50[]
+    let _291: int // __for_idx_14
+    let _292: int
     let _293: bool
-    let _294: int
-    let _295: bool
-    let _296: int // n
+    let _294: 10 | 20 | 30 | 40 | 50
+    let _295: 10 | 20 | 30 | 40 | 50 // j
+    let _296: int // val
     let _297: int
-    let _298: int // lvl1
-    let _299: bool
-    let _300: int
-    let _301: 1 | 2[]
-    let _302: int // __for_idx_15
-    let _303: int
-    let _304: bool
-    let _305: 1 | 2
-    let _306: 1 | 2 // lvl2
-    let _307: int // lvl3
-    let _308: bool
-    let _309: int
-    let _310: int // lvl4
-    let _311: bool
-    let _312: int
-    let _313: void
-    let _314: void
-    let _315: void
-    let _316: int
-    let _317: 1 | 2
-    let _318: int
+    let _298: 1 | 2 | 3 | 4 | 5
+    let _299: 10 | 20 | 30 | 40 | 50
+    let _300: bool
+    let _301: bool
+    let _302: int // n
+    let _303: bool
+    let _304: int
+    let _305: bool
+    let _306: int // n
+    let _307: int
+    let _308: int // lvl1
+    let _309: bool
+    let _310: int
+    let _311: 1 | 2[]
+    let _312: int // __for_idx_15
+    let _313: int
+    let _314: bool
+    let _315: 1 | 2
+    let _316: 1 | 2 // lvl2
+    let _317: int // lvl3
+    let _318: bool
     let _319: int
-    let _320: int // __for_idx_16
-    let _321: int
-    let _322: bool
+    let _320: int // lvl4
+    let _321: bool
+    let _322: int
     let _323: int
-    let _324: int // i
-    let _325: int // j
+    let _324: int
+    let _325: int
     let _326: int
-    let _327: int
+    let _327: 1 | 2
     let _328: int
     let _329: int
-    let _330: int
+    let _330: int // __for_idx_16
     let _331: int
     let _332: bool
-    let _333: bool
-    let _334: bool
-    let _335: bool
+    let _333: int
+    let _334: int // i
+    let _335: int // j
     let _336: int
     let _337: int
     let _338: int
     let _339: int
     let _340: int
-    let _341: void
-    let _342: void
-    let _343: void
-    let _344: void
-    let _345: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10[]
-    let _346: int // __for_idx_17
+    let _341: int
+    let _342: bool
+    let _343: bool
+    let _344: bool
+    let _345: bool
+    let _346: bool
     let _347: int
-    let _348: bool
-    let _349: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _350: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 // i
-    let _351: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100[]
-    let _352: int // __for_idx_18
-    let _353: int
-    let _354: bool
-    let _355: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _356: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100 // j
-    let _357: void | 0 // computation
-    let _358: bool
+    let _348: int
+    let _349: int
+    let _350: int
+    let _351: int
+    let _352: void
+    let _353: void
+    let _354: void
+    let _355: void
+    let _356: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10[]
+    let _357: int // __for_idx_17
+    let _358: int
     let _359: bool
-    let _360: void
-    let _361: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _362: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _363: void
-    let _364: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _365: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _366: void
-    let _367: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _368: void
-    let _369: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _370: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _360: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _361: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 // i
+    let _362: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100[]
+    let _363: int // __for_idx_18
+    let _364: int
+    let _365: bool
+    let _366: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _367: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100 // j
+    let _368: int // computation
+    let _369: bool
+    let _370: bool
     let _371: int
-    let _372: void
-    let _373: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _374: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _375: int
-    let _376: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
-    let _377: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
-    let _378: void
-    let _379: bool
-    let _380: int
-    let _381: int // i
-    let _382: bool
+    let _372: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _373: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _374: int
+    let _375: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _376: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _377: int
+    let _378: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _379: int
+    let _380: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _381: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _382: int
     let _383: int
-    let _384: int
-    let _385: int // __for_idx_19
+    let _384: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _385: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
     let _386: int
-    let _387: bool
-    let _388: int
-    let _389: int // item
-    let _390: int
+    let _387: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10
+    let _388: 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100
+    let _389: int
+    let _390: bool
     let _391: int
-    let _392: int
-    let _393: int
+    let _392: int // i
+    let _393: bool
     let _394: int
     let _395: int
-    let _396: int
+    let _396: int // __for_idx_19
     let _397: int
-    let _398: int
+    let _398: bool
     let _399: int
-    let _400: int
+    let _400: int // item
     let _401: int
     let _402: int
     let _403: int
@@ -3875,8 +3983,8 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _428: int
     let _429: int
     let _430: int
-    let _431: map<string, map<string, int | string | bool>>
-    let _432: map<string, int | string | bool>
+    let _431: int
+    let _432: int
     let _433: int
     let _434: int
     let _435: int
@@ -3886,8 +3994,8 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _439: int
     let _440: int
     let _441: int
-    let _442: int
-    let _443: int
+    let _442: map<string, map<string, int | string | bool>>
+    let _443: map<string, int | string | bool>
     let _444: int
     let _445: int
     let _446: int
@@ -3953,6 +4061,17 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     let _506: int
     let _507: int
     let _508: int
+    let _509: int
+    let _510: int
+    let _511: int
+    let _512: int
+    let _513: int
+    let _514: int
+    let _515: int
+    let _516: int
+    let _517: int
+    let _518: int
+    let _519: int
 
     bb0: {
         _3 = const 0_i64;
@@ -3970,17 +4089,19 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb3: {
-        _7 = copy _3;
-        _6 = copy _7 < const 100_i64;
-        branch copy _6 -> [bb4, bb5];
+        _8 = copy _3;
+        _7 = copy _8 < const 100_i64;
+        _6 = copy _7;
+        branch copy _7 -> [bb4, bb5];
     }
 
     bb4: {
+        _6 = copy _2;
         goto -> bb5;
     }
 
     bb5: {
-        branch copy _2 -> [bb278, bb6];
+        branch copy _6 -> [bb278, bb6];
     }
 
     bb6: {
@@ -3992,9 +4113,9 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb8: {
-        _9 = copy _3;
-        _8 = copy _9 > const 50_i64;
-        branch copy _8 -> [bb11, bb9];
+        _10 = copy _3;
+        _9 = copy _10 > const 50_i64;
+        branch copy _9 -> [bb11, bb9];
     }
 
     bb9: {
@@ -4015,9 +4136,9 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb13: {
-        _11 = copy _3;
-        _10 = copy _11 < const 100_i64;
-        branch copy _10 -> [bb274, bb14];
+        _12 = copy _3;
+        _11 = copy _12 < const 100_i64;
+        branch copy _11 -> [bb274, bb14];
     }
 
     bb14: {
@@ -4025,9 +4146,9 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb15: {
-        _16 = copy _3;
-        _15 = copy _16 < const 10_i64;
-        branch copy _15 -> [bb273, bb16];
+        _17 = copy _3;
+        _16 = copy _17 < const 10_i64;
+        branch copy _16 -> [bb273, bb16];
     }
 
     bb16: {
@@ -4035,119 +4156,121 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb17: {
-        _18 = copy _3;
-        _17 = copy _18 < const 10_i64;
-        branch copy _17 -> [bb272, bb18];
+        _19 = copy _3;
+        _18 = copy _19 < const 10_i64;
+        branch copy _18 -> [bb272, bb18];
     }
 
     bb18: {
-        _19 = const 0_i64;
         _20 = const 0_i64;
+        _21 = const 0_i64;
         goto -> bb19;
     }
 
     bb19: {
-        _22 = copy _20;
-        _21 = copy _22 < const 10_i64;
-        branch copy _21 -> [bb270, bb20];
+        _23 = copy _21;
+        _22 = copy _23 < const 10_i64;
+        branch copy _22 -> [bb270, bb20];
     }
 
     bb20: {
-        _24 = const 0_i64;
+        _25 = const 0_i64;
         goto -> bb21;
     }
 
     bb21: {
-        _26 = copy _24;
-        _25 = copy _26 < const 100_i64;
-        branch copy _25 -> [bb22, bb23];
+        _28 = copy _25;
+        _27 = copy _28 < const 100_i64;
+        _26 = copy _27;
+        branch copy _27 -> [bb22, bb23];
     }
 
     bb22: {
+        _26 = copy _2;
         goto -> bb23;
     }
 
     bb23: {
-        branch copy _2 -> [bb268, bb24];
+        branch copy _26 -> [bb268, bb24];
     }
 
     bb24: {
-        _28 = const 0_i64;
+        _30 = const 0_i64;
         goto -> bb25;
     }
 
     bb25: {
-        _29 = len(_1);
-        _30 = copy _28 < copy _29;
-        branch copy _30 -> [bb266, bb26];
+        _31 = len(_1);
+        _32 = copy _30 < copy _31;
+        branch copy _32 -> [bb266, bb26];
     }
 
     bb26: {
-        _34 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64];
-        _35 = const 0_i64;
+        _36 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64];
+        _37 = const 0_i64;
         goto -> bb27;
     }
 
     bb27: {
-        _36 = len(_34);
-        _37 = copy _35 < copy _36;
-        branch copy _37 -> [bb264, bb28];
+        _38 = len(_36);
+        _39 = copy _37 < copy _38;
+        branch copy _39 -> [bb264, bb28];
     }
 
     bb28: {
-        _41 = [const 1_i64, const 2_i64, const 3_i64];
-        _42 = const 0_i64;
+        _43 = [const 1_i64, const 2_i64, const 3_i64];
+        _44 = const 0_i64;
         goto -> bb29;
     }
 
     bb29: {
-        _43 = len(_41);
-        _44 = copy _42 < copy _43;
-        branch copy _44 -> [bb258, bb30];
+        _45 = len(_43);
+        _46 = copy _44 < copy _45;
+        branch copy _46 -> [bb258, bb30];
     }
 
     bb30: {
-        _56 = const 0_i64;
+        _58 = const 0_i64;
         goto -> bb31;
     }
 
     bb31: {
-        _58 = copy _56;
-        _57 = copy _58 < const 10_i64;
-        branch copy _57 -> [bb256, bb32];
+        _60 = copy _58;
+        _59 = copy _60 < const 10_i64;
+        branch copy _59 -> [bb256, bb32];
     }
 
     bb32: {
-        _60 = const 0_i64;
+        _62 = const 0_i64;
         goto -> bb33;
     }
 
     bb33: {
-        _62 = copy _60;
-        _61 = copy _62 < const 10_i64;
-        branch copy _61 -> [bb254, bb34];
+        _64 = copy _62;
+        _63 = copy _64 < const 10_i64;
+        branch copy _63 -> [bb254, bb34];
     }
 
     bb34: {
-        _64 = const 0_i64;
+        _66 = const 0_i64;
         goto -> bb35;
     }
 
     bb35: {
-        _65 = len(_1);
-        _66 = copy _64 < copy _65;
-        branch copy _66 -> [bb252, bb36];
+        _67 = len(_1);
+        _68 = copy _66 < copy _67;
+        branch copy _68 -> [bb252, bb36];
     }
 
     bb36: {
-        _70 = const 0_i64;
+        _72 = const 0_i64;
         goto -> bb37;
     }
 
     bb37: {
-        _71 = len(_1);
-        _72 = copy _70 < copy _71;
-        branch copy _72 -> [bb250, bb38];
+        _73 = len(_1);
+        _74 = copy _72 < copy _73;
+        branch copy _74 -> [bb250, bb38];
     }
 
     bb38: {
@@ -4155,79 +4278,81 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb39: {
-        _82 = copy _3;
-        _81 = copy _82 < const 100_i64;
-        _80 = copy _81;
-        branch copy _81 -> [bb40, bb41];
+        _85 = copy _3;
+        _84 = copy _85 < const 100_i64;
+        _83 = copy _84;
+        branch copy _84 -> [bb40, bb41];
     }
 
     bb40: {
-        _83 = copy _19;
-        _80 = copy _83 > const 0_i64;
+        _86 = copy _20;
+        _83 = copy _86 > const 0_i64;
         goto -> bb41;
     }
 
     bb41: {
-        branch copy _80 -> [bb42, bb43];
+        _82 = copy _83;
+        branch copy _83 -> [bb42, bb43];
     }
 
     bb42: {
+        _82 = copy _2;
         goto -> bb43;
     }
 
     bb43: {
-        _79 = copy _2;
-        branch copy _2 -> [bb44, bb45];
+        _81 = copy _82;
+        branch copy _82 -> [bb44, bb45];
     }
 
     bb44: {
-        _84 = copy _3;
-        _85 = copy _19;
-        _79 = copy _84 != copy _85;
+        _87 = copy _3;
+        _88 = copy _20;
+        _81 = copy _87 != copy _88;
         goto -> bb45;
     }
 
     bb45: {
-        _78 = copy _79;
-        branch copy _79 -> [bb46, bb47];
+        _80 = copy _81;
+        branch copy _81 -> [bb46, bb47];
     }
 
     bb46: {
-        _87 = copy _3;
-        _88 = copy _19;
-        _86 = copy _87 + copy _88;
-        _78 = copy _86 < const 10000_i64;
+        _90 = copy _3;
+        _91 = copy _20;
+        _89 = copy _90 + copy _91;
+        _80 = copy _89 < const 10000_i64;
         goto -> bb47;
     }
 
     bb47: {
-        _77 = copy _78;
-        branch copy _78 -> [bb48, bb49];
+        _79 = copy _80;
+        branch copy _80 -> [bb48, bb49];
     }
 
     bb48: {
-        _90 = copy _3;
-        _91 = copy _19;
-        _89 = copy _90 * copy _91;
-        _77 = copy _89 > const 500_i64;
+        _93 = copy _3;
+        _94 = copy _20;
+        _92 = copy _93 * copy _94;
+        _79 = copy _92 > const 500_i64;
         goto -> bb49;
     }
 
     bb49: {
-        _76 = copy _77;
-        branch copy _77 -> [bb50, bb51];
+        _78 = copy _79;
+        branch copy _79 -> [bb50, bb51];
     }
 
     bb50: {
-        _93 = copy _3;
-        _94 = copy _19;
-        _92 = copy _93 - copy _94;
-        _76 = copy _92 != const 42_i64;
+        _96 = copy _3;
+        _97 = copy _20;
+        _95 = copy _96 - copy _97;
+        _78 = copy _95 != const 42_i64;
         goto -> bb51;
     }
 
     bb51: {
-        branch copy _76 -> [bb249, bb52];
+        branch copy _78 -> [bb249, bb52];
     }
 
     bb52: {
@@ -4235,199 +4360,205 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb53: {
-        _104 = copy _3;
-        _103 = copy _104 < const 100_i64;
-        _102 = copy _103;
-        branch copy _103 -> [bb54, bb55];
+        _108 = copy _3;
+        _107 = copy _108 < const 100_i64;
+        _106 = copy _107;
+        branch copy _107 -> [bb54, bb55];
     }
 
     bb54: {
-        _105 = copy _19;
-        _102 = copy _105 > const 0_i64;
+        _109 = copy _20;
+        _106 = copy _109 > const 0_i64;
         goto -> bb55;
     }
 
     bb55: {
-        branch copy _102 -> [bb56, bb57];
+        _105 = copy _106;
+        branch copy _106 -> [bb56, bb57];
     }
 
     bb56: {
+        _105 = copy _2;
         goto -> bb57;
     }
 
     bb57: {
-        _101 = copy _2;
-        branch copy _2 -> [bb58, bb59];
+        _104 = copy _105;
+        branch copy _105 -> [bb58, bb59];
     }
 
     bb58: {
-        _106 = copy _3;
-        _107 = copy _19;
-        _101 = copy _106 != copy _107;
+        _110 = copy _3;
+        _111 = copy _20;
+        _104 = copy _110 != copy _111;
         goto -> bb59;
     }
 
     bb59: {
-        _100 = copy _101;
-        branch copy _101 -> [bb60, bb61];
+        _103 = copy _104;
+        branch copy _104 -> [bb60, bb61];
     }
 
     bb60: {
-        _109 = copy _3;
-        _110 = copy _19;
-        _108 = copy _109 + copy _110;
-        _100 = copy _108 < const 10000_i64;
+        _113 = copy _3;
+        _114 = copy _20;
+        _112 = copy _113 + copy _114;
+        _103 = copy _112 < const 10000_i64;
         goto -> bb61;
     }
 
     bb61: {
-        _99 = copy _100;
-        branch copy _100 -> [bb62, bb63];
+        _102 = copy _103;
+        branch copy _103 -> [bb62, bb63];
     }
 
     bb62: {
-        _112 = copy _3;
-        _113 = copy _19;
-        _111 = copy _112 * copy _113;
-        _99 = copy _111 > const 500_i64;
+        _116 = copy _3;
+        _117 = copy _20;
+        _115 = copy _116 * copy _117;
+        _102 = copy _115 > const 500_i64;
         goto -> bb63;
     }
 
     bb63: {
-        _98 = copy _99;
-        branch copy _99 -> [bb64, bb65];
+        _101 = copy _102;
+        branch copy _102 -> [bb64, bb65];
     }
 
     bb64: {
-        _115 = copy _3;
-        _116 = copy _19;
-        _114 = copy _115 - copy _116;
-        _98 = copy _114 != const 42_i64;
+        _119 = copy _3;
+        _120 = copy _20;
+        _118 = copy _119 - copy _120;
+        _101 = copy _118 != const 42_i64;
         goto -> bb65;
     }
 
     bb65: {
-        _97 = copy _98;
-        branch copy _98 -> [bb66, bb67];
+        _100 = copy _101;
+        branch copy _101 -> [bb66, bb67];
     }
 
     bb66: {
-        _118 = copy _3;
-        _117 = copy _118 % const 7_i64;
-        _97 = copy _117 == const 0_i64;
+        _122 = copy _3;
+        _121 = copy _122 % const 7_i64;
+        _100 = copy _121 == const 0_i64;
         goto -> bb67;
     }
 
     bb67: {
-        _96 = copy _97;
-        branch copy _97 -> [bb68, bb69];
+        _99 = copy _100;
+        branch copy _100 -> [bb68, bb69];
     }
 
     bb68: {
-        _120 = copy _19;
-        _119 = copy _120 % const 3_i64;
-        _96 = copy _119 == const 0_i64;
+        _124 = copy _20;
+        _123 = copy _124 % const 3_i64;
+        _99 = copy _123 == const 0_i64;
         goto -> bb69;
     }
 
     bb69: {
-        _95 = copy _96;
-        branch copy _96 -> [bb70, bb71];
+        _98 = copy _99;
+        branch copy _99 -> [bb70, bb71];
     }
 
     bb70: {
-        _123 = copy _3;
-        _124 = copy _19;
-        _122 = copy _123 + copy _124;
-        _126 = copy _3;
-        _127 = copy _19;
-        _125 = copy _126 * copy _127;
-        _121 = copy _122 + copy _125;
-        _95 = copy _121 > const 99999_i64;
+        _127 = copy _3;
+        _128 = copy _20;
+        _126 = copy _127 + copy _128;
+        _130 = copy _3;
+        _131 = copy _20;
+        _129 = copy _130 * copy _131;
+        _125 = copy _126 + copy _129;
+        _98 = copy _125 > const 99999_i64;
         goto -> bb71;
     }
 
     bb71: {
-        branch copy _95 -> [bb248, bb72];
+        branch copy _98 -> [bb248, bb72];
     }
 
     bb72: {
-        _128 = const 0_i64;
+        _132 = const 0_i64;
         goto -> bb73;
     }
 
     bb73: {
-        _130 = copy _128;
-        _129 = copy _130 < const 1000_i64;
-        branch copy _129 -> [bb74, bb75];
+        _135 = copy _132;
+        _134 = copy _135 < const 1000_i64;
+        _133 = copy _134;
+        branch copy _134 -> [bb74, bb75];
     }
 
     bb74: {
+        _133 = copy _2;
         goto -> bb75;
     }
 
     bb75: {
-        branch copy _2 -> [bb246, bb76];
+        branch copy _133 -> [bb246, bb76];
     }
 
     bb76: {
-        _134 = copy _3;
-        _135 = copy _3;
-        _133 = copy _134 * copy _135;
-        _137 = copy _19;
-        _138 = copy _19;
-        _136 = copy _137 * copy _138;
-        _132 = copy _133 + copy _136;
+        _139 = copy _3;
+        _140 = copy _3;
+        _138 = copy _139 * copy _140;
+        _142 = copy _20;
+        _143 = copy _20;
+        _141 = copy _142 * copy _143;
+        _137 = copy _138 + copy _141;
         goto -> bb77;
     }
 
     bb77: {
-        _141 = copy _132;
-        _140 = copy _141 < const 1000000_i64;
-        branch copy _140 -> [bb78, bb79];
+        _147 = copy _137;
+        _146 = copy _147 < const 1000000_i64;
+        _145 = copy _146;
+        branch copy _146 -> [bb78, bb79];
     }
 
     bb78: {
+        _145 = copy _2;
         goto -> bb79;
     }
 
     bb79: {
-        _139 = copy _2;
-        branch copy _2 -> [bb80, bb81];
+        _144 = copy _145;
+        branch copy _145 -> [bb80, bb81];
     }
 
     bb80: {
-        _142 = copy _3;
-        _139 = copy _142 > const 0_i64;
+        _148 = copy _3;
+        _144 = copy _148 > const 0_i64;
         goto -> bb81;
     }
 
     bb81: {
-        branch copy _139 -> [bb244, bb82];
+        branch copy _144 -> [bb244, bb82];
     }
 
     bb82: {
-        _147 = [const "very long string one", const "very long string two", const "very long string three", const "very long string four"];
-        _148 = const 0_i64;
+        _153 = [const "very long string one", const "very long string two", const "very long string three", const "very long string four"];
+        _154 = const 0_i64;
         goto -> bb83;
     }
 
     bb83: {
-        _149 = len(_147);
-        _150 = copy _148 < copy _149;
-        branch copy _150 -> [bb242, bb84];
+        _155 = len(_153);
+        _156 = copy _154 < copy _155;
+        branch copy _156 -> [bb242, bb84];
     }
 
     bb84: {
-        _152 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
-        _153 = const 0_i64;
+        _158 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
+        _159 = const 0_i64;
         goto -> bb85;
     }
 
     bb85: {
-        _154 = len(_152);
-        _155 = copy _153 < copy _154;
-        branch copy _155 -> [bb240, bb86];
+        _160 = len(_158);
+        _161 = copy _159 < copy _160;
+        branch copy _161 -> [bb240, bb86];
     }
 
     bb86: {
@@ -4435,79 +4566,81 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb87: {
-        _163 = copy _3;
-        _162 = copy _163 < const 100_i64;
-        _161 = copy _162;
-        branch copy _162 -> [bb88, bb89];
+        _170 = copy _3;
+        _169 = copy _170 < const 100_i64;
+        _168 = copy _169;
+        branch copy _169 -> [bb88, bb89];
     }
 
     bb88: {
-        _164 = copy _19;
-        _161 = copy _164 > const 0_i64;
+        _171 = copy _20;
+        _168 = copy _171 > const 0_i64;
         goto -> bb89;
     }
 
     bb89: {
-        branch copy _161 -> [bb90, bb91];
+        _167 = copy _168;
+        branch copy _168 -> [bb90, bb91];
     }
 
     bb90: {
+        _167 = copy _2;
         goto -> bb91;
     }
 
     bb91: {
-        _160 = copy _2;
-        branch copy _2 -> [bb92, bb93];
+        _166 = copy _167;
+        branch copy _167 -> [bb92, bb93];
     }
 
     bb92: {
-        _165 = copy _3;
-        _166 = copy _19;
-        _160 = copy _165 != copy _166;
+        _172 = copy _3;
+        _173 = copy _20;
+        _166 = copy _172 != copy _173;
         goto -> bb93;
     }
 
     bb93: {
-        _159 = copy _160;
-        branch copy _160 -> [bb94, bb95];
+        _165 = copy _166;
+        branch copy _166 -> [bb94, bb95];
     }
 
     bb94: {
-        _168 = copy _3;
-        _169 = copy _19;
-        _167 = copy _168 + copy _169;
-        _159 = copy _167 < const 10000_i64;
+        _175 = copy _3;
+        _176 = copy _20;
+        _174 = copy _175 + copy _176;
+        _165 = copy _174 < const 10000_i64;
         goto -> bb95;
     }
 
     bb95: {
-        _158 = copy _159;
-        branch copy _159 -> [bb96, bb97];
+        _164 = copy _165;
+        branch copy _165 -> [bb96, bb97];
     }
 
     bb96: {
-        _171 = copy _3;
-        _172 = copy _19;
-        _170 = copy _171 * copy _172;
-        _158 = copy _170 > const 500_i64;
+        _178 = copy _3;
+        _179 = copy _20;
+        _177 = copy _178 * copy _179;
+        _164 = copy _177 > const 500_i64;
         goto -> bb97;
     }
 
     bb97: {
-        _157 = copy _158;
-        branch copy _158 -> [bb98, bb99];
+        _163 = copy _164;
+        branch copy _164 -> [bb98, bb99];
     }
 
     bb98: {
-        _174 = copy _3;
-        _175 = copy _19;
-        _173 = copy _174 - copy _175;
-        _157 = copy _173 != const 42_i64;
+        _181 = copy _3;
+        _182 = copy _20;
+        _180 = copy _181 - copy _182;
+        _163 = copy _180 != const 42_i64;
         goto -> bb99;
     }
 
     bb99: {
-        branch copy _157 -> [bb239, bb100];
+        branch copy _163 -> [bb239, bb100];
     }
 
     bb100: {
@@ -4515,244 +4648,250 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb101: {
-        _182 = copy _3;
-        _181 = copy _182 < const 100_i64;
-        _180 = copy _181;
-        branch copy _181 -> [bb102, bb103];
+        _190 = copy _3;
+        _189 = copy _190 < const 100_i64;
+        _188 = copy _189;
+        branch copy _189 -> [bb102, bb103];
     }
 
     bb102: {
-        _183 = copy _19;
-        _180 = copy _183 > const 0_i64;
+        _191 = copy _20;
+        _188 = copy _191 > const 0_i64;
         goto -> bb103;
     }
 
     bb103: {
-        branch copy _180 -> [bb104, bb105];
+        _187 = copy _188;
+        branch copy _188 -> [bb104, bb105];
     }
 
     bb104: {
+        _187 = copy _2;
         goto -> bb105;
     }
 
     bb105: {
-        _179 = copy _2;
-        branch copy _2 -> [bb106, bb107];
+        _186 = copy _187;
+        branch copy _187 -> [bb106, bb107];
     }
 
     bb106: {
-        _184 = copy _3;
-        _185 = copy _19;
-        _179 = copy _184 != copy _185;
+        _192 = copy _3;
+        _193 = copy _20;
+        _186 = copy _192 != copy _193;
         goto -> bb107;
     }
 
     bb107: {
-        _178 = copy _179;
-        branch copy _179 -> [bb108, bb109];
+        _185 = copy _186;
+        branch copy _186 -> [bb108, bb109];
     }
 
     bb108: {
-        _187 = copy _3;
-        _188 = copy _19;
-        _186 = copy _187 + copy _188;
-        _178 = copy _186 < const 10000_i64;
+        _195 = copy _3;
+        _196 = copy _20;
+        _194 = copy _195 + copy _196;
+        _185 = copy _194 < const 10000_i64;
         goto -> bb109;
     }
 
     bb109: {
-        _177 = copy _178;
-        branch copy _178 -> [bb110, bb111];
+        _184 = copy _185;
+        branch copy _185 -> [bb110, bb111];
     }
 
     bb110: {
-        _190 = copy _3;
-        _191 = copy _19;
-        _189 = copy _190 * copy _191;
-        _177 = copy _189 > const 500_i64;
+        _198 = copy _3;
+        _199 = copy _20;
+        _197 = copy _198 * copy _199;
+        _184 = copy _197 > const 500_i64;
         goto -> bb111;
     }
 
     bb111: {
-        _176 = copy _177;
-        branch copy _177 -> [bb112, bb113];
+        _183 = copy _184;
+        branch copy _184 -> [bb112, bb113];
     }
 
     bb112: {
-        _193 = copy _3;
-        _194 = copy _19;
-        _192 = copy _193 - copy _194;
-        _176 = copy _192 != const 42_i64;
+        _201 = copy _3;
+        _202 = copy _20;
+        _200 = copy _201 - copy _202;
+        _183 = copy _200 != const 42_i64;
         goto -> bb113;
     }
 
     bb113: {
-        branch copy _176 -> [bb238, bb114];
+        branch copy _183 -> [bb238, bb114];
     }
 
     bb114: {
-        _197 = copy _3;
-        _198 = copy _3;
-        _196 = copy _197 * copy _198;
-        _200 = copy _19;
-        _201 = copy _19;
-        _199 = copy _200 * copy _201;
-        _195 = copy _196 + copy _199;
+        _205 = copy _3;
+        _206 = copy _3;
+        _204 = copy _205 * copy _206;
+        _208 = copy _20;
+        _209 = copy _20;
+        _207 = copy _208 * copy _209;
+        _203 = copy _204 + copy _207;
         goto -> bb115;
     }
 
     bb115: {
-        _204 = copy _195;
-        _203 = copy _204 < const 1000000_i64;
-        branch copy _203 -> [bb116, bb117];
+        _213 = copy _203;
+        _212 = copy _213 < const 1000000_i64;
+        _211 = copy _212;
+        branch copy _212 -> [bb116, bb117];
     }
 
     bb116: {
+        _211 = copy _2;
         goto -> bb117;
     }
 
     bb117: {
-        _202 = copy _2;
-        branch copy _2 -> [bb118, bb119];
+        _210 = copy _211;
+        branch copy _211 -> [bb118, bb119];
     }
 
     bb118: {
-        _205 = copy _3;
-        _202 = copy _205 > const 0_i64;
+        _214 = copy _3;
+        _210 = copy _214 > const 0_i64;
         goto -> bb119;
     }
 
     bb119: {
-        branch copy _202 -> [bb236, bb120];
+        branch copy _210 -> [bb236, bb120];
     }
 
     bb120: {
-        _212 = copy _3;
-        _213 = copy _3;
-        _211 = copy _212 * copy _213;
-        _215 = copy _19;
-        _216 = copy _19;
-        _214 = copy _215 * copy _216;
-        _210 = copy _211 + copy _214;
+        _221 = copy _3;
+        _222 = copy _3;
+        _220 = copy _221 * copy _222;
+        _224 = copy _20;
+        _225 = copy _20;
+        _223 = copy _224 * copy _225;
+        _219 = copy _220 + copy _223;
         goto -> bb121;
     }
 
     bb121: {
-        _219 = copy _210;
-        _218 = copy _219 < const 1000000_i64;
-        branch copy _218 -> [bb122, bb123];
+        _229 = copy _219;
+        _228 = copy _229 < const 1000000_i64;
+        _227 = copy _228;
+        branch copy _228 -> [bb122, bb123];
     }
 
     bb122: {
+        _227 = copy _2;
         goto -> bb123;
     }
 
     bb123: {
-        _217 = copy _2;
-        branch copy _2 -> [bb124, bb125];
+        _226 = copy _227;
+        branch copy _227 -> [bb124, bb125];
     }
 
     bb124: {
-        _220 = copy _3;
-        _217 = copy _220 > const 0_i64;
+        _230 = copy _3;
+        _226 = copy _230 > const 0_i64;
         goto -> bb125;
     }
 
     bb125: {
-        branch copy _217 -> [bb234, bb126];
+        branch copy _226 -> [bb234, bb126];
     }
 
     bb126: {
-        _225 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
-        _226 = const 0_i64;
+        _235 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
+        _236 = const 0_i64;
         goto -> bb127;
     }
 
     bb127: {
-        _227 = len(_225);
-        _228 = copy _226 < copy _227;
-        branch copy _228 -> [bb232, bb128];
+        _237 = len(_235);
+        _238 = copy _236 < copy _237;
+        branch copy _238 -> [bb232, bb128];
     }
 
     bb128: {
-        _230 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
-        _231 = const 0_i64;
+        _240 = [const "alpha bravo charlie", const "delta echo foxtrot", const "golf hotel india", const "juliet kilo lima", const "mike november oscar", const "papa quebec romeo"];
+        _241 = const 0_i64;
         goto -> bb129;
     }
 
     bb129: {
-        _232 = len(_230);
-        _233 = copy _231 < copy _232;
-        branch copy _233 -> [bb230, bb130];
+        _242 = len(_240);
+        _243 = copy _241 < copy _242;
+        branch copy _243 -> [bb230, bb130];
     }
 
     bb130: {
-        _235 = [const 1_i64, const 2_i64, const 3_i64];
-        _236 = const 0_i64;
+        _245 = [const 1_i64, const 2_i64, const 3_i64];
+        _246 = const 0_i64;
         goto -> bb131;
     }
 
     bb131: {
-        _237 = len(_235);
-        _238 = copy _236 < copy _237;
-        branch copy _238 -> [bb220, bb132];
+        _247 = len(_245);
+        _248 = copy _246 < copy _247;
+        branch copy _248 -> [bb220, bb132];
     }
 
     bb132: {
-        _258 = const 0_i64;
+        _268 = const 0_i64;
         goto -> bb133;
     }
 
     bb133: {
-        _260 = copy _258;
-        _259 = copy _260 < const 3_i64;
-        branch copy _259 -> [bb213, bb134];
+        _270 = copy _268;
+        _269 = copy _270 < const 3_i64;
+        branch copy _269 -> [bb213, bb134];
     }
 
     bb134: {
-        _272 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64];
-        _273 = const 0_i64;
+        _282 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64];
+        _283 = const 0_i64;
         goto -> bb135;
     }
 
     bb135: {
-        _274 = len(_272);
-        _275 = copy _273 < copy _274;
-        branch copy _275 -> [bb196, bb136];
+        _284 = len(_282);
+        _285 = copy _283 < copy _284;
+        branch copy _285 -> [bb196, bb136];
     }
 
     bb136: {
-        _298 = const 0_i64;
+        _308 = const 0_i64;
         goto -> bb137;
     }
 
     bb137: {
-        _300 = copy _298;
-        _299 = copy _300 < const 2_i64;
-        branch copy _299 -> [bb184, bb138];
+        _310 = copy _308;
+        _309 = copy _310 < const 2_i64;
+        branch copy _309 -> [bb184, bb138];
     }
 
     bb138: {
-        _320 = const 0_i64;
+        _330 = const 0_i64;
         goto -> bb139;
     }
 
     bb139: {
-        _321 = len(_1);
-        _322 = copy _320 < copy _321;
-        branch copy _322 -> [bb170, bb140];
+        _331 = len(_1);
+        _332 = copy _330 < copy _331;
+        branch copy _332 -> [bb170, bb140];
     }
 
     bb140: {
-        _345 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64, const 6_i64, const 7_i64, const 8_i64, const 9_i64, const 10_i64];
-        _346 = const 0_i64;
+        _356 = [const 1_i64, const 2_i64, const 3_i64, const 4_i64, const 5_i64, const 6_i64, const 7_i64, const 8_i64, const 9_i64, const 10_i64];
+        _357 = const 0_i64;
         goto -> bb141;
     }
 
     bb141: {
-        _347 = len(_345);
-        _348 = copy _346 < copy _347;
-        branch copy _348 -> [bb155, bb142];
+        _358 = len(_356);
+        _359 = copy _357 < copy _358;
+        branch copy _359 -> [bb155, bb142];
     }
 
     bb142: {
@@ -4760,153 +4899,153 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb143: {
-        _380 = copy _3;
-        _379 = copy _380 < const 10_i64;
-        branch copy _379 -> [bb154, bb144];
+        _391 = copy _3;
+        _390 = copy _391 < const 10_i64;
+        branch copy _390 -> [bb154, bb144];
     }
 
     bb144: {
-        _381 = const 0_i64;
+        _392 = const 0_i64;
         goto -> bb145;
     }
 
     bb145: {
-        _383 = copy _381;
-        _382 = copy _383 < const 10_i64;
-        branch copy _382 -> [bb152, bb146];
+        _394 = copy _392;
+        _393 = copy _394 < const 10_i64;
+        branch copy _393 -> [bb152, bb146];
     }
 
     bb146: {
-        _385 = const 0_i64;
+        _396 = const 0_i64;
         goto -> bb147;
     }
 
     bb147: {
-        _386 = len(_1);
-        _387 = copy _385 < copy _386;
-        branch copy _387 -> [bb150, bb148];
+        _397 = len(_1);
+        _398 = copy _396 < copy _397;
+        branch copy _398 -> [bb150, bb148];
     }
 
     bb148: {
-        _391 = copy _3;
-        _392 = copy _19;
-        _401 = copy _3;
         _402 = copy _3;
-        _400 = copy _401 * copy _402;
-        _404 = copy _19;
-        _405 = copy _19;
-        _403 = copy _404 * copy _405;
-        _399 = copy _400 + copy _403;
-        _407 = copy _3;
-        _408 = copy _19;
-        _406 = copy _407 * copy _408;
-        _398 = copy _399 + copy _406;
-        _409 = copy _3;
-        _397 = copy _398 + copy _409;
-        _410 = copy _19;
-        _396 = copy _397 + copy _410;
+        _403 = copy _20;
+        _412 = copy _3;
         _413 = copy _3;
-        _414 = copy _3;
-        _412 = copy _413 * copy _414;
-        _415 = copy _3;
-        _411 = copy _412 * copy _415;
-        _395 = copy _396 + copy _411;
-        _418 = copy _19;
-        _419 = copy _19;
+        _411 = copy _412 * copy _413;
+        _415 = copy _20;
+        _416 = copy _20;
+        _414 = copy _415 * copy _416;
+        _410 = copy _411 + copy _414;
+        _418 = copy _3;
+        _419 = copy _20;
         _417 = copy _418 * copy _419;
-        _420 = copy _19;
-        _416 = copy _417 * copy _420;
-        _394 = copy _395 + copy _416;
-        _423 = copy _3;
-        _424 = copy _19;
-        _422 = copy _423 * copy _424;
+        _409 = copy _410 + copy _417;
+        _420 = copy _3;
+        _408 = copy _409 + copy _420;
+        _421 = copy _20;
+        _407 = copy _408 + copy _421;
+        _424 = copy _3;
         _425 = copy _3;
-        _421 = copy _422 * copy _425;
-        _393 = copy _394 + copy _421;
-        _428 = copy _19;
-        _429 = copy _3;
-        _427 = copy _428 * copy _429;
-        _430 = copy _19;
-        _426 = copy _427 * copy _430;
-        _432 = { const "deep": const 42_i64 };
-        _431 = { const "inner": copy _432 };
-        _441 = copy _3;
-        _442 = copy _3;
-        _440 = copy _441 * copy _442;
-        _444 = copy _19;
-        _445 = copy _19;
-        _443 = copy _444 * copy _445;
-        _439 = copy _440 + copy _443;
-        _447 = copy _3;
-        _448 = copy _19;
-        _446 = copy _447 * copy _448;
-        _438 = copy _439 + copy _446;
-        _449 = copy _3;
-        _437 = copy _438 + copy _449;
-        _450 = copy _19;
-        _436 = copy _437 + copy _450;
+        _423 = copy _424 * copy _425;
+        _426 = copy _3;
+        _422 = copy _423 * copy _426;
+        _406 = copy _407 + copy _422;
+        _429 = copy _20;
+        _430 = copy _20;
+        _428 = copy _429 * copy _430;
+        _431 = copy _20;
+        _427 = copy _428 * copy _431;
+        _405 = copy _406 + copy _427;
+        _434 = copy _3;
+        _435 = copy _20;
+        _433 = copy _434 * copy _435;
+        _436 = copy _3;
+        _432 = copy _433 * copy _436;
+        _404 = copy _405 + copy _432;
+        _439 = copy _20;
+        _440 = copy _3;
+        _438 = copy _439 * copy _440;
+        _441 = copy _20;
+        _437 = copy _438 * copy _441;
+        _443 = { const "deep": const 42_i64 };
+        _442 = { const "inner": copy _443 };
+        _452 = copy _3;
         _453 = copy _3;
-        _454 = copy _3;
-        _452 = copy _453 * copy _454;
-        _455 = copy _3;
-        _451 = copy _452 * copy _455;
-        _435 = copy _436 + copy _451;
-        _458 = copy _19;
-        _459 = copy _19;
+        _451 = copy _452 * copy _453;
+        _455 = copy _20;
+        _456 = copy _20;
+        _454 = copy _455 * copy _456;
+        _450 = copy _451 + copy _454;
+        _458 = copy _3;
+        _459 = copy _20;
         _457 = copy _458 * copy _459;
-        _460 = copy _19;
-        _456 = copy _457 * copy _460;
-        _434 = copy _435 + copy _456;
-        _463 = copy _3;
-        _464 = copy _19;
-        _462 = copy _463 * copy _464;
+        _449 = copy _450 + copy _457;
+        _460 = copy _3;
+        _448 = copy _449 + copy _460;
+        _461 = copy _20;
+        _447 = copy _448 + copy _461;
+        _464 = copy _3;
         _465 = copy _3;
-        _461 = copy _462 * copy _465;
-        _433 = copy _434 + copy _461;
-        _468 = copy _19;
-        _469 = copy _3;
-        _467 = copy _468 * copy _469;
-        _470 = copy _19;
-        _466 = copy _467 * copy _470;
-        _479 = copy _3;
+        _463 = copy _464 * copy _465;
+        _466 = copy _3;
+        _462 = copy _463 * copy _466;
+        _446 = copy _447 + copy _462;
+        _469 = copy _20;
+        _470 = copy _20;
+        _468 = copy _469 * copy _470;
+        _471 = copy _20;
+        _467 = copy _468 * copy _471;
+        _445 = copy _446 + copy _467;
+        _474 = copy _3;
+        _475 = copy _20;
+        _473 = copy _474 * copy _475;
+        _476 = copy _3;
+        _472 = copy _473 * copy _476;
+        _444 = copy _445 + copy _472;
+        _479 = copy _20;
         _480 = copy _3;
         _478 = copy _479 * copy _480;
-        _482 = copy _19;
-        _483 = copy _19;
-        _481 = copy _482 * copy _483;
-        _477 = copy _478 + copy _481;
-        _485 = copy _3;
-        _486 = copy _19;
-        _484 = copy _485 * copy _486;
-        _476 = copy _477 + copy _484;
-        _487 = copy _3;
-        _475 = copy _476 + copy _487;
-        _488 = copy _19;
-        _474 = copy _475 + copy _488;
+        _481 = copy _20;
+        _477 = copy _478 * copy _481;
+        _490 = copy _3;
         _491 = copy _3;
-        _492 = copy _3;
-        _490 = copy _491 * copy _492;
-        _493 = copy _3;
-        _489 = copy _490 * copy _493;
-        _473 = copy _474 + copy _489;
-        _496 = copy _19;
-        _497 = copy _19;
+        _489 = copy _490 * copy _491;
+        _493 = copy _20;
+        _494 = copy _20;
+        _492 = copy _493 * copy _494;
+        _488 = copy _489 + copy _492;
+        _496 = copy _3;
+        _497 = copy _20;
         _495 = copy _496 * copy _497;
-        _498 = copy _19;
-        _494 = copy _495 * copy _498;
-        _472 = copy _473 + copy _494;
-        _501 = copy _3;
-        _502 = copy _19;
-        _500 = copy _501 * copy _502;
+        _487 = copy _488 + copy _495;
+        _498 = copy _3;
+        _486 = copy _487 + copy _498;
+        _499 = copy _20;
+        _485 = copy _486 + copy _499;
+        _502 = copy _3;
         _503 = copy _3;
-        _499 = copy _500 * copy _503;
-        _471 = copy _472 + copy _499;
-        _506 = copy _19;
-        _507 = copy _3;
-        _505 = copy _506 * copy _507;
-        _508 = copy _19;
-        _504 = copy _505 * copy _508;
-        _0 = copy _19;
+        _501 = copy _502 * copy _503;
+        _504 = copy _3;
+        _500 = copy _501 * copy _504;
+        _484 = copy _485 + copy _500;
+        _507 = copy _20;
+        _508 = copy _20;
+        _506 = copy _507 * copy _508;
+        _509 = copy _20;
+        _505 = copy _506 * copy _509;
+        _483 = copy _484 + copy _505;
+        _512 = copy _3;
+        _513 = copy _20;
+        _511 = copy _512 * copy _513;
+        _514 = copy _3;
+        _510 = copy _511 * copy _514;
+        _482 = copy _483 + copy _510;
+        _517 = copy _20;
+        _518 = copy _3;
+        _516 = copy _517 * copy _518;
+        _519 = copy _20;
+        _515 = copy _516 * copy _519;
+        _0 = copy _20;
         goto -> bb149;
     }
 
@@ -4915,26 +5054,26 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb150: {
-        _388 = copy _1[_385];
-        _389 = copy _388;
-        _390 = copy _389;
-        _19 = copy _19 + copy _390;
+        _399 = copy _1[_396];
+        _400 = copy _399;
+        _401 = copy _400;
+        _20 = copy _20 + copy _401;
         goto -> bb151;
     }
 
     bb151: {
-        _385 = copy _385 + const 1_i64;
+        _396 = copy _396 + const 1_i64;
         goto -> bb147;
     }
 
     bb152: {
-        _384 = copy _381;
-        _19 = copy _19 + copy _384;
+        _395 = copy _392;
+        _20 = copy _20 + copy _395;
         goto -> bb153;
     }
 
     bb153: {
-        _381 = copy _381 + const 1_i64;
+        _392 = copy _392 + const 1_i64;
         goto -> bb145;
     }
 
@@ -4944,17 +5083,17 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb155: {
-        _349 = copy _345[_346];
-        _350 = copy _349;
-        _351 = [const 10_i64, const 20_i64, const 30_i64, const 40_i64, const 50_i64, const 60_i64, const 70_i64, const 80_i64, const 90_i64, const 100_i64];
-        _352 = const 0_i64;
+        _360 = copy _356[_357];
+        _361 = copy _360;
+        _362 = [const 10_i64, const 20_i64, const 30_i64, const 40_i64, const 50_i64, const 60_i64, const 70_i64, const 80_i64, const 90_i64, const 100_i64];
+        _363 = const 0_i64;
         goto -> bb156;
     }
 
     bb156: {
-        _353 = len(_351);
-        _354 = copy _352 < copy _353;
-        branch copy _354 -> [bb159, bb157];
+        _364 = len(_362);
+        _365 = copy _363 < copy _364;
+        branch copy _365 -> [bb159, bb157];
     }
 
     bb157: {
@@ -4962,66 +5101,66 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb158: {
-        _346 = copy _346 + const 1_i64;
+        _357 = copy _357 + const 1_i64;
         goto -> bb141;
     }
 
     bb159: {
-        _355 = copy _351[_352];
-        _356 = copy _355;
-        _361 = copy _350;
-        _362 = copy _356;
-        _360 = copy _361 * copy _362;
-        _359 = copy _360 > const 500_i64;
-        _358 = copy _359;
-        branch copy _359 -> [bb160, bb161];
+        _366 = copy _362[_363];
+        _367 = copy _366;
+        _372 = copy _361;
+        _373 = copy _367;
+        _371 = copy _372 * copy _373;
+        _370 = copy _371 > const 500_i64;
+        _369 = copy _370;
+        branch copy _370 -> [bb160, bb161];
     }
 
     bb160: {
-        _364 = copy _350;
-        _365 = copy _356;
-        _363 = copy _364 + copy _365;
-        _358 = copy _363 < const 100_i64;
+        _375 = copy _361;
+        _376 = copy _367;
+        _374 = copy _375 + copy _376;
+        _369 = copy _374 < const 100_i64;
         goto -> bb161;
     }
 
     bb161: {
-        branch copy _358 -> [bb163, bb162];
+        branch copy _369 -> [bb163, bb162];
     }
 
     bb162: {
-        _357 = const 0_i64;
+        _368 = const 0_i64;
         goto -> bb168;
     }
 
     bb163: {
-        _367 = copy _350;
-        _366 = copy _367 % const 3_i64;
-        switch copy _366 [0: bb166, 1: bb165, otherwise: bb164];
+        _378 = copy _361;
+        _377 = copy _378 % const 3_i64;
+        switch copy _377 [0: bb166, 1: bb165, otherwise: bb164];
     }
 
     bb164: {
-        _376 = copy _350;
-        _377 = copy _356;
-        _357 = copy _376 * copy _377;
+        _387 = copy _361;
+        _388 = copy _367;
+        _368 = copy _387 * copy _388;
         goto -> bb167;
     }
 
     bb165: {
-        _373 = copy _350;
-        _374 = copy _356;
-        _372 = copy _373 * copy _374;
-        _375 = copy _19;
-        _357 = copy _372 - copy _375;
+        _384 = copy _361;
+        _385 = copy _367;
+        _383 = copy _384 * copy _385;
+        _386 = copy _20;
+        _368 = copy _383 - copy _386;
         goto -> bb167;
     }
 
     bb166: {
-        _369 = copy _350;
-        _370 = copy _356;
-        _368 = copy _369 * copy _370;
-        _371 = copy _19;
-        _357 = copy _368 + copy _371;
+        _380 = copy _361;
+        _381 = copy _367;
+        _379 = copy _380 * copy _381;
+        _382 = copy _20;
+        _368 = copy _379 + copy _382;
         goto -> bb167;
     }
 
@@ -5030,74 +5169,76 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb168: {
-        _378 = copy _357;
-        _19 = copy _19 + copy _378;
+        _389 = copy _368;
+        _20 = copy _20 + copy _389;
         goto -> bb169;
     }
 
     bb169: {
-        _352 = copy _352 + const 1_i64;
+        _363 = copy _363 + const 1_i64;
         goto -> bb156;
     }
 
     bb170: {
-        _323 = copy _1[_320];
-        _324 = copy _323;
-        _327 = copy _324;
-        _328 = copy _324;
-        _326 = copy _327 * copy _328;
-        _330 = copy _19;
-        _331 = copy _19;
-        _329 = copy _330 * copy _331;
-        _325 = copy _326 + copy _329;
+        _333 = copy _1[_330];
+        _334 = copy _333;
+        _337 = copy _334;
+        _338 = copy _334;
+        _336 = copy _337 * copy _338;
+        _340 = copy _20;
+        _341 = copy _20;
+        _339 = copy _340 * copy _341;
+        _335 = copy _336 + copy _339;
         goto -> bb171;
     }
 
     bb171: {
-        _336 = copy _325;
-        _335 = copy _336 < const 1000000_i64;
-        branch copy _335 -> [bb172, bb173];
+        _347 = copy _335;
+        _346 = copy _347 < const 1000000_i64;
+        _345 = copy _346;
+        branch copy _346 -> [bb172, bb173];
     }
 
     bb172: {
+        _345 = copy _2;
         goto -> bb173;
     }
 
     bb173: {
-        _334 = copy _2;
-        branch copy _2 -> [bb174, bb175];
+        _344 = copy _345;
+        branch copy _345 -> [bb174, bb175];
     }
 
     bb174: {
-        _337 = copy _324;
-        _334 = copy _337 > const 0_i64;
+        _348 = copy _334;
+        _344 = copy _348 > const 0_i64;
         goto -> bb175;
     }
 
     bb175: {
-        _333 = copy _334;
-        branch copy _334 -> [bb176, bb177];
+        _343 = copy _344;
+        branch copy _344 -> [bb176, bb177];
     }
 
     bb176: {
-        _338 = copy _19;
-        _333 = copy _338 > const 0_i64;
+        _349 = copy _20;
+        _343 = copy _349 > const 0_i64;
         goto -> bb177;
     }
 
     bb177: {
-        _332 = copy _333;
-        branch copy _333 -> [bb178, bb179];
+        _342 = copy _343;
+        branch copy _343 -> [bb178, bb179];
     }
 
     bb178: {
-        _339 = copy _325;
-        _332 = copy _339 != const 42_i64;
+        _350 = copy _335;
+        _342 = copy _350 != const 42_i64;
         goto -> bb179;
     }
 
     bb179: {
-        branch copy _332 -> [bb182, bb180];
+        branch copy _342 -> [bb182, bb180];
     }
 
     bb180: {
@@ -5105,53 +5246,53 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb181: {
-        _320 = copy _320 + const 1_i64;
+        _330 = copy _330 + const 1_i64;
         goto -> bb139;
     }
 
     bb182: {
-        _340 = copy _325;
-        _19 = copy _19 + copy _340;
+        _351 = copy _335;
+        _20 = copy _20 + copy _351;
         goto -> bb183;
     }
 
     bb183: {
-        _343 = copy _324;
-        _344 = copy _19;
-        _342 = copy _343 + copy _344;
-        _341 = copy _342 + const 1_i64;
-        _325 = copy _325 + copy _341;
+        _354 = copy _334;
+        _355 = copy _20;
+        _353 = copy _354 + copy _355;
+        _352 = copy _353 + const 1_i64;
+        _335 = copy _335 + copy _352;
         goto -> bb171;
     }
 
     bb184: {
-        _301 = [const 1_i64, const 2_i64];
-        _302 = const 0_i64;
+        _311 = [const 1_i64, const 2_i64];
+        _312 = const 0_i64;
         goto -> bb185;
     }
 
     bb185: {
-        _303 = len(_301);
-        _304 = copy _302 < copy _303;
-        branch copy _304 -> [bb187, bb186];
+        _313 = len(_311);
+        _314 = copy _312 < copy _313;
+        branch copy _314 -> [bb187, bb186];
     }
 
     bb186: {
-        _298 = copy _298 + const 1_i64;
+        _308 = copy _308 + const 1_i64;
         goto -> bb137;
     }
 
     bb187: {
-        _305 = copy _301[_302];
-        _306 = copy _305;
-        _307 = const 0_i64;
+        _315 = copy _311[_312];
+        _316 = copy _315;
+        _317 = const 0_i64;
         goto -> bb188;
     }
 
     bb188: {
-        _309 = copy _307;
-        _308 = copy _309 < const 2_i64;
-        branch copy _308 -> [bb191, bb189];
+        _319 = copy _317;
+        _318 = copy _319 < const 2_i64;
+        branch copy _318 -> [bb191, bb189];
     }
 
     bb189: {
@@ -5159,19 +5300,19 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb190: {
-        _302 = copy _302 + const 1_i64;
+        _312 = copy _312 + const 1_i64;
         goto -> bb185;
     }
 
     bb191: {
-        _310 = const 0_i64;
+        _320 = const 0_i64;
         goto -> bb192;
     }
 
     bb192: {
-        _312 = copy _310;
-        _311 = copy _312 < const 2_i64;
-        branch copy _311 -> [bb195, bb193];
+        _322 = copy _320;
+        _321 = copy _322 < const 2_i64;
+        branch copy _321 -> [bb195, bb193];
     }
 
     bb193: {
@@ -5179,29 +5320,29 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb194: {
-        _307 = copy _307 + const 1_i64;
+        _317 = copy _317 + const 1_i64;
         goto -> bb188;
     }
 
     bb195: {
-        _316 = copy _298;
-        _317 = copy _306;
-        _315 = copy _316 + copy _317;
-        _318 = copy _307;
-        _314 = copy _315 + copy _318;
-        _319 = copy _310;
-        _313 = copy _314 + copy _319;
-        _19 = copy _19 + copy _313;
-        _310 = copy _310 + const 1_i64;
+        _326 = copy _308;
+        _327 = copy _316;
+        _325 = copy _326 + copy _327;
+        _328 = copy _317;
+        _324 = copy _325 + copy _328;
+        _329 = copy _320;
+        _323 = copy _324 + copy _329;
+        _20 = copy _20 + copy _323;
+        _320 = copy _320 + const 1_i64;
         goto -> bb192;
     }
 
     bb196: {
-        _276 = copy _272[_273];
-        _277 = copy _276;
-        _279 = copy _277;
-        _278 = copy _279 == const 3_i64;
-        branch copy _278 -> [bb211, bb197];
+        _286 = copy _282[_283];
+        _287 = copy _286;
+        _289 = copy _287;
+        _288 = copy _289 == const 3_i64;
+        branch copy _288 -> [bb211, bb197];
     }
 
     bb197: {
@@ -5209,42 +5350,42 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb198: {
-        _280 = [const 10_i64, const 20_i64, const 30_i64, const 40_i64, const 50_i64];
-        _281 = const 0_i64;
+        _290 = [const 10_i64, const 20_i64, const 30_i64, const 40_i64, const 50_i64];
+        _291 = const 0_i64;
         goto -> bb199;
     }
 
     bb199: {
-        _282 = len(_280);
-        _283 = copy _281 < copy _282;
-        branch copy _283 -> [bb200, bb210];
+        _292 = len(_290);
+        _293 = copy _291 < copy _292;
+        branch copy _293 -> [bb200, bb210];
     }
 
     bb200: {
-        _284 = copy _280[_281];
-        _285 = copy _284;
-        _288 = copy _277;
-        _289 = copy _285;
-        _287 = copy _288 * copy _289;
-        _290 = copy _287 == const 0_i64;
-        branch copy _290 -> [bb209, bb201];
+        _294 = copy _290[_291];
+        _295 = copy _294;
+        _298 = copy _287;
+        _299 = copy _295;
+        _297 = copy _298 * copy _299;
+        _300 = copy _297 == const 0_i64;
+        branch copy _300 -> [bb209, bb201];
     }
 
     bb201: {
-        _291 = is_type(copy _287, Int { attr: TyAttr(None) });
-        branch copy _291 -> [bb202, bb203];
+        _301 = is_type(copy _297, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _301 -> [bb202, bb203];
     }
 
     bb202: {
-        _292 = copy _287;
-        _294 = copy _292;
-        _293 = copy _294 > const 100_i64;
-        branch copy _293 -> [bb207, bb203];
+        _302 = copy _297;
+        _304 = copy _302;
+        _303 = copy _304 > const 100_i64;
+        branch copy _303 -> [bb207, bb203];
     }
 
     bb203: {
-        _295 = is_type(copy _287, Int { attr: TyAttr(None) });
-        branch copy _295 -> [bb205, bb204];
+        _305 = is_type(copy _297, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
+        branch copy _305 -> [bb205, bb204];
     }
 
     bb204: {
@@ -5252,14 +5393,14 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb205: {
-        _296 = copy _287;
-        _286 = copy _296;
+        _306 = copy _297;
+        _296 = copy _306;
         goto -> bb206;
     }
 
     bb206: {
-        _297 = copy _286;
-        _19 = copy _19 + copy _297;
+        _307 = copy _296;
+        _20 = copy _20 + copy _307;
         goto -> bb208;
     }
 
@@ -5268,7 +5409,7 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb208: {
-        _281 = copy _281 + const 1_i64;
+        _291 = copy _291 + const 1_i64;
         goto -> bb199;
     }
 
@@ -5285,65 +5426,65 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb212: {
-        _273 = copy _273 + const 1_i64;
+        _283 = copy _283 + const 1_i64;
         goto -> bb135;
     }
 
     bb213: {
-        _261 = const 0_i64;
+        _271 = const 0_i64;
         goto -> bb214;
     }
 
     bb214: {
-        _263 = copy _261;
-        _262 = copy _263 < const 3_i64;
-        branch copy _262 -> [bb216, bb215];
+        _273 = copy _271;
+        _272 = copy _273 < const 3_i64;
+        branch copy _272 -> [bb216, bb215];
     }
 
     bb215: {
-        _258 = copy _258 + const 1_i64;
+        _268 = copy _268 + const 1_i64;
         goto -> bb133;
     }
 
     bb216: {
-        _264 = const 0_i64;
+        _274 = const 0_i64;
         goto -> bb217;
     }
 
     bb217: {
-        _266 = copy _264;
-        _265 = copy _266 < const 3_i64;
-        branch copy _265 -> [bb219, bb218];
+        _276 = copy _274;
+        _275 = copy _276 < const 3_i64;
+        branch copy _275 -> [bb219, bb218];
     }
 
     bb218: {
-        _261 = copy _261 + const 1_i64;
+        _271 = copy _271 + const 1_i64;
         goto -> bb214;
     }
 
     bb219: {
-        _269 = copy _258;
-        _270 = copy _261;
-        _268 = copy _269 + copy _270;
-        _271 = copy _264;
-        _267 = copy _268 + copy _271;
-        _19 = copy _19 + copy _267;
-        _264 = copy _264 + const 1_i64;
+        _279 = copy _268;
+        _280 = copy _271;
+        _278 = copy _279 + copy _280;
+        _281 = copy _274;
+        _277 = copy _278 + copy _281;
+        _20 = copy _20 + copy _277;
+        _274 = copy _274 + const 1_i64;
         goto -> bb217;
     }
 
     bb220: {
-        _239 = copy _235[_236];
-        _240 = copy _239;
-        _241 = [const 4_i64, const 5_i64, const 6_i64];
-        _242 = const 0_i64;
+        _249 = copy _245[_246];
+        _250 = copy _249;
+        _251 = [const 4_i64, const 5_i64, const 6_i64];
+        _252 = const 0_i64;
         goto -> bb221;
     }
 
     bb221: {
-        _243 = len(_241);
-        _244 = copy _242 < copy _243;
-        branch copy _244 -> [bb224, bb222];
+        _253 = len(_251);
+        _254 = copy _252 < copy _253;
+        branch copy _254 -> [bb224, bb222];
     }
 
     bb222: {
@@ -5351,22 +5492,22 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb223: {
-        _236 = copy _236 + const 1_i64;
+        _246 = copy _246 + const 1_i64;
         goto -> bb131;
     }
 
     bb224: {
-        _245 = copy _241[_242];
-        _246 = copy _245;
-        _247 = [const 7_i64, const 8_i64, const 9_i64];
-        _248 = const 0_i64;
+        _255 = copy _251[_252];
+        _256 = copy _255;
+        _257 = [const 7_i64, const 8_i64, const 9_i64];
+        _258 = const 0_i64;
         goto -> bb225;
     }
 
     bb225: {
-        _249 = len(_247);
-        _250 = copy _248 < copy _249;
-        branch copy _250 -> [bb228, bb226];
+        _259 = len(_257);
+        _260 = copy _258 < copy _259;
+        branch copy _260 -> [bb228, bb226];
     }
 
     bb226: {
@@ -5374,74 +5515,74 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb227: {
-        _242 = copy _242 + const 1_i64;
+        _252 = copy _252 + const 1_i64;
         goto -> bb221;
     }
 
     bb228: {
-        _251 = copy _247[_248];
-        _252 = copy _251;
-        _255 = copy _240;
-        _256 = copy _246;
-        _254 = copy _255 * copy _256;
-        _257 = copy _252;
-        _253 = copy _254 * copy _257;
-        _19 = copy _19 + copy _253;
+        _261 = copy _257[_258];
+        _262 = copy _261;
+        _265 = copy _250;
+        _266 = copy _256;
+        _264 = copy _265 * copy _266;
+        _267 = copy _262;
+        _263 = copy _264 * copy _267;
+        _20 = copy _20 + copy _263;
         goto -> bb229;
     }
 
     bb229: {
-        _248 = copy _248 + const 1_i64;
+        _258 = copy _258 + const 1_i64;
         goto -> bb225;
     }
 
     bb230: {
-        _234 = copy _230[_231];
-        _19 = copy _19 + const 1_i64;
+        _244 = copy _240[_241];
+        _20 = copy _20 + const 1_i64;
         goto -> bb231;
     }
 
     bb231: {
-        _231 = copy _231 + const 1_i64;
+        _241 = copy _241 + const 1_i64;
         goto -> bb129;
     }
 
     bb232: {
-        _229 = copy _225[_226];
-        _19 = copy _19 + const 1_i64;
+        _239 = copy _235[_236];
+        _20 = copy _20 + const 1_i64;
         goto -> bb233;
     }
 
     bb233: {
-        _226 = copy _226 + const 1_i64;
+        _236 = copy _236 + const 1_i64;
         goto -> bb127;
     }
 
     bb234: {
-        _221 = copy _210;
-        _19 = copy _19 + copy _221;
+        _231 = copy _219;
+        _20 = copy _20 + copy _231;
         goto -> bb235;
     }
 
     bb235: {
-        _223 = copy _3;
-        _224 = copy _19;
-        _222 = copy _223 + copy _224;
-        _210 = copy _210 + copy _222;
+        _233 = copy _3;
+        _234 = copy _20;
+        _232 = copy _233 + copy _234;
+        _219 = copy _219 + copy _232;
         goto -> bb121;
     }
 
     bb236: {
-        _206 = copy _195;
-        _19 = copy _19 + copy _206;
+        _215 = copy _203;
+        _20 = copy _20 + copy _215;
         goto -> bb237;
     }
 
     bb237: {
-        _208 = copy _3;
-        _209 = copy _19;
-        _207 = copy _208 + copy _209;
-        _195 = copy _195 + copy _207;
+        _217 = copy _3;
+        _218 = copy _20;
+        _216 = copy _217 + copy _218;
+        _203 = copy _203 + copy _216;
         goto -> bb115;
     }
 
@@ -5456,49 +5597,49 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb240: {
-        _156 = copy _152[_153];
-        _19 = copy _19 + const 1_i64;
+        _162 = copy _158[_159];
+        _20 = copy _20 + const 1_i64;
         goto -> bb241;
     }
 
     bb241: {
-        _153 = copy _153 + const 1_i64;
+        _159 = copy _159 + const 1_i64;
         goto -> bb85;
     }
 
     bb242: {
-        _151 = copy _147[_148];
-        _19 = copy _19 + const 1_i64;
+        _157 = copy _153[_154];
+        _20 = copy _20 + const 1_i64;
         goto -> bb243;
     }
 
     bb243: {
-        _148 = copy _148 + const 1_i64;
+        _154 = copy _154 + const 1_i64;
         goto -> bb83;
     }
 
     bb244: {
-        _143 = copy _132;
-        _19 = copy _19 + copy _143;
+        _149 = copy _137;
+        _20 = copy _20 + copy _149;
         goto -> bb245;
     }
 
     bb245: {
-        _145 = copy _3;
-        _146 = copy _19;
-        _144 = copy _145 + copy _146;
-        _132 = copy _132 + copy _144;
+        _151 = copy _3;
+        _152 = copy _20;
+        _150 = copy _151 + copy _152;
+        _137 = copy _137 + copy _150;
         goto -> bb77;
     }
 
     bb246: {
-        _131 = copy _128;
-        _19 = copy _19 + copy _131;
+        _136 = copy _132;
+        _20 = copy _20 + copy _136;
         goto -> bb247;
     }
 
     bb247: {
-        _128 = copy _128 + const 1_i64;
+        _132 = copy _132 + const 1_i64;
         goto -> bb73;
     }
 
@@ -5513,65 +5654,65 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb250: {
-        _73 = copy _1[_70];
-        _74 = copy _73;
-        _75 = copy _74;
-        _19 = copy _19 + copy _75;
+        _75 = copy _1[_72];
+        _76 = copy _75;
+        _77 = copy _76;
+        _20 = copy _20 + copy _77;
         goto -> bb251;
     }
 
     bb251: {
-        _70 = copy _70 + const 1_i64;
+        _72 = copy _72 + const 1_i64;
         goto -> bb37;
     }
 
     bb252: {
-        _67 = copy _1[_64];
-        _68 = copy _67;
-        _69 = copy _68;
-        _19 = copy _19 + copy _69;
+        _69 = copy _1[_66];
+        _70 = copy _69;
+        _71 = copy _70;
+        _20 = copy _20 + copy _71;
         goto -> bb253;
     }
 
     bb253: {
-        _64 = copy _64 + const 1_i64;
+        _66 = copy _66 + const 1_i64;
         goto -> bb35;
     }
 
     bb254: {
-        _63 = copy _60;
-        _19 = copy _19 + copy _63;
+        _65 = copy _62;
+        _20 = copy _20 + copy _65;
         goto -> bb255;
     }
 
     bb255: {
-        _60 = copy _60 + const 1_i64;
+        _62 = copy _62 + const 1_i64;
         goto -> bb33;
     }
 
     bb256: {
-        _59 = copy _56;
-        _19 = copy _19 + copy _59;
+        _61 = copy _58;
+        _20 = copy _20 + copy _61;
         goto -> bb257;
     }
 
     bb257: {
-        _56 = copy _56 + const 1_i64;
+        _58 = copy _58 + const 1_i64;
         goto -> bb31;
     }
 
     bb258: {
-        _45 = copy _41[_42];
-        _46 = copy _45;
-        _47 = [const 4_i64, const 5_i64, const 6_i64];
-        _48 = const 0_i64;
+        _47 = copy _43[_44];
+        _48 = copy _47;
+        _49 = [const 4_i64, const 5_i64, const 6_i64];
+        _50 = const 0_i64;
         goto -> bb259;
     }
 
     bb259: {
-        _49 = len(_47);
-        _50 = copy _48 < copy _49;
-        branch copy _50 -> [bb262, bb260];
+        _51 = len(_49);
+        _52 = copy _50 < copy _51;
+        branch copy _52 -> [bb262, bb260];
     }
 
     bb260: {
@@ -5579,70 +5720,70 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
     }
 
     bb261: {
-        _42 = copy _42 + const 1_i64;
+        _44 = copy _44 + const 1_i64;
         goto -> bb29;
     }
 
     bb262: {
-        _51 = copy _47[_48];
-        _52 = copy _51;
-        _54 = copy _46;
-        _55 = copy _52;
-        _53 = copy _54 * copy _55;
-        _19 = copy _19 + copy _53;
+        _53 = copy _49[_50];
+        _54 = copy _53;
+        _56 = copy _48;
+        _57 = copy _54;
+        _55 = copy _56 * copy _57;
+        _20 = copy _20 + copy _55;
         goto -> bb263;
     }
 
     bb263: {
-        _48 = copy _48 + const 1_i64;
+        _50 = copy _50 + const 1_i64;
         goto -> bb259;
     }
 
     bb264: {
-        _38 = copy _34[_35];
-        _39 = copy _38;
-        _40 = copy _39;
-        _19 = copy _19 + copy _40;
+        _40 = copy _36[_37];
+        _41 = copy _40;
+        _42 = copy _41;
+        _20 = copy _20 + copy _42;
         goto -> bb265;
     }
 
     bb265: {
-        _35 = copy _35 + const 1_i64;
+        _37 = copy _37 + const 1_i64;
         goto -> bb27;
     }
 
     bb266: {
-        _31 = copy _1[_28];
-        _32 = copy _31;
-        _33 = copy _32;
-        _19 = copy _19 + copy _33;
+        _33 = copy _1[_30];
+        _34 = copy _33;
+        _35 = copy _34;
+        _20 = copy _20 + copy _35;
         goto -> bb267;
     }
 
     bb267: {
-        _28 = copy _28 + const 1_i64;
+        _30 = copy _30 + const 1_i64;
         goto -> bb25;
     }
 
     bb268: {
-        _27 = copy _24;
-        _19 = copy _19 + copy _27;
+        _29 = copy _25;
+        _20 = copy _20 + copy _29;
         goto -> bb269;
     }
 
     bb269: {
-        _24 = copy _24 + const 2_i64;
+        _25 = copy _25 + const 2_i64;
         goto -> bb21;
     }
 
     bb270: {
-        _23 = copy _20;
-        _19 = copy _19 + copy _23;
+        _24 = copy _21;
+        _20 = copy _20 + copy _24;
         goto -> bb271;
     }
 
     bb271: {
-        _20 = copy _20 + const 1_i64;
+        _21 = copy _21 + const 1_i64;
         goto -> bb19;
     }
 
@@ -5658,10 +5799,10 @@ fn user.LoopStmts(items: int[], flag: bool) -> int {
 
     bb274: {
         _3 = copy _3 + const 1_i64;
-        _14 = copy _3;
-        _13 = copy _14 % const 2_i64;
-        _12 = copy _13 == const 0_i64;
-        branch copy _12 -> [bb277, bb275];
+        _15 = copy _3;
+        _14 = copy _15 % const 2_i64;
+        _13 = copy _14 == const 0_i64;
+        branch copy _13 -> [bb277, bb275];
     }
 
     bb275: {
@@ -5741,7 +5882,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     let _49: int
     let _50: int
     let _51: int
-    let _52: "this is the true branch with a very long string" | "this is the false branch also very long" // result
+    let _52: string // result
     let _53: bool
     let _54: int // n
     let _55: bool
@@ -5890,7 +6031,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb19: {
-        _5 = is_type(copy _1, Int { attr: TyAttr(None) });
+        _5 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _5 -> [bb20, bb21];
     }
 
@@ -5914,7 +6055,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb24: {
-        _9 = is_type(copy _1, Int { attr: TyAttr(None) });
+        _9 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _9 -> [bb25, bb26];
     }
 
@@ -6019,7 +6160,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb48: {
-        _18 = is_type(copy _1, Int { attr: TyAttr(None) });
+        _18 = is_type(copy _1, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _18 -> [bb50, bb49];
     }
 
@@ -6102,12 +6243,12 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb68: {
-        _21 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr(None)));
+        _21 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _21 -> [bb72, bb69];
     }
 
     bb69: {
-        _24 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr(None)));
+        _24 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _24 -> [bb71, bb70];
     }
 
@@ -6128,7 +6269,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb73: {
-        _27 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr(None)), Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr(None))], TyAttr(None)));
+        _27 = is_type(copy _3, Union([Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }), Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] })], TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _27 -> [bb75, bb74];
     }
 
@@ -6154,7 +6295,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb79: {
-        _29 = is_type(copy _28, Int { attr: TyAttr(None) });
+        _29 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _29 -> [bb80, bb81];
     }
 
@@ -6166,7 +6307,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb81: {
-        _33 = is_type(copy _28, Int { attr: TyAttr(None) });
+        _33 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _33 -> [bb82, bb83];
     }
 
@@ -6194,7 +6335,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb87: {
-        _37 = is_type(copy _28, Int { attr: TyAttr(None) });
+        _37 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _37 -> [bb88, bb99];
     }
 
@@ -6340,7 +6481,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb118: {
-        _53 = is_type(copy _28, Int { attr: TyAttr(None) });
+        _53 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _53 -> [bb119, bb128];
     }
 
@@ -6408,7 +6549,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb131: {
-        _65 = is_type(copy _28, Int { attr: TyAttr(None) });
+        _65 = is_type(copy _28, Int { attr: TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] } });
         branch copy _65 -> [bb132, bb141];
     }
 
@@ -6599,12 +6740,12 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb166: {
-        _115 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr(None)));
+        _115 = is_type(copy _3, Class(TypeName { name: "MatchSuccess", module_path: ["user"], display_name: "MatchSuccess" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _115 -> [bb170, bb167];
     }
 
     bb167: {
-        _120 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr(None)));
+        _120 = is_type(copy _3, Class(TypeName { name: "MatchFailure", module_path: ["user"], display_name: "MatchFailure" }, TyAttr { sap_parse_without_null: Unset, sap_pending_never: Unset, sap_in_progress_never: Unset, asserts: [] }));
         branch copy _120 -> [bb169, bb168];
     }
 

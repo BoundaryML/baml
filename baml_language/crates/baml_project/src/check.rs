@@ -63,6 +63,24 @@ pub fn collect_compiler2_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
     for file in &source_files {
         diagnostics.extend(lsp2_check_file(db, *file));
     }
+
+    // Collect package-level diagnostics (name conflicts and namespace shadows).
+    // Discover all unique packages from file metadata.
+    let mut seen_packages = std::collections::HashSet::new();
+    for file in &source_files {
+        let pkg_info = baml_compiler2_hir::file_package::file_package(db, *file);
+        seen_packages.insert(pkg_info.package.clone());
+    }
+    for pkg_name in seen_packages {
+        let pkg_id = baml_compiler2_hir::package::PackageId::new(db, pkg_name);
+        let items = baml_compiler2_hir::package::package_items(db, pkg_id);
+        for conflict in items.conflicts() {
+            diagnostics.push(conflict.to_diagnostic(db));
+        }
+        for shadow in items.shadows() {
+            diagnostics.push(shadow.to_diagnostic(db));
+        }
+    }
     diagnostics.sort_by(|a, b| {
         let a_span = a.primary_span();
         let b_span = b.primary_span();

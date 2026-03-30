@@ -147,6 +147,7 @@ async function loggingFetch(
       responseBody: null,
       error: null,
       durationMs: null,
+      responseHeaders: null,
     },
   });
 
@@ -171,7 +172,7 @@ async function loggingFetch(
     postOut({
       type: "fetchLogUpdate",
       logId,
-      patch: { status: response.status, durationMs: elapsed },
+      patch: { status: response.status, durationMs: elapsed, responseHeaders },
     });
 
     // Update log with body when it resolves
@@ -244,7 +245,25 @@ export function mapsToRecordsDeep<T>(input: T): T {
 
 
 function onPlaygroundNotification(notification: PlaygroundNotification): void {
-  postOut({ type: "playgroundNotification", notification });
+  // Request-response messages get unwrapped to top-level WorkerOutMessage.
+  // Only unsolicited push notifications stay wrapped in playgroundNotification.
+  switch (notification.type) {
+    case "controlFlowGraphResult":
+      postOut({
+        type: "controlFlowGraphResult",
+        functionName: notification.functionName,
+        graph: notification.graph ?? null,
+      });
+      break;
+    case "cursorContext":
+      postOut({
+        type: "cursorContext",
+        context: notification.context,
+      });
+      break;
+    default:
+      postOut({ type: "playgroundNotification", notification });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -485,11 +504,23 @@ self.onmessage = async (event: MessageEvent) => {
         const result = JSON.stringify(decoded, null, 2);
         postOut({ type: "callFunctionResult", id: msg.id, result });
       } catch (e) {
+        const isCancelled = e instanceof Error && (e as any).name === 'BamlCancelledError';
         postOut({
           type: "callFunctionError",
           id: msg.id,
           error: e instanceof Error ? e.message : String(e),
+          cancelled: isCancelled || undefined,
         });
+      }
+      return;
+    }
+
+    case "cancelCall": {
+      if (!runtime) return;
+      try {
+        runtime.cancelCall(msg.project, msg.id);
+      } catch (e) {
+        console.warn("cancelCall failed:", e);
       }
       return;
     }
@@ -525,6 +556,14 @@ self.onmessage = async (event: MessageEvent) => {
     case "requestState":
       runtime?.requestPlaygroundState();
       postOut({ type: "buildTime", value: getBuildTime() });
+      return;
+
+    case "requestControlFlowGraph":
+      runtime?.requestControlFlowGraph(msg.project, msg.functionName);
+      return;
+
+    case "cursorPosition":
+      runtime?.handleCursorPosition(msg.file, msg.line, msg.column);
       return;
 
     case "clearHandles":

@@ -37,6 +37,9 @@ pub struct FunctionSignature {
 pub struct SignatureSourceMap {
     /// One span per parameter, parallel to `FunctionSignature::params`.
     pub param_spans: Vec<TextRange>,
+    /// One span per parameter's type expression (just the type, not the name).
+    /// `None` when the parameter has no explicit type annotation.
+    pub param_type_spans: Vec<Option<TextRange>>,
     /// Span of the return type annotation, if present.
     pub return_type_span: Option<TextRange>,
     /// Span of the throws type annotation, if present.
@@ -62,7 +65,7 @@ fn function_signature_with_source_map<'db>(
                 .type_expr
                 .as_ref()
                 .map(|te| te.expr.clone())
-                .unwrap_or(TypeExpr::Unknown);
+                .unwrap_or(TypeExpr::Unknown { attrs: vec![] });
             (p.name.clone(), type_expr)
         })
         .collect();
@@ -79,6 +82,11 @@ fn function_signature_with_source_map<'db>(
     // Build source map — spans only (separate for early-cutoff)
     let source_map = SignatureSourceMap {
         param_spans: func_data.params.iter().map(|p| p.span).collect(),
+        param_type_spans: func_data
+            .params
+            .iter()
+            .map(|p| p.type_expr.as_ref().map(|te| te.span))
+            .collect(),
         return_type_span: func_data.return_type.as_ref().map(|te| te.span),
         throws_type_span: func_data.throws.as_ref().map(|te| te.span),
     };

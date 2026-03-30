@@ -1,0 +1,153 @@
+// ═══════════════════════════════════════════════════════════════════
+// AUTH NAMESPACE — defines Config, Error, Role
+//
+// Config and Error have the SAME names as root and llm types.
+// Bare references here must resolve to the AUTH versions.
+// ═══════════════════════════════════════════════════════════════════
+
+class Config {
+    provider string
+    secret string
+}
+
+class Error {
+    realm string
+    expired bool
+}
+
+enum Role {
+    Admin
+    User
+    Guest
+}
+
+class Token {
+    value string
+    role Role
+}
+
+type TokenAlias = Token
+
+// ── Bare name usage (must resolve to auth.* NOT root.*) ─────────
+
+// Bare Config param: must be auth.Config (.provider), not root (.key) or llm (.model)
+function AuthIdentity(cfg: Config) -> Config {
+    cfg
+}
+
+// Bare constructor: must build auth.Config
+function AuthConstruct(provider: string) -> Config {
+    Config { provider: provider, secret: "s3cret" }
+}
+
+// Bare enum return: must be auth.Role.Admin
+function AuthEnumReturn() -> Role {
+    Role.Admin
+}
+
+// Bare enum match: must match against auth.Role variants
+function AuthEnumMatch(r: Role) -> string {
+    match (r) {
+        Role.Admin => "admin",
+        Role.User => "user",
+        Role.Guest => "guest"
+    }
+}
+
+// Bare alias: must be auth.TokenAlias = auth.Token
+function AuthAliasParam(t: TokenAlias) -> string {
+    t.value
+}
+
+// Bare class in throw
+function AuthThrowClass(x: int) -> string {
+    match (x) {
+        0 => throw Error { realm: "auth failed", expired: true },
+        _ => "ok"
+    }
+}
+
+// Bare enum in throw
+function AuthThrowEnum(x: int) -> string {
+    match (x) {
+        0 => throw Role.Guest,
+        _ => "ok"
+    }
+}
+
+// Token constructor with nested enum field
+function AuthMakeToken(v: string) -> Token {
+    Token { value: v, role: Role.User }
+}
+
+// ── Cross-namespace: root.X ─────────────────────────────────────
+
+function AuthUsesRootConfig(cfg: root.Config) -> string {
+    cfg.key
+}
+
+function AuthUsesRootStatus() -> root.Status {
+    root.Status.Pending
+}
+
+function AuthMatchesRootStatus(s: root.Status) -> string {
+    match (s) {
+        root.Status.Ok => "ok",
+        root.Status.Failed => "failed",
+        root.Status.Pending => "pending"
+    }
+}
+
+function AuthThrowsRootError(x: int) -> string {
+    match (x) {
+        0 => throw root.Error { code: 403, message: "forbidden" },
+        _ => "ok"
+    }
+}
+
+// ── Cross-namespace: sibling (root.llm.X) ───────────────────────
+
+function AuthUsesLlmConfig(cfg: root.llm.Config) -> string {
+    cfg.model
+}
+
+function AuthUsesLlmResponse(r: root.llm.Response) -> string {
+    r.text
+}
+
+function AuthUsesLlmStatus() -> root.llm.Status {
+    root.llm.Status.Ready
+}
+
+function AuthMatchesLlmStatus(s: root.llm.Status) -> string {
+    match (s) {
+        root.llm.Status.Ready => "ready",
+        root.llm.Status.Generating => "generating",
+        root.llm.Status.Done => "done"
+    }
+}
+
+// ── Cross-namespace: nested (root.llm.openai.X) ────────────────
+
+function AuthUsesNestedClient(c: root.llm.openai.Client) -> string {
+    c.api_key
+}
+
+// ── Mixed: auth + root + llm types ──────────────────────────────
+
+function AuthMixedConfigs(
+    auth_cfg: Config,
+    root_cfg: root.Config,
+    llm_cfg: root.llm.Config
+) -> string {
+    auth_cfg.provider
+}
+
+// auth.Error + root.Error + llm.Error — three different types
+function AuthMixedErrors(
+    auth_err: Error,
+    root_err: root.Error,
+    llm_err: root.llm.Error
+) -> string {
+    auth_err.realm
+}

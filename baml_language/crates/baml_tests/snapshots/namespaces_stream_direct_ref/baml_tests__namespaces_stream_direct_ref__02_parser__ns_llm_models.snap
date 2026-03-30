@@ -1,0 +1,87 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Config"
+    L_BRACE "{"
+    FIELD
+      WORD "model"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "Response"
+    L_BRACE "{"
+    FIELD
+      WORD "text"
+      TYPE_EXPR "string"
+        WORD "string"
+    R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "LlmUsesOwnStream"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "r"
+        COLON ":"
+        TYPE_EXPR "Response$stream"
+          WORD "Response$stream"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        PATH_EXPR "r.text"
+          WORD "r"
+          DOT "."
+          WORD "text"
+        R_BRACE "}"
+  FUNCTION_DEF
+    KW_FUNCTION "function"
+    WORD "LlmUsesRootStream"
+    PARAMETER_LIST
+      L_PAREN "("
+      PARAMETER
+        WORD "c"
+        COLON ":"
+        TYPE_EXPR "root.Config$stream"
+          WORD "root"
+          DOT "."
+          WORD "Config$stream"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        PATH_EXPR "c.key"
+          WORD "c"
+          DOT "."
+          WORD "key"
+        R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "LlmWithStreamFields"
+    L_BRACE "{"
+    FIELD
+      WORD "own_stream"
+      TYPE_EXPR "Response$stream"
+        WORD "Response$stream"
+    FIELD
+      WORD "root_stream"
+      TYPE_EXPR "root.Config$stream"
+        WORD "root"
+        DOT "."
+        WORD "Config$stream"
+    R_BRACE "}"
+
+=== ERRORS ===
+None

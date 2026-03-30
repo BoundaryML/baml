@@ -42,6 +42,24 @@ fn user.Ambiguous$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Ambiguous$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Ambiguous", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Ambiguous$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -91,6 +109,24 @@ fn user.AnotherLLM$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "AnotherLLM", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.AnotherLLM$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "AnotherLLM", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -200,6 +236,24 @@ fn user.ExtractData$build_request(text: string) -> baml.http.Request {
     }
 }
 
+fn user.ExtractData$parse(json: string) -> JsonData {
+    // Locals:
+    let _0: JsonData // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "ExtractData", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.ExtractData$render_prompt(text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -260,6 +314,24 @@ fn user.ChainedProcess$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.ChainedProcess$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "ChainedProcess", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.ChainedProcess$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -309,6 +381,24 @@ fn user.LLMAnalyze$build_request(text: string) -> baml.http.Request {
     bb0: {
         _2 = { const "text": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "LLMAnalyze", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.LLMAnalyze$parse(json: string) -> Analysis {
+    // Locals:
+    let _0: Analysis // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "LLMAnalyze", copy _1) -> [bb1];
     }
 
     bb1: {

@@ -86,6 +86,24 @@ fn user.Process1$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process1$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process1", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process1$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -135,6 +153,24 @@ fn user.Process10$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process10", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process10$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process10", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -206,6 +242,24 @@ fn user.Process100$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process100$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process100", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process100$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -255,6 +309,24 @@ fn user.Process11$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process11", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process11$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process11", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -326,6 +398,24 @@ fn user.Process12$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process12$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process12", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process12$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -375,6 +465,24 @@ fn user.Process13$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process13", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process13$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process13", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -446,6 +554,24 @@ fn user.Process14$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process14$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process14", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process14$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -495,6 +621,24 @@ fn user.Process15$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process15", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process15$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process15", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -566,6 +710,24 @@ fn user.Process16$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process16$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process16", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process16$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -615,6 +777,24 @@ fn user.Process17$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process17", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process17$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process17", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -686,6 +866,24 @@ fn user.Process18$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process18$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process18", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process18$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -735,6 +933,24 @@ fn user.Process19$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process19", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process19$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process19", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -806,6 +1022,24 @@ fn user.Process2$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process2$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process2", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process2$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -855,6 +1089,24 @@ fn user.Process20$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process20", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process20$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process20", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -926,6 +1178,24 @@ fn user.Process21$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process21$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process21", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process21$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -975,6 +1245,24 @@ fn user.Process22$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process22", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process22$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process22", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1046,6 +1334,24 @@ fn user.Process23$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process23$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process23", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process23$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -1095,6 +1401,24 @@ fn user.Process24$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process24", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process24$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process24", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1166,6 +1490,24 @@ fn user.Process25$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process25$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process25", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process25$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -1215,6 +1557,24 @@ fn user.Process26$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process26", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process26$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process26", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1286,6 +1646,24 @@ fn user.Process27$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process27$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process27", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process27$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -1335,6 +1713,24 @@ fn user.Process28$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process28", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process28$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process28", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1406,6 +1802,24 @@ fn user.Process29$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process29$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process29", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process29$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -1455,6 +1869,24 @@ fn user.Process3$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process3", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process3$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process3", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1526,6 +1958,24 @@ fn user.Process30$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process30$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process30", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process30$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -1575,6 +2025,24 @@ fn user.Process31$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process31", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process31$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process31", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1646,6 +2114,24 @@ fn user.Process32$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process32$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process32", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process32$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -1695,6 +2181,24 @@ fn user.Process33$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process33", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process33$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process33", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1766,6 +2270,24 @@ fn user.Process34$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process34$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process34", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process34$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -1815,6 +2337,24 @@ fn user.Process35$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process35", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process35$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process35", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -1886,6 +2426,24 @@ fn user.Process36$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process36$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process36", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process36$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -1935,6 +2493,24 @@ fn user.Process37$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process37", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process37$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process37", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2006,6 +2582,24 @@ fn user.Process38$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process38$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process38", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process38$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2055,6 +2649,24 @@ fn user.Process39$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process39", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process39$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process39", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2126,6 +2738,24 @@ fn user.Process4$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process4$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process4", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process4$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2175,6 +2805,24 @@ fn user.Process40$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process40", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process40$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process40", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2246,6 +2894,24 @@ fn user.Process41$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process41$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process41", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process41$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2295,6 +2961,24 @@ fn user.Process42$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process42", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process42$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process42", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2366,6 +3050,24 @@ fn user.Process43$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process43$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process43", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process43$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2415,6 +3117,24 @@ fn user.Process44$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process44", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process44$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process44", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2486,6 +3206,24 @@ fn user.Process45$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process45$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process45", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process45$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2535,6 +3273,24 @@ fn user.Process46$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process46", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process46$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process46", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2606,6 +3362,24 @@ fn user.Process47$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process47$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process47", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process47$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2655,6 +3429,24 @@ fn user.Process48$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process48", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process48$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process48", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2726,6 +3518,24 @@ fn user.Process49$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process49$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process49", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process49$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2775,6 +3585,24 @@ fn user.Process5$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process5", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process5$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process5", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2846,6 +3674,24 @@ fn user.Process50$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process50$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process50", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process50$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -2895,6 +3741,24 @@ fn user.Process51$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process51", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process51$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process51", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -2966,6 +3830,24 @@ fn user.Process52$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process52$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process52", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process52$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -3015,6 +3897,24 @@ fn user.Process53$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process53", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process53$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process53", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3086,6 +3986,24 @@ fn user.Process54$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process54$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process54", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process54$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -3135,6 +4053,24 @@ fn user.Process55$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process55", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process55$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process55", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3206,6 +4142,24 @@ fn user.Process56$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process56$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process56", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process56$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -3255,6 +4209,24 @@ fn user.Process57$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process57", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process57$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process57", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3326,6 +4298,24 @@ fn user.Process58$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process58$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process58", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process58$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -3375,6 +4365,24 @@ fn user.Process59$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process59", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process59$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process59", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3446,6 +4454,24 @@ fn user.Process6$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process6$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process6", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process6$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -3495,6 +4521,24 @@ fn user.Process60$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process60", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process60$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process60", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3566,6 +4610,24 @@ fn user.Process61$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process61$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process61", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process61$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -3615,6 +4677,24 @@ fn user.Process62$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process62", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process62$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process62", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3686,6 +4766,24 @@ fn user.Process63$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process63$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process63", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process63$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -3735,6 +4833,24 @@ fn user.Process64$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process64", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process64$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process64", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3806,6 +4922,24 @@ fn user.Process65$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process65$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process65", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process65$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -3855,6 +4989,24 @@ fn user.Process66$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process66", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process66$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process66", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -3926,6 +5078,24 @@ fn user.Process67$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process67$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process67", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process67$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -3975,6 +5145,24 @@ fn user.Process68$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process68", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process68$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process68", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -4046,6 +5234,24 @@ fn user.Process69$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process69$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process69", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process69$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -4095,6 +5301,24 @@ fn user.Process7$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process7", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process7$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process7", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -4166,6 +5390,24 @@ fn user.Process70$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process70$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process70", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process70$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -4215,6 +5457,24 @@ fn user.Process71$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process71", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process71$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process71", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -4286,6 +5546,24 @@ fn user.Process72$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process72$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process72", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process72$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -4335,6 +5613,24 @@ fn user.Process73$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process73", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process73$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process73", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -4406,6 +5702,24 @@ fn user.Process74$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process74$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process74", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process74$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -4455,6 +5769,24 @@ fn user.Process75$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process75", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process75$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process75", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -4526,6 +5858,24 @@ fn user.Process76$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process76$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process76", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process76$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -4575,6 +5925,24 @@ fn user.Process77$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process77", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process77$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process77", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -4646,6 +6014,24 @@ fn user.Process78$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process78$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process78", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process78$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -4695,6 +6081,24 @@ fn user.Process79$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process79", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process79$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process79", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -4766,6 +6170,24 @@ fn user.Process8$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process8$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process8", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process8$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -4815,6 +6237,24 @@ fn user.Process80$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process80", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process80$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process80", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -4886,6 +6326,24 @@ fn user.Process81$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process81$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process81", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process81$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -4935,6 +6393,24 @@ fn user.Process82$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process82", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process82$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process82", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -5006,6 +6482,24 @@ fn user.Process83$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process83$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process83", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process83$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -5055,6 +6549,24 @@ fn user.Process84$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process84", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process84$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process84", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -5126,6 +6638,24 @@ fn user.Process85$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process85$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process85", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process85$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -5175,6 +6705,24 @@ fn user.Process86$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process86", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process86$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process86", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -5246,6 +6794,24 @@ fn user.Process87$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process87$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process87", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process87$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -5295,6 +6861,24 @@ fn user.Process88$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process88", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process88$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process88", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -5366,6 +6950,24 @@ fn user.Process89$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process89$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process89", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process89$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -5415,6 +7017,24 @@ fn user.Process9$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process9", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process9$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process9", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -5486,6 +7106,24 @@ fn user.Process90$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process90$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process90", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process90$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -5535,6 +7173,24 @@ fn user.Process91$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process91", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process91$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process91", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -5606,6 +7262,24 @@ fn user.Process92$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process92$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process92", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process92$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -5655,6 +7329,24 @@ fn user.Process93$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process93", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process93$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process93", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -5726,6 +7418,24 @@ fn user.Process94$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process94$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process94", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process94$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -5775,6 +7485,24 @@ fn user.Process95$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process95", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process95$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process95", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -5846,6 +7574,24 @@ fn user.Process96$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process96$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process96", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process96$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -5895,6 +7641,24 @@ fn user.Process97$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process97", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process97$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process97", copy _1) -> [bb1];
     }
 
     bb1: {
@@ -5966,6 +7730,24 @@ fn user.Process98$build_request(input: string) -> baml.http.Request {
     }
 }
 
+fn user.Process98$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process98", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.Process98$render_prompt(input: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return
@@ -6015,6 +7797,24 @@ fn user.Process99$build_request(input: string) -> baml.http.Request {
     bb0: {
         _2 = { const "input": copy _1 };
         _0 = call const fn baml.llm.build_request(const null, const "Process99", copy _2) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn user.Process99$parse(json: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "Process99", copy _1) -> [bb1];
     }
 
     bb1: {

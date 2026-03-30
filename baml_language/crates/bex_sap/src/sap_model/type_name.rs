@@ -3,9 +3,9 @@
 use std::{borrow::Cow, fmt};
 
 use crate::sap_model::{
-    ArrayTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, FloatTy, IntLiteralTy, IntTy, LiteralTy,
-    MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy, Ty, TyResolved,
-    TyResolvedRef, TyWithMeta, TypeIdent, UnionTy,
+    ArrayTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy,
+    LiteralTy, MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy, StringLiteralTy, StringTy, Ty,
+    TyResolved, TyResolvedRef, TyWithMeta, TypeIdent, UnionTy,
 };
 
 /// A trait that provides a type name for a given type.
@@ -130,6 +130,12 @@ impl<N: TypeIdent> TypeName for EnumTy<'_, N> {
     }
 }
 
+impl<N: TypeIdent> TypeName for EnumVariantTy<'_, N> {
+    fn type_name(&self) -> Cow<'static, str> {
+        Cow::Owned(format!("{}.{}", self.name, self.value.name))
+    }
+}
+
 impl<N: TypeIdent> TypeName for UnionTy<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
         let variants: Vec<_> = self.variants.iter().map(TyWithMeta::type_name).collect();
@@ -153,6 +159,7 @@ impl<N: TypeIdent> TypeName for TyResolved<'_, N> {
             TyResolved::Map(m) => m.type_name(),
             TyResolved::Class(c) => c.type_name(),
             TyResolved::Enum(e) => e.type_name(),
+            TyResolved::EnumVariant(e) => e.type_name(),
             TyResolved::Union(u) => u.type_name(),
             TyResolved::StreamState(s) => s.type_name(),
         }
@@ -181,6 +188,7 @@ impl<N: TypeIdent> TypeName for TyResolvedRef<'_, N> {
             TyResolvedRef::Map(m) => m.type_name(),
             TyResolvedRef::Class(c) => c.type_name(),
             TyResolvedRef::Enum(e) => e.type_name(),
+            TyResolvedRef::EnumVariant(e) => e.type_name(),
             TyResolvedRef::Union(u) => u.type_name(),
             TyResolvedRef::StreamState(s) => Cow::Owned(format!("stream_state<{}>", s.type_name())),
         }

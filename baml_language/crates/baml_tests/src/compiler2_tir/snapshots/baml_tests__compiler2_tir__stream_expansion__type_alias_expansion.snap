@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/compiler2_tir/stream_expansion.rs
+expression: "render_tir(&db, file)"
+---
+class user.Inner {
+  value: string
+}
+type user.SimpleAlias = string
+type user.ClassAlias = user.Inner
+type user.UnionAlias = int | user.Inner
+type user.OptionalAlias = user.Inner?
+class user.Inner$stream {
+  value: null | string
+}
+type user.SimpleAlias$stream = string
+type user.ClassAlias$stream = user.Inner$stream
+type user.UnionAlias$stream = int | user.Inner$stream
+type user.OptionalAlias$stream = null | user.Inner$stream

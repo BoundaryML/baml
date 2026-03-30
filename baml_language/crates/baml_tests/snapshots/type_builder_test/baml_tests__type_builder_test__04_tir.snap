@@ -11,7 +11,13 @@ function user.Fn$render_prompt() -> baml.llm.PromptAst throws never {
 function user.Fn$build_request() -> baml.http.Request throws never {
   baml.llm.build_request(baml.llm.Client { name: "openai/gpt-4o", client_type: baml.llm.ClientType.Primitive, sub_clients: [], retry: null, counter: 0 }, "Fn", map {  }) : baml.http.Request
 }
+function user.Fn$parse(json: string) -> string throws never {
+  baml.llm.parse<T>("Fn", json) : string
+}
 class user.TopLevelClass {
   a: string
 }
 enum user.TopLevelEnum
+class user.TopLevelClass$stream {
+  a: null | string
+}

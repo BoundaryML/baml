@@ -17,3 +17,12 @@ function user.GetTransform() -> (x: int) -> int throws never {
 }
 type user.UnionParam = (value: int | string) -> bool
 type user.FunctionFactory = (config: string) -> (int) -> int
+type user.IntToInt$stream = unknown
+type user.BinaryOp$stream = unknown
+type user.UnnamedParams$stream = unknown
+type user.MixedParams$stream = unknown
+type user.Producer$stream = unknown
+type user.Curried$stream = unknown
+type user.Complex$stream = unknown
+type user.UnionParam$stream = unknown
+type user.FunctionFactory$stream = unknown

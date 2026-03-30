@@ -17,6 +17,8 @@ mod phase6;
 mod phase7;
 #[cfg(test)]
 mod phase8_exceptions;
+#[cfg(test)]
+mod stream_expansion;
 
 #[cfg(test)]
 pub(crate) mod support {
@@ -28,7 +30,6 @@ pub(crate) mod support {
     use baml_compiler2_hir::{
         body::{FunctionBody, function_body},
         contributions::Definition,
-        file_semantic_index,
         loc::FunctionLoc,
         scope::ScopeKind,
         signature::function_signature,
@@ -46,46 +47,48 @@ pub(crate) mod support {
 
     fn type_expr_to_string(ty: &TypeExpr) -> String {
         match ty {
-            TypeExpr::Path(segments) => segments
+            TypeExpr::Path { segments, .. } => segments
                 .iter()
                 .map(|n| n.as_str())
                 .collect::<Vec<_>>()
                 .join("."),
-            TypeExpr::Int => "int".into(),
-            TypeExpr::Float => "float".into(),
-            TypeExpr::String => "string".into(),
-            TypeExpr::Bool => "bool".into(),
-            TypeExpr::Null => "null".into(),
-            TypeExpr::Never => "never".into(),
-            TypeExpr::Media(k) => format!("{:?}", k).to_lowercase(),
-            TypeExpr::Optional(inner) => {
+            TypeExpr::Int { .. } => "int".into(),
+            TypeExpr::Float { .. } => "float".into(),
+            TypeExpr::String { .. } => "string".into(),
+            TypeExpr::Bool { .. } => "bool".into(),
+            TypeExpr::Null { .. } => "null".into(),
+            TypeExpr::Never { .. } => "never".into(),
+            TypeExpr::Media { kind: k, .. } => format!("{:?}", k).to_lowercase(),
+            TypeExpr::Optional { inner, .. } => {
                 let s = type_expr_to_string(inner);
-                if matches!(**inner, TypeExpr::Union(_)) {
+                if matches!(**inner, TypeExpr::Union { .. }) {
                     format!("({s})?")
                 } else {
                     format!("{s}?")
                 }
             }
-            TypeExpr::List(inner) => {
+            TypeExpr::List { inner, .. } => {
                 let s = type_expr_to_string(inner);
-                if matches!(**inner, TypeExpr::Union(_)) {
+                if matches!(**inner, TypeExpr::Union { .. }) {
                     format!("({s})[]")
                 } else {
                     format!("{s}[]")
                 }
             }
-            TypeExpr::Map { key, value } => format!(
+            TypeExpr::Map { key, value, .. } => format!(
                 "map<{}, {}>",
                 type_expr_to_string(key),
                 type_expr_to_string(value)
             ),
-            TypeExpr::Union(members) => members
+            TypeExpr::Union {
+                variants: members, ..
+            } => members
                 .iter()
                 .map(type_expr_to_string)
                 .collect::<Vec<_>>()
                 .join(" | "),
-            TypeExpr::Literal(lit) => lit.to_string(),
-            TypeExpr::Function { params, ret } => {
+            TypeExpr::Literal { value: lit, .. } => lit.to_string(),
+            TypeExpr::Function { params, ret, .. } => {
                 let ps: Vec<String> = params
                     .iter()
                     .map(|p| {
@@ -97,11 +100,11 @@ pub(crate) mod support {
                     .collect();
                 format!("({}) -> {}", ps.join(", "), type_expr_to_string(ret))
             }
-            TypeExpr::BuiltinUnknown => "unknown".into(),
-            TypeExpr::Type => "type".into(),
-            TypeExpr::Rust => "$rust_type".into(),
-            TypeExpr::Error => "error".into(),
-            TypeExpr::Unknown => "?".into(),
+            TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
+            TypeExpr::Type { .. } => "type".into(),
+            TypeExpr::Rust { .. } => "$rust_type".into(),
+            TypeExpr::Error { .. } => "error".into(),
+            TypeExpr::Unknown { .. } => "?".into(),
         }
     }
 
@@ -396,23 +399,23 @@ pub(crate) mod support {
     fn collect_typevars_inner(ty: &baml_compiler2_tir::ty::Ty, out: &mut Vec<String>) {
         use baml_compiler2_tir::ty::Ty;
         match ty {
-            Ty::TypeVar(name) => {
+            Ty::TypeVar(name, _) => {
                 let s = name.to_string();
                 if !out.contains(&s) {
                     out.push(s);
                 }
             }
-            Ty::List(inner) | Ty::Optional(inner) => collect_typevars_inner(inner, out),
-            Ty::Map(k, v) => {
+            Ty::List(inner, _) | Ty::Optional(inner, _) => collect_typevars_inner(inner, out),
+            Ty::Map(k, v, _) => {
                 collect_typevars_inner(k, out);
                 collect_typevars_inner(v, out);
             }
-            Ty::Union(members) => {
+            Ty::Union(members, _) => {
                 for m in members {
                     collect_typevars_inner(m, out);
                 }
             }
-            Ty::Function { params, ret } => {
+            Ty::Function { params, ret, .. } => {
                 for (_, p) in params {
                     collect_typevars_inner(p, out);
                 }
@@ -567,6 +570,7 @@ pub(crate) mod support {
     }
 
     /// Render a file's TIR output in the same format as the onion skin tool.
+    /// Uses the PPIR semantic index which includes synthetic stream_* types.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
         use baml_compiler2_hir::package::{PackageId, package_items};
         use baml_compiler2_tir::inference::{
@@ -574,7 +578,7 @@ pub(crate) mod support {
         };
 
         let mut output = String::new();
-        let index = file_semantic_index(db, file);
+        let index = baml_compiler2_ppir::file_semantic_index(db, file);
 
         // Get package items for resolving TypeExpr -> Ty in signatures
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
@@ -622,8 +626,44 @@ pub(crate) mod support {
                             {
                                 let resolved = resolve_class_fields(db, class_loc);
                                 writeln!(output, "{kind_str} {fqn} {{").ok();
-                                for (fname, fty) in &resolved.fields {
-                                    writeln!(output, "  {fname}: {fty}").ok();
+                                for (fname, fty, fattrs) in &resolved.fields {
+                                    let ty_attr_names = fty.attr().attr_names();
+                                    let field_attr_strs: Vec<String> = fattrs
+                                        .iter()
+                                        .map(|a| {
+                                            if a.args.is_empty() {
+                                                format!("@{}", a.name)
+                                            } else {
+                                                let args_str = a
+                                                    .args
+                                                    .iter()
+                                                    .map(|arg| match &arg.key {
+                                                        Some(k) => format!("{}={}", k, arg.value),
+                                                        None => arg.value.clone(),
+                                                    })
+                                                    .collect::<Vec<_>>()
+                                                    .join(", ");
+                                                format!("@{}({})", a.name, args_str)
+                                            }
+                                        })
+                                        .collect();
+                                    // Format: field: (Ty @ty_attr) @field_attr
+                                    let ty_str = if ty_attr_names.is_empty() {
+                                        format!("{fty}")
+                                    } else {
+                                        let ta = ty_attr_names
+                                            .iter()
+                                            .map(|a| format!("@{a}"))
+                                            .collect::<Vec<_>>()
+                                            .join(" ");
+                                        format!("({fty} {ta})")
+                                    };
+                                    if field_attr_strs.is_empty() {
+                                        writeln!(output, "  {fname}: {ty_str}").ok();
+                                    } else {
+                                        let fa = field_attr_strs.join(" ");
+                                        writeln!(output, "  {fname}: {ty_str} {fa}").ok();
+                                    }
                                 }
                                 writeln!(output, "}}").ok();
                                 // Render class cycle diagnostic if applicable
@@ -705,13 +745,12 @@ pub(crate) mod support {
                                 let parent = &index.scopes[parent_idx.index() as usize];
                                 if matches!(parent.kind, ScopeKind::Class) {
                                     parent.name.as_ref().and_then(|cn| {
-                                        let mut ns_path = ns.to_vec();
-                                        ns_path.push(cn.clone());
-                                        pkg_items.lookup_type(&ns_path).map(|def| {
+                                        pkg_items.lookup_type(ns, cn).map(|def| {
                                             baml_compiler2_tir::ty::Ty::Class(
                                                 baml_compiler2_tir::lower_type_expr::qualify_def(
                                                     db, def, cn,
                                                 ),
+                                                Default::default(),
                                             )
                                         })
                                     })
@@ -733,11 +772,13 @@ pub(crate) mod support {
                             .iter()
                             .map(|(pname, ptype)| {
                                 let ty = if pname.as_str() == "self"
-                                    && matches!(ptype, baml_compiler2_ast::TypeExpr::Unknown)
+                                    && matches!(ptype, baml_compiler2_ast::TypeExpr::Unknown { .. })
                                 {
-                                    enclosing_class_ty
-                                        .clone()
-                                        .unwrap_or(baml_compiler2_tir::ty::Ty::Unknown)
+                                    enclosing_class_ty.clone().unwrap_or(
+                                        baml_compiler2_tir::ty::Ty::Unknown {
+                                            attr: Default::default(),
+                                        },
+                                    )
                                 } else {
                                     let mut diags = Vec::new();
                                     lower_type_expr_in_ns(db, ptype, pkg_items, ns, gp, &mut diags)
@@ -860,7 +901,7 @@ pub(crate) mod support {
 
         fn type_expr_to_string_hir(ty: &baml_compiler2_ast::TypeExpr, pkg_prefix: &str) -> String {
             match ty {
-                baml_compiler2_ast::TypeExpr::Path(segments) => {
+                baml_compiler2_ast::TypeExpr::Path { segments, .. } => {
                     let path = segments
                         .iter()
                         .map(|n| n.as_str())
@@ -872,31 +913,35 @@ pub(crate) mod support {
                         path
                     }
                 }
-                baml_compiler2_ast::TypeExpr::Int => "int".into(),
-                baml_compiler2_ast::TypeExpr::Float => "float".into(),
-                baml_compiler2_ast::TypeExpr::String => "string".into(),
-                baml_compiler2_ast::TypeExpr::Bool => "bool".into(),
-                baml_compiler2_ast::TypeExpr::Null => "null".into(),
-                baml_compiler2_ast::TypeExpr::Never => "never".into(),
-                baml_compiler2_ast::TypeExpr::Media(k) => format!("{:?}", k).to_lowercase(),
-                baml_compiler2_ast::TypeExpr::Optional(inner) => {
+                baml_compiler2_ast::TypeExpr::Int { .. } => "int".into(),
+                baml_compiler2_ast::TypeExpr::Float { .. } => "float".into(),
+                baml_compiler2_ast::TypeExpr::String { .. } => "string".into(),
+                baml_compiler2_ast::TypeExpr::Bool { .. } => "bool".into(),
+                baml_compiler2_ast::TypeExpr::Null { .. } => "null".into(),
+                baml_compiler2_ast::TypeExpr::Never { .. } => "never".into(),
+                baml_compiler2_ast::TypeExpr::Media { kind: k, .. } => {
+                    format!("{:?}", k).to_lowercase()
+                }
+                baml_compiler2_ast::TypeExpr::Optional { inner, .. } => {
                     format!("{}?", type_expr_to_string_hir(inner, pkg_prefix))
                 }
-                baml_compiler2_ast::TypeExpr::List(inner) => {
+                baml_compiler2_ast::TypeExpr::List { inner, .. } => {
                     format!("{}[]", type_expr_to_string_hir(inner, pkg_prefix))
                 }
-                baml_compiler2_ast::TypeExpr::Map { key, value } => format!(
+                baml_compiler2_ast::TypeExpr::Map { key, value, .. } => format!(
                     "map<{}, {}>",
                     type_expr_to_string_hir(key, pkg_prefix),
                     type_expr_to_string_hir(value, pkg_prefix)
                 ),
-                baml_compiler2_ast::TypeExpr::Union(members) => members
+                baml_compiler2_ast::TypeExpr::Union {
+                    variants: members, ..
+                } => members
                     .iter()
                     .map(|m| type_expr_to_string_hir(m, pkg_prefix))
                     .collect::<Vec<_>>()
                     .join(" | "),
-                baml_compiler2_ast::TypeExpr::Literal(lit) => lit.to_string(),
-                baml_compiler2_ast::TypeExpr::Function { params, ret } => {
+                baml_compiler2_ast::TypeExpr::Literal { value: lit, .. } => lit.to_string(),
+                baml_compiler2_ast::TypeExpr::Function { params, ret, .. } => {
                     let ps: Vec<String> = params
                         .iter()
                         .map(|p| {
@@ -918,11 +963,11 @@ pub(crate) mod support {
                         type_expr_to_string_hir(ret, pkg_prefix)
                     )
                 }
-                baml_compiler2_ast::TypeExpr::BuiltinUnknown => "unknown".into(),
-                baml_compiler2_ast::TypeExpr::Type => "type".into(),
-                baml_compiler2_ast::TypeExpr::Rust => "$rust_type".into(),
-                baml_compiler2_ast::TypeExpr::Error => "error".into(),
-                baml_compiler2_ast::TypeExpr::Unknown => "?".into(),
+                baml_compiler2_ast::TypeExpr::BuiltinUnknown { .. } => "unknown".into(),
+                baml_compiler2_ast::TypeExpr::Type { .. } => "type".into(),
+                baml_compiler2_ast::TypeExpr::Rust { .. } => "$rust_type".into(),
+                baml_compiler2_ast::TypeExpr::Error { .. } => "error".into(),
+                baml_compiler2_ast::TypeExpr::Unknown { .. } => "?".into(),
             }
         }
 

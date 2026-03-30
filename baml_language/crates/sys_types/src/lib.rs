@@ -13,6 +13,7 @@ use std::{
     },
 };
 
+use async_trait::async_trait;
 // Re-export BexExternalValue and BexValue for ops
 pub use bex_external_types::{AsBexExternalValue, BexExternalValue};
 pub use bex_heap::BexHeap;
@@ -210,24 +211,6 @@ pub fn validate_sys_op_error(op: SysOp, kind: &OpErrorKind) -> Result<(), Contra
     }
 }
 
-impl From<sys_llm::LlmOpError> for OpErrorKind {
-    fn from(e: sys_llm::LlmOpError) -> Self {
-        match e {
-            sys_llm::LlmOpError::TypeError { expected, actual } => {
-                OpErrorKind::TypeError { expected, actual }
-            }
-            sys_llm::LlmOpError::RenderPrompt(msg) => OpErrorKind::RenderPrompt(msg),
-            sys_llm::LlmOpError::Other(msg) => OpErrorKind::Other(msg),
-            sys_llm::LlmOpError::ParseResponseError(e) => {
-                OpErrorKind::LlmClientError { message: e }
-            }
-            sys_llm::LlmOpError::NotImplemented { message } => {
-                OpErrorKind::NotImplemented { message }
-            }
-        }
-    }
-}
-
 // ============================================================================
 // Operation Results
 // ============================================================================
@@ -341,6 +324,26 @@ pub type SysOpFn = Arc<
 // Engine Context for Sys Ops
 // ============================================================================
 
+/// A type that is able to spawn new VMs then return the value.
+/// Generally this is `BexEngine`.
+///
+/// This is used by sys ops that want to run code in a separate VM/thread.
+///
+/// This needs to be a separate trait because `sys_types` cannot import `bex_engine`
+/// due to a circular dependency.
+#[async_trait]
+pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>> {
+    /// Spawn a a new VM with the given function name and arguments.
+    ///
+    /// Generally just calls `BexEngine::call_function`.
+    async fn spawn_with_function(
+        self: Arc<Self>,
+        function_name: String,
+        args: Vec<BexExternalValue>,
+        cancel: CancellationToken,
+    ) -> Result<BexExternalValue, E>;
+}
+
 /// Context available to `sys_ops` that need engine-level information.
 ///
 /// Most `sys_ops` don't need this — only those marked with `#[uses(engine_ctx)]`
@@ -351,13 +354,9 @@ pub type SysOpFn = Arc<
 ///
 /// # Per-call fields
 ///
-/// The `cancel` field is per-call, not per-engine. All other fields are
-/// `Arc`-wrapped so that [`with_cancel`](Self::with_cancel) is O(1) — just
-/// reference-count increments, no data cloning. This is necessary because
-/// `SysOpFn` takes a single `&SysOpContext`; splitting into shared + per-call
-/// parts would require changing that signature and the proc macro codegen.
+/// [`SysOpContext`] is the per-call version of [`EngineSysOpContext`].
 #[derive(Clone)]
-pub struct SysOpContext {
+pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>> {
     /// Pre-extracted LLM function metadata, keyed by function name.
     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
     pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
@@ -375,6 +374,39 @@ pub struct SysOpContext {
     /// Defaults to a never-cancelled token for the shared engine context.
     /// In `execute_sys_op`, a per-call clone is created with the real token.
     pub cancel: CancellationToken,
+
+    /// Pre-extracted class definitions for output format rendering.
+    /// Keyed by class name.
+    pub class_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, ClassDefinition>>,
+
+    /// Pre-extracted enum definitions for output format rendering.
+    /// Keyed by enum name.
+    pub enum_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, EnumDefinition>>,
+
+    /// Recursive type alias definitions for output format rendering.
+    /// Only recursive aliases are stored (non-recursive ones are expanded inline).
+    /// Maps alias name → target type.
+    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::Ty>>,
+
+    /// Can be used to spawn new VMs.
+    pub spawner: Arc<dyn VmSpawner<E>>,
+}
+
+/// The shared part of [`SysOpContext`]. Used in `sys_ops` that need engine-level information.
+/// When passing to a sys op, convert to [`SysOpContext`] with `to_op_context`.
+#[derive(Clone)]
+pub struct EngineSysOpContext {
+    /// Pre-extracted LLM function metadata, keyed by function name.
+    /// Used by LLM ops that need to look up function prompt templates, client names, etc.
+    pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
+
+    /// Maps function names to their global indices in the VM.
+    /// Used by `resolve_client` to return `FunctionRef` values.
+    pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
+
+    /// Pre-formatted Jinja `{% macro %}` definitions for all `template_strings`.
+    /// Prepended to templates by `get_jinja_template`.
+    pub template_strings_macros: Arc<String>,
 
     /// Pre-extracted class definitions for output format rendering.
     /// Keyed by class name.
@@ -442,6 +474,20 @@ pub struct EnumVariantDefinition {
 impl SysOpContext {
     /// Create an empty context (for testing or when no LLM functions exist).
     pub fn empty() -> Self {
+        struct NeverSpawner;
+        #[async_trait]
+        impl VmSpawner for NeverSpawner {
+            async fn spawn_with_function(
+                self: Arc<Self>,
+                _function_name: String,
+                _args: Vec<BexExternalValue>,
+                _cancel: CancellationToken,
+            ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
+                Err(Box::new(
+                    "VmSpawner::spawn_with_function called on NeverSpawner (empty/test context)",
+                ))
+            }
+        }
         Self {
             llm_functions: Arc::new(std::collections::HashMap::new()),
             function_global_indices: Arc::new(std::collections::HashMap::new()),
@@ -457,17 +503,27 @@ impl SysOpContext {
                 baml_type::TypeName,
                 baml_type::Ty,
             >::new()),
+            spawner: Arc::new(NeverSpawner),
         }
     }
+}
 
-    /// Create a per-call clone with the given cancellation token.
-    ///
-    /// All `Arc`-wrapped fields are shared (just reference-count increments).
-    #[must_use]
-    pub fn with_cancel(&self, cancel: CancellationToken) -> Self {
-        Self {
+impl EngineSysOpContext {
+    /// Convert to [`SysOpContext`] for passing to a sys op.
+    pub fn to_op_context(
+        &self,
+        cancel: CancellationToken,
+        spawner: Arc<dyn VmSpawner>,
+    ) -> SysOpContext {
+        SysOpContext {
+            llm_functions: self.llm_functions.clone(),
+            function_global_indices: self.function_global_indices.clone(),
+            template_strings_macros: self.template_strings_macros.clone(),
             cancel,
-            ..self.clone()
+            class_definitions: self.class_definitions.clone(),
+            enum_definitions: self.enum_definitions.clone(),
+            type_alias_definitions: self.type_alias_definitions.clone(),
+            spawner,
         }
     }
 }
@@ -504,601 +560,6 @@ impl<T> FunctionRef<T> {
         }
     }
 }
-
-// ============================================================================
-// IO pipeline (generated from .baml files via baml_builtins2_codegen)
-// ============================================================================
-
-// SysOps struct, IO traits (IoClassFsFile, IoNamespaceFs, etc.),
-// view/owned types, from_impl, all_unsupported — all generated from
-// `.baml` `$rust_io_function` definitions by `baml_builtins2_codegen`.
-#[allow(
-    dead_code,
-    unreachable_pub,
-    unused_imports,
-    unused_variables,
-    unused_parens,
-    clippy::all,
-    clippy::wildcard_imports,
-    clippy::pub_underscore_fields,
-    clippy::used_underscore_binding,
-    clippy::redundant_closure_for_method_calls,
-    clippy::redundant_clone,
-    clippy::used_underscore_items,
-    clippy::implicit_clone
-)]
-pub mod io {
-    use std::sync::Arc;
-
-    pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, GcProtectedHeap};
-    pub use bex_vm_types::SysOp;
-
-    pub use super::{
-        AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, OpErrorKind, SysOpContext,
-        SysOpFn, SysOpOutput, SysOpResult,
-    };
-
-    include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
-}
-
-// ============================================================================
-// Blanket IO LLM implementation (delegates to sys_llm)
-// ============================================================================
-
-impl<T> io::IoClassLlmClient for T {
-    fn get_constructor(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::Client,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        let resolve_fn_name = format!("{}$new", client.name);
-        let global_index = ctx
-            .function_global_indices
-            .get(&resolve_fn_name)
-            .or_else(|| {
-                ctx.function_global_indices
-                    .get(&format!("user.{resolve_fn_name}"))
-            });
-        let Some(global_index) = global_index else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "Client resolve function not found: {resolve_fn_name}"
-            )));
-        };
-        SysOpOutput::ok(
-            FunctionRef::<io::owned::llm::PrimitiveClient>::new(*global_index).into_external(),
-        )
-    }
-}
-
-/// Blanket impl — all types get real LLM behavior via `sys_llm` delegation.
-/// Uses new IO traits from the `io` module.
-impl<T> io::IoClassLlmPrimitiveClient for T {
-    fn render_prompt(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        template: String,
-        args: indexmap::IndexMap<String, BexExternalValue>,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::PromptAst> {
-        let old_client = convert_io_primitive_client(&client);
-        let args_ext = BexExternalValue::Map {
-            key_type: baml_type::Ty::string(),
-            value_type: baml_type::Ty::unknown(),
-            entries: args,
-        };
-        SysOpOutput::Ready(
-            sys_llm::execute_render_prompt_from_owned(&old_client, &template, &args_ext)
-                .map(wrap_prompt_ast)
-                .map_err(OpErrorKind::from),
-        )
-    }
-
-    fn specialize_prompt(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        prompt: io::owned::llm::PromptAst,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::llm::PromptAst> {
-        let old_client = convert_io_primitive_client(&client);
-        let prompt_ast = unwrap_prompt_ast(&prompt);
-        SysOpOutput::Ready(
-            sys_llm::execute_specialize_prompt_from_owned(&old_client, prompt_ast)
-                .map(wrap_prompt_ast)
-                .map_err(OpErrorKind::from),
-        )
-    }
-
-    fn build_request(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        prompt: io::owned::llm::PromptAst,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        let old_client = convert_io_primitive_client(&client);
-        let prompt_ast = unwrap_prompt_ast(&prompt);
-        SysOpOutput::Ready(
-            sys_llm::execute_build_request_from_owned(&old_client, prompt_ast)
-                .map(|req| {
-                    io::owned::http::Request {
-                        method: req.method,
-                        url: req.url,
-                        headers: req.headers,
-                        body: req.body,
-                    }
-                    .into_bex_external_value()
-                })
-                .map_err(OpErrorKind::from),
-        )
-    }
-
-    fn parse(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        client: io::owned::llm::PrimitiveClient,
-        response: String,
-        type_def: baml_type::Ty,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        let old_client = convert_io_primitive_client(&client);
-        SysOpOutput::Ready(
-            sys_llm::execute_parse_response_from_owned(&old_client, &response, &type_def)
-                .map(bex_external_types::AsBexExternalValue::into_bex_external_value)
-                .map_err(OpErrorKind::from),
-        )
-    }
-}
-
-/// Look up an LLM function by name, trying the bare name first then "user.{name}".
-fn lookup_llm_function<'a>(
-    function_name: &str,
-    llm_functions: &'a std::collections::HashMap<String, LlmFunctionInfo>,
-) -> Option<&'a LlmFunctionInfo> {
-    llm_functions
-        .get(function_name)
-        .or_else(|| llm_functions.get(&format!("user.{function_name}")))
-}
-
-impl<T> io::IoNamespaceLlm for T {
-    fn get_jinja_template(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "LLM function not found: {function_name}"
-            )));
-        };
-        let dedented = sys_llm::preprocess_template(&info.prompt_template);
-        let template = if ctx.template_strings_macros.is_empty() {
-            dedented
-        } else {
-            format!("{}\n{}", ctx.template_strings_macros, dedented)
-        };
-        SysOpOutput::ok(template)
-    }
-
-    fn get_return_type(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::Ty> {
-        let Some(info) = lookup_llm_function(&function_name, &ctx.llm_functions) else {
-            return SysOpOutput::err(OpErrorKind::Other(format!(
-                "LLM function not found: {function_name}"
-            )));
-        };
-        SysOpOutput::ok(info.return_type.clone())
-    }
-}
-
-/// Wrap a `bex_vm_types::PromptAst` (Arc) into the generated `owned::llm::PromptAst`.
-fn wrap_prompt_ast(ast: bex_vm_types::PromptAst) -> io::owned::llm::PromptAst {
-    io::owned::llm::PromptAst {
-        _data: ast as std::sync::Arc<dyn std::any::Any + Send + Sync>,
-    }
-}
-
-/// Unwrap the `_data` field of a generated `owned::llm::PromptAst` back to `bex_vm_types::PromptAst`.
-#[allow(clippy::used_underscore_binding)]
-fn unwrap_prompt_ast(owned: &io::owned::llm::PromptAst) -> bex_vm_types::PromptAst {
-    owned
-        ._data
-        .clone()
-        .downcast::<baml_builtins::PromptAst>()
-        .expect("PromptAst _data should be Arc<baml_builtins::PromptAst>")
-}
-
-/// Convert the generated IO `PrimitiveClient` to the `sys_llm::baml_std::PrimitiveClient`.
-///
-/// With typed owned fields, both structs have the same field types so this is
-/// a direct field-by-field clone.
-fn convert_io_primitive_client(
-    io::owned::llm::PrimitiveClient {
-        name,
-        provider,
-        options,
-    }: &io::owned::llm::PrimitiveClient,
-) -> sys_llm::baml_std::PrimitiveClient {
-    sys_llm::baml_std::PrimitiveClient::new(
-        name.clone(),
-        provider.clone(),
-        sys_llm::baml_std::PrimitiveClientOptions {
-            model: options.model.clone(),
-            base_url: options.base_url.clone(),
-            default_role: options.default_role.clone(),
-            allowed_roles: options.allowed_roles.clone(),
-            remap_roles: options.remap_roles.clone(),
-            api_key: options.api_key.clone(),
-            headers: options.headers.clone(),
-            query_params: options.query_params.clone(),
-            request_body: options.request_body.clone(),
-            ..Default::default()
-        },
-    )
-}
-
-// ============================================================================
-// IoSysOpsBuilder — Compose an io::SysOps table by overriding namespaces
-// ============================================================================
-
-/// Default provider for the IO pipeline — non-LLM ops return `Unsupported`,
-/// LLM ops use the blanket `impl<T> IoClassLlmPrimitiveClient/IoNamespaceLlm for T`.
-struct DefaultIoOps;
-
-impl io::IoClassFsFile for DefaultIoOps {
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoNamespaceFs for DefaultIoOps {
-    fn open(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _path: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::fs::File> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoClassHttpResponse for DefaultIoOps {
-    fn text(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _r: io::owned::http::Response,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoNamespaceHttp for DefaultIoOps {
-    fn fetch(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _url: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-    fn send(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _req: io::owned::http::Request,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoClassNetSocket for DefaultIoOps {
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::Socket,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-    fn close(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _s: io::owned::net::Socket,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoNamespaceNet for DefaultIoOps {
-    fn connect(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _addr: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::net::Socket> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoNamespaceEnv for DefaultIoOps {
-    fn get(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _key: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoNamespaceSys for DefaultIoOps {
-    fn shell(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _command: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-    fn sleep(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _ms: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-    fn panic(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _msg: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(OpErrorKind::Unsupported)
-    }
-}
-
-impl io::IoPackageBaml for DefaultIoOps {}
-
-/// Builder for composing an [`io::SysOps`] table by overriding namespaces.
-///
-/// Starts with all operations returning `Unsupported` (except LLM, which uses
-/// the blanket implementation), and allows selectively overriding namespaces:
-///
-/// ```ignore
-/// let ops = IoSysOpsBuilder::new()
-///     .with_http_instance(Arc::new(my_http_impl))
-///     .with_env_instance(Arc::new(my_env_impl))
-///     .build();
-/// ```
-pub struct IoSysOpsBuilder {
-    inner: io::SysOps,
-}
-
-impl IoSysOpsBuilder {
-    /// Create a new builder with all operations defaulting to `Unsupported`,
-    /// except LLM ops which use the real blanket implementation.
-    pub fn new() -> Self {
-        Self {
-            inner: io::SysOps::from_impl(DefaultIoOps),
-        }
-    }
-
-    /// Consume the builder and return the composed [`io::SysOps`] table.
-    pub fn build(self) -> io::SysOps {
-        self.inner
-    }
-
-    /// Override the `env` namespace with a pre-built instance.
-    #[must_use]
-    pub fn with_env_instance(
-        mut self,
-        instance: Arc<dyn io::IoNamespaceEnv + Send + Sync + 'static>,
-    ) -> Self {
-        self.inner.baml_env_get = {
-            let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_env_get(heap, args, ctx, call_id)
-            })
-        };
-        self
-    }
-
-    /// Override the `env` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_env<T: io::IoNamespaceEnv + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_env_instance(Arc::new(T::default()))
-    }
-
-    /// Override the `fs` namespace (including `fs.File` methods) with a pre-built instance.
-    #[must_use]
-    pub fn with_fs_instance(
-        mut self,
-        instance: Arc<dyn io::IoNamespaceFs + Send + Sync + 'static>,
-    ) -> Self {
-        self.inner.baml_fs_open = {
-            let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_open(heap, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_read = {
-            let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read(heap, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_close = {
-            let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_fs_file_close(heap, args, ctx, call_id)
-            })
-        };
-        self
-    }
-
-    /// Override the `fs` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_fs<T: io::IoNamespaceFs + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_fs_instance(Arc::new(T::default()))
-    }
-
-    /// Override the `http` namespace (including `http.Response` methods) with a pre-built instance.
-    #[must_use]
-    pub fn with_http_instance(
-        mut self,
-        instance: Arc<dyn io::IoNamespaceHttp + Send + Sync + 'static>,
-    ) -> Self {
-        self.inner.baml_http_fetch = {
-            let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_fetch(heap, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_send = {
-            let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_send(heap, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_http_response_text = {
-            let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_http_response_text(heap, args, ctx, call_id)
-            })
-        };
-        self
-    }
-
-    /// Override the `http` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_http<T: io::IoNamespaceHttp + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_http_instance(Arc::new(T::default()))
-    }
-
-    /// Override the `net` namespace (including `net.Socket` methods) with a pre-built instance.
-    #[must_use]
-    pub fn with_net_instance(
-        mut self,
-        instance: Arc<dyn io::IoNamespaceNet + Send + Sync + 'static>,
-    ) -> Self {
-        self.inner.baml_net_connect = {
-            let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_net_connect(heap, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_socket_read = {
-            let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_net_socket_read(heap, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_net_socket_close = {
-            let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_net_socket_close(heap, args, ctx, call_id)
-            })
-        };
-        self
-    }
-
-    /// Override the `net` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_net<T: io::IoNamespaceNet + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_net_instance(Arc::new(T::default()))
-    }
-
-    /// Override the `sys` namespace with a pre-built instance.
-    #[must_use]
-    pub fn with_sys_instance(
-        mut self,
-        instance: Arc<dyn io::IoNamespaceSys + Send + Sync + 'static>,
-    ) -> Self {
-        self.inner.baml_sys_shell = {
-            let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_sys_shell(heap, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_sleep = {
-            let t = instance.clone();
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_sys_sleep(heap, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_sys_panic = {
-            let t = instance;
-            Arc::new(move |heap, args, ctx, call_id| {
-                t.__glue_baml_sys_panic(heap, args, ctx, call_id)
-            })
-        };
-        self
-    }
-
-    /// Override the `sys` namespace with a default-constructible type.
-    #[must_use]
-    pub fn with_sys<T: io::IoNamespaceSys + Default + Send + Sync + 'static>(self) -> Self {
-        self.with_sys_instance(Arc::new(T::default()))
-    }
-}
-
-impl Default for IoSysOpsBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// Re-export io::SysOps as the primary SysOps type.
-pub use io::SysOps;
-
-/// Builder for composing a [`SysOps`] table by overriding namespaces.
-///
-/// Starts with all operations returning `Unsupported` (except LLM, which uses
-/// the blanket implementation), and allows selectively overriding namespaces.
-pub type SysOpsBuilder = IoSysOpsBuilder;
 
 // ============================================================================
 // Async Completion Utilities
@@ -1150,71 +611,7 @@ impl SysOpResult {
 
 #[cfg(test)]
 mod tests {
-    use bex_vm_types::SysOp;
-
     use super::*;
-
-    fn test_heap() -> Arc<BexHeap> {
-        BexHeap::new(vec![])
-    }
-
-    fn test_ctx() -> SysOpContext {
-        SysOpContext::empty()
-    }
-
-    #[test]
-    fn test_unsupported_returns_error() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let op = SysOps::unsupported(SysOp::BamlSysShell);
-        let result = op(&heap, vec![], &ctx, CallId::next());
-        match result {
-            SysOpResult::Ready(Err(e)) => {
-                assert!(matches!(e.kind, OpErrorKind::Unsupported));
-                assert_eq!(e.fn_name, SysOp::BamlSysShell);
-            }
-            _ => panic!("Expected Unsupported error"),
-        }
-    }
-
-    #[test]
-    fn test_all_unsupported() {
-        let heap = test_heap();
-        let ctx = test_ctx();
-        let ops = SysOps::all_unsupported();
-
-        // Test fs_open returns Unsupported
-        let result = (ops.baml_fs_open)(&heap, vec![], &ctx, CallId::next());
-        assert!(matches!(
-            result,
-            SysOpResult::Ready(Err(OpError {
-                fn_name: SysOp::BamlFsOpen,
-                kind: OpErrorKind::Unsupported,
-            }))
-        ));
-
-        // Test shell returns Unsupported
-        let result = (ops.baml_sys_shell)(&heap, vec![], &ctx, CallId::next());
-        assert!(matches!(
-            result,
-            SysOpResult::Ready(Err(OpError {
-                fn_name: SysOp::BamlSysShell,
-                kind: OpErrorKind::Unsupported,
-            }))
-        ));
-    }
-
-    #[test]
-    fn test_sys_ops_get() {
-        let ops = SysOps::all_unsupported();
-        let heap = test_heap();
-        let ctx = test_ctx();
-
-        // Test that get() returns the correct function pointer
-        let fn_ptr = ops.get(SysOp::BamlFsOpen);
-        let result = fn_ptr(&heap, vec![], &ctx, CallId::next());
-        assert!(matches!(result, SysOpResult::Ready(Err(_))));
-    }
 
     #[tokio::test]
     async fn test_completion_handle() {

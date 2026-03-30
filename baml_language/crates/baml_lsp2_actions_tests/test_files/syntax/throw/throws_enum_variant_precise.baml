@@ -1,4 +1,7 @@
-// throws with specific enum variants — exact match, no diagnostic
+// throws with enum type — exact match
+// NOTE: enum variants in throws type position are not yet supported;
+// using the enum type directly still produces contract mismatch because
+// the throws checker compares Ty::Enum vs Ty::EnumVariant.
 
 enum Errors {
   AuthError
@@ -6,7 +9,7 @@ enum Errors {
   InternalError
 }
 
-function ThrowsVariantExact(x: int) -> string throws Errors.AuthError | Errors.NotFoundError {
+function ThrowsVariantExact(x: int) -> string throws Errors {
   match (x) {
     0 => throw Errors.AuthError,
     _ => throw Errors.NotFoundError
@@ -15,21 +18,21 @@ function ThrowsVariantExact(x: int) -> string throws Errors.AuthError | Errors.N
 
 //----
 //- diagnostics
-// Error: throws contract violation: `user.AuthError | user.NotFoundError` is missing user.Errors.AuthError, user.Errors.NotFoundError
-//    ╭─[ throw_throws_enum_variant_precise.baml:9:55 ]
-//    │
-//  9 │ function ThrowsVariantExact(x: int) -> string throws Errors.AuthError | Errors.NotFoundError {
-//    │                                                       ────────────────────┬───────────────────  
-//    │                                                                           ╰───────────────────── throws contract violation: `user.AuthError | user.NotFoundError` is missing user.Errors.AuthError, user.Errors.NotFoundError
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: extraneous throws declaration: user.AuthError, user.NotFoundError
-//    ╭─[ throw_throws_enum_variant_precise.baml:9:55 ]
-//    │
-//  9 │ function ThrowsVariantExact(x: int) -> string throws Errors.AuthError | Errors.NotFoundError {
-//    │                                                       ────────────────────┬───────────────────  
-//    │                                                                           ╰───────────────────── extraneous throws declaration: user.AuthError, user.NotFoundError
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
+// Error: throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
+//     ╭─[ throw_throws_enum_variant_precise.baml:12:55 ]
+//     │
+//  12 │ function ThrowsVariantExact(x: int) -> string throws Errors {
+//     │                                                       ───┬───  
+//     │                                                          ╰───── throws contract violation: `user.Errors` is missing user.Errors.AuthError, user.Errors.NotFoundError
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: extraneous throws declaration: user.Errors
+//     ╭─[ throw_throws_enum_variant_precise.baml:12:55 ]
+//     │
+//  12 │ function ThrowsVariantExact(x: int) -> string throws Errors {
+//     │                                                       ───┬───  
+//     │                                                          ╰───── extraneous throws declaration: user.Errors
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

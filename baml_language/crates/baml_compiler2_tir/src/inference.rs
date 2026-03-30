@@ -17,8 +17,8 @@ use baml_compiler2_ast::{ExprId, PatId};
 use baml_compiler2_hir::{
     body::{FunctionBody, LetBody},
     contributions::Definition,
-    loc::{ClassLoc, FunctionLoc, LetLoc, TypeAliasLoc},
-    package::{PackageId, PackageItems, package_items},
+    loc::{ClassLoc, EnumLoc, FunctionLoc, LetLoc, TypeAliasLoc},
+    package::{PackageId, PackageItems},
     scope::{ScopeId, ScopeKind},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -26,33 +26,35 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{
     builder::TypeInferenceBuilder,
     infer_context::{InferContext, TypeCheckDiagnostics},
-    ty::Ty,
+    ty::{Ty, TyAttr},
 };
 
-// ── Method Resolution ─────────────────────────────────────────────────────
+// ── Member Resolution ─────────────────────────────────────────────────────
 
 /// Records what a field-access expression resolved to during type inference.
 ///
 /// Stored per-ExprId alongside the `Ty`, so MIR can emit the correct
-/// `Constant::Function(QualifiedName)` without re-doing resolution.
+/// `Constant::Function(QualifiedName)` without re-doing resolution, and so
+/// LSP can navigate to the definition of the accessed member.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MethodResolution<'db> {
+pub enum MemberResolution<'db> {
+    /// A class field access (e.g. `p.name`).
+    Field {
+        class_loc: ClassLoc<'db>,
+        field_name: Name,
+    },
+    /// An enum variant access (e.g. `Status.Active`).
+    Variant {
+        enum_loc: EnumLoc<'db>,
+        variant_name: Name,
+    },
     /// A free item accessed via a package/namespace path.
     /// e.g. `env.get` → package="env", namespace=[], name="get"
-    Free {
-        package: Name,
-        namespace: Vec<Name>,
-        name: Name,
-        func_loc: FunctionLoc<'db>,
-    },
+    Free { func_loc: FunctionLoc<'db> },
     /// A method on a class (user-defined or builtin).
     /// e.g. `arr.length` → package="baml", namespace=[], class="Array", name="length"
     /// e.g. `baz.Greeting` → package="user", namespace=[], class="Baz", name="Greeting"
     Method {
-        package: Name,
-        namespace: Vec<Name>,
-        class: Name,
-        name: Name,
         class_loc: ClassLoc<'db>,
         func_loc: FunctionLoc<'db>,
     },
@@ -75,10 +77,11 @@ pub struct ScopeInference<'db> {
     /// May differ from the initializer expression type (e.g. `let x = 1` has
     /// expression type `Literal(1, Fresh)` but binding type `int`).
     bindings: FxHashMap<PatId, Ty>,
-    /// Method resolutions: for field-access expressions that resolved to a
-    /// method or free function, records the structural path (package, namespace,
-    /// class, name) so MIR can emit the correct `QualifiedName`.
-    resolutions: FxHashMap<ExprId, MethodResolution<'db>>,
+    /// Member resolutions: for field-access expressions that resolved to a
+    /// class field, enum variant, method, or free function — records the
+    /// structural path so MIR can emit the correct `QualifiedName` and LSP
+    /// can navigate to the definition.
+    resolutions: FxHashMap<ExprId, MemberResolution<'db>>,
     /// Match expressions that the exhaustiveness checker determined cover all cases.
     exhaustive_matches: FxHashSet<ExprId>,
     /// Diagnostics and other rare data. Heap-allocated only when non-empty.
@@ -133,13 +136,13 @@ impl<'db> ScopeInference<'db> {
         self.bindings.iter()
     }
 
-    /// Look up the method resolution for an expression in this scope.
-    pub fn resolution(&self, expr_id: ExprId) -> Option<&MethodResolution<'db>> {
+    /// Look up the member resolution for an expression in this scope.
+    pub fn resolution(&self, expr_id: ExprId) -> Option<&MemberResolution<'db>> {
         self.resolutions.get(&expr_id)
     }
 
-    /// Iterate over all (`ExprId`, `MethodResolution`) pairs for this scope.
-    pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MethodResolution<'db>)> {
+    /// Iterate over all (`ExprId`, `MemberResolution`) pairs for this scope.
+    pub fn iter_resolutions(&self) -> impl Iterator<Item = (&ExprId, &MemberResolution<'db>)> {
         self.resolutions.iter()
     }
 
@@ -256,7 +259,9 @@ pub fn infer_scope_types<'db>(
                                     &mut diags,
                                 )
                             })
-                            .unwrap_or(Ty::Unknown);
+                            .unwrap_or(Ty::Unknown {
+                                attr: TyAttr::default(),
+                            });
 
                         // Report unresolved type diagnostics for return type
                         if !diags.is_empty() {
@@ -291,21 +296,23 @@ pub fn infer_scope_types<'db>(
                         );
                         for (i, (param_name, param_te)) in sig.params.iter().enumerate() {
                             let param_ty = if param_name.as_str() == "self"
-                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown)
+                                && matches!(param_te, baml_compiler2_ast::TypeExpr::Unknown { .. })
                             {
                                 // `self` parameter with no type annotation — infer from enclosing class
                                 enclosing_class_name
                                     .as_ref()
                                     .and_then(|cn| {
-                                        let mut ns_path = pkg_info.namespace_path.clone();
-                                        ns_path.push(cn.clone());
-                                        pkg_items.lookup_type(&ns_path).map(|def| {
-                                            Ty::Class(crate::lower_type_expr::qualify_def(
-                                                db, def, cn,
-                                            ))
+                                        let ns_path = &pkg_info.namespace_path;
+                                        pkg_items.lookup_type(ns_path, cn).map(|def| {
+                                            Ty::Class(
+                                                crate::lower_type_expr::qualify_def(db, def, cn),
+                                                TyAttr::default(),
+                                            )
                                         })
                                     })
-                                    .unwrap_or(Ty::Unknown)
+                                    .unwrap_or(Ty::Unknown {
+                                        attr: TyAttr::default(),
+                                    })
                             } else {
                                 let mut param_diags = Vec::new();
                                 let ty = crate::lower_type_expr::lower_type_expr_in_ns(
@@ -317,8 +324,13 @@ pub fn infer_scope_types<'db>(
                                     &mut param_diags,
                                 );
                                 if !param_diags.is_empty() {
-                                    let span =
-                                        sig_sm.param_spans.get(i).copied().unwrap_or_default();
+                                    let span = sig_sm
+                                        .param_type_spans
+                                        .get(i)
+                                        .copied()
+                                        .flatten()
+                                        .or_else(|| sig_sm.param_spans.get(i).copied())
+                                        .unwrap_or_default();
                                     for diag in param_diags {
                                         builder.report_at_span(diag, span);
                                     }
@@ -430,7 +442,7 @@ pub fn detect_invalid_alias_cycles<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> std::collections::HashSet<crate::ty::QualifiedTypeName> {
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let aliases = collect_type_aliases(db, pkg_items);
     crate::normalize::find_invalid_alias_cycles(&aliases)
 }
@@ -443,7 +455,7 @@ pub fn detect_invalid_class_cycles<'db>(
     db: &'db dyn crate::Db,
     pkg_id: PackageId<'db>,
 ) -> Vec<crate::normalize::ClassCycleInfo> {
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
     let aliases = collect_type_aliases(db, pkg_items);
     let class_fields = collect_class_fields(db, pkg_items);
     crate::normalize::find_invalid_class_cycles(&class_fields, &aliases)
@@ -461,7 +473,12 @@ fn collect_class_fields<'db>(
                 let resolved = resolve_class_fields(db, *loc);
                 let qualified =
                     crate::lower_type_expr::qualify_def(db, Definition::Class(*loc), name);
-                classes.insert(qualified, resolved.fields.clone());
+                let fields_without_attrs: Vec<(Name, crate::ty::Ty)> = resolved
+                    .fields
+                    .iter()
+                    .map(|(n, ty, _attrs)| (n.clone(), ty.clone()))
+                    .collect();
+                classes.insert(qualified, fields_without_attrs);
             }
         }
     }
@@ -473,7 +490,8 @@ fn collect_class_fields<'db>(
 /// Resolved class fields — `TypeExpr` resolved to `Ty` for each field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedClassFields {
-    pub fields: Vec<(Name, Ty)>,
+    /// (field name, resolved type, field-level attributes)
+    pub fields: Vec<(Name, Ty, Vec<baml_compiler2_ast::RawAttribute>)>,
     /// Type lowering diagnostics: (error, span of the type annotation).
     pub diagnostics: Vec<(crate::infer_context::TirTypeError, text_size::TextRange)>,
 }
@@ -536,7 +554,7 @@ pub fn resolve_class_fields<'db>(
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let class_data = &item_tree[class_loc.id(db)];
     let mut all_diags = Vec::new();
@@ -562,8 +580,10 @@ pub fn resolve_class_fields<'db>(
                     }
                     ty
                 })
-                .unwrap_or(Ty::Unknown);
-            (f.name.clone(), ty)
+                .unwrap_or(Ty::Unknown {
+                    attr: TyAttr::default(),
+                });
+            (f.name.clone(), ty, f.attributes.clone())
         })
         .collect();
 
@@ -585,7 +605,7 @@ pub fn resolve_type_alias<'db>(
     let item_tree = baml_compiler2_ppir::file_item_tree(db, file);
     let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
     let pkg_id = PackageId::new(db, pkg_info.package.clone());
-    let pkg_items = package_items(db, pkg_id);
+    let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
 
     let alias_data = &item_tree[alias_loc.id(db)];
     let mut all_diags = Vec::new();
@@ -607,7 +627,9 @@ pub fn resolve_type_alias<'db>(
             }
             ty
         })
-        .unwrap_or(Ty::Unknown);
+        .unwrap_or(Ty::Unknown {
+            attr: TyAttr::default(),
+        });
 
     Arc::new(ResolvedTypeAlias {
         ty,
@@ -643,7 +665,7 @@ pub fn render_scope_diagnostics<'db>(
     let source_map = item_tree
         .functions
         .iter()
-        .find(|(_, f)| f.span == scope.range)
+        .find(|(_, f)| f.span == scope.range && scope.name.as_ref() == Some(&f.name))
         .and_then(|(local_id, _)| {
             let func_loc = baml_compiler2_hir::loc::FunctionLoc::new(db, file, *local_id);
             baml_compiler2_hir::body::function_body_source_map(db, func_loc)

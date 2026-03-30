@@ -114,9 +114,9 @@ pub fn definition_span<'db>(
 pub fn display_ty(ty: &Ty) -> String {
     use baml_compiler2_tir::ty::PrimitiveType;
     match ty {
-        Ty::Class(qn) | Ty::Enum(qn) | Ty::TypeAlias(qn) => qn.to_string(),
-        Ty::EnumVariant(qn, v) => format!("{qn}.{v}"),
-        Ty::Primitive(p) => match p {
+        Ty::Class(qn, _) | Ty::Enum(qn, _) | Ty::TypeAlias(qn, _) => qn.to_string(),
+        Ty::EnumVariant(qn, v, _) => format!("{qn}.{v}"),
+        Ty::Primitive(p, _) => match p {
             PrimitiveType::Int => "int".to_string(),
             PrimitiveType::Float => "float".to_string(),
             PrimitiveType::String => "string".to_string(),
@@ -127,29 +127,29 @@ pub fn display_ty(ty: &Ty) -> String {
             PrimitiveType::Video => "video".to_string(),
             PrimitiveType::Pdf => "pdf".to_string(),
         },
-        Ty::List(inner) => format!("{}[]", display_ty(inner)),
-        Ty::Map(k, v) => format!("map<{}, {}>", display_ty(k), display_ty(v)),
-        Ty::EvolvingList(inner) => {
-            if matches!(**inner, Ty::Never) {
+        Ty::List(inner, _) => format!("{}[]", display_ty(inner)),
+        Ty::Map(k, v, _) => format!("map<{}, {}>", display_ty(k), display_ty(v)),
+        Ty::EvolvingList(inner, _) => {
+            if matches!(**inner, Ty::Never { .. }) {
                 "_[]".to_string()
             } else {
                 format!("{}[]", display_ty(inner))
             }
         }
-        Ty::EvolvingMap(k, v) => {
-            if matches!(**k, Ty::Never) && matches!(**v, Ty::Never) {
+        Ty::EvolvingMap(k, v, _) => {
+            if matches!(**k, Ty::Never { .. }) && matches!(**v, Ty::Never { .. }) {
                 "map<_, _>".to_string()
             } else {
                 format!("map<{}, {}>", display_ty(k), display_ty(v))
             }
         }
-        Ty::Union(members) => {
+        Ty::Union(members, _) => {
             let parts: Vec<_> = members.iter().map(display_ty).collect();
             parts.join(" | ")
         }
-        Ty::Optional(inner) => format!("{}?", display_ty(inner)),
-        Ty::Literal(lit, _freshness) => lit.to_string(),
-        Ty::Function { params, ret } => {
+        Ty::Optional(inner, _) => format!("{}?", display_ty(inner)),
+        Ty::Literal(lit, _freshness, _) => lit.to_string(),
+        Ty::Function { params, ret, .. } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|(name, ty)| {
@@ -160,13 +160,13 @@ pub fn display_ty(ty: &Ty) -> String {
                 .collect();
             format!("({}) -> {}", ps.join(", "), display_ty(ret))
         }
-        Ty::TypeVar(name) => name.to_string(),
-        Ty::Never => "never".to_string(),
-        Ty::Void => "void".to_string(),
-        Ty::BuiltinUnknown | Ty::Unknown => "unknown".to_string(),
-        Ty::RustType => "$rust_type".to_string(),
-        Ty::Type => "type".to_string(),
-        Ty::Error => "!error".to_string(),
+        Ty::TypeVar(name, _) => name.to_string(),
+        Ty::Never { .. } => "never".to_string(),
+        Ty::Void { .. } => "void".to_string(),
+        Ty::BuiltinUnknown { .. } | Ty::Unknown { .. } => "unknown".to_string(),
+        Ty::RustType { .. } => "$rust_type".to_string(),
+        Ty::Type { .. } => "type".to_string(),
+        Ty::Error { .. } => "!error".to_string(),
     }
 }
 
@@ -179,48 +179,48 @@ pub fn display_ty(ty: &Ty) -> String {
 /// produces output that matches the user's source syntax.
 pub fn display_type_expr(te: &TypeExpr) -> String {
     match te {
-        TypeExpr::Path(segments) => {
+        TypeExpr::Path { segments, .. } => {
             // Use only the last segment for brevity (e.g. `baml.Foo` → `Foo`).
             segments
                 .last()
                 .map(|n| n.as_str().to_string())
                 .unwrap_or_else(|| "unknown".to_string())
         }
-        TypeExpr::Int => "int".to_string(),
-        TypeExpr::Float => "float".to_string(),
-        TypeExpr::String => "string".to_string(),
-        TypeExpr::Bool => "bool".to_string(),
-        TypeExpr::Null => "null".to_string(),
-        TypeExpr::Media(kind) => format!("{kind:?}").to_lowercase(),
-        TypeExpr::Optional(inner) => {
+        TypeExpr::Int { .. } => "int".to_string(),
+        TypeExpr::Float { .. } => "float".to_string(),
+        TypeExpr::String { .. } => "string".to_string(),
+        TypeExpr::Bool { .. } => "bool".to_string(),
+        TypeExpr::Null { .. } => "null".to_string(),
+        TypeExpr::Media { kind, .. } => format!("{kind:?}").to_lowercase(),
+        TypeExpr::Optional { inner, .. } => {
             let s = display_type_expr(inner);
-            if matches!(**inner, TypeExpr::Union(_)) {
+            if matches!(**inner, TypeExpr::Union { .. }) {
                 format!("({s})?")
             } else {
                 format!("{s}?")
             }
         }
-        TypeExpr::List(inner) => {
+        TypeExpr::List { inner, .. } => {
             let s = display_type_expr(inner);
-            if matches!(**inner, TypeExpr::Union(_)) {
+            if matches!(**inner, TypeExpr::Union { .. }) {
                 format!("({s})[]")
             } else {
                 format!("{s}[]")
             }
         }
-        TypeExpr::Map { key, value } => {
+        TypeExpr::Map { key, value, .. } => {
             format!(
                 "map<{}, {}>",
                 display_type_expr(key),
                 display_type_expr(value)
             )
         }
-        TypeExpr::Union(members) => {
-            let parts: Vec<_> = members.iter().map(display_type_expr).collect();
+        TypeExpr::Union { variants, .. } => {
+            let parts: Vec<_> = variants.iter().map(display_type_expr).collect();
             parts.join(" | ")
         }
-        TypeExpr::Literal(lit) => lit.to_string(),
-        TypeExpr::Function { params, ret } => {
+        TypeExpr::Literal { value, .. } => value.to_string(),
+        TypeExpr::Function { params, ret, .. } => {
             let ps: Vec<String> = params
                 .iter()
                 .map(|p| {
@@ -232,10 +232,10 @@ pub fn display_type_expr(te: &TypeExpr) -> String {
                 .collect();
             format!("({}) -> {}", ps.join(", "), display_type_expr(ret))
         }
-        TypeExpr::BuiltinUnknown => "unknown".to_string(),
-        TypeExpr::Never => "never".to_string(),
-        TypeExpr::Type => "type".to_string(),
-        TypeExpr::Rust => "$rust_type".to_string(),
-        TypeExpr::Error | TypeExpr::Unknown => "unknown".to_string(),
+        TypeExpr::BuiltinUnknown { .. } => "unknown".to_string(),
+        TypeExpr::Never { .. } => "never".to_string(),
+        TypeExpr::Type { .. } => "type".to_string(),
+        TypeExpr::Rust { .. } => "$rust_type".to_string(),
+        TypeExpr::Error { .. } | TypeExpr::Unknown { .. } => "unknown".to_string(),
     }
 }

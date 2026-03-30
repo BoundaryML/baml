@@ -113,11 +113,13 @@ function GetStatus() -> Status {
         );
 
         let loc = test.goto_definition();
-        // Enum variant goto-definition is not yet implemented.
-        // TODO: once implemented, assert contains("-> Status") || contains("-> Active")
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
         assert!(
-            loc.is_none(),
-            "Enum variant goto-def is not yet implemented"
+            desc.contains("-> Active"),
+            "Should navigate to enum variant 'Active', got: {desc}"
         );
     }
 
@@ -137,11 +139,13 @@ function GetName(p: Person) -> string {
         );
 
         let loc = test.goto_definition();
-        // Field access goto-definition is not yet implemented.
-        // TODO: once implemented, assert contains("-> name")
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
         assert!(
-            loc.is_none(),
-            "Field access goto-def is not yet implemented"
+            desc.contains("-> name"),
+            "Should navigate to field 'name', got: {desc}"
         );
     }
 
@@ -298,11 +302,13 @@ function Foo(s: Success) -> string {
         let test = builder.build();
 
         let loc = test.goto_definition();
-        // Field access goto-definition is not yet implemented.
-        // TODO: once implemented, assert contains("-> data")
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
         assert!(
-            loc.is_none(),
-            "Field access goto-def is not yet implemented"
+            desc.contains("-> data"),
+            "Should navigate to field 'data', got: {desc}"
         );
     }
 
@@ -324,11 +330,13 @@ function Foo() -> Success {
         let test = builder.build();
 
         let loc = test.goto_definition();
-        // Constructor field goto-definition is not yet implemented.
-        // TODO: once implemented, assert contains("-> data")
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
         assert!(
-            loc.is_none(),
-            "Constructor field goto-def is not yet implemented"
+            desc.contains("-> data"),
+            "Should navigate to constructor field 'data', got: {desc}"
         );
     }
 
@@ -381,8 +389,13 @@ function Foo(s: Success) -> string {
         let test = builder.build();
 
         let loc = test.goto_definition();
-        // Method goto-definition is not yet implemented.
-        // TODO: once implemented, assert contains("Celebrate")
-        assert!(loc.is_none(), "Method goto-def is not yet implemented");
+        let desc = loc
+            .as_ref()
+            .map(|l| test.format_location_with_name(l))
+            .unwrap_or_else(|| "No definition found".into());
+        assert!(
+            desc.contains("-> Celebrate"),
+            "Should navigate to method 'Celebrate', got: {desc}"
+        );
     }
 }

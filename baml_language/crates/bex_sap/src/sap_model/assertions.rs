@@ -4,6 +4,7 @@ use crate::{
     sap_model::TypeIdent,
 };
 
+/// Assertions are non-capturing functions that take in a value and return a boolean.
 /// TODO
 #[derive(Clone, PartialEq)]
 pub struct Assertion<'t, N: TypeIdent> {

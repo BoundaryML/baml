@@ -50,6 +50,24 @@ fn user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request {
     }
 }
 
+fn user.TypeBuilderFn$parse(json: string) -> Resume {
+    // Locals:
+    let _0: Resume // _0 // return
+    let _1: string // json // param
+
+    bb0: {
+        _0 = call const fn baml.llm.parse(const "TypeBuilderFn", copy _1) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
 fn user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
     // Locals:
     let _0: baml.llm.PromptAst // _0 // return

@@ -1,0 +1,15 @@
+class Config {
+  id int @stream.must_exist
+  name string @stream.done
+  data AttrFoo @stream.must_exist @stream.done
+}
+
+class AttrFoo {
+  x int
+}
+
+class WithBlockAttrs {
+  a int
+  b string
+  @@stream.done
+}

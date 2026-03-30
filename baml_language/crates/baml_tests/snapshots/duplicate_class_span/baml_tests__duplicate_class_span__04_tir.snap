@@ -9,3 +9,7 @@ class user.A {
   field: string
 }
 type user.A = int
+class user.A$stream {
+  field: null | string
+}
+type user.A$stream = int

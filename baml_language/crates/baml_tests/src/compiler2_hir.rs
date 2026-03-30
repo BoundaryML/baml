@@ -117,18 +117,54 @@ mod tests {
         let pkg_id = PackageId::new(&db, Name::new("user"));
         let items = package_items(&db, pkg_id);
 
-        let point_path = vec![Name::new("Point")];
-        let dir_path = vec![Name::new("Dir")];
-        let missing_path = vec![Name::new("Missing")];
-
         assert!(
-            items.lookup_type(&point_path).is_some(),
+            items.lookup_type(&[], &Name::new("Point")).is_some(),
             "Point should resolve"
         );
-        assert!(items.lookup_type(&dir_path).is_some(), "Dir should resolve");
         assert!(
-            items.lookup_type(&missing_path).is_none(),
+            items.lookup_type(&[], &Name::new("Dir")).is_some(),
+            "Dir should resolve"
+        );
+        assert!(
+            items.lookup_type(&[], &Name::new("Missing")).is_none(),
             "Missing should not resolve"
+        );
+    }
+
+    /// The new (namespace, item) API correctly handles namespace-qualified lookups.
+    #[test]
+    fn lookup_type_namespace_item_api() {
+        let mut db = make_db();
+        let _f1 = db.add_file("main.baml", "class Config { key string }");
+        let _f2 = db.add_file("ns_llm/models.baml", "class Response { text string }");
+
+        let pkg_id = PackageId::new(&db, Name::new("user"));
+        let pkg_items = package_items(&db, pkg_id);
+
+        // Response is only in ["llm"] namespace
+        let response_name = Name::new("Response");
+        assert!(
+            pkg_items
+                .lookup_type(&[Name::new("llm")], &response_name)
+                .is_some(),
+            "lookup_type(['llm'], 'Response') should find it"
+        );
+        assert!(
+            pkg_items.lookup_type(&[], &response_name).is_none(),
+            "lookup_type([], 'Response') should not find it in root"
+        );
+
+        // Config is only in root namespace
+        let config_name = Name::new("Config");
+        assert!(
+            pkg_items.lookup_type(&[], &config_name).is_some(),
+            "lookup_type([], 'Config') should find it in root"
+        );
+        assert!(
+            pkg_items
+                .lookup_type(&[Name::new("llm")], &config_name)
+                .is_none(),
+            "lookup_type(['llm'], 'Config') should not find it in llm namespace"
         );
     }
 
@@ -280,9 +316,9 @@ mod tests {
         // First wins
         assert!(ns.values.contains_key(&Name::new("greet")));
 
-        // Three conflicts: greet, greet$render_prompt, greet$build_request
+        // Four conflicts: greet, greet$render_prompt, greet$build_request, greet$parse
         // Each LLM function expands to companions, all duplicated across 3 files.
-        assert_eq!(ns.conflicts().len(), 3);
+        assert_eq!(ns.conflicts().len(), 4);
         for conflict in ns.conflicts() {
             assert_eq!(conflict.entries.len(), 3);
         }
@@ -340,7 +376,7 @@ mod tests {
         assert_eq!(items.conflicts()[0].name, Name::new("Dup"));
 
         // Resolution still works (first wins)
-        let resolved = items.lookup_type(&[Name::new("Dup")]);
+        let resolved = items.lookup_type(&[], &Name::new("Dup"));
         assert!(resolved.is_some());
     }
 
@@ -584,7 +620,7 @@ mod tests {
         let db = make_db();
         let builtin = baml_compiler2_hir::compiler2_all_files(&db)
             .into_iter()
-            .find(|file| file.path(&db) == std::path::Path::new("<builtin>/baml/http/http.baml"))
+            .find(|file| file.path(&db) == std::path::Path::new("<builtin>/baml/ns_http/http.baml"))
             .expect("expected builtin http file");
 
         let index = file_semantic_index(&db, builtin);
@@ -592,6 +628,200 @@ mod tests {
             index.diagnostics().is_empty(),
             "expected builtin http file to be phase1-clean, got: {:?}",
             index.diagnostics()
+        );
+    }
+
+    // ── Namespace derivation from ns_* folders ─────────────────────────────
+
+    /// ns_llm/client.baml → namespace_path = ["llm"]
+    #[test]
+    fn file_package_ns_folder_creates_namespace() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("ns_llm/client.baml", "class Foo {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            pkg_info.namespace_path,
+            vec![Name::new("llm")],
+            "ns_llm/ should create namespace ['llm']"
+        );
+    }
+
+    /// ns_llm/helpers/utils.baml → namespace_path = ["llm"] (plain subfolder skipped)
+    #[test]
+    fn file_package_plain_subfolder_skipped() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("ns_llm/helpers/utils.baml", "class Bar {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            pkg_info.namespace_path,
+            vec![Name::new("llm")],
+            "plain helpers/ subfolder should be skipped"
+        );
+    }
+
+    /// ns_llm/ns_openai/client.baml → namespace_path = ["llm", "openai"]
+    #[test]
+    fn file_package_nested_ns_folders() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("ns_llm/ns_openai/client.baml", "class Baz {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert_eq!(
+            pkg_info.namespace_path,
+            vec![Name::new("llm"), Name::new("openai")],
+            "nested ns_ folders should create ['llm', 'openai']"
+        );
+    }
+
+    /// plain/folder/file.baml → namespace_path = [] (no ns_ folders)
+    #[test]
+    fn file_package_plain_folder_no_namespace() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("plain/folder/file.baml", "class Qux {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert!(
+            pkg_info.namespace_path.is_empty(),
+            "plain folders should not create namespaces"
+        );
+    }
+
+    /// Flat file (no folder) → namespace_path = [] (unchanged behavior)
+    #[test]
+    fn file_package_flat_file_unchanged() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("main.baml", "class Root {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert!(
+            pkg_info.namespace_path.is_empty(),
+            "flat files should have empty namespace_path"
+        );
+    }
+
+    /// ns_ with invalid identifier suffix is skipped (ns_123bad/)
+    #[test]
+    fn file_package_invalid_ns_name_skipped() {
+        use baml_compiler2_hir::file_package::file_package;
+
+        let mut db = make_db();
+        let file = db.add_file("ns_123bad/file.baml", "class Bad {}");
+
+        let pkg_info = file_package(&db, file);
+        assert_eq!(pkg_info.package.as_str(), "user");
+        assert!(
+            pkg_info.namespace_path.is_empty(),
+            "ns_ with non-identifier suffix should be skipped"
+        );
+    }
+
+    /// Files in ns_llm/ are in a separate namespace from root files.
+    #[test]
+    fn namespace_items_separate_for_ns_folder() {
+        let mut db = make_db();
+        let _root_file = db.add_file("main.baml", "class Config { key string }");
+        let _ns_file = db.add_file("ns_llm/models.baml", "class Response { text string }");
+
+        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let items = package_items(&db, user_pkg_id);
+
+        // Root namespace should have Config but not Response
+        let root_ns = items.namespaces.get(&vec![]).expect("root namespace");
+        assert!(root_ns.types.contains_key(&Name::new("Config")));
+        assert!(!root_ns.types.contains_key(&Name::new("Response")));
+
+        // "llm" namespace should have Response but not Config
+        let llm_ns = items
+            .namespaces
+            .get(&vec![Name::new("llm")])
+            .expect("llm namespace");
+        assert!(llm_ns.types.contains_key(&Name::new("Response")));
+        assert!(!llm_ns.types.contains_key(&Name::new("Config")));
+    }
+
+    /// Same symbol name in different namespaces does NOT conflict.
+    #[test]
+    fn same_name_different_namespaces_no_conflict() {
+        let mut db = make_db();
+        let _f1 = db.add_file("ns_llm/types.baml", "class Response { text string }");
+        let _f2 = db.add_file("ns_http/types.baml", "class Response { status int }");
+
+        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let items = package_items(&db, user_pkg_id);
+
+        // No conflicts — different namespaces
+        assert!(
+            items.conflicts().is_empty(),
+            "Same name in different namespaces should not conflict"
+        );
+
+        // Both namespaces have their own Response
+        let llm_ns = items
+            .namespaces
+            .get(&vec![Name::new("llm")])
+            .expect("llm namespace");
+        assert!(llm_ns.types.contains_key(&Name::new("Response")));
+
+        let http_ns = items
+            .namespaces
+            .get(&vec![Name::new("http")])
+            .expect("http namespace");
+        assert!(http_ns.types.contains_key(&Name::new("Response")));
+    }
+
+    /// Namespace name shadowing a root declaration is detected.
+    #[test]
+    fn namespace_shadows_root_declaration() {
+        use baml_compiler2_hir::package::package_items;
+
+        let mut db = make_db();
+        let _root = db.add_file("main.baml", "class foo { x int }");
+        let _ns = db.add_file("ns_foo/stuff.baml", "class Bar { y string }");
+
+        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let items = package_items(&db, user_pkg_id);
+
+        assert_eq!(
+            items.shadows().len(),
+            1,
+            "Expected 1 shadow, got: {:?}",
+            items.shadows()
+        );
+        assert_eq!(items.shadows()[0].ns_name, Name::new("foo"));
+    }
+
+    /// No shadow when namespace name doesn't collide with root declarations.
+    #[test]
+    fn no_shadow_when_names_distinct() {
+        use baml_compiler2_hir::package::package_items;
+
+        let mut db = make_db();
+        let _root = db.add_file("main.baml", "class Config { x int }");
+        let _ns = db.add_file("ns_llm/stuff.baml", "class Model { y string }");
+
+        let user_pkg_id = PackageId::new(&db, Name::new("user"));
+        let items = package_items(&db, user_pkg_id);
+
+        assert!(
+            items.shadows().is_empty(),
+            "No shadow expected when names are distinct"
         );
     }
 
