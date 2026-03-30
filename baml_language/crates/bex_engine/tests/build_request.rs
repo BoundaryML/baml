@@ -906,18 +906,9 @@ function get_body() -> string {
 
 // ============================================================================
 // AWS Bedrock Integration Tests
-//
-// TODO: Most Bedrock tests are currently commented out because the full
-// pipeline's default_role is "system" when no _.role() directive is used.
-// Bedrock's Converse API only allows "user"/"assistant" as message roles
-// (system content uses a separate top-level field), so prompts without
-// explicit role directives fail with "unsupported conversation role: system".
-// Additionally, max_one_system_prompt=true collapses multiple system messages.
-// Once the default_role handling is fixed for Bedrock, uncomment these tests.
 // ============================================================================
 
 /// Shared Bedrock client block.
-#[allow(dead_code)]
 const BEDROCK_CLIENT: &str = r#"
 client C {
     provider aws-bedrock
@@ -930,43 +921,78 @@ client C {
 }
 "#;
 
-// TODO: uncomment when default_role is fixed for Bedrock
-//
-// #[tokio::test]
-// async fn test_bedrock_template_string_expansion() {
-//     let source = [BEDROCK_CLIENT, r##"
-// template_string Greet(name: string) #"Hello, {{ name }}!"#
-// function F(name: string) -> string {
-//     client C
-//     prompt #"{{ Greet(name) }}"#
-// }
-// function get_body() -> string {
-//     baml.llm.build_request(C, "F", { "name": "Alice" }).body
-// }
-// "##].join("\n");
-//     let body = body_json(&run_baml(&source, "get_body").await);
-//     assert_eq!(body, serde_json::json!({
-//         "messages": [{"role": "user", "content": [{"text": "Hello, Alice!"}]}]
-//     }));
-// }
-//
-// #[tokio::test]
-// async fn test_bedrock_struct_arg_in_prompt() { ... }
-// #[tokio::test]
-// async fn test_bedrock_mixed_text_and_image_base64() { ... }
-// #[tokio::test]
-// async fn test_bedrock_image_s3_uri() { ... }
-// #[tokio::test]
-// async fn test_bedrock_pdf_base64() { ... }
-// #[tokio::test]
-// async fn test_bedrock_video_base64() { ... }
-// #[tokio::test]
-// async fn test_bedrock_audio_base64() { ... }
-
-// Tests that use explicit _.role() directives work today:
+// ============================================================================
+// Template strings
+// ============================================================================
 
 #[tokio::test]
-#[ignore = "aws-bedrock provider not yet implemented in build_request"]
+async fn test_bedrock_template_string_expansion() {
+    let source = [
+        BEDROCK_CLIENT,
+        r##"
+template_string Greet(name: string) #"Hello, {{ name }}!"#
+function F(name: string) -> string {
+    client C
+    prompt #"{{ Greet(name) }}"#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", { "name": "Alice" }).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "messages": [
+                {"role": "user", "content": [{"text": "Hello, Alice!"}]}
+            ]
+        })
+    );
+}
+
+// ============================================================================
+// Struct args
+// ============================================================================
+
+#[tokio::test]
+async fn test_bedrock_struct_arg_in_prompt() {
+    let source = [
+        BEDROCK_CLIENT,
+        r##"
+class Person {
+    name string
+    age int
+}
+function F(p: Person) -> string {
+    client C
+    prompt #"{{ p.name }} is {{ p.age }}"#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", { "p": { "name": "Bob", "age": 42 } }).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "messages": [
+                {"role": "user", "content": [{"text": "Bob is 42"}]}
+            ]
+        })
+    );
+}
+
+// ============================================================================
+// System + user messages
+// ============================================================================
+
+#[tokio::test]
 async fn test_bedrock_system_and_user() {
     let source = [
         BEDROCK_CLIENT,
@@ -999,8 +1025,11 @@ function get_body() -> string {
     );
 }
 
+// ============================================================================
+// Multi-message conversations
+// ============================================================================
+
 #[tokio::test]
-#[ignore = "aws-bedrock provider not yet implemented in build_request"]
 async fn test_bedrock_three_role_conversation() {
     let source = [
         BEDROCK_CLIENT,
@@ -1037,7 +1066,6 @@ function get_body() -> string {
 }
 
 #[tokio::test]
-#[ignore = "aws-bedrock provider not yet implemented in build_request"]
 async fn test_bedrock_multi_turn_conversation() {
     let source = [
         BEDROCK_CLIENT,
@@ -1082,16 +1110,83 @@ function get_body() -> string {
     );
 }
 
-// TODO: uncomment when default_role / max_one_system_prompt is fixed for Bedrock
-// #[tokio::test]
-// async fn test_bedrock_multiple_system_messages() { ... }
-// #[tokio::test]
-// async fn test_bedrock_mixed_text_and_image_base64() { ... }
-// #[tokio::test]
-// async fn test_bedrock_image_s3_uri() { ... }
-// #[tokio::test]
-// async fn test_bedrock_pdf_base64() { ... }
-// #[tokio::test]
-// async fn test_bedrock_video_base64() { ... }
-// #[tokio::test]
-// async fn test_bedrock_audio_base64() { ... }
+// ============================================================================
+// Inference config
+// ============================================================================
+
+#[tokio::test]
+async fn test_bedrock_inference_config() {
+    let source = r##"
+client C {
+    provider aws-bedrock
+    options {
+        model "anthropic.claude-3-haiku-20240307-v1:0"
+        region "us-west-2"
+        access_key_id "AKIAIOSFODNN7EXAMPLE"
+        secret_access_key "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+        max_tokens 500
+        temperature 0.5
+        top_p 0.75
+    }
+}
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("user") }}
+        Hi
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##;
+
+    let body = body_json(&run_baml(source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "messages": [
+                {"role": "user", "content": [{"text": "Hi"}]}
+            ],
+            "inferenceConfig": {
+                "maxTokens": 500,
+                "temperature": 0.5,
+                "topP": 0.75
+            }
+        })
+    );
+}
+
+// ============================================================================
+// User-only (no system message)
+// ============================================================================
+
+#[tokio::test]
+async fn test_bedrock_user_only_no_system() {
+    let source = [
+        BEDROCK_CLIENT,
+        r##"
+function F() -> string {
+    client C
+    prompt #"
+        {{ _.role("user") }}
+        Hello there
+    "#
+}
+function get_body() -> string {
+    baml.llm.build_request(C, "F", {}).body
+}
+"##,
+    ]
+    .join("\n");
+
+    let body = body_json(&run_baml(&source, "get_body").await);
+    assert_eq!(
+        body,
+        serde_json::json!({
+            "messages": [
+                {"role": "user", "content": [{"text": "Hello there"}]}
+            ]
+        })
+    );
+}

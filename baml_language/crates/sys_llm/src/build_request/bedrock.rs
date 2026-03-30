@@ -540,13 +540,10 @@ fn json_value_to_document(value: &serde_json::Value) -> Option<aws_smithy_types:
         serde_json::Value::Null => Some(Document::Null),
         serde_json::Value::Bool(b) => Some(Document::Bool(*b)),
         serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                if i >= 0 {
-                    #[allow(clippy::cast_sign_loss)]
-                    Some(Document::Number(Number::PosInt(i as u64)))
-                } else {
-                    Some(Document::Number(Number::NegInt(i)))
-                }
+            if let Some(u) = n.as_u64() {
+                Some(Document::Number(Number::PosInt(u)))
+            } else if let Some(i) = n.as_i64() {
+                Some(Document::Number(Number::NegInt(i)))
             } else {
                 n.as_f64().map(|f| Document::Number(Number::Float(f)))
             }

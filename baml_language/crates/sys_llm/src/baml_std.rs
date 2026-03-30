@@ -80,21 +80,17 @@ impl PrimitiveClient {
         let Some(finish_reason) = finish_reason else {
             return true;
         };
-        let finish_reason = &finish_reason.to_ascii_lowercase();
+        let contains_ci = |list: &[String]| {
+            list.iter()
+                .any(|item| item.eq_ignore_ascii_case(finish_reason))
+        };
         match (
             &self.options.finish_reason_allow_list,
             &self.options.finish_reason_deny_list,
         ) {
-            (Some(finish_reason_allow_list), None) => {
-                finish_reason_allow_list.contains(finish_reason)
-            }
-            (None, Some(finish_reason_deny_list)) => {
-                !finish_reason_deny_list.contains(finish_reason)
-            }
-            (Some(finish_reason_allow_list), Some(finish_reason_deny_list)) => {
-                finish_reason_allow_list.contains(finish_reason)
-                    && !finish_reason_deny_list.contains(finish_reason)
-            }
+            (Some(allow), None) => contains_ci(allow),
+            (None, Some(deny)) => !contains_ci(deny),
+            (Some(allow), Some(deny)) => contains_ci(allow) && !contains_ci(deny),
             (None, None) => true,
         }
     }

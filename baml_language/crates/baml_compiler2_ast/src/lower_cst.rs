@@ -1047,10 +1047,11 @@ fn synthesize_client_new_companion(
                 };
                 let k = opt_key.text();
                 let val = crate::lower_config_item::lower_config_value(&opt_item, &mut alloc);
+                let is_null = opt_item.value_str().as_deref() == Some("null");
                 match k {
                     "model" => model = val,
                     "base_url" => {
-                        has_base_url = true;
+                        has_base_url = !is_null;
                         base_url = val;
                     }
                     "default_role" => default_role = val,
@@ -1065,7 +1066,9 @@ fn synthesize_client_new_companion(
                     "query_params" => query_params = val,
                     other => {
                         if let Some(&i) = prov_index.get(other) {
-                            prov_vals[i] = Some(val);
+                            if !is_null {
+                                prov_vals[i] = Some(val);
+                            }
                         } else {
                             let kx = alloc(Expr::Literal(Literal::String(other.to_string())));
                             request_body_entries.push((kx, val));
@@ -1254,7 +1257,7 @@ fn provider_config_for(provider: &str) -> ProviderConfig {
             ..ProviderConfig::EMPTY
         },
         "openrouter" => ProviderConfig {
-            base_url: Some("https://openrouter.ai/api"),
+            base_url: Some("https://openrouter.ai/api/v1"),
             default_role: Some("system"),
             allowed_roles: Some(SAU),
             ..ProviderConfig::EMPTY
