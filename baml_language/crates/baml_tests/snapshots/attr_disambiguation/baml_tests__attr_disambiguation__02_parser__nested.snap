@@ -1,0 +1,339 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== SYNTAX TREE ===
+SOURCE_FILE
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "NFoo"
+    L_BRACE "{"
+    FIELD
+      WORD "x"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "NBar"
+    L_BRACE "{"
+    FIELD
+      WORD "x"
+      TYPE_EXPR "int"
+        WORD "int"
+    R_BRACE "}"
+  CLASS_DEF
+    KW_CLASS "class"
+    WORD "AliasInNestedTypes"
+    L_BRACE "{"
+    FIELD
+      WORD "d1"
+      TYPE_EXPR "NFoo[]"
+        WORD "NFoo"
+        L_BRACKET "["
+        R_BRACKET "]"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "d1_alias"
+            QUOTE """
+            WORD "d1_alias"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "d2"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "NFoo"
+            WORD "NFoo"
+        AT "@"
+        WORD "alias"
+        L_PAREN "("
+        QUOTE """
+        WORD "d2_alias"
+        QUOTE """
+        R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "d3"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR
+            WORD "NFoo"
+            ATTRIBUTE "@stream.done"
+              AT "@"
+              WORD "stream"
+              DOT "."
+              WORD "done"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "d4"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "NFoo"
+            WORD "NFoo"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "d4_alias"
+            QUOTE """
+            WORD "d4_alias"
+            QUOTE """
+          R_PAREN ")"
+    COMMA ","
+    FIELD "NBar"
+      WORD "NBar"
+    GREATER ">"
+    FIELD
+      WORD "d5"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR
+            WORD "NFoo"
+            ATTRIBUTE "@stream.done"
+              AT "@"
+              WORD "stream"
+              DOT "."
+              WORD "done"
+          COMMA ","
+          TYPE_EXPR "NBar"
+            WORD "NBar"
+          GREATER ">"
+    FIELD
+      WORD "d6"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "NFoo"
+            WORD "NFoo"
+        AT "@"
+        WORD "alias"
+        L_PAREN "("
+        QUOTE """
+        WORD "d6_alias"
+        QUOTE """
+        R_PAREN ")"
+        PIPE "|"
+        WORD "NBar"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+    FIELD
+      WORD "d7"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "NFoo | NBar"
+            WORD "NFoo"
+            PIPE "|"
+            WORD "NBar"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "d7_alias"
+            QUOTE """
+            WORD "d7_alias"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "d8"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "NFoo"
+            WORD "NFoo"
+        AT "@"
+        WORD "alias"
+        L_PAREN "("
+        QUOTE """
+        WORD "d8_alias"
+        QUOTE """
+        R_PAREN ")"
+        R_PAREN ")"
+        L_BRACKET "["
+        R_BRACKET "]"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
+    FIELD
+      WORD "d9"
+      TYPE_EXPR
+        L_PAREN "("
+        FUNCTION_TYPE_PARAM
+          TYPE_EXPR "NFoo"
+            WORD "NFoo"
+        AT "@"
+        WORD "alias"
+        L_PAREN "("
+        QUOTE """
+        WORD "d9_inner"
+        QUOTE """
+        R_PAREN ")"
+        R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "d9_outer"
+            QUOTE """
+            WORD "d9_outer"
+            QUOTE """
+          R_PAREN ")"
+    FIELD
+      WORD "d10"
+      TYPE_EXPR
+        WORD "map"
+        TYPE_ARGS
+          LESS "<"
+          TYPE_EXPR "string"
+            WORD "string"
+          COMMA ","
+          TYPE_EXPR
+            WORD "map"
+            TYPE_ARGS
+              LESS "<"
+              TYPE_EXPR "NFoo"
+                WORD "NFoo"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "d10_alias"
+            QUOTE """
+            WORD "d10_alias"
+            QUOTE """
+          R_PAREN ")"
+    COMMA ","
+    FIELD "NBar"
+      WORD "NBar"
+    GREATER_GREATER ">>"
+    R_BRACE "}"
+
+=== ERRORS ===
+Error: Unexpected '@' in type expression
+    ╭─[ nested.baml:12:16 ]
+    │
+ 12 │   d2 (NFoo @alias("d2_alias"))[]
+    │                ┬  
+    │                ╰── Unexpected '@' in type expression
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected '>', found '@'
+    ╭─[ nested.baml:18:23 ]
+    │
+ 18 │   d4 map<NFoo @alias("d4_alias"), NBar>
+    │                       ┬  
+    │                       ╰── Expected '>', found '@'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found ','
+    ╭─[ nested.baml:19:1 ]
+    │
+ 19 │ 
+    │ ┬  
+    │ ╰── Expected Unexpected token in class body, found ','
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: field 'NBar' is missing a type annotation
+    ╭─[ nested.baml:20:2 ]
+    │
+ 20 │   // D5: stream.done inside generic arg — valid
+    │  ──┬─  
+    │    ╰─── field 'NBar' is missing a type annotation
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found '>'
+    ╭─[ nested.baml:20:6 ]
+    │
+ 20 │   // D5: stream.done inside generic arg — valid
+    │      ┬  
+    │      ╰── Expected Unexpected token in class body, found '>'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Unexpected '@' in type expression
+    ╭─[ nested.baml:24:24 ]
+    │
+ 24 │   d6 (NFoo @alias("d6_alias") | NBar)[]
+    │                        ┬  
+    │                        ╰── Unexpected '@' in type expression
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Unexpected '@' in type expression
+    ╭─[ nested.baml:30:28 ]
+    │
+ 30 │   d8 (NFoo @alias("d8_alias"))[] @stream.done
+    │                            ┬  
+    │                            ╰── Unexpected '@' in type expression
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Unexpected '@' in type expression
+    ╭─[ nested.baml:33:30 ]
+    │
+ 33 │   d9 (NFoo @alias("d9_inner")) @alias("d9_outer")
+    │                              ┬  
+    │                              ╰── Unexpected '@' in type expression
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected '>', found '@'
+    ╭─[ nested.baml:36:48 ]
+    │
+ 36 │   d10 map<string, map<NFoo @alias("d10_alias"), NBar>>
+    │                                                ┬  
+    │                                                ╰── Expected '>', found '@'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected '>', found '@'
+    ╭─[ nested.baml:36:48 ]
+    │
+ 36 │   d10 map<string, map<NFoo @alias("d10_alias"), NBar>>
+    │                                                ┬  
+    │                                                ╰── Expected '>', found '@'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+Error: Expected Unexpected token in class body, found ','
+
+Error: field 'NBar' is missing a type annotation
+
+Error: Expected Unexpected token in class body, found '>>'

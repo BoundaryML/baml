@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.E5(_1: void) -> void {
+    // Locals:
+    let _0: void // return
+    let _1: void // param
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.E6(x: EFoo) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: EFoo // x // param
+
+    bb0: {
+        _0 = const "hello";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.E7() -> void {
+    // Locals:
+    let _0: void // return
+
+    bb0: {
+        unreachable;
+    }
+}
+
+fn user.E8() -> EFoo {
+    // Locals:
+    let _0: EFoo // _0 // return
+
+    bb0: {
+        _0 = EFoo { const 1_i64 };
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

@@ -1,0 +1,37 @@
+// Group D: @alias in nested type positions.
+// Most cases produce diagnostics.
+
+class NFoo { x int }
+class NBar { x int }
+
+class AliasInNestedTypes {
+  // D1: alias after array — normal field attr, valid
+  d1 NFoo[] @alias("d1_alias")
+
+  // D2: alias inside parens — ERROR
+  d2 (NFoo @alias("d2_alias"))[]
+
+  // D3: stream.done inside parens — valid (type attr, any position is fine)
+  d3 (NFoo @stream.done)[]
+
+  // D4: alias inside generic arg — ERROR
+  d4 map<NFoo @alias("d4_alias"), NBar>
+
+  // D5: stream.done inside generic arg — valid
+  d5 map<NFoo @stream.done, NBar>
+
+  // D6: alias inside parens with union — ERROR
+  d6 (NFoo @alias("d6_alias") | NBar)[]
+
+  // D7: alias after parenthesized array — valid
+  d7 (NFoo | NBar)[] @alias("d7_alias")
+
+  // D8: alias inside parens + stream.done outside — ERROR (for the inner @alias)
+  d8 (NFoo @alias("d8_alias"))[] @stream.done
+
+  // D9: alias inside parens + alias outside — ERROR (for the inner @alias)
+  d9 (NFoo @alias("d9_inner")) @alias("d9_outer")
+
+  // D10: alias inside nested generic — ERROR
+  d10 map<string, map<NFoo @alias("d10_alias"), NBar>>
+}
