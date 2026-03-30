@@ -416,14 +416,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                     let param_ty = match &param.type_expr {
                         Some(te) => {
                             let mut diags = Vec::new();
-                            crate::lower_type_expr::lower_type_expr_in_ns(
+                            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                                 self.context.db(),
                                 &te.expr,
                                 self.package_items,
                                 &self.ns_context,
                                 &all_generic_params,
                                 &mut diags,
-                            )
+                            );
+                            for diag in diags {
+                                self.context.report_at_span(diag, te.span);
+                            }
+                            ty
                         }
                         None => {
                             // No annotation and no expected type → error
@@ -444,14 +448,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Lower optional return type annotation
                 let return_annotation = func_def.return_type.as_ref().map(|te| {
                     let mut diags = Vec::new();
-                    crate::lower_type_expr::lower_type_expr_in_ns(
+                    let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                         self.context.db(),
                         &te.expr,
                         self.package_items,
                         &self.ns_context,
                         &all_generic_params,
                         &mut diags,
-                    )
+                    );
+                    for diag in diags {
+                        self.context.report_at_span(diag, te.span);
+                    }
+                    ty
                 });
 
                 // Infer the lambda body using save/restore approach
@@ -838,6 +846,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                                         &self.generic_params,
                                         &mut diags,
                                     );
+                                    for diag in diags {
+                                        self.context.report_at_span(diag, te.span);
+                                    }
                                     // Check annotation is compatible with expected
                                     if !self.is_subtype(&expected_param_ty, &annotated) {
                                         self.context.report(
@@ -862,14 +873,18 @@ impl<'db> TypeInferenceBuilder<'db> {
                         // Determine return type: annotation > expected
                         let return_annotation = func_def.return_type.as_ref().map(|te| {
                             let mut diags = Vec::new();
-                            crate::lower_type_expr::lower_type_expr_in_ns(
+                            let ty = crate::lower_type_expr::lower_type_expr_in_ns(
                                 self.context.db(),
                                 &te.expr,
                                 self.package_items,
                                 &self.ns_context,
                                 &self.generic_params,
                                 &mut diags,
-                            )
+                            );
+                            for diag in diags {
+                                self.context.report_at_span(diag, te.span);
+                            }
+                            ty
                         });
                         let effective_ret =
                             return_annotation.as_ref().unwrap_or(expected_ret.as_ref());

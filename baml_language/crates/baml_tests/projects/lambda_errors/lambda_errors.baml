@@ -21,3 +21,15 @@ function test_param_type_mismatch() -> int[] {
     let items: int[] = [1, 2, 3]
     items.map((x: string) -> { x })
 }
+
+// Unknown type name in lambda param annotation (should report UnresolvedType)
+function test_unknown_param_type() -> int {
+    let f = (x: NonExistentType) -> { 0 }
+    0
+}
+
+// Unknown type name in lambda return type annotation
+function test_unknown_return_type() -> int {
+    let f = (x: int) -> NonExistentType { x }
+    0
+}

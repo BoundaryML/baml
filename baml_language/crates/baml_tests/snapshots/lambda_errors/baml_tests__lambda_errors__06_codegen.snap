@@ -30,3 +30,13 @@ function user.test_return_mismatch() -> int {
     load_const 0
     return
 }
+
+function user.test_unknown_param_type() -> int {
+    load_const 0
+    return
+}
+
+function user.test_unknown_return_type() -> int {
+    load_const 0
+    return
+}

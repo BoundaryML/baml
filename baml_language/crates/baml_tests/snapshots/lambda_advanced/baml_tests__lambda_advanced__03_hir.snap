@@ -92,7 +92,7 @@ function user.test_map_values_transform() -> int[]  [expr] {
 function user.test_map_with_capture() -> int[]  [expr] {
   { let items: int[] = [1, 2, 3]; let factor = 10 } items.map((x) -> { {  } x Mul factor })
 }
-function user.test_nested_map() -> int[]  [expr] {
+function user.test_nested_map() -> int[][]  [expr] {
   { let matrix: int[][] = [[1, 2], [3, 4]] } matrix.map((row: int[]) -> { {  } row.map((x) -> { {  } x Mul x }) })
 }
 function user.test_optional_return() -> int?  [expr] {

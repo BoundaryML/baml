@@ -24,7 +24,7 @@ function user.test_nested() -> int  [expr] {
   { let outer = (x: int) -> { { let inner = (y: int) -> int { {  } x Add y } } inner(1) } } outer(41)
 }
 function user.test_throws() -> int  [expr] {
-  { let risky = (x: int) -> int { { if (x Lt 0) { throw "negative" } } x } } risky(42)
+  { let risky = (x: int) -> int throws string { { if (x Lt 0) { throw "negative" } } x } } risky(42)
 }
 function user.test_zero_param() -> int  [expr] {
   { let constant = () -> int { {  } 42 } } constant()

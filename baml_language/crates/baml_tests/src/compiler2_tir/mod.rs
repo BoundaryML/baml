@@ -267,6 +267,11 @@ pub(crate) mod support {
             .as_ref()
             .map(|te| format!(" {}", type_expr_to_string(&te.expr)))
             .unwrap_or_default();
+        let throws = func_def
+            .throws
+            .as_ref()
+            .map(|te| format!(" throws {}", type_expr_to_string(&te.expr)))
+            .unwrap_or_default();
         let generics = if func_def.generic_params.is_empty() {
             String::new()
         } else {
@@ -280,7 +285,10 @@ pub(crate) mod support {
                     .join(", ")
             )
         };
-        format!("{generics}({}) ->{ret} {{ ... }}", params.join(", "))
+        format!(
+            "{generics}({}) ->{ret}{throws} {{ ... }}",
+            params.join(", ")
+        )
     }
 
     /// Like `expr_desc` but enriches Call expressions with type params from inference.

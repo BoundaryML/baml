@@ -136,3 +136,61 @@ fn .<lambda(test_return_mismatch, 0)>(x: int) -> null {
         return;
     }
 }
+
+fn user.test_unknown_param_type() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn .<lambda(test_unknown_param_type, 0)>(x: void) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: void // x // param
+
+    bb0: {
+        _0 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.test_unknown_return_type() -> int {
+    // Locals:
+    let _0: int // _0 // return
+
+    bb0: {
+        _0 = const 0_i64;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn .<lambda(test_unknown_return_type, 0)>(x: int) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: int // x // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

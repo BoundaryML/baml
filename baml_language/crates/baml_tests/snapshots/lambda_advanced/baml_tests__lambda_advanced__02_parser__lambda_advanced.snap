@@ -669,8 +669,10 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR "int[]"
+    TYPE_EXPR "int[][]"
       WORD "int"
+      L_BRACKET "["
+      R_BRACKET "]"
       L_BRACKET "["
       R_BRACKET "]"
     EXPR_FUNCTION_BODY

@@ -1568,9 +1568,9 @@ fn .<lambda(test_map_with_capture, 0)>(x: null) -> null {
     }
 }
 
-fn user.test_nested_map() -> int[] {
+fn user.test_nested_map() -> int[][] {
     // Locals:
-    let _0: int[] // _0 // return
+    let _0: int[][] // _0 // return
     let _1: int[][] // matrix
     let _2: int[]
     let _3: int[]

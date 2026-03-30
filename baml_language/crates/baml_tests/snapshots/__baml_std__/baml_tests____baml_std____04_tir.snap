@@ -10,6 +10,16 @@ class baml.Array {
 }
 class baml.Map {
 }
+function baml.Map.map_keys<U>(self: baml.Map, f: (unknown) -> U) -> U[] throws never {
+  { : U[]
+    self.keys().map<K, U>(f) : U[]
+  }
+}
+function baml.Map.map_values<U>(self: baml.Map, f: (unknown) -> U) -> U[] throws never {
+  { : U[]
+    self.values().map<V, U>(f) : U[]
+  }
+}
 class baml.Array$stream {
 }
 class baml.Map$stream {

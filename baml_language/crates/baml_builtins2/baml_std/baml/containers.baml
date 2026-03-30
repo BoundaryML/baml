@@ -73,10 +73,10 @@ class Map<K, V> {
   }
 
   function map_keys<U>(self, f: (K) -> U) -> U[] {
-    $rust_function
+    self.keys().map(f)
   }
 
   function map_values<U>(self, f: (V) -> U) -> U[] {
-    $rust_function
+    self.values().map(f)
   }
 }

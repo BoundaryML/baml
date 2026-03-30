@@ -53,3 +53,23 @@ source: crates/baml_tests/src/generated_tests.rs
     │ 
     │ Note: Error code: E0001
 ────╯
+
+  [type] Error: unresolved type: NonExistentType
+    ╭─[ lambda_errors.baml:27:16 ]
+    │
+ 27 │     let f = (x: NonExistentType) -> { 0 }
+    │                ────────┬───────  
+    │                        ╰───────── unresolved type: NonExistentType
+    │ 
+    │ Note: Error code: E0001
+────╯
+
+  [type] Error: unresolved type: NonExistentType
+    ╭─[ lambda_errors.baml:33:24 ]
+    │
+ 33 │     let f = (x: int) -> NonExistentType { x }
+    │                        ────────┬───────  
+    │                                ╰───────── unresolved type: NonExistentType
+    │ 
+    │ Note: Error code: E0001
+────╯

@@ -55,3 +55,29 @@ function user.test_param_type_mismatch() -> int[] throws never {
 }
 lambda user.test_param_type_mismatch {
 }
+function user.test_unknown_param_type() -> int throws never {
+  { : 0
+    let f = : (x: unknown) -> 0
+      (x: NonExistentType) -> { ... } : (x: unknown) -> 0
+        {
+          0
+        }
+    0 : 0
+  }
+  !! 784..800: unresolved type: NonExistentType
+}
+lambda user.test_unknown_param_type {
+}
+function user.test_unknown_return_type() -> int throws never {
+  { : 0
+    let f = : (x: int) -> int
+      (x: int) -> NonExistentType { ... } : (x: int) -> int
+        {
+          x
+        }
+    0 : 0
+  }
+  !! 942..958: unresolved type: NonExistentType
+}
+lambda user.test_unknown_return_type {
+}

@@ -24,9 +24,53 @@ fn baml.Array.map = builtin(vm)
 
 fn baml.Map.map = builtin(vm)
 
-fn baml.Map.map_keys = builtin(vm)
+fn baml.Map.map_keys(self: baml.Map, f: (void) -> void) -> void[] {
+    // Locals:
+    let _0: void[] // _0 // return
+    let _1: baml.Map // self // param
+    let _2: (void) -> void // f // param
+    let _3: void[]
 
-fn baml.Map.map_values = builtin(vm)
+    bb0: {
+        _3 = call const fn baml.Map.keys(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.Array.map(copy _3, copy _2) -> [bb2];
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+fn baml.Map.map_values(self: baml.Map, f: (void) -> void) -> void[] {
+    // Locals:
+    let _0: void[] // _0 // return
+    let _1: baml.Map // self // param
+    let _2: (void) -> void // f // param
+    let _3: void[]
+
+    bb0: {
+        _3 = call const fn baml.Map.values(copy _1) -> [bb1];
+    }
+
+    bb1: {
+        _0 = call const fn baml.Array.map(copy _3, copy _2) -> [bb2];
+    }
+
+    bb2: {
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
 
 fn baml.Array.pop = builtin(vm)
 

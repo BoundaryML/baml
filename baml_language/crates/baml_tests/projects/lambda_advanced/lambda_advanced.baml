@@ -80,7 +80,7 @@ function test_map_with_capture() -> int[] {
 }
 
 // ── Nested map: map inside a map callback ────────────────────────
-function test_nested_map() -> int[] {
+function test_nested_map() -> int[][] {
     let matrix: int[][] = [[1, 2], [3, 4]]
     // Flatten-map: for each row, map and collect
     matrix.map((row: int[]) -> {
