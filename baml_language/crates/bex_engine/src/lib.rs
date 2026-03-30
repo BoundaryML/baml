@@ -773,6 +773,9 @@ impl BexEngine {
             // Update watch state (graph NodeIds, RootState values)
             vm.watch.apply_forwarding(&forwarding);
 
+            // Update frame function pointers (needed for closures)
+            vm.apply_frame_forwarding(&forwarding);
+
             // Invalidate TLAB so next allocation gets chunk from new space
             vm.tlab.invalidate();
         }

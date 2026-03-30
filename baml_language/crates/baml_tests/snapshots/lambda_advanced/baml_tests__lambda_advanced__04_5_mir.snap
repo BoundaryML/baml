@@ -27,6 +27,7 @@ fn user.test_apply_twice_inferred() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_apply_twice_inferred, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -42,6 +43,7 @@ fn .<lambda(test_apply_twice_inferred, 0)>(x: int) -> null {
     }
 }
 
+// lambda[1]
 fn .<lambda(test_apply_twice_inferred, 1)>(f: (int) -> int, x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -91,6 +93,7 @@ fn user.test_capture_in_map_inferred() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_capture_in_map_inferred, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -131,6 +134,7 @@ fn user.test_capture_lambda_inferred() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_capture_lambda_inferred, 0)>(a: int, b: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -147,6 +151,7 @@ fn .<lambda(test_capture_lambda_inferred, 0)>(a: int, b: int) -> null {
     }
 }
 
+// lambda[1]
 fn .<lambda(test_capture_lambda_inferred, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -199,6 +204,7 @@ fn user.test_chained_map() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_chained_map, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -214,6 +220,7 @@ fn .<lambda(test_chained_map, 0)>(x: null) -> null {
     }
 }
 
+// lambda[1]
 fn .<lambda(test_chained_map, 1)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -261,6 +268,7 @@ fn user.test_compose_inferred() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_compose_inferred, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -276,6 +284,7 @@ fn .<lambda(test_compose_inferred, 0)>(x: null) -> null {
     }
 }
 
+// lambda[1]
 fn .<lambda(test_compose_inferred, 1)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -314,6 +323,7 @@ fn user.test_deep_capture() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_deep_capture, 0)>(b: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -336,6 +346,7 @@ fn .<lambda(test_deep_capture, 0)>(b: int) -> null {
     }
 }
 
+// lambda[0]
 fn .<lambda(<lambda(test_deep_capture, 0)>, 1)>(c: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -380,6 +391,7 @@ fn user.test_deep_capture_inferred() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_deep_capture_inferred, 0)>(b: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -402,6 +414,7 @@ fn .<lambda(test_deep_capture_inferred, 0)>(b: int) -> null {
     }
 }
 
+// lambda[0]
 fn .<lambda(<lambda(test_deep_capture_inferred, 0)>, 1)>(c: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -446,6 +459,7 @@ fn user.test_fully_inferred_map() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_fully_inferred_map, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -484,6 +498,7 @@ fn user.test_generic_apply_inferred() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_generic_apply_inferred, 0)>(f: (void) -> void, x: void) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -503,6 +518,7 @@ fn .<lambda(test_generic_apply_inferred, 0)>(f: (void) -> void, x: void) -> null
     }
 }
 
+// lambda[1]
 fn .<lambda(test_generic_apply_inferred, 1)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -548,6 +564,7 @@ fn user.test_generic_multi_instantiation() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_generic_multi_instantiation, 0)>(x: void) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -591,6 +608,7 @@ fn user.test_higher_order_inferred() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_higher_order_inferred, 0)>(n: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -608,6 +626,7 @@ fn .<lambda(test_higher_order_inferred, 0)>(n: int) -> null {
     }
 }
 
+// lambda[0]
 fn .<lambda(<lambda(test_higher_order_inferred, 0)>, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -653,6 +672,7 @@ fn user.test_higher_order_return() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_higher_order_return, 0)>(n: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -670,6 +690,7 @@ fn .<lambda(test_higher_order_return, 0)>(n: int) -> null {
     }
 }
 
+// lambda[0]
 fn .<lambda(<lambda(test_higher_order_return, 0)>, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -708,6 +729,7 @@ fn user.test_iife() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_iife, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -742,6 +764,7 @@ fn user.test_iife_inferred() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_iife_inferred, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -782,6 +805,7 @@ fn user.test_lambda_calling_lambda() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_lambda_calling_lambda, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -797,6 +821,7 @@ fn .<lambda(test_lambda_calling_lambda, 0)>(x: int) -> null {
     }
 }
 
+// lambda[1]
 fn .<lambda(test_lambda_calling_lambda, 1)>(f: (int) -> int, x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -874,6 +899,7 @@ fn user.test_lambda_in_match_inferred() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_lambda_in_match_inferred, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -889,6 +915,7 @@ fn .<lambda(test_lambda_in_match_inferred, 0)>(x: int) -> null {
     }
 }
 
+// lambda[1]
 fn .<lambda(test_lambda_in_match_inferred, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -904,6 +931,7 @@ fn .<lambda(test_lambda_in_match_inferred, 1)>(x: int) -> null {
     }
 }
 
+// lambda[2]
 fn .<lambda(test_lambda_in_match_inferred, 2)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -944,6 +972,7 @@ fn user.test_lambda_variable_then_pass() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_lambda_variable_then_pass, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -982,6 +1011,7 @@ fn user.test_lambda_with_if() -> string {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_lambda_with_if, 0)>(n: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1048,6 +1078,7 @@ fn user.test_lambda_with_match() -> string {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_lambda_with_match, 0)>(n: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1104,6 +1135,7 @@ fn user.test_literal_return_inference() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_literal_return_inference, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1142,6 +1174,7 @@ fn user.test_map_entries() -> string[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_entries, 0)>(k: string, v: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1181,6 +1214,7 @@ fn user.test_map_entries_inferred() -> string[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_entries_inferred, 0)>(k: null, v: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1220,6 +1254,7 @@ fn user.test_map_keys_transform() -> string[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_keys_transform, 0)>(k: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1258,6 +1293,7 @@ fn user.test_map_multi_statement() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_multi_statement, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1304,6 +1340,7 @@ fn user.test_map_optional_inferred() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_optional_inferred, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1361,6 +1398,7 @@ fn user.test_map_string_to_int() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_string_to_int, 0)>(w: string) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1402,6 +1440,7 @@ fn user.test_map_type_change_inferred() -> string[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_type_change_inferred, 0)>(n: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1458,6 +1497,7 @@ fn user.test_map_values_fully_inferred() -> string[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_values_fully_inferred, 0)>(v: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1511,6 +1551,7 @@ fn user.test_map_values_transform() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_values_transform, 0)>(v: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1551,6 +1592,7 @@ fn user.test_map_with_capture() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_with_capture, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1595,6 +1637,7 @@ fn user.test_nested_map() -> int[][] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_nested_map, 0)>(row: int[]) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1615,6 +1658,7 @@ fn .<lambda(test_nested_map, 0)>(row: int[]) -> null {
     }
 }
 
+// lambda[0]
 fn .<lambda(<lambda(test_nested_map, 0)>, 1)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1653,6 +1697,7 @@ fn user.test_optional_return() -> int? {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_optional_return, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1761,6 +1806,7 @@ fn user.test_shadowing() -> string {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_shadowing, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1799,6 +1845,7 @@ fn user.test_shadowing_inferred() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_shadowing_inferred, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1839,6 +1886,7 @@ fn user.test_two_transforms_inferred() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_two_transforms_inferred, 0)>(f: (int) -> int, g: (int) -> int, x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1864,6 +1912,7 @@ fn .<lambda(test_two_transforms_inferred, 0)>(f: (int) -> int, g: (int) -> int, 
     }
 }
 
+// lambda[1]
 fn .<lambda(test_two_transforms_inferred, 1)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1879,6 +1928,7 @@ fn .<lambda(test_two_transforms_inferred, 1)>(x: int) -> null {
     }
 }
 
+// lambda[2]
 fn .<lambda(test_two_transforms_inferred, 2)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1926,6 +1976,7 @@ fn user.test_void_lambda_inferred() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_void_lambda_inferred, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1981,6 +2032,7 @@ fn user.test_void_lambda_inferred_captures() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_void_lambda_inferred_captures, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
@@ -1999,6 +2051,7 @@ fn .<lambda(test_void_lambda_inferred_captures, 0)>() -> null {
     }
 }
 
+// lambda[0]
 fn .<lambda(<lambda(test_void_lambda_inferred_captures, 0)>, 1)>() -> null {
     // Locals:
     let _0: null // _0 // return

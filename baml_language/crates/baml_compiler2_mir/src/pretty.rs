@@ -108,9 +108,10 @@ fn write_bytecode_function(
 
     writeln!(f, "}}")?;
 
-    // Recursively display child lambda functions.
-    for lambda in &func.lambdas {
+    // Recursively display child lambda functions, labeled by index.
+    for (idx, lambda) in func.lambdas.iter().enumerate() {
         writeln!(f)?;
+        writeln!(f, "// lambda[{idx}]")?;
         write_function(f, lambda)?;
     }
 

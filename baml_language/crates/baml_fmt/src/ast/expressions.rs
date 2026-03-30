@@ -3021,10 +3021,11 @@ impl KnownKind for ThrowsClause {
 
 impl Printable for ThrowsClause {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
-        printer.print(&self.ty, shape);
-        PrintInfo::default_single_line()
+        multi_lined |= printer.print(&self.ty, shape).multi_lined;
+        PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {
         self.keyword.span()

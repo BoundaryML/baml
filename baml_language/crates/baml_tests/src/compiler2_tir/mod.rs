@@ -291,6 +291,60 @@ pub(crate) mod support {
         )
     }
 
+    /// HIR-aware version of `format_lambda_signature` that qualifies type names.
+    fn format_lambda_signature_hir(
+        func_def: &baml_compiler2_ast::FunctionDef,
+        prefix: &str,
+        local_type_names: &std::collections::HashSet<&str>,
+    ) -> String {
+        let qualify = |te: &baml_compiler2_ast::TypeExpr| -> String {
+            let raw = type_expr_to_string(te);
+            if local_type_names.contains(raw.as_str()) {
+                format!("{prefix}{raw}")
+            } else {
+                raw
+            }
+        };
+        let params: Vec<String> = func_def
+            .params
+            .iter()
+            .map(|p| {
+                if let Some(ref te) = p.type_expr {
+                    format!("{}: {}", p.name, qualify(&te.expr))
+                } else {
+                    p.name.to_string()
+                }
+            })
+            .collect();
+        let ret = func_def
+            .return_type
+            .as_ref()
+            .map(|te| format!(" {}", qualify(&te.expr)))
+            .unwrap_or_default();
+        let throws = func_def
+            .throws
+            .as_ref()
+            .map(|te| format!(" throws {}", qualify(&te.expr)))
+            .unwrap_or_default();
+        let generics = if func_def.generic_params.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "<{}>",
+                func_def
+                    .generic_params
+                    .iter()
+                    .map(|n| n.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        format!(
+            "{generics}({}) ->{ret}{throws} {{ ... }}",
+            params.join(", ")
+        )
+    }
+
     /// Like `expr_desc` but enriches Call expressions with type params from inference.
     fn expr_desc_rich(expr_id: ExprId, body: &ExprBody, inference: &ScopeInference) -> String {
         let expr = &body.exprs[expr_id];
@@ -1379,7 +1433,7 @@ pub(crate) mod support {
                     expr_desc_hir(*index, body, prefix, local_type_names)
                 ),
                 Expr::Lambda(func_def) => {
-                    let sig = format_lambda_signature(func_def);
+                    let sig = format_lambda_signature_hir(func_def, prefix, local_type_names);
                     let body_desc = func_def
                         .body
                         .as_ref()

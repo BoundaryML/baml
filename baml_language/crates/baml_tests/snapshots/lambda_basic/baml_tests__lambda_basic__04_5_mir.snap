@@ -23,6 +23,7 @@ fn user.test_annotated() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_annotated, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -61,6 +62,7 @@ fn user.test_capture() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_capture, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -99,6 +101,7 @@ fn user.test_generic_lambda() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_generic_lambda, 0)>(x: void) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -135,6 +138,7 @@ fn user.test_inferred_return() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_inferred_return, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -173,6 +177,7 @@ fn user.test_map_inferred() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_map_inferred, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -209,6 +214,7 @@ fn user.test_multi_param() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_multi_param, 0)>(a: int, b: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -246,6 +252,7 @@ fn user.test_nested() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_nested, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -268,6 +275,7 @@ fn .<lambda(test_nested, 0)>(x: int) -> null {
     }
 }
 
+// lambda[0]
 fn .<lambda(<lambda(test_nested, 0)>, 1)>(y: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -306,6 +314,7 @@ fn user.test_throws() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_throws, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -356,6 +365,7 @@ fn user.test_zero_param() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_zero_param, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return

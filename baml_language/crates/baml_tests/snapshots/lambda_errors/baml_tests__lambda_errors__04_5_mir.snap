@@ -25,6 +25,7 @@ fn user.test_arity_mismatch() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_arity_mismatch, 0)>(x: null, y: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -55,6 +56,7 @@ fn user.test_no_annotation_no_context() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_no_annotation_no_context, 0)>(x: null) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -93,6 +95,7 @@ fn user.test_param_type_mismatch() -> int[] {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_param_type_mismatch, 0)>(x: string) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -122,6 +125,7 @@ fn user.test_return_mismatch() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_return_mismatch, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -151,6 +155,7 @@ fn user.test_unknown_param_type() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_unknown_param_type, 0)>(x: void) -> null {
     // Locals:
     let _0: null // _0 // return
@@ -180,6 +185,7 @@ fn user.test_unknown_return_type() -> int {
     }
 }
 
+// lambda[0]
 fn .<lambda(test_unknown_return_type, 0)>(x: int) -> null {
     // Locals:
     let _0: null // _0 // return
