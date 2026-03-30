@@ -559,6 +559,14 @@ fn tracker_visit_expr(
             Type::Bool
         }
         ast::Expr::GetAttr(expr) => {
+            // First check if there's a narrowed path for this full expression.
+            // This handles cases like `{% if obj.field %}` where `obj.field`
+            // was narrowed to a non-null type inside the if block.
+            let full_path = format!("{}.{}", pretty_print(&expr.expr), expr.name);
+            if let Some(narrowed_type) = types.resolve_narrowed_path(&full_path) {
+                return narrowed_type.clone();
+            }
+
             let parent = tracker_visit_expr(&expr.expr, state, types);
 
             match &parent {

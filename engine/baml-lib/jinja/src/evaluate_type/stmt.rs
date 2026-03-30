@@ -1,8 +1,16 @@
 use baml_types::LiteralValue;
 use minijinja::machinery::ast::{self, Spanned, Stmt, UnaryOpKind};
 
-use super::{expr::evaluate_type, types::PredefinedTypes, TypeError};
+use super::{expr::evaluate_type, pretty_print::pretty_print, types::PredefinedTypes, TypeError};
 use crate::evaluate_type::types::Type;
+
+/// Represents a type narrowing implication.
+/// Can be either a variable narrowing (by name) or a path narrowing (by path like "obj.field").
+#[derive(Debug, Clone)]
+pub enum NarrowingImplication {
+    Variable(String, Type),
+    Path(String, Type),
+}
 
 fn track_walk(node: &ast::Stmt<'_>, state: &mut PredefinedTypes) {
     match node {
@@ -107,9 +115,12 @@ fn track_walk(node: &ast::Stmt<'_>, state: &mut PredefinedTypes) {
             // This ensures narrowed types are visible in the branch body but don't
             // participate in branch merging (they should revert after the branch).
             state.start_narrowing_scope();
-            true_bindings
-                .into_iter()
-                .for_each(|(k, v)| state.add_narrowing(k.as_str(), v));
+            for implication in true_bindings {
+                match implication {
+                    NarrowingImplication::Variable(name, t) => state.add_narrowing(&name, t),
+                    NarrowingImplication::Path(path, t) => state.add_path_narrowing(&path, t),
+                }
+            }
             stmt.true_body.iter().for_each(|x| track_walk(x, state));
             state.end_narrowing_scope();
 
@@ -117,9 +128,12 @@ fn track_walk(node: &ast::Stmt<'_>, state: &mut PredefinedTypes) {
 
             // Same for the false/else branch
             state.start_narrowing_scope();
-            false_bindings
-                .into_iter()
-                .for_each(|(k, v)| state.add_narrowing(k.as_str(), v));
+            for implication in false_bindings {
+                match implication {
+                    NarrowingImplication::Variable(name, t) => state.add_narrowing(&name, t),
+                    NarrowingImplication::Path(path, t) => state.add_path_narrowing(&path, t),
+                }
+            }
             stmt.false_body.iter().for_each(|x| track_walk(x, state));
             state.end_narrowing_scope();
 
@@ -162,9 +176,9 @@ pub fn get_variable_types(stmt: &Stmt, state: &mut PredefinedTypes) -> Vec<TypeE
 ///
 /// For example, in the context where `a: Number | null`, the expr `a` implies
 /// `a: Number`.
-/// So `predicate_implications(Var("a"), true)` should return `[("a", Number)]`.
+/// So `predicate_implications(Var("a"), true)` should return `[Variable("a", Number)]`.
 /// `predicate_implications(Var("!a"), false)` should
-/// return `[("a", Number)]`, because if `!a` is false,
+/// return `[Variable("a", Number)]`, because if `!a` is false,
 /// then `a` is true.
 ///
 /// More complex examples (all assuming `branch: true`):
@@ -183,11 +197,15 @@ pub fn get_variable_types(stmt: &Stmt, state: &mut PredefinedTypes) -> Vec<TypeE
 ///
 /// Γ: { a: Number | null }
 /// (!!!a) -> []
+///
+/// For field access like `obj.field` where field is optional:
+/// Γ: { obj: { field: T | null } }
+/// (obj.field) -> [Path("obj.field", T)]
 pub fn predicate_implications<'a>(
     expr: &'a ast::Expr<'a>,
     context: &'a mut PredefinedTypes,
     branch: bool,
-) -> Vec<(String, Type)> {
+) -> Vec<NarrowingImplication> {
     use ast::Expr::*;
     match expr {
         Var(var_name) => context
@@ -195,11 +213,32 @@ pub fn predicate_implications<'a>(
             .and_then(|var_type| truthy(&var_type))
             .map_or(vec![], |truthy_type| {
                 if branch {
-                    vec![(var_name.id.to_string(), truthy_type)]
+                    vec![NarrowingImplication::Variable(
+                        var_name.id.to_string(),
+                        truthy_type,
+                    )]
                 } else {
-                    vec![(var_name.id.to_string(), Type::None)]
+                    vec![NarrowingImplication::Variable(
+                        var_name.id.to_string(),
+                        Type::None,
+                    )]
                 }
             }),
+        GetAttr(_) => {
+            // Handle optional field access like `{% if obj.field %}`
+            // Evaluate the type of the attribute access to see if it's a union with None
+            if let Ok(attr_type) = evaluate_type(expr, context) {
+                if let Some(truthy_type) = truthy(&attr_type) {
+                    let path = pretty_print(expr);
+                    if branch {
+                        return vec![NarrowingImplication::Path(path, truthy_type)];
+                    } else {
+                        return vec![NarrowingImplication::Path(path, Type::None)];
+                    }
+                }
+            }
+            vec![]
+        }
         UnaryOp(unary_op) => {
             let next_branch = match unary_op.op {
                 UnaryOpKind::Not => !branch,
@@ -219,29 +258,58 @@ pub fn predicate_implications<'a>(
             ast::BinOpKind::ScOr => {
                 if branch {
                     // For `A or B` being TRUE: at least one is true
-                    // We need to union the narrowed types for each variable
+                    // We need to union the narrowed types for each implication
                     let left_implications = predicate_implications(&binary_op.left, context, true);
                     let right_implications =
                         predicate_implications(&binary_op.right, context, true);
 
-                    // Merge implications by variable name, creating unions where needed
-                    let mut merged: std::collections::HashMap<String, Type> =
+                    // Merge implications by key (variable name or path), creating unions where needed
+                    let mut merged_vars: std::collections::HashMap<String, Type> =
+                        std::collections::HashMap::new();
+                    let mut merged_paths: std::collections::HashMap<String, Type> =
                         std::collections::HashMap::new();
 
-                    for (var_name, var_type) in left_implications {
-                        merged.insert(var_name, var_type);
+                    for implication in left_implications {
+                        match implication {
+                            NarrowingImplication::Variable(name, t) => {
+                                merged_vars.insert(name, t);
+                            }
+                            NarrowingImplication::Path(path, t) => {
+                                merged_paths.insert(path, t);
+                            }
+                        }
                     }
 
-                    for (var_name, var_type) in right_implications {
-                        merged
-                            .entry(var_name)
-                            .and_modify(|existing| {
-                                *existing = Type::merge([existing.clone(), var_type.clone()]);
-                            })
-                            .or_insert(var_type);
+                    for implication in right_implications {
+                        match implication {
+                            NarrowingImplication::Variable(name, t) => {
+                                merged_vars
+                                    .entry(name)
+                                    .and_modify(|existing| {
+                                        *existing = Type::merge([existing.clone(), t.clone()]);
+                                    })
+                                    .or_insert(t);
+                            }
+                            NarrowingImplication::Path(path, t) => {
+                                merged_paths
+                                    .entry(path)
+                                    .and_modify(|existing| {
+                                        *existing = Type::merge([existing.clone(), t.clone()]);
+                                    })
+                                    .or_insert(t);
+                            }
+                        }
                     }
 
-                    merged.into_iter().collect()
+                    merged_vars
+                        .into_iter()
+                        .map(|(k, v)| NarrowingImplication::Variable(k, v))
+                        .chain(
+                            merged_paths
+                                .into_iter()
+                                .map(|(k, v)| NarrowingImplication::Path(k, v)),
+                        )
+                        .collect()
                 } else {
                     // For `A or B` being FALSE: both must be false
                     // This is like AND on the false branches
@@ -255,16 +323,27 @@ pub fn predicate_implications<'a>(
             }
 
             ast::BinOpKind::Ne => {
+                // Handle `var != none` case
                 let maybe_non_null_variable = match (&binary_op.left, &binary_op.right) {
                     (Var { .. }, Const(n)) if fuzzy_null(n) => Some(&binary_op.left),
                     (Const(n), Var { .. }) if fuzzy_null(n) => Some(&binary_op.right),
                     _ => None,
                 };
                 if let Some(non_null_variable) = maybe_non_null_variable {
-                    predicate_implications(non_null_variable, context, branch)
-                } else {
-                    vec![]
+                    return predicate_implications(non_null_variable, context, branch);
                 }
+
+                // Handle `obj.field != none` case for optional field access
+                let maybe_non_null_path = match (&binary_op.left, &binary_op.right) {
+                    (GetAttr(_), Const(n)) if fuzzy_null(n) => Some(&binary_op.left),
+                    (Const(n), GetAttr(_)) if fuzzy_null(n) => Some(&binary_op.right),
+                    _ => None,
+                };
+                if let Some(non_null_expr) = maybe_non_null_path {
+                    return predicate_implications(non_null_expr, context, branch);
+                }
+
+                vec![]
             }
             // Narrow union attr access in the form of `if var.kind == "literal"`
             ast::BinOpKind::Eq => {
@@ -327,7 +406,7 @@ fn narrow_attr_access_on_union_var(
     get_attr: &Spanned<ast::GetAttr<'_>>,
     const_expr: &Spanned<ast::Const>,
     context: &mut PredefinedTypes,
-) -> Vec<(String, Type)> {
+) -> Vec<NarrowingImplication> {
     let Some(var_type) = context.resolve(var.id) else {
         return vec![];
     };
@@ -341,7 +420,7 @@ fn narrow_attr_access_on_union_var(
         _ => return vec![],
     };
 
-    let mut implications = vec![];
+    let mut implications: Vec<(String, Type)> = vec![];
     let mut attr_type = None;
 
     let mut stack = Vec::from_iter(union_items.iter());
@@ -350,7 +429,7 @@ fn narrow_attr_access_on_union_var(
         match union_item_type {
             Type::ClassRef(class_name) => {
                 let (prop_type, err) = context.check_class_property(
-                    &crate::evaluate_type::pretty_print::pretty_print(&get_attr.expr),
+                    &pretty_print(&get_attr.expr),
                     class_name,
                     get_attr.name,
                     get_attr.span(),
@@ -413,6 +492,9 @@ fn narrow_attr_access_on_union_var(
     // one is ambiguous.
     if implications.len() == 1 {
         implications
+            .into_iter()
+            .map(|(name, t)| NarrowingImplication::Variable(name, t))
+            .collect()
     } else {
         vec![]
     }
@@ -506,10 +588,10 @@ mod tests {
         let expr = Expr::Var(Spanned::new(Var { id: "a" }, Span::default()));
         let new_vars = predicate_implications(&expr, &mut context, true);
         match new_vars.as_slice() {
-            [(name, Type::Int)] => {
+            [NarrowingImplication::Variable(name, Type::Int)] => {
                 assert_eq!(name.as_str(), "a");
             }
-            _ => panic!("Expected singleton list with Type::Int"),
+            _ => panic!("Expected singleton list with Variable narrowing and Type::Int"),
         }
     }
 }

@@ -292,7 +292,10 @@ enum Scope {
     /// Variables in this scope shadow outer variables but don't participate
     /// in branch merging. When the scope ends, the narrowed types disappear
     /// and the original types are restored.
-    Narrowing(IndexMap<String, Type>),
+    ///
+    /// The first IndexMap is for variable narrowings (e.g., `foo` -> Type).
+    /// The second IndexMap is for path narrowings (e.g., `obj.field` -> Type).
+    Narrowing(IndexMap<String, Type>, IndexMap<String, Type>),
 }
 
 #[derive(Debug)]
@@ -329,7 +332,7 @@ impl PredefinedTypes {
                         on_false.keys()
                     }
                 }
-                Scope::Narrowing(vars) => vars.keys(),
+                Scope::Narrowing(vars, _) => vars.keys(),
             }))
             .map(String::to_owned)
             .collect()
@@ -466,13 +469,14 @@ impl PredefinedTypes {
     /// Variables added via `add_narrowing` will shadow outer variables
     /// but won't participate in branch merging.
     pub fn start_narrowing_scope(&mut self) {
-        self.scopes.push(Scope::Narrowing(IndexMap::new()));
+        self.scopes
+            .push(Scope::Narrowing(IndexMap::new(), IndexMap::new()));
     }
 
     /// End the current narrowing scope, restoring original variable types.
     pub fn end_narrowing_scope(&mut self) {
         match self.scopes.pop() {
-            Some(Scope::Narrowing(_)) => {}
+            Some(Scope::Narrowing(_, _)) => {}
             _ => panic!("Cannot end narrowing scope without starting one"),
         }
     }
@@ -481,11 +485,31 @@ impl PredefinedTypes {
     /// This should only be called after `start_narrowing_scope`.
     pub fn add_narrowing(&mut self, name: &str, t: Type) {
         match self.scopes.last_mut() {
-            Some(Scope::Narrowing(vars)) => {
+            Some(Scope::Narrowing(vars, _)) => {
                 vars.insert(name.to_string(), t);
             }
             _ => panic!("Cannot add narrowing without a Narrowing scope"),
         }
+    }
+
+    /// Add a narrowed path type to the current narrowing scope.
+    /// Used for narrowing field accesses like `obj.field` after truthiness checks.
+    /// This should only be called after `start_narrowing_scope`.
+    pub fn add_path_narrowing(&mut self, path: &str, t: Type) {
+        match self.scopes.last_mut() {
+            Some(Scope::Narrowing(_, paths)) => {
+                paths.insert(path.to_string(), t);
+            }
+            _ => panic!("Cannot add path narrowing without a Narrowing scope"),
+        }
+    }
+
+    /// Look up a narrowed path type. Returns the narrowed type if found.
+    pub fn resolve_narrowed_path(&self, path: &str) -> Option<&Type> {
+        self.scopes.iter().rev().find_map(|scope| match scope {
+            Scope::Narrowing(_, paths) => paths.get(path),
+            _ => None,
+        })
     }
 
     pub fn start_branch(&mut self) {
@@ -571,7 +595,7 @@ impl PredefinedTypes {
                         false_vars.get(name)
                     }
                 }
-                Scope::Narrowing(vars) => vars.get(name),
+                Scope::Narrowing(vars, _) => vars.get(name),
             })
             .or_else(|| self.variables.get(name))
     }
@@ -635,7 +659,7 @@ impl PredefinedTypes {
         // go to the underlying Branch/CodeBlock scope for proper branch merging.
         for scope in self.scopes.iter_mut().rev() {
             match scope {
-                Scope::Narrowing(_) => continue, // Skip narrowing scopes
+                Scope::Narrowing(_, _) => continue, // Skip narrowing scopes
                 Scope::Branch(true_vars, false_vars, branch_cond) => {
                     if *branch_cond {
                         true_vars.insert(name.to_string(), t);

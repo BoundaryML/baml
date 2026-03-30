@@ -302,4 +302,129 @@ mod tests {
         )
         .expect("Should succeed");
     }
+
+    /// Test case for narrowing optional field access in if conditions.
+    ///
+    /// This tests the scenario where:
+    /// - `acc.message_capacity` has type `AuditCapacityInfo?` (i.e., `AuditCapacityInfo | null`)
+    /// - We guard with `{% if acc.message_capacity %}`
+    /// - Inside the if block, we should be able to access `acc.message_capacity.effective_limit`
+    ///   without getting "union contains non-class type none" error
+    #[test]
+    fn test_type_narrowing_optional_field_access() {
+        let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+
+        // Define AuditCapacityInfo class
+        types.add_class(
+            "AuditCapacityInfo",
+            indexmap::indexmap! {
+                "effective_limit".to_string() => Type::Int,
+                "sent".to_string() => Type::Int,
+                "remaining".to_string() => Type::Int,
+            },
+        );
+
+        // Define AuditAccountInfo class with optional message_capacity field
+        types.add_class(
+            "AuditAccountInfo",
+            indexmap::indexmap! {
+                "id".to_string() => Type::String,
+                "name".to_string() => Type::String,
+                "message_capacity".to_string() => Type::Union(vec![
+                    Type::ClassRef("AuditCapacityInfo".to_string()),
+                    Type::None,
+                ]),
+            },
+        );
+
+        types.add_variable("acc", Type::ClassRef("AuditAccountInfo".to_string()));
+
+        // This should succeed - the if guard should narrow the type of acc.message_capacity
+        validate_template(
+            "test",
+            r#"
+            {% if acc.message_capacity %}
+            Message capacity: effective_limit={{ acc.message_capacity.effective_limit }}, sent={{ acc.message_capacity.sent }}, remaining={{ acc.message_capacity.remaining }}
+            {% endif %}
+            "#,
+            &mut types,
+        )
+        .expect("Should succeed - type should be narrowed inside if block");
+    }
+
+    /// Test case for narrowing optional field with != none comparison
+    #[test]
+    fn test_type_narrowing_optional_field_ne_none() {
+        let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+
+        types.add_class(
+            "Inner",
+            indexmap::indexmap! {
+                "value".to_string() => Type::Int,
+            },
+        );
+
+        types.add_class(
+            "Outer",
+            indexmap::indexmap! {
+                "inner".to_string() => Type::Union(vec![
+                    Type::ClassRef("Inner".to_string()),
+                    Type::None,
+                ]),
+            },
+        );
+
+        types.add_variable("obj", Type::ClassRef("Outer".to_string()));
+
+        validate_template(
+            "test",
+            r#"
+            {% if obj.inner != none %}
+            Value: {{ obj.inner.value }}
+            {% endif %}
+            "#,
+            &mut types,
+        )
+        .expect("Should succeed - type should be narrowed with != none");
+    }
+
+    /// Test case for narrowing with logical AND on multiple optional fields
+    #[test]
+    fn test_type_narrowing_optional_field_and() {
+        let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+
+        types.add_class(
+            "Data",
+            indexmap::indexmap! {
+                "value".to_string() => Type::Int,
+            },
+        );
+
+        types.add_class(
+            "Container",
+            indexmap::indexmap! {
+                "first".to_string() => Type::Union(vec![
+                    Type::ClassRef("Data".to_string()),
+                    Type::None,
+                ]),
+                "second".to_string() => Type::Union(vec![
+                    Type::ClassRef("Data".to_string()),
+                    Type::None,
+                ]),
+            },
+        );
+
+        types.add_variable("c", Type::ClassRef("Container".to_string()));
+
+        validate_template(
+            "test",
+            r#"
+            {% if c.first and c.second %}
+            First: {{ c.first.value }}, Second: {{ c.second.value }}
+            {% endif %}
+            "#,
+            &mut types,
+        )
+        .expect("Should succeed - both fields narrowed with AND");
+    }
 }
