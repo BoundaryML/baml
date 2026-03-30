@@ -200,6 +200,18 @@ source: crates/baml_tests/src/generated_tests.rs
     │     Note: Error code: E0001
 ────╯
 
+  [hir] Error: function is missing a name
+    ╭─[ unicode_strings.baml:25:38 ]
+    │
+ 25 │ ╭─▶ function 处理文本(输入: string) -> string {
+    ┆ ┆   
+ 29 │ ├─▶     Return result with emojis: ✅ or ❌
+    │ │                                             
+    │ ╰───────────────────────────────────────────── expected a name here
+    │     
+    │     Note: Error code: E0101
+────╯
+
   [parse] Error: Expected function name, found error
     ╭─[ unicode_strings.baml:28:31 ]
     │
@@ -340,6 +352,8 @@ source: crates/baml_tests/src/generated_tests.rs
     │ 
     │ Note: Error code: E0010
 ────╯
+
+  [hir] Error: client `GPT4` is missing a required config block
 
   [parse] Error: Expected config block, found identifier
 

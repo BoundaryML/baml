@@ -2,6 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [hir] Error: class is missing a name
+   ╭─[ invalid_syntax.baml:1:1 ]
+   │
+ 1 │ class 123Invalid {  // Invalid class name
+   │ ──┬──  
+   │   ╰──── expected a name here
+   │ 
+   │ Note: Error code: E0101
+───╯
+
   [parse] Error: Expected '{', found integer
    ╭─[ invalid_syntax.baml:1:7 ]
    │
@@ -81,6 +91,16 @@ source: crates/baml_tests/src/generated_tests.rs
    │ 
    │ Note: Error code: E0010
 ───╯
+
+  [hir] Error: could not parse type expression for return type of `Foo`
+    ╭─[ invalid_syntax.baml:10:18 ]
+    │
+ 10 │ function Foo() -> {  // Missing return type
+    │                  │ 
+    │                  ╰─ unparseable type
+    │ 
+    │ Note: Error code: E0102
+────╯
 
   [parse] Error: Expected type, found '{'
     ╭─[ invalid_syntax.baml:10:19 ]

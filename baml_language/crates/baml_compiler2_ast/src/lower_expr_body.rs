@@ -1672,7 +1672,7 @@ impl LoweringContext {
             .children()
             .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
             .and_then(ast::ParameterList::cast)
-            .map(|pl| crate::lower_cst::lower_params(&pl))
+            .map(|pl| crate::lower_cst::lower_params(&pl, "<lambda>", &mut Vec::new()))
             .unwrap_or_default();
 
         let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();

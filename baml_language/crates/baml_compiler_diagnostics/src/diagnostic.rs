@@ -185,6 +185,13 @@ pub enum DiagnosticId {
 
     // Namespace diagnostics (E0099)
     NamespaceShadow,
+
+    // Lowering diagnostics (E0101-E0105)
+    MissingName,
+    UnparseableType,
+    MissingConfigBlock,
+    MissingConfigKey,
+    MalformedAttribute,
 }
 
 impl DiagnosticId {
@@ -323,6 +330,13 @@ impl DiagnosticId {
             DiagnosticId::InstanceofRemoved => "E0098",
 
             DiagnosticId::NamespaceShadow => "E0099",
+
+            // Lowering diagnostics
+            DiagnosticId::MissingName => "E0101",
+            DiagnosticId::UnparseableType => "E0102",
+            DiagnosticId::MissingConfigBlock => "E0103",
+            DiagnosticId::MissingConfigKey => "E0104",
+            DiagnosticId::MalformedAttribute => "E0105",
         }
     }
 }

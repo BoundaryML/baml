@@ -13,9 +13,11 @@ pub(crate) mod lower_config_item;
 pub(crate) mod lower_cst;
 pub(crate) mod lower_expr_body;
 pub(crate) mod lower_type_expr;
+pub mod lowering_diagnostic;
 
 pub use ast::*;
 pub use lower_cst::{lower_file, lower_file_with_file_id};
+pub use lowering_diagnostic::LoweringDiagnostic;
 
 #[cfg(test)]
 mod tests {
@@ -73,10 +75,15 @@ mod tests {
     /// Parse BAML source and lower to AST items.
     fn parse_and_lower(source: &str) -> Vec<Item> {
         let root = parse(source);
-        let (items, diags) = lower_file(&root);
+        let mut diags = Vec::new();
+        let (items, hir_diags) = lower_file(&root, &mut diags);
         assert!(
             diags.is_empty(),
             "expected no lower diagnostics, got: {diags:#?}"
+        );
+        assert!(
+            hir_diags.is_empty(),
+            "expected no hir diagnostics, got: {hir_diags:#?}"
         );
         items
     }

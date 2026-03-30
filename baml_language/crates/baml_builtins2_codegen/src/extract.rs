@@ -71,12 +71,13 @@ pub fn extract_native_builtins()
         let cst_root = SyntaxNode::new_root(green);
 
         // Lower CST → AST items.
-        let (items, diags) = baml_compiler2_ast::lower_file(&cst_root);
-        for hir in &diags {
-            let d = hir.to_diagnostic();
+        let mut lowering_diags = Vec::new();
+        let (items, _hir_diags) = baml_compiler2_ast::lower_file(&cst_root, &mut lowering_diags);
+        for ld in &lowering_diags {
+            let d = ld.to_diagnostic(FileId::new(0));
             diagnostic_lines.push(format!("  {path}: [{}] {}", d.id.code(), d.message));
         }
-        if !diags.is_empty() {
+        if !lowering_diags.is_empty() {
             continue;
         }
 

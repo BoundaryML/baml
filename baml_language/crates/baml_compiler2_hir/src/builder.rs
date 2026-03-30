@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use baml_base::{Name, SourceFile};
 use baml_compiler_diagnostics::diagnostic::DiagnosticId;
-use baml_compiler2_ast as ast;
+use baml_compiler2_ast::{self as ast, LoweringDiagnostic};
 use rustc_hash::FxHashMap;
 use text_size::TextRange;
 
@@ -48,6 +48,7 @@ pub struct SemanticIndexBuilder<'db> {
     type_contributions: Vec<(Name, Contribution<'db>)>,
     value_contributions: Vec<(Name, Contribution<'db>)>,
     diagnostics: Vec<Hir2Diagnostic>,
+    lowering_diagnostics: Vec<LoweringDiagnostic>,
 }
 
 impl<'db> SemanticIndexBuilder<'db> {
@@ -65,6 +66,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             type_contributions: Vec::new(),
             value_contributions: Vec::new(),
             diagnostics: Vec::new(),
+            lowering_diagnostics: Vec::new(),
         }
     }
 
@@ -79,6 +81,12 @@ impl<'db> SemanticIndexBuilder<'db> {
                 span: span.range,
             });
         }
+    }
+
+    /// Set lowering diagnostics produced during CST → AST lowering.
+    pub fn with_lowering_diagnostics(mut self, diags: Vec<LoweringDiagnostic>) -> Self {
+        self.lowering_diagnostics = diags;
+        self
     }
 
     /// Build the `FileSemanticIndex` from a list of AST items.
@@ -130,11 +138,12 @@ impl<'db> SemanticIndexBuilder<'db> {
             })
             .collect();
 
-        let extra = if self.diagnostics.is_empty() {
+        let extra = if self.diagnostics.is_empty() && self.lowering_diagnostics.is_empty() {
             None
         } else {
             Some(Box::new(SemanticIndexExtra {
                 diagnostics: self.diagnostics,
+                lowering_diagnostics: self.lowering_diagnostics,
             }))
         };
 
