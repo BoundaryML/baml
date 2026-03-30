@@ -1203,16 +1203,10 @@ impl<'db> LoweringContext<'db> {
                 );
             }
             ResolvedName::Unknown => {
-                // The MIR lowerer may already know this as a local (e.g. from
-                // lowering a let-statement, match arm, or catch clause). Check
-                // locals first as a guard against scope-resolution mismatches.
-                if let Some(&local) = self.locals.get(name) {
-                    self.builder
-                        .assign(dest, Rvalue::Use(Operand::Copy(Place::Local(local))));
-                } else if self.expr_types.contains_key(&expr_id) {
-                    // Package path intermediate (e.g. `baml` in `baml.HttpMethod.Get`).
-                    // Emit a null placeholder — the outer FieldAccess will produce
-                    // the real value.
+                // If TIR recorded a type for this expr, it was handled as a package
+                // path intermediate (e.g. `baml` in `baml.HttpMethod.Get`). Emit a
+                // null placeholder — the outer FieldAccess will produce the real value.
+                if self.expr_types.contains_key(&expr_id) {
                     self.builder
                         .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
                 } else {

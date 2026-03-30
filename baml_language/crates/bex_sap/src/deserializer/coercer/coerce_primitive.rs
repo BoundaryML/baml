@@ -564,7 +564,9 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlNull, N>>, ParsingError> {
-        assert!(!target.meta.parse_without_null);
+        if target.meta.parse_without_null {
+            return Err(ctx.error_unexpected_null(&target));
+        }
         let mut flags = DeserializerConditions::new();
 
         // Handle in_progress for all incomplete values
@@ -609,7 +611,9 @@ where
         target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, BamlNull, N>> {
-        assert!(!target.meta.parse_without_null);
+        if target.meta.parse_without_null {
+            return None;
+        }
         // Null doesn't carry CompletionState, so it's always complete — no in_progress handling needed.
         let crate::jsonish::Value::Null = value else {
             return None;

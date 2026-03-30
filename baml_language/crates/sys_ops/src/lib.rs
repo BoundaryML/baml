@@ -225,7 +225,7 @@ fn unwrap_prompt_ast(owned: &io::owned::llm::PromptAst) -> bex_vm_types::PromptA
         ._data
         .clone()
         .downcast::<baml_builtins::PromptAst>()
-        .expect("PromptAst _data should be Arc<baml_builtins::PromptAst>")
+        .expect("PromptAst._data downcast failed: expected Arc<baml_builtins::PromptAst>. This indicates a bug in wrap_prompt_ast or a type mismatch.")
 }
 
 /// Convert the generated IO `PrimitiveClient` to the `sys_llm::baml_std::PrimitiveClient`.

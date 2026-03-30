@@ -5951,9 +5951,8 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     let _118: MatchSuccess
     let _119: bool
     let _120: bool
-    let _121: MatchFailure // f
-    let _122: MatchFailure
-    let _123: int
+    let _121: MatchFailure
+    let _122: int
 
     bb0: {
         switch copy _1 [0: bb2, otherwise: bb1];
@@ -6755,8 +6754,7 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb169: {
-        _121 = copy _3;
-        _122 = copy _121;
+        _121 = const null;
         goto -> bb176;
     }
 
@@ -6856,8 +6854,8 @@ fn user.MatchExprs(x: int, s: MatchStatus, r: MatchSuccess | MatchFailure, b: bo
     }
 
     bb192: {
-        _123 = discriminant(_116);
-        switch copy _123 [MatchStatus.Active: bb196, MatchStatus.Inactive: bb195, MatchStatus.Pending: bb194, otherwise: bb193] (exhaustive);
+        _122 = discriminant(_116);
+        switch copy _122 [MatchStatus.Active: bb196, MatchStatus.Inactive: bb195, MatchStatus.Pending: bb194, otherwise: bb193] (exhaustive);
     }
 
     bb193: {

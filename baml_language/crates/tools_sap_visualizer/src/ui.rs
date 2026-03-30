@@ -53,6 +53,8 @@ pub struct SapVisualizer {
     compile_rx: Option<std::sync::mpsc::Receiver<CompileResult>>,
     /// Repaint context for waking the UI when compilation finishes.
     ctx: Option<egui::Context>,
+    /// Timestamp of the last editor change, for debouncing recompilation.
+    last_change: Option<web_time::Instant>,
 }
 
 enum CompileStatus {
@@ -76,6 +78,7 @@ impl SapVisualizer {
             overtype_stack: AutoCloseStack::default(),
             compile_rx: None,
             ctx: None,
+            last_change: None,
         }
     }
 
@@ -113,8 +116,15 @@ impl SapVisualizer {
         let Some(ref rx) = self.compile_rx else {
             return;
         };
-        let Ok(result) = rx.try_recv() else {
-            return;
+        let result = match rx.try_recv() {
+            Ok(result) => result,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.compile_rx = None;
+                self.compile_status =
+                    CompileStatus::Error("Background compilation crashed".to_string());
+                return;
+            }
         };
         self.compile_rx = None;
         let old_json = self.sap.as_ref().map(|s| s.json().to_string());
@@ -190,7 +200,16 @@ impl eframe::App for SapVisualizer {
                         .show(ui);
 
                     if baml_response.response.changed() || type_response.response.changed() {
-                        self.recompile();
+                        self.last_change = Some(web_time::Instant::now());
+                    }
+                    // Debounce: recompile only after 300ms of no changes.
+                    if let Some(last) = self.last_change {
+                        if last.elapsed() >= std::time::Duration::from_millis(300) {
+                            self.last_change = None;
+                            self.recompile();
+                        } else if let Some(ctx) = &self.ctx {
+                            ctx.request_repaint_after(std::time::Duration::from_millis(300));
+                        }
                     }
 
                     ui.add_space(8.0);
@@ -496,6 +515,11 @@ fn preprocess_json_input(
     sap: &mut SapVisualizerState,
     stack: &mut AutoCloseStack,
 ) -> PostShowAction {
+    // Only process events when the JSON editor has focus.
+    if !ui.ctx().memory(|mem| mem.has_focus(text_edit_id)) {
+        stack.clear();
+        return PostShowAction::None(0);
+    }
     let Some(state) = egui::TextEdit::load_state(ui.ctx(), text_edit_id) else {
         return PostShowAction::None(0);
     };

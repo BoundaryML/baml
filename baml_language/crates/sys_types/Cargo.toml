@@ -15,11 +15,11 @@ bex_vm_types = { workspace = true }
 async-trait = { workspace = true }
 indexmap = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = [ "sync" ] }
 tokio-util = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt", "macros"] }
+tokio = { workspace = true, features = [ "rt", "macros" ] }
 
 [lints]
 workspace = true

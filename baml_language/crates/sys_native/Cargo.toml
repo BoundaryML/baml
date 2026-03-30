@@ -7,10 +7,10 @@ authors.workspace = true
 license.workspace = true
 
 [features]
-default = []
-native-tls = ["reqwest/native-tls"]
-rustls = ["reqwest/rustls"]
-bundle-http = ["dep:reqwest"]
+default = [  ]
+native-tls = [ "reqwest/native-tls" ]
+rustls = [ "reqwest/rustls" ]
+bundle-http = [ "dep:reqwest" ]
 
 [dependencies]
 baml_type = { workspace = true }
@@ -19,14 +19,14 @@ bex_resource_types = { workspace = true }
 sys_ops = { workspace = true }
 sys_types = { workspace = true }
 indexmap = { workspace = true }
-reqwest = { workspace = true, features = ["rustls"], optional = true }
+reqwest = { workspace = true, features = [ "rustls" ], optional = true }
 tokio = { workspace = true, features = [
-    "sync",
-    "fs",
-    "net",
-    "process",
-    "io-util",
-    "time",
+  "sync",
+  "fs",
+  "net",
+  "process",
+  "io-util",
+  "time",
 ] }
 
 [lints]

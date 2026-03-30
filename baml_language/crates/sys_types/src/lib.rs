@@ -354,11 +354,7 @@ pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>> {
 ///
 /// # Per-call fields
 ///
-/// The `cancel` field is per-call, not per-engine. All other fields are
-/// `Arc`-wrapped so that [`with_cancel`](Self::with_cancel) is O(1) — just
-/// reference-count increments, no data cloning. This is necessary because
-/// `SysOpFn` takes a single `&SysOpContext`; splitting into shared + per-call
-/// parts would require changing that signature and the proc macro codegen.
+/// [`SysOpContext`] is the per-call version of [`EngineSysOpContext`].
 #[derive(Clone)]
 pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>> {
     /// Pre-extracted LLM function metadata, keyed by function name.
@@ -487,7 +483,9 @@ impl SysOpContext {
                 _args: Vec<BexExternalValue>,
                 _cancel: CancellationToken,
             ) -> Result<BexExternalValue, Box<dyn Send + Sync + 'static>> {
-                Err(Box::new("never spawned"))
+                Err(Box::new(
+                    "VmSpawner::spawn_with_function called on NeverSpawner (empty/test context)",
+                ))
             }
         }
         Self {
@@ -512,7 +510,7 @@ impl SysOpContext {
 
 impl EngineSysOpContext {
     /// Convert to [`SysOpContext`] for passing to a sys op.
-    pub fn to_op_context<E: Send + Sync + 'static>(
+    pub fn to_op_context(
         &self,
         cancel: CancellationToken,
         spawner: Arc<dyn VmSpawner>,

@@ -1520,9 +1520,7 @@ impl BexEngine {
     ) -> SysOpResult {
         let args = args.iter().map(std::convert::Into::into).collect();
         let fn_ptr = self.sys_ops.get(op);
-        let ctx = self
-            .sys_op_ctx
-            .to_op_context::<Box<dyn Send + Sync + 'static>>(cancel.clone(), self.clone());
+        let ctx = self.sys_op_ctx.to_op_context(cancel.clone(), self.clone());
         let result = fn_ptr(&self.heap, args, &ctx, call_id);
 
         match result {

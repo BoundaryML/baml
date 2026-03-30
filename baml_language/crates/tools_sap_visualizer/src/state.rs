@@ -72,7 +72,14 @@ impl SapVisualizerState {
                 .and_then(|value| TyResolvedRef::coerce(&ctx, value, &jsonish));
 
             Some(match sap {
-                Ok(sap) => Ok(Some(serde_json::to_string(&sap).unwrap())),
+                Ok(Some(sap)) => serde_json::to_string(&sap)
+                    .map(Some)
+                    .map_err(|e| ParsingError {
+                        scope: ctx.scope.clone(),
+                        reason: format!("Failed to serialize SAP value: {e}"),
+                        causes: Vec::new(),
+                    }),
+                Ok(None) => Ok(None),
                 Err(e) => Err(e),
             })
         })

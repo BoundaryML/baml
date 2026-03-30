@@ -76,18 +76,21 @@ where
             Vec::new();
 
         for (i, option) in all_variants.iter().enumerate() {
+            // When parse_without_null is set, skip null variants entirely —
+            // they should not be used as a fallback when other variants fail.
+            if target.meta.parse_without_null {
+                if let Ok(ty) = ctx.db.resolve_with_meta(option.as_ref()) {
+                    if matches!(ty.ty, TyResolvedRef::Null(_)) {
+                        continue;
+                    }
+                }
+            }
+
             let parsed = ctx
                 .db
                 .resolve_with_meta(option.as_ref())
                 .map_err(|ident| ctx.error_type_resolution(ident))
-                .and_then(|ty| {
-                    // When parse_without_null is set, skip null variants entirely —
-                    // they should not be used as a fallback when other variants fail.
-                    if target.meta.parse_without_null && matches!(ty.ty, TyResolvedRef::Null(_)) {
-                        return Err(ctx.error_unexpected_null(&target));
-                    }
-                    TyResolvedRef::coerce(ctx, ty, value)
-                });
+                .and_then(|ty| TyResolvedRef::coerce(ctx, ty, value));
             match parsed {
                 Ok(None) => {
                     // Variant type with `in_progress = never` means we ignore this variant until it is complete.

@@ -67,11 +67,10 @@ impl ToBamlTy for Ty<'_, TypeName> {
         match self {
             Ty::Resolved(resolved) => resolved.as_ref().to_baml_ty(),
             Ty::ResolvedRef(resolved_ref) => resolved_ref.to_baml_ty(),
-            Ty::Unresolved(name) => {
-                // Unresolved names are class/enum references; we don't know which
-                // without access to the TypeRefDb. Use Class as a default since
-                // it's the most common case for named types.
-                baml_type::Ty::Class(name.clone(), baml_type::TyAttr::default())
+            Ty::Unresolved(_name) => {
+                // Unresolved names are class/enum references; we can't distinguish
+                // without access to the TypeRefDb. Use unknown rather than guessing.
+                baml_type::Ty::unknown()
             }
         }
     }
