@@ -50,6 +50,7 @@ pub(crate) trait PullSink {
 
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error>;
     fn is_type(&mut self, ty: &Ty) -> Result<(), Self::Error>;
+    fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Resolve the field name for a `Place::Field { base, field }` access.
     fn resolve_field_name(&self, base: &Place, field_idx: usize) -> String;
@@ -370,9 +371,14 @@ pub(crate) fn walk_rvalue_pull<S: PullSink>(sink: &mut S, rvalue: &Rvalue) -> Re
             walk_operand_pull(sink, operand)?;
             sink.is_type(ty)
         }
-        Rvalue::MakeClosure { .. } => {
-            // Not yet implemented — will be wired up in a later phase.
-            todo!("MakeClosure emit not yet implemented")
+        Rvalue::MakeClosure {
+            lambda_idx,
+            captures,
+        } => {
+            for capture in captures {
+                walk_operand_pull(sink, capture)?;
+            }
+            sink.make_closure(*lambda_idx, captures.len())
         }
     }
 }

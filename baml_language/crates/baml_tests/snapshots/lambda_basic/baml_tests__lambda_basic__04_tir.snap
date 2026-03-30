@@ -40,7 +40,7 @@ lambda user.test_zero_param {
 }
 function user.test_map_inferred() -> int[] throws never {
   { : int[]
-    let items = [1, 2, 3] : int -> int[]
+    let items = [1, 2, 3] : int[]
     items.map<U>((x) -> { ... }) : int[]
       (x) -> { ... } : (x: int) -> int
         {
@@ -68,7 +68,7 @@ lambda user.test_throws {
 }
 function user.test_capture() -> int throws never {
   { : int
-    let offset = 10 : int
+    let offset = 10 : 10 -> int
     let add_offset = : (x: int) -> int
       (x: int) -> int { ... } : (x: int) -> int
         {

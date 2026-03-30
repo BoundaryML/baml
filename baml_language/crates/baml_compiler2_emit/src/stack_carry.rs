@@ -749,6 +749,19 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
+    fn make_closure(
+        &mut self,
+        _lambda_idx: usize,
+        capture_count: usize,
+    ) -> Result<(), Self::Error> {
+        // MakeClosure pops `capture_count` capture values and pushes one closure object.
+        if !self.sim.pop_n(capture_count) {
+            return Err(());
+        }
+        self.sim.push();
+        Ok(())
+    }
+
     fn resolve_field_name(&self, _base: &Place, field_idx: usize) -> String {
         format!("{field_idx}")
     }

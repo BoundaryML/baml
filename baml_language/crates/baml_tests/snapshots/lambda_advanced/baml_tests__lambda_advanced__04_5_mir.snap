@@ -379,7 +379,7 @@ fn user.test_map_keys_transform() -> string[] {
 fn user.test_map_multi_statement() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
-    let _1: int // items
+    let _1: int[] // items
     let _2: null
 
     bb0: {
@@ -492,7 +492,7 @@ fn user.test_nested_map() -> int[] {
     // Locals:
     let _0: int[] // _0 // return
     let _1: int[][] // matrix
-    let _2: (int) -> int
+    let _2: int[]
     let _3: int[]
     let _4: null
 

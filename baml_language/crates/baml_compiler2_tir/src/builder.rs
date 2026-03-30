@@ -455,7 +455,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 });
 
                 // Infer the lambda body using save/restore approach
-                let ret_ty = self.infer_lambda_body(
+                let (ret_ty, _lambda_expressions) = self.infer_lambda_body(
                     func_def,
                     &param_tys,
                     return_annotation.as_ref(),
@@ -875,7 +875,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                             return_annotation.as_ref().unwrap_or(expected_ret.as_ref());
 
                         // Infer/check the lambda body using save/restore approach
-                        let ret_ty = self.infer_lambda_body(
+                        let (ret_ty, _lambda_expressions) = self.infer_lambda_body(
                             func_def,
                             &param_tys,
                             Some(effective_ret),
@@ -4233,44 +4233,49 @@ impl<'db> TypeInferenceBuilder<'db> {
 
     /// Infer/check a lambda body using a save/restore approach.
     ///
-    /// Saves the current locals, `declared_types`, `declared_return_ty`, and
-    /// `generic_params`, seeds lambda params on top (captures work naturally
-    /// because parent locals remain visible), then infers or checks the lambda
-    /// body root expression.
+    /// Saves the current locals, `declared_types`, `declared_return_ty`,
+    /// `generic_params`, and `expressions` (to avoid `ExprId` collisions between
+    /// the lambda's arena and the parent's arena). After inference, restores all
+    /// saved state and returns the lambda's expression types separately.
     ///
-    /// NOTE: The lambda body has its own `ExprBody` arena with `ExprId`s starting
-    /// at 0, which may collide with the parent body's `ExprId`s in `self.expressions`.
-    /// This is acceptable for the first iteration — LSP/MIR do not yet consume
-    /// the per-scope `ScopeInference` for lambda scopes.
-    ///
-    /// Returns the inferred return type.
-    fn infer_lambda_body(
+    /// Returns `(inferred_return_ty, lambda_expressions)` where
+    /// `lambda_expressions` contains the expression types for the lambda body
+    /// only (keyed by the lambda's own `ExprId`s, which start at 0).
+    pub fn infer_lambda_body(
         &mut self,
         func_def: &baml_compiler2_ast::FunctionDef,
         param_tys: &[(Option<baml_base::Name>, Ty)],
         expected_ret: Option<&Ty>,
         _lambda_expr_id: ExprId,
-    ) -> Ty {
+    ) -> (Ty, FxHashMap<ExprId, Ty>) {
         use baml_compiler2_ast::FunctionBodyDef;
 
         // Get the lambda's ExprBody
         let Some(FunctionBodyDef::Expr(lambda_body, _source_map)) = &func_def.body else {
-            return Ty::Unknown {
-                attr: TyAttr::default(),
-            };
+            return (
+                Ty::Unknown {
+                    attr: TyAttr::default(),
+                },
+                FxHashMap::default(),
+            );
         };
 
         let Some(root_expr) = lambda_body.root_expr else {
-            return Ty::Void {
-                attr: TyAttr::default(),
-            };
+            return (
+                Ty::Void {
+                    attr: TyAttr::default(),
+                },
+                FxHashMap::default(),
+            );
         };
 
-        // Save current state
+        // Save current state (including expressions to prevent ExprId collisions)
         let saved_locals = self.locals.clone();
         let saved_declared = self.declared_types.clone();
         let saved_return_ty = self.declared_return_ty.clone();
         let saved_generic_params = self.generic_params.clone();
+        let saved_expressions = std::mem::take(&mut self.expressions);
+        let saved_bindings = std::mem::take(&mut self.bindings);
 
         // Extend generic params with the lambda's own generic params
         let mut new_generic_params = self.generic_params.clone();
@@ -4281,6 +4286,37 @@ impl<'db> TypeInferenceBuilder<'db> {
         for (name_opt, ty) in param_tys {
             if let Some(name) = name_opt {
                 self.add_local(name.clone(), ty.clone());
+            }
+        }
+
+        // Seed captures from HIR semantic index as Ty::Unknown.
+        //
+        // When `infer_lambda_body` is called from a parent scope (e.g. when the outer
+        // lambda scope infers its body and encounters an inner lambda), captures from
+        // grandparent scopes are NOT visible in `saved_locals`. Look up the lambda
+        // scope by its span and seed its captures as `Ty::Unknown` to suppress false
+        // "unresolved name" diagnostics. Names already in locals are left unchanged.
+        {
+            let db = self.context.db();
+            let file = self.context.scope().file(db);
+            let index = baml_compiler2_ppir::file_semantic_index(db, file);
+            let lambda_span = func_def.span;
+            for (i, scope) in index.scopes.iter().enumerate() {
+                if matches!(scope.kind, baml_compiler2_hir::scope::ScopeKind::Lambda)
+                    && scope.range == lambda_span
+                {
+                    for capture_name in &index.scope_bindings[i].captures {
+                        if !self.locals.contains_key(capture_name) {
+                            self.locals.insert(
+                                capture_name.clone(),
+                                Ty::Unknown {
+                                    attr: TyAttr::default(),
+                                },
+                            );
+                        }
+                    }
+                    break;
+                }
             }
         }
 
@@ -4303,12 +4339,14 @@ impl<'db> TypeInferenceBuilder<'db> {
             self.infer_expr(root_expr, lambda_body)
         };
 
-        // Restore parent state
+        // Collect the lambda's expression types and restore parent state
+        let lambda_expressions = std::mem::replace(&mut self.expressions, saved_expressions);
+        self.bindings = saved_bindings;
         self.locals = saved_locals;
         self.declared_types = saved_declared;
         self.declared_return_ty = saved_return_ty;
         self.generic_params = saved_generic_params;
 
-        ret_ty
+        (ret_ty, lambda_expressions)
     }
 }

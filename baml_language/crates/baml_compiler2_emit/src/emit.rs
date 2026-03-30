@@ -215,6 +215,15 @@ struct StackifyCodegen<'ctx, 'obj> {
 
     /// Slot index → variable name mapping for debug metadata.
     slot_names: Vec<String>,
+
+    /// Maps MIR lambda index (index into parent `MirFunction.lambdas`) to the
+    /// `ObjectIndex` of the compiled lambda `Function` object in `program.objects`.
+    /// Populated by Pass 4 when lambda functions are compiled (Phase 3+).
+    lambda_object_indices: Vec<usize>,
+
+    /// Names for each lambda (parallel to `lambda_object_indices`).
+    /// Used for debug metadata in `MakeClosure` instructions.
+    lambda_names: Vec<String>,
 }
 
 impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
@@ -255,6 +264,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             block_notifications: Vec::new(),
             local_types: HashMap::new(),
             slot_names: Vec::new(),
+            lambda_object_indices: Vec::new(),
+            lambda_names: Vec::new(),
         }
     }
 
@@ -1942,6 +1953,24 @@ impl PullSink for StackifyCodegen<'_, '_> {
             let inst = self.emit(Instruction::LoadConst(idx));
             self.set_operand(inst, OperandMeta::Const("false".to_string()));
         }
+        Ok(())
+    }
+
+    fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error> {
+        let obj_idx = *self
+            .lambda_object_indices
+            .get(lambda_idx)
+            .unwrap_or_else(|| panic!("make_closure: lambda_idx {lambda_idx} out of range"));
+        let name = self
+            .lambda_names
+            .get(lambda_idx)
+            .cloned()
+            .unwrap_or_else(|| format!("<lambda {lambda_idx}>"));
+        let inst = self.emit(Instruction::MakeClosure(
+            ObjectIndex::from_raw(obj_idx),
+            capture_count,
+        ));
+        self.set_operand(inst, OperandMeta::Object(name));
         Ok(())
     }
 

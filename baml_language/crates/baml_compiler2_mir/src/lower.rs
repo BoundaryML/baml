@@ -332,13 +332,19 @@ struct LoweringContext<'db> {
     catch_context: Option<CatchContext>,
     exit_block: BlockId,
 
-    // Eagerly aggregated type maps from all scopes in the function
-    expr_types: FxHashMap<AstExprId, Tir2Ty>,
-    pat_types: FxHashMap<AstPatId, Tir2Ty>,
+    // Eagerly aggregated type maps from all scopes in the function.
+    // Key is (FileScopeId, AstExprId) to avoid collisions between lambda body
+    // arenas and their parent function body arenas (both start ExprIds at 0).
+    expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+    pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
     // Member resolutions from TIR: ExprId → MemberResolution
     resolutions: FxHashMap<AstExprId, baml_compiler2_tir::inference::MemberResolution<'db>>,
     // Match expressions that TIR determined are exhaustive
     exhaustive_matches: rustc_hash::FxHashSet<AstExprId>,
+
+    // The FileScopeId of the expression body currently being lowered.
+    // Updated when descending into lambda bodies (Phase 3+).
+    current_scope: FileScopeId,
 
     // AST expression body and source map
     body: AstExprBody,
@@ -450,8 +456,8 @@ impl<'db> LoweringContext<'db> {
             index.scope_at_offset(func_span.start(), Some(&func_data.name));
 
         // --- Eagerly aggregate expr_types, pat_types, resolutions, and exhaustive_matches from all scopes ---
-        let mut expr_types: FxHashMap<AstExprId, Tir2Ty> = FxHashMap::default();
-        let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
+        let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
             AstExprId,
             baml_compiler2_tir::inference::MemberResolution<'db>,
@@ -461,8 +467,8 @@ impl<'db> LoweringContext<'db> {
 
         let merge_scope =
             |fsi: FileScopeId,
-             expr_types: &mut FxHashMap<AstExprId, Tir2Ty>,
-             pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
+             expr_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             pat_types: &mut FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
              resolutions: &mut FxHashMap<
                 AstExprId,
                 baml_compiler2_tir::inference::MemberResolution<'db>,
@@ -471,10 +477,10 @@ impl<'db> LoweringContext<'db> {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
-                    expr_types.insert(expr_id, ty.clone());
+                    expr_types.insert((fsi, expr_id), ty.clone());
                 }
                 for (&pat_id, ty) in inference.iter_bindings() {
-                    pat_types.insert(pat_id, ty.clone());
+                    pat_types.insert((fsi, pat_id), ty.clone());
                 }
                 for (&expr_id, res) in inference.iter_resolutions() {
                     resolutions.insert(expr_id, res.clone());
@@ -586,6 +592,7 @@ impl<'db> LoweringContext<'db> {
             pat_types,
             resolutions,
             exhaustive_matches,
+            current_scope: func_scope_id,
             body: expr_body,
             source_map,
             file,
@@ -625,8 +632,8 @@ impl<'db> LoweringContext<'db> {
         let let_scope_id: FileScopeId = index.scope_at_offset(let_span.start(), Some(&let_name));
 
         // --- Eagerly aggregate expr_types, pat_types, resolutions from let scope ---
-        let mut expr_types: FxHashMap<AstExprId, Tir2Ty> = FxHashMap::default();
-        let mut pat_types: FxHashMap<AstPatId, Tir2Ty> = FxHashMap::default();
+        let mut expr_types: FxHashMap<(FileScopeId, AstExprId), Tir2Ty> = FxHashMap::default();
+        let mut pat_types: FxHashMap<(FileScopeId, AstPatId), Tir2Ty> = FxHashMap::default();
         let mut resolutions: FxHashMap<
             AstExprId,
             baml_compiler2_tir::inference::MemberResolution<'db>,
@@ -636,8 +643,8 @@ impl<'db> LoweringContext<'db> {
 
         let merge_scope =
             |fsi: FileScopeId,
-             expr_types: &mut FxHashMap<AstExprId, Tir2Ty>,
-             pat_types: &mut FxHashMap<AstPatId, Tir2Ty>,
+             expr_types: &mut FxHashMap<(FileScopeId, AstExprId), Tir2Ty>,
+             pat_types: &mut FxHashMap<(FileScopeId, AstPatId), Tir2Ty>,
              resolutions: &mut FxHashMap<
                 AstExprId,
                 baml_compiler2_tir::inference::MemberResolution<'db>,
@@ -646,10 +653,10 @@ impl<'db> LoweringContext<'db> {
                 let scope_id = index.scope_ids[fsi.index() as usize];
                 let inference = infer_scope_types(db, scope_id);
                 for (&expr_id, ty) in inference.iter_expressions() {
-                    expr_types.insert(expr_id, ty.clone());
+                    expr_types.insert((fsi, expr_id), ty.clone());
                 }
                 for (&pat_id, ty) in inference.iter_bindings() {
-                    pat_types.insert(pat_id, ty.clone());
+                    pat_types.insert((fsi, pat_id), ty.clone());
                 }
                 for (&expr_id, res) in inference.iter_resolutions() {
                     resolutions.insert(expr_id, res.clone());
@@ -734,6 +741,7 @@ impl<'db> LoweringContext<'db> {
             pat_types,
             resolutions,
             exhaustive_matches,
+            current_scope: let_scope_id,
             body: expr_body,
             source_map,
             file,
@@ -767,10 +775,10 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// Get the `baml_type::Ty` for an expression by looking up in the aggregated map
-    /// and converting from TIR Ty.
+    /// and converting from TIR Ty. Uses `current_scope` as the `FileScopeId` key.
     fn expr_ty(&self, expr_id: AstExprId) -> Ty {
         self.expr_types
-            .get(&expr_id)
+            .get(&(self.current_scope, expr_id))
             .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
@@ -780,7 +788,7 @@ impl<'db> LoweringContext<'db> {
     /// Get the `baml_type::Ty` for a pattern binding
     fn pat_ty(&self, pat_id: AstPatId) -> Ty {
         self.pat_types
-            .get(&pat_id)
+            .get(&(self.current_scope, pat_id))
             .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
             .unwrap_or(Ty::Void {
                 attr: TyAttr::default(),
@@ -1210,7 +1218,7 @@ impl<'db> LoweringContext<'db> {
                 // If TIR recorded a type for this expr, it was handled as a package
                 // path intermediate (e.g. `baml` in `baml.HttpMethod.Get`). Emit a
                 // null placeholder — the outer FieldAccess will produce the real value.
-                if self.expr_types.contains_key(&expr_id) {
+                if self.expr_types.contains_key(&(self.current_scope, expr_id)) {
                     self.builder
                         .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
                 } else {
@@ -1224,8 +1232,11 @@ impl<'db> LoweringContext<'db> {
     fn lower_item_ref(&mut self, expr_id: AstExprId, def: Definition<'db>, dest: Place) {
         let item = def_to_item_ref(self.db, def);
         // Check if this expression's type is EnumVariant
-        if let Some(Tir2Ty::EnumVariant(_qtn, variant, _)) =
-            self.expr_types.get(&expr_id).cloned().as_ref()
+        if let Some(Tir2Ty::EnumVariant(_qtn, variant, _)) = self
+            .expr_types
+            .get(&(self.current_scope, expr_id))
+            .cloned()
+            .as_ref()
         {
             let variant_name = variant.clone();
             // Convert the Free item ref to an EnumType variant
@@ -1419,7 +1430,7 @@ impl LoweringContext<'_> {
                 // Package paths have Unknown type in TIR (baml, baml.Array, etc.)
                 let base_is_value = self
                     .expr_types
-                    .get(base)
+                    .get(&(self.current_scope, *base))
                     .map(|ty| !matches!(ty, Tir2Ty::Unknown { .. }))
                     .unwrap_or(false);
                 if base_is_value {
@@ -1799,8 +1810,11 @@ impl LoweringContext<'_> {
         }
 
         // Check if TIR resolved this to an enum variant (e.g. baml.HttpMethod.Get via package path)
-        if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) =
-            self.expr_types.get(&expr_id).cloned().as_ref()
+        if let Some(Tir2Ty::EnumVariant(qtn, variant, _)) = self
+            .expr_types
+            .get(&(self.current_scope, expr_id))
+            .cloned()
+            .as_ref()
         {
             let enum_ref = ItemRef::EnumType {
                 package: qtn.package().clone(),
@@ -1824,10 +1838,10 @@ impl LoweringContext<'_> {
         // concrete type, this is a real field access whose field type happens to be
         // Unknown (unresolved type annotation). In that case, fall through to emit
         // the field projection.
-        if let Some(Tir2Ty::Unknown { .. }) = self.expr_types.get(&expr_id) {
+        if let Some(Tir2Ty::Unknown { .. }) = self.expr_types.get(&(self.current_scope, expr_id)) {
             let base_is_also_unknown = self
                 .expr_types
-                .get(&base)
+                .get(&(self.current_scope, base))
                 .map(|ty| matches!(ty, Tir2Ty::Unknown { .. }))
                 .unwrap_or(true);
             if base_is_also_unknown {
@@ -2811,21 +2825,22 @@ impl LoweringContext<'_> {
             AstPattern::EnumVariant { enum_name, variant } => {
                 // Resolve the enum's package from TIR type info when available,
                 // otherwise fall back to the current file's package.
-                let enum_ref =
-                    if let Some(Tir2Ty::EnumVariant(qtn, _, _)) = self.pat_types.get(&pat_id) {
-                        ItemRef::EnumType {
-                            package: qtn.package().clone(),
-                            namespace: qtn.namespace().clone(),
-                            name: qtn.name().clone(),
-                        }
-                    } else {
-                        let pkg_info = file_package(self.db, self.file);
-                        ItemRef::EnumType {
-                            package: pkg_info.package.clone(),
-                            namespace: pkg_info.namespace_path,
-                            name: enum_name,
-                        }
-                    };
+                let enum_ref = if let Some(Tir2Ty::EnumVariant(qtn, _, _)) =
+                    self.pat_types.get(&(self.current_scope, pat_id))
+                {
+                    ItemRef::EnumType {
+                        package: qtn.package().clone(),
+                        namespace: qtn.namespace().clone(),
+                        name: qtn.name().clone(),
+                    }
+                } else {
+                    let pkg_info = file_package(self.db, self.file);
+                    ItemRef::EnumType {
+                        package: pkg_info.package.clone(),
+                        namespace: pkg_info.namespace_path,
+                        name: enum_name,
+                    }
+                };
                 let test = Rvalue::BinaryOp {
                     op: BinOp::Eq,
                     left: Operand::Copy(Place::Local(scrutinee)),
@@ -2867,7 +2882,7 @@ impl LoweringContext<'_> {
                 // rather than Null, so catch bindings get the error's type (unknown) not null.
                 let ty = self
                     .pat_types
-                    .get(&pat_id)
+                    .get(&(self.current_scope, pat_id))
                     .map(|ty| convert_tir2_ty(ty, &self.type_aliases, &self.recursive_aliases))
                     .unwrap_or_else(|| self.builder.local_ty(scrutinee));
                 let local = self
