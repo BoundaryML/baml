@@ -62,7 +62,7 @@ baml-log = { path = "baml-lib/baml-log" }
 baml-viz-events = { path = "baml-viz-events" }
 base64 = "0.22.1"
 bstd = { path = "bstd" }
-bytes = "1.6.0"
+bytes = "1.11.1"
 cfg-if = "1.0.0"
 chrono = "0.4.38"
 clap = { version = "4.4.6", features = ["cargo", "derive"] }
@@ -150,7 +150,7 @@ textwrap = "0.16.0"
 thiserror = "2.0.12"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
-time = { version = "0.3.36", features = ["formatting"] }
+time = { version = "0.3.47", features = ["formatting"] }
 tracing = "0.1"
 tracing-core = { version = "0.1.31" }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
