@@ -587,11 +587,16 @@ impl<'db> TypeInferenceBuilder<'db> {
                     self.infer_expr(expr_id, body)
                 }
             }
-            // Object: if expected is Class(name), check fields
+            // Object: if expected is Class(name), check fields against declared types.
             Expr::Object { fields, .. } => {
-                if let Ty::Class(_, _) = expected {
-                    for (_field_name, field_expr) in fields {
-                        self.infer_expr(*field_expr, body);
+                if let Ty::Class(class_name, _) = expected {
+                    let field_types = self.lookup_class_fields(class_name);
+                    for (field_name, field_expr) in fields {
+                        if let Some(declared_ty) = field_types.get(field_name) {
+                            self.check_expr(*field_expr, body, declared_ty);
+                        } else {
+                            self.infer_expr(*field_expr, body);
+                        }
                     }
                     let ty = expected.clone();
                     self.record_expr_type(expr_id, ty.clone());

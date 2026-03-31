@@ -232,7 +232,7 @@ fn user.GetUser(id: int) -> User {
     let _0: User // _0 // return
     let _1: int // id // param
     let _2: baml.llm.Client
-    let _3: void[]
+    let _3: baml.llm.Client[]
     let _4: map<string, unknown>
 
     bb0: {
@@ -256,7 +256,7 @@ fn user.GetUser$build_request(id: int) -> baml.http.Request {
     let _0: baml.http.Request // _0 // return
     let _1: int // id // param
     let _2: baml.llm.Client
-    let _3: void[]
+    let _3: baml.llm.Client[]
     let _4: map<string, unknown>
 
     bb0: {
@@ -298,7 +298,7 @@ fn user.GetUser$render_prompt(id: int) -> baml.llm.PromptAst {
     let _0: baml.llm.PromptAst // _0 // return
     let _1: int // id // param
     let _2: baml.llm.Client
-    let _3: void[]
+    let _3: baml.llm.Client[]
     let _4: map<string, unknown>
 
     bb0: {

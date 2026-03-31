@@ -1,5 +1,5 @@
 client<llm> Hello {
-  provider baml-openai-chat
+  provider openai
   options {
     thing hello'world
     banned @helloworld
@@ -13,7 +13,7 @@ client<llm> Hello {
 //    |
 //    |
 //  1 | client<llm> Hello {
-//  2 |   provider baml-openai-chat
+//  2 |   provider openai
 //    |
 
 //----

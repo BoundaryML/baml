@@ -228,11 +228,15 @@ class Client {
 class PrimitiveClientOptions {
   model string | null
   base_url string | null
+  allowed_role_metadata unknown | null
+  finish_reason_allow_list string[] | null
+  finish_reason_deny_list string[] | null
+  supports_streaming bool | null
   default_role string | null
   allowed_roles string[] | null
   remap_roles map<string, string> | null
   api_key string | null
-  provider_options AnthropicOptions | AzureOpenAiOptions | null
+  provider_options AnthropicOptions | AzureOpenAiOptions | BedrockOptions | null
 
   // request stuff here
   headers map<string, string>
@@ -241,12 +245,27 @@ class PrimitiveClientOptions {
 }
 
 class AzureOpenAiOptions {
-  resource_name string
+  resource_name string | null
+  deployment_id string | null
   api_version string
+  max_tokens int | null
 }
 
 class AnthropicOptions {
-  anthropic_version string | null
+  max_tokens int | null
+}
+
+class BedrockOptions {
+  region string | null
+  endpoint_url string | null
+  access_key_id string | null
+  secret_access_key string | null
+  session_token string | null
+  profile string | null
+  stop_sequences string[] | null
+  max_tokens int | null
+  temperature float | null
+  top_p float | null
 }
 
 class PrimitiveClient {

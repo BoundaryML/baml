@@ -14,8 +14,8 @@ SOURCE_FILE
       L_BRACE "{"
       CONFIG_ITEM
         WORD "provider"
-        CONFIG_VALUE "baml-openai-chat"
-          WORD "baml-openai-chat"
+        CONFIG_VALUE "openai"
+          WORD "openai"
       CONFIG_ITEM
         WORD "options"
         CONFIG_BLOCK

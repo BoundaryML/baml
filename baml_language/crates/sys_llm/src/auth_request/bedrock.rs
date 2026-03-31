@@ -16,12 +16,12 @@ use aws_smithy_runtime_api::{
     http as smithy_http,
 };
 use aws_smithy_types::body::SdkBody;
-use bex_heap::builtin_types::owned::LlmPrimitiveClient;
 use indexmap::IndexMap;
 
-use super::LlmRequestAuthorizer;
-use crate::build_request::{
-    BuildRequestCallbacks, BuildRequestError, RawHttpRequest, get_string_option,
+use crate::{
+    BuildRequestCallbacks, HttpSendFn,
+    baml_std::{BedrockOptions, HttpRequest, PrimitiveClient, ProviderOptions},
+    build_request::BuildRequestError,
 };
 
 // ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ use crate::build_request::{
 
 /// Platform-aware `SystemTime::now()`.
 ///
-/// On WASM, `std::time::SystemTime::now()` panics — use `web_time` instead.
+/// On WASM, `std::time::SystemTime::now()` panics -- use `web_time` instead.
 #[allow(clippy::disallowed_types)]
 fn now() -> SystemTime {
     #[cfg(not(target_arch = "wasm32"))]
@@ -195,10 +195,10 @@ mod wasm_providers {
 // ---------------------------------------------------------------------------
 
 /// An [`aws_smithy_runtime_api::client::http::HttpConnector`] that delegates
-/// all HTTP traffic to a BAML [`HttpSendFn`](crate::HttpSendFn) closure.
+/// all HTTP traffic to a BAML [`HttpSendFn`] closure.
 #[derive(Clone)]
 struct BamlHttpConnector {
-    send_fn: crate::HttpSendFn,
+    send_fn: HttpSendFn,
 }
 
 impl std::fmt::Debug for BamlHttpConnector {
@@ -223,7 +223,7 @@ impl aws_smithy_runtime_api::client::http::HttpConnector for BamlHttpConnector {
                 .map(|b| String::from_utf8_lossy(b).into_owned())
                 .unwrap_or_default();
 
-            let baml_req = bex_heap::builtin_types::owned::HttpRequest {
+            let baml_req = HttpRequest {
                 method,
                 url,
                 headers,
@@ -250,9 +250,7 @@ impl aws_smithy_runtime_api::client::http::HttpConnector for BamlHttpConnector {
     }
 }
 
-fn baml_http_client(
-    send_fn: crate::HttpSendFn,
-) -> aws_smithy_runtime_api::client::http::SharedHttpClient {
+fn baml_http_client(send_fn: HttpSendFn) -> aws_smithy_runtime_api::client::http::SharedHttpClient {
     use aws_smithy_runtime_api::client::http::http_client_fn;
     let connector = SharedHttpConnector::new(BamlHttpConnector { send_fn });
     http_client_fn(move |_settings, _components| connector.clone())
@@ -262,31 +260,23 @@ fn baml_http_client(
 // AWS SDK config loading
 // ---------------------------------------------------------------------------
 
-/// Load the AWS SDK config with platform-specific providers.
-///
-/// If the client has a `profile` option, it is passed to the SDK config
-/// loader to select the named profile from `~/.aws/config` and
-/// `~/.aws/credentials`.
-pub(crate) async fn load_aws_sdk_config(
-    client: &LlmPrimitiveClient,
-    http_send: &crate::HttpSendFn,
-    env_read: &crate::EnvReadFn,
-    #[cfg_attr(target_arch = "wasm32", allow(unused))] fs_read: &crate::FsReadFn,
+/// Load the AWS SDK config using the provided callbacks for IO.
+async fn load_aws_sdk_config_with_callbacks(
+    #[cfg_attr(target_arch = "wasm32", allow(unused))] bedrock_opts: &BedrockOptions,
+    callbacks: &BuildRequestCallbacks,
 ) -> aws_config::SdkConfig {
-    let profile = get_string_option(client, "profile");
-
     #[cfg(not(target_arch = "wasm32"))]
     {
         use aws_types::os_shim_internal::{Env, Fs};
         let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .http_client(baml_http_client(http_send.clone()))
+            .http_client(baml_http_client(callbacks.http_send.clone()))
             .env(Env::from_custom(native_providers::BexEnvProvider {
-                env_read_fn: env_read.clone(),
+                env_read_fn: callbacks.env_read.clone(),
             }))
             .fs(Fs::from_custom(native_providers::BexFsProvider {
-                fs_read_fn: fs_read.clone(),
+                fs_read_fn: callbacks.fs_read.clone(),
             }));
-        if let Some(profile) = profile {
+        if let Some(profile) = &bedrock_opts.profile {
             loader = loader.profile_name(profile);
         }
         loader.load().await
@@ -294,13 +284,12 @@ pub(crate) async fn load_aws_sdk_config(
 
     #[cfg(target_arch = "wasm32")]
     {
-        let _ = profile; // profiles not supported on WASM
         aws_config::defaults(aws_config::BehaviorVersion::latest())
             .sleep_impl(crate::wasm::BrowserSleep)
             .time_source(crate::wasm::BrowserTime)
-            .http_client(baml_http_client(http_send.clone()))
+            .http_client(baml_http_client(callbacks.http_send.clone()))
             .credentials_provider(wasm_providers::EnvCredentialProvider {
-                env_read: env_read.clone(),
+                env_read: callbacks.env_read.clone(),
             })
             .load()
             .await
@@ -308,99 +297,159 @@ pub(crate) async fn load_aws_sdk_config(
 }
 
 // ---------------------------------------------------------------------------
-// LlmRequestAuthorizer implementation
+// Public entry point
 // ---------------------------------------------------------------------------
 
-pub(crate) struct BedrockAuth;
+/// Add `SigV4` auth headers to a Bedrock request.
+pub(crate) async fn auth_bedrock(
+    request: &mut HttpRequest,
+    client: &PrimitiveClient,
+    callbacks: Option<&BuildRequestCallbacks>,
+) -> Result<(), BuildRequestError> {
+    let bedrock_opts = match &client.provider_options {
+        Some(ProviderOptions::Bedrock(opts)) => opts.clone(),
+        _ => BedrockOptions::default(),
+    };
 
-impl LlmRequestAuthorizer for BedrockAuth {
-    async fn authorize(
-        &self,
-        mut request: RawHttpRequest,
-        client: &LlmPrimitiveClient,
-        callbacks: &BuildRequestCallbacks<'_>,
-    ) -> Result<RawHttpRequest, BuildRequestError> {
-        let credentials = resolve_aws_credentials(
-            client,
-            callbacks.http_send,
-            callbacks.env_read,
-            callbacks.fs_read,
-        )
-        .await?;
+    let credentials = resolve_credentials(&bedrock_opts, callbacks).await?;
+    let region = resolve_region(&bedrock_opts, callbacks).await?;
 
-        // Extract region from the URL (already set by build_request).
-        let region = extract_region_from_url(&request.url)?;
+    let signed_headers = sign_with_credentials(
+        &credentials,
+        &region,
+        &request.method,
+        &request.url,
+        &request.headers,
+        request.body.as_bytes(),
+    )?;
+    request.headers.extend(signed_headers);
 
-        // Sign the request with SigV4.
-        let signed_headers = sign_with_credentials(
-            &credentials,
-            &region,
-            &request.method,
-            &request.url,
-            &request.headers,
-            request.body.as_bytes(),
-        )?;
-        request.headers.extend(signed_headers);
+    Ok(())
+}
 
-        Ok(request)
+// ---------------------------------------------------------------------------
+// Shared native SDK config loader (no callbacks)
+// ---------------------------------------------------------------------------
+
+/// Load the AWS SDK config using the native default provider chain.
+/// This is the no-callbacks counterpart of `load_aws_sdk_config_with_callbacks`.
+#[cfg(not(target_arch = "wasm32"))]
+async fn load_aws_sdk_config_native(opts: &BedrockOptions) -> aws_config::SdkConfig {
+    let mut loader = aws_config::defaults(aws_config::BehaviorVersion::latest());
+    if let Some(profile) = &opts.profile {
+        loader = loader.profile_name(profile);
     }
+    loader.load().await
 }
 
 // ---------------------------------------------------------------------------
 // Credential resolution
 // ---------------------------------------------------------------------------
 
-/// Extract the AWS region from a Bedrock URL like
-/// `https://bedrock-runtime.us-east-1.amazonaws.com/...`
-fn extract_region_from_url(url: &str) -> Result<String, BuildRequestError> {
-    url.strip_prefix("https://bedrock-runtime.")
-        .and_then(|rest| rest.split('.').next())
-        .map(String::from)
-        .ok_or_else(|| {
-            BuildRequestError::AuthorizationFailed(format!(
-                "could not extract region from Bedrock URL: {url}"
-            ))
+/// Resolve the AWS region from explicit options or the default provider chain.
+pub(crate) async fn resolve_region(
+    opts: &BedrockOptions,
+    callbacks: Option<&BuildRequestCallbacks>,
+) -> Result<String, BuildRequestError> {
+    if let Some(region) = &opts.region {
+        return Ok(region.clone());
+    }
+
+    if let Some(cb) = callbacks {
+        let sdk_config = load_aws_sdk_config_with_callbacks(opts, cb).await;
+        return sdk_config.region().map(ToString::to_string).ok_or_else(|| {
+            BuildRequestError::AuthorizationFailed(
+                "AWS region not found in default provider chain".into(),
+            )
+        });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let sdk_config = load_aws_sdk_config_native(opts).await;
+        sdk_config.region().map(ToString::to_string).ok_or_else(|| {
+            BuildRequestError::AuthorizationFailed(
+                "AWS region not found in default provider chain".into(),
+            )
         })
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        Err(BuildRequestError::AuthorizationFailed(
+            "AWS Bedrock on WASM requires an explicit region".into(),
+        ))
+    }
 }
 
-/// Resolve AWS credentials from client options or the default provider chain.
-async fn resolve_aws_credentials(
-    client: &LlmPrimitiveClient,
-    http_send: &crate::HttpSendFn,
-    env_read: &crate::EnvReadFn,
-    #[cfg_attr(target_arch = "wasm32", allow(unused))] fs_read: &crate::FsReadFn,
+/// Resolve AWS credentials from explicit options or the default provider chain.
+async fn resolve_credentials(
+    opts: &BedrockOptions,
+    callbacks: Option<&BuildRequestCallbacks>,
 ) -> Result<Credentials, BuildRequestError> {
-    if let Some(creds) = credentials_from_options(client) {
+    // Prefer explicit credentials from client options.
+    if let Some(creds) = credentials_from_options(opts) {
         return Ok(creds);
     }
 
-    let sdk_config = load_aws_sdk_config(client, http_send, env_read, fs_read).await;
+    // Fall back to the AWS provider chain.
+    if let Some(cb) = callbacks {
+        // Use callbacks for IO -- works on both native and WASM.
+        let sdk_config = load_aws_sdk_config_with_callbacks(opts, cb).await;
+        let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
+            BuildRequestError::AuthorizationFailed(
+                "AWS credentials provider not found in default provider chain".into(),
+            )
+        })?;
+        return credentials_provider
+            .provide_credentials()
+            .await
+            .map_err(|e| {
+                BuildRequestError::AuthorizationFailed(format!(
+                    "failed to load credentials from default provider chain: {e}"
+                ))
+            });
+    }
 
-    let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
-        BuildRequestError::MissingOption(
-            "AWS credentials provider not found in default provider chain".into(),
-        )
-    })?;
+    // No callbacks -- try the native default provider chain directly.
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let sdk_config = load_aws_sdk_config_native(opts).await;
 
-    credentials_provider
-        .provide_credentials()
-        .await
-        .map_err(|e| {
-            BuildRequestError::AuthorizationFailed(format!(
-                "failed to load credentials from default provider chain: {e}"
-            ))
-        })
+        let credentials_provider = sdk_config.credentials_provider().ok_or_else(|| {
+            BuildRequestError::AuthorizationFailed(
+                "AWS credentials provider not found in default provider chain".into(),
+            )
+        })?;
+
+        credentials_provider
+            .provide_credentials()
+            .await
+            .map_err(|e| {
+                BuildRequestError::AuthorizationFailed(format!(
+                    "failed to load credentials from default provider chain: {e}"
+                ))
+            })
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        Err(BuildRequestError::AuthorizationFailed(
+            "AWS Bedrock on WASM requires explicit credentials \
+             (access_key_id + secret_access_key)"
+                .into(),
+        ))
+    }
 }
 
-/// Try to extract explicit credentials from client options.
-fn credentials_from_options(client: &LlmPrimitiveClient) -> Option<Credentials> {
-    let access_key_id = get_string_option(client, "access_key_id")?;
-    let secret_access_key = get_string_option(client, "secret_access_key")?;
-    let session_token = get_string_option(client, "session_token");
+/// Try to build credentials from explicit client options.
+fn credentials_from_options(opts: &BedrockOptions) -> Option<Credentials> {
+    let access_key_id = opts.access_key_id.as_ref()?;
+    let secret_access_key = opts.secret_access_key.as_ref()?;
     Some(Credentials::new(
         access_key_id,
         secret_access_key,
-        session_token,
+        opts.session_token.clone(),
         None,
         "baml-bedrock",
     ))
@@ -457,6 +506,10 @@ fn sign_with_credentials(
     Ok(signed_headers)
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 #[cfg(test)]
 mod tests {
     use std::sync::{
@@ -464,49 +517,37 @@ mod tests {
         atomic::{AtomicUsize, Ordering},
     };
 
-    use bex_external_types::BexExternalValue;
-    use indexmap::IndexMap;
+    use bex_external_types::AsBexExternalValue;
 
     use super::*;
-    use crate::build_request::{BuildRequestCallbacks, RawHttpRequest};
+    use crate::baml_std::PrimitiveClientOptions;
 
-    fn make_client(options: Vec<(&str, BexExternalValue)>) -> LlmPrimitiveClient {
-        let mut opts = IndexMap::new();
-        for (k, v) in options {
-            opts.insert(k.to_string(), v);
-        }
-        LlmPrimitiveClient {
-            name: "test-bedrock".to_string(),
-            provider: "aws-bedrock".to_string(),
-            default_role: "user".to_string(),
-            allowed_roles: vec![
-                "system".to_string(),
-                "user".to_string(),
-                "assistant".to_string(),
-            ],
-            options: opts,
+    fn make_client(opts: BedrockOptions) -> PrimitiveClient {
+        PrimitiveClient::new(
+            "test-bedrock".to_string(),
+            "aws-bedrock".to_string(),
+            PrimitiveClientOptions {
+                model: Some("test-model".to_string()),
+                provider_options: opts.into_bex_external_value(),
+                ..Default::default()
+            },
+        )
+        .unwrap()
+    }
+
+    fn base_bedrock_opts() -> BedrockOptions {
+        BedrockOptions {
+            region: Some("us-east-1".to_string()),
+            access_key_id: Some("AKIAIOSFODNN7EXAMPLE".to_string()),
+            secret_access_key: Some("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string()),
+            ..Default::default()
         }
     }
 
-    fn base_options() -> Vec<(&'static str, BexExternalValue)> {
-        vec![
-            ("region", BexExternalValue::String("us-east-1".into())),
-            (
-                "access_key_id",
-                BexExternalValue::String("AKIAIOSFODNN7EXAMPLE".into()),
-            ),
-            (
-                "secret_access_key",
-                BexExternalValue::String("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
-            ),
-        ]
-    }
-
-    /// A minimal unsigned Bedrock request for auth tests.
-    fn fake_request() -> RawHttpRequest {
+    fn fake_bedrock_request() -> HttpRequest {
         let mut headers = IndexMap::new();
         headers.insert("content-type".to_string(), "application/json".to_string());
-        RawHttpRequest {
+        HttpRequest {
             method: "POST".to_string(),
             url: "https://bedrock-runtime.us-east-1.amazonaws.com/model/some-model/converse"
                 .to_string(),
@@ -515,11 +556,25 @@ mod tests {
         }
     }
 
-    fn mock_http_send(
-        call_count: Arc<AtomicUsize>,
-        status: u16,
-        body: &'static str,
-    ) -> crate::HttpSendFn {
+    fn stub_callbacks() -> BuildRequestCallbacks {
+        BuildRequestCallbacks {
+            http_send: Arc::new(|_req| {
+                Box::pin(async {
+                    Ok(crate::HttpSendResponse {
+                        status_code: 200,
+                        headers: IndexMap::new(),
+                        body: String::new(),
+                    })
+                })
+            }),
+            env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
+            fs_read: Arc::new(|_path| {
+                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
+            }),
+        }
+    }
+
+    fn mock_http_send(call_count: Arc<AtomicUsize>, status: u16, body: &'static str) -> HttpSendFn {
         Arc::new(move |_req| {
             call_count.fetch_add(1, Ordering::SeqCst);
             let body = body.to_string();
@@ -535,52 +590,40 @@ mod tests {
 
     #[tokio::test]
     async fn sigv4_headers_present() {
-        let client = make_client(base_options());
-        let (h, e, f) = crate::build_request::stub_callbacks();
-        let callbacks = BuildRequestCallbacks {
-            http_send: &h,
-            env_read: &e,
-            fs_read: &f,
-        };
-        let result = BedrockAuth
-            .authorize(fake_request(), &client, &callbacks)
-            .await
-            .unwrap();
-        assert!(result.headers.contains_key("authorization"));
-        assert!(result.headers.contains_key("x-amz-date"));
+        let client = make_client(base_bedrock_opts());
+        let mut req = fake_bedrock_request();
+        auth_bedrock(&mut req, &client, None).await.unwrap();
+        assert!(req.headers.contains_key("authorization"));
+        assert!(req.headers.contains_key("x-amz-date"));
     }
 
     #[tokio::test]
-    async fn fails_without_explicit_credentials() {
-        let call_count = Arc::new(AtomicUsize::new(0));
-        let send_fn = mock_http_send(call_count, 404, "");
-        let (e, f) = crate::build_request::noop_env_fs_callbacks();
-        let client = make_client(vec![]);
-        let callbacks = BuildRequestCallbacks {
-            http_send: &send_fn,
-            env_read: &e,
-            fs_read: &f,
-        };
-        let result = BedrockAuth
-            .authorize(fake_request(), &client, &callbacks)
-            .await;
-        assert!(result.is_err());
+    async fn explicit_credentials_used_without_callbacks() {
+        let client = make_client(base_bedrock_opts());
+        let mut req = fake_bedrock_request();
+        let result = auth_bedrock(&mut req, &client, None).await;
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn http_send_invoked_during_credential_resolution() {
+    async fn fails_without_explicit_credentials_uses_callbacks() {
         let call_count = Arc::new(AtomicUsize::new(0));
         let send_fn = mock_http_send(call_count.clone(), 404, "");
-        let (e, f) = crate::build_request::noop_env_fs_callbacks();
-        let client = make_client(vec![]);
         let callbacks = BuildRequestCallbacks {
-            http_send: &send_fn,
-            env_read: &e,
-            fs_read: &f,
+            http_send: send_fn,
+            env_read: Arc::new(|_key| Box::pin(async { Ok(None) })),
+            fs_read: Arc::new(|_path| {
+                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
+            }),
         };
-        let _result = BedrockAuth
-            .authorize(fake_request(), &client, &callbacks)
-            .await;
+        let client = make_client(BedrockOptions {
+            region: Some("us-east-1".to_string()),
+            ..Default::default()
+        });
+        let mut req = fake_bedrock_request();
+        let result = auth_bedrock(&mut req, &client, Some(&callbacks)).await;
+        assert!(result.is_err());
+        // The callbacks were invoked during credential resolution.
         assert!(call_count.load(Ordering::SeqCst) > 0);
     }
 
@@ -588,17 +631,69 @@ mod tests {
     async fn http_send_not_invoked_with_explicit_credentials() {
         let call_count = Arc::new(AtomicUsize::new(0));
         let send_fn = mock_http_send(call_count.clone(), 200, "");
-        let client = make_client(base_options());
-        let (_, e, f) = crate::build_request::stub_callbacks();
         let callbacks = BuildRequestCallbacks {
-            http_send: &send_fn,
-            env_read: &e,
-            fs_read: &f,
+            http_send: send_fn,
+            ..stub_callbacks()
         };
-        let result = BedrockAuth
-            .authorize(fake_request(), &client, &callbacks)
-            .await;
+        let client = make_client(base_bedrock_opts());
+        let mut req = fake_bedrock_request();
+        let result = auth_bedrock(&mut req, &client, Some(&callbacks)).await;
         assert!(result.is_ok());
         assert_eq!(call_count.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn resolve_region_from_explicit_option() {
+        let opts = BedrockOptions {
+            region: Some("eu-west-1".into()),
+            ..Default::default()
+        };
+        let region = resolve_region(&opts, None).await.unwrap();
+        assert_eq!(region, "eu-west-1");
+    }
+
+    #[tokio::test]
+    async fn resolve_region_from_env_via_callbacks() {
+        let mut cb = stub_callbacks();
+        cb.env_read = Arc::new(|key| {
+            Box::pin(async move {
+                if key == "AWS_REGION" {
+                    Ok(Some("ap-southeast-1".into()))
+                } else {
+                    Ok(None)
+                }
+            })
+        });
+        let opts = BedrockOptions::default();
+        let region = resolve_region(&opts, Some(&cb)).await.unwrap();
+        assert_eq!(region, "ap-southeast-1");
+    }
+
+    #[tokio::test]
+    async fn resolve_region_missing_with_empty_env() {
+        let cb = stub_callbacks();
+        let opts = BedrockOptions::default();
+        let result = resolve_region(&opts, Some(&cb)).await;
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn credentials_from_options_complete() {
+        let opts = base_bedrock_opts();
+        assert!(credentials_from_options(&opts).is_some());
+    }
+
+    #[test]
+    fn credentials_from_options_missing_secret() {
+        let opts = BedrockOptions {
+            access_key_id: Some("AKID".to_string()),
+            ..Default::default()
+        };
+        assert!(credentials_from_options(&opts).is_none());
+    }
+
+    #[test]
+    fn credentials_from_options_empty() {
+        assert!(credentials_from_options(&BedrockOptions::default()).is_none());
     }
 }

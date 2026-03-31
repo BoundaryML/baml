@@ -6,6 +6,7 @@
 //! - `specialize_prompt()` - Transform a generic `PromptAst` for a specific LLM provider
 //! - `execute_*` entry points for trait-based dispatch from `sys_types`
 
+mod auth_request;
 pub mod baml_std;
 mod build_request;
 pub(crate) mod jinja;
@@ -15,8 +16,16 @@ mod provider;
 mod render_prompt;
 mod specialize_prompt;
 pub(crate) mod types;
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod wasm;
 
-use std::str::FromStr;
+use std::{
+    future::Future,
+    panic::{RefUnwindSafe, UnwindSafe},
+    pin::Pin,
+    str::FromStr,
+    sync::Arc,
+};
 
 use ::core::ops::Deref;
 use bex_external_types::BexExternalValue;
@@ -27,11 +36,70 @@ pub use jinja::{
 };
 // --- Crate-internal re-exports (used by submodules via `crate::`) ---
 pub(crate) use model_features::{AllowedMetadata, ModelFeatures};
-pub(crate) use provider::LlmProvider;
 // --- Public API: only what sys_types and bex_engine tests actually use ---
 
 // Used by sys_types (From<LlmOpError> for OpErrorKind)
+pub use provider::LlmProvider;
 pub use types::LlmOpError;
+
+// ============================================================================
+// Callback types for IO operations (used by auth_request, especially Bedrock)
+// ============================================================================
+
+/// Response from an HTTP send callback.
+pub struct HttpSendResponse {
+    pub status_code: u16,
+    pub headers: indexmap::IndexMap<String, String>,
+    pub body: String,
+}
+
+/// Async closure that sends an HTTP request and returns a response.
+///
+/// `UnwindSafe + RefUnwindSafe` bounds are required by the AWS SDK's
+/// `HttpConnector` trait.
+pub type HttpSendFn = Arc<
+    dyn Fn(
+            baml_std::HttpRequest,
+        ) -> Pin<Box<dyn Future<Output = Result<HttpSendResponse, LlmOpError>> + Send>>
+        + Send
+        + Sync
+        + UnwindSafe
+        + RefUnwindSafe,
+>;
+
+/// Async closure that reads an environment variable by name.
+///
+/// `UnwindSafe + RefUnwindSafe` bounds are required for compatibility with
+/// the AWS SDK provider chain.
+pub type EnvReadFn = Arc<
+    dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<Option<String>, LlmOpError>> + Send>>
+        + Send
+        + Sync
+        + UnwindSafe
+        + RefUnwindSafe,
+>;
+
+/// Async closure that reads a file by path, returning its raw bytes.
+///
+/// `UnwindSafe + RefUnwindSafe` bounds are required for compatibility with
+/// the AWS SDK provider chain.
+pub type FsReadFn = Arc<
+    dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<Vec<u8>, LlmOpError>> + Send>>
+        + Send
+        + Sync
+        + UnwindSafe
+        + RefUnwindSafe,
+>;
+
+/// IO callbacks needed by `auth_request` (especially Bedrock credential resolution).
+///
+/// These bridge the BAML runtime's IO capabilities into the auth pipeline,
+/// allowing credential resolution to work on both native and WASM targets.
+pub struct BuildRequestCallbacks {
+    pub http_send: HttpSendFn,
+    pub env_read: EnvReadFn,
+    pub fs_read: FsReadFn,
+}
 
 // ============================================================================
 // Clean (owned-type) entry points for trait-based dispatch
@@ -60,8 +128,8 @@ pub fn execute_render_prompt_from_owned(
         client: jinja::RenderContextClient {
             name: client.name.clone(),
             provider: client.provider.clone(),
-            default_role: client.default_role(),
-            allowed_roles: client.allowed_roles(),
+            default_role: client.default_role.clone(),
+            allowed_roles: client.allowed_roles.clone(),
         },
         output_format: types::OutputFormatContent::new(bex_external_types::Ty::String {
             attr: baml_type::TyAttr::default(),
@@ -80,17 +148,24 @@ pub fn execute_specialize_prompt_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
 ) -> Result<bex_vm_types::PromptAst, LlmOpError> {
-    Ok(specialize_prompt::specialize_prompt_from_owned(
-        client, prompt,
-    ))
+    specialize_prompt::specialize_prompt_from_owned(client, prompt)
+        .map_err(|e| LlmOpError::Other(e.to_string()))
 }
 
 /// Build an HTTP request from a prompt given already-extracted owned types.
-pub fn execute_build_request_from_owned(
+///
+/// `callbacks` provides IO bridges for auth steps that need HTTP, env, or
+/// filesystem access (e.g. Bedrock `SigV4` credential resolution). Pass `None`
+/// when callbacks are unavailable -- providers that need them will fall back to
+/// the native AWS SDK provider chain (native only) or return an error (WASM).
+pub async fn execute_build_request_from_owned(
     client: &baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
+    callbacks: Option<&BuildRequestCallbacks>,
 ) -> Result<baml_std::HttpRequest, LlmOpError> {
-    build_request::build_request(client, prompt).map_err(|e| LlmOpError::Other(e.to_string()))
+    build_request::build_request(client, prompt, callbacks)
+        .await
+        .map_err(|e| LlmOpError::Other(e.to_string()))
 }
 
 /// Parse an LLM response and extract the return value given already-extracted owned types.
@@ -176,13 +251,13 @@ mod tests {
     use crate::baml_std;
 
     fn make_client_with_options(
-        options: baml_std::PrimitiveClientOptions,
+        mut options: baml_std::PrimitiveClientOptions,
     ) -> baml_std::PrimitiveClient {
-        baml_std::PrimitiveClient {
-            name: "TestClient".to_string(),
-            provider: "openai".to_string(),
-            options,
+        if options.model.is_none() {
+            options.model = Some("test-model".to_string());
         }
+        baml_std::PrimitiveClient::new("TestClient".to_string(), "openai".to_string(), options)
+            .unwrap()
     }
 
     #[test]
@@ -205,7 +280,7 @@ mod tests {
         }"#;
 
         let allow_client = make_client_with_options(baml_std::PrimitiveClientOptions {
-            allowed_roles_allow_list: Some(vec!["stop".to_string()]),
+            finish_reason_allow_list: Some(vec!["stop".to_string()]),
             ..Default::default()
         });
 
@@ -234,7 +309,7 @@ mod tests {
         assert!(blocked.is_err());
 
         let deny_client = make_client_with_options(baml_std::PrimitiveClientOptions {
-            allowed_roles_deny_list: Some(vec!["length".to_string()]),
+            finish_reason_deny_list: Some(vec!["length".to_string()]),
             ..Default::default()
         });
 

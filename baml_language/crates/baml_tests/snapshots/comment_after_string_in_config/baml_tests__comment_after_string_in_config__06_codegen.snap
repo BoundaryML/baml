@@ -11,7 +11,7 @@ function $init() -> null {
 function user.OpenRouterMistralSmall3_1_24b$new() -> null {
     load_const "OPENROUTER_API_KEY"
     call baml.env.get_or_panic
-    store_var _2
+    store_var _3
     alloc_instance baml.llm.PrimitiveClient
     copy 0
     load_const "OpenRouterMistralSmall3_1_24b"
@@ -29,15 +29,30 @@ function user.OpenRouterMistralSmall3_1_24b$new() -> null {
     store_field .base_url
     copy 0
     load_const null
-    store_field .default_role
+    store_field .allowed_role_metadata
     copy 0
     load_const null
+    store_field .finish_reason_allow_list
+    copy 0
+    load_const null
+    store_field .finish_reason_deny_list
+    copy 0
+    load_const null
+    store_field .supports_streaming
+    copy 0
+    load_const "system"
+    store_field .default_role
+    copy 0
+    load_const "system"
+    load_const "user"
+    load_const "assistant"
+    alloc_array 3
     store_field .allowed_roles
     copy 0
     load_const null
     store_field .remap_roles
     copy 0
-    load_var _2
+    load_var _3
     store_field .api_key
     copy 0
     load_const null

@@ -97,8 +97,13 @@ pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
 pub fn file_semantic_index(db: &dyn Db, file: SourceFile) -> FileSemanticIndex<'_> {
     let tree = baml_compiler_parser::syntax_tree(db, file);
     let file_range = tree.text_range();
-    let (items, _ast_diagnostics) = baml_compiler2_ast::lower_file(&tree);
-    SemanticIndexBuilder::new(db, file).build(&items, file_range)
+    let (items, ast_diagnostics) =
+        baml_compiler2_ast::lower_file_with_file_id(&tree, file.file_id(db));
+    let mut builder = SemanticIndexBuilder::new(db, file);
+    for diag in &ast_diagnostics {
+        builder.push_ast_diagnostic(diag);
+    }
+    builder.build(&items, file_range)
 }
 
 // ── Projection helpers ────────────────────────────────────────────────────────

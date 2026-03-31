@@ -152,6 +152,20 @@ pub enum HirDiagnostic {
     /// Missing required `provider` field in client definition.
     MissingProvider { client_name: String, span: Span },
 
+    /// Unknown provider in client definition.
+    UnknownProvider {
+        client_name: String,
+        provider: String,
+        span: Span,
+    },
+
+    /// Missing required client option(s).
+    MissingClientOptions {
+        client_name: String,
+        message: String,
+        span: Span,
+    },
+
     /// Unknown field in client configuration block.
     UnknownClientProperty {
         client_name: String,

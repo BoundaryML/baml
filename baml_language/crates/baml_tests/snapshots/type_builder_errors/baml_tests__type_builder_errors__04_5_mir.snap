@@ -7,7 +7,7 @@ fn user.TypeBuilderFn(from_text: string) -> Resume {
     let _0: Resume // _0 // return
     let _1: string // from_text // param
     let _2: baml.llm.Client
-    let _3: void[]
+    let _3: baml.llm.Client[]
     let _4: map<string, unknown>
 
     bb0: {
@@ -31,7 +31,7 @@ fn user.TypeBuilderFn$build_request(from_text: string) -> baml.http.Request {
     let _0: baml.http.Request // _0 // return
     let _1: string // from_text // param
     let _2: baml.llm.Client
-    let _3: void[]
+    let _3: baml.llm.Client[]
     let _4: map<string, unknown>
 
     bb0: {
@@ -73,7 +73,7 @@ fn user.TypeBuilderFn$render_prompt(from_text: string) -> baml.llm.PromptAst {
     let _0: baml.llm.PromptAst // _0 // return
     let _1: string // from_text // param
     let _2: baml.llm.Client
-    let _3: void[]
+    let _3: baml.llm.Client[]
     let _4: map<string, unknown>
 
     bb0: {

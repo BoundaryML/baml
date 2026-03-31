@@ -18,6 +18,37 @@ use std::{
 use crate::types::{BamlType, NativeBuiltin, NativeClassDef};
 
 // ============================================================================
+// Path configuration for generated code
+// ============================================================================
+
+/// Controls the module path prefixes for `owned::` and `view::` references in
+/// generated code. When structs and traits live in the same file, use
+/// `CodegenPaths::inline()`. When structs are generated in a separate crate,
+/// use `CodegenPaths::external("sys_types::generated")`.
+struct CodegenPaths {
+    owned: String,
+    view: String,
+}
+
+impl CodegenPaths {
+    /// Structs are emitted in the same file: `owned::ns::Type`, `view::ns::Type`.
+    fn inline() -> Self {
+        Self {
+            owned: "owned".to_string(),
+            view: "view".to_string(),
+        }
+    }
+
+    /// Structs live in an external crate: `path::owned::ns::Type`, `path::view::ns::Type`.
+    fn external(path: &str) -> Self {
+        Self {
+            owned: format!("{path}::owned"),
+            view: format!("{path}::view"),
+        }
+    }
+}
+
+// ============================================================================
 // Namespace tree for IO builtins
 // ============================================================================
 
@@ -142,7 +173,11 @@ fn group_class_defs_by_ns<'a>(
 // ============================================================================
 
 /// Map a `BamlType` to the Rust type string for an owned struct field.
-fn owned_rust_type(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> String {
+fn owned_rust_type(
+    ty: &BamlType,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> String {
     match ty {
         BamlType::String => "String".into(),
         BamlType::Int => "i64".into(),
@@ -150,18 +185,20 @@ fn owned_rust_type(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> St
         BamlType::Bool => "bool".into(),
         BamlType::Null => "()".into(),
         BamlType::RustType => "std::sync::Arc<dyn std::any::Any + Send + Sync>".into(),
-        BamlType::List(inner) => format!("Vec<{}>", owned_rust_type(inner, class_ns_map)),
+        BamlType::List(inner) => {
+            format!("Vec<{}>", owned_rust_type(inner, class_ns_map, paths))
+        }
         BamlType::Map(k, v) => format!(
             "indexmap::IndexMap<{}, {}>",
-            owned_rust_type(k, class_ns_map),
-            owned_rust_type(v, class_ns_map)
+            owned_rust_type(k, class_ns_map, paths),
+            owned_rust_type(v, class_ns_map, paths)
         ),
         BamlType::Optional(inner) => {
-            format!("Option<{}>", owned_rust_type(inner, class_ns_map))
+            format!("Option<{}>", owned_rust_type(inner, class_ns_map, paths))
         }
         BamlType::Named(name) => {
             if let Some(ns) = class_ns_map.get(name.as_str()) {
-                format!("owned::{ns}::{name}")
+                format!("{}::{ns}::{name}", paths.owned)
             } else {
                 match name.as_str() {
                     "unknown" => "BexExternalValue".into(),
@@ -226,6 +263,7 @@ fn external_to_typed_expr(
     val_expr: &str,
     ty: &BamlType,
     class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
 ) -> String {
     match ty {
         BamlType::String => format!(
@@ -254,7 +292,7 @@ fn external_to_typed_expr(
              actual: other.type_name().to_string() }}) }}"
         ),
         BamlType::List(inner) => {
-            let inner_conv = external_to_typed_expr("__v", inner, class_ns_map);
+            let inner_conv = external_to_typed_expr("__v", inner, class_ns_map, paths);
             format!(
                 "match {val_expr} {{ BexExternalValue::Array {{ items, .. }} => \
                  items.into_iter().map(|__v| {{ {inner_conv} }}).collect::<Result<Vec<_>, AccessError>>(), \
@@ -263,7 +301,7 @@ fn external_to_typed_expr(
             )
         }
         BamlType::Map(_k, v) => {
-            let v_conv = external_to_typed_expr("__v", v, class_ns_map);
+            let v_conv = external_to_typed_expr("__v", v, class_ns_map, paths);
             format!(
                 "match {val_expr} {{ BexExternalValue::Map {{ entries, .. }} => \
                  entries.into_iter().map(|(__k, __v)| {{ Ok((__k, ({v_conv})?)) }}).collect::<Result<indexmap::IndexMap<_, _>, AccessError>>(), \
@@ -272,7 +310,7 @@ fn external_to_typed_expr(
             )
         }
         BamlType::Optional(inner) => {
-            let inner_conv = external_to_typed_expr("__v", inner, class_ns_map);
+            let inner_conv = external_to_typed_expr("__v", inner, class_ns_map, paths);
             format!(
                 "match {val_expr} {{ BexExternalValue::Null => Ok(None), \
                  __v => Ok(Some(({inner_conv})?)) }}"
@@ -280,7 +318,7 @@ fn external_to_typed_expr(
         }
         BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
             let ns = &class_ns_map[name.as_str()];
-            format!("owned::{ns}::{name}::from_external({val_expr})")
+            format!("{}::{ns}::{name}::from_external({val_expr})", paths.owned)
         }
         _ => format!("Ok({val_expr})"),
     }
@@ -291,6 +329,7 @@ fn into_owned_expr(
     field_name: &str,
     ty: &BamlType,
     class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
 ) -> String {
     match ty {
         BamlType::Int | BamlType::Float | BamlType::Bool => {
@@ -299,13 +338,21 @@ fn into_owned_expr(
         BamlType::String => format!("self.{field_name}(heap)?.clone()"),
         BamlType::RustType => format!("self.{field_name}(heap)?"),
         BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
-            let conv =
-                external_to_typed_expr(&format!("self.{field_name}(heap)?"), ty, class_ns_map);
+            let conv = external_to_typed_expr(
+                &format!("self.{field_name}(heap)?"),
+                ty,
+                class_ns_map,
+                paths,
+            );
             format!("({conv})?")
         }
         BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
-            let conv =
-                external_to_typed_expr(&format!("self.{field_name}(heap)?"), ty, class_ns_map);
+            let conv = external_to_typed_expr(
+                &format!("self.{field_name}(heap)?"),
+                ty,
+                class_ns_map,
+                paths,
+            );
             format!("({conv})?")
         }
         _ => format!("self.{field_name}(heap)?"),
@@ -353,7 +400,11 @@ fn owned_to_external_expr(
 }
 
 /// Map a `BamlType` to the Rust type for a clean trait method param/return.
-fn clean_rust_type(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> String {
+fn clean_rust_type(
+    ty: &BamlType,
+    class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
+) -> String {
     match ty {
         BamlType::String => "String".into(),
         BamlType::Int => "i64".into(),
@@ -362,19 +413,19 @@ fn clean_rust_type(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> St
         BamlType::Null => "()".into(),
         BamlType::RustType => "std::sync::Arc<dyn std::any::Any + Send + Sync>".into(),
         BamlType::List(inner) => {
-            format!("Vec<{}>", clean_rust_type(inner, class_ns_map))
+            format!("Vec<{}>", clean_rust_type(inner, class_ns_map, paths))
         }
         BamlType::Map(k, v) => format!(
             "indexmap::IndexMap<{}, {}>",
-            clean_rust_type(k, class_ns_map),
-            clean_rust_type(v, class_ns_map)
+            clean_rust_type(k, class_ns_map, paths),
+            clean_rust_type(v, class_ns_map, paths)
         ),
         BamlType::Optional(inner) => {
-            format!("Option<{}>", clean_rust_type(inner, class_ns_map))
+            format!("Option<{}>", clean_rust_type(inner, class_ns_map, paths))
         }
         BamlType::Named(name) => {
             if let Some(ns) = class_ns_map.get(name.as_str()) {
-                format!("owned::{ns}::{name}")
+                format!("{}::{ns}::{name}", paths.owned)
             } else {
                 match name.as_str() {
                     "type" => "baml_type::Ty".into(),
@@ -394,10 +445,9 @@ fn glue_extract_expr(
     ty: &BamlType,
     class_ns_map: &BTreeMap<String, String>,
     is_receiver: bool,
+    paths: &CodegenPaths,
 ) -> String {
     if is_receiver {
-        // Receiver (self) params are always IO classes → extract via view + into_owned
-        // The receiver class is determined by the method's class context
         return "/* receiver extracted below */".to_string();
     }
     match ty {
@@ -407,7 +457,10 @@ fn glue_extract_expr(
         BamlType::Bool => format!("{arg_var}.as_bool()?"),
         BamlType::Named(name) => {
             if let Some(ns) = class_ns_map.get(name.as_str()) {
-                format!("{arg_var}.as_builtin_class::<view::{ns}::{name}>(&__p)?.into_owned(&__p)?")
+                format!(
+                    "{arg_var}.as_builtin_class::<{}::{ns}::{name}>(&__p)?.into_owned(&__p)?",
+                    paths.view
+                )
             } else {
                 match name.as_str() {
                     "type" => format!("{arg_var}.as_baml_type_owned(&__p)?"),
@@ -421,6 +474,7 @@ fn glue_extract_expr(
                 &format!("{arg_var}.as_owned_but_very_slow(&__p)?"),
                 ty,
                 class_ns_map,
+                paths,
             );
             format!("({conv})?")
         }
@@ -551,21 +605,78 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
 }
 
 // ============================================================================
-// Generate IO Traits (main entry point for sys_types codegen)
+// Generate IO Traits (main entry point for sys_ops codegen)
 // ============================================================================
 
-pub fn generate_io_traits(io_builtins: &[NativeBuiltin], class_defs: &[NativeClassDef]) -> String {
+/// Generate view + owned struct modules from IO class definitions.
+///
+/// This is the structs-only half of the codegen. Use this in crates that need
+/// the data types but not the IO trait hierarchy (e.g. `sys_types`).
+pub fn generate_io_structs(io_builtins: &[NativeBuiltin], class_defs: &[NativeClassDef]) -> String {
+    let io_class_defs = filter_io_class_defs(io_builtins, class_defs);
+    let class_ns_map = build_class_ns_map(&io_class_defs);
+    let class_defs_by_ns = group_class_defs_by_ns(&io_class_defs);
+    let paths = CodegenPaths::inline();
+
+    let mut out = String::new();
+    emit_view_module(
+        &mut out,
+        &io_class_defs,
+        &class_ns_map,
+        &class_defs_by_ns,
+        &paths,
+    );
+    emit_owned_module(
+        &mut out,
+        &io_class_defs,
+        &class_ns_map,
+        &class_defs_by_ns,
+        &paths,
+    );
+    out
+}
+
+/// Generate IO trait hierarchy and `SysOps` dispatch struct.
+///
+/// `structs_path` controls where struct references (both `view::` and `owned::`)
+/// point. Pass `"self"` to include the struct modules inline, or an external
+/// path like `"sys_types::generated"` to reference structs from another crate.
+pub fn generate_io_traits(
+    io_builtins: &[NativeBuiltin],
+    class_defs: &[NativeClassDef],
+    structs_path: &str,
+) -> String {
     let tree = build_io_namespace_tree(io_builtins);
     let io_class_defs = filter_io_class_defs(io_builtins, class_defs);
     let class_ns_map = build_class_ns_map(&io_class_defs);
     let class_defs_by_ns = group_class_defs_by_ns(&io_class_defs);
 
+    let paths = if structs_path == "self" {
+        CodegenPaths::inline()
+    } else {
+        CodegenPaths::external(structs_path)
+    };
+
     let mut out = String::new();
 
-    emit_view_module(&mut out, &io_class_defs, &class_ns_map, &class_defs_by_ns);
-    emit_owned_module(&mut out, &io_class_defs, &class_ns_map, &class_defs_by_ns);
-    emit_class_traits(&mut out, &tree, &class_ns_map);
-    emit_namespace_traits(&mut out, &tree, &class_ns_map);
+    if structs_path == "self" {
+        emit_view_module(
+            &mut out,
+            &io_class_defs,
+            &class_ns_map,
+            &class_defs_by_ns,
+            &paths,
+        );
+        emit_owned_module(
+            &mut out,
+            &io_class_defs,
+            &class_ns_map,
+            &class_defs_by_ns,
+            &paths,
+        );
+    }
+    emit_class_traits(&mut out, &tree, &class_ns_map, &paths);
+    emit_namespace_traits(&mut out, &tree, &class_ns_map, &paths);
     emit_root_trait(&mut out, &tree);
     emit_sys_ops_struct(&mut out, io_builtins);
 
@@ -581,6 +692,7 @@ fn emit_view_module(
     _io_class_defs: &[&NativeClassDef],
     class_ns_map: &BTreeMap<String, String>,
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
+    paths: &CodegenPaths,
 ) {
     out.push_str("pub mod view {\n");
 
@@ -589,7 +701,7 @@ fn emit_view_module(
         out.push_str("        use super::super::*;\n\n");
 
         for cd in classes {
-            emit_view_struct(out, cd, class_ns_map, ns);
+            emit_view_struct(out, cd, class_ns_map, ns, paths);
         }
 
         out.push_str("    }\n");
@@ -603,6 +715,7 @@ fn emit_view_struct(
     cd: &NativeClassDef,
     class_ns_map: &BTreeMap<String, String>,
     ns: &str,
+    paths: &CodegenPaths,
 ) {
     let name = &cd.name;
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
@@ -654,14 +767,14 @@ fn emit_view_struct(
     }
 
     // into_owned()
-    let owned_path = format!("owned::{ns}::{name}");
+    let owned_path = format!("{}::{ns}::{name}", paths.owned);
     writeln!(out,
         "            pub fn into_owned(self, heap: &'a GcProtectedHeap<'a>) -> Result<{owned_path}, AccessError> {{"
     ).unwrap();
 
     writeln!(out, "                Ok({owned_path} {{").unwrap();
     for field in &cd.fields {
-        let expr = into_owned_expr(&field.name, &field.field_type, class_ns_map);
+        let expr = into_owned_expr(&field.name, &field.field_type, class_ns_map, paths);
         writeln!(out, "                    {}: {expr},", field.name).unwrap();
     }
     out.push_str("                })\n");
@@ -679,6 +792,7 @@ fn emit_owned_module(
     _io_class_defs: &[&NativeClassDef],
     class_ns_map: &BTreeMap<String, String>,
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
+    paths: &CodegenPaths,
 ) {
     out.push_str("pub mod owned {\n");
 
@@ -687,7 +801,7 @@ fn emit_owned_module(
         out.push_str("        use super::super::*;\n\n");
 
         for cd in classes {
-            emit_owned_struct(out, cd, class_ns_map, ns);
+            emit_owned_struct(out, cd, class_ns_map, ns, paths);
         }
 
         out.push_str("    }\n");
@@ -701,15 +815,26 @@ fn emit_owned_struct(
     cd: &NativeClassDef,
     class_ns_map: &BTreeMap<String, String>,
     _ns: &str,
+    paths: &CodegenPaths,
 ) {
     let name = &cd.name;
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
 
     // Struct definition
+    let has_rust_type = cd
+        .fields
+        .iter()
+        .any(|f| matches!(f.field_type, BamlType::RustType));
+    let derives = if has_rust_type {
+        "#[derive(Clone, Debug)]"
+    } else {
+        "#[derive(Clone, Debug, Default)]"
+    };
     writeln!(out, "        /// Generated from `{}`", cd.source_file).unwrap();
+    writeln!(out, "        {derives}").unwrap();
     writeln!(out, "        pub struct {name} {{").unwrap();
     for field in &cd.fields {
-        let rust_ty = owned_rust_type(&field.field_type, class_ns_map);
+        let rust_ty = owned_rust_type(&field.field_type, class_ns_map, paths);
         writeln!(out, "            pub {}: {rust_ty},", field.name).unwrap();
     }
     out.push_str("        }\n\n");
@@ -739,7 +864,7 @@ fn emit_owned_struct(
     out.push_str("            }\n");
     out.push_str("        }\n\n");
 
-    // from_external() — convert BexExternalValue::Instance back to this owned struct
+    // from_external() -- convert BexExternalValue::Instance back to this owned struct
     writeln!(out, "        impl {name} {{").unwrap();
     writeln!(
         out,
@@ -755,7 +880,7 @@ fn emit_owned_struct(
             "fields.swap_remove({:?}).unwrap_or(BexExternalValue::Null)",
             field.name
         );
-        let conv = external_to_typed_expr(&field_val, &field.field_type, class_ns_map);
+        let conv = external_to_typed_expr(&field_val, &field.field_type, class_ns_map, paths);
         writeln!(out, "                        {}: ({conv})?,", field.name).unwrap();
     }
     out.push_str("                    }),\n");
@@ -778,10 +903,11 @@ fn emit_class_traits(
     out: &mut String,
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
 ) {
     for (ns, node) in tree {
         for (class_name, methods) in &node.classes {
-            emit_one_class_trait(out, ns, class_name, methods, class_ns_map);
+            emit_one_class_trait(out, ns, class_name, methods, class_ns_map, paths);
         }
     }
 }
@@ -792,6 +918,7 @@ fn emit_one_class_trait(
     class_name: &str,
     methods: &[&NativeBuiltin],
     class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
 ) {
     let trait_name = class_trait_name(ns, class_name);
     let dispatch_fn = format!("__dispatch_{ns}_{}", class_name.to_lowercase());
@@ -804,8 +931,8 @@ fn emit_one_class_trait(
     // Clean methods
     for m in methods {
         let method_name = io_method_name(m);
-        let ret_ty = clean_rust_type(&m.return_type, class_ns_map);
-        let receiver_ty = format!("owned::{ns}::{class_name}");
+        let ret_ty = clean_rust_type(&m.return_type, class_ns_map, paths);
+        let receiver_ty = format!("{}::{ns}::{class_name}", paths.owned);
 
         // Build param list: &self, heap, call_id, receiver, then other params, then ctx
         let mut param_strs = vec![
@@ -815,7 +942,7 @@ fn emit_one_class_trait(
             format!("{}: {receiver_ty}", class_name.to_lowercase()),
         ];
         for p in &m.params {
-            let pty = clean_rust_type(&p.ty, class_ns_map);
+            let pty = clean_rust_type(&p.ty, class_ns_map, paths);
             param_strs.push(format!("{}: {pty}", p.name));
         }
         param_strs.push("ctx: &SysOpContext".to_string());
@@ -830,7 +957,7 @@ fn emit_one_class_trait(
 
     // Glue methods
     for m in methods {
-        emit_glue_method(out, m, ns, class_name, class_ns_map);
+        emit_glue_method(out, m, ns, class_name, class_ns_map, paths);
     }
 
     // Dispatch method
@@ -863,6 +990,7 @@ fn emit_glue_method(
     ns: &str,
     class_name: &str,
     class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
 ) {
     let method_name = io_method_name(builtin);
     let glue_name = format!("__glue_{}", builtin.fn_name);
@@ -893,11 +1021,12 @@ fn emit_glue_method(
     // GC protection block
     out.push_str("        let __extraction = heap.with_gc_protection(move |__p| {\n");
     writeln!(out,
-        "            let __receiver = __arg_self.as_builtin_class::<view::{ns}::{class_name}>(&__p)?.into_owned(&__p)?;"
+        "            let __receiver = __arg_self.as_builtin_class::<{}::{ns}::{class_name}>(&__p)?.into_owned(&__p)?;",
+        paths.view
     ).unwrap();
 
     for (i, p) in builtin.params.iter().enumerate() {
-        let extract = glue_extract_expr(&format!("__arg{i}"), &p.ty, class_ns_map, false);
+        let extract = glue_extract_expr(&format!("__arg{i}"), &p.ty, class_ns_map, false, paths);
         writeln!(out, "            let __{} = {extract};", p.name).unwrap();
     }
 
@@ -951,9 +1080,10 @@ fn emit_namespace_traits(
     out: &mut String,
     tree: &BTreeMap<String, IoNamespaceNode>,
     class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
 ) {
     for (ns, node) in tree {
-        emit_one_namespace_trait(out, ns, node, class_ns_map);
+        emit_one_namespace_trait(out, ns, node, class_ns_map, paths);
     }
 }
 
@@ -962,6 +1092,7 @@ fn emit_one_namespace_trait(
     ns: &str,
     node: &IoNamespaceNode,
     class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
 ) {
     let trait_name = ns_trait_name(ns);
     let dispatch_fn = format!("__dispatch_{ns}");
@@ -987,7 +1118,7 @@ fn emit_one_namespace_trait(
     // Clean methods for free functions
     for f in &node.free_fns {
         let fn_name = io_method_name(f);
-        let ret_ty = clean_rust_type(&f.return_type, class_ns_map);
+        let ret_ty = clean_rust_type(&f.return_type, class_ns_map, paths);
 
         let mut param_strs = vec![
             "&self".to_string(),
@@ -995,7 +1126,7 @@ fn emit_one_namespace_trait(
             "call_id: CallId".to_string(),
         ];
         for p in &f.params {
-            let pty = clean_rust_type(&p.ty, class_ns_map);
+            let pty = clean_rust_type(&p.ty, class_ns_map, paths);
             param_strs.push(format!("{}: {pty}", p.name));
         }
         // Some functions need ctx
@@ -1011,7 +1142,7 @@ fn emit_one_namespace_trait(
 
     // Glue methods for free functions
     for f in &node.free_fns {
-        emit_free_fn_glue(out, f, class_ns_map);
+        emit_free_fn_glue(out, f, class_ns_map, paths);
     }
 
     // Dispatch method
@@ -1071,6 +1202,7 @@ fn emit_free_fn_glue(
     out: &mut String,
     builtin: &NativeBuiltin,
     class_ns_map: &BTreeMap<String, String>,
+    paths: &CodegenPaths,
 ) {
     let glue_name = format!("__glue_{}", builtin.fn_name);
     let variant = builtin.sys_op_variant_name();
@@ -1101,7 +1233,8 @@ fn emit_free_fn_glue(
         out.push_str("        let __extraction = heap.with_gc_protection(move |__p| {\n");
         let mut param_names = Vec::new();
         for (i, p) in builtin.params.iter().enumerate() {
-            let extract = glue_extract_expr(&format!("__arg{i}"), &p.ty, class_ns_map, false);
+            let extract =
+                glue_extract_expr(&format!("__arg{i}"), &p.ty, class_ns_map, false, paths);
             writeln!(out, "            let __{} = {extract};", p.name).unwrap();
             param_names.push(format!("__{}", p.name));
         }
@@ -1326,7 +1459,7 @@ mod tests {
     #[test]
     fn test_sys_ops_struct_field_names() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "self");
 
         let expected_fields = [
             "pub baml_fs_open: SysOpFn",
@@ -1349,7 +1482,7 @@ mod tests {
     #[test]
     fn test_owned_fs_file() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "self");
 
         assert!(code.contains("pub mod fs {"));
         assert!(code.contains("pub struct File {"));
@@ -1359,7 +1492,7 @@ mod tests {
     #[test]
     fn test_owned_http_response() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "self");
 
         assert!(code.contains("pub mod http {"));
         assert!(
@@ -1380,7 +1513,7 @@ mod tests {
     #[test]
     fn test_view_fs_file() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "self");
 
         assert!(code.contains("pub struct File<'a>"));
         assert!(code.contains("cls: BexClass<'a>"));
@@ -1394,7 +1527,7 @@ mod tests {
     #[test]
     fn test_class_trait_llm_primitive_client() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "self");
 
         assert!(
             code.contains("pub trait IoClassLlmPrimitiveClient"),
@@ -1418,7 +1551,7 @@ mod tests {
     #[test]
     fn test_namespace_traits() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "self");
 
         assert!(
             code.contains("pub trait IoNamespaceFs: IoClassFsFile"),
@@ -1449,7 +1582,7 @@ mod tests {
     #[test]
     fn test_root_trait() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "self");
 
         assert!(
             code.contains("pub trait IoPackageBaml:"),
@@ -1472,7 +1605,7 @@ mod tests {
     #[test]
     fn test_sys_ops_from_impl() {
         let (_vm, io, cd) = extract_native_builtins().unwrap();
-        let code = generate_io_traits(&io, &cd);
+        let code = generate_io_traits(&io, &cd, "self");
 
         assert!(
             code.contains("pub fn from_impl<T: IoPackageBaml + Send + Sync + 'static>"),

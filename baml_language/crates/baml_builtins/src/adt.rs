@@ -95,6 +95,36 @@ pub enum MediaContent {
     },
 }
 
+impl MediaContent {
+    /// Get the base64 data regardless of variant.
+    ///
+    /// Returns `Some` for `Base64`, and for `Url`/`File` when the data has
+    /// been pre-fetched. Returns `None` when no base64 data is available.
+    pub fn base64_data(&self) -> Option<&str> {
+        match self {
+            MediaContent::Base64 { base64_data } => Some(base64_data),
+            MediaContent::Url { base64_data, .. } => base64_data.as_deref(),
+            MediaContent::File { base64_data, .. } => base64_data.as_deref(),
+        }
+    }
+
+    /// Get the original URL, if this content was sourced from one.
+    pub fn url(&self) -> Option<&str> {
+        match self {
+            MediaContent::Url { url, .. } => Some(url),
+            _ => None,
+        }
+    }
+
+    /// Get the file path, if this content references a local file.
+    pub fn file_path(&self) -> Option<&str> {
+        match self {
+            MediaContent::File { file, .. } => Some(file),
+            _ => None,
+        }
+    }
+}
+
 impl std::fmt::Display for MediaValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.read_content(|content| write!(f, "{}::{}", self.kind, content))
@@ -362,5 +392,77 @@ mod tests {
         if let PromptAst::Simple(s) = &*merged {
             assert!(matches!(&**s, PromptAstSimple::String(t) if t == "abcd"));
         }
+    }
+
+    #[test]
+    fn test_media_content_base64_data() {
+        let base64 = MediaContent::Base64 {
+            base64_data: "abc123".to_string(),
+        };
+        assert_eq!(base64.base64_data(), Some("abc123"));
+
+        let url_no_data = MediaContent::Url {
+            url: "http://example.com".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(url_no_data.base64_data(), None);
+
+        let url_with_data = MediaContent::Url {
+            url: "http://example.com".to_string(),
+            base64_data: Some("xyz".to_string()),
+        };
+        assert_eq!(url_with_data.base64_data(), Some("xyz"));
+
+        let file_no_data = MediaContent::File {
+            file: "/path/to/file".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(file_no_data.base64_data(), None);
+
+        let file_with_data = MediaContent::File {
+            file: "/path/to/file".to_string(),
+            base64_data: Some("data".to_string()),
+        };
+        assert_eq!(file_with_data.base64_data(), Some("data"));
+    }
+
+    #[test]
+    fn test_media_content_url() {
+        let url = MediaContent::Url {
+            url: "http://example.com".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(url.url(), Some("http://example.com"));
+
+        let base64 = MediaContent::Base64 {
+            base64_data: "abc".to_string(),
+        };
+        assert_eq!(base64.url(), None);
+
+        let file = MediaContent::File {
+            file: "/path".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(file.url(), None);
+    }
+
+    #[test]
+    fn test_media_content_file_path() {
+        let file = MediaContent::File {
+            file: "/path/to/file".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(file.file_path(), Some("/path/to/file"));
+
+        let url = MediaContent::Url {
+            url: "http://example.com".to_string(),
+            base64_data: None,
+        };
+        assert_eq!(url.file_path(), None);
+
+        let base64 = MediaContent::Base64 {
+            base64_data: "abc".to_string(),
+        };
+        assert_eq!(base64.file_path(), None);
     }
 }

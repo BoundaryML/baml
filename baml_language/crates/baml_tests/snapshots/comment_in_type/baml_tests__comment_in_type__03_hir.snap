@@ -27,5 +27,5 @@ function user.FunctionWithComments$render_prompt(a: string, b: int) -> baml.llm.
   baml.llm.render_prompt(TestClient, "FunctionWithComments", map { "a": a, "b": b })
 }
 function user.TestClient$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "TestClient", provider: "baml-openai-chat", options: baml.llm.PrimitiveClientOptions { model: null, base_url: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
+  baml.llm.PrimitiveClient { name: "TestClient", provider: "openai", options: baml.llm.PrimitiveClientOptions { model: null, base_url: "https://api.opena...", allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "system", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map {  } } }
 }

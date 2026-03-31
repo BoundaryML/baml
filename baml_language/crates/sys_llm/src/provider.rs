@@ -4,7 +4,7 @@
 /// Unknown provider strings fall through to parse errors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString)]
 #[strum(serialize_all = "kebab-case")]
-pub(crate) enum LlmProvider {
+pub enum LlmProvider {
     /// `OpenAI` API (api.openai.com)
     #[strum(serialize = "openai")]
     OpenAi,

@@ -3,192 +3,79 @@
 //! Converts a `crate::baml_std::PrimitiveClient` + `PromptAst` into a `baml.http.Request` instance.
 
 mod anthropic;
+mod bedrock;
 mod openai;
 
 use std::str::FromStr;
 
-use baml_builtins::PromptAstSimple;
 use bex_external_types::BexExternalValue;
 
 use crate::LlmProvider;
-
-/// Option keys consumed by `specialize_prompt` — never forwarded to the request body.
-const SPECIALIZE_PROMPT_SKIP_KEYS: &[&str] = &[
-    "max_one_system_prompt",
-    "allowed_role_metadata",
-    "default_role",
-    "allowed_roles",
-];
-
-/// Option keys consumed by `build_request` itself (URL, auth, headers, model) —
-/// never forwarded to the request body.
-const BUILD_REQUEST_SKIP_KEYS: &[&str] = &["api_key", "base_url", "model", "headers"];
-
-/// Trait for building provider-specific HTTP requests.
-///
-/// Default methods handle shared logic (body assembly, option forwarding, header
-/// merging). Each provider implements only the parts that differ.
-pub(crate) trait LlmRequestBuilder {
-    /// LlmProvider-specific option keys to skip (in addition to the shared skip-key lists).
-    fn provider_skip_keys(&self) -> &'static [&'static str];
-
-    /// Build the request URL.
-    fn build_url(
-        &self,
-        client: &crate::baml_std::PrimitiveClient,
-    ) -> Result<String, BuildRequestError>;
-
-    /// Build auth + provider-specific headers (without content-type or custom headers).
-    fn build_auth_headers(
-        &self,
-        client: &crate::baml_std::PrimitiveClient,
-    ) -> indexmap::IndexMap<String, String>;
-
-    /// Convert a specialized prompt into the JSON body fields specific to this provider.
-    fn build_prompt_body(
-        &self,
-        prompt: bex_vm_types::PromptAst,
-    ) -> serde_json::Map<String, serde_json::Value>;
-
-    // --- Default methods (shared logic) ---
-
-    /// Build the full request. Default: POST with url/headers/body from trait methods.
-    fn build_request(
-        &self,
-        client: &crate::baml_std::PrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-    ) -> Result<RawHttpRequest, BuildRequestError> {
-        let url = self.build_url(client)?;
-        let headers = self.build_headers(client);
-        let body = self.build_body(client, prompt)?;
-        Ok(RawHttpRequest {
-            method: "POST".to_string(),
-            url,
-            headers,
-            body,
-        })
-    }
-
-    /// Build headers: auth headers + content-type + custom headers from options.
-    fn build_headers(
-        &self,
-        client: &crate::baml_std::PrimitiveClient,
-    ) -> indexmap::IndexMap<String, String> {
-        let mut headers = indexmap::IndexMap::new();
-        headers.insert("content-type".to_string(), "application/json".to_string());
-        headers.extend(self.build_auth_headers(client));
-        // Forward custom headers from client.options["headers"]
-        for (key, value) in &client.options.headers {
-            headers.insert(key.clone(), value.clone());
-        }
-        headers
-    }
-
-    /// Build JSON body: model + prompt fields + forwarded options.
-    fn build_body(
-        &self,
-        client: &crate::baml_std::PrimitiveClient,
-        prompt: bex_vm_types::PromptAst,
-    ) -> Result<String, BuildRequestError> {
-        let mut body = serde_json::Map::new();
-        if let Some(model) = client.options.model.as_deref() {
-            body.insert(
-                "model".to_string(),
-                serde_json::Value::String(model.to_string()),
-            );
-        }
-        body.extend(self.build_prompt_body(prompt));
-        self.forward_options(client, &mut body);
-        serde_json::to_string(&body).map_err(|e| BuildRequestError::InvalidOption {
-            key: "body".into(),
-            reason: e.to_string(),
-        })
-    }
-
-    /// Forward non-skipped options to body.
-    fn forward_options(
-        &self,
-        client: &crate::baml_std::PrimitiveClient,
-        body: &mut serde_json::Map<String, serde_json::Value>,
-    ) {
-        let provider_keys = self.provider_skip_keys();
-        for (key, value) in &client.options.request_body {
-            if SPECIALIZE_PROMPT_SKIP_KEYS.contains(&key.as_str())
-                || BUILD_REQUEST_SKIP_KEYS.contains(&key.as_str())
-                || provider_keys.contains(&key.as_str())
-            {
-                continue;
-            }
-            if let Some(json_val) = bex_value_to_json(value) {
-                body.insert(key.clone(), json_val);
-            }
-        }
-    }
-}
 
 /// Build a provider-specific HTTP request from a specialized prompt.
 ///
 /// Returns an owned `HttpRequest` matching the `baml.http.Request` class:
 /// `{ method: String, url: String, headers: Map<String, String>, body: String }`
-pub(crate) fn build_request(
+pub(crate) async fn build_request(
     client: &crate::baml_std::PrimitiveClient,
     prompt: bex_vm_types::PromptAst,
+    callbacks: Option<&crate::BuildRequestCallbacks>,
 ) -> Result<crate::baml_std::HttpRequest, BuildRequestError> {
     let provider = LlmProvider::from_str(&client.provider)
         .map_err(|_| BuildRequestError::UnsupportedLlmProvider(client.provider.clone()))?;
 
-    let raw = match provider {
+    let mut request = match provider {
         LlmProvider::OpenAi
         | LlmProvider::OpenAiGeneric
         | LlmProvider::AzureOpenAi
         | LlmProvider::Ollama
-        | LlmProvider::OpenRouter
-        | LlmProvider::OpenAiResponses => {
-            openai::OpenAiBuilder::new(&provider).build_request(client, prompt)?
-        }
-        LlmProvider::Anthropic => anthropic::AnthropicBuilder.build_request(client, prompt)?,
+        | LlmProvider::OpenRouter => openai::chat_completions::build_request(client, &prompt),
+        LlmProvider::OpenAiResponses => openai::responses::build_request(client, &prompt),
+        LlmProvider::Anthropic => anthropic::build_request(client, &prompt),
+        LlmProvider::AwsBedrock => bedrock::build_request(client, &prompt, callbacks).await,
         LlmProvider::GoogleAi
         | LlmProvider::VertexAi
-        | LlmProvider::AwsBedrock
         | LlmProvider::BamlFallback
-        | LlmProvider::BamlRoundRobin => {
-            return Err(BuildRequestError::UnsupportedLlmProvider(
-                client.provider.clone(),
-            ));
-        }
-    };
+        | LlmProvider::BamlRoundRobin => Err(BuildRequestError::UnsupportedLlmProvider(
+            client.provider.clone(),
+        )),
+    }?;
 
-    Ok(raw.into_owned())
+    // Auth is applied after body construction. Eventually this can be promoted
+    // to a standalone step in the LLM function pipeline (llm.baml) so that
+    // auth can be resolved, cached, or refreshed independently of request
+    // building.
+    crate::auth_request::auth_request(provider, &mut request, client, callbacks).await?;
+
+    Ok(request)
 }
 
-/// Intermediate struct before converting to an owned `HttpRequest`.
-pub(crate) struct RawHttpRequest {
-    pub method: String,
-    pub url: String,
-    pub headers: indexmap::IndexMap<String, String>,
-    pub body: String,
-}
-
-impl RawHttpRequest {
-    /// Convert to an owned `builtin_types::owned::HttpRequest`.
-    fn into_owned(self) -> crate::baml_std::HttpRequest {
-        crate::baml_std::HttpRequest {
-            method: self.method,
-            url: self.url,
-            headers: self.headers,
-            body: self.body,
-        }
-    }
+/// Extract a MIME type from a `MediaValue`, returning an error if none is set.
+pub(super) fn mime_type_as_ok(
+    media: &baml_builtins::MediaValue,
+) -> Result<&str, BuildRequestError> {
+    media
+        .mime_type
+        .as_deref()
+        .ok_or_else(|| BuildRequestError::UnsupportedMedia("missing MIME type on media".into()))
 }
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum BuildRequestError {
     #[error("Unsupported provider: {0}")]
     UnsupportedLlmProvider(String),
-    #[error("Missing required option: {0}")]
-    MissingOption(String),
     #[error("Invalid option value for '{key}': {reason}")]
     InvalidOption { key: String, reason: String },
+    #[error("Unsupported media: {0}")]
+    UnsupportedMedia(String),
+    #[error("File not resolved: {0}")]
+    FileNotResolved(String),
+    #[error("Failed to serialize request body: {0}")]
+    Serialization(#[from] serde_json::Error),
+    #[error("Authorization failed: {0}")]
+    AuthorizationFailed(String),
+    #[error("{0}")]
+    Other(String),
 }
 
 /// Convert a `BexExternalValue` to a `serde_json::Value`.
@@ -214,36 +101,12 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
     }
 }
 
-fn prompt_to_content_parts_simple(content: &PromptAstSimple) -> Vec<serde_json::Value> {
-    match content {
-        PromptAstSimple::String(s) => {
-            vec![serde_json::json!({"type": "text", "text": s})]
-        }
-        PromptAstSimple::Media(media) => {
-            media.read_content(|f| match f {
-                baml_builtins::MediaContent::Url { url, .. } => {
-                    vec![serde_json::json!({"type": "input_image", "image_url": url})]
-                }
-                baml_builtins::MediaContent::Base64 { base64_data, .. } => {
-                    vec![serde_json::json!({"type": "input_image", "image_url": format!("data:{};base64,{}", media.mime_type.as_deref().unwrap_or("image/png"), base64_data)})]
-                }
-                baml_builtins::MediaContent::File { file, .. } => {
-                    vec![serde_json::json!({"type": "file", "file_id": file})]
-                }
-            })
-        }
-        PromptAstSimple::Multiple(multiple) => {
-            multiple.iter().flat_map(|i| prompt_to_content_parts_simple(i)).collect()
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
     use baml_builtins::PromptAst;
-    use bex_external_types::Ty;
+    use bex_external_types::{AsBexExternalValue, Ty};
     use indexmap::IndexMap;
 
     use super::*;
@@ -252,17 +115,21 @@ mod tests {
         provider: &str,
         mut options: crate::baml_std::PrimitiveClientOptions,
     ) -> crate::baml_std::PrimitiveClient {
+        if options.model.is_none() {
+            options.model = Some("test-model".to_string());
+        }
         options.default_role = Some("user".to_string());
         options.allowed_roles = Some(vec![
             "system".to_string(),
             "user".to_string(),
             "assistant".to_string(),
         ]);
-        crate::baml_std::PrimitiveClient {
-            name: "test-client".to_string(),
-            provider: provider.to_string(),
+        crate::baml_std::PrimitiveClient::new(
+            "test-client".to_string(),
+            provider.to_string(),
             options,
-        }
+        )
+        .unwrap()
     }
 
     fn msg(role: &str, text: &str) -> Arc<PromptAst> {
@@ -279,34 +146,34 @@ mod tests {
     }
 
     #[test]
-    fn test_unsupported_provider() {
-        let client = make_client(
-            "unknown-provider",
-            crate::baml_std::PrimitiveClientOptions::default(),
+    fn test_unknown_provider_rejected_at_construction() {
+        let mut options = crate::baml_std::PrimitiveClientOptions {
+            base_url: Some("https://example.com".to_string()),
+            ..crate::baml_std::PrimitiveClientOptions::default()
+        };
+        options.default_role = Some("user".to_string());
+        let result = crate::baml_std::PrimitiveClient::new(
+            "test-client".to_string(),
+            "unknown-provider".to_string(),
+            options,
         );
-        let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt);
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Unsupported provider")
-        );
+        assert!(result.unwrap_err().to_string().contains("unknown provider"));
     }
 
     // ========================================================================
-    // OpenAI tests — modeled after integ-tests/python/tests/test_request.py
+    // OpenAI tests
     // ========================================================================
 
     /// Matches `test_expose_request_gpt4` from `test_request.py`.
-    #[test]
-    fn test_openai_gpt4o_system_only() {
+    #[tokio::test]
+    async fn test_openai_gpt4o_system_only() {
         let client = make_client(
             "openai",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gpt-4o".to_string()),
                 api_key: Some("sk-test-key".to_string()),
+                base_url: Some("https://api.openai.com/v1".to_string()),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
@@ -314,15 +181,11 @@ mod tests {
         let system_text = "Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: \"barisa\" or \"ox_burger\",\n}";
         let prompt = Arc::new(PromptAst::Vec(vec![msg("system", system_text)]));
 
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, None).await.unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
         assert_eq!(result.url, "https://api.openai.com/v1/chat/completions");
-        assert_eq!(
-            result.headers.get("authorization").unwrap(),
-            "Bearer sk-test-key"
-        );
         assert_eq!(
             result.headers.get("content-type").unwrap(),
             "application/json"
@@ -350,13 +213,14 @@ mod tests {
     }
 
     /// Matches `test_expose_request_fallback` from `test_request.py`.
-    #[test]
-    fn test_openai_gpt4_turbo_system_and_user() {
+    #[tokio::test]
+    async fn test_openai_gpt4_turbo_system_and_user() {
         let client = make_client(
             "openai",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("gpt-4-turbo".to_string()),
                 api_key: Some("sk-test-key".to_string()),
+                base_url: Some("https://api.openai.com/v1".to_string()),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },
         );
@@ -366,7 +230,7 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, None).await.unwrap();
 
         assert_eq!(result.url, "https://api.openai.com/v1/chat/completions");
 
@@ -394,8 +258,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_openai_content_always_array() {
+    #[tokio::test]
+    async fn test_openai_content_always_array() {
         let client = make_client(
             "openai",
             crate::baml_std::PrimitiveClientOptions {
@@ -404,15 +268,21 @@ mod tests {
             },
         );
         let prompt = msg("user", "Hello world");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, None).await.unwrap();
         let body = parse_body(&result);
-        assert!(body["messages"][0]["content"].is_array());
-        assert_eq!(body["messages"][0]["content"][0]["type"], "text");
-        assert_eq!(body["messages"][0]["content"][0]["text"], "Hello world");
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "Hello world"}]}
+                ]
+            })
+        );
     }
 
-    #[test]
-    fn test_openai_custom_base_url() {
+    #[tokio::test]
+    async fn test_openai_custom_base_url() {
         let client = make_client(
             "openai",
             crate::baml_std::PrimitiveClientOptions {
@@ -421,12 +291,12 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
-        assert_eq!(result.url, "https://custom.api.com/v1/chat/completions");
+        let result = build_request(&client, prompt, None).await.unwrap();
+        assert_eq!(result.url, "https://custom.api.com/chat/completions");
     }
 
-    #[test]
-    fn test_openai_forwards_options_to_body() {
+    #[tokio::test]
+    async fn test_openai_forwards_options_to_body() {
         let client = make_client(
             "openai",
             crate::baml_std::PrimitiveClientOptions {
@@ -439,13 +309,22 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, None).await.unwrap();
         let body = parse_body(&result);
-        assert_eq!(body["temperature"], 0.7);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "temperature": 0.7,
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hello"}]}
+                ]
+            })
+        );
     }
 
-    #[test]
-    fn test_openai_skips_internal_options_in_body() {
+    #[tokio::test]
+    async fn test_openai_skips_internal_options_in_body() {
         let client = make_client(
             "openai",
             crate::baml_std::PrimitiveClientOptions {
@@ -456,26 +335,32 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, None).await.unwrap();
         let body = parse_body(&result);
-        assert!(body.get("api_key").is_none());
-        assert!(body.get("base_url").is_none());
-        // model IS in the body
-        assert_eq!(body["model"], "gpt-4o");
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "gpt-4o",
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hello"}]}
+                ]
+            })
+        );
     }
 
     // ========================================================================
-    // Anthropic tests — modeled after integ-tests/python/tests/test_request.py
+    // Anthropic tests
     // ========================================================================
 
     /// Matches `test_expose_request_round_robin` from `test_request.py`.
-    #[test]
-    fn test_anthropic_claude_system_extracted() {
+    #[tokio::test]
+    async fn test_anthropic_claude_system_extracted() {
         let client = make_client(
             "anthropic",
             crate::baml_std::PrimitiveClientOptions {
                 model: Some("claude-3-haiku-20240307".to_string()),
                 api_key: Some("sk-ant-test".to_string()),
+                base_url: Some("https://api.anthropic.com".to_string()),
                 request_body: IndexMap::from([(
                     "max_tokens".to_string(),
                     BexExternalValue::Int(1000),
@@ -489,17 +374,15 @@ mod tests {
             msg("user", "Write a nice short story about Dr. Pepper"),
         ]));
 
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, None).await.unwrap();
 
         // Verify envelope
         assert_eq!(result.method, "POST");
         assert_eq!(result.url, "https://api.anthropic.com/v1/messages");
-        assert_eq!(result.headers.get("x-api-key").unwrap(), "sk-ant-test");
         assert_eq!(
             result.headers.get("content-type").unwrap(),
             "application/json"
         );
-        assert!(result.headers.contains_key("anthropic-version"));
 
         let body = parse_body(&result);
         assert_eq!(
@@ -523,8 +406,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_anthropic_no_system_message() {
+    #[tokio::test]
+    async fn test_anthropic_no_system_message() {
         let client = make_client(
             "anthropic",
             crate::baml_std::PrimitiveClientOptions {
@@ -537,20 +420,22 @@ mod tests {
             },
         );
         let prompt = msg("user", "Hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, None).await.unwrap();
         let body = parse_body(&result);
-        assert!(body.get("system").is_none());
-        assert_eq!(body["messages"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 1000,
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "Hello"}]}
+                ]
+            })
+        );
     }
 
-    #[test]
-    fn test_anthropic_custom_headers() {
-        let mut header_entries = IndexMap::new();
-        header_entries.insert(
-            "anthropic-beta".to_string(),
-            BexExternalValue::String("prompt-caching-2024-07-31".into()),
-        );
-
+    #[tokio::test]
+    async fn test_anthropic_custom_headers() {
         let client = make_client(
             "anthropic",
             crate::baml_std::PrimitiveClientOptions {
@@ -575,7 +460,7 @@ mod tests {
         );
 
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, None).await.unwrap();
 
         assert_eq!(
             result.headers.get("anthropic-beta").unwrap(),
@@ -583,43 +468,20 @@ mod tests {
         );
 
         let body = parse_body(&result);
-        assert!(body.get("allowed_role_metadata").is_none());
-        assert!(body.get("headers").is_none());
-    }
-
-    #[test]
-    fn test_anthropic_custom_version() {
-        let client = make_client(
-            "anthropic",
-            crate::baml_std::PrimitiveClientOptions {
-                anthropic_version: Some("2024-01-01".to_string()),
-                ..crate::baml_std::PrimitiveClientOptions::default()
-            },
-        );
-        let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
         assert_eq!(
-            result.headers.get("anthropic-version").unwrap(),
-            "2024-01-01"
+            body,
+            serde_json::json!({
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 500,
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hello"}]}
+                ]
+            })
         );
     }
 
-    #[test]
-    fn test_anthropic_default_version() {
-        let client = make_client(
-            "anthropic",
-            crate::baml_std::PrimitiveClientOptions::default(),
-        );
-        let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
-        assert_eq!(
-            result.headers.get("anthropic-version").unwrap(),
-            "2023-06-01"
-        );
-    }
-
-    #[test]
-    fn test_anthropic_forwards_max_tokens() {
+    #[tokio::test]
+    async fn test_anthropic_forwards_max_tokens() {
         let client = make_client(
             "anthropic",
             crate::baml_std::PrimitiveClientOptions {
@@ -632,8 +494,45 @@ mod tests {
             },
         );
         let prompt = msg("user", "hello");
-        let result = build_request(&client, prompt).unwrap();
+        let result = build_request(&client, prompt, None).await.unwrap();
         let body = parse_body(&result);
-        assert_eq!(body["max_tokens"], 1000);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 1000,
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hello"}]}
+                ]
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_anthropic_default_max_tokens_when_not_set() {
+        let client = make_client(
+            "anthropic",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("claude-3-haiku-20240307".to_string()),
+                provider_options: crate::baml_std::AnthropicOptions {
+                    max_tokens: Some(4096),
+                }
+                .into_bex_external_value(),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, prompt, None).await.unwrap();
+        let body = parse_body(&result);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "model": "claude-3-haiku-20240307",
+                "max_tokens": 4096,
+                "messages": [
+                    {"role": "user", "content": [{"type": "text", "text": "hello"}]}
+                ]
+            })
+        );
     }
 }
