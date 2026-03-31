@@ -1125,11 +1125,11 @@ fn baml.llm.Client.execute_once(self: baml.llm.Client, context: baml.llm.Executi
     let _38: string
     let _39: type
     let _40: future<void>
-    let _41: baml.errors.LlmClient // e
+    let _41: baml.errors.LlmClient | baml.panics.AssertionFailed | baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.KeyNotFound | baml.panics.NegativeIndex | baml.panics.StackOverflow | baml.panics.Unreachable // e
     let _42: void
     let _43: bool
     let _44: future<void>
-    let _45: baml.errors.LlmClient
+    let _45: baml.errors.LlmClient | baml.panics.AssertionFailed | baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.KeyNotFound | baml.panics.NegativeIndex | baml.panics.StackOverflow | baml.panics.Unreachable
     let _46: void
     let _47: baml.llm.Client[]
     let _48: int // __for_idx

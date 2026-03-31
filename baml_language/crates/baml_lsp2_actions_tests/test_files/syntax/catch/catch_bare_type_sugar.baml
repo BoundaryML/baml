@@ -37,4 +37,39 @@ function CatchBarePrimitive(x: int) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//     ╭─[ catch_catch_bare_type_sugar.baml:16:21 ]
+//     │
+//  16 │     TimeoutError => "timeout",
+//     │                     ────┬────  
+//     │                         ╰────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ catch_catch_bare_type_sugar.baml:24:21 ]
+//     │
+//  24 │     TimeoutError => "timeout",
+//     │                     ────┬────  
+//     │                         ╰────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ catch_catch_bare_type_sugar.baml:25:19 ]
+//     │
+//  25 │     ParseError => "parse error",
+//     │                   ──────┬──────  
+//     │                         ╰──────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ catch_catch_bare_type_sugar.baml:33:15 ]
+//     │
+//  33 │     string => "string error",
+//     │               ───────┬──────  
+//     │                      ╰──────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

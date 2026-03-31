@@ -416,7 +416,7 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
                           { : null
                             root.sys.sleep(active_delay_ms) : null
                           }
-                        throw e : baml.errors.LlmClient
+                        throw e : baml.errors.LlmClient | baml.panics.AssertionFailed | baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.KeyNotFound | baml.panics.NegativeIndex | baml.panics.StackOverflow | baml.panics.Unreachable
                       }
               result : T
             }

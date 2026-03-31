@@ -45,4 +45,12 @@ function CatchOuter(x: int) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//     ╭─[ throw_throw_with_catch.baml:29:10 ]
+//     │
+//  29 │     _ => "ultimately caught"
+//     │          ─────────┬─────────  
+//     │                   ╰─────────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

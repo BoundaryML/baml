@@ -213,7 +213,6 @@ async fn catch_binds_to_throw_expression_not_throw_payload() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: throw inside match arms produces diagnostic errors"]
 async fn match_arm_block_with_throw_is_not_typed_as_void() {
     let output = baml_test!(
         r#"
@@ -221,7 +220,7 @@ async fn match_arm_block_with_throw_is_not_typed_as_void() {
             let a = 1;
             return match (a) {
                 1 => "1",
-                int => {
+                _ => {
                     throw 1
                 },
             };
@@ -229,20 +228,39 @@ async fn match_arm_block_with_throw_is_not_typed_as_void() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"");
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        load_const 1
+        copy 0
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        pop 1
+        jump L1
+
+      L0:
+        pop 1
+        load_const 1
+        throw
+
+      L1:
+        load_const "1"
+        return
+    }
+    "#);
 
     assert_eq!(output.result, Ok(BexExternalValue::String("1".to_string())));
 }
 
 #[tokio::test]
-#[ignore = "compiler2: throw inside match arms produces diagnostic errors"]
+#[ignore = "compiler2: inline throw-catch inside match arm triggers false unreachable arm"]
 async fn throw_catch_inside_match_arm_returns_catch_value() {
     let output = baml_test!(
         r#"
         function main() -> string {
             return match (2) {
                 1 => "1",
-                int => throw 1 catch (e) {
+                _ => throw 1 catch (e) {
                     _ => ".."
                 },
             };
@@ -259,7 +277,6 @@ async fn throw_catch_inside_match_arm_returns_catch_value() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: throw inside match arms produces diagnostic errors"]
 async fn throw_in_match_arm_diverges() {
     let output = baml_test!(
         r#"
@@ -267,7 +284,7 @@ async fn throw_in_match_arm_diverges() {
             let a = 1;
             return match (a) {
                 1 => "one",
-                int => {
+                _ => {
                     throw "error"
                 },
             };
@@ -275,7 +292,26 @@ async fn throw_in_match_arm_diverges() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"");
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        load_const 1
+        copy 0
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        pop 1
+        jump L1
+
+      L0:
+        pop 1
+        load_const "error"
+        throw
+
+      L1:
+        load_const "one"
+        return
+    }
+    "#);
 
     assert_eq!(
         output.result,
@@ -307,7 +343,6 @@ async fn return_diverges() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: throw inside match arms produces diagnostic errors"]
 async fn if_else_both_throw_diverges() {
     let output = baml_test!(
         r#"
@@ -315,7 +350,7 @@ async fn if_else_both_throw_diverges() {
             let a = 1;
             return match (a) {
                 1 => "one",
-                int => {
+                _ => {
                     if (true) {
                         throw "a"
                     } else {
@@ -327,7 +362,35 @@ async fn if_else_both_throw_diverges() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"");
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        load_const 1
+        copy 0
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        pop 1
+        jump L3
+
+      L0:
+        pop 1
+        load_const true
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_const "b"
+        throw
+
+      L2:
+        load_const "a"
+        throw
+
+      L3:
+        load_const "one"
+        return
+    }
+    "#);
 
     assert_eq!(
         output.result,
@@ -390,14 +453,13 @@ async fn unhandled_throw_string_shows_value() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: throw inside match arms produces diagnostic errors"]
 async fn unhandled_throw_string_in_match_shows_value() {
     let output = baml_test!(
         r#"
         function main() -> string {
             let a = 1;
             match (a) {
-                int => {
+                _ => {
                     throw "oops"
                 }
             }
@@ -405,7 +467,12 @@ async fn unhandled_throw_string_in_match_shows_value() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"");
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        load_const "oops"
+        throw
+    }
+    "#);
 
     assert_eq!(
         output.result,
@@ -418,7 +485,6 @@ async fn unhandled_throw_string_in_match_shows_value() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: throw inside match arms produces diagnostic errors"]
 async fn throw_in_non_matching_match_arm_propagates() {
     let output = baml_test!(
         r#"
@@ -426,7 +492,7 @@ async fn throw_in_non_matching_match_arm_propagates() {
             let a = 2;
             return match (a) {
                 1 => "one",
-                int => {
+                _ => {
                     throw "boom"
                 },
             };
@@ -434,7 +500,26 @@ async fn throw_in_non_matching_match_arm_propagates() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"");
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        load_const 2
+        copy 0
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        pop 1
+        jump L1
+
+      L0:
+        pop 1
+        load_const "boom"
+        throw
+
+      L1:
+        load_const "one"
+        return
+    }
+    "#);
 
     assert_eq!(
         output.result,
@@ -694,7 +779,7 @@ async fn rethrow_propagates_to_outer_catch() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "compiler2: catch binding typed as unknown when throw set is empty — needs panic type inference"]
+#[ignore = "needs catch arm type narrowing to access fields on specific panic type"]
 async fn caught_index_oob_has_index_field() {
     let output = baml_test!(
         r#"
@@ -716,7 +801,7 @@ async fn caught_index_oob_has_index_field() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: catch binding typed as unknown when throw set is empty — needs panic type inference"]
+#[ignore = "needs catch arm type narrowing to access fields on specific panic type"]
 async fn caught_index_oob_has_length_field() {
     let output = baml_test!(
         r#"
@@ -738,7 +823,7 @@ async fn caught_index_oob_has_length_field() {
 }
 
 #[tokio::test]
-#[ignore = "compiler2: catch binding typed as unknown when throw set is empty — needs panic type inference"]
+#[ignore = "needs catch arm type narrowing to access fields on specific panic type"]
 async fn caught_division_by_zero_has_dividend_field() {
     let output = baml_test!(
         r#"

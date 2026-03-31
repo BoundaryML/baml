@@ -29,4 +29,30 @@ function MultipleNarrowedArms(x: int) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//     ╭─[ catch_catch_binding_narrowing.baml:16:21 ]
+//     │
+//  16 │     TimeoutError => "retry",
+//     │                     ───┬───  
+//     │                        ╰───── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ catch_catch_binding_narrowing.baml:24:21 ]
+//     │
+//  24 │     TimeoutError => "timeout",
+//     │                     ────┬────  
+//     │                         ╰────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ catch_catch_binding_narrowing.baml:25:19 ]
+//     │
+//  25 │     ParseError => "parse error",
+//     │                   ──────┬──────  
+//     │                         ╰──────── unreachable arm
+//     │ 
+//     │ Note: Error code: E0001
+// ────╯

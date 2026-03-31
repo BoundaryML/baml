@@ -1375,10 +1375,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         let mut result_members = vec![base_ty];
         let mut residual = self.catch_base_throw_types(base_expr_id, body);
-        // When the inferred throw set is empty (no declared/inferred throws),
-        // runtime panics are still possible, so catch arms should not be
-        // flagged as unreachable.
-        let throw_set_is_known = !residual.is_empty();
 
         for clause in clauses {
             // Compute the clause-level binding type from the current residual throw set.
@@ -1413,7 +1409,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arm = &body.catch_arms[arm_id];
                 let matches =
                     self.match_throw_types_for_pattern(arm.pattern, &residual, body, arm.body);
-                if matches.may_match.is_empty() && throw_set_is_known {
+                if matches.may_match.is_empty() {
                     self.context
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }
@@ -1684,7 +1680,9 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Ty {
         match &body.patterns[pattern_id] {
             baml_compiler2_ast::Pattern::Binding(name) => {
-                if self.is_bare_type_sugar_binding(name) {
+                if let Some(prim_ty) = Self::bare_type_sugar_to_ty(name) {
+                    prim_ty
+                } else if self.is_bare_type_sugar_binding(name) {
                     self.lower_pattern_type_expr(
                         &TypeExpr::Path {
                             segments: vec![name.clone()],
@@ -1761,6 +1759,25 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
+    /// Map a bare type sugar name to a `Ty` for primitive and media types.
+    ///
+    /// Returns `Some(Ty)` for names like `int`, `string`, `image`, etc.
+    /// Returns `None` for class/enum names that need full resolution.
+    fn bare_type_sugar_to_ty(name: &Name) -> Option<Ty> {
+        match name.as_str() {
+            "int" => Some(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
+            "float" => Some(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
+            "string" => Some(Ty::Primitive(PrimitiveType::String, TyAttr::default())),
+            "bool" => Some(Ty::Primitive(PrimitiveType::Bool, TyAttr::default())),
+            "null" => Some(Ty::Primitive(PrimitiveType::Null, TyAttr::default())),
+            "image" => Some(Ty::Primitive(PrimitiveType::Image, TyAttr::default())),
+            "audio" => Some(Ty::Primitive(PrimitiveType::Audio, TyAttr::default())),
+            "video" => Some(Ty::Primitive(PrimitiveType::Video, TyAttr::default())),
+            "pdf" => Some(Ty::Primitive(PrimitiveType::Pdf, TyAttr::default())),
+            _ => None,
+        }
+    }
+
     fn is_bare_type_sugar_binding(&self, name: &Name) -> bool {
         matches!(
             name.as_str(),
@@ -1803,7 +1820,34 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
         let mut out = BTreeSet::new();
         self.collect_throw_facts_from_expr(base_expr_id, body, &mut out);
+        // Any expression can produce a runtime panic (division by zero, index
+        // OOB, etc.), so always include the builtin panic types. This ensures
+        // catch bindings are properly typed as a union that includes panics.
+        out.extend(Self::panic_throw_facts());
         out
+    }
+
+    /// The set of `root.panics.*` types that any expression can produce.
+    fn panic_throw_facts() -> impl Iterator<Item = Ty> {
+        const PANIC_CLASSES: &[&str] = &[
+            "DivisionByZero",
+            "IndexOutOfBounds",
+            "NegativeIndex",
+            "KeyNotFound",
+            "StackOverflow",
+            "AssertionFailed",
+            "Unreachable",
+        ];
+        PANIC_CLASSES.iter().map(|name| {
+            Ty::Class(
+                crate::ty::QualifiedTypeName::new(
+                    Name::new("baml"),
+                    vec![Name::new("panics")],
+                    Name::new(*name),
+                ),
+                TyAttr::default(),
+            )
+        })
     }
 
     /// Join a set of throw fact types into a single type.
@@ -1855,13 +1899,17 @@ impl<'db> TypeInferenceBuilder<'db> {
         match pattern {
             baml_compiler2_ast::Pattern::Binding(name) => {
                 if self.is_bare_type_sugar_binding(name) {
-                    let lowered = self.lower_pattern_type_expr(
-                        &TypeExpr::Path {
-                            segments: vec![name.clone()],
-                            attrs: vec![],
-                        },
-                        at_expr,
-                    );
+                    let lowered = if let Some(prim_ty) = Self::bare_type_sugar_to_ty(name) {
+                        prim_ty
+                    } else {
+                        self.lower_pattern_type_expr(
+                            &TypeExpr::Path {
+                                segments: vec![name.clone()],
+                                attrs: vec![],
+                            },
+                            at_expr,
+                        )
+                    };
                     if Self::ty_covers_fact(&lowered, throw_fact) {
                         PatternMatchStrength::DefiniteMatch
                     } else if is_unknown {

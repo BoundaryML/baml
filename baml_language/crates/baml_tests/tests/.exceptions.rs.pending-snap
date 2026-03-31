@@ -1,0 +1,86 @@
+{"run_id":"1775000445-200131000","line":326,"new":{"module_name":"exceptions","snapshot_name":"if_else_both_throw_diverges","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":326,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L3\n\n  L0:\n    pop 1\n    load_const true\n    pop_jump_if_false L1\n    jump L2\n\n  L1:\n    load_const \"b\"\n    throw\n\n  L2:\n    load_const \"a\"\n    throw\n\n  L3:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000445-200131000","line":231,"new":{"module_name":"exceptions","snapshot_name":"match_arm_block_with_throw_is_not_typed_as_void","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":231,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const 1\n    throw\n\n  L1:\n    load_const \"1\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000445-200131000","line":275,"new":{"module_name":"exceptions","snapshot_name":"throw_in_match_arm_diverges","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":275,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const \"error\"\n    throw\n\n  L1:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000445-200131000","line":344,"new":null,"old":null}
+{"run_id":"1775000445-200131000","line":171,"new":null,"old":null}
+{"run_id":"1775000445-200131000","line":371,"new":null,"old":null}
+{"run_id":"1775000445-200131000","line":431,"new":{"module_name":"exceptions","snapshot_name":"throw_in_non_matching_match_arm_propagates","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":431,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 2\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const \"boom\"\n    throw\n\n  L1:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000445-200131000","line":403,"new":{"module_name":"exceptions","snapshot_name":"unhandled_throw_string_in_match_shows_value","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":403,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const \"oops\"\n    throw\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000451-194683000","line":231,"new":{"module_name":"exceptions","snapshot_name":"match_arm_block_with_throw_is_not_typed_as_void","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":231,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const 1\n    throw\n\n  L1:\n    load_const \"1\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000456-692328000","line":231,"new":{"module_name":"exceptions","snapshot_name":"match_arm_block_with_throw_is_not_typed_as_void","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":231,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const 1\n    throw\n\n  L1:\n    load_const \"1\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000483-217061000","line":22,"new":null,"old":null}
+{"run_id":"1775000483-217061000","line":293,"new":null,"old":null}
+{"run_id":"1775000483-217061000","line":133,"new":null,"old":null}
+{"run_id":"1775000483-217061000","line":60,"new":null,"old":null}
+{"run_id":"1775000483-217061000","line":205,"new":null,"old":null}
+{"run_id":"1775000483-217061000","line":95,"new":null,"old":null}
+{"run_id":"1775000483-217061000","line":326,"new":{"module_name":"exceptions","snapshot_name":"if_else_both_throw_diverges","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":326,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L3\n\n  L0:\n    pop 1\n    load_const true\n    pop_jump_if_false L1\n    jump L2\n\n  L1:\n    load_const \"b\"\n    throw\n\n  L2:\n    load_const \"a\"\n    throw\n\n  L3:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000483-217061000","line":231,"new":{"module_name":"exceptions","snapshot_name":"match_arm_block_with_throw_is_not_typed_as_void","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":231,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const 1\n    throw\n\n  L1:\n    load_const \"1\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000483-217061000","line":171,"new":null,"old":null}
+{"run_id":"1775000483-217061000","line":344,"new":null,"old":null}
+{"run_id":"1775000483-217061000","line":371,"new":null,"old":null}
+{"run_id":"1775000483-217061000","line":275,"new":{"module_name":"exceptions","snapshot_name":"throw_in_match_arm_diverges","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":275,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const \"error\"\n    throw\n\n  L1:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000483-217061000","line":431,"new":{"module_name":"exceptions","snapshot_name":"throw_in_non_matching_match_arm_propagates","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":431,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 2\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const \"boom\"\n    throw\n\n  L1:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000483-217061000","line":403,"new":{"module_name":"exceptions","snapshot_name":"unhandled_throw_string_in_match_shows_value","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":403,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const \"oops\"\n    throw\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000489-572235000","line":22,"new":null,"old":null}
+{"run_id":"1775000489-572235000","line":133,"new":null,"old":null}
+{"run_id":"1775000489-572235000","line":293,"new":null,"old":null}
+{"run_id":"1775000489-572235000","line":205,"new":null,"old":null}
+{"run_id":"1775000489-572235000","line":60,"new":null,"old":null}
+{"run_id":"1775000489-572235000","line":95,"new":null,"old":null}
+{"run_id":"1775000489-572235000","line":231,"new":{"module_name":"exceptions","snapshot_name":"match_arm_block_with_throw_is_not_typed_as_void","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":231,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const 1\n    throw\n\n  L1:\n    load_const \"1\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000489-572235000","line":326,"new":{"module_name":"exceptions","snapshot_name":"if_else_both_throw_diverges","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":326,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L3\n\n  L0:\n    pop 1\n    load_const true\n    pop_jump_if_false L1\n    jump L2\n\n  L1:\n    load_const \"b\"\n    throw\n\n  L2:\n    load_const \"a\"\n    throw\n\n  L3:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000489-572235000","line":371,"new":null,"old":null}
+{"run_id":"1775000489-572235000","line":275,"new":{"module_name":"exceptions","snapshot_name":"throw_in_match_arm_diverges","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":275,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const \"error\"\n    throw\n\n  L1:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000489-572235000","line":171,"new":null,"old":null}
+{"run_id":"1775000489-572235000","line":344,"new":null,"old":null}
+{"run_id":"1775000489-572235000","line":431,"new":{"module_name":"exceptions","snapshot_name":"throw_in_non_matching_match_arm_propagates","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":431,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 2\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const \"boom\"\n    throw\n\n  L1:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000489-572235000","line":403,"new":{"module_name":"exceptions","snapshot_name":"unhandled_throw_string_in_match_shows_value","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":403,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const \"oops\"\n    throw\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000498-421686000","line":275,"new":{"module_name":"exceptions","snapshot_name":"throw_in_match_arm_diverges","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":275,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const \"error\"\n    throw\n\n  L1:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000558-934104000","line":231,"new":{"module_name":"exceptions","snapshot_name":"match_arm_block_with_throw_is_not_typed_as_void","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":231,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const 1\n    throw\n\n  L1:\n    load_const \"1\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000560-564941000","line":275,"new":{"module_name":"exceptions","snapshot_name":"throw_in_match_arm_diverges","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":275,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const \"error\"\n    throw\n\n  L1:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000561-394943000","line":326,"new":{"module_name":"exceptions","snapshot_name":"if_else_both_throw_diverges","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":326,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 1\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L3\n\n  L0:\n    pop 1\n    load_const true\n    pop_jump_if_false L1\n    jump L2\n\n  L1:\n    load_const \"b\"\n    throw\n\n  L2:\n    load_const \"a\"\n    throw\n\n  L3:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000562-259425000","line":403,"new":{"module_name":"exceptions","snapshot_name":"unhandled_throw_string_in_match_shows_value","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":403,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const \"oops\"\n    throw\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000563-94469000","line":431,"new":{"module_name":"exceptions","snapshot_name":"throw_in_non_matching_match_arm_propagates","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":431,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    load_const 2\n    copy 0\n    load_const 1\n    cmp_op ==\n    pop_jump_if_false L0\n    pop 1\n    jump L1\n\n  L0:\n    pop 1\n    load_const \"boom\"\n    throw\n\n  L1:\n    load_const \"one\"\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775000724-793590000","line":60,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":205,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":22,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":95,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":133,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":365,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":295,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":332,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":503,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":231,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":470,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":438,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":171,"new":null,"old":null}
+{"run_id":"1775000724-793590000","line":411,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":205,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":295,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":503,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":365,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":133,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":60,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":22,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":231,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":95,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":332,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":411,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":438,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":171,"new":null,"old":null}
+{"run_id":"1775000854-865275000","line":470,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":503,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":365,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":22,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":133,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":231,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":205,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":295,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":95,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":332,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":60,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":411,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":438,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":470,"new":null,"old":null}
+{"run_id":"1775000901-806047000","line":171,"new":null,"old":null}
