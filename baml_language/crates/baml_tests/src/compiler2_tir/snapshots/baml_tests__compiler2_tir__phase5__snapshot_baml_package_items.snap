@@ -61,6 +61,14 @@ namespace baml.media:
 namespace baml.net:
   class Socket { methods: [read, close] }
   function connect
+namespace baml.panics:
+  class AssertionFailed { methods: [] }
+  class DivisionByZero { methods: [] }
+  class IndexOutOfBounds { methods: [] }
+  class KeyNotFound { methods: [] }
+  class NegativeIndex { methods: [] }
+  class StackOverflow { methods: [] }
+  class Unreachable { methods: [] }
 namespace baml.sys:
   function panic
   function shell

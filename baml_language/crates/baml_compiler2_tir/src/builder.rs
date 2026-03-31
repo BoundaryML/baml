@@ -1375,6 +1375,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         let mut result_members = vec![base_ty];
         let mut residual = self.catch_base_throw_types(base_expr_id, body);
+        // When the inferred throw set is empty (no declared/inferred throws),
+        // runtime panics are still possible, so catch arms should not be
+        // flagged as unreachable.
+        let throw_set_is_known = !residual.is_empty();
 
         for clause in clauses {
             // Compute the clause-level binding type from the current residual throw set.
@@ -1409,7 +1413,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arm = &body.catch_arms[arm_id];
                 let matches =
                     self.match_throw_types_for_pattern(arm.pattern, &residual, body, arm.body);
-                if matches.may_match.is_empty() {
+                if matches.may_match.is_empty() && throw_set_is_known {
                     self.context
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }

@@ -283,6 +283,30 @@ function baml.net.close(self: ?) -> null  [builtin]
 function baml.net.connect(addr: string) -> baml.net.Socket  [builtin]
 function baml.net.read(self: ?) -> string  [builtin]
 
+--- <builtin>/baml/ns_panics/panics.baml ---
+class baml.panics.AssertionFailed {
+  message: string
+}
+class baml.panics.DivisionByZero {
+  dividend: int
+}
+class baml.panics.IndexOutOfBounds {
+  index: int
+  length: int
+}
+class baml.panics.KeyNotFound {
+  key: string
+}
+class baml.panics.NegativeIndex {
+  index: int
+}
+class baml.panics.StackOverflow {
+  message: string
+}
+class baml.panics.Unreachable {
+  message: string
+}
+
 --- <builtin>/baml/ns_sys/sys.baml ---
 function baml.sys.panic(message: string) -> null  [builtin]
 function baml.sys.shell(command: string) -> string  [builtin]

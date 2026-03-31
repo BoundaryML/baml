@@ -586,6 +586,52 @@ class baml.net.Socket$stream {
   _handle: $rust_type
 }
 
+--- <builtin>/baml/ns_panics/panics.baml ---
+class baml.panics.DivisionByZero {
+  dividend: int
+}
+class baml.panics.IndexOutOfBounds {
+  index: int
+  length: int
+}
+class baml.panics.NegativeIndex {
+  index: int
+}
+class baml.panics.KeyNotFound {
+  key: string
+}
+class baml.panics.StackOverflow {
+  message: string
+}
+class baml.panics.AssertionFailed {
+  message: string
+}
+class baml.panics.Unreachable {
+  message: string
+}
+class baml.panics.DivisionByZero$stream {
+  dividend: null | int
+}
+class baml.panics.IndexOutOfBounds$stream {
+  index: null | int
+  length: null | int
+}
+class baml.panics.NegativeIndex$stream {
+  index: null | int
+}
+class baml.panics.KeyNotFound$stream {
+  key: null | string
+}
+class baml.panics.StackOverflow$stream {
+  message: null | string
+}
+class baml.panics.AssertionFailed$stream {
+  message: null | string
+}
+class baml.panics.Unreachable$stream {
+  message: null | string
+}
+
 --- <builtin>/baml/ns_sys/sys.baml ---
 
 --- <builtin>/baml/ns_unstable/unstable.baml ---

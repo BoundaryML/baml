@@ -148,17 +148,6 @@ pub(crate) fn display_instruction(
         Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
-        Instruction::PushUnwind {
-            handler,
-            error_slot,
-        } => {
-            let target = instruction_ptr.wrapping_add_signed(*handler);
-            let slot_name = function
-                .local_names
-                .get(*error_slot)
-                .map_or_else(|| format!("slot {error_slot}"), std::clone::Clone::clone);
-            format!("(to {target}, {slot_name})")
-        }
         Instruction::AllocInstance(index) | Instruction::AllocVariant(index) => {
             // Look up the class/enum from the compile-time ObjectPool if available
             if let Some(objs) = objects {
@@ -191,7 +180,6 @@ pub(crate) fn display_instruction(
         | Instruction::StoreMapElement
         | Instruction::Await
         | Instruction::CallIndirect
-        | Instruction::PopUnwind
         | Instruction::Throw
         | Instruction::Assert
         | Instruction::Discriminant
@@ -319,7 +307,6 @@ fn instruction_color(instruction: &Instruction) -> Color {
         Instruction::Jump(_) | Instruction::PopJumpIfFalse(_) | Instruction::JumpTable { .. } => {
             Color::Yellow
         }
-        Instruction::PushUnwind { .. } | Instruction::PopUnwind => Color::Yellow,
         Instruction::Call(_) | Instruction::CallIndirect => Color::Magenta,
         Instruction::Assert
         | Instruction::Return
@@ -546,10 +533,6 @@ fn display_bytecode_textual(function: &Function) -> String {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
             }
-            Instruction::PushUnwind { handler, .. } => {
-                let target = ip.wrapping_add_signed(*handler);
-                jump_targets.insert(target);
-            }
             Instruction::JumpTable { table_idx, default } => {
                 // Default target.
                 let default_target = ip.wrapping_add_signed(*default);
@@ -703,18 +686,6 @@ fn display_instruction_textual(
             }
         }
 
-        Instruction::PushUnwind {
-            handler,
-            error_slot,
-        } => {
-            let target = ip.wrapping_add_signed(*handler);
-            let label = label_map
-                .get(&target)
-                .cloned()
-                .unwrap_or_else(|| format!("?{target}"));
-            format!("push_unwind {label}, slot {error_slot}")
-        }
-        Instruction::PopUnwind => "pop_unwind".to_string(),
         Instruction::Throw => "throw".to_string(),
 
         // --- Operators ---
@@ -964,17 +935,6 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         Instruction::Jump(offset) | Instruction::PopJumpIfFalse(offset) => {
             let target = ip.wrapping_add_signed(*offset);
             format!("(to {target})")
-        }
-
-        Instruction::PushUnwind {
-            handler,
-            error_slot,
-        } => {
-            let target = ip.wrapping_add_signed(*handler);
-            let slot_meta = meta
-                .map(|m| m.as_str().to_string())
-                .unwrap_or_else(|| format!("slot {error_slot}"));
-            format!("(to {target}, {slot_meta})")
         }
 
         // Jump tables: show all target addresses.

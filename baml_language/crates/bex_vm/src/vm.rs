@@ -60,21 +60,6 @@ pub(crate) struct Frame {
     pub(crate) locals_offset: StackIndex,
 }
 
-/// Active unwind handler for catch semantics.
-#[derive(Clone, Copy, Debug)]
-struct UnwindHandler {
-    /// Frame depth where this handler is active.
-    frame_depth: usize,
-    /// Instruction pointer to resume at when unwinding to this handler.
-    target_ip: usize,
-    /// Frame-local slot index where the exception value is stored.
-    error_slot: usize,
-    /// Eval-stack depth at registration time. On same-frame unwind the stack
-    /// is truncated back to this depth so stale temporaries don't corrupt the
-    /// handler block.
-    stack_depth: usize,
-}
-
 /// Exception payload used by unwind routing.
 #[derive(Debug)]
 enum VmException {
@@ -232,9 +217,6 @@ pub struct BexVm {
     /// Frame depths for traced function calls. Always sorted ascending (LIFO).
     /// Checked on `Return` to yield `FunctionExit` notifications.
     traced_frames: Vec<usize>,
-
-    /// Active unwind handlers (LIFO) for catch semantics.
-    unwind_handlers: Vec<UnwindHandler>,
 }
 
 /// VM execution state.
@@ -457,7 +439,6 @@ impl BexVm {
             watched_vars: HashMap::new(),
             interrupt_frame: None,
             traced_frames: Vec::new(),
-            unwind_handlers: Vec::new(),
         }
     }
 
@@ -664,8 +645,6 @@ impl BexVm {
             self.get_object(function)
         );
 
-        self.unwind_handlers.clear();
-
         self.stack.extend(args.iter().copied());
 
         self.frames.push(Frame {
@@ -688,7 +667,6 @@ impl BexVm {
         // stack and call stack should be empty.
         self.stack.clear();
         self.frames.clear();
-        self.unwind_handlers.clear();
     }
 
     /// Returns a reference to the pending future.
@@ -983,28 +961,76 @@ impl BexVm {
         StackIndex::from_raw(locals_offset.raw() + slot - 1)
     }
 
-    fn is_panic_runtime_error(error: &VmError) -> bool {
-        match error {
-            VmError::RuntimeError(runtime_error) => matches!(
-                runtime_error,
-                RuntimeError::AssertionError
-                    | RuntimeError::Unreachable
-                    | RuntimeError::StackOverflow
-            ),
-        }
-    }
-
     fn exception_to_value(&mut self, exception: &VmException) -> Value {
         match exception {
             VmException::Thrown(value) => *value,
-            VmException::Runtime(error) => {
-                let prefix = if Self::is_panic_runtime_error(error) {
-                    "panic"
-                } else {
-                    "error"
-                };
-                self.alloc_string(format!("{prefix}: {error}"))
+            VmException::Runtime(error) => self.runtime_error_to_value(error),
+        }
+    }
+
+    /// Convert a VM runtime error into a typed class instance from `root.panics`.
+    ///
+    /// Falls back to a plain string if the panic class isn't available (e.g. in
+    /// minimal test programs that don't load `baml_std`).
+    fn runtime_error_to_value(&mut self, error: &VmError) -> Value {
+        match error {
+            VmError::RuntimeError(RuntimeError::DivisionByZero { left, .. }) => {
+                // DivisionByZero { dividend int }
+                let dividend = *left;
+                self.alloc_panic_instance("baml.panics.DivisionByZero", vec![dividend])
             }
+            VmError::RuntimeError(RuntimeError::InternalError(
+                InternalError::ArrayIndexOutOfBounds { index, length },
+            )) => {
+                // IndexOutOfBounds { index int, length int }
+                #[allow(clippy::cast_possible_wrap)]
+                let fields = vec![Value::Int(*index as i64), Value::Int(*length as i64)];
+                self.alloc_panic_instance("baml.panics.IndexOutOfBounds", fields)
+            }
+            VmError::RuntimeError(RuntimeError::InternalError(
+                InternalError::ArrayIndexIsNegative(index),
+            )) => {
+                // NegativeIndex { index int }
+                self.alloc_panic_instance("baml.panics.NegativeIndex", vec![Value::Int(*index)])
+            }
+            VmError::RuntimeError(RuntimeError::NoSuchKeyInMap) => {
+                // KeyNotFound { key string }
+                // TODO: capture the actual key once the VM tracks it
+                let key = self.alloc_string("(unknown)".to_string());
+                self.alloc_panic_instance("baml.panics.KeyNotFound", vec![key])
+            }
+            VmError::RuntimeError(RuntimeError::StackOverflow) => {
+                let msg = self.alloc_string("stack overflow".to_string());
+                self.alloc_panic_instance("baml.panics.StackOverflow", vec![msg])
+            }
+            VmError::RuntimeError(RuntimeError::AssertionError) => {
+                let msg = self.alloc_string("assertion failed".to_string());
+                self.alloc_panic_instance("baml.panics.AssertionFailed", vec![msg])
+            }
+            VmError::RuntimeError(RuntimeError::Unreachable) => {
+                let msg = self.alloc_string("unreachable code executed".to_string());
+                self.alloc_panic_instance("baml.panics.Unreachable", vec![msg])
+            }
+            VmError::RuntimeError(_) => {
+                // Fallback for errors without a dedicated panic class.
+                self.alloc_string(format!("error: {error}"))
+            }
+        }
+    }
+
+    /// Allocate a typed panic class instance if the class exists in
+    /// `resolved_class_names`. Falls back to returning the first field
+    /// (the message string) if the class isn't available.
+    fn alloc_panic_instance(&mut self, class_name: &str, fields: Vec<Value>) -> Value {
+        if let Some(&class_ptr) = self.resolved_class_names.get(class_name) {
+            let instance_ptr = self.tlab.alloc(Object::Instance(Instance {
+                class: class_ptr,
+                fields,
+            }));
+            Value::Object(instance_ptr)
+        } else {
+            // No panic class available — return the message string directly.
+            fields.into_iter().next().unwrap_or(Value::Null)
         }
     }
 
@@ -1017,102 +1043,75 @@ impl BexVm {
         }
     }
 
-    fn push_unwind_handler(
-        &mut self,
-        frame_depth: usize,
-        instruction_ptr: usize,
-        handler_offset: isize,
-        error_slot: usize,
-    ) -> Result<(), VmError> {
-        let target_ip = instruction_ptr
-            .checked_add_signed(handler_offset)
-            .ok_or(InternalError::InvalidJump)?;
-        self.unwind_handlers.push(UnwindHandler {
-            frame_depth,
-            target_ip,
-            error_slot,
-            stack_depth: self.stack.len(),
-        });
-        Ok(())
-    }
-
-    fn pop_unwind_handler(&mut self, frame_depth: usize) {
-        if self
-            .unwind_handlers
-            .last()
-            .is_some_and(|handler| handler.frame_depth == frame_depth)
-        {
-            self.unwind_handlers.pop();
-        }
-    }
-
-    fn discard_unwind_handlers_from_depth(&mut self, min_depth: usize) {
-        while self
-            .unwind_handlers
-            .last()
-            .is_some_and(|handler| handler.frame_depth >= min_depth)
-        {
-            self.unwind_handlers.pop();
-        }
-    }
-
     fn try_unwind_exception(
         &mut self,
         frame_idx: &mut usize,
         function: &mut &'static Function,
         exception: VmException,
     ) -> Result<(), VmError> {
-        let current_depth = self.frames.len().saturating_sub(1);
-        let Some(handler_pos) = self
-            .unwind_handlers
-            .iter()
-            .rposition(|handler| handler.frame_depth <= current_depth)
-        else {
-            return Err(Self::unhandled_exception_error(exception));
-        };
+        // Walk the call stack from the current frame outward looking for an
+        // exception table entry that covers the faulting PC.
+        loop {
+            let depth = self.frames.len().saturating_sub(1);
+            let frame = &self.frames[depth];
 
-        let handler = self.unwind_handlers[handler_pos];
-        // Remove the selected handler and any handlers above it.
-        self.unwind_handlers.truncate(handler_pos);
+            // The frame's instruction_ptr already points to the NEXT instruction
+            // (it was incremented before the instruction executed), so the
+            // faulting PC is one less.
+            let faulting_pc = frame.instruction_ptr.saturating_sub(1);
 
-        // Pop frames until we reach the handler's frame, restoring the stack
-        // to that frame's local window.
-        while self.frames.len().saturating_sub(1) > handler.frame_depth {
-            let popped = self
-                .frames
-                .pop()
-                .expect("unwind requires at least one frame to pop");
+            // Load the function for this frame to access its exception table.
+            // SAFETY: See `load_function` doc comment.
+            let frame_function = unsafe { self.load_function(depth)? };
+
+            if let Some(entry) = frame_function.bytecode.find_exception_handler(faulting_pc) {
+                // Found a handler in this frame. Truncate the eval stack back
+                // to just after the frame's locals region (removes stale
+                // temporaries from interrupted expressions).
+                let locals_offset = frame.locals_offset;
+                let locals_end =
+                    locals_offset.raw() + frame_function.arity + frame_function.real_local_count;
+                self.stack.truncate(locals_end);
+
+                // Store the exception value in the designated error slot.
+                let exception_value = self.exception_to_value(&exception);
+                let error_stack_slot =
+                    Self::local_slot_stack_index(locals_offset, entry.error_slot);
+                self.stack[error_stack_slot] = exception_value;
+
+                // Jump to the handler.
+                self.frames[depth].instruction_ptr = entry.handler_pc;
+
+                // Update caller's frame_idx / function references.
+                *frame_idx = depth;
+                *function = frame_function;
+                return Ok(());
+            }
+
+            // No handler in this frame -- pop it and try the caller.
+            if self.frames.len() <= 1 {
+                // No more frames to unwind through.
+                return Err(Self::unhandled_exception_error(exception));
+            }
+
+            let popped = self.frames.pop().expect("frame stack is not empty");
             self.stack.drain(popped.locals_offset..);
+
+            // Clean up tracing / interrupt bookkeeping for popped frames.
+            while self
+                .traced_frames
+                .last()
+                .is_some_and(|d| *d >= self.frames.len())
+            {
+                self.traced_frames.pop();
+            }
+
+            if let Some(interrupt_depth) = self.interrupt_frame
+                && interrupt_depth >= self.frames.len()
+            {
+                self.interrupt_frame = None;
+            }
         }
-
-        while self
-            .traced_frames
-            .last()
-            .is_some_and(|depth| *depth > handler.frame_depth)
-        {
-            self.traced_frames.pop();
-        }
-
-        if let Some(interrupt_depth) = self.interrupt_frame
-            && interrupt_depth > handler.frame_depth
-        {
-            self.interrupt_frame = None;
-        }
-
-        // Restore the eval stack to the depth at PushUnwind time. This removes
-        // any stale temporaries from interrupted expressions in the handler frame.
-        self.stack.truncate(handler.stack_depth);
-
-        let exception_value = self.exception_to_value(&exception);
-
-        let locals_offset = self.frames[handler.frame_depth].locals_offset;
-        self.frames[handler.frame_depth].instruction_ptr = handler.target_ip;
-        let error_stack_slot = Self::local_slot_stack_index(locals_offset, handler.error_slot);
-        self.stack[error_stack_slot] = exception_value;
-
-        *frame_idx = handler.frame_depth;
-        *function = unsafe { self.load_function(*frame_idx)? };
-        Ok(())
     }
 
     fn resolve_callable_target(&self, callee_value: Value) -> Result<(HeapPtr, usize), VmError> {
@@ -1721,17 +1720,6 @@ impl BexVm {
                                 }));
                             }
                         }
-                    }
-
-                    Instruction::PushUnwind {
-                        handler,
-                        error_slot,
-                    } => {
-                        self.push_unwind_handler(frame_idx, instruction_ptr, handler, error_slot)?;
-                    }
-
-                    Instruction::PopUnwind => {
-                        self.pop_unwind_handler(frame_idx);
                     }
 
                     Instruction::Throw => {
@@ -2667,9 +2655,7 @@ impl BexVm {
                         self.stack.push(result);
 
                         // Pop from the call stack.
-                        let popped_depth = frame_idx;
                         self.frames.pop();
-                        self.discard_unwind_handlers_from_depth(popped_depth);
 
                         // Return from interrupt.
                         if Some(self.frames.len()) == self.interrupt_frame {

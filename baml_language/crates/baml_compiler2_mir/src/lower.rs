@@ -9,9 +9,9 @@ use crate::{
     builder::MirBuilder,
     cleanup,
     ir::{
-        AggregateKind, BasicBlock, BinOp, BlockId, Constant, IndexKind, ItemRef, Local, LocalDecl,
-        MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue, StatementKind,
-        Terminator,
+        AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, ItemRef,
+        Local, LocalDecl, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue,
+        StatementKind, Terminator,
     },
 };
 
@@ -3321,6 +3321,16 @@ impl LoweringContext<'_> {
             .unwind_error_locals
             .insert(bb_handler, error_local);
 
+        // Record the catch region for exception table construction.
+        // The body_entry is the current block — the try body will be lowered into
+        // it (and any successor blocks up to the handler).
+        let body_entry = self.builder.current_block();
+        self.builder.catch_regions.push(CatchRegion {
+            body_entry,
+            handler: bb_handler,
+            error_local,
+        });
+
         let prev_catch = self.catch_context.take();
         self.catch_context = Some(CatchContext {
             unwind_target: bb_handler,
@@ -3439,6 +3449,7 @@ pub fn lower_function<'db>(db: &'db dyn crate::Db, func_loc: FunctionLoc<'db>) -
                     })
                     .collect(),
                 unwind_error_locals: std::collections::HashMap::new(),
+                catch_regions: vec![],
                 viz_nodes: vec![],
             }),
             lambdas: vec![],

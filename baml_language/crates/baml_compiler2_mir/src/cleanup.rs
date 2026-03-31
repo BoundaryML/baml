@@ -107,6 +107,16 @@ fn eliminate_dead_blocks(body: &mut MirFunctionBody) {
         }
     }
 
+    // Rewrite catch_regions block IDs
+    for region in &mut body.catch_regions {
+        if let Some(new_block) = old_to_new[region.body_entry.0] {
+            region.body_entry = new_block;
+        }
+        if let Some(new_block) = old_to_new[region.handler.0] {
+            region.handler = new_block;
+        }
+    }
+
     body.blocks = new_blocks;
 }
 
@@ -793,6 +803,13 @@ fn eliminate_dead_locals(body: &mut MirFunctionBody, arity: usize) {
         }
     }
 
+    // Rewrite catch_regions error locals
+    for region in &mut body.catch_regions {
+        if let Some(new_local) = old_to_new[region.error_local.0] {
+            region.error_local = new_local;
+        }
+    }
+
     body.locals = new_locals;
 }
 
@@ -1167,7 +1184,26 @@ fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {
         );
     }
 
-    // 8. Entry block must be valid.
+    // 8. catch_regions: block IDs and locals must be valid.
+    for (i, region) in body.catch_regions.iter().enumerate() {
+        assert!(
+            region.body_entry.0 < num_blocks,
+            "dangling body_entry {:?} in catch_region[{i}] of MIR function {name}",
+            region.body_entry,
+        );
+        assert!(
+            region.handler.0 < num_blocks,
+            "dangling handler {:?} in catch_region[{i}] of MIR function {name}",
+            region.handler,
+        );
+        assert!(
+            region.error_local.0 < num_locals,
+            "dangling error_local {} in catch_region[{i}] of MIR function {name}",
+            region.error_local,
+        );
+    }
+
+    // 9. Entry block must be valid.
     assert!(
         body.entry.0 < num_blocks,
         "entry block {:?} out of range in MIR function {}",
@@ -1253,6 +1289,16 @@ fn reorder_blocks_rpo(body: &mut MirFunctionBody) {
     for (old_block, local) in old_unwind {
         if let Some(new_block) = old_to_new[old_block.0] {
             body.unwind_error_locals.insert(new_block, local);
+        }
+    }
+
+    // Rewrite catch_regions block IDs
+    for region in &mut body.catch_regions {
+        if let Some(new_block) = old_to_new[region.body_entry.0] {
+            region.body_entry = new_block;
+        }
+        if let Some(new_block) = old_to_new[region.handler.0] {
+            region.handler = new_block;
         }
     }
 
