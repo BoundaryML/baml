@@ -59,6 +59,7 @@ define_keyword_tokens! {
     "client" => SyntaxKind::KW_CLIENT => Client;
     "generator" => SyntaxKind::KW_GENERATOR => Generator;
     "test" => SyntaxKind::KW_TEST => Test;
+    "testset" => SyntaxKind::KW_TESTSET => TestSet;
     "retry_policy" => SyntaxKind::KW_RETRY_POLICY => RetryPolicy;
     "template_string" => SyntaxKind::KW_TEMPLATE_STRING => TemplateString;
     "type_builder" => SyntaxKind::KW_TYPE_BUILDER => TypeBuilder;
@@ -75,6 +76,7 @@ define_keyword_tokens! {
     "watch" => SyntaxKind::KW_WATCH => Watch;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
+    "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
 }
 

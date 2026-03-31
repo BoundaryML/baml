@@ -5,7 +5,7 @@ use super::tokens as t;
 use crate::{
     ast::{
         BlockExpr, Expression, FromCST, HeaderComment, KnownKind, ParenExpr, StrongAstError,
-        SyntaxNodeIter, Token, Type,
+        SyntaxNodeIter, TestExprDecl, TestSetDecl, Token, Type,
     },
     printer::{PrintInfo, PrintMultiLine, Printable, Printer, Shape},
     trivia_classifier::TriviaSliceExt,
@@ -28,6 +28,10 @@ pub enum Statement {
     HeaderComment(HeaderComment),
     /// There's a semicolon with no preceding statement.
     EmptySemicolon(t::Semicolon),
+    /// An expression-body test nested inside a testset body.
+    TestExpr(TestExprDecl),
+    /// A nested testset inside a testset body.
+    TestSet(TestSetDecl),
     Unknown(TextRange),
 }
 
@@ -46,6 +50,8 @@ impl FromCST for Statement {
             SyntaxKind::HEADER_COMMENT => {
                 t::HeaderComment::from_cst(elem).map(Statement::HeaderComment)
             }
+            SyntaxKind::TEST_EXPR_DEF => TestExprDecl::from_cst(elem).map(Statement::TestExpr),
+            SyntaxKind::TESTSET_DEF => TestSetDecl::from_cst(elem).map(Statement::TestSet),
             _ => ExpressionStmt::from_cst(elem).map(Statement::Expr),
         }
     }
@@ -69,6 +75,8 @@ impl Printable for Statement {
                 printer.print_raw_token(semicolon);
                 PrintInfo::default_single_line()
             }
+            Statement::TestExpr(test_expr_decl) => test_expr_decl.print(shape, printer),
+            Statement::TestSet(test_set_decl) => test_set_decl.print(shape, printer),
             Statement::Unknown(range) => {
                 printer.print_input_range_trimmed_start(*range);
                 PrintInfo::default_multi_lined()
@@ -86,6 +94,8 @@ impl Printable for Statement {
             Statement::For(for_stmt) => for_stmt.leftmost_token(),
             Statement::HeaderComment(header_comment) => header_comment.span(),
             Statement::EmptySemicolon(semicolon) => semicolon.span(),
+            Statement::TestExpr(t) => t.leftmost_token(),
+            Statement::TestSet(t) => t.leftmost_token(),
             Statement::Unknown(range) => *range,
         }
     }
@@ -100,6 +110,8 @@ impl Printable for Statement {
             Statement::For(for_stmt) => for_stmt.rightmost_token(),
             Statement::HeaderComment(header_comment) => header_comment.span(),
             Statement::EmptySemicolon(semicolon) => semicolon.span(),
+            Statement::TestExpr(t) => t.rightmost_token(),
+            Statement::TestSet(t) => t.rightmost_token(),
             Statement::Unknown(range) => *range,
         }
     }
