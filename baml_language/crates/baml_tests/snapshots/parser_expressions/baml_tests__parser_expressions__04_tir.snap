@@ -4,10 +4,10 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.Calculate() -> int throws never {
   { : never
-    let a = 1 Add 2 : 3 -> int
-    let b = a Mul 3 : int
-    let c = b Div 2 Sub 1 : int
-    let d = a Add b Mul c : int
+    let a = 1 + 2 : 3 -> int
+    let b = a * 3 : int
+    let c = b / 2 - 1 : int
+    let d = a + b * c : int
     return d : int
   }
 }
@@ -66,10 +66,10 @@ class user.IndexUser$stream {
 }
 function user.TestPrecedence() -> bool throws never {
   { : never
-    let a = 2 Add 3 Mul 4 : 14 -> int
-    let c = 2 Mul 3 Add 4 : 10 -> int
-    let b = a Gt 10 Add 2 : bool
-    let d = true Or false And false : true -> bool
+    let a = 2 + 3 * 4 : 14 -> int
+    let c = 2 * 3 + 4 : 10 -> int
+    let b = a > 10 + 2 : bool
+    let d = true || false && false : true -> bool
     return d : bool
   }
 }

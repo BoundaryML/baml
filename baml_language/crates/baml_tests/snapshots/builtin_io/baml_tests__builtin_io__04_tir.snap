@@ -19,7 +19,7 @@ function user.ReadMultipleFiles() -> string throws never {
     let f2 = baml.fs.open("file2.txt") : baml.fs.File
     let content1 = f1.read() : string
     let content2 = f2.read() : string
-    content1 Add content2 : string
+    content1 + content2 : string
   }
 }
 function user.ReadAndClose() -> string throws never {
@@ -47,7 +47,7 @@ function user.MultipleConnections() -> string throws never {
     let s2 = baml.net.connect("server2:80") : baml.net.Socket
     let data1 = s1.read() : string
     let data2 = s2.read() : string
-    data1 Add data2 : string
+    data1 + data2 : string
   }
 }
 function user.ConnectReadAndClose() -> string throws never {
@@ -73,6 +73,6 @@ function user.ChainCommands() -> string throws never {
   { : string
     let result1 = baml.sys.shell("pwd") : string
     let result2 = baml.sys.shell("whoami") : string
-    result1 Add " - " Add result2 : string
+    result1 + " - " + result2 : string
   }
 }

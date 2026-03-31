@@ -25,6 +25,9 @@ pub enum Expression {
     Call(CallExpr),
     Index(IndexExpr),
     FieldAccess(FieldAccessExpr),
+    OptionalFieldAccess(OptionalFieldAccessExpr),
+    OptionalIndex(OptionalIndexExpr),
+    OptionalCall(OptionalCallExpr),
     EnvAccess(EnvAccessExpr),
     Block(BlockExpr),
     ArrayInitializer(ArrayInitializer),
@@ -73,6 +76,15 @@ impl FromCST for Expression {
             SyntaxKind::FIELD_ACCESS_EXPR => {
                 FieldAccessExpr::from_cst(elem).map(Expression::FieldAccess)?
             }
+            SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR => {
+                OptionalFieldAccessExpr::from_cst(elem).map(Expression::OptionalFieldAccess)?
+            }
+            SyntaxKind::OPTIONAL_INDEX_EXPR => {
+                OptionalIndexExpr::from_cst(elem).map(Expression::OptionalIndex)?
+            }
+            SyntaxKind::OPTIONAL_CALL_EXPR => {
+                OptionalCallExpr::from_cst(elem).map(Expression::OptionalCall)?
+            }
             SyntaxKind::ENV_ACCESS_EXPR => {
                 EnvAccessExpr::from_cst(elem).map(Expression::EnvAccess)?
             }
@@ -111,6 +123,9 @@ impl Expression {
             Expression::Call(call) => call.single_line_width(input),
             Expression::Index(index) => index.single_line_width(input),
             Expression::FieldAccess(fa) => fa.single_line_width(input),
+            Expression::OptionalFieldAccess(fa) => fa.single_line_width(input),
+            Expression::OptionalIndex(index) => index.single_line_width(input),
+            Expression::OptionalCall(call) => call.single_line_width(input),
             Expression::EnvAccess(env) => env.single_line_width(input),
             Expression::Block(_) => None,
             Expression::ArrayInitializer(array) => array.single_line_width(input),
@@ -136,7 +151,10 @@ impl Printable for Expression {
             chain @ (Expression::Path(_)
             | Expression::Call(_)
             | Expression::Index(_)
-            | Expression::FieldAccess(_)) => {
+            | Expression::FieldAccess(_)
+            | Expression::OptionalFieldAccess(_)
+            | Expression::OptionalIndex(_)
+            | Expression::OptionalCall(_)) => {
                 // These are all chains of postfix expressions
                 let chain = PrintChain::new(chain);
                 chain.print(shape, printer)
@@ -171,6 +189,9 @@ impl Printable for Expression {
             Expression::Call(call) => call.leftmost_token(),
             Expression::Index(index) => index.leftmost_token(),
             Expression::FieldAccess(fa) => fa.base.leftmost_token(),
+            Expression::OptionalFieldAccess(fa) => fa.base.leftmost_token(),
+            Expression::OptionalIndex(index) => index.base.leftmost_token(),
+            Expression::OptionalCall(call) => call.callee.leftmost_token(),
             Expression::EnvAccess(env) => env.leftmost_token(),
             Expression::Block(block) => block.leftmost_token(),
             Expression::ArrayInitializer(array) => array.leftmost_token(),
@@ -193,6 +214,9 @@ impl Printable for Expression {
             Expression::Call(call) => call.rightmost_token(),
             Expression::Index(index) => index.rightmost_token(),
             Expression::FieldAccess(fa) => fa.field.span(),
+            Expression::OptionalFieldAccess(fa) => fa.field.span(),
+            Expression::OptionalIndex(index) => index.close_bracket.span(),
+            Expression::OptionalCall(call) => call.args.rightmost_token(),
             Expression::EnvAccess(env) => env.rightmost_token(),
             Expression::Block(block) => block.rightmost_token(),
             Expression::ArrayInitializer(array) => array.rightmost_token(),
@@ -513,9 +537,24 @@ impl FromCST for BinaryExpr {
         let left = it.expect_next("left expression")?;
         let left_expr = Expression::from_cst(left)?;
 
-        // Get operator
-        let op = it.expect_next("binary operator")?;
-        let op = BinaryOp::from_cst(op)?;
+        // Get operator — handle `??` which appears as two consecutive QUESTION tokens
+        let op_elem = it.expect_next("binary operator")?;
+        let op = if op_elem.kind() == SyntaxKind::QUESTION {
+            // Check for second QUESTION to form `??`
+            let first_range = op_elem.text_range();
+            if let Some(second) = it.next_if_kind(SyntaxKind::QUESTION) {
+                let combined_range = TextRange::new(first_range.start(), second.text_range().end());
+                BinaryOp::QuestionQuestion(t::QuestionQuestion::new_from_span(combined_range))
+            } else {
+                return Err(StrongAstError::UnexpectedKindDesc {
+                    expected_desc: "binary operator".into(),
+                    found: SyntaxKind::QUESTION,
+                    at: first_range,
+                });
+            }
+        } else {
+            BinaryOp::from_cst(op_elem)?
+        };
 
         // Get right expression
         let right = it.expect_next("right expression")?;
@@ -1914,6 +1953,197 @@ impl FieldAccessExpr {
     }
 }
 
+/// Corresponds to a [`SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR`] node: `base?.field`.
+#[derive(Debug)]
+pub struct OptionalFieldAccessExpr {
+    pub base: Box<Expression>,
+    pub question_dot: t::QuestionDot,
+    pub field: t::Word,
+}
+
+impl FromCST for OptionalFieldAccessExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let base_node = it.expect_next("base expression")?;
+        let base = Box::new(Expression::from_cst(base_node)?);
+
+        let question_dot = it.expect_parse()?;
+
+        let field = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(OptionalFieldAccessExpr {
+            base,
+            question_dot,
+            field,
+        })
+    }
+}
+
+impl KnownKind for OptionalFieldAccessExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
+    }
+}
+
+impl OptionalFieldAccessExpr {
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let base = self.base.single_line_width(input)?;
+        Some(
+            base + usize::from(self.question_dot.span().len())
+                + usize::from(self.field.span().len()),
+        )
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::OPTIONAL_INDEX_EXPR`] node: `base?.[index]`.
+#[derive(Debug)]
+pub struct OptionalIndexExpr {
+    pub base: Box<Expression>,
+    pub question_dot: t::QuestionDot,
+    pub open_bracket: t::LBracket,
+    pub index: Box<Expression>,
+    pub close_bracket: t::RBracket,
+}
+
+impl FromCST for OptionalIndexExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::OPTIONAL_INDEX_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let base_node = it.expect_next("base expression")?;
+        let base = Box::new(Expression::from_cst(base_node)?);
+
+        let question_dot = it.expect_parse()?;
+
+        let open_bracket = it.expect_parse()?;
+
+        let index_node = it.expect_next("index expression")?;
+        let index = Box::new(Expression::from_cst(index_node)?);
+
+        let close_bracket = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(OptionalIndexExpr {
+            base,
+            question_dot,
+            open_bracket,
+            index,
+            close_bracket,
+        })
+    }
+}
+
+impl KnownKind for OptionalIndexExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::OPTIONAL_INDEX_EXPR
+    }
+}
+
+impl OptionalIndexExpr {
+    fn args(&self) -> IndexArgs<'_> {
+        IndexArgs {
+            open_bracket: &self.open_bracket,
+            index: &self.index,
+            close_bracket: &self.close_bracket,
+        }
+    }
+
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let base = self.base.single_line_width(input)?;
+        Some(
+            base + usize::from(self.question_dot.span().len())
+                + self.args().single_line_width(input)?,
+        )
+    }
+}
+
+impl Printable for OptionalIndexExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        multi_lined |= printer.print(&*self.base, shape.clone()).multi_lined;
+        printer.print_raw_token(&self.question_dot);
+        multi_lined |= printer.print(&self.args(), shape).multi_lined;
+        PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.base.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_bracket.span()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::OPTIONAL_CALL_EXPR`] node: `callee?.(args)`.
+#[derive(Debug)]
+pub struct OptionalCallExpr {
+    pub callee: Box<Expression>,
+    pub question_dot: t::QuestionDot,
+    pub args: CallArgs,
+}
+
+impl FromCST for OptionalCallExpr {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::OPTIONAL_CALL_EXPR)?;
+
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let callee_node = it.expect_next("callee expression")?;
+        let callee = Box::new(Expression::from_cst(callee_node)?);
+
+        let question_dot = it.expect_parse()?;
+
+        let args: CallArgs = it.expect_parse()?;
+
+        it.expect_end()?;
+
+        Ok(OptionalCallExpr {
+            callee,
+            question_dot,
+            args,
+        })
+    }
+}
+
+impl KnownKind for OptionalCallExpr {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::OPTIONAL_CALL_EXPR
+    }
+}
+
+impl OptionalCallExpr {
+    pub(crate) fn single_line_width(&self, input: &Printer<'_>) -> Option<usize> {
+        let callee = self.callee.single_line_width(input)?;
+        let args = self.args.single_line_width(input)?;
+        Some(callee + usize::from(self.question_dot.span().len()) + args)
+    }
+}
+
+impl Printable for OptionalCallExpr {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        multi_lined |= printer.print(&*self.callee, shape.clone()).multi_lined;
+        printer.print_raw_token(&self.question_dot);
+        multi_lined |= printer.print(&self.args, shape).multi_lined;
+        PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.callee.leftmost_token()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        self.args.rightmost_token()
+    }
+}
+
 /// Corresponds to a [`SyntaxKind::ENV_ACCESS_EXPR`] node.
 #[derive(Debug)]
 pub struct EnvAccessExpr {
@@ -3214,6 +3444,30 @@ impl<'a> PrintChain<'a> {
                 ));
                 chain
             }
+            Expression::OptionalFieldAccess(ofa) => {
+                let mut chain = Self::new(&ofa.base);
+                chain
+                    .chain_members
+                    .push(PrintChainItem::OptionalFieldAccess(
+                        &ofa.question_dot,
+                        &ofa.field,
+                    ));
+                chain
+            }
+            Expression::OptionalIndex(oi) => {
+                let mut chain = Self::new(&oi.base);
+                chain
+                    .chain_members
+                    .push(PrintChainItem::OptionalIndex(&oi.question_dot, oi.args()));
+                chain
+            }
+            Expression::OptionalCall(oc) => {
+                let mut chain = Self::new(&oc.callee);
+                chain
+                    .chain_members
+                    .push(PrintChainItem::OptionalCall(&oc.question_dot, &oc.args));
+                chain
+            }
             base => Self {
                 first: base,
                 chain_members: Vec::new(),
@@ -3256,57 +3510,63 @@ impl PrintMultiLine for PrintChain<'_> {
 
         let mut line_remaining_width = printer.current_line_remaining_width();
         let mut it = self.chain_members.iter();
-        if first_single_line
-            && offset <= printer.config.indent_width
-            && let Some(&PrintChainItem::FieldAccess(dot, word)) = it.next()
-        {
-            // We can try to print the second item on the same line as the first item
-            // if it fits, since the first item is very short.
-            let second_len = usize::from(dot.span().len() + word.span().len());
-            if line_remaining_width >= second_len {
-                printer.print_raw_token(dot);
-                printer.print_raw_token(word);
-                line_remaining_width = line_remaining_width.saturating_sub(second_len);
-            } else {
-                // Otherwise, we need to print the first item on its own line.
-                printer.print_newline();
-                printer.print_spaces(chain_indent);
-                printer.print_raw_token(dot);
-                printer.print_raw_token(word);
-                line_remaining_width = printer
-                    .config
-                    .line_width
-                    .saturating_sub(chain_indent + second_len);
+        if first_single_line && offset <= printer.config.indent_width {
+            // Try to print the second item on the same line if it's a field access and fits.
+            let peeked = it.next();
+            let second_len = match peeked {
+                Some(&PrintChainItem::FieldAccess(dot, word)) => {
+                    Some(usize::from(dot.span().len() + word.span().len()))
+                }
+                Some(&PrintChainItem::OptionalFieldAccess(qd, word)) => {
+                    Some(usize::from(qd.span().len() + word.span().len()))
+                }
+                _ => None,
+            };
+            if let Some(second_len) = second_len {
+                let item = peeked.unwrap();
+                if line_remaining_width >= second_len {
+                    Self::print_field_access_item(item, printer);
+                    line_remaining_width = line_remaining_width.saturating_sub(second_len);
+                } else {
+                    printer.print_newline();
+                    printer.print_spaces(chain_indent);
+                    Self::print_field_access_item(item, printer);
+                    line_remaining_width = printer
+                        .config
+                        .line_width
+                        .saturating_sub(chain_indent + second_len);
+                }
+            } else if let Some(item) = peeked {
+                Self::print_non_field_item(item, chain_indent, &mut line_remaining_width, printer);
             }
         }
         for item in it {
             match item {
-                &PrintChainItem::FieldAccess(dot, word) => {
+                &PrintChainItem::FieldAccess(_, _) | &PrintChainItem::OptionalFieldAccess(_, _) => {
                     printer.print_newline();
                     printer.print_spaces(chain_indent);
-                    printer.print_raw_token(dot);
-                    printer.print_raw_token(word);
-                    line_remaining_width = printer.config.line_width.saturating_sub(
-                        chain_indent + usize::from(dot.span().len() + word.span().len()),
+                    Self::print_field_access_item(item, printer);
+                    let item_len = match *item {
+                        PrintChainItem::FieldAccess(dot, word) => {
+                            usize::from(dot.span().len() + word.span().len())
+                        }
+                        PrintChainItem::OptionalFieldAccess(qd, word) => {
+                            usize::from(qd.span().len() + word.span().len())
+                        }
+                        _ => unreachable!(),
+                    };
+                    line_remaining_width = printer
+                        .config
+                        .line_width
+                        .saturating_sub(chain_indent + item_len);
+                }
+                _ => {
+                    Self::print_non_field_item(
+                        item,
+                        chain_indent,
+                        &mut line_remaining_width,
+                        printer,
                     );
-                }
-                PrintChainItem::Index(index_args) => {
-                    let index_shape = Shape {
-                        width: line_remaining_width,
-                        indent: chain_indent,
-                        first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
-                    };
-                    printer.print(index_args, index_shape);
-                    line_remaining_width = printer.current_line_remaining_width();
-                }
-                &PrintChainItem::Call(call_args) => {
-                    let call_shape = Shape {
-                        width: line_remaining_width,
-                        indent: chain_indent,
-                        first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
-                    };
-                    printer.print(call_args, call_shape);
-                    line_remaining_width = printer.current_line_remaining_width();
                 }
             }
         }
@@ -3316,12 +3576,78 @@ impl PrintMultiLine for PrintChain<'_> {
 }
 
 impl PrintChain<'_> {
+    fn print_field_access_item(item: &PrintChainItem<'_>, printer: &mut Printer) {
+        match *item {
+            PrintChainItem::FieldAccess(dot, word) => {
+                printer.print_raw_token(dot);
+                printer.print_raw_token(word);
+            }
+            PrintChainItem::OptionalFieldAccess(qd, word) => {
+                printer.print_raw_token(qd);
+                printer.print_raw_token(word);
+            }
+            _ => unreachable!("print_field_access_item called with non-field-access item"),
+        }
+    }
+
+    fn print_non_field_item(
+        item: &PrintChainItem<'_>,
+        chain_indent: usize,
+        line_remaining_width: &mut usize,
+        printer: &mut Printer,
+    ) {
+        match item {
+            PrintChainItem::Index(index_args) => {
+                let index_shape = Shape {
+                    width: *line_remaining_width,
+                    indent: chain_indent,
+                    first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
+                };
+                printer.print(index_args, index_shape);
+                *line_remaining_width = printer.current_line_remaining_width();
+            }
+            PrintChainItem::OptionalIndex(qd, index_args) => {
+                printer.print_raw_token(*qd);
+                let index_shape = Shape {
+                    width: *line_remaining_width,
+                    indent: chain_indent,
+                    first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
+                };
+                printer.print(index_args, index_shape);
+                *line_remaining_width = printer.current_line_remaining_width();
+            }
+            &PrintChainItem::Call(call_args) => {
+                let call_shape = Shape {
+                    width: *line_remaining_width,
+                    indent: chain_indent,
+                    first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
+                };
+                printer.print(call_args, call_shape);
+                *line_remaining_width = printer.current_line_remaining_width();
+            }
+            &PrintChainItem::OptionalCall(qd, call_args) => {
+                printer.print_raw_token(qd);
+                let call_shape = Shape {
+                    width: *line_remaining_width,
+                    indent: chain_indent,
+                    first_line_offset: printer.current_line_len().saturating_sub(chain_indent),
+                };
+                printer.print(call_args, call_shape);
+                *line_remaining_width = printer.current_line_remaining_width();
+            }
+            _ => unreachable!("print_non_field_item called with field-access item"),
+        }
+    }
+
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
         match self.first {
             Expression::Path(path_expr) => {
                 printer.print_raw_token(&path_expr.first);
             }
-            Expression::FieldAccess(..) => {
+            Expression::FieldAccess(..)
+            | Expression::OptionalFieldAccess(..)
+            | Expression::OptionalIndex(..)
+            | Expression::OptionalCall(..) => {
                 unreachable!("Should have been unwrapped when the PrintChain was created")
             }
             Expression::Call(call_expr) => {
@@ -3361,10 +3687,22 @@ impl PrintChain<'_> {
                     printer.print_raw_token(dot);
                     printer.print_raw_token(word);
                 }
+                &PrintChainItem::OptionalFieldAccess(qd, word) => {
+                    printer.print_raw_token(qd);
+                    printer.print_raw_token(word);
+                }
                 PrintChainItem::Index(index_args) => {
                     index_args.try_print_single_line(shape, printer)?;
                 }
+                PrintChainItem::OptionalIndex(qd, index_args) => {
+                    printer.print_raw_token(*qd);
+                    index_args.try_print_single_line(shape, printer)?;
+                }
                 &PrintChainItem::Call(call_args) => {
+                    call_args.try_print_single_line(shape, printer)?;
+                }
+                &PrintChainItem::OptionalCall(qd, call_args) => {
+                    printer.print_raw_token(qd);
                     call_args.try_print_single_line(shape, printer)?;
                 }
             }
@@ -3388,9 +3726,15 @@ impl Printable for PrintChain<'_> {
     }
     fn rightmost_token(&self) -> TextRange {
         match self.chain_members.last() {
-            Some(PrintChainItem::FieldAccess(_, word)) => word.span(),
-            Some(PrintChainItem::Index(index_args)) => index_args.close_bracket.span(),
-            Some(PrintChainItem::Call(call_args)) => call_args.rightmost_token(),
+            Some(
+                PrintChainItem::FieldAccess(_, word) | PrintChainItem::OptionalFieldAccess(_, word),
+            ) => word.span(),
+            Some(
+                PrintChainItem::Index(index_args) | PrintChainItem::OptionalIndex(_, index_args),
+            ) => index_args.close_bracket.span(),
+            Some(PrintChainItem::Call(call_args) | PrintChainItem::OptionalCall(_, call_args)) => {
+                call_args.rightmost_token()
+            }
             None => self.first.rightmost_token(),
         }
     }
@@ -3399,6 +3743,9 @@ impl Printable for PrintChain<'_> {
 /// Only used for printing chained expressions. See [`PrintChain`].
 enum PrintChainItem<'a> {
     FieldAccess(&'a t::Dot, &'a t::Word),
+    OptionalFieldAccess(&'a t::QuestionDot, &'a t::Word),
     Index(IndexArgs<'a>),
+    OptionalIndex(&'a t::QuestionDot, IndexArgs<'a>),
     Call(&'a CallArgs),
+    OptionalCall(&'a t::QuestionDot, &'a CallArgs),
 }

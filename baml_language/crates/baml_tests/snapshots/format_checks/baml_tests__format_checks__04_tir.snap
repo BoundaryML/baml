@@ -4,24 +4,24 @@ source: crates/baml_tests/src/generated_tests.rs
 === TIR2 ===
 function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> int throws never {
   { : int
-    a Add b : int
-    a Sub b : int
-    a Mul b : int
-    a Div b : int
-    a Mod b : int
-    a Eq b : bool
-    a Ne b : bool
-    a Lt b : bool
-    a Gt b : bool
-    a Le b : bool
-    a Ge b : bool
-    flag And true : bool
-    flag Or false : bool
-    a BitAnd b : int
-    a BitOr b : int
-    a BitXor b : int
-    a Shl b : int
-    a Shr b : int
+    a + b : int
+    a - b : int
+    a * b : int
+    a / b : int
+    a % b : int
+    a == b : bool
+    a != b : bool
+    a < b : bool
+    a > b : bool
+    a <= b : bool
+    a >= b : bool
+    flag && true : bool
+    flag || false : bool
+    a & b : int
+    a | b : int
+    a ^ b : int
+    a << b : int
+    a >> b : int
     let mut_a = a : int
     mut_a Add= b : int
     mut_a Sub= b : int
@@ -33,45 +33,45 @@ function user.BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool)
     mut_a BitXor= b : int
     mut_a Shl= b : int
     mut_a Shr= b : int
-    a Add b Add c : int
-    a Add b Add c Add d : int
-    a Sub b Add c Sub d : int
-    a Mul b Mul c : int
-    a Mul b Div c Mod d : int
-    a Gt 0 And b Gt 0 : bool
-    a Gt 0 Or b Gt 0 : bool
-    a Gt 0 And b Gt 0 And c Gt 0 : bool
-    a Gt 0 Or b Gt 0 Or c Gt 0 : bool
-    a Gt 0 And b Gt 0 Or c Gt 0 : bool
-    a Add b Mul c : int
-    a Add b Mul c : int
-    a Mul b Add c Mul d : int
-    a Add b Mul c Add d : int
-    a Add b Mul c Add d : int
-    a Add b Mul c Add d : int
-    a Add b Mul c Add d : int
-    a Add b Mul c Add d Mul a Sub b Add c Sub d Add a Mul b Add c Mul d : int
-    a Add b Mul c Add d Add a Sub b Mul c Sub d Mul a Mul c Mul d Add b Mul c Mul d Sub a Mul d Add b Mul c Mul d : int
-    a Add b : int
-    a Add b : int
-    a Add b Add c : int
-    a Add b Add c Add d Add a Add b Add c Add d Add a Add b Add c Add d Add a Add b Add c Add d Add a Add b Add c Add d Add a Add b Add c Add d Add a Add b : int
-    a Gt 0 And b Gt 0 And c Gt 0 And d Gt 0 And a Ne b And b Ne c And c Ne d And a Lt 1000 Mul 8 Add 1 Mul 2 And b Lt 1000 And c Lt 1000 And d Lt 1000 Add 2 Add 3 : bool
-    a Mul b Add c Mul d Sub a Mul b Add c Mul d Sub a Mul b Add c Mul d Sub a Mul b Add c Mul d Sub a Mul b Add c Mul d Sub a Mul b Add c Mul d Sub a Mul b Add c Mul d Sub a Mul b Add c Mul d Sub a Mul b Add c Mul d Sub a Mul b Add c Mul d : int
-    a Add b Add c Add d Gt 0 And a Mul b Mul c Mul d Lt 10000 And a Sub b Sub c Sub d Ne 0 And a Add b Mul c Add d Ge 100 Or a Mul 1 Lt 2 And "aowiefjowiaj" Eq "jfeiowajpwoeifj" : bool
-    "a very long strin..." Add " concatenated with " Add "another very long..." : "a very long string prefix that is already quite long concatenated with another very long string that together exceeds the line limit easily and comfortably"
-    mut_a Add= a Mul b Add c Mul d Add a Mul b Add c Mul d Add a Mul b Add c Mul d Add a Mul b Add c Mul d Add a Mul b Add c Mul d Add a : int
-    a Add b Add c Add d Add a Add b Add c Add d Add a Add b Add c Add d : int
-    a Add b Add c Add d Add a Add b Add c Add d Add a Add b Add c Add d : int
-    a Gt 0 And b Gt 0 And c Gt 0 And d Gt 0 And a Ne b And b Ne c And c Ne d : bool
-    a Add b : int
-    1 Add 2 : 3
-    a Gt b : bool
-    a Add b : int
-    a Mul b Add c : int
-    a Eq b : bool
-    a Eq 2 And b Ne 3 : bool
-    a Add b : int
+    a + b + c : int
+    a + b + c + d : int
+    a - b + c - d : int
+    a * b * c : int
+    a * b / c % d : int
+    a > 0 && b > 0 : bool
+    a > 0 || b > 0 : bool
+    a > 0 && b > 0 && c > 0 : bool
+    a > 0 || b > 0 || c > 0 : bool
+    a > 0 && b > 0 || c > 0 : bool
+    a + b * c : int
+    a + b * c : int
+    a * b + c * d : int
+    a + b * c + d : int
+    a + b * c + d : int
+    a + b * c + d : int
+    a + b * c + d : int
+    a + b * c + d * a - b + c - d + a * b + c * d : int
+    a + b * c + d + a - b * c - d * a * c * d + b * c * d - a * d + b * c * d : int
+    a + b : int
+    a + b : int
+    a + b + c : int
+    a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b + c + d + a + b : int
+    a > 0 && b > 0 && c > 0 && d > 0 && a != b && b != c && c != d && a < 1000 * 8 + 1 * 2 && b < 1000 && c < 1000 && d < 1000 + 2 + 3 : bool
+    a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d - a * b + c * d : int
+    a + b + c + d > 0 && a * b * c * d < 10000 && a - b - c - d != 0 && a + b * c + d >= 100 || a * 1 < 2 && "aowiefjowiaj" == "jfeiowajpwoeifj" : bool
+    "a very long strin..." + " concatenated with " + "another very long..." : "a very long string prefix that is already quite long concatenated with another very long string that together exceeds the line limit easily and comfortably"
+    mut_a Add= a * b + c * d + a * b + c * d + a * b + c * d + a * b + c * d + a * b + c * d + a : int
+    a + b + c + d + a + b + c + d + a + b + c + d : int
+    a + b + c + d + a + b + c + d + a + b + c + d : int
+    a > 0 && b > 0 && c > 0 && d > 0 && a != b && b != c && c != d : bool
+    a + b : int
+    1 + 2 : 3
+    a > b : bool
+    a + b : int
+    a * b + c : int
+    a == b : bool
+    a == 2 && b != 3 : bool
+    a + b : int
   }
 }
 class user.ChainUser {
@@ -130,14 +130,14 @@ function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<s
     user.name.len().to_string() : unknown
     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string() : unknown
     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string() : unknown
-    user.profile.items.get(user.profile.items.len() Sub 1 Add user.profile.items.len() Sub 2 Add user.profile.items.len() Sub 3).label : unknown
-    user.profile.items.slice(0, user.profile.items.len() Sub 1, user.profile.settings.preferences.size) : user.ChainItem[]
+    user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label : unknown
+    user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size) : user.ChainItem[]
     user.profile.settings.preferences.color.len().to_string().len() : unknown
     user.profile.settings.preferences.color.len().to_string().len() : unknown
-    user.profile.items.get(user.profile.items.len() Sub 1 Add user.profile.items.len() Sub 2).label : unknown
+    user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2).label : unknown
     user.scores[0][0] : int
     user.scores[0][1] : int
-    user.scores[user.scores.len() Sub 1][user.scores[0].len() Sub 1] : int
+    user.scores[user.scores.len() - 1][user.scores[0].len() - 1] : int
     user.name : string
     items[0] : user.ChainItem
     items.get(0) : unknown
@@ -148,30 +148,30 @@ function user.ChainExprs(user: user.ChainUser, items: user.ChainItem[], m: map<s
     baml.env.get_or_panic("DATABASE_URL") : string
     user.name : string
   }
-  !! 1859..1862: unresolved member: string.len
-  !! 1876..1879: unresolved member: user.ChainItem[].len
-  !! 1946..1949: unresolved member: user.ChainItem[].get
-  !! 2140..2143: unresolved member: user.ChainItem[].get
-  !! 2505..2508: unresolved member: user.ChainItem[].get
-  !! 3446..3449: unresolved member: string.len
-  !! 3577..3580: unresolved member: string.len
-  !! 3766..3769: unresolved member: string.len
-  !! 3895..3898: unresolved member: user.ChainItem[].get
-  !! 3918..3921: unresolved member: user.ChainItem[].len
-  !! 3949..3952: unresolved member: user.ChainItem[].len
-  !! 3980..3983: unresolved member: user.ChainItem[].len
+  !! 1859..1862: type `string` has no member `len`
+  !! 1876..1879: type `user.ChainItem[]` has no member `len`
+  !! 1946..1949: type `user.ChainItem[]` has no member `get`
+  !! 2140..2143: type `user.ChainItem[]` has no member `get`
+  !! 2505..2508: type `user.ChainItem[]` has no member `get`
+  !! 3446..3449: type `string` has no member `len`
+  !! 3577..3580: type `string` has no member `len`
+  !! 3766..3769: type `string` has no member `len`
+  !! 3895..3898: type `user.ChainItem[]` has no member `get`
+  !! 3918..3921: type `user.ChainItem[]` has no member `len`
+  !! 3949..3952: type `user.ChainItem[]` has no member `len`
+  !! 3980..3983: type `user.ChainItem[]` has no member `len`
   !! 3997..4155: expected 2 argument(s), got 3
-  !! 4105..4108: unresolved member: user.ChainItem[].len
-  !! 4566..4569: unresolved member: string.len
-  !! 5305..5308: unresolved member: string.len
-  !! 5897..5900: unresolved member: user.ChainItem[].get
-  !! 5978..5981: unresolved member: user.ChainItem[].len
-  !! 6009..6012: unresolved member: user.ChainItem[].len
-  !! 6246..6249: unresolved member: int[][].len
-  !! 6272..6275: unresolved member: int[].len
-  !! 6379..6382: unresolved member: user.ChainItem[].get
-  !! 6464..6467: unresolved member: string.len
-  !! 6513..6516: unresolved member: string.len
+  !! 4105..4108: type `user.ChainItem[]` has no member `len`
+  !! 4566..4569: type `string` has no member `len`
+  !! 5305..5308: type `string` has no member `len`
+  !! 5897..5900: type `user.ChainItem[]` has no member `get`
+  !! 5978..5981: type `user.ChainItem[]` has no member `len`
+  !! 6009..6012: type `user.ChainItem[]` has no member `len`
+  !! 6246..6249: type `int[][]` has no member `len`
+  !! 6272..6275: type `int[]` has no member `len`
+  !! 6379..6382: type `user.ChainItem[]` has no member `get`
+  !! 6464..6467: type `string` has no member `len`
+  !! 6513..6516: type `string` has no member `len`
 }
 class user.ChainUser$stream {
   name: null | string
@@ -616,7 +616,7 @@ function user.SingleParam(x: int) -> int throws never {
 }
 function user.MultipleParams(a: int, b: int, c: string) -> int throws never {
   { : int
-    a Add b : int
+    a + b : int
   }
 }
 function user.ManyParams(first_parameter: int, second_parameter: string, third_parameter: bool, fourth_parameter: float) -> string throws never {
@@ -732,9 +732,9 @@ function user.TriviaEverythingLong_NameAndParamsAndReturnBlock(first_long_param:
 }
 function user.MultiStatement(a: int, b: int) -> int throws never {
   { : never
-    let x = a Add b : int
-    let y = x Mul 2 : int
-    if (y Gt 10 : bool) : void
+    let x = a + b : int
+    let y = x * 2 : int
+    if (y > 10 : bool) : void
       { : never
         return y : int
       }
@@ -743,21 +743,21 @@ function user.MultiStatement(a: int, b: int) -> int throws never {
 }
 function user.FinalExpr(a: int, b: int) -> int throws never {
   { : int
-    a Add b : int
+    a + b : int
   }
 }
 function user.DeeplyNestedBody(a: int, b: int, c: int) -> int throws never {
   { : never
-    if (a Gt 0 : bool) : never
+    if (a > 0 : bool) : never
       { : never
-        if (b Gt 0 : bool) : never
+        if (b > 0 : bool) : never
           { : never
-            if (c Gt 0 : bool) : never
+            if (c > 0 : bool) : never
               { : never
-                let x = a Add b Add c : int
-                if (x Gt 100 : bool) : never
+                let x = a + b + c : int
+                if (x > 100 : bool) : never
                   { : never
-                    return x Mul 2 : int
+                    return x * 2 : int
                   }
                 else
                   { : never
@@ -766,14 +766,14 @@ function user.DeeplyNestedBody(a: int, b: int, c: int) -> int throws never {
               }
             else
               { : never
-                return a Add b : int
+                return a + b : int
               }
           }
         else
           { : never
-            if (c Gt 0 : bool) : never
+            if (c > 0 : bool) : never
               { : never
-                return a Add c : int
+                return a + c : int
               }
             else
               { : never
@@ -792,7 +792,7 @@ function user.ManyNestedExprs(items: int[]) -> int throws never {
     let a = items[0] : int
     let b = items[1] : int
     let c = : int
-      if (a Gt b : bool) : int
+      if (a > b : bool) : int
         { : int
           a : int
         }
@@ -805,13 +805,13 @@ function user.ManyNestedExprs(items: int[]) -> int throws never {
         0 =>
           1 : 1
         _ =>
-          c Mul 2 : int
+          c * 2 : int
     let e = : int
       { : int
-        let inner = d Add a : int
-        inner Mul inner : int
+        let inner = d + a : int
+        inner * inner : int
       }
-    e Add d Add c Add b Add a : int
+    e + d + c + b + a : int
   }
 }
 function user.NestedLoops(matrix: int[][]) -> int throws never {
@@ -821,20 +821,20 @@ function user.NestedLoops(matrix: int[][]) -> int throws never {
       { : void
         for val in row
           { : void
-            if (val Lt 0 : bool) : void
+            if (val < 0 : bool) : void
               { : never
                 continue
               }
-            if (val Gt 1000 : bool) : void
+            if (val > 1000 : bool) : void
               { : never
                 break
               }
             let processed = : int
-              match (val Mod 3 : int) : int
+              match (val % 3 : int) : int
                 0 =>
-                  val Mul 2 : int
+                  val * 2 : int
                 1 =>
-                  val Add 1 : int
+                  val + 1 : int
                 _ =>
                   val : int
             total Add= processed : int
@@ -845,13 +845,13 @@ function user.NestedLoops(matrix: int[][]) -> int throws never {
 }
 function user.DeepNestLongExpr(a: int, b: int, c: int, d: int) -> int throws never {
   { : never
-    if (a Gt 0 : bool) : never
+    if (a > 0 : bool) : never
       { : never
-        if (b Gt 0 : bool) : never
+        if (b > 0 : bool) : never
           { : never
-            if (c Gt 0 : bool) : never
+            if (c > 0 : bool) : never
               { : never
-                return a Mul b Mul c Mul d Add a Mul b Mul c Add a Mul b Add a Add b Mul c Mul d Add b Mul c Add b Add c Mul d Add c Add d : int
+                return a * b * c * d + a * b * c + a * b + a + b * c * d + b * c + b + c * d + c + d : int
               }
             else
               { : never
@@ -943,7 +943,7 @@ function user.LlmWithLongSignature$parse(json: string) -> string throws never {
 }
 function user.ExtraWhitespace(a: int, b: int) -> int throws never {
   { : int
-    a Add b : int
+    a + b : int
   }
 }
 function user.F() -> int throws never {
@@ -953,7 +953,7 @@ function user.F() -> int throws never {
 }
 function user.MyFunction(a: int, b: int) -> int throws never {
   { : 1
-    if (a Gt b : bool) : void
+    if (a > b : bool) : void
       { : void
         1 : 1
       }
@@ -961,7 +961,7 @@ function user.MyFunction(a: int, b: int) -> int throws never {
       { : void
         1 : 1
       }
-    if (a Gt b : bool) : void
+    if (a > b : bool) : void
       { : void
         1 : 1
       }
@@ -969,7 +969,7 @@ function user.MyFunction(a: int, b: int) -> int throws never {
       { : void
         1 : 1
       }
-    if (a Gt b : bool) : void
+    if (a > b : bool) : void
       { : void
         1 : 1
       }
@@ -983,49 +983,49 @@ function user.MyFunction(a: int, b: int) -> int throws never {
 function user.LoopStmts(items: int[], flag: bool) -> int throws never {
   { : never
     let a = 0 : 0 -> int
-    while a Lt 10
+    while a < 10
       { : void
         a Add= 1 : int
       }
-    while a Lt 100 And flag
+    while a < 100 && flag
       { : void
         a Add= 1 : int
       }
     while true
       { : void
-        if (a Gt 50 : bool) : void
+        if (a > 50 : bool) : void
           { : never
             break
           }
         a Add= 1 : int
       }
-    while a Lt 100
+    while a < 100
       { : void
         a Add= 1 : int
-        if (a Mod 2 Eq 0 : bool) : void
+        if (a % 2 == 0 : bool) : void
           { : never
             continue
           }
       }
-    while a Lt 10
+    while a < 10
       { : void
         a Add= 1 : int
       }
-    while a Lt 10
+    while a < 10
       { : void
         a Add= 1 : int
       }
     let result = 0 : 0 -> int
     { : void
       let i = 0 : 0 -> int
-      while i Lt 10
+      while i < 10
         { : void
           result Add= i : int
         }
     }
     { : void
       let i = 0 : 0 -> int
-      while i Lt 100 And flag
+      while i < 100 && flag
         { : void
           result Add= i : int
         }
@@ -1042,19 +1042,19 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
       { : void
         for j in [4, 5, 6]
           { : void
-            result Add= i Mul j : int
+            result Add= i * j : int
           }
       }
     { : void
       let i = 0 : 0 -> int
-      while i Lt 10
+      while i < 10
         { : void
           result Add= i : int
         }
     }
     { : void
       let i = 0 : 0 -> int
-      while i Lt 10
+      while i < 10
         { : void
           result Add= i : int
         }
@@ -1067,24 +1067,24 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
       { : void
         result Add= item : int
       }
-    while a Lt 100 And result Gt 0 And flag And a Ne result And a Add result Lt 10000 And a Mul result Gt 500 And a Sub result Ne 42
+    while a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42
       { : void
         a Add= 1 : int
       }
-    while a Lt 100 And result Gt 0 And flag And a Ne result And a Add result Lt 10000 And a Mul result Gt 500 And a Sub result Ne 42 And a Mod 7 Eq 0 And result Mod 3 Eq 0 And a Add result Add a Mul result Gt 99999
+    while a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42 && a % 7 == 0 && result % 3 == 0 && a + result + a * result > 99999
       { : void
         a Add= 1 : int
       }
     { : void
       let very_long_variable_name = 0 : 0 -> int
-      while very_long_variable_name Lt 1000 And flag
+      while very_long_variable_name < 1000 && flag
         { : void
           result Add= very_long_variable_name : int
         }
     }
     { : void
-      let extremely_long_loop_counter_variable = a Mul a Add result Mul result : int
-      while extremely_long_loop_counter_variable Lt 1000000 And flag And a Gt 0
+      let extremely_long_loop_counter_variable = a * a + result * result : int
+      while extremely_long_loop_counter_variable < 1000000 && flag && a > 0
         { : void
           result Add= extremely_long_loop_counter_variable : int
         }
@@ -1097,24 +1097,24 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
       { : void
         result Add= 1 : int
       }
-    while a Lt 100 And result Gt 0 And flag And a Ne result And a Add result Lt 10000 And a Mul result Gt 500 And a Sub result Ne 42
+    while a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42
       { : void
         a Add= 1 : int
       }
-    while a Lt 100 And result Gt 0 And flag And a Ne result And a Add result Lt 10000 And a Mul result Gt 500 And a Sub result Ne 42
+    while a < 100 && result > 0 && flag && a != result && a + result < 10000 && a * result > 500 && a - result != 42
       { : void
         a Add= 1 : int
       }
     { : void
-      let extremely_long_loop_counter_variable = a Mul a Add result Mul result : int
-      while extremely_long_loop_counter_variable Lt 1000000 And flag And a Gt 0
+      let extremely_long_loop_counter_variable = a * a + result * result : int
+      while extremely_long_loop_counter_variable < 1000000 && flag && a > 0
         { : void
           result Add= extremely_long_loop_counter_variable : int
         }
     }
     { : void
-      let extremely_long_loop_counter_variable = a Mul a Add result Mul result : int
-      while extremely_long_loop_counter_variable Lt 1000000 And flag And a Gt 0
+      let extremely_long_loop_counter_variable = a * a + result * result : int
+      while extremely_long_loop_counter_variable < 1000000 && flag && a > 0
         { : void
           result Add= extremely_long_loop_counter_variable : int
         }
@@ -1133,20 +1133,20 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           { : void
             for k in [7, 8, 9]
               { : void
-                result Add= i Mul j Mul k : int
+                result Add= i * j * k : int
               }
           }
       }
     let outer = 0 : 0 -> int
-    while outer Lt 3
+    while outer < 3
       { : void
         let middle = 0 : 0 -> int
-        while middle Lt 3
+        while middle < 3
           { : void
             let inner = 0 : 0 -> int
-            while inner Lt 3
+            while inner < 3
               { : void
-                result Add= outer Add middle Add inner : int
+                result Add= outer + middle + inner : int
                 inner Add= 1 : int
               }
             middle Add= 1 : int
@@ -1155,20 +1155,20 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
       }
     for i in [1, 2, 3, 4, 5]
       { : void
-        if (i Eq 3 : bool) : void
+        if (i == 3 : bool) : void
           { : never
             continue
           }
         for j in [10, 20, 30, 40, 50]
           { : void
             let val = : int
-              match (i Mul j : int) : int
+              match (i * j : int) : int
                 0 =>
                   { : never
                     break
                     0 : unknown
                   }
-                n: int if n Gt 100 =>
+                n: int if n > 100 =>
                   { : never
                     continue
                     n : unknown
@@ -1179,18 +1179,18 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
           }
       }
     let lvl1 = 0 : 0 -> int
-    while lvl1 Lt 2
+    while lvl1 < 2
       { : void
         for lvl2 in [1, 2]
           { : void
             { : void
               let lvl3 = 0 : 0 -> int
-              while lvl3 Lt 2
+              while lvl3 < 2
                 { : void
                   let lvl4 = 0 : 0 -> int
-                  while lvl4 Lt 2
+                  while lvl4 < 2
                     { : void
-                      result Add= lvl1 Add lvl2 Add lvl3 Add lvl4 : int
+                      result Add= lvl1 + lvl2 + lvl3 + lvl4 : int
                       lvl4 Add= 1 : int
                     }
                 }
@@ -1201,8 +1201,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
     for i in items
       { : void
         { : void
-          let j = i Mul i Add result Mul result : int
-          while j Lt 1000000 And flag And i Gt 0 And result Gt 0 And j Ne 42
+          let j = i * i + result * result : int
+          while j < 1000000 && flag && i > 0 && result > 0 && j != 42
             { : void
               result Add= j : int
             }
@@ -1213,15 +1213,15 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
         for j in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
           { : void
             let computation = : int | 0 -> int
-              if (i Mul j Gt 500 And i Add j Lt 100 : bool) : int | 0
+              if (i * j > 500 && i + j < 100 : bool) : int | 0
                 { : int
-                  match (i Mod 3 : int) : int
+                  match (i % 3 : int) : int
                     0 =>
-                      i Mul j Add result : int
+                      i * j + result : int
                     1 =>
-                      i Mul j Sub result : int
+                      i * j - result : int
                     _ =>
-                      i Mul j : int
+                      i * j : int
                 }
               else
                 { : 0
@@ -1230,13 +1230,13 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
             result Add= computation : int
           }
       }
-    while a Lt 10
+    while a < 10
       { : void
         a Add= 1 : int
       }
     { : void
       let i = 0 : 0 -> int
-      while i Lt 10
+      while i < 10
         { : void
           result Add= i : int
         }
@@ -1247,16 +1247,16 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
       }
     let plain = 1 : 1 -> int
     let typed = 2 : 2
-    let complex_init = a Add result : int
+    let complex_init = a + result : int
     let very_long_variable_name_for_testing_wrapping = map { "key": 42 } : map<string, int | string | bool | float | null>
-    let another_extremely_long_variable_name = a Mul a Add result Mul result Add a Mul result Add a Add result Add a Mul a Mul a Add result Mul result Mul result Add a Mul result Mul a Add result Mul a Mul result : int
+    let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
     let deeply_typed = map { "outer": map { "inner": map { "deep": 42 } } } : map<string, map<string, map<string, int | string | bool>>>
     let trivia_var = 42 : 42
     let trivia_var_block = 42 : 42
     let very_long_variable_name_for_testing_wrapping = map { "key": 42 } : map<string, int | string | bool | float | null>
     let very_long_variable_name_for_testing_wrapping = map { "key": 42 } : map<string, int | string | bool | float | null>
-    let another_extremely_long_variable_name = a Mul a Add result Mul result Add a Mul result Add a Add result Add a Mul a Mul a Add result Mul result Mul result Add a Mul result Mul a Add result Mul a Mul result : int
-    let another_extremely_long_variable_name = a Mul a Add result Mul result Add a Mul result Add a Add result Add a Mul a Mul a Add result Mul result Mul result Add a Mul result Mul a Add result Mul a Mul result : int
+    let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
+    let another_extremely_long_variable_name = a * a + result * result + a * result + a + result + a * a * a + result * result * result + a * result * a + result * a * result : int
     return result : int
   }
   !! 12080..12107: unreachable code: 1 statement(s) after diverging statement
@@ -1264,14 +1264,14 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
 }
 function user.AssertStmts(x: int, y: int) -> int throws never {
   { : int
-    assert x Gt 0
-    assert x Lt 100
-    assert x Gt 0
-    assert x Gt 0
-    assert x Gt 0 And x Lt 100 And y Gt 0 And y Lt 100 And x Ne y And x Add y Lt 150 And x Mul y Gt 10 And x Sub y Ne 42 And x Mod 7 Eq 0
-    assert x Gt 0 And x Lt 100 And y Gt 0 And y Lt 100 And x Ne y And x Add y Lt 150 And x Mul y Gt 10 And x Sub y Ne 42 And x Mod 7 Eq 0 And y Mod 3 Eq 0 And x Add y Add x Mul y Gt 100 And x Mul x Add y Mul y Lt 10000
-    assert x Gt 0 And x Lt 100 And y Gt 0 And y Lt 100 And x Ne y And x Add y Lt 150 And x Mul y Gt 10 And x Sub y Ne 42 And x Mod 7 Eq 0
-    assert x Gt 0 And x Lt 100 And y Gt 0 And y Lt 100 And x Ne y And x Add y Lt 150 And x Mul y Gt 10 And x Sub y Ne 42 And x Mod 7 Eq 0
+    assert x > 0
+    assert x < 100
+    assert x > 0
+    assert x > 0
+    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0
+    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0 && y % 3 == 0 && x + y + x * y > 100 && x * x + y * y < 10000
+    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0
+    assert x > 0 && x < 100 && y > 0 && y < 100 && x != y && x + y < 150 && x * y > 10 && x - y != 42 && x % 7 == 0
     x : int
   }
 }
@@ -1310,7 +1310,7 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
         }
       _ =>
         { : void
-          let y = x Add 1 : int
+          let y = x + 1 : int
           "other" : "other"
         }
     match (x : int) : "zero" | "other"
@@ -1324,12 +1324,12 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       _ =>
         "other" : "other"
     match (x : int) : "positive" | "other"
-      n: int if n Gt 0 =>
+      n: int if n > 0 =>
         "positive" : "positive"
       _ =>
         "other" : "other"
     match (x : int) : "positive" | "other"
-      n: int if n Gt 0 =>
+      n: int if n > 0 =>
         "positive" : "positive"
       _ =>
         "other" : "other"
@@ -1402,14 +1402,14 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       _ =>
         "big" : "big"
     match (x : int) : "positive" | "negative" | "zero"
-      n: int if n Gt 0 =>
+      n: int if n > 0 =>
         "positive" : "positive"
-      n: int if n Lt 0 =>
+      n: int if n < 0 =>
         "negative" : "negative"
       _ =>
         "zero" : "zero"
     match (x : int) : "acceptable small positive number that passes all the filters" | "other"
-      n: int if n Gt 0 And n Lt 100 And n Ne 42 And n Ne 13 And n Ne 7 And n Ne 99 =>
+      n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 && n != 99 =>
         "acceptable small ..." : "acceptable small positive number that passes all the filters"
       _ =>
         "other" : "other"
@@ -1445,26 +1445,26 @@ function user.MatchExprs(x: int, s: user.MatchStatus, r: user.MatchResult, b: bo
       _ =>
         "short" : "short"
     match (x : int) : "acceptable small positive number that passes all the defined filter conditions" | "other"
-      n: int if n Gt 0 And n Lt 100 And n Ne 42 And n Ne 13 And n Ne 7 =>
+      n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 =>
         "acceptable small ..." : "acceptable small positive number that passes all the defined filter conditions"
       _ =>
         "other" : "other"
     match (x : int) : "acceptable small positive number that passes all the defined filter conditions" | "other"
-      n: int if n Gt 0 And n Lt 100 And n Ne 42 And n Ne 13 And n Ne 7 =>
+      n: int if n > 0 && n < 100 && n != 42 && n != 13 && n != 7 =>
         "acceptable small ..." : "acceptable small positive number that passes all the defined filter conditions"
       _ =>
         "other" : "other"
-    match (x Add 1 : int) : "was minus one" | "other"
+    match (x + 1 : int) : "was minus one" | "other"
       0 =>
         "was minus one" : "was minus one"
       _ =>
         "other" : "other"
-    match (x Mul x Add b Mul b Add x Mul b Add x Add b Add x Mul x Mul x Add b Mul b Mul b Add x Mul b Mul x Add b Mul x Mul b : unknown) : "zero polynomial" | "nonzero"
+    match (x * x + b * b + x * b + x + b + x * x * x + b * b * b + x * b * x + b * x * b : unknown) : "zero polynomial" | "nonzero"
       0 =>
         "zero polynomial" : "zero polynomial"
       _ =>
         "nonzero" : "nonzero"
-    match (x Add 1 : int) : "whitespace" | "other"
+    match (x + 1 : int) : "whitespace" | "other"
       0 =>
         "whitespace" : "whitespace"
       _ =>
@@ -1584,16 +1584,16 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
         of content
     "
     a : int
-    a Add b : int
+    a + b : int
     a : int
-    a Add b Mul a Sub b : int
-    a Add b Mul a Sub b Add a Mul a Add b Mul b Mul a Add b Mul a Add b Sub a Sub b Mul a Sub b : int
+    a + b * a - b : int
+    a + b * a - b + a * a + b * b * a + b * a + b - a - b * a - b : int
     a : int
     a : int
     Neg a : int
     Not true : false
     Neg Neg a : int
-    Not a Gt b : bool
+    Not a > b : bool
     Neg a : int
     Neg a : int
     [] : never[]
@@ -1627,11 +1627,11 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
     OtherVec { p: OtherPoint { x: 100000, y: 200000 }, q: OtherPoint { x: 300000, y: 400000 } } : user.OtherVec
     { : int
       let x = 1 : 1 -> int
-      x Add 1 : int
+      x + 1 : int
     }
     { : int
-      let x = a Add b : int
-      let y = x Mul 2 : int
+      let x = a + b : int
+      let y = x * 2 : int
       y : int
     }
     { : int
@@ -1639,22 +1639,22 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
         { : int
           let y = : int
             { : int
-              let z = a Add b : int
-              z Mul z : int
+              let z = a + b : int
+              z * z : int
             }
-          y Add y : int
+          y + y : int
         }
-      x Mul x : int
+      x * x : int
     }
     { : int
       let x = : int
-        if (a Gt b : bool) : int
+        if (a > b : bool) : int
           { : int
             match (a : int) : int
               0 =>
                 { : int
-                  let inner = b Mul 2 : int
-                  inner Add 1 : int
+                  let inner = b * 2 : int
+                  inner + 1 : int
                 }
               _ =>
                 a : int
@@ -1668,7 +1668,7 @@ function user.OtherExprs(a: int, b: int) -> int throws never {
     [1, 2, 3] : (1 | 2 | 3)[]
     map { "k": 1 } : map<"k", 1>
     OtherPoint { x: 1, y: 2 } : user.OtherPoint
-    a Add b : int
+    a + b : int
   }
 }
 class user.OtherPoint$stream {

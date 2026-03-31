@@ -1,0 +1,292 @@
+// Test: Null handling — optional chaining, null coalescing, safe assignment
+// Covers BEP 20 specification for ?., ?.[], ?.(), ??, and LHS optional chaining.
+
+// ============================================================================
+// SUPPORTING TYPES
+// ============================================================================
+
+class Address {
+    street string
+    zip string?
+}
+
+class Profile {
+    name string
+    address Address?
+    scores int[]?
+    settings map<string, string>?
+}
+
+class User {
+    id int
+    profile Profile?
+}
+
+class Node {
+    value int
+    next Node?
+    children Node[]?
+    labels map<string, Node>?
+}
+
+// ============================================================================
+// 1. OPTIONAL CHAINING (?.)
+// ============================================================================
+
+function OptionalChaining(user: User?, nonNullUser: User, node: Node?) -> string {
+    // --- Assignment FROM optional chain (read) ---
+
+    // Basic: a?.b
+    let a1 = user?.id;
+
+    // Stacked: a?.b?.c
+    let a2 = user?.profile?.name;
+
+    // Deep chain: a?.b?.c?.d
+    let a3 = user?.profile?.address?.street;
+
+    // Long short-circuit: a?.b.c — entire tail is guarded
+    // If user is null → null. If user non-null but profile null → runtime error on .name
+    let a4 = user?.profile.name;
+
+    // Multiple accesses after ?.: a?.b.c.d
+    let a5 = user?.profile.address.street;
+
+    // Stacking creates independent checkpoints: a?.b?.c.d
+    // If profile null → null (second ?. guards). If address null → error (.street is not ?.)
+    let a6 = user?.profile?.address.street;
+
+    // Parentheses BREAK the chain: (a?.b).c — if a null, (null).c → TypeError
+    let a7 = (user?.profile).name;
+
+    // Parentheses around entire chain (no effect on semantics)
+    let a8 = (user?.profile?.name);
+
+    // Nested chains via parenthesized eval order
+    let a9 = user?.profile?.address?.zip;
+
+    // E2: ?. on a non-nullable type (should be error)
+    let a10 = nonNullUser?.id;
+
+    // --- Assignment TO optional chain (write) ---
+
+    // Basic LHS ?.
+    user?.profile?.name = "updated";
+
+    // Deep LHS chain
+    user?.profile?.address?.street = "123 Main St";
+
+    // Long short-circuit on LHS: if user null, skip everything including RHS
+    user?.profile.name = "updated2";
+
+    // Compound assignment through chain
+    user?.id += 1;
+
+    // Return value of safe call assignment: short-circuit → null, otherwise → assigned value
+    let a11 = (user?.profile?.name = "new_name");
+
+    return a2 ?? "default";
+}
+
+// ============================================================================
+// 2. OPTIONAL INDEX (?.[] — lists and maps)
+// ============================================================================
+
+function OptionalIndex(node: Node?, items: int[]?, lookup: map<string, int>?, nonNullItems: int[]) -> int {
+    // --- Assignment FROM optional index (read) ---
+
+    // List: basic a?.[0]
+    let b1 = items?.[0];
+
+    // List: chained through optional index
+    let b2 = node?.children?.[0];
+
+    // List: long short-circuit after ?.[idx] — .value guarded by preceding ?.
+    let b3 = node?.children?.[0].value;
+
+    // List: stacked — a?.b?.[i].c
+    let b4 = node?.children?.[0].next?.value;
+
+    // Map: basic a?.["key"]
+    let b5 = lookup?.["total"];
+
+    // Map: chained
+    let b6 = node?.labels?.["main"];
+
+    // Map: long short-circuit after ?.["key"]
+    let b7 = node?.labels?.["main"].value;
+
+    // Parentheses break chain: (a?.[i]).prop — TypeError if a null
+    let b8 = (node?.children)?.[0];
+    let b9 = (items?.[0]).to_string();
+
+    // Parentheses for eval order: a?.[b?.c] — nested optional chains in index expr
+    let b10 = node?.children?.[node?.value];
+
+    // Nested computed access: a?.[b?.[c]]
+    let b11 = node?.children?.[items?.[0] ?? 0];
+
+    // E2: ?. on non-nullable (should be error)
+    let b12 = nonNullItems?.[0];
+
+    // --- Assignment TO optional index (write) ---
+
+    // List LHS
+    items?.[0] = 42;
+
+    // List LHS through chain
+    node?.children?.[0].value = 99;
+
+    // Map LHS
+    lookup?.["total"] = 100;
+
+    // Map LHS through chain
+    node?.labels?.["main"].value = 50;
+
+    // Compound assignment on indexed LHS
+    items?.[0] += 10;
+    lookup?.["total"] += 5;
+
+    // Return value of safe indexed assignment
+    let b13 = (items?.[0] = 77);
+
+    return b1 ?? 0;
+}
+
+// ============================================================================
+// 3. OPTIONAL CALL (?.())
+// ============================================================================
+
+function OptionalCall(callback: (int) -> string?, nonNullCb: (int) -> string, name: string?) -> string {
+    // --- Assignment FROM optional call (read) ---
+
+    // Basic optional call: f?.(args)
+    let c1 = callback?.(42);
+
+    // Long short-circuit after optional call: f?.(x).prop — tail guarded
+    let c2 = callback?.(42).length;
+
+    // Stacking: a?.b?.(x).d — from spec §1.3
+    // If a null → null; if a.b null → null; otherwise a.b(x).d
+
+    // Parentheses break chain: (f?.(x)).prop — TypeError if f null
+    let c3 = (callback?.(42)).length;
+
+    // E4: ?.(…) on a non-callable type (should be error)
+    let c4 = name?.(42);
+
+    // E2: ?. on non-nullable callable (should be error)
+    let c5 = nonNullCb?.(42);
+
+    // --- Assignment TO expression containing optional call (write) ---
+
+    // Assign through result of optional call in a chain
+    // e.g. obj?.getChild?.(key).value = val
+    // (No direct write test for call-only, since call results aren't lvalues)
+
+    return c1 ?? "default";
+}
+
+// ============================================================================
+// 4. NULL COALESCING (??)
+// ============================================================================
+
+function NullCoalescing(user: User?, fallback: string, count: int) -> string {
+    // --- Assignment FROM ?? (read) ---
+
+    // Basic: a ?? b
+    let d1 = user?.profile?.name ?? "Anonymous";
+
+    // Chaining: a ?? b ?? c
+    let d2 = user?.profile?.name ?? user?.profile?.address?.street ?? "Unknown";
+
+    // Type narrowing: T? ?? T → T (result is non-nullable)
+    let d3: string = user?.profile?.name ?? fallback;
+
+    // Both sides nullable: T? ?? T? → T?
+    let d4: string? = user?.profile?.name ?? user?.profile?.address?.zip;
+
+    // With optional index
+    let d5 = user?.profile?.scores?.[0] ?? 0;
+
+    // With optional call
+    // let d6 = callback?.(1) ?? "no callback";
+
+    // Lazy evaluation: RHS not evaluated if LHS non-null (semantic, but
+    // compile-time type checking should still work)
+    let d6 = user?.profile?.name ?? fallback;
+
+    // --- Assignment TO with ?? on RHS ---
+
+    // ?? providing the value for an assignment through optional chain
+    user?.profile?.name = user?.profile?.address?.street ?? "no street";
+
+    // --- Diagnostic: E1 — cannot mix ?? with || without parens ---
+    // (uncomment to trigger E1 error)
+    // let d7_err = user?.profile?.name ?? fallback || "other";
+    // let d8_err = user?.profile?.name ?? true && false;
+
+    // OK: explicit parens resolve ambiguity
+    let d7 = (user?.profile?.name ?? fallback);
+
+    // --- Diagnostic: E3 — ?? on non-nullable type ---
+    let d8 = count ?? 0;
+
+    // --- Diagnostic: W2 — ?? null is redundant ---
+    let d9 = user?.profile?.name ?? null;
+
+    // --- Diagnostic: W1 — || where ?? was likely intended ---
+    let d10 = user?.profile?.name || "Anonymous";
+
+    return d1;
+}
+
+// ============================================================================
+// 5. COMBINED — all operators interacting
+// ============================================================================
+
+function Combined(user: User?, node: Node?, items: int[]?) -> string {
+    // Optional chain + null coalescing + index
+    let e1 = user?.profile?.address?.street ?? "unknown";
+
+    // Nested optional index with optional chain providing the index
+    let e2 = node?.children?.[node?.value ?? 0];
+
+    // Multiple ?? in sequence with diverse sources
+    let e3 = user?.profile?.name
+        ?? node?.labels?.["name"]?.value.to_string()
+        ?? "fallback";
+
+    // LHS assignment: chain + index + ??-provided RHS
+    node?.children?.[0].next?.value = user?.id ?? 0;
+
+    // Compound assignment through mixed chain
+    node?.value += items?.[0] ?? 1;
+
+    // Return value of safe call assignment (short-circuit → null)
+    let e4 = (node?.next?.value = 42);
+
+    // Deeply nested parenthesized eval order
+    let e5 = node?.children?.[(user?.profile?.scores?.[0] ?? 0)].value;
+
+    // Chain through map then list
+    let e6 = node?.labels?.["first"]?.children?.[0].value;
+
+    // Assign through map index on LHS with chained RHS
+    node?.labels?.["counter"].value = (items?.[0] ?? 0) + 1;
+
+    // Compound assignment mixing chain + index + ??
+    node?.labels?.["counter"].value += items?.[0] ?? 0;
+
+    // Spec §3.2 evaluation order: a?.b[f()]?.c = g()
+    // If a null → f() NOT called, g() NOT called
+    // If a non-null, a.b[f()] null → g() NOT called
+    // If a non-null, a.b[f()] non-null → g() called, assignment happens
+    node?.children?.[node?.value ?? 0]?.next?.value = node?.value ?? 0;
+
+    // Spec §4.1: ?. must not be followed by a decimal digit
+    // (uncomment to trigger lexer error)
+    // let e_lex = user?.3;
+
+    return e3;
+}

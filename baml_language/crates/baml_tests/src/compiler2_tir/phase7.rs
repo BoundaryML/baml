@@ -22,7 +22,7 @@ fn narrow_ne_null_then_branch_is_non_nullable() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(x: int?) -> int throws never {
       { : never
-        if (x Ne null : bool) : void
+        if (x != null : bool) : void
           { : never
             return x : int
           }
@@ -47,7 +47,7 @@ fn narrow_ne_null_rhs_form() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(x: int?) -> int throws never {
       { : never
-        if (null Ne x : bool) : void
+        if (null != x : bool) : void
           { : never
             return x : int
           }
@@ -75,7 +75,7 @@ fn narrow_eq_null_else_branch_is_non_nullable() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(x: int?) -> int throws never {
       { : never
-        if (x Eq null : bool) : never
+        if (x == null : bool) : never
           { : never
             return 0 : 0
           }
@@ -132,7 +132,7 @@ fn narrow_negated_eq_null_then_branch_non_null() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(x: int?) -> int throws never {
       { : never
-        if (Not x Eq null : bool) : void
+        if (Not x == null : bool) : void
           { : never
             return x : int
           }
@@ -159,7 +159,7 @@ fn early_return_null_check_narrows_rest_of_block() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(x: int?) -> int throws never {
       { : never
-        if (x Eq null : bool) : void
+        if (x == null : bool) : void
           { : never
             return 0 : 0
           }
@@ -184,7 +184,7 @@ fn early_return_ne_null_check_narrows_rest_of_block() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(x: int?) -> int? throws never {
       { : never
-        if (x Ne null : bool) : void
+        if (x != null : bool) : void
           { : never
             return x : int
           }
@@ -212,7 +212,7 @@ fn narrowed_type_captured_in_let_binding() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(x: int?) -> int throws never {
       { : never
-        if (x Eq null : bool) : void
+        if (x == null : bool) : void
           { : never
             return 0 : 0
           }
@@ -240,9 +240,9 @@ fn narrowed_int_arithmetic_no_error() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(x: int?) -> int throws never {
       { : never
-        if (x Ne null : bool) : void
+        if (x != null : bool) : void
           { : never
-            return x Add 1 : int
+            return x + 1 : int
           }
         return 0 : 0
       }
@@ -271,11 +271,11 @@ fn snapshot_narrowing_patterns() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(a: int?, b: string?) -> int throws never {
       { : never
-        if (a Eq null : bool) : void
+        if (a == null : bool) : void
           { : never
             return 0 : 0
           }
-        if (b Eq null : bool) : void
+        if (b == null : bool) : void
           { : never
             return a : int
           }
@@ -305,7 +305,7 @@ fn assign_wrong_type_in_null_branch_is_error() {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f(x: int?) -> int throws never {
       { : never
-        if (x Eq null : bool) : never
+        if (x == null : bool) : never
           { : never
             x = "string" : "string"
             return 0 : 0
@@ -337,7 +337,7 @@ fn assign_method_result_in_null_branch_works() {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f(x: int?) -> int throws never {
       { : never
-        if (x Eq null : bool) : never
+        if (x == null : bool) : never
           { : never
             x = "string".length() : int
             return 0 : 0
@@ -368,7 +368,7 @@ fn early_return_string_null_check() {
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f(s: string?) -> string throws never {
       { : never
-        if (s Eq null : bool) : void
+        if (s == null : bool) : void
           { : never
             return "" : ""
           }

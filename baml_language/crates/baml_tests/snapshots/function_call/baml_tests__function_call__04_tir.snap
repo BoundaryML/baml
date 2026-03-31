@@ -17,7 +17,7 @@ function user.Bar() -> int throws never {
 }
 function user.Foo(x: int) -> int throws never {
   { : int
-    x Add 1 : int
+    x + 1 : int
   }
 }
 function user.GreetBaz(n: string) -> string throws never {
@@ -31,7 +31,7 @@ class user.Baz {
 }
 function user.Baz.Greeting(self: user.Baz) -> string throws never {
   { : string
-    "Hello, " Add self.name Add "!" : string
+    "Hello, " + self.name + "!" : string
   }
 }
 function user.param_in_if_statement(b: bool) -> int throws never {

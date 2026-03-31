@@ -59,19 +59,21 @@ pub enum SyntaxKind {
     R_BRACKET, // ]
 
     // Punctuation
-    COLON,        // :
-    DOUBLE_COLON, // ::
-    COMMA,        // ,
-    SEMICOLON,    // ;
-    DOT_DOT_DOT,  // ...
-    DOT,          // .
-    DOLLAR,       // $
-    ARROW,        // ->
-    FAT_ARROW,    // =>
-    AT,           // @
-    AT_AT,        // @@
-    PIPE,         // |
-    QUESTION,     // ?
+    COLON,             // :
+    DOUBLE_COLON,      // ::
+    COMMA,             // ,
+    SEMICOLON,         // ;
+    DOT_DOT_DOT,       // ...
+    DOT,               // .
+    DOLLAR,            // $
+    ARROW,             // ->
+    FAT_ARROW,         // =>
+    AT,                // @
+    AT_AT,             // @@
+    PIPE,              // |
+    QUESTION_DOT,      // ?.
+    QUESTION_QUESTION, // ??
+    QUESTION,          // ?
 
     // Assignment operators
     EQUALS,                 // =
@@ -194,6 +196,10 @@ pub enum SyntaxKind {
     UNARY_EXPR,
     CALL_EXPR,
     INDEX_EXPR,
+    /// Optional call: `func?.(args)` — short-circuits to null if callee is null.
+    OPTIONAL_CALL_EXPR,
+    /// Optional index: `obj?.[expr]` — short-circuits to null if base is null.
+    OPTIONAL_INDEX_EXPR,
     /// Field access on a complex expression: `arr[0].field`, `f().method`, `(a + b).field`
     ///
     /// Used when the base is NOT a simple identifier chain. For simple identifier
@@ -206,6 +212,10 @@ pub enum SyntaxKind {
     ///   module item, or function reference
     /// - `FIELD_ACCESS_EXPR` is always a field/method access on a computed value
     FIELD_ACCESS_EXPR,
+    /// Optional field access: `obj?.field` — short-circuits to null if base is null.
+    ///
+    /// Structure: `<base_expr> QUESTION_DOT WORD`
+    OPTIONAL_FIELD_ACCESS_EXPR,
     /// Path expression with one or more dot-separated identifier segments.
     ///
     /// Examples:
@@ -326,7 +336,8 @@ impl SyntaxKind {
         use SyntaxKind::{
             AND, AND_AND, CARET, EQUALS, EQUALS_EQUALS, GREATER, GREATER_EQUALS, GREATER_GREATER,
             LESS, LESS_EQUALS, LESS_LESS, MINUS, MINUS_EQUALS, NOT, NOT_EQUALS, OR_OR, PERCENT,
-            PIPE, PLUS, PLUS_EQUALS, SLASH, SLASH_EQUALS, STAR, STAR_EQUALS, TILDE,
+            PIPE, PLUS, PLUS_EQUALS, QUESTION_DOT, QUESTION_QUESTION, SLASH, SLASH_EQUALS, STAR,
+            STAR_EQUALS, TILDE,
         };
         matches!(
             self,
@@ -354,6 +365,8 @@ impl SyntaxKind {
                 | TILDE
                 | LESS_LESS
                 | GREATER_GREATER
+                | QUESTION_DOT
+                | QUESTION_QUESTION
         )
     }
 

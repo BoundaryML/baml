@@ -2,122 +2,122 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved member: string.len
+  [type] Error: type `string` has no member `len`
     ╭─[ chain_expr.baml:86:15 ]
     │
  86 │     user.name.len();
     │               ─┬─  
-    │                ╰─── unresolved member: string.len
+    │                ╰─── type `string` has no member `len`
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved member: user.ChainItem[].len
+  [type] Error: type `user.ChainItem[]` has no member `len`
     ╭─[ chain_expr.baml:87:11 ]
     │
  87 │     items.len();
     │           ─┬─  
-    │            ╰─── unresolved member: user.ChainItem[].len
+    │            ╰─── type `user.ChainItem[]` has no member `len`
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved member: user.ChainItem[].get
+  [type] Error: type `user.ChainItem[]` has no member `get`
     ╭─[ chain_expr.baml:90:24 ]
     │
  90 │     user.profile.items.get(0);
     │                        ─┬─  
-    │                         ╰─── unresolved member: user.ChainItem[].get
+    │                         ╰─── type `user.ChainItem[]` has no member `get`
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved member: user.ChainItem[].get
+  [type] Error: type `user.ChainItem[]` has no member `get`
     ╭─[ chain_expr.baml:98:5 ]
     │
  98 │     get // 6 method trailing
     │     ─┬─  
-    │      ╰─── unresolved member: user.ChainItem[].get
+    │      ╰─── type `user.ChainItem[]` has no member `get`
     │ 
     │ Note: Error code: E0001
 ────╯
 
-  [type] Error: unresolved member: user.ChainItem[].get
+  [type] Error: type `user.ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:112:5 ]
      │
  112 │     get /* 6 method trailing */
      │     ─┬─  
-     │      ╰─── unresolved member: user.ChainItem[].get
+     │      ╰─── type `user.ChainItem[]` has no member `get`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: string.len
+  [type] Error: type `string` has no member `len`
      ╭─[ chain_expr.baml:149:15 ]
      │
  149 │     user.name.len().to_string();
      │               ─┬─  
-     │                ╰─── unresolved member: string.len
+     │                ╰─── type `string` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: string.len
+  [type] Error: type `string` has no member `len`
      ╭─[ chain_expr.baml:152:45 ]
      │
  152 │     user.profile.settings.preferences.color.len().to_string().len().to_string().len().to_string().len().to_string();
      │                                             ─┬─  
-     │                                              ╰─── unresolved member: string.len
+     │                                              ╰─── type `string` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: string.len
+  [type] Error: type `string` has no member `len`
      ╭─[ chain_expr.baml:155:44 ]
      │
  155 │     user.profile.items[0].metadata.tags[0].len().to_string().len().to_string().len().to_string();
      │                                            ─┬─  
-     │                                             ╰─── unresolved member: string.len
+     │                                             ╰─── type `string` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: user.ChainItem[].get
+  [type] Error: type `user.ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:158:24 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │                        ─┬─  
-     │                         ╰─── unresolved member: user.ChainItem[].get
+     │                         ╰─── type `user.ChainItem[]` has no member `get`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: user.ChainItem[].len
+  [type] Error: type `user.ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:158:47 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │                                               ─┬─  
-     │                                                ╰─── unresolved member: user.ChainItem[].len
+     │                                                ╰─── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: user.ChainItem[].len
+  [type] Error: type `user.ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:158:78 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │                                                                              ─┬─  
-     │                                                                               ╰─── unresolved member: user.ChainItem[].len
+     │                                                                               ╰─── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: user.ChainItem[].len
+  [type] Error: type `user.ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:158:109 ]
      │
  158 │     user.profile.items.get(user.profile.items.len() - 1 + user.profile.items.len() - 2 + user.profile.items.len() - 3).label;
      │                                                                                                             ─┬─  
-     │                                                                                                              ╰─── unresolved member: user.ChainItem[].len
+     │                                                                                                              ╰─── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
@@ -134,112 +134,112 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: user.ChainItem[].len
+  [type] Error: type `user.ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:161:52 ]
      │
  161 │     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
      │                                                    ─┬─  
-     │                                                     ╰─── unresolved member: user.ChainItem[].len
+     │                                                     ╰─── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: string.len
+  [type] Error: type `string` has no member `len`
      ╭─[ chain_expr.baml:180:5 ]
      │
  180 │     len // 17 trailing
      │     ─┬─  
-     │      ╰─── unresolved member: string.len
+     │      ╰─── type `string` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: string.len
+  [type] Error: type `string` has no member `len`
      ╭─[ chain_expr.baml:212:5 ]
      │
  212 │     len /* 17 trailing */
      │     ─┬─  
-     │      ╰─── unresolved member: string.len
+     │      ╰─── type `string` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: user.ChainItem[].get
+  [type] Error: type `user.ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:238:5 ]
      │
  238 │     get // 11 trailing
      │     ─┬─  
-     │      ╰─── unresolved member: user.ChainItem[].get
+     │      ╰─── type `user.ChainItem[]` has no member `get`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: user.ChainItem[].len
+  [type] Error: type `user.ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:241:24 ]
      │
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
      │                        ─┬─  
-     │                         ╰─── unresolved member: user.ChainItem[].len
+     │                         ╰─── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: user.ChainItem[].len
+  [type] Error: type `user.ChainItem[]` has no member `len`
      ╭─[ chain_expr.baml:241:55 ]
      │
  241 │     user.profile.items.len() - 1 + user.profile.items.len() - 2 // 14 trailing
      │                                                       ─┬─  
-     │                                                        ╰─── unresolved member: user.ChainItem[].len
+     │                                                        ╰─── type `user.ChainItem[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: int[][].len
+  [type] Error: type `int[][]` has no member `len`
      ╭─[ chain_expr.baml:251:29 ]
      │
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
      │                             ─┬─  
-     │                              ╰─── unresolved member: int[][].len
+     │                              ╰─── type `int[][]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: int[].len
+  [type] Error: type `int[]` has no member `len`
      ╭─[ chain_expr.baml:251:55 ]
      │
  251 │     user.scores[user.scores.len() - 1][user.scores[0].len() - 1];
      │                                                       ─┬─  
-     │                                                        ╰─── unresolved member: int[].len
+     │                                                        ╰─── type `int[]` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: user.ChainItem[].get
+  [type] Error: type `user.ChainItem[]` has no member `get`
      ╭─[ chain_expr.baml:256:15 ]
      │
  256 │     items  .  get  (  0  );
      │               ─┬─  
-     │                ╰─── unresolved member: user.ChainItem[].get
+     │                ╰─── type `user.ChainItem[]` has no member `get`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: string.len
+  [type] Error: type `string` has no member `len`
      ╭─[ chain_expr.baml:259:18 ]
      │
  259 │     user.tags[0].len();
      │                  ─┬─  
-     │                   ╰─── unresolved member: string.len
+     │                   ╰─── type `string` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
 
-  [type] Error: unresolved member: string.len
+  [type] Error: type `string` has no member `len`
      ╭─[ chain_expr.baml:261:20 ]
      │
  261 │     items[0].label.len();
      │                    ─┬─  
-     │                     ╰─── unresolved member: string.len
+     │                     ╰─── type `string` has no member `len`
      │ 
      │ Note: Error code: E0001
 ─────╯
