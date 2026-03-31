@@ -8,13 +8,12 @@ function user.$init_test(registry: testing.Registry) -> ? throws never {
       () -> { ... } : () -> unknown
         {
           let result = "hello"
-          assert <missing>
-          not_null(result)
+          assert.not_null(result)
         }
   }
   !! 0..0: unresolved member: testing.Registry.register_test
-  !! 0..0: unresolved name: not_null
+  !! 0..0: unresolved name: assert
 }
 lambda user.$init_test {
-  !! 0..0: unresolved name: not_null
+  !! 0..0: unresolved name: assert
 }

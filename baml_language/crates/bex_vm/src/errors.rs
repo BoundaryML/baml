@@ -52,9 +52,6 @@ pub enum RuntimeError {
     #[error("stack overflow")]
     StackOverflow,
 
-    #[error("assertion failed")]
-    AssertionError,
-
     #[error("unreachable code executed")]
     Unreachable,
 

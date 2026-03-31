@@ -12,22 +12,12 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: unresolved name: not_null
+  [type] Error: unresolved name: assert
    ╭─[ main.baml:1:1 ]
    │
  1 │ test "with quorum" with testing.Quorum(5, 3) {
    │ │ 
-   │ ╰─ unresolved name: not_null
+   │ ╰─ unresolved name: assert
    │ 
    │ Note: Error code: E0001
-───╯
-
-  [parse] Error: Expected expression, found '.'
-   ╭─[ main.baml:3:9 ]
-   │
- 3 │   assert.not_null(result)
-   │         ┬  
-   │         ╰── Expected expression, found '.'
-   │ 
-   │ Note: Error code: E0010
 ───╯

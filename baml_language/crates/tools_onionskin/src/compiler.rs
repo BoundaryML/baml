@@ -2470,12 +2470,6 @@ impl CompilerRunner {
                             writeln!(output, "{line}").ok();
                             output_annotated.push((line, status));
                         }
-                        Stmt::Assert { condition } => {
-                            let desc = expr_desc(*condition, body);
-                            let line = format!("{pad}assert {desc}");
-                            writeln!(output, "{line}").ok();
-                            output_annotated.push((line, status));
-                        }
                         Stmt::Break => {
                             let line = format!("{pad}break");
                             writeln!(output, "{line}").ok();
@@ -3153,11 +3147,6 @@ impl CompilerRunner {
                             line.extend(expr_desc_spans(*target, body, inference));
                             line.push(DetailSpan::Code(format!(" {} ", assignop_sym(op))));
                             line.extend(expr_desc_spans(*value, body, inference));
-                            lines.push(line);
-                        }
-                        Stmt::Assert { condition } => {
-                            let mut line = vec![DetailSpan::Code(format!("{pad}  assert "))];
-                            line.extend(expr_desc_spans(*condition, body, inference));
                             lines.push(line);
                         }
                         Stmt::Break => {

@@ -32,14 +32,17 @@ fn user.$init_test(registry: testing.Registry) -> null {
 fn .<lambda($init_test, 0)>() -> null {
     // Locals:
     let _0: null // _0 // return
-    let _1: null
 
     bb0: {
-        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+        _0 = call const null(const null) -> [bb1];
     }
 
     bb1: {
-        unreachable;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
     }
 }
 

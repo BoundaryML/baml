@@ -85,8 +85,6 @@ pub enum TokenKind {
     Catch,
     #[token("catch_all")]
     CatchAll,
-    #[token("assert")]
-    Assert,
     #[token("throws")]
     Throws,
 
@@ -289,7 +287,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Match => "match",
             TokenKind::Catch => "catch",
             TokenKind::CatchAll => "catch_all",
-            TokenKind::Assert => "assert",
             TokenKind::Throws => "throws",
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",

@@ -12,22 +12,12 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: unresolved name: not_null
+  [type] Error: unresolved name: assert
    ╭─[ main.baml:1:1 ]
    │
  1 │ // Old-style config-block test (should continue to work)
    │ │ 
-   │ ╰─ unresolved name: not_null
+   │ ╰─ unresolved name: assert
    │ 
    │ Note: Error code: E0001
 ───╯
-
-  [parse] Error: Expected expression, found '.'
-    ╭─[ main.baml:16:9 ]
-    │
- 16 │   assert.not_null(result)
-    │         ┬  
-    │         ╰── Expected expression, found '.'
-    │ 
-    │ Note: Error code: E0010
-────╯

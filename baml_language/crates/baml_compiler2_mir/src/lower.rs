@@ -2687,11 +2687,6 @@ impl LoweringContext<'_> {
                 );
             }
 
-            AstStmt::Assert { condition } => {
-                let cond_op = self.lower_to_operand(condition);
-                self.builder.assert(cond_op);
-            }
-
             AstStmt::Missing => {
                 let callee = Operand::Constant(Constant::Function(ItemRef::Free {
                     package: Name::new("baml"),

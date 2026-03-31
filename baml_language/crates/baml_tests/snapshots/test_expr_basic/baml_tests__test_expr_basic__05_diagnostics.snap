@@ -22,52 +22,22 @@ source: crates/baml_tests/src/generated_tests.rs
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: unresolved name: equal
+  [type] Error: unresolved name: assert
    ╭─[ main.baml:1:1 ]
    │
  1 │ test "simple test" {
    │ │ 
-   │ ╰─ unresolved name: equal
+   │ ╰─ unresolved name: assert
    │ 
    │ Note: Error code: E0001
 ───╯
 
-  [type] Error: unresolved name: equal
+  [type] Error: unresolved name: assert
    ╭─[ main.baml:1:1 ]
    │
  1 │ test "simple test" {
    │ │ 
-   │ ╰─ unresolved name: equal
+   │ ╰─ unresolved name: assert
    │ 
    │ Note: Error code: E0001
-───╯
-
-  [type] Error: unresolved name: not_null
-   ╭─[ main.baml:1:1 ]
-   │
- 1 │ test "simple test" {
-   │ │ 
-   │ ╰─ unresolved name: not_null
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [parse] Error: Expected expression, found '.'
-   ╭─[ main.baml:3:9 ]
-   │
- 3 │   assert.equal(x, 3)
-   │         ┬  
-   │         ╰── Expected expression, found '.'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-  [parse] Error: Expected expression, found '.'
-   ╭─[ main.baml:8:9 ]
-   │
- 8 │   assert.not_null(result)
-   │         ┬  
-   │         ╰── Expected expression, found '.'
-   │ 
-   │ Note: Error code: E0010
 ───╯

@@ -30,11 +30,11 @@ SOURCE_FILE
               QUOTE """
             BLOCK_EXPR
               L_BRACE "{"
-              ASSERT_STMT "assert."
-                KW_ASSERT "assert"
-                DOT "."
               CALL_EXPR
-                WORD "is_true"
+                PATH_EXPR "assert.is_true"
+                  WORD "assert"
+                  DOT "."
+                  WORD "is_true"
                 CALL_ARGS "(true)"
                   L_PAREN "("
                   WORD "true"
@@ -59,11 +59,11 @@ SOURCE_FILE
               QUOTE """
             BLOCK_EXPR
               L_BRACE "{"
-              ASSERT_STMT "assert."
-                KW_ASSERT "assert"
-                DOT "."
               CALL_EXPR
-                WORD "is_true"
+                PATH_EXPR "assert.is_true"
+                  WORD "assert"
+                  DOT "."
+                  WORD "is_true"
                 CALL_ARGS "(true)"
                   L_PAREN "("
                   WORD "true"
@@ -73,22 +73,4 @@ SOURCE_FILE
       R_BRACE "}"
 
 === ERRORS ===
-Error: Expected expression, found '.'
-   ╭─[ main.baml:4:13 ]
-   │
- 4 │       assert.is_true(true)
-   │             ┬  
-   │             ╰── Expected expression, found '.'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected expression, found '.'
-   ╭─[ main.baml:9:13 ]
-   │
- 9 │       assert.is_true(true)
-   │             ┬  
-   │             ╰── Expected expression, found '.'
-   │ 
-   │ Note: Error code: E0010
-───╯
+None

@@ -550,19 +550,26 @@ function LoopStmts(items: int[], flag: bool) -> int {
 
 // ===== Assert statements =====
 function AssertStmts(x: int, y: int) -> int {
-    assert x > 0;
-    assert x < 100;
+    assert;
+    x > 0;
+    assert;
+    x < 100;
 
     // ===== Trivia on assert (line comments) =====
     // 1 assert keyword leading
-    assert x > 0; // 5 semicolon trailing
+    assert; // 2 assert keyword trailing
+    // 3 condition leading
+    x > 0; // 5 semicolon trailing
 
     // ===== Trivia on assert (block comments) =====
     /* 1 assert keyword leading */
-    assert /* 2 assert keyword trailing *//* 3 condition leading */x > 0/* 4 condition trailing */; /* 5 semicolon trailing */
+    assert; /* 2 assert keyword trailing */
+    /* 3 condition leading */
+    x > 0/* 4 condition trailing */; /* 5 semicolon trailing */
 
     // ===== Long assert condition exceeding limit =====
-    assert x > 0
+    assert;
+    x > 0
         && x < 100
         && y > 0
         && y < 100
@@ -573,7 +580,8 @@ function AssertStmts(x: int, y: int) -> int {
         && x % 7 == 0;
 
     // ===== Very long assert condition far exceeding limit =====
-    assert x > 0
+    assert;
+    x > 0
         && x < 100
         && y > 0
         && y < 100
@@ -588,7 +596,9 @@ function AssertStmts(x: int, y: int) -> int {
 
     // ===== Trivia on wrapping assert (line comments) =====
     // 1 assert leading
-    assert x > 0
+    assert; // 2 assert trailing
+    // 3 condition leading
+    x > 0
         && x < 100
         && y > 0
         && y < 100
@@ -602,7 +612,9 @@ function AssertStmts(x: int, y: int) -> int {
 
     // ===== Trivia on wrapping assert (block comments) =====
     /* 1 assert leading */
-    assert /* 2 assert trailing *//* 3 condition leading */x > 0
+    assert; /* 2 assert trailing */
+    /* 3 condition leading */
+    x > 0
         && x < 100
         && y > 0
         && y < 100

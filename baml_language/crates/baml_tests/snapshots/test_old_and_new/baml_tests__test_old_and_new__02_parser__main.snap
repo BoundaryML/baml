@@ -73,11 +73,11 @@ SOURCE_FILE
           QUOTE """
           WORD "hello"
           QUOTE """
-      ASSERT_STMT "assert."
-        KW_ASSERT "assert"
-        DOT "."
       CALL_EXPR
-        WORD "not_null"
+        PATH_EXPR "assert.not_null"
+          WORD "assert"
+          DOT "."
+          WORD "not_null"
         CALL_ARGS "(result)"
           L_PAREN "("
           WORD "result"
@@ -85,12 +85,4 @@ SOURCE_FILE
       R_BRACE "}"
 
 === ERRORS ===
-Error: Expected expression, found '.'
-    ╭─[ main.baml:16:9 ]
-    │
- 16 │   assert.not_null(result)
-    │         ┬  
-    │         ╰── Expected expression, found '.'
-    │ 
-    │ Note: Error code: E0010
-────╯
+None

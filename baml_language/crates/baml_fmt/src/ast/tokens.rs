@@ -72,7 +72,6 @@ define_keyword_tokens! {
     "continue" => SyntaxKind::KW_CONTINUE => Continue;
     "return" => SyntaxKind::KW_RETURN => Return;
     "match" => SyntaxKind::KW_MATCH => Match;
-    "assert" => SyntaxKind::KW_ASSERT => Assert;
     "watch" => SyntaxKind::KW_WATCH => Watch;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;

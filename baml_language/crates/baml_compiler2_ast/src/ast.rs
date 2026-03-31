@@ -441,9 +441,6 @@ pub enum Stmt {
         op: AssignOp,
         value: ExprId,
     },
-    Assert {
-        condition: ExprId,
-    },
     Missing,
     HeaderComment {
         name: Name,

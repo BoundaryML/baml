@@ -1,6 +1,3 @@
----
-source: crates/baml_tests/src/generated_tests.rs
----
 // Old-style config-block test (should continue to work)
 function Greet(name: string) -> string {
     "Hello, {name}!"
@@ -12,6 +9,7 @@ test OldStyle {
         name: "world",
     },
 }
+
 
 
 // New-style expression-body test

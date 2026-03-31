@@ -3,7 +3,7 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 function user.$init_test(registry: testing.Registry) -> ?  [expr] {
-  { registry.register_test("new style", () -> { { let result = "hello"; assert <missing> } not_null(result) }, null) }
+  { registry.register_test("new style", () -> { { let result = "hello" } assert.not_null(result) }, null) }
 }
 function user.Greet(name: string) -> string  [expr] {
   {  } "Hello, {name}!"

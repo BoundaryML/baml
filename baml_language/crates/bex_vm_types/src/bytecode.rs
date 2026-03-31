@@ -318,12 +318,6 @@ pub enum Instruction {
     /// simply has to clean up the call stack and continue execution.
     Return,
 
-    /// Pops a `Bool` value from the stack. If the value is `false`, raises
-    /// an assertion error.
-    ///
-    /// Format: `ASSERT`
-    Assert,
-
     /// Notifies about entering or exiting a block.
     ///
     /// Format: `NOTIFY_BLOCK block_index` where `block_index` is the index
@@ -633,7 +627,6 @@ impl std::fmt::Display for Instruction {
             Instruction::Throw => f.write_str("THROW"),
 
             Instruction::Return => f.write_str("RETURN"),
-            Instruction::Assert => f.write_str("ASSERT"),
             Instruction::AllocMap(n) => write!(f, "ALLOC_MAP {n}"),
             Instruction::Watch(i) => write!(f, "WATCH {i}"),
             Instruction::Unwatch(i) => write!(f, "UNWATCH {i}"),

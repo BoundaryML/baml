@@ -193,7 +193,6 @@ pub(crate) fn display_instruction(
         | Instruction::CallIndirect
         | Instruction::PopUnwind
         | Instruction::Throw
-        | Instruction::Assert
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::Unreachable
@@ -321,11 +320,9 @@ fn instruction_color(instruction: &Instruction) -> Color {
         }
         Instruction::PushUnwind { .. } | Instruction::PopUnwind => Color::Yellow,
         Instruction::Call(_) | Instruction::CallIndirect => Color::Magenta,
-        Instruction::Assert
-        | Instruction::Return
-        | Instruction::Pop(_)
-        | Instruction::Copy(_)
-        | Instruction::Throw => Color::Red,
+        Instruction::Return | Instruction::Pop(_) | Instruction::Copy(_) | Instruction::Throw => {
+            Color::Red
+        }
         Instruction::AllocMap(_)
         | Instruction::AllocInstance(_)
         | Instruction::AllocVariant(_)
@@ -742,7 +739,6 @@ fn display_instruction_textual(
 
         // --- Control ---
         Instruction::Return => "return".to_string(),
-        Instruction::Assert => "assert".to_string(),
         Instruction::Unreachable => "unreachable".to_string(),
 
         // --- Watch/Notify ---

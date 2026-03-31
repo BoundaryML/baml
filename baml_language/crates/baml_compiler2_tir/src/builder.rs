@@ -1132,10 +1132,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.record_expr_type(*value, result_ty);
                 false
             }
-            Stmt::Assert { condition } => {
-                self.infer_expr(*condition, body);
-                false
-            }
             Stmt::Break | Stmt::Continue => true, // break/continue diverge
             Stmt::Missing | Stmt::HeaderComment { .. } => false,
         }
@@ -2120,9 +2116,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_effective_throws_from_expr(*target, body, out);
                 self.collect_effective_throws_from_expr(*value, body, out);
             }
-            Stmt::Assert { condition } => {
-                self.collect_effective_throws_from_expr(*condition, body, out);
-            }
             Stmt::Throw { value } => {
                 self.collect_effective_throws_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);
@@ -2268,7 +2261,6 @@ impl<'db> TypeInferenceBuilder<'db> {
                 self.collect_throw_facts_from_expr(*target, body, out);
                 self.collect_throw_facts_from_expr(*value, body, out);
             }
-            Stmt::Assert { condition } => self.collect_throw_facts_from_expr(*condition, body, out),
             Stmt::Throw { value } => {
                 self.collect_throw_facts_from_expr(*value, body, out);
                 self.collect_throw_facts_from_value(*value, out);

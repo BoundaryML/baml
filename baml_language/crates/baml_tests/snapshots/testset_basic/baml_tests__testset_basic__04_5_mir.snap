@@ -62,7 +62,7 @@ fn .<lambda(<lambda($init_test, 0)>, 1)>() -> null {
     let _1: null
 
     bb0: {
-        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+        _1 = call const fn baml.sys.panic(const "unresolved name: assert") -> [bb1];
     }
 
     bb1: {
@@ -77,7 +77,7 @@ fn .<lambda(<lambda($init_test, 0)>, 2)>() -> null {
     let _1: null
 
     bb0: {
-        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+        _1 = call const fn baml.sys.panic(const "unresolved name: assert") -> [bb1];
     }
 
     bb1: {

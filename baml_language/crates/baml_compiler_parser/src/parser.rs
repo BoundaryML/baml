@@ -54,7 +54,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
         TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
-        TokenKind::Assert => SyntaxKind::KW_ASSERT,
         TokenKind::Throws => SyntaxKind::KW_THROWS,
 
         // Literals
@@ -418,7 +417,7 @@ impl<'a> Parser<'a> {
         let name_kind = self.tokens.get(i)?.kind;
         if !matches!(
             name_kind,
-            TokenKind::Word | TokenKind::Dynamic | TokenKind::Assert | TokenKind::Throws
+            TokenKind::Word | TokenKind::Dynamic | TokenKind::Throws
         ) {
             return None;
         }
@@ -435,7 +434,7 @@ impl<'a> Parser<'a> {
             let segment_kind = self.tokens.get(i)?.kind;
             if !matches!(
                 segment_kind,
-                TokenKind::Word | TokenKind::Dynamic | TokenKind::Assert | TokenKind::Throws
+                TokenKind::Word | TokenKind::Dynamic | TokenKind::Throws
             ) {
                 return None;
             }
@@ -1583,13 +1582,12 @@ impl<'a> Parser<'a> {
             }
 
             // Attribute name (can be dotted like stream.done)
-            // Allow keywords like 'assert' as attribute names (for @assert)
-            if p.at(TokenKind::Word) || p.at(TokenKind::Assert) {
+            if p.at(TokenKind::Word) {
                 p.bump();
                 // Handle dotted attribute names like @stream.done
                 while p.at(TokenKind::Dot) {
                     p.bump(); // consume dot
-                    if p.at(TokenKind::Word) || p.at(TokenKind::Assert) {
+                    if p.at(TokenKind::Word) {
                         p.bump(); // consume next segment
                     } else {
                         p.error_unexpected_token("attribute name segment after dot".to_string());
@@ -1614,19 +1612,12 @@ impl<'a> Parser<'a> {
             p.expect(TokenKind::AtAt);
 
             // Attribute name (can be dotted like @@stream.done)
-            if p.at(TokenKind::Word)
-                || p.at(TokenKind::Dynamic)
-                || p.at(TokenKind::Assert)
-                || p.at(TokenKind::Throws)
-            {
+            if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Throws) {
                 p.bump();
                 // Handle dotted attribute names like @@stream.done
                 while p.at(TokenKind::Dot) {
                     p.bump(); // consume dot
-                    if p.at(TokenKind::Word)
-                        || p.at(TokenKind::Dynamic)
-                        || p.at(TokenKind::Assert)
-                        || p.at(TokenKind::Throws)
+                    if p.at(TokenKind::Word) || p.at(TokenKind::Dynamic) || p.at(TokenKind::Throws)
                     {
                         p.bump(); // consume next segment
                     } else {
@@ -1671,7 +1662,7 @@ impl<'a> Parser<'a> {
         // Attribute argument can be:
         // - String: @alias("user_name")
         // - Raw string: @description(#"Multi-line\ndescription"#)
-        // - Expression: @assert({{ this > 0 }})
+        // - Expression: @check({{ this > 0 }})
         // - Unquoted string: @alias(my_alias) - one WORD token
 
         if self.parse_any_string() {
@@ -2368,7 +2359,6 @@ impl<'a> Parser<'a> {
                 | TokenKind::Throw
                 | TokenKind::Catch
                 | TokenKind::CatchAll
-                | TokenKind::Assert
                     if brace_depth == 1 =>
                 {
                     return false;
@@ -2623,8 +2613,6 @@ impl<'a> Parser<'a> {
             self.parse_continue_stmt();
         } else if self.at(TokenKind::Throw) {
             self.parse_throw_stmt();
-        } else if self.at(TokenKind::Assert) {
-            self.parse_assert_stmt();
         } else {
             // Expression statement
             self.parse_expr_stmt();
@@ -2729,18 +2717,6 @@ impl<'a> Parser<'a> {
             }
 
             p.parse_expr_bp_no_catch(0);
-        });
-    }
-
-    fn parse_assert_stmt(&mut self) {
-        self.with_node(SyntaxKind::ASSERT_STMT, |p| {
-            p.expect(TokenKind::Assert);
-
-            // Condition expression
-            p.parse_expr();
-
-            // Consume trailing semicolon
-            p.eat(TokenKind::Semicolon);
         });
     }
 

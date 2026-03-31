@@ -209,7 +209,6 @@ impl LoweringContext {
                         SyntaxKind::CONTINUE_STMT => {
                             self.alloc_stmt(Stmt::Continue, node.text_range())
                         }
-                        SyntaxKind::ASSERT_STMT => self.lower_assert_stmt(node),
                         _ => self.alloc_stmt(Stmt::Missing, node.text_range()),
                     };
                     stmts.push(stmt_id);
@@ -2255,20 +2254,6 @@ impl LoweringContext {
             range,
         );
         self.alloc_stmt(Stmt::Expr(block_expr), range)
-    }
-
-    fn lower_assert_stmt(&mut self, node: &SyntaxNode) -> StmtId {
-        let condition = if let Some(n) = node.children().next() {
-            self.lower_expr(&n)
-        } else {
-            // Try bare token: `assert x;`
-            node.children_with_tokens()
-                .filter_map(rowan::NodeOrToken::into_token)
-                .find_map(|t| self.try_lower_bare_token(&t))
-                .unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.text_range()))
-        };
-
-        self.alloc_stmt(Stmt::Assert { condition }, node.text_range())
     }
 
     fn lower_header_comment(&mut self, node: &SyntaxNode) -> StmtId {

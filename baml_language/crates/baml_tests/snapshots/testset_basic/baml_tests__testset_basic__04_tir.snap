@@ -13,25 +13,25 @@ function user.$init_test(registry: testing.Registry) -> ? throws never {
   }
   !! 0..0: unresolved member: testing.Registry.register_test_set
   !! 0..0: unresolved member: testing.TestSetCollector.register_test
-  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved name: assert
   !! 0..0: unresolved member: testing.TestSetCollector.register_test
-  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved name: assert
 }
 lambda user.$init_test {
   !! 0..0: unresolved member: testing.TestSetCollector.register_test
-  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved name: assert
   !! 0..0: unresolved member: testing.TestSetCollector.register_test
-  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved name: assert
 }
 lambda user.$init_test {
   !! 0..0: unresolved member: testing.TestSetCollector.register_test
-  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved name: assert
   !! 0..0: unresolved member: testing.TestSetCollector.register_test
-  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved name: assert
 }
 lambda user.$init_test {
   !! 0..0: unresolved member: testing.TestSetCollector.register_test
-  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved name: assert
   !! 0..0: unresolved member: testing.TestSetCollector.register_test
-  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved name: assert
 }

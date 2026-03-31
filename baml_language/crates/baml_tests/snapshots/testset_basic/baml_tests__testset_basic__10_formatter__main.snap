@@ -1,5 +1,11 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-=== PARSER ERROR ===
-[UnexpectedToken { expected: "expression", found: "'.'", span: Span { file_id: FileId(0), range: 51..52 } }, UnexpectedToken { expected: "expression", found: "'.'", span: Span { file_id: FileId(0), range: 98..99 } }]
+testset "basic group" {
+  test "first" {
+    assert.is_true(true)
+  }
+  test "second" {
+    assert.is_true(true)
+  }
+}
