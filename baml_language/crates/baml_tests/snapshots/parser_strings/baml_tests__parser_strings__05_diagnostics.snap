@@ -2,6 +2,16 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [hir] Error: `@alias` expects exactly one string argument
+   ╭─[ nested_quotes.baml:4:26 ]
+   │
+ 4 │   double_in_single string @alias('She said "hello"')
+   │                          ────┬───  
+   │                              ╰───── invalid builtin declaration
+   │ 
+   │ Note: Error code: E0037
+───╯
+
   [parse] Error: Expected ')', found error
    ╭─[ nested_quotes.baml:4:34 ]
    │

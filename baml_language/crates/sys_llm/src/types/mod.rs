@@ -3,7 +3,9 @@
 mod output_format;
 
 pub use output_format::OutputFormatContent;
-pub(crate) use output_format::{HoistClasses, MapStyle, RenderOptions, RenderSetting};
+pub(crate) use output_format::{
+    Class, ClassField, Enum, EnumValue, HoistClasses, MapStyle, RenderOptions, RenderSetting,
+};
 
 /// Errors that can occur during LLM operations (render, specialize, `build_request`).
 #[derive(Debug, thiserror::Error)]

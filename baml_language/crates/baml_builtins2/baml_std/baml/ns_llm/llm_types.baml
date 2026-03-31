@@ -176,15 +176,15 @@ class Client {
       ClientType.Primitive => {
         let resolve_fn = self.get_constructor()
         let primitive = resolve_fn()
+        let return_type = get_return_type(context.function_name)
 
-        let prompt = primitive.render_prompt(context.jinja_string, context.args)
+        let prompt = primitive.render_prompt(context.jinja_string, context.args, return_type)
         let specialized = primitive.specialize_prompt(prompt)
         let http_request = primitive.build_request(specialized)
         let http_response = root.http.send(http_request)
 
         if (http_response.ok()) {
           let body = http_response.text()
-          let return_type = get_return_type(context.function_name)
           let result: T = primitive.parse(body, return_type) catch (e) {
             _ => {
               if (active_delay_ms > 0) {
@@ -277,6 +277,7 @@ class PrimitiveClient {
     self,
     template: string,
     args: map<string, unknown>,
+    return_type: type,
   ) -> PromptAst throws root.errors.RenderPrompt {
     $rust_io_function
   }

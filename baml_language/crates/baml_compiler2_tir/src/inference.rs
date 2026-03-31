@@ -651,7 +651,7 @@ fn collect_class_fields<'db>(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResolvedClassFields {
     /// (field name, resolved type, field-level attributes)
-    pub fields: Vec<(Name, Ty, Vec<baml_compiler2_ast::RawAttribute>)>,
+    pub fields: Vec<(Name, Ty, Vec<baml_compiler2_hir::item_tree::Attribute>)>,
     /// Type lowering diagnostics: (error, span of the type annotation).
     pub diagnostics: Vec<(crate::infer_context::TirTypeError, text_size::TextRange)>,
 }
