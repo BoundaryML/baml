@@ -404,6 +404,27 @@ impl io::IoClassHttpResponse for DefaultIoOps {
     }
 }
 
+impl io::IoClassHttpSseStream for DefaultIoOps {
+    fn next(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _s: io::owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
 impl io::IoNamespaceHttp for DefaultIoOps {
     fn fetch(
         &self,
@@ -421,6 +442,15 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _req: io::owned::http::Request,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+    fn fetch_sse(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _req: io::owned::http::Request,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::SseStream> {
         SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }

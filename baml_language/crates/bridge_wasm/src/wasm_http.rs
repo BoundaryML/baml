@@ -222,6 +222,28 @@ impl IoClassHttpResponse for WasmHttp {
     }
 }
 
+impl io::IoClassHttpSseStream for WasmHttp {
+    fn next(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _sse_stream: io::owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _sse_stream: io::owned::http::SseStream,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
+    }
+}
+
 impl IoNamespaceHttp for WasmHttp {
     fn fetch(
         &self,
@@ -247,5 +269,15 @@ impl IoNamespaceHttp for WasmHttp {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
         self.do_send(call_id, request)
+    }
+
+    fn fetch_sse(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _request: io::owned::http::Request,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::http::SseStream> {
+        SysOpOutput::err(OpErrorKind::Unsupported)
     }
 }

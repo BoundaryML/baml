@@ -14,6 +14,7 @@
 
 mod io_impls;
 pub mod registry;
+mod sse_parser;
 
 pub use sys_ops::{SysOps, io};
 pub use sys_types::{CallId, CompletionHandle, OpError, SysOp, SysOpContext};
