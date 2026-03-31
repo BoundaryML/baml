@@ -105,12 +105,12 @@ pub struct ListTracesRequest {
     /// Search term to filter across function_call_id, function_name, tags, error, input (args), and output
     #[ts(optional)]
     pub search: Option<String>,
+    /// When true, also search LLM request/response text (full-text search). Defaults to false.
+    #[ts(optional)]
+    pub full_text_search: Option<bool>,
     /// Filter to only show LLM function calls (function_type = 'baml_llm')
     #[ts(optional)]
     pub llm_only: Option<FilterExpression<bool>>,
-    /// Whether to search across llm_request_text and llm_response_text columns
-    #[ts(optional)]
-    pub full_text_search: Option<bool>,
 }
 
 impl Default for ListTracesRequest {
@@ -136,8 +136,8 @@ impl Default for ListTracesRequest {
             streamed: None,
             relative_time: None,
             search: None,
-            llm_only: None,
             full_text_search: None,
+            llm_only: None,
         }
     }
 }
@@ -165,6 +165,9 @@ pub struct GetTraceChildrenRequest {
     /// Search term to highlight matching children
     #[ts(optional)]
     pub search: Option<String>,
+    /// When true, also search LLM request/response text (full-text search). Defaults to false.
+    #[ts(optional)]
+    pub full_text_search: Option<bool>,
     /// Status filter for matching children
     #[ts(optional)]
     pub status: Option<FilterExpression<FunctionCallStatus>>,
@@ -177,9 +180,6 @@ pub struct GetTraceChildrenRequest {
     /// LLM-only filter for matching children
     #[ts(optional)]
     pub llm_only: Option<FilterExpression<bool>>,
-    /// Whether to search across llm_request_text and llm_response_text columns
-    #[ts(optional)]
-    pub full_text_search: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -308,6 +308,7 @@ pub struct ListTraceFunctionSummariesRequest {
     pub error_filters: Option<Vec<TagFilter>>,
     #[ts(optional)]
     pub search: Option<String>,
+    /// When true, also search LLM request/response text (full-text search). Defaults to false.
     #[ts(optional)]
     pub full_text_search: Option<bool>,
 }
