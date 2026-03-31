@@ -1072,7 +1072,7 @@ SOURCE_FILE
                       WORD "the"
                       WORD "true"
                       WORD "branch"
-                      WORD "with"
+                      KW_WITH "with"
                       WORD "a"
                       WORD "very"
                       WORD "long"

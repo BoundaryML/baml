@@ -33,6 +33,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Client => SyntaxKind::KW_CLIENT,
         TokenKind::Generator => SyntaxKind::KW_GENERATOR,
         TokenKind::Test => SyntaxKind::KW_TEST,
+        TokenKind::TestSet => SyntaxKind::KW_TESTSET,
         TokenKind::RetryPolicy => SyntaxKind::KW_RETRY_POLICY,
         TokenKind::TemplateString => SyntaxKind::KW_TEMPLATE_STRING,
         TokenKind::TypeBuilder => SyntaxKind::KW_TYPE_BUILDER,
@@ -49,6 +50,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Watch => SyntaxKind::KW_WATCH,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
+        TokenKind::With => SyntaxKind::KW_WITH,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
         TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
@@ -717,6 +719,7 @@ impl<'a> Parser<'a> {
                     | TokenKind::Client
                     | TokenKind::Generator
                     | TokenKind::Test
+                    | TokenKind::TestSet
                     | TokenKind::RetryPolicy
                     | TokenKind::TemplateString
                     | TokenKind::TypeBuilder
@@ -4562,6 +4565,96 @@ impl<'a> Parser<'a> {
         });
     }
 
+    /// Check if the current test looks like an expression-body test.
+    /// Old-style: `test Name { ... }` (bare Word name)
+    /// New-style: `test "name" { ... }` or `test "name" with ... { ... }` (string literal name)
+    fn looks_like_test_expr_body(&self) -> bool {
+        // After the `test` keyword, peek at the next non-trivia token.
+        // If it's a Quote (regular string) or Hash (raw string), this is an expression-body test.
+        self.peek(1)
+            .map(|t| t.kind == TokenKind::Quote || t.kind == TokenKind::Hash)
+            .unwrap_or(false)
+    }
+
+    /// Parse an expression-body test: `test "name" [with expr] { body }`
+    pub(crate) fn parse_test_expr(&mut self) {
+        self.with_node(SyntaxKind::TEST_EXPR_DEF, |p| {
+            // 'test' keyword
+            p.expect(TokenKind::Test);
+
+            // Test name — must be a string literal
+            if !p.parse_string() && !p.parse_raw_string() {
+                p.error_unexpected_token("test name (string literal)".to_string());
+            }
+
+            // Optional `with` clause for test runner
+            if p.at(TokenKind::With) {
+                p.bump(); // consume 'with'
+                p.parse_expr(); // runner expression (e.g., testing.Quorum(5, 3))
+            }
+
+            // Block body — reuse existing expression body parsing
+            if p.at(TokenKind::LBrace) {
+                p.parse_block_expr();
+            } else {
+                p.error_unexpected_token("test body".to_string());
+            }
+        });
+    }
+
+    /// Parse a testset: `testset "name" [with expr] { body }`
+    /// Body can contain statements, nested `test` and `testset` blocks.
+    pub(crate) fn parse_testset(&mut self) {
+        self.with_node(SyntaxKind::TESTSET_DEF, |p| {
+            // 'testset' keyword
+            p.expect(TokenKind::TestSet);
+
+            // Testset name — must be a string literal
+            if !p.parse_string() && !p.parse_raw_string() {
+                p.error_unexpected_token("testset name (string literal)".to_string());
+            }
+
+            // Optional `with` clause for testset runner
+            if p.at(TokenKind::With) {
+                p.bump(); // consume 'with'
+                p.parse_expr(); // runner expression (e.g., testing.PassRate(0.7))
+            }
+
+            // Block body — parse as a block containing statements + nested test/testset
+            if p.at(TokenKind::LBrace) {
+                p.parse_testset_body();
+            } else {
+                p.error_unexpected_token("testset body".to_string());
+            }
+        });
+    }
+
+    /// Parse the body of a testset block.
+    /// Allows statements (let, for) and nested test/testset declarations.
+    fn parse_testset_body(&mut self) {
+        self.with_node(SyntaxKind::BLOCK_EXPR, |p| {
+            p.expect(TokenKind::LBrace);
+            while !p.at(TokenKind::RBrace) && !p.at_end() {
+                if p.at(TokenKind::Test) {
+                    if p.looks_like_test_expr_body() {
+                        p.parse_test_expr();
+                    } else {
+                        p.error_unexpected_token(
+                            "expression-body test (use string literal name)".to_string(),
+                        );
+                        p.bump();
+                    }
+                } else if p.at(TokenKind::TestSet) {
+                    p.parse_testset();
+                } else {
+                    // Regular statements: let, for, etc.
+                    p.parse_stmt();
+                }
+            }
+            p.expect(TokenKind::RBrace);
+        });
+    }
+
     // ============ Retry Policy Parsing ============
 
     /// Parse a retry policy declaration
@@ -4700,7 +4793,13 @@ fn parse_impl(tokens: &[Token], cache: Option<&mut NodeCache>) -> (GreenNode, Ve
         } else if parser.at(TokenKind::Generator) {
             parser.parse_generator();
         } else if parser.at(TokenKind::Test) {
-            parser.parse_test();
+            if parser.looks_like_test_expr_body() {
+                parser.parse_test_expr();
+            } else {
+                parser.parse_test();
+            }
+        } else if parser.at(TokenKind::TestSet) {
+            parser.parse_testset();
         } else if parser.at(TokenKind::RetryPolicy) {
             parser.parse_retry_policy();
         } else if parser.at(TokenKind::TemplateString) {

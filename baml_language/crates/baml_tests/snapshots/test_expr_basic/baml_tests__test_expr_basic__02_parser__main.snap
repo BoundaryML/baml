@@ -3,361 +3,80 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
-  TEST_DEF "test"
+  TEST_EXPR_DEF
     KW_TEST "test"
-  QUOTE """
-  WORD "simple"
-  TEST_DEF "test"
-    KW_TEST "test"
-  QUOTE """
-  L_BRACE "{"
-  LET_STMT
-    KW_LET "let"
-    WORD "x"
-    EQUALS "="
-    BINARY_EXPR "1 + 2"
-      INTEGER_LITERAL "1"
-      PLUS "+"
-      INTEGER_LITERAL "2"
-  KW_ASSERT "assert"
-  DOT "."
-  WORD "equal"
-  L_PAREN "("
-  WORD "x"
-  COMMA ","
-  INTEGER_LITERAL "3"
-  R_PAREN ")"
-  R_BRACE "}"
-  TEST_DEF "test"
-    KW_TEST "test"
-  QUOTE """
-  WORD "with"
-  WORD "not_null"
-  QUOTE """
-  L_BRACE "{"
-  LET_STMT
-    KW_LET "let"
-    WORD "result"
-    EQUALS "="
-    STRING_LITERAL "hello"
+    STRING_LITERAL "simple test"
       QUOTE """
-      WORD "hello"
+      WORD "simple"
+      KW_TEST "test"
       QUOTE """
-  KW_ASSERT "assert"
-  DOT "."
-  WORD "not_null"
-  L_PAREN "("
-  WORD "result"
-  R_PAREN ")"
-  R_BRACE "}"
+    BLOCK_EXPR
+      L_BRACE "{"
+      LET_STMT
+        KW_LET "let"
+        WORD "x"
+        EQUALS "="
+        BINARY_EXPR "1 + 2"
+          INTEGER_LITERAL "1"
+          PLUS "+"
+          INTEGER_LITERAL "2"
+      ASSERT_STMT "assert."
+        KW_ASSERT "assert"
+        DOT "."
+      CALL_EXPR
+        WORD "equal"
+        CALL_ARGS "(x, 3)"
+          L_PAREN "("
+          WORD "x"
+          COMMA ","
+          INTEGER_LITERAL "3"
+          R_PAREN ")"
+      R_BRACE "}"
+  TEST_EXPR_DEF
+    KW_TEST "test"
+    STRING_LITERAL "with not_null"
+      QUOTE """
+      KW_WITH "with"
+      WORD "not_null"
+      QUOTE """
+    BLOCK_EXPR
+      L_BRACE "{"
+      LET_STMT
+        KW_LET "let"
+        WORD "result"
+        EQUALS "="
+        STRING_LITERAL "hello"
+          QUOTE """
+          WORD "hello"
+          QUOTE """
+      ASSERT_STMT "assert."
+        KW_ASSERT "assert"
+        DOT "."
+      CALL_EXPR
+        WORD "not_null"
+        CALL_ARGS "(result)"
+          L_PAREN "("
+          WORD "result"
+          R_PAREN ")"
+      R_BRACE "}"
 
 === ERRORS ===
-Error: Expected test name, found '"'
-   ╭─[ main.baml:1:6 ]
-   │
- 1 │ test "simple test" {
-   │      ┬  
-   │      ╰── Expected test name, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected test body, found '"'
-   ╭─[ main.baml:1:6 ]
-   │
- 1 │ test "simple test" {
-   │      ┬  
-   │      ╰── Expected test body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:1:6 ]
-   │
- 1 │ test "simple test" {
-   │      ┬  
-   │      ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:1:7 ]
-   │
- 1 │ test "simple test" {
-   │       ───┬──  
-   │          ╰──── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected test name, found '"'
-   ╭─[ main.baml:1:18 ]
-   │
- 1 │ test "simple test" {
-   │                  ┬  
-   │                  ╰── Expected test name, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected test body, found '"'
-   ╭─[ main.baml:1:18 ]
-   │
- 1 │ test "simple test" {
-   │                  ┬  
-   │                  ╰── Expected test body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:1:18 ]
-   │
- 1 │ test "simple test" {
-   │                  ┬  
-   │                  ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '{'
-   ╭─[ main.baml:1:20 ]
-   │
- 1 │ test "simple test" {
-   │                    ┬  
-   │                    ╰── Expected top-level declaration, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found assert
-   ╭─[ main.baml:3:3 ]
-   │
- 3 │   assert.equal(x, 3)
-   │   ───┬──  
-   │      ╰──── Expected top-level declaration, found assert
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '.'
+Error: Expected expression, found '.'
    ╭─[ main.baml:3:9 ]
    │
  3 │   assert.equal(x, 3)
    │         ┬  
-   │         ╰── Expected top-level declaration, found '.'
+   │         ╰── Expected expression, found '.'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:3:10 ]
-   │
- 3 │   assert.equal(x, 3)
-   │          ──┬──  
-   │            ╰──── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '('
-   ╭─[ main.baml:3:15 ]
-   │
- 3 │   assert.equal(x, 3)
-   │               ┬  
-   │               ╰── Expected top-level declaration, found '('
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:3:16 ]
-   │
- 3 │   assert.equal(x, 3)
-   │                ┬  
-   │                ╰── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found ','
-   ╭─[ main.baml:3:17 ]
-   │
- 3 │   assert.equal(x, 3)
-   │                 ┬  
-   │                 ╰── Expected top-level declaration, found ','
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found integer
-   ╭─[ main.baml:3:19 ]
-   │
- 3 │   assert.equal(x, 3)
-   │                   ┬  
-   │                   ╰── Expected top-level declaration, found integer
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found ')'
-   ╭─[ main.baml:3:20 ]
-   │
- 3 │   assert.equal(x, 3)
-   │                    ┬  
-   │                    ╰── Expected top-level declaration, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '}'
-   ╭─[ main.baml:4:1 ]
-   │
- 4 │ }
-   │ ┬  
-   │ ╰── Expected top-level declaration, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected test name, found '"'
-   ╭─[ main.baml:6:6 ]
-   │
- 6 │ test "with not_null" {
-   │      ┬  
-   │      ╰── Expected test name, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected test body, found '"'
-   ╭─[ main.baml:6:6 ]
-   │
- 6 │ test "with not_null" {
-   │      ┬  
-   │      ╰── Expected test body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:6:6 ]
-   │
- 6 │ test "with not_null" {
-   │      ┬  
-   │      ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:6:7 ]
-   │
- 6 │ test "with not_null" {
-   │       ──┬─  
-   │         ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:6:12 ]
-   │
- 6 │ test "with not_null" {
-   │            ────┬───  
-   │                ╰───── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:6:20 ]
-   │
- 6 │ test "with not_null" {
-   │                    ┬  
-   │                    ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '{'
-   ╭─[ main.baml:6:22 ]
-   │
- 6 │ test "with not_null" {
-   │                      ┬  
-   │                      ╰── Expected top-level declaration, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found assert
-   ╭─[ main.baml:8:3 ]
-   │
- 8 │   assert.not_null(result)
-   │   ───┬──  
-   │      ╰──── Expected top-level declaration, found assert
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '.'
+Error: Expected expression, found '.'
    ╭─[ main.baml:8:9 ]
    │
  8 │   assert.not_null(result)
    │         ┬  
-   │         ╰── Expected top-level declaration, found '.'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:8:10 ]
-   │
- 8 │   assert.not_null(result)
-   │          ────┬───  
-   │              ╰───── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '('
-   ╭─[ main.baml:8:18 ]
-   │
- 8 │   assert.not_null(result)
-   │                  ┬  
-   │                  ╰── Expected top-level declaration, found '('
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:8:19 ]
-   │
- 8 │   assert.not_null(result)
-   │                   ───┬──  
-   │                      ╰──── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found ')'
-   ╭─[ main.baml:8:25 ]
-   │
- 8 │   assert.not_null(result)
-   │                         ┬  
-   │                         ╰── Expected top-level declaration, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '}'
-   ╭─[ main.baml:9:1 ]
-   │
- 9 │ }
-   │ ┬  
-   │ ╰── Expected top-level declaration, found '}'
+   │         ╰── Expected expression, found '.'
    │ 
    │ Note: Error code: E0010
 ───╯

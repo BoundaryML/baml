@@ -44,7 +44,7 @@ SOURCE_FILE
             WORD "an"
             WORD "Analysis"
             WORD "object"
-            WORD "with"
+            KW_WITH "with"
             WORD "sentiment"
             WORD "and"
             WORD "keywords"

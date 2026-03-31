@@ -49,6 +49,8 @@ pub enum TokenKind {
     Generator,
     #[token("test")]
     Test,
+    #[token("testset")]
+    TestSet,
     #[token("retry_policy")]
     RetryPolicy,
     #[token("template_string")]
@@ -95,6 +97,8 @@ pub enum TokenKind {
     Instanceof,
     #[token("dynamic")]
     Dynamic,
+    #[token("with")]
+    With,
 
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
@@ -268,6 +272,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Client => "client",
             TokenKind::Generator => "generator",
             TokenKind::Test => "test",
+            TokenKind::TestSet => "testset",
             TokenKind::RetryPolicy => "retry_policy",
             TokenKind::TemplateString => "template_string",
             TokenKind::TypeBuilder => "type_builder",
@@ -289,6 +294,7 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",
             TokenKind::Dynamic => "dynamic",
+            TokenKind::With => "with",
 
             // Identifiers and literals
             TokenKind::Word => "identifier",

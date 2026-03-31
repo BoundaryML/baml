@@ -3,543 +3,92 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === SYNTAX TREE ===
 SOURCE_FILE
-  WORD "testset"
-  QUOTE """
-  WORD "all"
-  WORD "evals"
-  QUOTE """
-  L_BRACE "{"
-  WORD "testset"
-  QUOTE """
-  WORD "normal"
-  WORD "cases"
-  QUOTE """
-  L_BRACE "{"
-  TEST_DEF "test"
-    KW_TEST "test"
-  QUOTE """
-  WORD "case"
-  WORD "one"
-  QUOTE """
-  L_BRACE "{"
-  KW_ASSERT "assert"
-  DOT "."
-  WORD "is_true"
-  L_PAREN "("
-  WORD "true"
-  R_PAREN ")"
-  R_BRACE "}"
-  R_BRACE "}"
-  WORD "testset"
-  QUOTE """
-  WORD "hard"
-  WORD "cases"
-  QUOTE """
-  L_BRACE "{"
-  TEST_DEF "test"
-    KW_TEST "test"
-  QUOTE """
-  WORD "case"
-  WORD "two"
-  QUOTE """
-  L_BRACE "{"
-  KW_ASSERT "assert"
-  DOT "."
-  WORD "is_true"
-  L_PAREN "("
-  WORD "true"
-  R_PAREN ")"
-  R_BRACE "}"
-  R_BRACE "}"
-  R_BRACE "}"
+  TESTSET_DEF
+    KW_TESTSET "testset"
+    STRING_LITERAL "all evals"
+      QUOTE """
+      WORD "all"
+      WORD "evals"
+      QUOTE """
+    BLOCK_EXPR
+      L_BRACE "{"
+      TESTSET_DEF
+        KW_TESTSET "testset"
+        STRING_LITERAL "normal cases"
+          QUOTE """
+          WORD "normal"
+          WORD "cases"
+          QUOTE """
+        BLOCK_EXPR
+          L_BRACE "{"
+          TEST_EXPR_DEF
+            KW_TEST "test"
+            STRING_LITERAL "case one"
+              QUOTE """
+              WORD "case"
+              WORD "one"
+              QUOTE """
+            BLOCK_EXPR
+              L_BRACE "{"
+              ASSERT_STMT "assert."
+                KW_ASSERT "assert"
+                DOT "."
+              CALL_EXPR
+                WORD "is_true"
+                CALL_ARGS "(true)"
+                  L_PAREN "("
+                  WORD "true"
+                  R_PAREN ")"
+              R_BRACE "}"
+          R_BRACE "}"
+      TESTSET_DEF
+        KW_TESTSET "testset"
+        STRING_LITERAL "hard cases"
+          QUOTE """
+          WORD "hard"
+          WORD "cases"
+          QUOTE """
+        BLOCK_EXPR
+          L_BRACE "{"
+          TEST_EXPR_DEF
+            KW_TEST "test"
+            STRING_LITERAL "case two"
+              QUOTE """
+              WORD "case"
+              WORD "two"
+              QUOTE """
+            BLOCK_EXPR
+              L_BRACE "{"
+              ASSERT_STMT "assert."
+                KW_ASSERT "assert"
+                DOT "."
+              CALL_EXPR
+                WORD "is_true"
+                CALL_ARGS "(true)"
+                  L_PAREN "("
+                  WORD "true"
+                  R_PAREN ")"
+              R_BRACE "}"
+          R_BRACE "}"
+      R_BRACE "}"
 
 === ERRORS ===
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:1:1 ]
-   │
- 1 │ testset "all evals" {
-   │ ───┬───  
-   │    ╰───── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:1:9 ]
-   │
- 1 │ testset "all evals" {
-   │         ┬  
-   │         ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:1:10 ]
-   │
- 1 │ testset "all evals" {
-   │          ─┬─  
-   │           ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:1:14 ]
-   │
- 1 │ testset "all evals" {
-   │              ──┬──  
-   │                ╰──── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:1:19 ]
-   │
- 1 │ testset "all evals" {
-   │                   ┬  
-   │                   ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '{'
-   ╭─[ main.baml:1:21 ]
-   │
- 1 │ testset "all evals" {
-   │                     ┬  
-   │                     ╰── Expected top-level declaration, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:2:3 ]
-   │
- 2 │   testset "normal cases" {
-   │   ───┬───  
-   │      ╰───── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:2:11 ]
-   │
- 2 │   testset "normal cases" {
-   │           ┬  
-   │           ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:2:12 ]
-   │
- 2 │   testset "normal cases" {
-   │            ───┬──  
-   │               ╰──── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:2:19 ]
-   │
- 2 │   testset "normal cases" {
-   │                   ──┬──  
-   │                     ╰──── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:2:24 ]
-   │
- 2 │   testset "normal cases" {
-   │                        ┬  
-   │                        ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '{'
-   ╭─[ main.baml:2:26 ]
-   │
- 2 │   testset "normal cases" {
-   │                          ┬  
-   │                          ╰── Expected top-level declaration, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected test name, found '"'
-   ╭─[ main.baml:3:10 ]
-   │
- 3 │     test "case one" {
-   │          ┬  
-   │          ╰── Expected test name, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected test body, found '"'
-   ╭─[ main.baml:3:10 ]
-   │
- 3 │     test "case one" {
-   │          ┬  
-   │          ╰── Expected test body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:3:10 ]
-   │
- 3 │     test "case one" {
-   │          ┬  
-   │          ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:3:11 ]
-   │
- 3 │     test "case one" {
-   │           ──┬─  
-   │             ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:3:16 ]
-   │
- 3 │     test "case one" {
-   │                ─┬─  
-   │                 ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:3:19 ]
-   │
- 3 │     test "case one" {
-   │                   ┬  
-   │                   ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '{'
-   ╭─[ main.baml:3:21 ]
-   │
- 3 │     test "case one" {
-   │                     ┬  
-   │                     ╰── Expected top-level declaration, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found assert
-   ╭─[ main.baml:4:7 ]
-   │
- 4 │       assert.is_true(true)
-   │       ───┬──  
-   │          ╰──── Expected top-level declaration, found assert
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '.'
+Error: Expected expression, found '.'
    ╭─[ main.baml:4:13 ]
    │
  4 │       assert.is_true(true)
    │             ┬  
-   │             ╰── Expected top-level declaration, found '.'
+   │             ╰── Expected expression, found '.'
    │ 
    │ Note: Error code: E0010
 ───╯
 
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:4:14 ]
-   │
- 4 │       assert.is_true(true)
-   │              ───┬───  
-   │                 ╰───── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '('
-   ╭─[ main.baml:4:21 ]
-   │
- 4 │       assert.is_true(true)
-   │                     ┬  
-   │                     ╰── Expected top-level declaration, found '('
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:4:22 ]
-   │
- 4 │       assert.is_true(true)
-   │                      ──┬─  
-   │                        ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found ')'
-   ╭─[ main.baml:4:26 ]
-   │
- 4 │       assert.is_true(true)
-   │                          ┬  
-   │                          ╰── Expected top-level declaration, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '}'
-   ╭─[ main.baml:5:5 ]
-   │
- 5 │     }
-   │     ┬  
-   │     ╰── Expected top-level declaration, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '}'
-   ╭─[ main.baml:6:3 ]
-   │
- 6 │   }
-   │   ┬  
-   │   ╰── Expected top-level declaration, found '}'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:7:3 ]
-   │
- 7 │   testset "hard cases" {
-   │   ───┬───  
-   │      ╰───── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:7:11 ]
-   │
- 7 │   testset "hard cases" {
-   │           ┬  
-   │           ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:7:12 ]
-   │
- 7 │   testset "hard cases" {
-   │            ──┬─  
-   │              ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:7:17 ]
-   │
- 7 │   testset "hard cases" {
-   │                 ──┬──  
-   │                   ╰──── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:7:22 ]
-   │
- 7 │   testset "hard cases" {
-   │                      ┬  
-   │                      ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '{'
-   ╭─[ main.baml:7:24 ]
-   │
- 7 │   testset "hard cases" {
-   │                        ┬  
-   │                        ╰── Expected top-level declaration, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected test name, found '"'
-   ╭─[ main.baml:8:10 ]
-   │
- 8 │     test "case two" {
-   │          ┬  
-   │          ╰── Expected test name, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected test body, found '"'
-   ╭─[ main.baml:8:10 ]
-   │
- 8 │     test "case two" {
-   │          ┬  
-   │          ╰── Expected test body, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:8:10 ]
-   │
- 8 │     test "case two" {
-   │          ┬  
-   │          ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:8:11 ]
-   │
- 8 │     test "case two" {
-   │           ──┬─  
-   │             ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:8:16 ]
-   │
- 8 │     test "case two" {
-   │                ─┬─  
-   │                 ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '"'
-   ╭─[ main.baml:8:19 ]
-   │
- 8 │     test "case two" {
-   │                   ┬  
-   │                   ╰── Expected top-level declaration, found '"'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '{'
-   ╭─[ main.baml:8:21 ]
-   │
- 8 │     test "case two" {
-   │                     ┬  
-   │                     ╰── Expected top-level declaration, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found assert
-   ╭─[ main.baml:9:7 ]
-   │
- 9 │       assert.is_true(true)
-   │       ───┬──  
-   │          ╰──── Expected top-level declaration, found assert
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '.'
+Error: Expected expression, found '.'
    ╭─[ main.baml:9:13 ]
    │
  9 │       assert.is_true(true)
    │             ┬  
-   │             ╰── Expected top-level declaration, found '.'
+   │             ╰── Expected expression, found '.'
    │ 
    │ Note: Error code: E0010
 ───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:9:14 ]
-   │
- 9 │       assert.is_true(true)
-   │              ───┬───  
-   │                 ╰───── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '('
-   ╭─[ main.baml:9:21 ]
-   │
- 9 │       assert.is_true(true)
-   │                     ┬  
-   │                     ╰── Expected top-level declaration, found '('
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found identifier
-   ╭─[ main.baml:9:22 ]
-   │
- 9 │       assert.is_true(true)
-   │                      ──┬─  
-   │                        ╰─── Expected top-level declaration, found identifier
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found ')'
-   ╭─[ main.baml:9:26 ]
-   │
- 9 │       assert.is_true(true)
-   │                          ┬  
-   │                          ╰── Expected top-level declaration, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ main.baml:10:5 ]
-    │
- 10 │     }
-    │     ┬  
-    │     ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ main.baml:11:3 ]
-    │
- 11 │   }
-    │   ┬  
-    │   ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ main.baml:12:1 ]
-    │
- 12 │ }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯

@@ -267,7 +267,7 @@ SOURCE_FILE
   R_BRACE "}"
   WORD "Return"
   WORD "result"
-  WORD "with"
+  KW_WITH "with"
   WORD "emojis"
   COLON ":"
   ERROR_TOKEN "✅"
@@ -451,7 +451,7 @@ Error: Expected top-level declaration, found identifier
 
 Error: Expected top-level declaration, found identifier
 
-Error: Expected top-level declaration, found identifier
+Error: Expected top-level declaration, found with
 
 Error: Expected top-level declaration, found identifier
 

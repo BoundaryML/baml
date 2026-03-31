@@ -985,7 +985,7 @@ SOURCE_FILE
             STRING_LITERAL " concatenated with "
               QUOTE """
               WORD "concatenated"
-              WORD "with"
+              KW_WITH "with"
               QUOTE """
           PLUS "+"
           STRING_LITERAL "another very long string that together exceeds the line limit easily and comfortably"

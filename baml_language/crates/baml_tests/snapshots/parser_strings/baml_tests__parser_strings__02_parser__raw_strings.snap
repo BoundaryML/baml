@@ -94,7 +94,7 @@ SOURCE_FILE
               WORD "multiline"
               WORD "raw"
               WORD "string"
-              WORD "with"
+              KW_WITH "with"
               QUOTE """
               WORD "quotes"
               QUOTE """

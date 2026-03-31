@@ -3,10 +3,10 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 Test "test"
 Quote "\""
-Word "with"
+With "with"
 Word "quorum"
 Quote "\""
-Word "with"
+With "with"
 Word "testing"
 Dot "."
 Word "Quorum"

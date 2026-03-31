@@ -15,6 +15,7 @@ pub enum SyntaxKind {
     KW_CLIENT,
     KW_GENERATOR,
     KW_TEST,
+    KW_TESTSET,
     KW_RETRY_POLICY,
     KW_TEMPLATE_STRING,
     KW_TYPE_BUILDER,
@@ -40,6 +41,7 @@ pub enum SyntaxKind {
     KW_WATCH,
     KW_INSTANCEOF,
     KW_DYNAMIC,
+    KW_WITH,
 
     // Literals
     WORD,            // Any word (non-keyword identifier)
@@ -140,6 +142,8 @@ pub enum SyntaxKind {
     CLIENT_DEF,
     GENERATOR_DEF,
     TEST_DEF,
+    TEST_EXPR_DEF,
+    TESTSET_DEF,
     RETRY_POLICY_DEF,
     TEMPLATE_STRING_DEF,
     TYPE_ALIAS_DEF,
@@ -367,6 +371,7 @@ impl SyntaxKind {
                 | Self::KW_CLIENT
                 | Self::KW_GENERATOR
                 | Self::KW_TEST
+                | Self::KW_TESTSET
                 | Self::KW_RETRY_POLICY
                 | Self::KW_TEMPLATE_STRING
                 | Self::KW_TYPE_BUILDER
@@ -388,6 +393,7 @@ impl SyntaxKind {
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC
+                | Self::KW_WITH
         )
     }
 }

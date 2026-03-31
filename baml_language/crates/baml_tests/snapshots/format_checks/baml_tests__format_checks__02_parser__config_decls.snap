@@ -560,7 +560,7 @@ SOURCE_FILE
               STRING_LITERAL "value with spaces"
                 QUOTE """
                 WORD "value"
-                WORD "with"
+                KW_WITH "with"
                 WORD "spaces"
                 QUOTE """
           R_BRACE "}"
