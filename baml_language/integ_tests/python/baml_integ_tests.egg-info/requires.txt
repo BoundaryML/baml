@@ -1,0 +1,5 @@
+baml-py
+pydantic>=2.0
+pytest
+pytest-asyncio
+python-dotenv
