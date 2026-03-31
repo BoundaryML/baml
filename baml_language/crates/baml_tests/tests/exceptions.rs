@@ -530,3 +530,230 @@ async fn catch_negative_index() {
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
+
+// ============================================================================
+// Same-frame runtime panics — the error happens inside the callee, caught by
+// the caller's exception table. This is the core feature: non-call instructions
+// (like BinOp Div) are now covered.
+// ============================================================================
+
+#[tokio::test]
+async fn same_frame_division_by_zero_caught() {
+    let output = baml_test!(
+        r#"
+        function div(a: int, b: int) -> int {
+            a / b
+        }
+
+        function main() -> int {
+            div(10, 0) catch (e) {
+                _ => -1
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
+// ============================================================================
+// Nested catch — inner handler catches, outer doesn't fire
+// ============================================================================
+
+#[tokio::test]
+async fn nested_catch_inner_handles() {
+    let output = baml_test!(
+        r#"
+        function inner_throws() -> int {
+            throw "inner";
+        }
+
+        function middle() -> int {
+            inner_throws() catch (e) {
+                _ => 42
+            }
+        }
+
+        function main() -> int {
+            middle() catch (e) {
+                _ => -1
+            }
+        }
+    "#
+    );
+
+    // Inner catch handles it, middle returns 42, outer catch never fires.
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+// ============================================================================
+// Sequential errors — first caught, execution continues, second also caught
+// ============================================================================
+
+#[tokio::test]
+async fn sequential_catches_both_recover() {
+    let output = baml_test!(
+        r#"
+        function fails1() -> int {
+            throw "one";
+        }
+
+        function fails2() -> int {
+            throw "two";
+        }
+
+        function main() -> int {
+            let a = fails1() catch (e) { _ => 10 };
+            let b = fails2() catch (e) { _ => 20 };
+            a + b
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(30)));
+}
+
+// ============================================================================
+// Uncaught panics propagate as unhandled errors
+// ============================================================================
+
+#[tokio::test]
+async fn uncaught_division_by_zero_propagates() {
+    let output = baml_test!(
+        r#"
+        function div(a: int, b: int) -> int {
+            a / b
+        }
+
+        function main() -> int {
+            div(1, 0)
+        }
+    "#
+    );
+
+    assert!(
+        output.result.is_err(),
+        "expected error, got {:?}",
+        output.result
+    );
+}
+
+#[tokio::test]
+async fn uncaught_index_out_of_bounds_propagates() {
+    let output = baml_test!(
+        r#"
+        function oob() -> int {
+            let arr = [1, 2, 3];
+            arr[99]
+        }
+
+        function main() -> int {
+            oob()
+        }
+    "#
+    );
+
+    assert!(
+        output.result.is_err(),
+        "expected error, got {:?}",
+        output.result
+    );
+}
+
+// ============================================================================
+// Re-throw from catch arm propagates to outer handler
+// ============================================================================
+
+#[tokio::test]
+async fn rethrow_propagates_to_outer_catch() {
+    let output = baml_test!(
+        r#"
+        function inner() -> int {
+            throw "original";
+        }
+
+        function middle() -> int {
+            inner() catch (e) {
+                _ => throw "rethrown"
+            }
+        }
+
+        function main() -> int {
+            middle() catch (e) {
+                _ => 99
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+// ============================================================================
+// Typed panic instance fields — verify the caught error has accessible fields
+// ============================================================================
+
+#[tokio::test]
+#[ignore = "compiler2: catch binding typed as unknown when throw set is empty — needs panic type inference"]
+async fn caught_index_oob_has_index_field() {
+    let output = baml_test!(
+        r#"
+        function oob() -> int {
+            let arr = [10, 20, 30];
+            arr[7]
+        }
+
+        function main() -> int {
+            oob() catch (e) {
+                _ => e.index
+            }
+        }
+    "#
+    );
+
+    // IndexOutOfBounds { index: 7, length: 3 } — e.index should be 7
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}
+
+#[tokio::test]
+#[ignore = "compiler2: catch binding typed as unknown when throw set is empty — needs panic type inference"]
+async fn caught_index_oob_has_length_field() {
+    let output = baml_test!(
+        r#"
+        function oob() -> int {
+            let arr = [10, 20, 30];
+            arr[7]
+        }
+
+        function main() -> int {
+            oob() catch (e) {
+                _ => e.length
+            }
+        }
+    "#
+    );
+
+    // IndexOutOfBounds { index: 7, length: 3 } — e.length should be 3
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+#[tokio::test]
+#[ignore = "compiler2: catch binding typed as unknown when throw set is empty — needs panic type inference"]
+async fn caught_division_by_zero_has_dividend_field() {
+    let output = baml_test!(
+        r#"
+        function div(a: int, b: int) -> int {
+            a / b
+        }
+
+        function main() -> int {
+            div(42, 0) catch (e) {
+                _ => e.dividend
+            }
+        }
+    "#
+    );
+
+    // DivisionByZero { dividend: 42 } — e.dividend should be 42
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
