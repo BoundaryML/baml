@@ -112,6 +112,9 @@ pub struct UiFunctionCall {
     #[ts(type = "unknown")]
     pub baml_options: serde_json::Value,
     pub inputs: Vec<UiFunctionInput>,
+    /// True when the inputs were too large and were truncated by the query
+    #[serde(default)]
+    pub inputs_truncated: bool,
     #[ts(as = "Option<BamlValue>")]
     pub output: serde_json::Value,
     pub error: Option<UiBamlFunctionCallError>,
