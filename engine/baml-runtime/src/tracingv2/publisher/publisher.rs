@@ -231,7 +231,7 @@ pub fn start_publisher(
         log::debug!("Skipping publisher because BOUNDARY_API_KEY is not set");
         return;
     }
-    log::debug!("Starting publisher");
+    log::info!("Starting publisher");
 
     // Read batch sizes early to calculate channel capacities
     let trace_batch_size = lookup

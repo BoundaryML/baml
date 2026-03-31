@@ -387,3 +387,49 @@ impl ApiEndpoint for ListTraceFunctionSummaries {
 
     const PATH: &'static str = "/v1/traces/function-summaries";
 }
+
+/// Batch request to compute costs for a set of root trace function_call_ids.
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct GetTraceCostsRequest {
+    #[ts(type = "string")]
+    pub project_id: ProjectId,
+    /// Root function_call_ids to compute costs for.
+    pub function_call_ids: Vec<String>,
+    /// Optional relative time to scope the cost query.
+    #[ts(optional)]
+    pub relative_time: Option<super::ui_function_calls::RelativeTime>,
+    /// Optional function name to narrow the cost query.
+    #[ts(optional)]
+    pub function_name: Option<String>,
+}
+
+/// Cost entry for a single root trace.
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct TraceCostEntry {
+    pub function_call_id: String,
+    #[ts(type = "number", optional)]
+    pub input_cost: Option<f64>,
+    #[ts(type = "number", optional)]
+    pub output_cost: Option<f64>,
+    #[ts(type = "number", optional)]
+    pub total_cost: Option<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GetTraceCostsResponse {
+    pub costs: Vec<TraceCostEntry>,
+}
+
+pub struct GetTraceCosts;
+
+impl ApiEndpoint for GetTraceCosts {
+    type Request<'a> = GetTraceCostsRequest;
+    type Response<'a> = GetTraceCostsResponse;
+
+    const PATH: &'static str = "/v1/traces/costs";
+}
