@@ -108,6 +108,9 @@ pub struct ListTracesRequest {
     /// Filter to only show LLM function calls (function_type = 'baml_llm')
     #[ts(optional)]
     pub llm_only: Option<FilterExpression<bool>>,
+    /// Whether to search across llm_request_text and llm_response_text columns
+    #[ts(optional)]
+    pub full_text_search: Option<bool>,
 }
 
 impl Default for ListTracesRequest {
@@ -134,6 +137,7 @@ impl Default for ListTracesRequest {
             relative_time: None,
             search: None,
             llm_only: None,
+            full_text_search: None,
         }
     }
 }
@@ -173,6 +177,9 @@ pub struct GetTraceChildrenRequest {
     /// LLM-only filter for matching children
     #[ts(optional)]
     pub llm_only: Option<FilterExpression<bool>>,
+    /// Whether to search across llm_request_text and llm_response_text columns
+    #[ts(optional)]
+    pub full_text_search: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -301,6 +308,8 @@ pub struct ListTraceFunctionSummariesRequest {
     pub error_filters: Option<Vec<TagFilter>>,
     #[ts(optional)]
     pub search: Option<String>,
+    #[ts(optional)]
+    pub full_text_search: Option<bool>,
 }
 
 impl Default for ListTraceFunctionSummariesRequest {
@@ -319,6 +328,7 @@ impl Default for ListTraceFunctionSummariesRequest {
             tag_filters: None,
             error_filters: None,
             search: None,
+            full_text_search: None,
         }
     }
 }
