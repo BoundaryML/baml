@@ -154,10 +154,11 @@ impl OutputFormatContent {
                 let enm = self.find_enum(name)?;
                 let enum_str = self.render_enum(enm, options);
                 // If this is the target enum, prepend prefix
-                if target_is_hoisted_enum && name == enm_display_name(&self.target) {
-                    prefix
-                        .as_ref()
-                        .map_or(Some(enum_str.clone()), |p| Some(format!("{p}{enum_str}")))
+                if target_is_hoisted_enum && enm_display_name(&self.target) == Some(name.as_str()) {
+                    match &prefix {
+                        Some(p) => Some(format!("{p}{enum_str}")),
+                        None => Some(enum_str),
+                    }
                 } else {
                     Some(enum_str)
                 }
@@ -226,12 +227,15 @@ impl OutputFormatContent {
             } else {
                 self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
             }
-        } else if let Ty::Enum(_, _) = &self.target {
+        } else if let Ty::Enum(tn, _) = &self.target {
             if target_is_hoisted_enum {
                 // Hoisted target enum: rendered in enum_definitions block
                 None
+            } else if let Some(enm) = self.find_enum(tn.display_name.as_str()) {
+                // Non-hoisted target enum: render full block format (not inline)
+                Some(self.render_enum(enm, options))
             } else {
-                self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
+                Some(tn.display_name.to_string())
             }
         } else if let Ty::TypeAlias(fqn, _) = &self.target {
             Some(fqn.display_name.to_string())
@@ -289,6 +293,7 @@ impl OutputFormatContent {
         let mut hoisted = indexmap::IndexSet::new();
         for (name, enm) in &self.enums {
             if enm.values.len() > Self::INLINE_RENDER_ENUM_MAX_VALUES
+                || enm.description.is_some()
                 || enm.values.iter().any(|v| v.description.is_some())
                 || matches!(options.always_hoist_enums, RenderSetting::Always(true))
             {
@@ -652,10 +657,10 @@ fn rendered_name<'a>(name: &'a str, alias: Option<&'a String>) -> &'a str {
 }
 
 /// Extract the display name from an enum target type.
-fn enm_display_name(ty: &Ty) -> &str {
+fn enm_display_name(ty: &Ty) -> Option<&str> {
     match ty {
-        Ty::Enum(tn, _) => tn.display_name.as_str(),
-        _ => "",
+        Ty::Enum(tn, _) => Some(tn.display_name.as_str()),
+        _ => None,
     }
 }
 
@@ -2090,7 +2095,9 @@ Answer in JSON using this schema: Ret"#
             rendered,
             Some(
                 "Answer with any of the categories:\n\
-                 'Bar'"
+                 Foo\n\
+                 ----\n\
+                 - Bar"
                     .to_string()
             )
         );
@@ -2505,8 +2512,11 @@ Answer in JSON using this schema: Ret"#
             rendered,
             Some(
                 "Answer with any of the categories:\n\
-                 'A' or 'B'"
-                    .to_string()
+                 Category\n\
+                 ----\n\
+                 - A\n\
+                 - B"
+                .to_string()
             )
         );
     }
@@ -2702,6 +2712,225 @@ type C = A[]
 
 Answer in JSON using this type: A"#
             ))
+        );
+    }
+
+    // ========================================================================
+    // Enum hoisting and inline rendering
+    // ========================================================================
+
+    #[test]
+    fn inline_enum_in_class_field() {
+        // Enum with <=6 values and no descriptions → renders inline in field type
+        let enm = mk_enum("Color", vec!["Red", "Green", "Blue"]);
+        let cls = mk_class(
+            "Item",
+            vec![("name", ty_string()), ("color", ty_enum("Color"))],
+        );
+        let content = OutputFormatContent::new(ty_class("Item"))
+            .with_class(cls)
+            .with_enum(enm);
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert!(
+            rendered.contains("color: 'Red' or 'Green' or 'Blue',"),
+            "Expected inline enum rendering, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn hoisted_enum_in_class_field_renders_as_name() {
+        // Enum with >6 values → hoisted, field renders just the name
+        let enm = Enum {
+            name: "BigEnum".to_string(),
+            alias: None,
+            description: None,
+            values: (0..8)
+                .map(|i| EnumValue {
+                    name: format!("V{i}"),
+                    alias: None,
+                    description: None,
+                })
+                .collect(),
+        };
+        let cls = mk_class("Item", vec![("val", ty_enum("BigEnum"))]);
+        let content = OutputFormatContent::new(ty_class("Item"))
+            .with_class(cls)
+            .with_enum(enm);
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        // Field should use just the name, not inline values
+        assert!(
+            rendered.contains("val: BigEnum,"),
+            "Expected hoisted enum name in field, got:\n{rendered}"
+        );
+        // Enum definition should appear above
+        assert!(
+            rendered.contains("BigEnum\n----"),
+            "Expected hoisted enum block, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn enum_description_triggers_hoisting() {
+        // Enum with @@description but <=6 values → hoisted because of description
+        let enm = Enum {
+            name: "Status".to_string(),
+            alias: None,
+            description: Some("The status of an order".to_string()),
+            values: vec![
+                EnumValue {
+                    name: "Pending".to_string(),
+                    alias: None,
+                    description: None,
+                },
+                EnumValue {
+                    name: "Done".to_string(),
+                    alias: None,
+                    description: None,
+                },
+            ],
+        };
+        let cls = mk_class("Order", vec![("status", ty_enum("Status"))]);
+        let content = OutputFormatContent::new(ty_class("Order"))
+            .with_class(cls)
+            .with_enum(enm);
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        // Should be hoisted and description rendered above
+        assert!(
+            rendered.contains("/// The status of an order\nStatus\n----"),
+            "Expected hoisted enum with description, got:\n{rendered}"
+        );
+        // Field should reference by name
+        assert!(
+            rendered.contains("status: Status,"),
+            "Expected enum name in field, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn field_alias_in_class() {
+        let cls = Class {
+            name: "User".to_string(),
+            alias: None,
+            description: None,
+            fields: vec![
+                ClassField {
+                    name: "user_name".to_string(),
+                    alias: Some("username".to_string()),
+                    field_type: ty_string(),
+                    description: None,
+                },
+                ClassField {
+                    name: "email_addr".to_string(),
+                    alias: Some("email".to_string()),
+                    field_type: ty_string(),
+                    description: None,
+                },
+            ],
+        };
+        let content = OutputFormatContent::new(ty_class("User")).with_class(cls);
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert!(
+            rendered.contains("username: string,"),
+            "Expected field alias 'username', got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("email: string,"),
+            "Expected field alias 'email', got:\n{rendered}"
+        );
+        assert!(
+            !rendered.contains("user_name"),
+            "Original field name should not appear"
+        );
+    }
+
+    #[test]
+    fn enum_variant_alias_inline() {
+        // Inline enum with variant aliases
+        let enm = Enum {
+            name: "Color".to_string(),
+            alias: None,
+            description: None,
+            values: vec![
+                EnumValue {
+                    name: "Red".to_string(),
+                    alias: Some("r".to_string()),
+                    description: None,
+                },
+                EnumValue {
+                    name: "Green".to_string(),
+                    alias: Some("g".to_string()),
+                    description: None,
+                },
+            ],
+        };
+        let cls = mk_class("Item", vec![("color", ty_enum("Color"))]);
+        let content = OutputFormatContent::new(ty_class("Item"))
+            .with_class(cls)
+            .with_enum(enm);
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert!(
+            rendered.contains("color: 'r' or 'g',"),
+            "Expected aliased variant names in inline enum, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn multiline_list_of_class() {
+        // List<Class> should render multiline when class is not hoisted
+        let cls = mk_class("Point", vec![("x", ty_int()), ("y", ty_int())]);
+        let content = OutputFormatContent::new(ty_list(ty_class("Point"))).with_class(cls);
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert!(
+            rendered.contains("[\n  {\n"),
+            "Expected multiline list rendering, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn target_enum_renders_block_format() {
+        // When target IS an enum, it should render full block format, not inline
+        let enm = mk_enum("Sentiment", vec!["Positive", "Negative", "Neutral"]);
+        let content = OutputFormatContent::new(ty_enum("Sentiment")).with_enum(enm);
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        assert!(
+            rendered.contains("Sentiment\n----\n- Positive\n- Negative\n- Neutral"),
+            "Target enum should render in block format, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn field_description_above_field() {
+        // Field descriptions should render as /// comment above the field line
+        let cls = Class {
+            name: "User".to_string(),
+            alias: None,
+            description: None,
+            fields: vec![
+                ClassField {
+                    name: "name".to_string(),
+                    alias: None,
+                    field_type: ty_string(),
+                    description: Some("The user's full name".to_string()),
+                },
+                ClassField {
+                    name: "age".to_string(),
+                    alias: None,
+                    field_type: ty_int(),
+                    description: None,
+                },
+            ],
+        };
+        let content = OutputFormatContent::new(ty_class("User")).with_class(cls);
+        let rendered = content.render(&RenderOptions::default()).unwrap().unwrap();
+        // Description on line before, field on next line
+        assert!(
+            rendered.contains("  /// The user's full name\n  name: string,"),
+            "Expected description above field, got:\n{rendered}"
+        );
+        // Field without description: no /// line
+        assert!(
+            !rendered.contains("/// \n  age"),
+            "Field without description should have no comment"
         );
     }
 }

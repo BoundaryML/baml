@@ -97,10 +97,42 @@ fn unescape_string_literal(s: &str) -> String {
     result
 }
 
+/// Parse a string attribute value, handling both regular strings (`"text"`)
+/// and raw strings (`#"text"#`, `##"text"##`, etc.).
+///
+/// Returns `None` if the value is not a recognized string literal.
+fn parse_string_attr_value(raw: &str) -> Option<String> {
+    // Double-quoted string: "text"
+    if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
+        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+    }
+    // Single-quoted string: 'text'
+    if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
+        return Some(unescape_string_literal(&raw[1..raw.len() - 1]));
+    }
+
+    // Raw string: #"text"#, ##"text"##, etc.
+    let hash_count = raw.bytes().take_while(|&b| b == b'#').count();
+    if hash_count == 0 {
+        return None;
+    }
+
+    let rest = &raw[hash_count..];
+    let closing = format!("\"{}", &raw[..hash_count]);
+
+    // Need at least `"` + `"` + closing hashes
+    if rest.len() < hash_count + 2 || !rest.starts_with('"') || !rest.ends_with(&closing) {
+        return None;
+    }
+
+    // Raw strings: no escape processing
+    Some(rest[1..rest.len() - 1 - hash_count].to_string())
+}
+
 /// Extract `@description`, `@alias`, `@skip` from span-free HIR attributes.
 ///
-/// Returns `(description, alias, skip)`. Invalid attribute usage (wrong arg
-/// count, non-string-literal) is silently ignored for now.
+/// Returns `(description, alias, skip)`. Invalid attribute usage is diagnosed
+/// at HIR validation time; by this point, malformed attrs are simply skipped.
 fn extract_schema_attrs(
     attrs: &[baml_compiler2_hir::item_tree::Attribute],
 ) -> (Option<String>, Option<String>, bool) {
@@ -112,14 +144,11 @@ fn extract_schema_attrs(
             "description" | "alias" => {
                 if attr.args.len() == 1 {
                     let raw = attr.args[0].value.as_str();
-                    // Must be a string literal (quoted)
-                    if raw.starts_with('"') && raw.ends_with('"') && raw.len() >= 2 {
-                        let value = unescape_string_literal(&raw[1..raw.len() - 1]);
-                        if attr.name.as_str() == "description" {
-                            description = Some(value);
-                        } else {
-                            alias = Some(value);
-                        }
+                    let value = parse_string_attr_value(raw);
+                    if attr.name.as_str() == "description" {
+                        description = value;
+                    } else {
+                        alias = value;
                     }
                 }
             }
@@ -1072,4 +1101,207 @@ fn compile_init_function<'db>(
         body_meta: None,
         trace: false,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_compiler2_hir::item_tree::{Attribute, AttributeArg};
+
+    use super::*;
+
+    // ── unescape_string_literal ─────────────────────────────────────────
+
+    #[test]
+    fn unescape_common_sequences() {
+        assert_eq!(unescape_string_literal(r"hello\nworld"), "hello\nworld");
+        assert_eq!(unescape_string_literal(r"tab\there"), "tab\there");
+        assert_eq!(unescape_string_literal(r"cr\rhere"), "cr\rhere");
+        assert_eq!(unescape_string_literal(r"back\\slash"), "back\\slash");
+        assert_eq!(unescape_string_literal(r#"a\"b"#), "a\"b");
+    }
+
+    #[test]
+    fn unescape_unknown_sequence_preserved() {
+        assert_eq!(unescape_string_literal(r"\x41"), "\\x41");
+        assert_eq!(unescape_string_literal(r"\u0041"), "\\u0041");
+    }
+
+    #[test]
+    fn unescape_trailing_backslash() {
+        assert_eq!(unescape_string_literal("trailing\\"), "trailing\\");
+    }
+
+    #[test]
+    fn unescape_empty() {
+        assert_eq!(unescape_string_literal(""), "");
+    }
+
+    #[test]
+    fn unescape_no_escapes() {
+        assert_eq!(unescape_string_literal("plain text"), "plain text");
+    }
+
+    // ── parse_string_attr_value ─────────────────────────────────────────
+
+    #[test]
+    fn parse_regular_string() {
+        assert_eq!(
+            parse_string_attr_value(r#""hello world""#),
+            Some("hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_regular_string_with_escapes() {
+        assert_eq!(
+            parse_string_attr_value(r#""line\nbreak""#),
+            Some("line\nbreak".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_single_quoted_string() {
+        assert_eq!(
+            parse_string_attr_value("'hello world'"),
+            Some("hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_empty_regular_string() {
+        assert_eq!(parse_string_attr_value(r#""""#), Some(String::new()));
+    }
+
+    #[test]
+    fn parse_raw_string_single_hash() {
+        // Input: #"raw\ntext"#  — raw strings don't unescape
+        let input = "#\"raw\\ntext\"#";
+        assert_eq!(
+            parse_string_attr_value(input),
+            Some("raw\\ntext".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_raw_string_double_hash() {
+        // Input: ##"has "# inside"##
+        let input = "##\"has \"# inside\"##";
+        assert_eq!(
+            parse_string_attr_value(input),
+            Some("has \"# inside".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_empty_raw_string() {
+        // Input: #""#
+        let input = "#\"\"#";
+        assert_eq!(parse_string_attr_value(input), Some(String::new()));
+    }
+
+    #[test]
+    fn parse_non_string_returns_none() {
+        assert_eq!(parse_string_attr_value("vm"), None);
+        assert_eq!(parse_string_attr_value("42"), None);
+        assert_eq!(parse_string_attr_value("true"), None);
+    }
+
+    #[test]
+    fn parse_malformed_returns_none() {
+        // Unclosed quote: just a bare "
+        assert_eq!(parse_string_attr_value("\"unclosed"), None);
+        // Mismatched hashes: #"text"##  (1 opening hash, 2 closing)
+        let mismatched = "#\"text\"##";
+        assert_eq!(parse_string_attr_value(mismatched), None);
+        // Degenerate: #"# (would panic without length guard)
+        let degenerate = "#\"#";
+        assert_eq!(parse_string_attr_value(degenerate), None);
+    }
+
+    // ── extract_schema_attrs ────────────────────────────────────────────
+
+    fn mk_attr(name: &str, args: &[&str]) -> Attribute {
+        Attribute {
+            name: baml_base::Name::new(name),
+            args: args
+                .iter()
+                .map(|v| AttributeArg {
+                    key: None,
+                    value: v.to_string(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn extract_description_and_alias() {
+        let attrs = vec![
+            mk_attr("description", &[r#""A field""#]),
+            mk_attr("alias", &[r#""myField""#]),
+        ];
+        let (desc, alias, skip) = extract_schema_attrs(&attrs);
+        assert_eq!(desc, Some("A field".to_string()));
+        assert_eq!(alias, Some("myField".to_string()));
+        assert!(!skip);
+    }
+
+    #[test]
+    fn extract_skip() {
+        let attrs = vec![mk_attr("skip", &[])];
+        let (desc, alias, skip) = extract_schema_attrs(&attrs);
+        assert_eq!(desc, None);
+        assert_eq!(alias, None);
+        assert!(skip);
+    }
+
+    #[test]
+    fn extract_unknown_attrs_ignored() {
+        let attrs = vec![
+            mk_attr("stream.done", &["true"]),
+            mk_attr("internal.opaque", &[]),
+            mk_attr("description", &[r#""kept""#]),
+        ];
+        let (desc, _, _) = extract_schema_attrs(&attrs);
+        assert_eq!(desc, Some("kept".to_string()));
+    }
+
+    #[test]
+    fn extract_non_string_arg_ignored() {
+        let attrs = vec![mk_attr("description", &["42"])];
+        let (desc, _, _) = extract_schema_attrs(&attrs);
+        assert_eq!(desc, None);
+    }
+
+    #[test]
+    fn extract_wrong_arg_count_ignored() {
+        let attrs = vec![mk_attr("description", &[])]; // 0 args
+        let (desc, _, _) = extract_schema_attrs(&attrs);
+        assert_eq!(desc, None);
+    }
+
+    #[test]
+    fn extract_duplicate_last_wins() {
+        let attrs = vec![
+            mk_attr("description", &[r#""first""#]),
+            mk_attr("description", &[r#""second""#]),
+        ];
+        let (desc, _, _) = extract_schema_attrs(&attrs);
+        assert_eq!(desc, Some("second".to_string()));
+    }
+
+    #[test]
+    fn extract_raw_string_attr() {
+        // Simulates @description(#"raw desc"#)
+        let attrs = vec![mk_attr("description", &["#\"raw desc\"#"])];
+        let (desc, _, _) = extract_schema_attrs(&attrs);
+        assert_eq!(desc, Some("raw desc".to_string()));
+    }
+
+    #[test]
+    fn extract_no_attrs() {
+        let (desc, alias, skip) = extract_schema_attrs(&[]);
+        assert_eq!(desc, None);
+        assert_eq!(alias, None);
+        assert!(!skip);
+    }
 }

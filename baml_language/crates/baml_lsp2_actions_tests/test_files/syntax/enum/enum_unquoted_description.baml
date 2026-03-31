@@ -76,3 +76,23 @@ enum TestEnum {
 //     │ 
 //     │ Note: Error code: E0012
 // ────╯
+// Error: `@description` argument must be a string literal, got `User`
+//     ╭─[ enum_enum_unquoted_description.baml:12:25 ]
+//     │
+//  12 │ ╭─▶   Confused @description(
+//  13 │ ├─▶     User is confused
+//     │ │                          
+//     │ ╰────────────────────────── invalid builtin declaration
+//     │     
+//     │     Note: Error code: E0037
+// ────╯
+// Error: `@description` argument must be a string literal, got `User`
+//     ╭─[ enum_enum_unquoted_description.baml:15:37 ]
+//     │
+//  15 │ ╭─▶   Excited @alias("k5") @description(
+//  16 │ ├─▶     User is excited
+//     │ │                         
+//     │ ╰───────────────────────── invalid builtin declaration
+//     │     
+//     │     Note: Error code: E0037
+// ────╯

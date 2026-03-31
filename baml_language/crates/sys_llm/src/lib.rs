@@ -380,10 +380,12 @@ pub fn execute_sap_parse(
 
 #[cfg(test)]
 mod tests {
-    use ::baml_base::TyAttr;
-    use ::sys_types::SysOpContext;
+    use std::sync::Arc;
 
-    use super::execute_parse_response_from_owned;
+    use ::baml_base::TyAttr;
+    use ::sys_types::{ClassDefinition, ClassFieldDefinition, EnumDefinition, SysOpContext};
+
+    use super::{build_output_format_content, execute_parse_response_from_owned};
     use crate::baml_std;
 
     fn make_client_with_options(
@@ -459,5 +461,272 @@ mod tests {
             &ctx,
         );
         assert!(denied.is_err());
+    }
+
+    // ========================================================================
+    // build_output_format_content / walk_ty tests
+    // ========================================================================
+
+    fn ty_class(name: &str) -> baml_type::Ty {
+        baml_type::Ty::Class(baml_type::TypeName::local(name.into()), TyAttr::default())
+    }
+    fn ty_enum(name: &str) -> baml_type::Ty {
+        baml_type::Ty::Enum(baml_type::TypeName::local(name.into()), TyAttr::default())
+    }
+    fn ty_string() -> baml_type::Ty {
+        baml_type::Ty::String {
+            attr: TyAttr::default(),
+        }
+    }
+    fn ty_optional(inner: baml_type::Ty) -> baml_type::Ty {
+        baml_type::Ty::Optional(Box::new(inner), TyAttr::default())
+    }
+    fn tn(name: &str) -> baml_type::TypeName {
+        baml_type::TypeName::local(name.into())
+    }
+
+    fn ctx_with(
+        classes: Vec<(baml_type::TypeName, ClassDefinition)>,
+        enums: Vec<(baml_type::TypeName, EnumDefinition)>,
+    ) -> SysOpContext {
+        let mut ctx = SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes.into_iter().collect());
+        ctx.enum_definitions = Arc::new(enums.into_iter().collect());
+        ctx
+    }
+
+    #[test]
+    fn walk_simple_class() {
+        let ctx = ctx_with(
+            vec![(
+                tn("User"),
+                ClassDefinition {
+                    name: "User".into(),
+                    description: Some("A user".into()),
+                    alias: None,
+                    fields: vec![ClassFieldDefinition {
+                        name: "name".into(),
+                        field_type: ty_string(),
+                        description: Some("Full name".into()),
+                        alias: None,
+                        skip: false,
+                    }],
+                },
+            )],
+            vec![],
+        );
+        let content = build_output_format_content(&ty_class("User"), &ctx);
+        assert!(content.classes.contains_key("User"));
+        assert_eq!(
+            content.classes["User"].description.as_deref(),
+            Some("A user")
+        );
+        assert_eq!(content.classes["User"].fields.len(), 1);
+        assert_eq!(
+            content.classes["User"].fields[0].description.as_deref(),
+            Some("Full name")
+        );
+        assert!(content.recursive_classes.is_empty());
+    }
+
+    #[test]
+    fn walk_skips_skip_fields() {
+        let ctx = ctx_with(
+            vec![(
+                tn("Foo"),
+                ClassDefinition {
+                    name: "Foo".into(),
+                    description: None,
+                    alias: None,
+                    fields: vec![
+                        ClassFieldDefinition {
+                            name: "keep".into(),
+                            field_type: ty_string(),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        },
+                        ClassFieldDefinition {
+                            name: "hidden".into(),
+                            field_type: ty_string(),
+                            description: None,
+                            alias: None,
+                            skip: true,
+                        },
+                    ],
+                },
+            )],
+            vec![],
+        );
+        let content = build_output_format_content(&ty_class("Foo"), &ctx);
+        assert_eq!(content.classes["Foo"].fields.len(), 1);
+        assert_eq!(content.classes["Foo"].fields[0].name, "keep");
+    }
+
+    #[test]
+    fn walk_collects_enum() {
+        let ctx = ctx_with(
+            vec![],
+            vec![(
+                tn("Color"),
+                EnumDefinition {
+                    name: "Color".into(),
+                    description: Some("A color".into()),
+                    alias: None,
+                    variants: vec![
+                        ::sys_types::EnumVariantDefinition {
+                            name: "Red".into(),
+                            description: None,
+                            alias: None,
+                        },
+                        ::sys_types::EnumVariantDefinition {
+                            name: "Blue".into(),
+                            description: None,
+                            alias: None,
+                        },
+                    ],
+                },
+            )],
+        );
+        let content = build_output_format_content(&ty_enum("Color"), &ctx);
+        assert!(content.enums.contains_key("Color"));
+        assert_eq!(content.enums["Color"].values.len(), 2);
+        assert_eq!(
+            content.enums["Color"].description.as_deref(),
+            Some("A color")
+        );
+    }
+
+    #[test]
+    fn walk_direct_self_recursion() {
+        // Node { next: Node? }
+        let ctx = ctx_with(
+            vec![(
+                tn("Node"),
+                ClassDefinition {
+                    name: "Node".into(),
+                    description: None,
+                    alias: None,
+                    fields: vec![ClassFieldDefinition {
+                        name: "next".into(),
+                        field_type: ty_optional(ty_class("Node")),
+                        description: None,
+                        alias: None,
+                        skip: false,
+                    }],
+                },
+            )],
+            vec![],
+        );
+        let content = build_output_format_content(&ty_class("Node"), &ctx);
+        assert!(
+            content.recursive_classes.contains("Node"),
+            "Node should be marked recursive"
+        );
+    }
+
+    #[test]
+    fn walk_mutual_recursion() {
+        // A { b: B }, B { a: A? }
+        let ctx = ctx_with(
+            vec![
+                (
+                    tn("A"),
+                    ClassDefinition {
+                        name: "A".into(),
+                        description: None,
+                        alias: None,
+                        fields: vec![ClassFieldDefinition {
+                            name: "b".into(),
+                            field_type: ty_class("B"),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        }],
+                    },
+                ),
+                (
+                    tn("B"),
+                    ClassDefinition {
+                        name: "B".into(),
+                        description: None,
+                        alias: None,
+                        fields: vec![ClassFieldDefinition {
+                            name: "a".into(),
+                            field_type: ty_optional(ty_class("A")),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        }],
+                    },
+                ),
+            ],
+            vec![],
+        );
+        let content = build_output_format_content(&ty_class("A"), &ctx);
+        assert!(content.recursive_classes.contains("A"), "A in cycle");
+        assert!(content.recursive_classes.contains("B"), "B in cycle");
+    }
+
+    #[test]
+    fn walk_non_recursive_wrapper_around_recursive_child() {
+        // Wrapper { node: Node }, Node { next: Node? }
+        // Only Node should be recursive, not Wrapper.
+        let ctx = ctx_with(
+            vec![
+                (
+                    tn("Wrapper"),
+                    ClassDefinition {
+                        name: "Wrapper".into(),
+                        description: None,
+                        alias: None,
+                        fields: vec![ClassFieldDefinition {
+                            name: "node".into(),
+                            field_type: ty_class("Node"),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        }],
+                    },
+                ),
+                (
+                    tn("Node"),
+                    ClassDefinition {
+                        name: "Node".into(),
+                        description: None,
+                        alias: None,
+                        fields: vec![ClassFieldDefinition {
+                            name: "next".into(),
+                            field_type: ty_optional(ty_class("Node")),
+                            description: None,
+                            alias: None,
+                            skip: false,
+                        }],
+                    },
+                ),
+            ],
+            vec![],
+        );
+        let content = build_output_format_content(&ty_class("Wrapper"), &ctx);
+        assert!(
+            content.recursive_classes.contains("Node"),
+            "Node should be recursive"
+        );
+        assert!(
+            !content.recursive_classes.contains("Wrapper"),
+            "Wrapper should NOT be recursive"
+        );
+        // Both classes should be collected
+        assert!(content.classes.contains_key("Wrapper"));
+        assert!(content.classes.contains_key("Node"));
+    }
+
+    #[test]
+    fn walk_missing_class_definition() {
+        // Reference to a class not in ctx — should not panic, just skip
+        let ctx = ctx_with(vec![], vec![]);
+        let content = build_output_format_content(&ty_class("Missing"), &ctx);
+        assert!(content.classes.is_empty());
+        assert!(content.recursive_classes.is_empty());
     }
 }

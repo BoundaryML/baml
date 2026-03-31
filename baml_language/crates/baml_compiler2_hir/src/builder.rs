@@ -734,6 +734,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     "class",
                     false,
                 );
+                self.validate_schema_attributes(&class.attributes);
                 for field in &class.fields {
                     if let Some(type_expr) = &field.type_expr {
                         self.validate_type_expr_phase1(
@@ -748,9 +749,16 @@ impl<'db> SemanticIndexBuilder<'db> {
                         "class field",
                         false,
                     );
+                    self.validate_schema_attributes(&field.attributes);
                 }
                 for method in &class.methods {
                     self.validate_function_phase1(method, is_builtin_file, "method");
+                }
+            }
+            ast::Item::Enum(enm) => {
+                self.validate_schema_attributes(&enm.attributes);
+                for variant in &enm.variants {
+                    self.validate_schema_attributes(&variant.attributes);
                 }
             }
             ast::Item::TypeAlias(alias) => {
@@ -927,6 +935,52 @@ impl<'db> SemanticIndexBuilder<'db> {
         }
     }
 
+    /// Validate `@description`, `@alias`, and `@skip` attribute usage.
+    ///
+    /// - `description` / `alias`: exactly 1 argument, must be a string literal
+    /// - `skip`: exactly 0 arguments
+    ///
+    /// Unknown attributes are silently passed through (e.g. `@stream.*` for PPIR).
+    fn validate_schema_attributes(&mut self, attributes: &[ast::RawAttribute]) {
+        for attr in attributes {
+            match attr.name.as_str() {
+                "description" | "alias" => {
+                    let attr_name = attr.name.as_str();
+                    if attr.args.len() != 1 {
+                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                            diagnostic_id: DiagnosticId::InvalidAttributeArg,
+                            message: format!("`@{attr_name}` expects exactly one string argument"),
+                            span: attr.span,
+                        });
+                        continue;
+                    }
+                    let value = attr.args[0].value.as_str();
+                    if !is_string_literal(value) {
+                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                            diagnostic_id: DiagnosticId::InvalidAttributeArg,
+                            message: format!(
+                                "`@{attr_name}` argument must be a string literal, got `{value}`"
+                            ),
+                            span: attr.args[0].span,
+                        });
+                    }
+                }
+                "skip" => {
+                    if !attr.args.is_empty() {
+                        self.diagnostics.push(Hir2Diagnostic::DiagnosticMessage {
+                            diagnostic_id: DiagnosticId::UnexpectedAttributeArg,
+                            message: "`@skip` does not take any arguments".to_string(),
+                            span: attr.span,
+                        });
+                    }
+                }
+                _ => {
+                    // Unknown attributes passed through silently (e.g. @stream.*)
+                }
+            }
+        }
+    }
+
     fn validate_type_expr_phase1(
         &mut self,
         type_expr: &ast::TypeExpr,
@@ -1032,4 +1086,27 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::TypeExpr::Unknown { .. } => "<unknown>".to_string(),
         }
     }
+}
+
+/// Check if a raw attribute argument value is a valid string literal.
+///
+/// Accepts double-quoted (`"text"`), single-quoted (`'text'`), and raw strings
+/// (`#"text"#`, `##"text"##`, etc.).
+fn is_string_literal(value: &str) -> bool {
+    // Double-quoted
+    if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
+        return true;
+    }
+    // Single-quoted
+    if value.starts_with('\'') && value.ends_with('\'') && value.len() >= 2 {
+        return true;
+    }
+    // Raw string: #"text"#, ##"text"##, etc.
+    let hashes = value.bytes().take_while(|&b| b == b'#').count();
+    if hashes > 0 && value.len() >= hashes * 2 + 2 {
+        let rest = &value[hashes..];
+        let closing = format!("\"{}", &value[..hashes]);
+        return rest.starts_with('"') && rest.ends_with(&closing);
+    }
+    false
 }
