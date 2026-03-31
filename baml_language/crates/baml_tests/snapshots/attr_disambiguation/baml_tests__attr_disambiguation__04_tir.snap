@@ -62,13 +62,13 @@ class user.GProfile$stream {
   status: null | user.GStatus
   role: null | user.GRole
   name: null | string
-  location: null | user.GPoint$stream
+  location: null | user.GPoint
   fallback: null | user.GCoord$stream
 }
 class user.GAliased$stream {
   status: null | user.GStatus @alias("s")
   role: null | user.GRole @alias("r")
-  point: null | user.GPoint$stream @alias("p")
+  point: null | user.GPoint @alias("p")
   coord: null | user.GCoord$stream @alias("c")
 }
 class user.GComplex$stream {
@@ -83,7 +83,7 @@ class user.GIncident$stream {
   severity: null | user.GSeverity
   priority: null | user.GPriority
   title: null | string
-  config: null | user.GConfig$stream
+  config: null | user.GConfig
 }
 enum user.GroupF
 class user.MFoo {
@@ -214,13 +214,13 @@ class user.Fizz$stream {
   x: null | int
 }
 class user.OrderingSimple$stream {
-  a1: null | user.Fizz$stream
+  a1: null | user.Fizz
   a2: null | user.Fizz$stream @alias("a2_alias")
-  a3: null | user.Fizz$stream @alias("a3_alias")
+  a3: null | user.Fizz @alias("a3_alias")
   a4: null | user.Fizz$stream @alias("a4_alias")
   a5: null | user.Fizz$stream @alias("a5_alias") @description("a5 desc")
-  a6: user.Fizz$stream @alias("a6_alias")
-  a7: user.Fizz$stream
+  a6: null | user.Fizz @alias("a6_alias")
+  a7: user.Fizz
   a8: null | user.Fizz$stream @alias("a8_alias") @description("a8 desc")
   a9: user.Fizz$stream @alias("a9_alias")
 }

@@ -17,7 +17,7 @@ class user.WithBlockAttrs {
 class user.Config$stream {
   id: int
   name: null | string
-  data: user.AttrFoo$stream
+  data: user.AttrFoo
 }
 class user.AttrFoo$stream {
   x: null | int
@@ -157,7 +157,7 @@ class user.AllMustExist$stream {
 class user.AllDone$stream {
   a: null | int
   b: null | string
-  c: null | user.EdgeFoo$stream
+  c: null | user.EdgeFoo
 }
 class user.EdgeFoo$stream {
   x: null | int

@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use baml_db::baml_compiler_diagnostics::{render, Severity};
 use baml_compiler2_hir::{self, file_package, item_tree::GeneratorConfigItem};
+use baml_db::baml_compiler_diagnostics::{Severity, render};
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
 use clap::Args;
@@ -90,13 +90,16 @@ impl GenerateArgs {
         }
 
         // Build the codegen ObjectPool from the compiler database.
-        let pool = crate::codegen_bridge::build_object_pool(&db)
+        let pool = baml_codegen_types::build_object_pool(&db)
             .context("Failed to build codegen object pool")?;
 
         let mut total_files = 0;
 
         for generator in &generators {
-            let output_dir = self.output.clone().unwrap_or_else(|| generator.output_dir.clone());
+            let output_dir = self
+                .output
+                .clone()
+                .unwrap_or_else(|| generator.output_dir.clone());
 
             let generated = match generator.output_type.as_str() {
                 "python/pydantic" | "python/pydantic/v1" => {
@@ -117,6 +120,7 @@ impl GenerateArgs {
                     output_dir.display()
                 )
             })?;
+            let output_dir = std::fs::canonicalize(&output_dir).unwrap_or(output_dir);
 
             let mut count = 0;
             for (rel_path, content) in &generated {
@@ -132,7 +136,7 @@ impl GenerateArgs {
             // Write Python-specific bootstrap files.
             if generator.output_type.starts_with("python") {
                 // inlinedbaml.py — embed all BAML source files.
-                let inlined = generate_inlinedbaml(&db, &source_files);
+                let inlined = generate_inlinedbaml(&db, &source_files, &from);
                 let inlined_path = output_dir.join("inlinedbaml.py");
                 std::fs::write(&inlined_path, &inlined)
                     .with_context(|| format!("Failed to write {}", inlined_path.display()))?;
@@ -187,12 +191,10 @@ fn discover_generators(db: &ProjectDatabase, baml_src: &std::path::Path) -> Vec<
             }
 
             // output_dir is relative to baml_src, defaults to "../"
-            let raw_output_dir = get_config(config, "output_dir")
-                .unwrap_or_else(|| "..".to_string());
+            let raw_output_dir =
+                get_config(config, "output_dir").unwrap_or_else(|| "..".to_string());
             // Strip surrounding quotes if present (config values may be quoted strings)
-            let raw_output_dir = raw_output_dir
-                .trim_matches('"')
-                .trim_matches('\'');
+            let raw_output_dir = raw_output_dir.trim_matches('"').trim_matches('\'');
 
             let output_dir = baml_src.join(raw_output_dir).join("baml_client");
 
@@ -215,10 +217,11 @@ fn get_config(items: &[GeneratorConfigItem], key: &str) -> Option<String> {
         .map(|item| item.value.clone())
 }
 
-/// Generate `inlinedbaml.py` — a Python dict mapping filenames to BAML source.
+/// Generate `inlinedbaml.py` — a Python dict mapping relative file paths to BAML source.
 fn generate_inlinedbaml(
     db: &ProjectDatabase,
     source_files: &[baml_base::SourceFile],
+    baml_src: &std::path::Path,
 ) -> String {
     use std::fmt::Write;
 
@@ -228,13 +231,13 @@ fn generate_inlinedbaml(
     );
     for sf in source_files {
         let path = sf.path(db);
-        // Use just the filename (relative to baml_src).
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy())
-            .unwrap_or_default();
+        // Make key relative to baml_src (e.g. "sub/foo.baml").
+        let rel = path
+            .strip_prefix(baml_src)
+            .unwrap_or(&path);
+        let key = rel.to_string_lossy();
         let text = sf.text(db);
-        let _ = write!(out, "    {}: {},\n", quote_py(&name), quote_py(text));
+        let _ = write!(out, "    {}: {},\n", quote_py(&key), quote_py(text));
     }
     out.push_str(
         "}\n\n\

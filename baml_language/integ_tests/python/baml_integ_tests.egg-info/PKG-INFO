@@ -7,4 +7,5 @@ Requires-Dist: baml-py
 Requires-Dist: pydantic>=2.0
 Requires-Dist: pytest
 Requires-Dist: pytest-asyncio
+Requires-Dist: pytest-timeout
 Requires-Dist: python-dotenv

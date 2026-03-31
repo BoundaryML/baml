@@ -16,7 +16,7 @@ baml_codegen_types::render_fn! {
     ///         function_name="{{ function_.name }}",
     ///         args={{ function_.render_args_dict() }},
     ///     )
-    ///     return __result__
+    ///     return {{ function_.render_coerce_result(*ns) }}
     /// ```
     pub fn print_sync_impl(function_: &crate::objects::Function, ns: crate::ty::Namespace) -> String;
 }
@@ -31,7 +31,7 @@ baml_codegen_types::render_fn! {
     ///         function_name="{{ function_.name }}",
     ///         args={{ function_.render_args_dict() }},
     ///     )
-    ///     return __result__
+    ///     return {{ function_.render_coerce_result(*ns) }}
     /// ```
     pub fn print_async_impl(function_: &crate::objects::Function, ns: crate::ty::Namespace) -> String;
 }
@@ -74,6 +74,25 @@ impl crate::objects::Function {
             return "{}".to_string();
         }
         format!("{{{}}}", entries.join(", "))
+    }
+
+    /// Render the expression that coerces a `FunctionResult` into the return type.
+    ///
+    /// For class return types: `types.Resume(**__result__.result())`
+    /// For primitive/other types: `__result__.result()`
+    fn render_coerce_result(&self, ns: crate::ty::Namespace) -> String {
+        match &self.return_type {
+            crate::ty::Ty::Class(name) => {
+                format!("{}(**__result__.result())", name.render(ns))
+            }
+            crate::ty::Ty::Enum(name) => {
+                format!("{}(__result__.result())", name.render(ns))
+            }
+            crate::ty::Ty::List(_) | crate::ty::Ty::Map { .. } | crate::ty::Ty::Union(_) => {
+                "__result__.result()".to_string()
+            }
+            _ => "__result__.result()".to_string(),
+        }
     }
 }
 

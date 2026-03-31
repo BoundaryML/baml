@@ -57,7 +57,7 @@ pub(crate) enum Commands {
     // #[command(about = "Print Bytecode from BAML files", hide = true)]
     // DumpBytecode(baml_runtime::cli::dump_intermediate::DumpIntermediateArgs),
     #[command(about = "Generate client code from BAML definitions")]
-    Generate(crate::generate_command::GenerateArgs),
+    Generate(crate::generate::GenerateArgs),
 
     #[command(about = "Run BAML tests")]
     Test(crate::test_command::TestArgs),

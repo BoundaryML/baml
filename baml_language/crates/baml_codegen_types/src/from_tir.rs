@@ -1,4 +1,4 @@
-//! Bridge from the compiler2 HIR/TIR to `baml_codegen_types::ObjectPool`.
+//! Conversion from the compiler2 HIR/TIR to `ObjectPool`.
 //!
 //! Walks the HIR item trees for user-defined files, resolves types via TIR,
 //! and populates a codegen-ready `ObjectPool` suitable for language-specific
@@ -6,7 +6,6 @@
 
 use anyhow::Result;
 use baml_base::Name;
-use baml_codegen_types::{self as cg, Namespace, ObjectPool};
 use baml_compiler2_ast::DeclarativeMeta;
 use baml_compiler2_hir::{file_package, package::PackageId};
 use baml_compiler2_tir::{
@@ -14,6 +13,8 @@ use baml_compiler2_tir::{
     ty::{PrimitiveType, Ty as TirTy},
 };
 use baml_project::ProjectDatabase;
+
+use crate::{self as cg, Namespace, ObjectPool};
 
 /// Build a codegen `ObjectPool` from the compiler database.
 ///

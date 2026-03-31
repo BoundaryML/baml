@@ -15,4 +15,7 @@ baml_integ_tests.egg-info/SOURCES.txt
 baml_integ_tests.egg-info/dependency_links.txt
 baml_integ_tests.egg-info/requires.txt
 baml_integ_tests.egg-info/top_level.txt
-tests/test_functions.py
+tests/test_001_basic_happy_path.py
+tests/test_002_directory_happy_path.py
+tests/test_003_namespace_happy_path.py
+tests/test_004_nonclass_returns_happy_path.py
