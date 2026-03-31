@@ -2,3 +2,85 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === MIR2 ===
+fn user.$init_test(registry: testing.Registry) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.Registry // registry // param
+    let _2: null
+
+    bb0: {
+        _2 = call const fn baml.sys.panic(const "internal compiler error: MIR failed to resolve field access .register_test_set against class definition 'TestSetCollector' (module_path: [\"testing\"]). This class should be in class_fields but isn't.") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+// lambda[0]
+fn .<lambda($init_test, 0)>(testset: testing.TestSetCollector) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.TestSetCollector // testset // param
+    let _2: void
+    let _3: void
+    let _4: string
+    let _5: void
+    let _6: void
+    let _7: void
+    let _8: string
+    let _9: void
+
+    bb0: {
+        _4 = const "register_test";
+        _3 = copy _1[_4];
+        _5 = make_closure lambda[0]();
+        _2 = call copy _3(const "first", copy _5, const null) -> [bb1];
+    }
+
+    bb1: {
+        _8 = const "register_test";
+        _7 = copy _1[_8];
+        _9 = make_closure lambda[1]();
+        _6 = call copy _7(const "second", copy _9, const null) -> [bb2];
+    }
+
+    bb2: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(<lambda($init_test, 0)>, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+// lambda[1]
+fn .<lambda(<lambda($init_test, 0)>, 2)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "parse error") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}

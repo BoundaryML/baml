@@ -2,6 +2,376 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] Error: unresolved member: testing.Registry.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.Registry.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved member: testing.TestSetCollector.register_test_set
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved member: testing.TestSetCollector.register_test_set
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: is_true
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "all evals" {
+   │ │ 
+   │ ╰─ unresolved name: is_true
+   │ 
+   │ Note: Error code: E0001
+───╯
+
   [parse] Error: Expected expression, found '.'
    ╭─[ main.baml:4:13 ]
    │

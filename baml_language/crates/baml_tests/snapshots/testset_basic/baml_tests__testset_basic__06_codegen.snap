@@ -1,4 +1,12 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
+function user.$init_test(registry: testing.Registry) -> null {
+    load_const "internal compiler error: MIR failed to resolve field access .register_test_set against class definition 'TestSetCollector' (module_path: ["testing"]). This class should be in class_fields but isn't."
+    call baml.sys.panic
+    pop 1
+    jump L0
 
+  L0:
+    unreachable
+}

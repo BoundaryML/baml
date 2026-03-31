@@ -49,6 +49,23 @@ pub(crate) fn lower(
     ctx.finish(root_expr)
 }
 
+/// Lower a `BLOCK_EXPR` node directly to an owned `ExprBody` + parallel `AstSourceMap`.
+///
+/// Used by `lower_cst` when synthesizing lambda bodies from `TEST_EXPR_DEF` / `TESTSET_DEF`
+/// blocks, where there is no wrapping `EXPR_FUNCTION_BODY` node.
+pub(crate) fn lower_block_node(
+    block_node: &SyntaxNode,
+    param_names: &[Name],
+) -> (ExprBody, AstSourceMap) {
+    let mut ctx = LoweringContext::new();
+    for name in param_names {
+        ctx.names_in_scope.insert(name.to_string());
+    }
+    let root_expr = baml_compiler_syntax::ast::BlockExpr::cast(block_node.clone())
+        .map(|block| ctx.lower_block_expr(&block));
+    ctx.finish(root_expr)
+}
+
 /// Helper enum for building pattern elements during lowering.
 enum PatternElement {
     /// Accumulated dotted path segments.

@@ -1,4 +1,23 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-
+function user.$init_test(registry: testing.Registry) -> null {
+    load_const "simple test"
+    make_closure .<lambda($init_test, 0)>, 0
+    load_const null
+    load_var registry
+    load_const "register_test"
+    load_map_element
+    call_indirect
+    pop 1
+    load_const "with not_null"
+    make_closure .<lambda($init_test, 1)>, 0
+    load_const null
+    load_var registry
+    load_const "register_test"
+    load_map_element
+    call_indirect
+    pop 1
+    load_const null
+    return
+}

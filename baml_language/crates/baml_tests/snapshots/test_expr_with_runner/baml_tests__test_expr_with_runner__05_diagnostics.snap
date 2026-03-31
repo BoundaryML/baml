@@ -2,6 +2,26 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] Error: unresolved member: testing.Registry.register_test
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ test "with quorum" with testing.Quorum(5, 3) {
+   │ │ 
+   │ ╰─ unresolved member: testing.Registry.register_test
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: not_null
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ test "with quorum" with testing.Quorum(5, 3) {
+   │ │ 
+   │ ╰─ unresolved name: not_null
+   │ 
+   │ Note: Error code: E0001
+───╯
+
   [parse] Error: Expected expression, found '.'
    ╭─[ main.baml:3:9 ]
    │

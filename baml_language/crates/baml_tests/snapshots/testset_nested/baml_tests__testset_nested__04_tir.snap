@@ -2,3 +2,60 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
+function user.$init_test(registry: testing.Registry) -> ? throws never {
+  { : void
+    registry.register_test_set("all evals", (testset: testing.TestSetCollector) -> { ... }, null) : unknown
+      (testset: testing.TestSetCollector) -> { ... } : (testset: testing.TestSetCollector) -> void
+        {
+          testset.register_test_set("normal cases", (testset: testing.TestSetCollector) -> { ... }, null)
+          testset.register_test_set("hard cases", (testset: testing.TestSetCollector) -> { ... }, null)
+        }
+  }
+  !! 0..0: unresolved member: testing.Registry.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+}
+lambda user.$init_test {
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+}
+lambda user.$init_test {
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+}
+lambda user.$init_test {
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+}
+lambda user.$init_test {
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+}
+lambda user.$init_test {
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test_set
+  !! 0..0: unresolved member: testing.TestSetCollector.register_test
+  !! 0..0: unresolved name: is_true
+}

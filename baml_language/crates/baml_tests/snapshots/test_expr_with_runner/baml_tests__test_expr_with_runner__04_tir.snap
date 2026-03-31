@@ -2,3 +2,19 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
+function user.$init_test(registry: testing.Registry) -> ? throws never {
+  { : void
+    registry.register_test("with quorum", () -> { ... }, null) : unknown
+      () -> { ... } : () -> unknown
+        {
+          let result = "hello"
+          assert <missing>
+          not_null(result)
+        }
+  }
+  !! 0..0: unresolved member: testing.Registry.register_test
+  !! 0..0: unresolved name: not_null
+}
+lambda user.$init_test {
+  !! 0..0: unresolved name: not_null
+}
