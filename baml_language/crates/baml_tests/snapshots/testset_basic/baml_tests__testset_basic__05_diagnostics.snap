@@ -1,0 +1,333 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] Error: Expected top-level declaration, found identifier
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ testset "basic group" {
+   │ ───┬───  
+   │    ╰───── Expected top-level declaration, found identifier
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '"'
+   ╭─[ main.baml:1:9 ]
+   │
+ 1 │ testset "basic group" {
+   │         ┬  
+   │         ╰── Expected top-level declaration, found '"'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found identifier
+   ╭─[ main.baml:1:10 ]
+   │
+ 1 │ testset "basic group" {
+   │          ──┬──  
+   │            ╰──── Expected top-level declaration, found identifier
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found identifier
+   ╭─[ main.baml:1:16 ]
+   │
+ 1 │ testset "basic group" {
+   │                ──┬──  
+   │                  ╰──── Expected top-level declaration, found identifier
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '"'
+   ╭─[ main.baml:1:21 ]
+   │
+ 1 │ testset "basic group" {
+   │                     ┬  
+   │                     ╰── Expected top-level declaration, found '"'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '{'
+   ╭─[ main.baml:1:23 ]
+   │
+ 1 │ testset "basic group" {
+   │                       ┬  
+   │                       ╰── Expected top-level declaration, found '{'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected test body, found '"'
+   ╭─[ main.baml:2:8 ]
+   │
+ 2 │   test "first" {
+   │        ┬  
+   │        ╰── Expected test body, found '"'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected test name, found '"'
+   ╭─[ main.baml:2:8 ]
+   │
+ 2 │   test "first" {
+   │        ┬  
+   │        ╰── Expected test name, found '"'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '"'
+   ╭─[ main.baml:2:8 ]
+   │
+ 2 │   test "first" {
+   │        ┬  
+   │        ╰── Expected top-level declaration, found '"'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found identifier
+   ╭─[ main.baml:2:9 ]
+   │
+ 2 │   test "first" {
+   │         ──┬──  
+   │           ╰──── Expected top-level declaration, found identifier
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '"'
+   ╭─[ main.baml:2:14 ]
+   │
+ 2 │   test "first" {
+   │              ┬  
+   │              ╰── Expected top-level declaration, found '"'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '{'
+   ╭─[ main.baml:2:16 ]
+   │
+ 2 │   test "first" {
+   │                ┬  
+   │                ╰── Expected top-level declaration, found '{'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found assert
+   ╭─[ main.baml:3:5 ]
+   │
+ 3 │     assert.is_true(true)
+   │     ───┬──  
+   │        ╰──── Expected top-level declaration, found assert
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '.'
+   ╭─[ main.baml:3:11 ]
+   │
+ 3 │     assert.is_true(true)
+   │           ┬  
+   │           ╰── Expected top-level declaration, found '.'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found identifier
+   ╭─[ main.baml:3:12 ]
+   │
+ 3 │     assert.is_true(true)
+   │            ───┬───  
+   │               ╰───── Expected top-level declaration, found identifier
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '('
+   ╭─[ main.baml:3:19 ]
+   │
+ 3 │     assert.is_true(true)
+   │                   ┬  
+   │                   ╰── Expected top-level declaration, found '('
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found identifier
+   ╭─[ main.baml:3:20 ]
+   │
+ 3 │     assert.is_true(true)
+   │                    ──┬─  
+   │                      ╰─── Expected top-level declaration, found identifier
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found ')'
+   ╭─[ main.baml:3:24 ]
+   │
+ 3 │     assert.is_true(true)
+   │                        ┬  
+   │                        ╰── Expected top-level declaration, found ')'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '}'
+   ╭─[ main.baml:4:3 ]
+   │
+ 4 │   }
+   │   ┬  
+   │   ╰── Expected top-level declaration, found '}'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected test body, found '"'
+   ╭─[ main.baml:5:8 ]
+   │
+ 5 │   test "second" {
+   │        ┬  
+   │        ╰── Expected test body, found '"'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected test name, found '"'
+   ╭─[ main.baml:5:8 ]
+   │
+ 5 │   test "second" {
+   │        ┬  
+   │        ╰── Expected test name, found '"'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '"'
+   ╭─[ main.baml:5:8 ]
+   │
+ 5 │   test "second" {
+   │        ┬  
+   │        ╰── Expected top-level declaration, found '"'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found identifier
+   ╭─[ main.baml:5:9 ]
+   │
+ 5 │   test "second" {
+   │         ───┬──  
+   │            ╰──── Expected top-level declaration, found identifier
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '"'
+   ╭─[ main.baml:5:15 ]
+   │
+ 5 │   test "second" {
+   │               ┬  
+   │               ╰── Expected top-level declaration, found '"'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '{'
+   ╭─[ main.baml:5:17 ]
+   │
+ 5 │   test "second" {
+   │                 ┬  
+   │                 ╰── Expected top-level declaration, found '{'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found assert
+   ╭─[ main.baml:6:5 ]
+   │
+ 6 │     assert.is_true(true)
+   │     ───┬──  
+   │        ╰──── Expected top-level declaration, found assert
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '.'
+   ╭─[ main.baml:6:11 ]
+   │
+ 6 │     assert.is_true(true)
+   │           ┬  
+   │           ╰── Expected top-level declaration, found '.'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found identifier
+   ╭─[ main.baml:6:12 ]
+   │
+ 6 │     assert.is_true(true)
+   │            ───┬───  
+   │               ╰───── Expected top-level declaration, found identifier
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '('
+   ╭─[ main.baml:6:19 ]
+   │
+ 6 │     assert.is_true(true)
+   │                   ┬  
+   │                   ╰── Expected top-level declaration, found '('
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found identifier
+   ╭─[ main.baml:6:20 ]
+   │
+ 6 │     assert.is_true(true)
+   │                    ──┬─  
+   │                      ╰─── Expected top-level declaration, found identifier
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found ')'
+   ╭─[ main.baml:6:24 ]
+   │
+ 6 │     assert.is_true(true)
+   │                        ┬  
+   │                        ╰── Expected top-level declaration, found ')'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '}'
+   ╭─[ main.baml:7:3 ]
+   │
+ 7 │   }
+   │   ┬  
+   │   ╰── Expected top-level declaration, found '}'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected top-level declaration, found '}'
+   ╭─[ main.baml:8:1 ]
+   │
+ 8 │ }
+   │ ┬  
+   │ ╰── Expected top-level declaration, found '}'
+   │ 
+   │ Note: Error code: E0010
+───╯

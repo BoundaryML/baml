@@ -56,7 +56,10 @@ pub fn extract_native_builtins()
     let mut class_defs = Vec::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL {
+    for builtin_file in baml_builtins2::ALL
+        .iter()
+        .filter(|f| f.package == baml_builtins2::PACKAGE_BAML)
+    {
         let path = builtin_file.virtual_path();
         // Lex and parse into a lossless CST.
         let tokens = baml_compiler_lexer::lex_lossless(builtin_file.contents, FileId::new(0));

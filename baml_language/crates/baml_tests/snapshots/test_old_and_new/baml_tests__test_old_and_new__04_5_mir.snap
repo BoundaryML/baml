@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.Greet(name: string) -> string {
+    // Locals:
+    let _0: string // _0 // return
+    let _1: string // name // param
+
+    bb0: {
+        _0 = const "Hello, {name}!";
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}

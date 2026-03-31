@@ -1,0 +1,90 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+
+=== TIR2 (package testing) ===
+
+--- <builtin>/testing/registry.baml ---
+class testing.TestRegistration {
+  name: string
+  body: () -> null
+  runner: testing.TestRunner?
+}
+class testing.TestSetRegistration {
+  name: string
+  collector: (testing.TestSetCollector) -> null
+  runner: testing.TestSetRunner?
+}
+class testing.Registry {
+  tests: testing.TestRegistration[]
+  testsets: testing.TestSetRegistration[]
+}
+class testing.TestSetCollector {
+  tests: testing.TestRegistration[]
+  testsets: testing.TestSetRegistration[]
+}
+class testing.TestRegistration$stream {
+  name: null | string
+  body: unknown
+  runner: null | testing.TestRunner$stream
+}
+class testing.TestSetRegistration$stream {
+  name: null | string
+  collector: unknown
+  runner: null | testing.TestSetRunner$stream
+}
+class testing.Registry$stream {
+  tests: testing.TestRegistration$stream[]
+  testsets: testing.TestSetRegistration$stream[]
+}
+class testing.TestSetCollector$stream {
+  tests: testing.TestRegistration$stream[]
+  testsets: testing.TestSetRegistration$stream[]
+}
+
+--- <builtin>/testing/types.baml ---
+type testing.Outcome = "pass" | "fail" | "error"
+class testing.RunReport {
+  outcome: testing.Outcome
+  duration_ms: int
+  extras: map<string, unknown>
+}
+class testing.TestReport {
+  outcome: testing.Outcome
+  runs: testing.RunReport[]
+  extras: map<string, unknown>
+}
+class testing.TestSetReport {
+  outcome: testing.Outcome
+  passed: int
+  failed: int
+  total: int
+  results: testing.ChildReport[]
+  extras: map<string, unknown>
+}
+type testing.ChildReport = testing.TestReport | testing.TestSetReport
+type testing.TestRunner = (() -> testing.TestReport) -> () -> testing.TestReport
+type testing.TestSetRunner = (() -> testing.TestSetReport) -> () -> testing.TestSetReport
+type testing.Outcome$stream = "pass" | "fail" | "error"
+class testing.RunReport$stream {
+  outcome: null | testing.Outcome$stream
+  duration_ms: null | int
+  extras: map<string, unknown>
+}
+class testing.TestReport$stream {
+  outcome: null | testing.Outcome$stream
+  runs: testing.RunReport$stream[]
+  extras: map<string, unknown>
+}
+class testing.TestSetReport$stream {
+  outcome: null | testing.Outcome$stream
+  passed: null | int
+  failed: null | int
+  total: null | int
+  results: testing.ChildReport$stream[]
+  extras: map<string, unknown>
+}
+type testing.ChildReport$stream = testing.TestReport$stream | testing.TestSetReport$stream
+type testing.TestRunner$stream = unknown
+type testing.TestSetRunner$stream = unknown

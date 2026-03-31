@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+
+=== MIR2 (package testing) ===
+fn testing.Registry.register_test = builtin(vm)
+
+fn testing.TestSetCollector.register_test = builtin(vm)
+
+fn testing.TestSetCollector.register_test_set = builtin(vm)
+
+fn testing.Registry.register_test_set = builtin(vm)

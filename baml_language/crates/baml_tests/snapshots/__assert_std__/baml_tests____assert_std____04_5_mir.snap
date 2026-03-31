@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+
+=== MIR2 (package assert) ===
+fn assert.contains = builtin(vm)
+
+fn assert.equal = builtin(vm)
+
+fn assert.is_true = builtin(vm)
+
+fn assert.not_null = builtin(vm)

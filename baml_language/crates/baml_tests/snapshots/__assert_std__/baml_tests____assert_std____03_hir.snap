@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+
+=== HIR2 (package assert) ===
+
+--- <builtin>/assert/assert.baml ---
+function assert.contains(haystack: string, needle: string) -> null  [builtin]
+function assert.equal(actual: unknown, expected: unknown) -> null  [builtin]
+function assert.is_true(condition: bool) -> null  [builtin]
+function assert.not_null(value: unknown?) -> null  [builtin]
