@@ -8,13 +8,14 @@ function user.Greet(name: string) -> string throws never {
   }
 }
 function user.$init_test(registry: testing.Registry) -> ? throws never {
-  { : void
+  { : null
     registry.register_test("new style", () -> { ... }, null) : null
       () -> { ... } : () -> null
         {
           let result = "hello"
           assert.not_null(result)
         }
+    null : null
   }
 }
 lambda user.$init_test {

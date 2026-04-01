@@ -741,10 +741,11 @@ fn synthesize_init_test_function(registrations: &[TestRegistrationItem]) -> Func
         })
         .collect();
 
-    // Block expression containing all registration calls
+    // Block expression containing all registration calls, with a null tail
+    let null_expr = alloc_expr(Expr::Null);
     let block_expr = alloc_expr(Expr::Block {
         stmts: stmt_ids,
-        tail_expr: None,
+        tail_expr: Some(null_expr),
     });
 
     let body = ExprBody {
@@ -924,9 +925,10 @@ fn synthesize_testset_collector_body(
         })
         .collect();
 
+    let null_expr = alloc_expr(Expr::Null);
     let block = alloc_expr(Expr::Block {
         stmts: stmt_ids,
-        tail_expr: None,
+        tail_expr: Some(null_expr),
     });
 
     let body = ExprBody {

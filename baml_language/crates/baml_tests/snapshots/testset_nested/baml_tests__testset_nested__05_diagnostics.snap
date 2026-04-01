@@ -2,12 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: missing return: expected `null`
-   ╭─[ main.baml:1:1 ]
-   │
- 1 │ testset "all evals" {
-   │ │ 
-   │ ╰─ missing return: expected `null`
-   │ 
-   │ Note: Error code: E0001
-───╯
+No errors found.
