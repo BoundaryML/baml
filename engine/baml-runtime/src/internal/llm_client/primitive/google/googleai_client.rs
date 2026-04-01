@@ -221,16 +221,11 @@ impl RequestBuilder for GoogleAIClient {
         stream: bool,
         expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
-        let mut should_stream = "generateContent";
-        if stream {
-            should_stream = "streamGenerateContent?alt=sse";
-        }
-
-        let baml_original_url = format!(
-            "{}/models/{}:{}",
-            self.properties.base_url,
-            self.properties.model.clone(),
-            should_stream
+        let baml_original_url = build_google_ai_url(
+            &self.properties.base_url,
+            &self.properties.model,
+            stream,
+            self.properties.use_shorthand_url,
         );
 
         let mut req = match (&self.properties.proxy_url, allow_proxy) {
@@ -409,5 +404,99 @@ impl CompletionToProviderBody for GoogleAIClient {
         prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value> {
         convert_completion_prompt_to_body(prompt)
+    }
+}
+
+/// Builds the URL for Google AI API requests.
+///
+/// When `use_shorthand_url` is true, returns the base_url directly without any suffix.
+/// This is useful for API gateways like OpenCode Zen that handle routing internally.
+///
+/// When `use_shorthand_url` is false (the default), builds the full Google Gemini API URL:
+/// `{base_url}/models/{model}:generateContent` or `{base_url}/models/{model}:streamGenerateContent?alt=sse`
+pub fn build_google_ai_url(
+    base_url: &str,
+    model: &str,
+    stream: bool,
+    use_shorthand_url: bool,
+) -> String {
+    if use_shorthand_url {
+        base_url.to_string()
+    } else {
+        let method = if stream {
+            "streamGenerateContent?alt=sse"
+        } else {
+            "generateContent"
+        };
+        format!("{}/models/{}:{}", base_url, model, method)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_url_format_non_streaming() {
+        let url = build_google_ai_url(
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-3-flash",
+            false,
+            false,
+        );
+        assert_eq!(
+            url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent"
+        );
+    }
+
+    #[test]
+    fn test_default_url_format_streaming() {
+        let url = build_google_ai_url(
+            "https://generativelanguage.googleapis.com/v1beta",
+            "gemini-3-flash",
+            true,
+            false,
+        );
+        assert_eq!(
+            url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:streamGenerateContent?alt=sse"
+        );
+    }
+
+    #[test]
+    fn test_shorthand_url_non_streaming() {
+        let url = build_google_ai_url(
+            "https://opencode.ai/zen/v1/models/gemini-3-flash",
+            "gemini-3-flash",
+            false,
+            true,
+        );
+        assert_eq!(url, "https://opencode.ai/zen/v1/models/gemini-3-flash");
+    }
+
+    #[test]
+    fn test_shorthand_url_streaming() {
+        let url = build_google_ai_url(
+            "https://opencode.ai/zen/v1/models/gemini-3-flash",
+            "gemini-3-flash",
+            true,
+            true,
+        );
+        assert_eq!(url, "https://opencode.ai/zen/v1/models/gemini-3-flash");
+    }
+
+    #[test]
+    fn test_custom_base_url_without_shorthand() {
+        let url = build_google_ai_url(
+            "https://custom-proxy.example.com/api",
+            "gemini-pro",
+            false,
+            false,
+        );
+        assert_eq!(
+            url,
+            "https://custom-proxy.example.com/api/models/gemini-pro:generateContent"
+        );
     }
 }

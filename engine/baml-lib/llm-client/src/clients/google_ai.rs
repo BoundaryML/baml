@@ -27,6 +27,10 @@ pub struct UnresolvedGoogleAI<Meta> {
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
     media_url_handler: UnresolvedMediaUrlHandler,
     http_config: HttpConfig,
+    /// When true, sends POST requests directly to base_url without appending
+    /// `/models/{model}:generateContent`. Useful for API gateways like OpenCode Zen
+    /// that handle routing internally.
+    use_shorthand_url: bool,
 }
 
 impl<Meta> UnresolvedGoogleAI<Meta> {
@@ -51,6 +55,7 @@ impl<Meta> UnresolvedGoogleAI<Meta> {
             finish_reason_filter: self.finish_reason_filter.clone(),
             media_url_handler: self.media_url_handler.clone(),
             http_config: self.http_config.clone(),
+            use_shorthand_url: self.use_shorthand_url,
         }
     }
 }
@@ -68,6 +73,10 @@ pub struct ResolvedGoogleAI {
     pub finish_reason_filter: FinishReasonFilter,
     pub media_url_handler: MediaUrlHandler,
     pub http_config: HttpConfig,
+    /// When true, sends POST requests directly to base_url without appending
+    /// `/models/{model}:generateContent`. Useful for API gateways like OpenCode Zen
+    /// that handle routing internally.
+    pub use_shorthand_url: bool,
 }
 
 impl ResolvedGoogleAI {
@@ -165,6 +174,7 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
             media_url_handler: self.media_url_handler.resolve(ctx)?,
             http_config: self.http_config.clone(),
+            use_shorthand_url: self.use_shorthand_url,
         })
     }
 
@@ -189,6 +199,10 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
         let headers = properties.ensure_headers().unwrap_or_default();
         let finish_reason_filter = properties.ensure_finish_reason_filter();
         let media_url_handler = properties.ensure_media_url_handler();
+        let use_shorthand_url = properties
+            .ensure_bool("use_shorthand_url", false)
+            .map(|(_, v, _)| v)
+            .unwrap_or(false);
         let (properties, errors) = properties.finalize();
 
         if !errors.is_empty() {
@@ -207,6 +221,113 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
             finish_reason_filter,
             media_url_handler,
             http_config,
+            use_shorthand_url,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_types::{StringOr, UnresolvedValue};
+    use indexmap::IndexMap;
+
+    use super::*;
+    use crate::clients::helpers::PropertyHandler;
+
+    fn create_test_options(
+        options: &[(&str, UnresolvedValue<()>)],
+    ) -> IndexMap<String, ((), UnresolvedValue<()>)> {
+        options
+            .iter()
+            .map(|(k, v)| (k.to_string(), ((), v.clone())))
+            .collect()
+    }
+
+    #[test]
+    fn test_use_shorthand_url_defaults_to_false() {
+        let options = create_test_options(&[
+            (
+                "model",
+                UnresolvedValue::String(StringOr::Value("gemini-3-flash".to_string()), ()),
+            ),
+            (
+                "api_key",
+                UnresolvedValue::String(StringOr::Value("test-key".to_string()), ()),
+            ),
+        ]);
+        let handler = PropertyHandler::new(options, ());
+        let result = UnresolvedGoogleAI::create_from(handler);
+        match result {
+            Ok(unresolved) => assert!(!unresolved.use_shorthand_url),
+            Err(errors) => panic!("Expected Ok but got {} errors", errors.len()),
+        }
+    }
+
+    #[test]
+    fn test_use_shorthand_url_can_be_set_true() {
+        let options = create_test_options(&[
+            (
+                "model",
+                UnresolvedValue::String(StringOr::Value("gemini-3-flash".to_string()), ()),
+            ),
+            (
+                "api_key",
+                UnresolvedValue::String(StringOr::Value("test-key".to_string()), ()),
+            ),
+            ("use_shorthand_url", UnresolvedValue::Bool(true, ())),
+        ]);
+        let handler = PropertyHandler::new(options, ());
+        let result = UnresolvedGoogleAI::create_from(handler);
+        match result {
+            Ok(unresolved) => assert!(unresolved.use_shorthand_url),
+            Err(errors) => panic!("Expected Ok but got {} errors", errors.len()),
+        }
+    }
+
+    #[test]
+    fn test_use_shorthand_url_can_be_set_false() {
+        let options = create_test_options(&[
+            (
+                "model",
+                UnresolvedValue::String(StringOr::Value("gemini-3-flash".to_string()), ()),
+            ),
+            (
+                "api_key",
+                UnresolvedValue::String(StringOr::Value("test-key".to_string()), ()),
+            ),
+            ("use_shorthand_url", UnresolvedValue::Bool(false, ())),
+        ]);
+        let handler = PropertyHandler::new(options, ());
+        let result = UnresolvedGoogleAI::create_from(handler);
+        match result {
+            Ok(unresolved) => assert!(!unresolved.use_shorthand_url),
+            Err(errors) => panic!("Expected Ok but got {} errors", errors.len()),
+        }
+    }
+
+    #[test]
+    fn test_resolved_use_shorthand_url_is_passed_through() {
+        let options = create_test_options(&[
+            (
+                "model",
+                UnresolvedValue::String(StringOr::Value("gemini-3-flash".to_string()), ()),
+            ),
+            (
+                "api_key",
+                UnresolvedValue::String(StringOr::Value("test-key".to_string()), ()),
+            ),
+            ("use_shorthand_url", UnresolvedValue::Bool(true, ())),
+        ]);
+        let handler = PropertyHandler::new(options, ());
+        let unresolved = match UnresolvedGoogleAI::create_from(handler) {
+            Ok(u) => u,
+            Err(errors) => panic!("Expected Ok but got {} errors", errors.len()),
+        };
+
+        let empty_env = std::collections::HashMap::new();
+        let ctx = EvaluationContext::new(&empty_env, true);
+        let resolved = unresolved.resolve(&ctx).unwrap();
+        assert!(resolved.use_shorthand_url);
+        assert_eq!(resolved.model, "gemini-3-flash");
     }
 }
