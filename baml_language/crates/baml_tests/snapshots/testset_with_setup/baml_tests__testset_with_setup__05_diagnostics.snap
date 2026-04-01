@@ -1,0 +1,93 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] Error: unresolved name: base_url
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ // Testset with setup code — let bindings should flow into nested tests.
+   │ │ 
+   │ ╰─ unresolved name: base_url
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: base_url
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ // Testset with setup code — let bindings should flow into nested tests.
+   │ │ 
+   │ ╰─ unresolved name: base_url
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: base_url
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ // Testset with setup code — let bindings should flow into nested tests.
+   │ │ 
+   │ ╰─ unresolved name: base_url
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: base_url
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ // Testset with setup code — let bindings should flow into nested tests.
+   │ │ 
+   │ ╰─ unresolved name: base_url
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: base_url
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ // Testset with setup code — let bindings should flow into nested tests.
+   │ │ 
+   │ ╰─ unresolved name: base_url
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: timeout
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ // Testset with setup code — let bindings should flow into nested tests.
+   │ │ 
+   │ ╰─ unresolved name: timeout
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: timeout
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ // Testset with setup code — let bindings should flow into nested tests.
+   │ │ 
+   │ ╰─ unresolved name: timeout
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: timeout
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ // Testset with setup code — let bindings should flow into nested tests.
+   │ │ 
+   │ ╰─ unresolved name: timeout
+   │ 
+   │ Note: Error code: E0001
+───╯
+
+  [type] Error: unresolved name: timeout
+   ╭─[ main.baml:1:1 ]
+   │
+ 1 │ // Testset with setup code — let bindings should flow into nested tests.
+   │ │ 
+   │ ╰─ unresolved name: timeout
+   │ 
+   │ Note: Error code: E0001
+───╯

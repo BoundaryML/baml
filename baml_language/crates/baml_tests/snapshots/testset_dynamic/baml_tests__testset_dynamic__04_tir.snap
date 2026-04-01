@@ -1,0 +1,29 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.$init_test(registry: testing.Registry) -> ? throws never {
+  { : null
+    registry.register_test_set("dynamic tests", (testset: testing.TestSetCollector) -> { ... }, null) : null
+      (testset: testing.TestSetCollector) -> { ... } : (testset: testing.TestSetCollector) -> null
+        {
+          null
+        }
+    registry.register_test_set("conditional tests", (testset: testing.TestSetCollector) -> { ... }, null) : null
+      (testset: testing.TestSetCollector) -> { ... } : (testset: testing.TestSetCollector) -> null
+        {
+          testset.register_test("always runs", () -> { ... }, null)
+          testset.register_test("only when slow", () -> { ... }, null)
+          null
+        }
+    null : null
+  }
+}
+lambda user.$init_test {
+}
+lambda user.$init_test {
+}
+lambda user.$init_test {
+}
+lambda user.$init_test {
+}

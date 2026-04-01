@@ -1,0 +1,151 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] Error: Expected field name, spread element, or '}', found test
+   ╭─[ main.baml:7:7 ]
+   │
+ 7 │     test "check " + case {
+   │       ──┬─  
+   │         ╰─── Expected field name, spread element, or '}', found test
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected ',' or '}' after object field, found '+'
+   ╭─[ main.baml:7:21 ]
+   │
+ 7 │     test "check " + case {
+   │                     ┬  
+   │                     ╰── Expected ',' or '}' after object field, found '+'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected ':', found '+'
+   ╭─[ main.baml:7:21 ]
+   │
+ 7 │     test "check " + case {
+   │                     ┬  
+   │                     ╰── Expected ':', found '+'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected ',' or '}' after object field, found '{'
+   ╭─[ main.baml:8:1 ]
+   │
+ 8 │       assert.not_null(case)
+   │ ┬  
+   │ ╰── Expected ',' or '}' after object field, found '{'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected ':', found '{'
+   ╭─[ main.baml:8:1 ]
+   │
+ 8 │       assert.not_null(case)
+   │ ┬  
+   │ ╰── Expected ':', found '{'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected ',' or '}' after object field, found '.'
+   ╭─[ main.baml:8:15 ]
+   │
+ 8 │       assert.not_null(case)
+   │               ┬  
+   │               ╰── Expected ',' or '}' after object field, found '.'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected ':', found '.'
+   ╭─[ main.baml:8:15 ]
+   │
+ 8 │       assert.not_null(case)
+   │               ┬  
+   │               ╰── Expected ':', found '.'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected ',' or '}' after object field, found '('
+   ╭─[ main.baml:8:24 ]
+   │
+ 8 │       assert.not_null(case)
+   │                        ┬  
+   │                        ╰── Expected ',' or '}' after object field, found '('
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected ':', found '('
+   ╭─[ main.baml:8:24 ]
+   │
+ 8 │       assert.not_null(case)
+   │                        ┬  
+   │                        ╰── Expected ':', found '('
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected ',' or '}' after object field, found ')'
+   ╭─[ main.baml:9:1 ]
+   │
+ 9 │     }
+   │ ┬  
+   │ ╰── Expected ',' or '}' after object field, found ')'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected ':', found ')'
+   ╭─[ main.baml:9:1 ]
+   │
+ 9 │     }
+   │ ┬  
+   │ ╰── Expected ':', found ')'
+   │ 
+   │ Note: Error code: E0010
+───╯
+
+  [parse] Error: Expected block after for expression, found '}'
+    ╭─[ main.baml:11:1 ]
+    │
+ 11 │ }
+    │ ┬  
+    │ ╰── Expected block after for expression, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected top-level declaration, found '}'
+    ╭─[ main.baml:12:1 ]
+    │
+ 12 │ 
+    │ ┬  
+    │ ╰── Expected top-level declaration, found '}'
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected '}', found test
+    ╭─[ main.baml:21:7 ]
+    │
+ 21 │     test "only when slow" {
+    │       ──┬─  
+    │         ╰─── Expected '}', found test
+    │ 
+    │ Note: Error code: E0010
+────╯
+
+  [parse] Error: Expected top-level declaration, found '}'
+    ╭─[ main.baml:25:3 ]
+    │
+    │ 
+    │ 
+    │ Note: Error code: E0010
+────╯

@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.$init_test(registry: testing.Registry) -> null {
+    load_var registry
+    load_const "with shared setup"
+    make_closure .<lambda($init_test, 0)>, 0
+    load_const null
+    call assert.contains
+    pop 1
+    load_const null
+    return
+}

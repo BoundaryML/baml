@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.$init_test(registry: testing.Registry) -> ?  [expr] {
+  { registry.register_test_set("with shared setup", (testset: testing.TestSetCollector) -> { { testset.register_test("uses setup vars", () -> { { assert.not_null(base_url) } assert.equal(timeout, 5000) }, null); testset.register_test("also uses setup", () -> { {  } assert.contains(base_url, "example") }, null) } null }, null) } null
+}

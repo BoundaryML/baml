@@ -1,0 +1,124 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.$init_test(registry: testing.Registry) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.Registry // registry // param
+    let _2: void
+    let _3: null
+    let _4: string
+    let _5: void
+    let _6: void
+    let _7: void
+    let _8: string
+    let _9: void
+
+    bb0: {
+        _4 = const "register_test_set";
+        _3 = copy _1[_4];
+        _5 = make_closure lambda[0]();
+        _2 = call copy _3(const "dynamic tests", copy _5, const null) -> [bb1];
+    }
+
+    bb1: {
+        _8 = const "register_test_set";
+        _7 = copy _1[_8];
+        _9 = make_closure lambda[1]();
+        _6 = call copy _7(const "conditional tests", copy _9, const null) -> [bb2];
+    }
+
+    bb2: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda($init_test, 0)>(testset: testing.TestSetCollector) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.TestSetCollector // testset // param
+
+    bb0: {
+        _0 = const null;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+// lambda[1]
+fn .<lambda($init_test, 1)>(testset: testing.TestSetCollector) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.TestSetCollector // testset // param
+    let _2: void
+    let _3: void
+    let _4: string
+    let _5: void
+    let _6: void
+    let _7: void
+    let _8: string
+    let _9: void
+
+    bb0: {
+        _4 = const "register_test";
+        _3 = copy _1[_4];
+        _5 = make_closure lambda[0]();
+        _2 = call copy _3(const "always runs", copy _5, const null) -> [bb1];
+    }
+
+    bb1: {
+        _8 = const "register_test";
+        _7 = copy _1[_8];
+        _9 = make_closure lambda[1]();
+        _6 = call copy _7(const "only when slow", copy _9, const null) -> [bb2];
+    }
+
+    bb2: {
+        _0 = const null;
+        goto -> bb3;
+    }
+
+    bb3: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(<lambda($init_test, 1)>, 2)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "unresolved name: assert") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}
+
+// lambda[1]
+fn .<lambda(<lambda($init_test, 1)>, 3)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: null
+
+    bb0: {
+        _1 = call const fn baml.sys.panic(const "unresolved name: assert") -> [bb1];
+    }
+
+    bb1: {
+        unreachable;
+    }
+}

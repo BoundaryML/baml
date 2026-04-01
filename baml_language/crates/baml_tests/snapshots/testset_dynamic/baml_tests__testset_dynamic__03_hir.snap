@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.$init_test(registry: testing.Registry) -> ?  [expr] {
+  { registry.register_test_set("dynamic tests", (testset: testing.TestSetCollector) -> { {  } null }, null); registry.register_test_set("conditional tests", (testset: testing.TestSetCollector) -> { { testset.register_test("always runs", () -> { {  } assert.is_true(true) }, null); testset.register_test("only when slow", () -> { {  } assert.is_true(true) }, null) } null }, null) } null
+}
