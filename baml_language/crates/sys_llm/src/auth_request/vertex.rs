@@ -366,6 +366,11 @@ mod wasm {
 
     /// Parse service account JSON, sign a JWT via browser `SubtleCrypto`, and
     /// exchange it for an access token via `HttpSendFn`.
+    ///
+    /// `SubtleCrypto` returns `JsFuture` which is not `Send`. We bridge this
+    /// by spawning the signing work via `spawn_local` (which does not require
+    /// `Send`) and communicate the signed JWT back over a `tokio::sync::oneshot`
+    /// channel so the outer future remains `Send`.
     pub(super) async fn service_account_token(
         json_str: &str,
         callbacks: Option<&BuildRequestCallbacks>,
@@ -376,7 +381,28 @@ mod wasm {
             ))
         })?;
 
-        let jwt = sign_jwt(&sa).await?;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let sa_email = sa.client_email.clone();
+        let sa_key = sa.private_key.clone();
+        let sa_key_id = sa.private_key_id.clone();
+        let sa_token_uri = sa.token_uri.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            let sa = ServiceAccount {
+                client_email: sa_email,
+                private_key: sa_key,
+                private_key_id: sa_key_id,
+                token_uri: sa_token_uri,
+            };
+            let result = sign_jwt(&sa).await;
+            let _ = tx.send(result);
+        });
+
+        let jwt = rx.await.map_err(|_| {
+            BuildRequestError::AuthorizationFailed(
+                "Google Cloud: JWT signing task was dropped".into(),
+            )
+        })??;
+
         exchange_jwt_for_token(&sa.token_uri, &jwt, callbacks).await
     }
 
