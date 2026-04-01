@@ -11,7 +11,7 @@ fn user.$init_test(registry: testing.Registry) -> null {
     let _4: string
     let _5: void
     let _6: void
-    let _7: void
+    let _7: null
     let _8: string
     let _9: void
 
@@ -46,7 +46,7 @@ fn .<lambda($init_test, 0)>() -> null {
     let _1: null
 
     bb0: {
-        _1 = call const fn baml.sys.panic(const "unresolved name: assert") -> [bb1];
+        _1 = call const fn baml.sys.panic(const "unresolved name: x") -> [bb1];
     }
 
     bb1: {

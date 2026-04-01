@@ -6,7 +6,7 @@ fn user.$init_test(registry: testing.Registry) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.Registry // registry // param
-    let _2: void
+    let _2: null
     let _3: void
     let _4: string
     let _5: string
@@ -34,7 +34,7 @@ fn .<lambda($init_test, 0)>() -> null {
     let _0: null // _0 // return
 
     bb0: {
-        _0 = call const null(const null) -> [bb1];
+        _0 = call const fn assert.not_null(const null) -> [bb1];
     }
 
     bb1: {

@@ -9,16 +9,13 @@ function user.Greet(name: string) -> string throws never {
 }
 function user.$init_test(registry: testing.Registry) -> ? throws never {
   { : void
-    registry.register_test("new style", () -> { ... }, null) : unknown
-      () -> { ... } : () -> unknown
+    registry.register_test("new style", () -> { ... }, null) : null
+      () -> { ... } : () -> null
         {
           let result = "hello"
           assert.not_null(result)
         }
   }
-  !! 0..0: unresolved member: testing.Registry.register_test
-  !! 0..0: unresolved name: assert
 }
 lambda user.$init_test {
-  !! 0..0: unresolved name: assert
 }

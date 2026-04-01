@@ -2,22 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
-  [type] Error: unresolved member: testing.Registry.register_test
-   ╭─[ main.baml:1:1 ]
-   │
- 1 │ test "with quorum" with testing.Quorum(5, 3) {
-   │ │ 
-   │ ╰─ unresolved member: testing.Registry.register_test
-   │ 
-   │ Note: Error code: E0001
-───╯
-
-  [type] Error: unresolved name: assert
-   ╭─[ main.baml:1:1 ]
-   │
- 1 │ test "with quorum" with testing.Quorum(5, 3) {
-   │ │ 
-   │ ╰─ unresolved name: assert
-   │ 
-   │ Note: Error code: E0001
-───╯
+No errors found.
