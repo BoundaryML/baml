@@ -376,16 +376,12 @@ SOURCE_FILE
             WORD "configured"
             QUOTE """
           R_PAREN ")"
-      ATTRIBUTE "// 18 close paren trailing
-    // 19 third attr leading
-    @stream.done"
+      ATTRIBUTE "@stream.done"
         AT "@"
         WORD "stream"
         DOT "."
         WORD "done"
-      ATTRIBUTE "// 20 third attr trailing
-    // 21 fourth attr leading
-    @stream.not_null"
+      ATTRIBUTE "@stream.not_null"
         AT "@"
         WORD "stream"
         DOT "."
@@ -422,16 +418,12 @@ SOURCE_FILE
             WORD "configured"
             QUOTE """
           R_PAREN ")"
-      ATTRIBUTE "/* 18 close paren trailing */
-    /* 19 third attr leading */
-    @stream.done"
+      ATTRIBUTE "@stream.done"
         AT "@"
         WORD "stream"
         DOT "."
         WORD "done"
-      ATTRIBUTE "/* 20 third attr trailing */
-    /* 21 fourth attr leading */
-    @stream.not_null"
+      ATTRIBUTE "@stream.not_null"
         AT "@"
         WORD "stream"
         DOT "."

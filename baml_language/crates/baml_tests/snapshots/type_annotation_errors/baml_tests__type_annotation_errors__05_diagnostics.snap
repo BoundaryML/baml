@@ -31,3 +31,13 @@ source: crates/baml_tests/src/generated_tests.rs
     │ 
     │ Note: Error code: E0010
 ────╯
+
+  [hir] Error: could not parse type expression for type alias `Bar`
+    ╭─[ type_malformed.baml:10:11 ]
+    │
+ 10 │ type Bar =
+    │           │ 
+    │           ╰─ unparseable type
+    │ 
+    │ Note: Error code: E0108
+────╯

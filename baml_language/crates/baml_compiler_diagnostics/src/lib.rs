@@ -38,6 +38,6 @@ pub mod to_diagnostic;
 // Re-export error types
 // Re-export the unified diagnostic types
 pub use diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity, ToDiagnostic};
-pub use errors::{ErrorContext, HirDiagnostic, NameError, ParseError, TypeError};
+pub use errors::{ErrorContext, NameError, ParseError, TypeError};
 // Re-export the rendering functions and types
 pub use render::{RenderConfig, render_diagnostic};

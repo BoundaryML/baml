@@ -7,7 +7,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use baml_base::Name;
-use baml_compiler2_ast::{ExprId, PatId, StmtId};
+use baml_compiler2_ast::{ExprId, LoweringDiagnostic, PatId, StmtId};
 use text_size::{TextRange, TextSize};
 
 use crate::{
@@ -77,6 +77,7 @@ impl Default for ScopeBindings {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SemanticIndexExtra {
     pub diagnostics: Vec<Hir2Diagnostic>,
+    pub lowering_diagnostics: Vec<LoweringDiagnostic>,
 }
 
 // ── FileSemanticIndex ────────────────────────────────────────────────────────

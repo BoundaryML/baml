@@ -222,11 +222,11 @@ class user.SingleAttrField {
 }
 class user.MultiAttrField {
   name: string @description("The user's name") @alias("user_name")
-  summary: string? @description("A summary") @alias("sum") @stream.done @stream.not_null
+  summary: string? @description("A summary") @alias("sum")
 }
 class user.LongAttrField {
   name: string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
-  data: map<string, int | string | bool> @description("complex data") @alias("payload") @stream.done
+  data: map<string, int | string | bool> @description("complex data") @alias("payload")
   config: map<string, map<string, int | string | bool | null>> @description("deeply nested config structure for testing wrapping")
 }
 class user.LongFieldTypes {
@@ -275,10 +275,10 @@ class user.TriviaLongFieldTypeBlock {
   data: map<string, int | string | bool | float | null> @description("a long description")
 }
 class user.TriviaMultiAttr {
-  name: string @description("name") @alias("user_name") @stream.done
+  name: string @description("name") @alias("user_name")
 }
 class user.TriviaMultiAttrBlock {
-  name: string @description("name") @alias("user_name") @stream.done
+  name: string @description("name") @alias("user_name")
 }
 class user.A {
   x: int

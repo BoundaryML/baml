@@ -91,11 +91,11 @@ class user.MFoo {
 }
 class user.OrderingModifiers {
   c1: user.MFoo?
-  c2: user.MFoo? @alias("c2_alias") @stream.done
+  c2: user.MFoo? @alias("c2_alias")
   c3: user.MFoo[]
-  c4: user.MFoo[] @alias("c4_alias") @stream.done
-  c5: user.MFoo[]? @alias("c5_alias") @stream.done
-  c6: map<string, user.MFoo> @alias("c6_alias") @stream.done
+  c4: user.MFoo[] @alias("c4_alias")
+  c5: user.MFoo[]? @alias("c5_alias")
+  c6: map<string, user.MFoo> @alias("c6_alias")
 }
 class user.MFoo$stream {
   x: null | int
@@ -118,15 +118,13 @@ class user.AliasInNestedTypes {
   d1: user.NFoo[] @alias("d1_alias")
   d2: user.NFoo[]
   d3: user.NFoo[]
-  d4: unknown @alias("d4_alias")
-  NBar: unknown
+  d4: map<user.NFoo, user.NBar>
   d5: map<user.NFoo, user.NBar>
-  d6: user.NFoo | user.NBar[]
+  d6: (user.NFoo | user.NBar)[]
   d7: (user.NFoo | user.NBar)[] @alias("d7_alias")
   d8: user.NFoo[]
   d9: user.NFoo @alias("d9_outer")
-  d10: map<string, unknown> @alias("d10_alias")
-  NBar: unknown
+  d10: map<string, map<user.NFoo, user.NBar>>
 }
 class user.NFoo$stream {
   x: null | int
@@ -138,15 +136,13 @@ class user.AliasInNestedTypes$stream {
   d1: user.NFoo$stream[] @alias("d1_alias")
   d2: user.NFoo$stream[]
   d3: user.NFoo$stream[]
-  d4: null | unknown @alias("d4_alias")
-  NBar: unknown
+  d4: map<user.NFoo, user.NBar$stream>
   d5: map<user.NFoo, user.NBar$stream>
-  d6: null | user.NFoo$stream | user.NBar$stream[]
+  d6: (user.NFoo$stream | user.NBar$stream)[]
   d7: (user.NFoo$stream | user.NBar$stream)[] @alias("d7_alias")
   d8: user.NFoo$stream[]
   d9: null | user.NFoo$stream @alias("d9_outer")
-  d10: map<string, unknown> @alias("d10_alias")
-  NBar: unknown
+  d10: map<string, map<user.NFoo, user.NBar$stream>>
 }
 class user.EFoo {
   x: int
@@ -164,9 +160,19 @@ type user.E1 = user.EFoo
 type user.E2 = user.EFoo
 type user.E3 = user.EFoo
 type user.E4 = user.EA | user.EB | user.EC
+function user.E5(x: user.EFoo) -> string throws never {
+  { : "hello"
+    "hello" : "hello"
+  }
+}
 function user.E6(x: user.EFoo) -> string throws never {
   { : "hello"
     "hello" : "hello"
+  }
+}
+function user.E7() -> user.EFoo throws never {
+  { : user.EFoo
+    EFoo { x: 1 } : user.EFoo
   }
 }
 function user.E8() -> user.EFoo throws never {
@@ -197,12 +203,12 @@ class user.OrderingSimple {
   a1: user.Fizz
   a2: user.Fizz @alias("a2_alias")
   a3: user.Fizz @alias("a3_alias")
-  a4: user.Fizz @alias("a4_alias") @stream.done
-  a5: user.Fizz @alias("a5_alias") @stream.done @description("a5 desc")
-  a6: user.Fizz @alias("a6_alias") @stream.must_exist
+  a4: user.Fizz @alias("a4_alias")
+  a5: user.Fizz @alias("a5_alias") @description("a5 desc")
+  a6: user.Fizz @alias("a6_alias")
   a7: user.Fizz
   a8: user.Fizz @alias("a8_alias") @description("a8 desc")
-  a9: user.Fizz @alias("a9_alias") @stream.done @stream.must_exist
+  a9: user.Fizz @alias("a9_alias")
 }
 class user.Fizz$stream {
   x: null | int
@@ -213,10 +219,10 @@ class user.OrderingSimple$stream {
   a3: null | user.Fizz$stream @alias("a3_alias")
   a4: null | user.Fizz$stream @alias("a4_alias")
   a5: null | user.Fizz$stream @alias("a5_alias") @description("a5 desc")
-  a6: null | user.Fizz$stream @alias("a6_alias")
+  a6: user.Fizz$stream @alias("a6_alias")
   a7: user.Fizz$stream
   a8: null | user.Fizz$stream @alias("a8_alias") @description("a8 desc")
-  a9: null | user.Fizz$stream @alias("a9_alias")
+  a9: user.Fizz$stream @alias("a9_alias")
 }
 class user.UA {
   x: int
@@ -232,15 +238,12 @@ class user.OrderingUnions {
   b2: user.UA | user.UB | user.UC
   b3: user.UA | user.UB | user.UC
   b4: user.UA | user.UB | user.UC @alias("b4_alias")
-  b5: user.UA | user.UB @alias("b5_alias")
-  UC: unknown
-  b6: user.UA @alias("b6_alias")
-  UB: unknown
-  UC: unknown
-  b7: user.UA | user.UB | user.UC @alias("b7_alias") @stream.done
+  b5: user.UA | user.UB | user.UC
+  b6: user.UA | user.UB | user.UC
+  b7: user.UA | user.UB | user.UC @alias("b7_alias")
   b8: user.UA | user.UB | user.UC @alias("b8_alias")
   b9: user.UA | user.UB
-  b10: user.UA | user.UB @alias("b10_alias") @stream.done
+  b10: user.UA | user.UB @alias("b10_alias")
   b11: user.UA | user.UB @alias("b11_alias")
   b12: user.UA | user.UB @alias("b12_alias")
   b13: user.UA | user.UB
@@ -260,11 +263,8 @@ class user.OrderingUnions$stream {
   b2: null | user.UA$stream | user.UB$stream | user.UC$stream
   b3: null | user.UA$stream | user.UB$stream | user.UC$stream
   b4: null | user.UA$stream | user.UB$stream | user.UC$stream @alias("b4_alias")
-  b5: null | user.UA$stream | user.UB$stream @alias("b5_alias")
-  UC: unknown
-  b6: null | user.UA$stream @alias("b6_alias")
-  UB: unknown
-  UC: unknown
+  b5: null | user.UA$stream | user.UB$stream | user.UC$stream
+  b6: null | user.UA$stream | user.UB$stream | user.UC$stream
   b7: null | user.UA$stream | user.UB$stream | user.UC$stream @alias("b7_alias")
   b8: null | user.UA$stream | user.UB$stream | user.UC$stream @alias("b8_alias")
   b9: null | user.UA$stream | user.UB$stream
