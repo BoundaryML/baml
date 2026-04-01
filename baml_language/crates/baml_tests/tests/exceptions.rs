@@ -19,7 +19,21 @@ async fn handled_runtime_error_continues_execution() {
     "#
     );
 
-    // Bytecode snapshot omitted — panic guard generates verbose instanceof chain
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> string {
+        load_const "boom"
+        throw
+    }
+
+    function main() -> string {
+        call user.fails
+        jump L0
+        load_const "recovered"
+
+      L0:
+        return
+    }
+    "#);
 
     assert_eq!(
         output.result,
@@ -43,7 +57,21 @@ async fn handled_throw_from_callee_returns_fallback_value() {
     "#
     );
 
-    // Bytecode snapshot omitted — panic guard generates verbose instanceof chain
+    insta::assert_snapshot!(output.bytecode, @r"
+    function main() -> int {
+        call user.throws_now
+        jump L0
+        load_const 99
+
+      L0:
+        return
+    }
+
+    function throws_now() -> int {
+        load_const 7
+        throw
+    }
+    ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
 }
@@ -64,7 +92,21 @@ async fn catch_dispatches_non_panic_to_wildcard_arm() {
     "#
     );
 
-    // Bytecode snapshot omitted — panic guard generates verbose instanceof chain
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        call user.throws_error
+        jump L0
+        load_const "wildcard"
+
+      L0:
+        return
+    }
+
+    function throws_error() -> string {
+        load_const "some error"
+        throw
+    }
+    "#);
 
     assert_eq!(
         output.result,
@@ -88,7 +130,21 @@ async fn catch_handles_thrown_error() {
     "#
     );
 
-    // Bytecode snapshot omitted — panic guard generates verbose instanceof chain
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        call user.panics_now
+        jump L0
+        load_const "caught it"
+
+      L0:
+        return
+    }
+
+    function panics_now() -> string {
+        load_const "boom"
+        throw
+    }
+    "#);
 
     assert_eq!(
         output.result,
@@ -112,7 +168,21 @@ async fn typed_catch_arm_matches_primitive_throw_value() {
     "#
     );
 
-    // Bytecode snapshot omitted — panic guard generates verbose instanceof chain
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        call user.throws_now
+        jump L0
+        load_const "typed catch"
+
+      L0:
+        return
+    }
+
+    function throws_now() -> string {
+        load_const "boom"
+        throw
+    }
+    "#);
 
     assert_eq!(
         output.result,
@@ -132,7 +202,12 @@ async fn catch_binds_to_throw_expression_not_throw_payload() {
     "
     );
 
-    // Bytecode snapshot omitted — panic guard generates verbose instanceof chain
+    insta::assert_snapshot!(output.bytecode, @r"
+    function main() -> int {
+        load_const 2
+        return
+    }
+    ");
 
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }

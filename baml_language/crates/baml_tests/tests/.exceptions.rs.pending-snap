@@ -159,3 +159,23 @@
 {"run_id":"1775004710-81458000","line":395,"new":null,"old":null}
 {"run_id":"1775004710-81458000","line":363,"new":null,"old":null}
 {"run_id":"1775004710-81458000","line":336,"new":null,"old":null}
+{"run_id":"1775004954-995275000","line":22,"new":{"module_name":"exceptions","snapshot_name":"handled_runtime_error_continues_execution","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":22,"expression":"output.bytecode"},"snapshot":"function fails() -> string {\n    load_const \"boom\"\n    throw\n}\n\nfunction main() -> string {\n    call user.fails\n    jump L0\n    load_const \"recovered\"\n\n  L0:\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775004956-65004000","line":46,"new":{"module_name":"exceptions","snapshot_name":"handled_throw_from_callee_returns_fallback_value","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":46,"expression":"output.bytecode"},"snapshot":"function main() -> int {\n    call user.throws_now\n    jump L0\n    load_const 99\n\n  L0:\n    return\n}\n\nfunction throws_now() -> int {\n    load_const 7\n    throw\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775004956-928395000","line":67,"new":{"module_name":"exceptions","snapshot_name":"catch_dispatches_non_panic_to_wildcard_arm","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":67,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    call user.throws_error\n    jump L0\n    load_const \"wildcard\"\n\n  L0:\n    return\n}\n\nfunction throws_error() -> string {\n    load_const \"some error\"\n    throw\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775004957-783959000","line":91,"new":{"module_name":"exceptions","snapshot_name":"catch_handles_thrown_error","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":91,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    call user.panics_now\n    jump L0\n    load_const \"caught it\"\n\n  L0:\n    return\n}\n\nfunction panics_now() -> string {\n    load_const \"boom\"\n    throw\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775004958-635486000","line":115,"new":{"module_name":"exceptions","snapshot_name":"typed_catch_arm_matches_primitive_throw_value","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":115,"expression":"output.bytecode"},"snapshot":"function main() -> string {\n    call user.throws_now\n    jump L0\n    load_const \"typed catch\"\n\n  L0:\n    return\n}\n\nfunction throws_now() -> string {\n    load_const \"boom\"\n    throw\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775004959-487672000","line":135,"new":{"module_name":"exceptions","snapshot_name":"catch_binds_to_throw_expression_not_throw_payload","metadata":{"source":"crates/baml_tests/tests/exceptions.rs","assertion_line":135,"expression":"output.bytecode"},"snapshot":"function main() -> int {\n    load_const 2\n    return\n}"},"old":{"module_name":"exceptions","metadata":{},"snapshot":""}}
+{"run_id":"1775005316-179832000","line":332,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":95,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":205,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":503,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":60,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":365,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":295,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":22,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":133,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":231,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":171,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":411,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":470,"new":null,"old":null}
+{"run_id":"1775005316-179832000","line":438,"new":null,"old":null}
