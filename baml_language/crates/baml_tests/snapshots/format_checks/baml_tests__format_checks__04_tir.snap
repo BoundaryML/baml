@@ -370,7 +370,7 @@ class user.SingleAttrField$stream {
 }
 class user.MultiAttrField$stream {
   name: null | string @description("The user's name") @alias("user_name")
-  summary: null | string @description("A summary") @alias("sum")
+  summary: string? @description("A summary") @alias("sum")
 }
 class user.LongAttrField$stream {
   name: null | string @description("This is an extremely long description attribute value that should push the field definition well past the default line width limit of one hundred columns")
@@ -423,10 +423,10 @@ class user.TriviaLongFieldTypeBlock$stream {
   data: map<string, int | string | bool | float | null> @description("a long description")
 }
 class user.TriviaMultiAttr$stream {
-  name: null | string @description("name") @alias("user_name")
+  name: string @description("name") @alias("user_name")
 }
 class user.TriviaMultiAttrBlock$stream {
-  name: null | string @description("name") @alias("user_name")
+  name: string @description("name") @alias("user_name")
 }
 class user.A$stream {
   x: null | int
@@ -438,7 +438,7 @@ class user.AttributeVariety$stream {
   a: null | string @skip
   b: null | string @alias("alt_name")
   c: null | string @description("desc")
-  d: null | string
+  d: string
   e: null | string
   f: null | string
 }

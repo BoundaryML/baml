@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from baml_client import b, sync_b, types
+from baml_client import async_b, sync_b, types
 
 
 class TestExtractContact:
@@ -21,7 +21,7 @@ class TestExtractContact:
 
     @pytest.mark.asyncio
     async def test_async(self):
-        result = await b.ExtractContact(
+        result = await async_b.ExtractContact(
             text="Reach Bob at bob@corp.io, phone 555-9999."
         )
         assert isinstance(result, types.ContactInfo)

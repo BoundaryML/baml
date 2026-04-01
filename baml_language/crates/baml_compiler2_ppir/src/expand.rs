@@ -359,6 +359,21 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
     let mut done = ty.attrs().stream_done;
     let d = PpirTypeAttrs::default();
 
+    // @stream.done: the entire type stays as-is (no $stream conversion at any depth),
+    // because the field won't be populated until streaming completes.
+    if done == TyAttrValue::Set {
+        let sap_attrs = SapAttrs {
+            in_progress_never: TyAttrValue::Set,
+            pending_never: if must_exist == TyAttrValue::Set {
+                TyAttrValue::Set
+            } else {
+                TyAttrValue::Unset
+            },
+            ..SapAttrs::default()
+        };
+        return (ty.clone_without_attrs(), sap_attrs);
+    }
+
     let (mut stream_type, default_when_pending, in_progress) = match ty {
         // Primitive/atomic types
         PpirTy::Int { .. } | PpirTy::Float { .. } | PpirTy::Bool { .. } => (
@@ -415,30 +430,20 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                     Some(SymbolKind::Class) => {
                         // Merge @@stream.* block attrs
                         merge_block_attrs(path, ctx, &mut must_exist, &mut done);
-                        if done == TyAttrValue::Set {
-                            // @stream.done: field keeps the original (non-stream) type
-                            // because it won't be populated until streaming completes.
-                            (
-                                ty.clone_without_attrs(),
-                                DefaultWhenPending::PrependNull,
-                                InProgress::NotAllowed,
-                            )
-                        } else {
-                            let (bare_name, prefix) = path.split_last().expect("non-empty path");
-                            let stream_path: Vec<Name> = prefix
-                                .iter()
-                                .cloned()
-                                .chain(std::iter::once(SmolStr::new(format!("{bare_name}$stream"))))
-                                .collect();
-                            (
-                                PpirTy::Named {
-                                    path: stream_path,
-                                    attrs: d.clone(),
-                                },
-                                DefaultWhenPending::PrependNull,
-                                InProgress::Allowed,
-                            )
-                        }
+                        let (bare_name, prefix) = path.split_last().expect("non-empty path");
+                        let stream_path: Vec<Name> = prefix
+                            .iter()
+                            .cloned()
+                            .chain(std::iter::once(SmolStr::new(format!("{bare_name}$stream"))))
+                            .collect();
+                        (
+                            PpirTy::Named {
+                                path: stream_path,
+                                attrs: d.clone(),
+                            },
+                            DefaultWhenPending::PrependNull,
+                            InProgress::Allowed,
+                        )
                     }
                     Some(SymbolKind::TypeAlias) => {
                         // Merge @@stream.* block attrs, then resolve alias recursively

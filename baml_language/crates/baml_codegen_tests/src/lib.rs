@@ -179,7 +179,7 @@ define_fixtures! {
         object_pool! {
             fn union_simple(u: "string | int") -> "bool",
             fn union_complex(u: "User | Company | string") -> "void",
-            fn union_in_list(l: "(string | int)[]") -> "void",
+            fn union_in_list(items: "(string | int)[]") -> "void",
             fn union_return() -> "string | int",
 
             class User { name: "string" },

@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from baml_client import b, sync_b, types
+from baml_client import async_b, sync_b, types
 
 
 class TestAnalyzeSentiment:
@@ -31,7 +31,7 @@ class TestAnalyzeSentiment:
     @pytest.mark.xfail(reason="Namespaced function lookup not yet wired")
     @pytest.mark.asyncio
     async def test_async(self):
-        result = await b.AnalyzeSentiment(
+        result = await async_b.AnalyzeSentiment(
             text="The weather is okay today, nothing special."
         )
         assert isinstance(result, types.Sentiment)

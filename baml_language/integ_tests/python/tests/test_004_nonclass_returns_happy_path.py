@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from baml_client import b, sync_b, types
+from baml_client import async_b, sync_b, types
 
 
 class TestExtractKeywords:
@@ -21,7 +21,7 @@ class TestExtractKeywords:
 
     @pytest.mark.asyncio
     async def test_async(self):
-        result = await b.ExtractKeywords(
+        result = await async_b.ExtractKeywords(
             text="Python is great for machine learning, data science, and web development."
         )
         assert isinstance(result, list)
@@ -44,7 +44,7 @@ class TestExtractMultipleResumes:
 
     @pytest.mark.asyncio
     async def test_async(self):
-        result = await b.ExtractMultipleResumes(
+        result = await async_b.ExtractMultipleResumes(
             text="Carol is a data scientist with Python and R. "
                  "Dave is a DevOps engineer skilled in Kubernetes and Terraform."
         )
@@ -63,7 +63,7 @@ class TestCountWords:
 
     @pytest.mark.asyncio
     async def test_async(self):
-        result = await b.CountWords(text="hello world")
+        result = await async_b.CountWords(text="hello world")
         assert isinstance(result, int)
         assert result == 2
 
@@ -80,7 +80,7 @@ class TestSummarize:
 
     @pytest.mark.asyncio
     async def test_async(self):
-        result = await b.Summarize(
+        result = await async_b.Summarize(
             text="BAML is a domain-specific language for defining LLM functions with structured inputs and outputs."
         )
         assert isinstance(result, str)
