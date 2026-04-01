@@ -5,8 +5,7 @@ function assert.contains(haystack: string, needle: string) -> null {
     load_var haystack
     load_var needle
     call baml.String.includes
-    load_const false
-    cmp_op ==
+    unary_op !
     pop_jump_if_false L0
     jump L1
 

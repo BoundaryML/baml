@@ -44,7 +44,7 @@ function assert.equal(actual: unknown, expected: unknown) -> null throws never {
 }
 function assert.contains(haystack: string, needle: string) -> null throws never {
   { : null
-    if (haystack.includes(needle) Eq false : bool) : null
+    if (Not haystack.includes(needle) : bool) : null
       { : null
         baml.sys.panic("assertion failed:...") : null
       }

@@ -18,7 +18,7 @@ fn assert.contains(haystack: string, needle: string) -> null {
     }
 
     bb1: {
-        _3 = copy _4 == const false;
+        _3 = !copy _4;
         branch copy _3 -> [bb3, bb2];
     }
 

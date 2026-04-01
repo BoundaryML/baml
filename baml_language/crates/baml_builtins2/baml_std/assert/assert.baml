@@ -25,7 +25,7 @@ function equal(actual: unknown, expected: unknown) -> null {
 }
 
 function contains(haystack: string, needle: string) -> null {
-  if (haystack.includes(needle) == false) {
+  if (!haystack.includes(needle)) {
     baml.sys.panic("assertion failed: string does not contain expected substring")
   } else {
     null

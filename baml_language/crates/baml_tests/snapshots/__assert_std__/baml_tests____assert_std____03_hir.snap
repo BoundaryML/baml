@@ -7,7 +7,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
 --- <builtin>/assert/assert.baml ---
 function assert.contains(haystack: string, needle: string) -> null  [expr] {
-  {  } if (haystack.includes(needle) Eq false) {  } baml.sys.panic("assertion failed:...") else {  } null
+  {  } if (Not haystack.includes(needle)) {  } baml.sys.panic("assertion failed:...") else {  } null
 }
 function assert.equal(actual: unknown, expected: unknown) -> null  [expr] {
   {  } if (actual Ne expected) {  } baml.sys.panic("assertion failed:...") else {  } null

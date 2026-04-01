@@ -3488,8 +3488,20 @@ impl<'a> Parser<'a> {
         self.events.insert(start_index, Event::StartNode { kind });
     }
 
-    /// Parse prefix expression (primary or unary operator)
+    /// Parse prefix expression (primary or unary operator).
+    ///
+    /// Unary operators (`!`, `-`, `~`, `++`, `--`) bind looser than postfix
+    /// operators (`.`, `()`, `[]`), so `!x.f()` parses as `!(x.f())`.
+    /// We achieve this by parsing the operand with `parse_expr_bp(PREFIX_BP)`
+    /// instead of recursing into `parse_prefix()` directly — the Pratt loop
+    /// then handles `.` and `()` before the `UNARY_EXPR` node closes.
     fn parse_prefix(&mut self) {
+        // Binding power for unary prefix operators — higher than all infix
+        // operators (max infix is 22) so `!a + b` is still `(!a) + b`, but
+        // the operand goes through parse_expr_bp so postfix `.`/`()`/`[]`
+        // bind tighter.
+        const PREFIX_BP: u8 = 23;
+
         // Check for unary operators
         if self.at(TokenKind::Minus)
             || self.at(TokenKind::Not)
@@ -3499,7 +3511,7 @@ impl<'a> Parser<'a> {
         {
             self.with_node(SyntaxKind::UNARY_EXPR, |p| {
                 p.bump(); // operator
-                p.parse_prefix(); // operand
+                p.parse_expr_bp(PREFIX_BP); // operand: postfix ops bind tighter
             });
         } else {
             self.parse_primary_expr();
