@@ -24,10 +24,18 @@ class testing.TestSetRegistration {
   collector: (testing.TestSetCollector) -> null
   runner: testing.TestSetRunner?
 }
-function testing.register_test(self: ?, name: string, body: () -> null, runner: testing.TestRunner?) -> null  [builtin]
-function testing.register_test(self: ?, name: string, body: () -> null, runner: testing.TestRunner?) -> null  [builtin]
-function testing.register_test_set(self: ?, name: string, collector: (testing.TestSetCollector) -> null, runner: testing.TestSetRunner?) -> null  [builtin]
-function testing.register_test_set(self: ?, name: string, collector: (testing.TestSetCollector) -> null, runner: testing.TestSetRunner?) -> null  [builtin]
+function testing.register_test(self: ?, name: string, body: () -> null, runner: testing.TestRunner?) -> null  [expr] {
+  { let _ = self.tests.push(testing.TestRegistration { name: name, body: body, runner: runner }) } null
+}
+function testing.register_test(self: ?, name: string, body: () -> null, runner: testing.TestRunner?) -> null  [expr] {
+  { let _ = self.tests.push(testing.TestRegistration { name: name, body: body, runner: runner }) } null
+}
+function testing.register_test_set(self: ?, name: string, collector: (testing.TestSetCollector) -> null, runner: testing.TestSetRunner?) -> null  [expr] {
+  { let _ = self.testsets.push(testing.TestSetRegistration { name: name, collector: collector, runner: runner }) } null
+}
+function testing.register_test_set(self: ?, name: string, collector: (testing.TestSetCollector) -> null, runner: testing.TestSetRunner?) -> null  [expr] {
+  { let _ = self.testsets.push(testing.TestSetRegistration { name: name, collector: collector, runner: runner }) } null
+}
 
 --- <builtin>/testing/types.baml ---
 class testing.RunReport {

@@ -2,13 +2,77 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 function testing.Registry.register_test(self: null, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
+    load_var self
+    load_field .tests
+    alloc_instance TestRegistration
+    copy 0
+    load_var name
+    store_field .name
+    copy 0
+    load_var body
+    store_field .body
+    copy 0
+    load_var runner
+    store_field .runner
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
 }
 
 function testing.Registry.register_test_set(self: null, name: string, collector: (testing.TestSetCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+    load_var self
+    load_field .testsets
+    alloc_instance TestSetRegistration
+    copy 0
+    load_var name
+    store_field .name
+    copy 0
+    load_var collector
+    store_field .collector
+    copy 0
+    load_var runner
+    store_field .runner
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
 }
 
 function testing.TestSetCollector.register_test(self: null, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
+    load_var self
+    load_field .tests
+    alloc_instance TestRegistration
+    copy 0
+    load_var name
+    store_field .name
+    copy 0
+    load_var body
+    store_field .body
+    copy 0
+    load_var runner
+    store_field .runner
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
 }
 
 function testing.TestSetCollector.register_test_set(self: null, name: string, collector: (testing.TestSetCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+    load_var self
+    load_field .testsets
+    alloc_instance TestSetRegistration
+    copy 0
+    load_var name
+    store_field .name
+    copy 0
+    load_var collector
+    store_field .collector
+    copy 0
+    load_var runner
+    store_field .runner
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
 }

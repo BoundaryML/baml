@@ -4,10 +4,110 @@ source: crates/baml_tests/src/generated_tests.rs
 === MIR2 ===
 
 === MIR2 (package testing) ===
-fn testing.Registry.register_test = builtin(vm)
+fn testing.Registry.register_test(self: testing.Registry, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.Registry // self // param
+    let _2: string // name // param
+    let _3: () -> null // body // param
+    let _4: (() -> testing.TestReport) -> () -> testing.TestReport? // runner // param
+    let _5: int // _
+    let _6: testing.TestRegistration[]
+    let _7: testing.TestRegistration
 
-fn testing.TestSetCollector.register_test = builtin(vm)
+    bb0: {
+        _6 = copy _1.0;
+        _7 = TestRegistration { copy _2, copy _3, copy _4 };
+        _5 = call const fn baml.Array.push(copy _6, copy _7) -> [bb1];
+    }
 
-fn testing.TestSetCollector.register_test_set = builtin(vm)
+    bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
 
-fn testing.Registry.register_test_set = builtin(vm)
+    bb2: {
+        return;
+    }
+}
+
+fn testing.TestSetCollector.register_test(self: testing.TestSetCollector, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.TestSetCollector // self // param
+    let _2: string // name // param
+    let _3: () -> null // body // param
+    let _4: (() -> testing.TestReport) -> () -> testing.TestReport? // runner // param
+    let _5: int // _
+    let _6: testing.TestRegistration[]
+    let _7: testing.TestRegistration
+
+    bb0: {
+        _6 = copy _1.0;
+        _7 = TestRegistration { copy _2, copy _3, copy _4 };
+        _5 = call const fn baml.Array.push(copy _6, copy _7) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn testing.TestSetCollector.register_test_set(self: testing.TestSetCollector, name: string, collector: (testing.TestSetCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.TestSetCollector // self // param
+    let _2: string // name // param
+    let _3: (testing.TestSetCollector) -> null // collector // param
+    let _4: (() -> testing.TestSetReport) -> () -> testing.TestSetReport? // runner // param
+    let _5: int // _
+    let _6: testing.TestSetRegistration[]
+    let _7: testing.TestSetRegistration
+
+    bb0: {
+        _6 = copy _1.1;
+        _7 = TestSetRegistration { copy _2, copy _3, copy _4 };
+        _5 = call const fn baml.Array.push(copy _6, copy _7) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+fn testing.Registry.register_test_set(self: testing.Registry, name: string, collector: (testing.TestSetCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.Registry // self // param
+    let _2: string // name // param
+    let _3: (testing.TestSetCollector) -> null // collector // param
+    let _4: (() -> testing.TestSetReport) -> () -> testing.TestSetReport? // runner // param
+    let _5: int // _
+    let _6: testing.TestSetRegistration[]
+    let _7: testing.TestSetRegistration
+
+    bb0: {
+        _6 = copy _1.1;
+        _7 = TestSetRegistration { copy _2, copy _3, copy _4 };
+        _5 = call const fn baml.Array.push(copy _6, copy _7) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}

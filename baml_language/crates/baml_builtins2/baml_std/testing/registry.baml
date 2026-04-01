@@ -20,12 +20,14 @@ class Registry {
 
   //baml:mut_self
   function register_test(self, name: string, body: () -> null, runner: TestRunner?) -> null {
-    $rust_function
+    let _ = self.tests.push(TestRegistration { name: name, body: body, runner: runner })
+    null
   }
 
   //baml:mut_self
   function register_test_set(self, name: string, collector: (TestSetCollector) -> null, runner: TestSetRunner?) -> null {
-    $rust_function
+    let _ = self.testsets.push(TestSetRegistration { name: name, collector: collector, runner: runner })
+    null
   }
 }
 
@@ -35,11 +37,13 @@ class TestSetCollector {
 
   //baml:mut_self
   function register_test(self, name: string, body: () -> null, runner: TestRunner?) -> null {
-    $rust_function
+    let _ = self.tests.push(TestRegistration { name: name, body: body, runner: runner })
+    null
   }
 
   //baml:mut_self
   function register_test_set(self, name: string, collector: (TestSetCollector) -> null, runner: TestSetRunner?) -> null {
-    $rust_function
+    let _ = self.testsets.push(TestSetRegistration { name: name, collector: collector, runner: runner })
+    null
   }
 }
