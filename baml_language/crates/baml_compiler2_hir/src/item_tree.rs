@@ -486,10 +486,7 @@ impl ItemTree {
         id
     }
 
-    pub fn alloc_generator(
-        &mut self,
-        g: &ast::GeneratorDef,
-    ) -> LocalItemId<GeneratorMarker> {
+    pub fn alloc_generator(&mut self, g: &ast::GeneratorDef) -> LocalItemId<GeneratorMarker> {
         let id = self.alloc_id(ItemKind::Generator, &g.name);
         let config_items = g
             .config_items

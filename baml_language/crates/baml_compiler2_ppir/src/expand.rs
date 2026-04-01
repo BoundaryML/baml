@@ -424,14 +424,11 @@ fn stream_expand_inner(ty: &PpirTy, ctx: &ExpandCtx<'_>, depth: u32) -> (PpirTy,
                                 InProgress::NotAllowed,
                             )
                         } else {
-                            let (bare_name, prefix) =
-                                path.split_last().expect("non-empty path");
+                            let (bare_name, prefix) = path.split_last().expect("non-empty path");
                             let stream_path: Vec<Name> = prefix
                                 .iter()
                                 .cloned()
-                                .chain(std::iter::once(SmolStr::new(format!(
-                                    "{bare_name}$stream"
-                                ))))
+                                .chain(std::iter::once(SmolStr::new(format!("{bare_name}$stream"))))
                                 .collect();
                             (
                                 PpirTy::Named {

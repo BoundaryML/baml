@@ -25,10 +25,7 @@ pub fn to_source_code(
         (PathBuf::from("stream_types.py"), stream_types_py),
         (PathBuf::from("sync_client.py"), sync_client_py),
         (PathBuf::from("async_client.py"), async_client_py),
-        (
-            PathBuf::from("stream_client.pyi"),
-            stream_functions_pyi,
-        ),
+        (PathBuf::from("stream_client.pyi"), stream_functions_pyi),
         (
             PathBuf::from("runtime.py"),
             include_str!("./_askama/runtime.py").to_string(),

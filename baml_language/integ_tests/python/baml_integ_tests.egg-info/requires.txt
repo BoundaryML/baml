@@ -1,6 +1,0 @@
-baml-py
-pydantic>=2.0
-pytest
-pytest-asyncio
-pytest-timeout
-python-dotenv

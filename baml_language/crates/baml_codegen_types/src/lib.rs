@@ -3,12 +3,10 @@
 //! Union / Optional / Null invariance guaranteed
 
 mod errors;
-mod from_tir;
 mod objects;
 mod ty;
 
 pub use errors::*;
-pub use from_tir::build_object_pool;
 pub use objects::*;
 pub use ty::*;
 

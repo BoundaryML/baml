@@ -1,11 +1,12 @@
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result};
-use baml_compiler2_hir::{self, file_package, item_tree::GeneratorConfigItem};
-use baml_db::baml_compiler_diagnostics::{Severity, render};
+use baml_db::{
+    baml_compiler_diagnostics::{Severity, render},
+    baml_compiler2_hir::{self, file_package, item_tree::GeneratorConfigItem},
+};
 use baml_project::ProjectDatabase;
 use baml_workspace::discover_baml_files;
 use clap::Args;
@@ -90,8 +91,7 @@ impl GenerateArgs {
         }
 
         // Build the codegen ObjectPool from the compiler database.
-        let pool = baml_codegen_types::build_object_pool(&db)
-            .context("Failed to build codegen object pool")?;
+        let pool = baml_project::build_object_pool(&db);
 
         let mut total_files = 0;
 
@@ -179,7 +179,7 @@ fn discover_generators(db: &ProjectDatabase, baml_src: &std::path::Path) -> Vec<
 
         let item_tree = baml_compiler2_hir::file_item_tree(db, source_file);
 
-        for (_id, generator_item) in &item_tree.generators {
+        for generator_item in item_tree.generators.values() {
             let config = &generator_item.config_items;
             let output_type = get_config(config, "output_type").unwrap_or_default();
             if output_type.is_empty() {
@@ -220,7 +220,7 @@ fn get_config(items: &[GeneratorConfigItem], key: &str) -> Option<String> {
 /// Generate `inlinedbaml.py` — a Python dict mapping relative file paths to BAML source.
 fn generate_inlinedbaml(
     db: &ProjectDatabase,
-    source_files: &[baml_base::SourceFile],
+    source_files: &[baml_db::SourceFile],
     baml_src: &std::path::Path,
 ) -> String {
     use std::fmt::Write;
@@ -232,12 +232,10 @@ fn generate_inlinedbaml(
     for sf in source_files {
         let path = sf.path(db);
         // Make key relative to baml_src (e.g. "sub/foo.baml").
-        let rel = path
-            .strip_prefix(baml_src)
-            .unwrap_or(&path);
+        let rel = path.strip_prefix(baml_src).unwrap_or(&path);
         let key = rel.to_string_lossy();
         let text = sf.text(db);
-        let _ = write!(out, "    {}: {},\n", quote_py(&key), quote_py(text));
+        let _ = writeln!(out, "    {}: {},", quote_py(&key), quote_py(text));
     }
     out.push_str(
         "}\n\n\

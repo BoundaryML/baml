@@ -4,23 +4,22 @@
 //! and populates a codegen-ready `ObjectPool` suitable for language-specific
 //! code generators (e.g. `baml_codegen_python`).
 
-use anyhow::Result;
-use baml_base::Name;
+use baml_codegen_types::{self as cg, Namespace, ObjectPool};
 use baml_compiler2_ast::DeclarativeMeta;
 use baml_compiler2_hir::{file_package, package::PackageId};
 use baml_compiler2_tir::{
     lower_type_expr,
     ty::{PrimitiveType, Ty as TirTy},
 };
-use baml_project::ProjectDatabase;
+use baml_db::Name;
 
-use crate::{self as cg, Namespace, ObjectPool};
+use crate::ProjectDatabase;
 
 /// Build a codegen `ObjectPool` from the compiler database.
 ///
 /// Walks all user-package source files, extracts classes/enums/type aliases/
 /// declarative functions, resolves their types, and converts to codegen types.
-pub fn build_object_pool(db: &ProjectDatabase) -> Result<ObjectPool> {
+pub fn build_object_pool(db: &ProjectDatabase) -> ObjectPool {
     let mut pool = ObjectPool::new();
 
     let user_pkg_id = PackageId::new(db, Name::new("user"));
@@ -35,7 +34,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> Result<ObjectPool> {
         let item_tree = baml_compiler2_ppir::file_item_tree(db, source_file);
 
         // Classes
-        for (_id, class) in &item_tree.classes {
+        for class in item_tree.classes.values() {
             if !class.generic_params.is_empty() {
                 continue;
             }
@@ -72,7 +71,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> Result<ObjectPool> {
         }
 
         // Enums
-        for (_id, enum_def) in &item_tree.enums {
+        for enum_def in item_tree.enums.values() {
             let cg_name = cg::Name {
                 name: enum_def.name.clone(),
                 namespace: namespace_for(enum_def.name.as_str()),
@@ -97,7 +96,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> Result<ObjectPool> {
         }
 
         // Type aliases
-        for (_id, alias) in &item_tree.type_aliases {
+        for alias in item_tree.type_aliases.values() {
             if let Some(resolved) = resolve_type_expr(
                 db,
                 alias.type_expr.as_ref(),
@@ -120,7 +119,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> Result<ObjectPool> {
         }
 
         // Functions (only declarative LLM functions)
-        for (_id, func) in &item_tree.functions {
+        for func in item_tree.functions.values() {
             if !matches!(&func.declarative_meta, Some(DeclarativeMeta::Llm(_))) {
                 continue;
             }
@@ -174,7 +173,7 @@ pub fn build_object_pool(db: &ProjectDatabase) -> Result<ObjectPool> {
         }
     }
 
-    Ok(pool)
+    pool
 }
 
 /// Determine the namespace for an item based on its name.
@@ -233,10 +232,10 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
         TirTy::Primitive(PrimitiveType::String, _) => cg::Ty::String,
         TirTy::Primitive(PrimitiveType::Bool, _) => cg::Ty::Bool,
         TirTy::Primitive(PrimitiveType::Null, _) => cg::Ty::Null,
-        TirTy::Primitive(PrimitiveType::Image, _) => cg::Ty::Media(baml_base::MediaKind::Image),
-        TirTy::Primitive(PrimitiveType::Audio, _) => cg::Ty::Media(baml_base::MediaKind::Audio),
-        TirTy::Primitive(PrimitiveType::Video, _) => cg::Ty::Media(baml_base::MediaKind::Video),
-        TirTy::Primitive(PrimitiveType::Pdf, _) => cg::Ty::Media(baml_base::MediaKind::Pdf),
+        TirTy::Primitive(PrimitiveType::Image, _) => cg::Ty::Media(baml_db::MediaKind::Image),
+        TirTy::Primitive(PrimitiveType::Audio, _) => cg::Ty::Media(baml_db::MediaKind::Audio),
+        TirTy::Primitive(PrimitiveType::Video, _) => cg::Ty::Media(baml_db::MediaKind::Video),
+        TirTy::Primitive(PrimitiveType::Pdf, _) => cg::Ty::Media(baml_db::MediaKind::Pdf),
 
         // Named types
         TirTy::Class(qtn, _) => cg::Ty::Class(cg::Name {

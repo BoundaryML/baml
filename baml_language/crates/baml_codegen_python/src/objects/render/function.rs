@@ -81,18 +81,43 @@ impl crate::objects::Function {
     /// For class return types: `types.Resume(**__result__.result())`
     /// For primitive/other types: `__result__.result()`
     fn render_coerce_result(&self, ns: crate::ty::Namespace) -> String {
-        match &self.return_type {
-            crate::ty::Ty::Class(name) => {
-                format!("{}(**__result__.result())", name.render(ns))
-            }
-            crate::ty::Ty::Enum(name) => {
-                format!("{}(__result__.result())", name.render(ns))
-            }
-            crate::ty::Ty::List(_) | crate::ty::Ty::Map { .. } | crate::ty::Ty::Union(_) => {
-                "__result__.result()".to_string()
-            }
-            _ => "__result__.result()".to_string(),
+        render_coerce_expr("__result__.result()", &self.return_type, ns)
+    }
+}
+
+/// Render an expression that coerces a raw Python value into the expected type.
+///
+/// - Class: `Type(**val)`
+/// - Enum: `Type(val)`
+/// - List(Class): `[Type(**item) for item in val]`
+/// - List(other): unchanged
+/// - Map with class value: `{k: Type(**v) for k, v in val.items()}`
+/// - Primitives/unions: unchanged
+fn render_coerce_expr(val: &str, ty: &crate::ty::Ty, ns: crate::ty::Namespace) -> String {
+    match ty {
+        crate::ty::Ty::Class(name) => {
+            format!("{}(**{})", name.render(ns), val)
         }
+        crate::ty::Ty::Enum(name) => {
+            format!("{}({})", name.render(ns), val)
+        }
+        crate::ty::Ty::List(inner) => {
+            let item_expr = render_coerce_expr("item", inner, ns);
+            if item_expr == "item" {
+                val.to_string()
+            } else {
+                format!("[{item_expr} for item in {val}]")
+            }
+        }
+        crate::ty::Ty::Map { key: _, value } => {
+            let val_expr = render_coerce_expr("v", value, ns);
+            if val_expr == "v" {
+                val.to_string()
+            } else {
+                format!("{{k: {val_expr} for k, v in {val}.items()}}")
+            }
+        }
+        _ => val.to_string(),
     }
 }
 

@@ -17,13 +17,7 @@ doctest = false
 workspace = true
 
 [dependencies]
-baml_base = { workspace = true }
 baml_codegen_python = { workspace = true }
-baml_codegen_types = { workspace = true }
-baml_compiler2_ast = { workspace = true }
-baml_compiler2_hir = { workspace = true }
-baml_compiler2_ppir = { workspace = true }
-baml_compiler2_tir = { workspace = true }
 baml_db = { workspace = true }
 baml_fmt = { workspace = true }
 baml_lsp_server = { workspace = true }

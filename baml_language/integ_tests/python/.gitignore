@@ -1,1 +1,5 @@
 baml_client/
+*.egg-info/
+.venv/
+__pycache__/
+.pytest_cache/
