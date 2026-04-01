@@ -726,10 +726,24 @@ impl<'a> Parser<'a> {
         )
     }
 
-    /// [`at_top_level_keyword`] minus `client`: in blocks, `client` can start `client.method(...)`
-    /// (e.g. a parameter named `client`), not a top-level `client` declaration.
+    /// [`at_top_level_keyword`] minus tokens that are valid in statement position:
+    /// - `client` can start `client.method(...)` (parameter named `client`)
+    /// - `test` with a string literal is an expression-body test (valid in blocks)
+    /// - `testset` with a string literal is a testset declaration (valid in blocks)
     fn at_top_level_keyword_except_client(&self) -> bool {
-        self.at_top_level_keyword() && !self.at(TokenKind::Client)
+        if !self.at_top_level_keyword() {
+            return false;
+        }
+        if self.at(TokenKind::Client) {
+            return false;
+        }
+        // Expression-body test/testset are valid inside block expressions
+        if (self.at(TokenKind::Test) && self.looks_like_test_expr_body())
+            || self.at(TokenKind::TestSet)
+        {
+            return false;
+        }
+        true
     }
 
     /// Expect a '>' token, but also accept '>>' and consume only one '>'.
@@ -2613,6 +2627,20 @@ impl<'a> Parser<'a> {
             self.parse_continue_stmt();
         } else if self.at(TokenKind::Throw) {
             self.parse_throw_stmt();
+        } else if self.at(TokenKind::Test) {
+            // `test` keyword in statement position — valid inside testset bodies,
+            // for loops, and if blocks for dynamic test generation.
+            if self.looks_like_test_expr_body() {
+                self.parse_test_expr();
+            } else {
+                self.error_unexpected_token(
+                    "expression-body test (use string literal name)".to_string(),
+                );
+                self.bump();
+            }
+        } else if self.at(TokenKind::TestSet) {
+            // `testset` keyword in statement position — valid for nested testsets.
+            self.parse_testset();
         } else {
             // Expression statement
             self.parse_expr_stmt();

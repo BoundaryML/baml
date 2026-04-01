@@ -3,5 +3,8 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 === HIR2 ===
 function user.$init_test(registry: testing.Registry) -> ?  [expr] {
-  { registry.register_test_set("dynamic tests", (testset: testing.TestSetCollector) -> { {  } null }, null); registry.register_test_set("conditional tests", (testset: testing.TestSetCollector) -> { { testset.register_test("always runs", () -> { {  } assert.is_true(true) }, null); testset.register_test("only when slow", () -> { {  } assert.is_true(true) }, null) } null }, null) } null
+  { registry.register_test_set("dynamic tests", (testset: testing.TestSetCollector) -> { { let cases = ["hello", "world", "foo"]; for case in cases { testset.register_test("check case", () -> { {  } assert.not_null(case) }, null) } } null }, null); registry.register_test_set("conditional tests", (testset: testing.TestSetCollector) -> { { { let run_slow = false; testset.register_test("always runs", () -> { {  } assert.is_true(true) }, null) } if (run_slow) { testset.register_test("only when slow", () -> { {  } assert.is_true(true) }, null) } } null }, null) } null
 }
+
+--- captures ---
+lambda () in ?: captures [case]

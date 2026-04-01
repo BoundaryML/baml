@@ -40,8 +40,9 @@ enum TestRegistrationItem {
     },
     TestSet {
         name: String,
-        /// Nested test/testset items extracted from the testset body.
-        children: Vec<TestRegistrationItem>,
+        /// The `BLOCK_EXPR` body node of the testset — lowered as a collector lambda body.
+        /// May contain setup statements (let bindings), for/if blocks, and nested test/testset.
+        body_node: SyntaxNode,
     },
 }
 
@@ -677,7 +678,9 @@ fn lower_test_expr(node: &SyntaxNode) -> Option<TestRegistrationItem> {
 /// The CST structure is:
 /// `TESTSET_DEF [ KW_TESTSET STRING_LITERAL [KW_WITH expr] BLOCK_EXPR ]`
 ///
-/// The `BLOCK_EXPR` body may contain nested `TEST_EXPR_DEF` / `TESTSET_DEF` nodes.
+/// The `BLOCK_EXPR` body may contain setup statements (let bindings), for/if control
+/// flow, and nested `TEST_EXPR_DEF` / `TESTSET_DEF` nodes. The entire body is stored
+/// and lowered lazily into a collector lambda body.
 fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
     // Find the STRING_LITERAL child
     let name_node = node
@@ -685,22 +688,12 @@ fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
         .find(|c| c.kind() == SyntaxKind::STRING_LITERAL)?;
     let name = extract_string_literal_name(&name_node);
 
-    // Find the BLOCK_EXPR child containing nested test/testset items
+    // Find the BLOCK_EXPR child (the full testset body)
     let body_node = node
         .children()
         .find(|c| c.kind() == SyntaxKind::BLOCK_EXPR)?;
 
-    // Recursively lower nested TEST_EXPR_DEF / TESTSET_DEF nodes from the body
-    let children: Vec<TestRegistrationItem> = body_node
-        .children()
-        .filter_map(|child| match child.kind() {
-            SyntaxKind::TEST_EXPR_DEF => lower_test_expr(&child),
-            SyntaxKind::TESTSET_DEF => lower_testset(&child),
-            _ => None,
-        })
-        .collect();
-
-    Some(TestRegistrationItem::TestSet { name, children })
+    Some(TestRegistrationItem::TestSet { name, body_node })
 }
 
 /// Synthesize a `$init_test` function that registers tests and testsets
@@ -841,11 +834,14 @@ fn synthesize_register_call(
                 args: vec![name_arg, lambda_arg, runner_arg],
             })
         }
-        TestRegistrationItem::TestSet { name, children, .. } => {
-            // Lower the testset into a collector lambda:
-            // (testset: testing.TestSetCollector) -> void { ... registrations ... }
-            let collector_body = synthesize_testset_collector_body(children);
-            let (collector_exprs, collector_source_map) = collector_body;
+        TestRegistrationItem::TestSet { name, body_node } => {
+            // Lower the testset body into a collector lambda using the full testset lowering.
+            // This handles setup statements (let bindings), for/if control flow, and nested tests.
+            let (collector_exprs, collector_source_map) = lower_expr_body::lower_testset_block_node(
+                body_node,
+                &Name::new("testset"),
+                &[Name::new("registry")],
+            );
 
             // Collector lambda parameter: `testset`
             let testset_param = Param {
@@ -888,153 +884,6 @@ fn synthesize_register_call(
 
             alloc_expr(Expr::Call {
                 callee: method_call_target,
-                args: vec![name_arg, collector_arg, runner_arg],
-            })
-        }
-    }
-}
-
-/// Synthesize the body of a testset collector lambda.
-///
-/// Recursively emits `testset.register_test(...)` / `testset.register_test_set(...)`
-/// calls for each nested child registration.
-fn synthesize_testset_collector_body(
-    children: &[TestRegistrationItem],
-) -> (ExprBody, AstSourceMap) {
-    let span = text_size::TextRange::default();
-
-    let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
-    let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
-    let mut stmts: la_arena::Arena<crate::ast::Stmt> = la_arena::Arena::new();
-    let mut stmt_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
-
-    let mut alloc_expr = |expr: Expr| -> ExprId {
-        let id = exprs.alloc(expr);
-        expr_spans.alloc(span);
-        id
-    };
-
-    // For each nested item, emit a `testset.register_test(...)` call
-    let stmt_ids: Vec<crate::ast::StmtId> = children
-        .iter()
-        .map(|child| {
-            let call_expr = synthesize_nested_register_call(child, &mut alloc_expr);
-            let id = stmts.alloc(crate::ast::Stmt::Expr(call_expr));
-            stmt_spans.alloc(span);
-            id
-        })
-        .collect();
-
-    let null_expr = alloc_expr(Expr::Null);
-    let block = alloc_expr(Expr::Block {
-        stmts: stmt_ids,
-        tail_expr: Some(null_expr),
-    });
-
-    let body = ExprBody {
-        exprs,
-        stmts,
-        patterns: la_arena::Arena::new(),
-        match_arms: la_arena::Arena::new(),
-        catch_arms: la_arena::Arena::new(),
-        type_annotations: la_arena::Arena::new(),
-        root_expr: Some(block),
-    };
-    let source_map = AstSourceMap {
-        expr_spans,
-        stmt_spans,
-        pattern_spans: la_arena::Arena::new(),
-        match_arm_spans: la_arena::Arena::new(),
-        type_annotation_spans: la_arena::Arena::new(),
-        catch_arm_spans: la_arena::Arena::new(),
-        field_access_member_spans: std::collections::HashMap::new(),
-    };
-
-    (body, source_map)
-}
-
-/// Synthesize `testset.register_test(...)` / `testset.register_test_set(...)` for
-/// a nested child inside a testset collector lambda. Uses `testset` instead of `registry`.
-fn synthesize_nested_register_call(
-    reg: &TestRegistrationItem,
-    alloc_expr: &mut impl FnMut(Expr) -> ExprId,
-) -> ExprId {
-    let span = text_size::TextRange::default();
-    match reg {
-        TestRegistrationItem::Test {
-            name, body_node, ..
-        } => {
-            let (lambda_body, lambda_source_map) =
-                lower_expr_body::lower_block_node(body_node, &[Name::new("testset")]);
-
-            let lambda_def = FunctionDef {
-                name: Name::new("<test body>"),
-                generic_params: vec![],
-                params: vec![],
-                return_type: None,
-                throws: None,
-                body: Some(FunctionBodyDef::Expr(lambda_body, lambda_source_map)),
-                declarative_meta: None,
-                attributes: vec![],
-                span,
-                name_span: span,
-            };
-
-            let testset_ref = alloc_expr(Expr::Path(vec![Name::new("testset")]));
-            let method_target = alloc_expr(Expr::FieldAccess {
-                base: testset_ref,
-                field: Name::new("register_test"),
-            });
-            let name_arg = alloc_expr(Expr::Literal(Literal::String(name.clone())));
-            let lambda_arg = alloc_expr(Expr::Lambda(Box::new(lambda_def)));
-            let runner_arg = alloc_expr(Expr::Null);
-
-            alloc_expr(Expr::Call {
-                callee: method_target,
-                args: vec![name_arg, lambda_arg, runner_arg],
-            })
-        }
-        TestRegistrationItem::TestSet { name, children, .. } => {
-            let collector_body = synthesize_testset_collector_body(children);
-            let (collector_exprs, collector_source_map) = collector_body;
-
-            let testset_param = Param {
-                name: Name::new("testset"),
-                type_expr: Some(SpannedTypeExpr {
-                    expr: crate::ast::TypeExpr::Path {
-                        segments: vec![Name::new("testing"), Name::new("TestSetCollector")],
-                        attrs: vec![],
-                    },
-                    span,
-                }),
-                span,
-                name_span: span,
-            };
-
-            let collector_def = FunctionDef {
-                name: Name::new("<testset collector>"),
-                generic_params: vec![],
-                params: vec![testset_param],
-                return_type: None,
-                throws: None,
-                body: Some(FunctionBodyDef::Expr(collector_exprs, collector_source_map)),
-                declarative_meta: None,
-                attributes: vec![],
-                span,
-                name_span: span,
-            };
-
-            let testset_ref = alloc_expr(Expr::Path(vec![Name::new("testset")]));
-            let method_target = alloc_expr(Expr::FieldAccess {
-                base: testset_ref,
-                field: Name::new("register_test_set"),
-            });
-            let name_arg = alloc_expr(Expr::Literal(Literal::String(name.clone())));
-            let collector_arg = alloc_expr(Expr::Lambda(Box::new(collector_def)));
-            let runner_arg = alloc_expr(Expr::Null);
-
-            alloc_expr(Expr::Call {
-                callee: method_target,
                 args: vec![name_arg, collector_arg, runner_arg],
             })
         }

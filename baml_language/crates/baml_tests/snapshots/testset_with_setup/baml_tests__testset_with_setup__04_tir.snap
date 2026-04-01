@@ -7,28 +7,18 @@ function user.$init_test(registry: testing.Registry) -> ? throws never {
     registry.register_test_set("with shared setup", (testset: testing.TestSetCollector) -> { ... }, null) : null
       (testset: testing.TestSetCollector) -> { ... } : (testset: testing.TestSetCollector) -> null
         {
+          let base_url = "https://api.examp..."
+          let timeout = 5000
           testset.register_test("uses setup vars", () -> { ... }, null)
           testset.register_test("also uses setup", () -> { ... }, null)
           null
         }
     null : null
   }
-  !! 0..0: unresolved name: base_url
-  !! 0..0: unresolved name: timeout
-  !! 0..0: unresolved name: base_url
 }
 lambda user.$init_test {
-  !! 0..0: unresolved name: base_url
-  !! 0..0: unresolved name: timeout
-  !! 0..0: unresolved name: base_url
 }
 lambda user.$init_test {
-  !! 0..0: unresolved name: base_url
-  !! 0..0: unresolved name: timeout
-  !! 0..0: unresolved name: base_url
 }
 lambda user.$init_test {
-  !! 0..0: unresolved name: base_url
-  !! 0..0: unresolved name: timeout
-  !! 0..0: unresolved name: base_url
 }

@@ -2445,7 +2445,10 @@ impl BlockExpr {
                         | SyntaxKind::FOR_EXPR
                         | SyntaxKind::BREAK_STMT
                         | SyntaxKind::CONTINUE_STMT
-                        | SyntaxKind::THROW_STMT => Some(BlockElement::Stmt(n)),
+                        | SyntaxKind::THROW_STMT
+                        // test/testset declarations inside blocks (dynamic test generation)
+                        | SyntaxKind::TEST_EXPR_DEF
+                        | SyntaxKind::TESTSET_DEF => Some(BlockElement::Stmt(n)),
                         // Header comment (//# name)
                         SyntaxKind::HEADER_COMMENT => Some(BlockElement::HeaderComment(n)),
                         // Expression nodes

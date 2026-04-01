@@ -29,19 +29,19 @@ fn .<lambda($init_test, 0)>(testset: testing.TestSetCollector) -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: testing.TestSetCollector // testset // param
-    let _2: void
-    let _3: void
-    let _4: void
-    let _5: void
+    let _2: null
+    let _3: () -> null
+    let _4: null
+    let _5: () -> null
 
     bb0: {
         _3 = make_closure lambda[0]();
-        _2 = call const fn assert.is_true(const "first", copy _3, const null) -> [bb1];
+        _2 = call const fn testing.TestSetCollector.register_test(copy _1, const "first", copy _3, const null) -> [bb1];
     }
 
     bb1: {
         _5 = make_closure lambda[1]();
-        _4 = call const fn testing.TestSetCollector.register_test(const "second", copy _5, const null) -> [bb2];
+        _4 = call const fn testing.TestSetCollector.register_test(copy _1, const "second", copy _5, const null) -> [bb2];
     }
 
     bb2: {

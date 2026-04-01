@@ -35,33 +35,34 @@ SOURCE_FILE
           R_BRACKET "]"
       FOR_EXPR
         KW_FOR "for"
+        L_PAREN "("
         WORD "case"
         KW_IN "in"
-        OBJECT_LITERAL
-          WORD "cases"
+        WORD "cases"
+        R_PAREN ")"
+        BLOCK_EXPR
           L_BRACE "{"
-          KW_TEST "test"
-          OBJECT_FIELD
-            STRING_LITERAL "check "
+          TEST_EXPR_DEF
+            KW_TEST "test"
+            STRING_LITERAL "check case"
               QUOTE """
               WORD "check"
+              WORD "case"
               QUOTE """
-          PLUS "+"
-          OBJECT_FIELD "case"
-            WORD "case"
-          L_BRACE "{"
-          OBJECT_FIELD "assert"
-            WORD "assert"
-          DOT "."
-          OBJECT_FIELD "not_null"
-            WORD "not_null"
-          L_PAREN "("
-          OBJECT_FIELD "case"
-            WORD "case"
-          R_PAREN ")"
+            BLOCK_EXPR
+              L_BRACE "{"
+              CALL_EXPR
+                PATH_EXPR "assert.not_null"
+                  WORD "assert"
+                  DOT "."
+                  WORD "not_null"
+                CALL_ARGS "(case)"
+                  L_PAREN "("
+                  WORD "case"
+                  R_PAREN ")"
+              R_BRACE "}"
           R_BRACE "}"
       R_BRACE "}"
-  R_BRACE "}"
   TESTSET_DEF
     KW_TESTSET "testset"
     STRING_LITERAL "conditional tests"
@@ -101,176 +102,30 @@ SOURCE_FILE
           L_PAREN "("
           WORD "run_slow"
           R_PAREN ")"
-        BLOCK_EXPR "{"
-          L_BRACE "{"
-      TEST_EXPR_DEF
-        KW_TEST "test"
-        STRING_LITERAL "only when slow"
-          QUOTE """
-          WORD "only"
-          WORD "when"
-          WORD "slow"
-          QUOTE """
         BLOCK_EXPR
           L_BRACE "{"
-          CALL_EXPR
-            PATH_EXPR "assert.is_true"
-              WORD "assert"
-              DOT "."
-              WORD "is_true"
-            CALL_ARGS "(true)"
-              L_PAREN "("
-              WORD "true"
-              R_PAREN ")"
+          TEST_EXPR_DEF
+            KW_TEST "test"
+            STRING_LITERAL "only when slow"
+              QUOTE """
+              WORD "only"
+              WORD "when"
+              WORD "slow"
+              QUOTE """
+            BLOCK_EXPR
+              L_BRACE "{"
+              CALL_EXPR
+                PATH_EXPR "assert.is_true"
+                  WORD "assert"
+                  DOT "."
+                  WORD "is_true"
+                CALL_ARGS "(true)"
+                  L_PAREN "("
+                  WORD "true"
+                  R_PAREN ")"
+              R_BRACE "}"
           R_BRACE "}"
       R_BRACE "}"
-  R_BRACE "}"
 
 === ERRORS ===
-Error: Expected field name, spread element, or '}', found test
-   ╭─[ main.baml:7:7 ]
-   │
- 7 │     test "check " + case {
-   │       ──┬─  
-   │         ╰─── Expected field name, spread element, or '}', found test
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ':', found '+'
-   ╭─[ main.baml:7:21 ]
-   │
- 7 │     test "check " + case {
-   │                     ┬  
-   │                     ╰── Expected ':', found '+'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ',' or '}' after object field, found '+'
-   ╭─[ main.baml:7:21 ]
-   │
- 7 │     test "check " + case {
-   │                     ┬  
-   │                     ╰── Expected ',' or '}' after object field, found '+'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ':', found '{'
-   ╭─[ main.baml:8:1 ]
-   │
- 8 │       assert.not_null(case)
-   │ ┬  
-   │ ╰── Expected ':', found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ',' or '}' after object field, found '{'
-   ╭─[ main.baml:8:1 ]
-   │
- 8 │       assert.not_null(case)
-   │ ┬  
-   │ ╰── Expected ',' or '}' after object field, found '{'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ':', found '.'
-   ╭─[ main.baml:8:15 ]
-   │
- 8 │       assert.not_null(case)
-   │               ┬  
-   │               ╰── Expected ':', found '.'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ',' or '}' after object field, found '.'
-   ╭─[ main.baml:8:15 ]
-   │
- 8 │       assert.not_null(case)
-   │               ┬  
-   │               ╰── Expected ',' or '}' after object field, found '.'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ':', found '('
-   ╭─[ main.baml:8:24 ]
-   │
- 8 │       assert.not_null(case)
-   │                        ┬  
-   │                        ╰── Expected ':', found '('
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ',' or '}' after object field, found '('
-   ╭─[ main.baml:8:24 ]
-   │
- 8 │       assert.not_null(case)
-   │                        ┬  
-   │                        ╰── Expected ',' or '}' after object field, found '('
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ':', found ')'
-   ╭─[ main.baml:9:1 ]
-   │
- 9 │     }
-   │ ┬  
-   │ ╰── Expected ':', found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected ',' or '}' after object field, found ')'
-   ╭─[ main.baml:9:1 ]
-   │
- 9 │     }
-   │ ┬  
-   │ ╰── Expected ',' or '}' after object field, found ')'
-   │ 
-   │ Note: Error code: E0010
-───╯
-
-Error: Expected block after for expression, found '}'
-    ╭─[ main.baml:11:1 ]
-    │
- 11 │ }
-    │ ┬  
-    │ ╰── Expected block after for expression, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ main.baml:12:1 ]
-    │
- 12 │ 
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected '}', found test
-    ╭─[ main.baml:21:7 ]
-    │
- 21 │     test "only when slow" {
-    │       ──┬─  
-    │         ╰─── Expected '}', found test
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ main.baml:25:3 ]
-    │
-    │ 
-    │ 
-    │ Note: Error code: E0010
-────╯
+None

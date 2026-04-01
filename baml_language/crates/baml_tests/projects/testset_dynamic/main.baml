@@ -3,8 +3,8 @@
 testset "dynamic tests" {
   let cases = ["hello", "world", "foo"]
 
-  for case in cases {
-    test "check " + case {
+  for (case in cases) {
+    test "check case" {
       assert.not_null(case)
     }
   }
