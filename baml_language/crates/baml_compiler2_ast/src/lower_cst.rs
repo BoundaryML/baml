@@ -1486,7 +1486,18 @@ fn provider_config_for(provider: &str) -> ProviderConfig {
                 ..ProviderConfig::EMPTY
             }
         }
-        "google-ai" | "vertex-ai" => ProviderConfig::EMPTY,
+        "google-ai" => ProviderConfig::EMPTY,
+        "vertex-ai" => {
+            let (opts, defaults) =
+                provider_options!("baml.llm.VertexAiOptions", credentials, credentials_content,);
+            ProviderConfig {
+                default_role: Some("user"),
+                allowed_roles: Some(SAU),
+                provider_options: opts,
+                provider_option_defaults: defaults,
+                ..ProviderConfig::EMPTY
+            }
+        }
         // Dev guard: adding a new provider without updating this panics at test time.
         _ => unreachable!("unknown provider {provider:?}: add it to provider_config_for"),
     }

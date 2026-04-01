@@ -88,6 +88,7 @@ ariadne = { version = "0.6" }
 async-trait = "0.1"
 askama = { version = "0.14.0" }
 aws-config = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", default-features = false, features = [ "behavior-version-latest" ] }
+google-cloud-auth = { git = "https://github.com/BoundaryML/google-cloud-rust.git", rev = "a18d3e42bd304de897990c3d0f3e90ffd4e428fd", package = "google-cloud-auth" }
 aws-credential-types = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac" }
 aws-sdk-bedrockruntime = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", default-features = false, features = [ "behavior-version-latest" ] }
 aws-sigv4 = { git = "https://github.com/boundaryml/aws-sdk-rust.git", rev = "28d4f67bac1214320320905c1f6908ea32b6b0ac", features = [ "sign-http" ] }
@@ -126,6 +127,7 @@ ouroboros = "0.18.5"
 parking_lot = { version = "0.12", features = [ "deadlock_detection" ] }
 paste = "1.0"
 percent-encoding = "2.3"
+web-sys = { version = "0.3", features = [ "Crypto", "CryptoKey", "SubtleCrypto", "Window" ] }
 pretty_assertions = { version = "1.4" }
 prettyplease = { version = "0.2" }
 proc-macro2 = { version = "1" }

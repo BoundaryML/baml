@@ -18,5 +18,5 @@ function user.FetchDatax$render_prompt(user_id: string) -> baml.llm.PromptAst  [
   baml.llm.render_prompt(VertexGCP, "FetchDatax", map { "user_id": user_id })
 }
 function user.VertexGCP$new() -> ?  [expr] {
-  baml.llm.PrimitiveClient { name: "VertexGCP", provider: "vertex-ai", options: baml.llm.PrimitiveClientOptions { model: "gemini-2", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "flash": "" } } }
+  baml.llm.PrimitiveClient { name: "VertexGCP", provider: "vertex-ai", options: baml.llm.PrimitiveClientOptions { model: "gemini-2", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "user", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "flash": "" } } }
 }

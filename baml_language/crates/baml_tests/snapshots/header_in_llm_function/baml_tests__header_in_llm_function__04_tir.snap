@@ -6,7 +6,7 @@ class user.Hi {
   name: string
 }
 function user.VertexGCP$new() -> ? throws never {
-  baml.llm.PrimitiveClient { name: "VertexGCP", provider: "vertex-ai", options: baml.llm.PrimitiveClientOptions { model: "gemini-2", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: null, allowed_roles: null, remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "flash": "" } } } : unknown
+  baml.llm.PrimitiveClient { name: "VertexGCP", provider: "vertex-ai", options: baml.llm.PrimitiveClientOptions { model: "gemini-2", base_url: null, allowed_role_metadata: null, finish_reason_allow_list: null, finish_reason_deny_list: null, supports_streaming: null, default_role: "user", allowed_roles: ["system", "user", "assistant"], remap_roles: null, api_key: null, provider_options: null, headers: map {  }, query_params: map {  }, request_body: map { "flash": "" } } } : unknown
 }
 function user.FetchDatax(user_id: string) -> user.Hi throws never {
   baml.llm.call_llm_function<T>(VertexGCP, "FetchDatax", map { "user_id": user_id }) : user.Hi

@@ -677,6 +677,128 @@ mod tests {
         assert!(result.is_err());
     }
 
+    /// Confirms the full injection flow: env callbacks provide AWS credentials
+    /// and region, which are resolved through the AWS SDK config loader and
+    /// used to produce valid `SigV4` headers on the request.
+    #[tokio::test]
+    async fn sigv4_headers_from_env_via_callbacks() {
+        let callbacks = BuildRequestCallbacks {
+            env_read: Arc::new(|key| {
+                Box::pin(async move {
+                    match key.as_str() {
+                        "AWS_ACCESS_KEY_ID" => Ok(Some("AKIAIOSFODNN7EXAMPLE".to_string())),
+                        "AWS_SECRET_ACCESS_KEY" => {
+                            Ok(Some("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string()))
+                        }
+                        "AWS_REGION" => Ok(Some("us-east-1".to_string())),
+                        _ => Ok(None),
+                    }
+                })
+            }),
+            ..stub_callbacks()
+        };
+        let client = make_client(BedrockOptions::default());
+        let mut req = fake_bedrock_request();
+        auth_bedrock(&mut req, &client, Some(&callbacks))
+            .await
+            .unwrap();
+        assert!(req.headers.contains_key("authorization"));
+        assert!(req.headers.contains_key("x-amz-date"));
+    }
+
+    /// Confirms that the fs callback is used by the AWS SDK config loader.
+    #[tokio::test]
+    async fn sigv4_headers_from_credentials_file_via_fs_callback() {
+        let credentials_file = "\
+[default]
+aws_access_key_id = AKIAIOSFODNN7EXAMPLE
+aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+";
+        let callbacks = BuildRequestCallbacks {
+            env_read: Arc::new(|key| {
+                Box::pin(async move {
+                    match key.as_str() {
+                        "AWS_SHARED_CREDENTIALS_FILE" => {
+                            Ok(Some("/fake/aws/credentials".to_string()))
+                        }
+                        "AWS_REGION" => Ok(Some("us-east-1".to_string())),
+                        _ => Ok(None),
+                    }
+                })
+            }),
+            fs_read: {
+                let creds = credentials_file.to_string();
+                Arc::new(move |path| {
+                    let creds = creds.clone();
+                    Box::pin(async move {
+                        if path == "/fake/aws/credentials" {
+                            Ok(creds.into_bytes())
+                        } else {
+                            Err(crate::LlmOpError::Other("not found".into()))
+                        }
+                    })
+                })
+            },
+            ..stub_callbacks()
+        };
+        let client = make_client(BedrockOptions::default());
+        let mut req = fake_bedrock_request();
+        auth_bedrock(&mut req, &client, Some(&callbacks))
+            .await
+            .unwrap();
+        assert!(req.headers.contains_key("authorization"));
+        assert!(req.headers.contains_key("x-amz-date"));
+    }
+
+    /// Confirms that the http callback is used when the AWS SDK falls back
+    /// to the container credentials provider.
+    #[tokio::test]
+    async fn sigv4_headers_from_container_credentials_via_http_callback() {
+        let http_call_count = Arc::new(AtomicUsize::new(0));
+        let http_call_count_clone = http_call_count.clone();
+
+        let callbacks = BuildRequestCallbacks {
+            env_read: Arc::new(|key| {
+                Box::pin(async move {
+                    match key.as_str() {
+                        "AWS_CONTAINER_CREDENTIALS_FULL_URI" => {
+                            Ok(Some("http://169.254.170.23/creds".to_string()))
+                        }
+                        "AWS_REGION" => Ok(Some("us-east-1".to_string())),
+                        _ => Ok(None),
+                    }
+                })
+            }),
+            http_send: Arc::new(move |_req| {
+                http_call_count_clone.fetch_add(1, Ordering::SeqCst);
+                Box::pin(async {
+                    Ok(crate::HttpSendResponse {
+                        status_code: 200,
+                        headers: IndexMap::new(),
+                        body: serde_json::json!({
+                            "AccessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                            "SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                            "Token": "FwoGZXIvYXdzEBYaDH...",
+                            "Expiration": "2099-01-01T00:00:00Z",
+                        })
+                        .to_string(),
+                    })
+                })
+            }),
+            fs_read: Arc::new(|_path| {
+                Box::pin(async { Err(crate::LlmOpError::Other("not found".into())) })
+            }),
+        };
+        let client = make_client(BedrockOptions::default());
+        let mut req = fake_bedrock_request();
+        auth_bedrock(&mut req, &client, Some(&callbacks))
+            .await
+            .unwrap();
+        assert!(http_call_count.load(Ordering::SeqCst) > 0);
+        assert!(req.headers.contains_key("authorization"));
+        assert!(req.headers.contains_key("x-amz-date"));
+    }
+
     #[test]
     fn credentials_from_options_complete() {
         let opts = base_bedrock_opts();

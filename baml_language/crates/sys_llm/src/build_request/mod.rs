@@ -41,6 +41,18 @@ pub(crate) async fn build_request(
         )),
     }?;
 
+    // Append query params to the URL.
+    if !client.options.query_params.is_empty() {
+        let separator = if request.url.contains('?') { '&' } else { '?' };
+        let params: Vec<String> = client
+            .options
+            .query_params
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect();
+        request.url = format!("{}{separator}{}", request.url, params.join("&"));
+    }
+
     // Auth is applied after body construction. Eventually this can be promoted
     // to a standalone step in the LLM function pipeline (llm.baml) so that
     // auth can be resolved, cached, or refreshed independently of request
@@ -515,6 +527,54 @@ mod tests {
             })
         );
     }
+
+    // ========================================================================
+    // Query params tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_query_params_appended_to_url() {
+        let client = make_client(
+            "openai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
+                query_params: IndexMap::from([
+                    ("foo".to_string(), "bar".to_string()),
+                    ("baz".to_string(), "qux".to_string()),
+                ]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, prompt, None).await.unwrap();
+        assert!(
+            result.url.contains("?foo=bar&baz=qux") || result.url.contains("?baz=qux&foo=bar"),
+            "URL should contain query params: {}",
+            result.url
+        );
+    }
+
+    #[tokio::test]
+    async fn test_no_query_params_no_question_mark() {
+        let client = make_client(
+            "openai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gpt-4o".to_string()),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, prompt, None).await.unwrap();
+        assert!(
+            !result.url.contains('?'),
+            "URL should not contain '?' without query params: {}",
+            result.url
+        );
+    }
+
+    // ========================================================================
+    // Anthropic tests (continued)
+    // ========================================================================
 
     #[tokio::test]
     async fn test_anthropic_default_max_tokens_when_not_set() {

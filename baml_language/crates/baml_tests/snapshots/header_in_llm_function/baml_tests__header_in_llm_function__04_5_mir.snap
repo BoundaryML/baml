@@ -84,15 +84,17 @@ fn user.VertexGCP$new() -> null {
     // Locals:
     let _0: null // _0 // return
     let _1: void
-    let _2: map<void, void>
+    let _2: "system" | "user" | "assistant"[]
     let _3: map<void, void>
-    let _4: map<"flash", "">
+    let _4: map<void, void>
+    let _5: map<"flash", "">
 
     bb0: {
-        _2 = {  };
+        _2 = [const "system", const "user", const "assistant"];
         _3 = {  };
-        _4 = { const "flash": const "" };
-        _1 = baml.llm.PrimitiveClientOptions { const "gemini-2", const null, const null, const null, const null, const null, const null, const null, const null, const null, const null, copy _2, copy _3, copy _4 };
+        _4 = {  };
+        _5 = { const "flash": const "" };
+        _1 = baml.llm.PrimitiveClientOptions { const "gemini-2", const null, const null, const null, const null, const null, const "user", copy _2, const null, const null, const null, copy _3, copy _4, copy _5 };
         _0 = baml.llm.PrimitiveClient { const "VertexGCP", const "vertex-ai", copy _1 };
         goto -> bb1;
     }

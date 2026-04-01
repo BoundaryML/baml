@@ -10,6 +10,7 @@
 //! OAuth token refresh, or vault-based secret retrieval).
 
 pub(crate) mod bedrock;
+pub(crate) mod vertex;
 
 use crate::{
     LlmProvider,
@@ -35,11 +36,11 @@ pub(crate) async fn auth_request(
         LlmProvider::AwsBedrock => {
             return bedrock::auth_bedrock(request, client, callbacks).await;
         }
+        LlmProvider::VertexAi => {
+            return vertex::auth_vertex(request, client, callbacks).await;
+        }
         // Providers that don't need auth or aren't supported yet.
-        LlmProvider::GoogleAi
-        | LlmProvider::VertexAi
-        | LlmProvider::BamlFallback
-        | LlmProvider::BamlRoundRobin => {}
+        LlmProvider::GoogleAi | LlmProvider::BamlFallback | LlmProvider::BamlRoundRobin => {}
     }
     Ok(())
 }
