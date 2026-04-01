@@ -52,7 +52,7 @@ pub(crate) async fn build_request(
 
 /// Extract a MIME type from a `MediaValue`, returning an error if none is set.
 pub(super) fn mime_type_as_ok(
-    media: &baml_builtins::MediaValue,
+    media: &baml_builtins2::MediaValue,
 ) -> Result<&str, BuildRequestError> {
     media
         .mime_type
@@ -105,7 +105,7 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
 mod tests {
     use std::sync::Arc;
 
-    use baml_builtins::PromptAst;
+    use baml_builtins2::PromptAst;
     use bex_external_types::{AsBexExternalValue, Ty};
     use indexmap::IndexMap;
 

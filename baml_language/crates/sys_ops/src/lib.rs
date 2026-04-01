@@ -247,8 +247,8 @@ fn unwrap_prompt_ast(owned: &io::owned::llm::PromptAst) -> bex_vm_types::PromptA
     owned
         ._data
         .clone()
-        .downcast::<baml_builtins::PromptAst>()
-        .expect("PromptAst._data downcast failed: expected Arc<baml_builtins::PromptAst>. This indicates a bug in wrap_prompt_ast or a type mismatch.")
+        .downcast::<baml_builtins2::PromptAst>()
+        .expect("PromptAst._data downcast failed: expected Arc<baml_builtins2::PromptAst>. This indicates a bug in wrap_prompt_ast or a type mismatch.")
 }
 
 /// Convert the generated IO `PrimitiveClient` to the `sys_llm::baml_std::PrimitiveClient`.

@@ -87,9 +87,9 @@ pub enum BexExternalAdt {
     Collector(bex_vm_types::CollectorRef),
     Type(baml_type::Ty),
     /// A rendered prompt AST (from `baml.llm.render_prompt`).
-    PromptAst(std::sync::Arc<baml_builtins::PromptAst>),
+    PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
-    Media(std::sync::Arc<baml_builtins::MediaValue>),
+    Media(std::sync::Arc<baml_builtins2::MediaValue>),
 }
 
 /// A deep-copied value tree with no heap references.
@@ -543,13 +543,13 @@ pub trait ToBexExternalValue: std::any::Any + Send + Sync {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue;
 }
 
-impl ToBexExternalValue for baml_builtins::PromptAst {
+impl ToBexExternalValue for baml_builtins2::PromptAst {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
     }
 }
 
-impl ToBexExternalValue for baml_builtins::MediaValue {
+impl ToBexExternalValue for baml_builtins2::MediaValue {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Media(self))
     }
@@ -563,10 +563,10 @@ impl ToBexExternalValue for baml_builtins::MediaValue {
 pub fn try_convert_rust_data(
     arc: &std::sync::Arc<dyn std::any::Any + Send + Sync>,
 ) -> Option<BexExternalValue> {
-    if let Ok(typed) = arc.clone().downcast::<baml_builtins::PromptAst>() {
+    if let Ok(typed) = arc.clone().downcast::<baml_builtins2::PromptAst>() {
         return Some(typed.to_bex_external_value());
     }
-    if let Ok(typed) = arc.clone().downcast::<baml_builtins::MediaValue>() {
+    if let Ok(typed) = arc.clone().downcast::<baml_builtins2::MediaValue>() {
         return Some(typed.to_bex_external_value());
     }
     None
