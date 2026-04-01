@@ -27,12 +27,4 @@ function ThrowNewInCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// Error: unreachable arm
-//     ╭─[ throw_throw_in_catch.baml:16:20 ]
-//     │
-//  16 │     _: string => "handled string",
-//     │                    ────────┬───────  
-//     │                            ╰───────── unreachable arm
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
+// <no-diagnostics-expected>

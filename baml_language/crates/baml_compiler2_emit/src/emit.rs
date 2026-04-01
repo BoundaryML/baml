@@ -1316,6 +1316,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     end_pc: handler_pc,
                     handler_pc,
                     error_slot,
+                    catches_panics: region.catches_panics,
                 });
             }
         }

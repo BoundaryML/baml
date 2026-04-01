@@ -306,6 +306,7 @@ class baml.panics.StackOverflow {
 class baml.panics.Unreachable {
   message: string
 }
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.NegativeIndex | baml.panics.KeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable
 
 --- <builtin>/baml/ns_sys/sys.baml ---
 function baml.sys.panic(message: string) -> null  [builtin]

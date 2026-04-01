@@ -26,3 +26,5 @@ class AssertionFailed {
 class Unreachable {
   message string
 }
+
+type Panic = DivisionByZero | IndexOutOfBounds | NegativeIndex | KeyNotFound | StackOverflow | AssertionFailed | Unreachable

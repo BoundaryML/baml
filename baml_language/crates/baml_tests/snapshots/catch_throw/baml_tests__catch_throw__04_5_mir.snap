@@ -34,8 +34,8 @@ fn user.CatchAndRethrow(x: int) -> string {
     let _0: string // _0 // return
     let _1: int // x // param
     let _2: unknown
-    let _3: baml.panics.AssertionFailed | baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.KeyNotFound | baml.panics.NegativeIndex | baml.panics.StackOverflow | baml.panics.Unreachable | string // e
-    let _4: baml.panics.AssertionFailed | baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.KeyNotFound | baml.panics.NegativeIndex | baml.panics.StackOverflow | baml.panics.Unreachable | string
+    let _3: string // e
+    let _4: string
 
     bb0: {
         _0 = call const fn user.MayFail(copy _1) -> [bb3, unwind: bb1];

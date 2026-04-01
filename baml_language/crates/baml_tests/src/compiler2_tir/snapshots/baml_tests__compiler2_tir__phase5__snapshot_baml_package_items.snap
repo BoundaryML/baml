@@ -67,6 +67,7 @@ namespace baml.panics:
   class IndexOutOfBounds { methods: [] }
   class KeyNotFound { methods: [] }
   class NegativeIndex { methods: [] }
+  type Panic
   class StackOverflow { methods: [] }
   class Unreachable { methods: [] }
 namespace baml.sys:

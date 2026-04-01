@@ -1049,6 +1049,8 @@ impl BexVm {
         function: &mut &'static Function,
         exception: VmException,
     ) -> Result<(), VmError> {
+        let is_panic = matches!(exception, VmException::Runtime(_));
+
         // Walk the call stack from the current frame outward looking for an
         // exception table entry that covers the faulting PC.
         loop {
@@ -1064,7 +1066,13 @@ impl BexVm {
             // SAFETY: See `load_function` doc comment.
             let frame_function = unsafe { self.load_function(depth)? };
 
-            if let Some(entry) = frame_function.bytecode.find_exception_handler(faulting_pc) {
+            // Find a handler that covers this PC. For panics, skip handlers
+            // that don't opt in via `catches_panics`.
+            if let Some(entry) = frame_function
+                .bytecode
+                .find_exception_handler(faulting_pc)
+                .filter(|e| !is_panic || e.catches_panics)
+            {
                 // Found a handler in this frame. Truncate the eval stack back
                 // to just after the frame's locals region (removes stale
                 // temporaries from interrupted expressions).

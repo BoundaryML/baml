@@ -3321,6 +3321,14 @@ impl LoweringContext<'_> {
             .unwind_error_locals
             .insert(bb_handler, error_local);
 
+        // Check if any catch arm explicitly names a panic type.
+        let catches_panics = clauses.iter().any(|clause| {
+            clause.arms.iter().any(|&arm_id| {
+                let arm = &self.body.catch_arms[arm_id];
+                Self::pattern_names_panic_type(arm.pattern, &self.body)
+            })
+        });
+
         // Record the catch region for exception table construction.
         // The body_entry is the current block — the try body will be lowered into
         // it (and any successor blocks up to the handler).
@@ -3329,6 +3337,7 @@ impl LoweringContext<'_> {
             body_entry,
             handler: bb_handler,
             error_local,
+            catches_panics,
         });
 
         let prev_catch = self.catch_context.take();
@@ -3371,6 +3380,38 @@ impl LoweringContext<'_> {
         }
 
         self.builder.set_current_block(bb_join);
+    }
+
+    /// Check if a pattern names a `root.panics.*` class.
+    fn pattern_names_panic_type(
+        pat_id: baml_compiler2_ast::PatId,
+        body: &baml_compiler2_ast::ExprBody,
+    ) -> bool {
+        use baml_compiler2_ast::Pattern;
+        const PANIC_NAMES: &[&str] = &[
+            "DivisionByZero",
+            "IndexOutOfBounds",
+            "NegativeIndex",
+            "KeyNotFound",
+            "StackOverflow",
+            "AssertionFailed",
+            "Unreachable",
+            "Panic",
+        ];
+        match &body.patterns[pat_id] {
+            Pattern::Binding(name) => PANIC_NAMES.contains(&name.as_str()),
+            Pattern::TypedBinding {
+                ty: baml_compiler2_ast::TypeExpr::Path { segments, .. },
+                ..
+            } => segments
+                .last()
+                .is_some_and(|s| PANIC_NAMES.contains(&s.as_str())),
+            Pattern::TypedBinding { .. } => false,
+            Pattern::Union(pats) => pats
+                .iter()
+                .any(|p| Self::pattern_names_panic_type(*p, body)),
+            _ => false,
+        }
     }
 }
 

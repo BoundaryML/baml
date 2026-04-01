@@ -20,7 +20,7 @@ fn user.caller() -> bool {
     // Locals:
     let _0: bool // _0 // return
     let _1: unknown
-    let _2: baml.panics.AssertionFailed | baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.KeyNotFound | baml.panics.NegativeIndex | baml.panics.StackOverflow | baml.panics.Unreachable | Errors // e
+    let _2: Errors // e
     let _3: bool
 
     bb0: {

@@ -416,7 +416,7 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
                           { : null
                             root.sys.sleep(active_delay_ms) : null
                           }
-                        throw e : baml.errors.LlmClient | baml.panics.AssertionFailed | baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.KeyNotFound | baml.panics.NegativeIndex | baml.panics.StackOverflow | baml.panics.Unreachable
+                        throw e : baml.errors.LlmClient
                       }
               result : T
             }
@@ -609,6 +609,7 @@ class baml.panics.AssertionFailed {
 class baml.panics.Unreachable {
   message: string
 }
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.NegativeIndex | baml.panics.KeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable
 class baml.panics.DivisionByZero$stream {
   dividend: null | int
 }
@@ -631,6 +632,7 @@ class baml.panics.AssertionFailed$stream {
 class baml.panics.Unreachable$stream {
   message: null | string
 }
+type baml.panics.Panic$stream = baml.panics.DivisionByZero$stream | baml.panics.IndexOutOfBounds$stream | baml.panics.NegativeIndex$stream | baml.panics.KeyNotFound$stream | baml.panics.StackOverflow$stream | baml.panics.AssertionFailed$stream | baml.panics.Unreachable$stream
 
 --- <builtin>/baml/ns_sys/sys.baml ---
 

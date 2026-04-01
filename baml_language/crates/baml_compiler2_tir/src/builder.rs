@@ -1375,6 +1375,10 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         let mut result_members = vec![base_ty];
         let mut residual = self.catch_base_throw_types(base_expr_id, body);
+        // When the inferred throw set is empty (no declared/inferred throws),
+        // don't flag catch arms as unreachable — runtime panics are always
+        // possible and can be caught with explicit panic type patterns.
+        let throw_set_is_known = !residual.is_empty();
 
         for clause in clauses {
             // Compute the clause-level binding type from the current residual throw set.
@@ -1409,7 +1413,11 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arm = &body.catch_arms[arm_id];
                 let matches =
                     self.match_throw_types_for_pattern(arm.pattern, &residual, body, arm.body);
-                if matches.may_match.is_empty() {
+                // Don't flag as unreachable if:
+                // - the throw set is unknown (empty) — panics are always possible
+                // - the arm explicitly names a panic type
+                let is_explicit_panic = Self::is_panic_type_pattern(arm.pattern, body);
+                if matches.may_match.is_empty() && throw_set_is_known && !is_explicit_panic {
                     self.context
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }
@@ -1763,6 +1771,33 @@ impl<'db> TypeInferenceBuilder<'db> {
     ///
     /// Returns `Some(Ty)` for names like `int`, `string`, `image`, etc.
     /// Returns `None` for class/enum names that need full resolution.
+    /// Check if a catch arm pattern names a `root.panics.*` class.
+    fn is_panic_type_pattern(
+        pattern_id: baml_compiler2_ast::PatId,
+        body: &baml_compiler2_ast::ExprBody,
+    ) -> bool {
+        const PANIC_NAMES: &[&str] = &[
+            "DivisionByZero",
+            "IndexOutOfBounds",
+            "NegativeIndex",
+            "KeyNotFound",
+            "StackOverflow",
+            "AssertionFailed",
+            "Unreachable",
+            "Panic",
+        ];
+        match &body.patterns[pattern_id] {
+            baml_compiler2_ast::Pattern::Binding(name) => PANIC_NAMES.contains(&name.as_str()),
+            baml_compiler2_ast::Pattern::TypedBinding {
+                ty: baml_compiler2_ast::TypeExpr::Path { segments, .. },
+                ..
+            } => segments
+                .last()
+                .is_some_and(|s| PANIC_NAMES.contains(&s.as_str())),
+            _ => false,
+        }
+    }
+
     fn bare_type_sugar_to_ty(name: &Name) -> Option<Ty> {
         match name.as_str() {
             "int" => Some(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
@@ -1774,18 +1809,41 @@ impl<'db> TypeInferenceBuilder<'db> {
             "audio" => Some(Ty::Primitive(PrimitiveType::Audio, TyAttr::default())),
             "video" => Some(Ty::Primitive(PrimitiveType::Video, TyAttr::default())),
             "pdf" => Some(Ty::Primitive(PrimitiveType::Pdf, TyAttr::default())),
-            _ => None,
+            _ => Self::panic_class_ty(name),
+        }
+    }
+
+    /// If `name` matches a `root.panics.*` class, return its `Ty::Class`.
+    fn panic_class_ty(name: &Name) -> Option<Ty> {
+        const PANIC_CLASSES: &[&str] = &[
+            "DivisionByZero",
+            "IndexOutOfBounds",
+            "NegativeIndex",
+            "KeyNotFound",
+            "StackOverflow",
+            "AssertionFailed",
+            "Unreachable",
+        ];
+        if PANIC_CLASSES.contains(&name.as_str()) {
+            Some(Ty::Class(
+                crate::ty::QualifiedTypeName::new(
+                    Name::new("baml"),
+                    vec![Name::new("panics")],
+                    name.clone(),
+                ),
+                TyAttr::default(),
+            ))
+        } else {
+            None
         }
     }
 
     fn is_bare_type_sugar_binding(&self, name: &Name) -> bool {
-        matches!(
-            name.as_str(),
-            "int" | "float" | "string" | "bool" | "null" | "image" | "audio" | "video" | "pdf"
-        ) || self
-            .package_items
-            .lookup_type(&self.ns_context, name)
-            .is_some()
+        Self::bare_type_sugar_to_ty(name).is_some()
+            || self
+                .package_items
+                .lookup_type(&self.ns_context, name)
+                .is_some()
     }
 
     /// Check if a pattern's `enum_name` (which may be dotted like `"root.Status"` or
@@ -1820,34 +1878,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     fn catch_base_throw_types(&self, base_expr_id: ExprId, body: &ExprBody) -> BTreeSet<Ty> {
         let mut out = BTreeSet::new();
         self.collect_throw_facts_from_expr(base_expr_id, body, &mut out);
-        // Any expression can produce a runtime panic (division by zero, index
-        // OOB, etc.), so always include the builtin panic types. This ensures
-        // catch bindings are properly typed as a union that includes panics.
-        out.extend(Self::panic_throw_facts());
         out
-    }
-
-    /// The set of `root.panics.*` types that any expression can produce.
-    fn panic_throw_facts() -> impl Iterator<Item = Ty> {
-        const PANIC_CLASSES: &[&str] = &[
-            "DivisionByZero",
-            "IndexOutOfBounds",
-            "NegativeIndex",
-            "KeyNotFound",
-            "StackOverflow",
-            "AssertionFailed",
-            "Unreachable",
-        ];
-        PANIC_CLASSES.iter().map(|name| {
-            Ty::Class(
-                crate::ty::QualifiedTypeName::new(
-                    Name::new("baml"),
-                    vec![Name::new("panics")],
-                    Name::new(*name),
-                ),
-                TyAttr::default(),
-            )
-        })
     }
 
     /// Join a set of throw fact types into a single type.

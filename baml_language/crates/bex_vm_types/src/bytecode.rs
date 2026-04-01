@@ -727,6 +727,10 @@ pub struct ExceptionTableEntry {
     pub handler_pc: usize,
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
+    /// Whether this handler catches panic types (`root.panics.*`).
+    /// When `false`, VM-originated panics (division by zero, index OOB, etc.)
+    /// skip this handler and continue unwinding.
+    pub catches_panics: bool,
 }
 
 /// Executable bytecode.

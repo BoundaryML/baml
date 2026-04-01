@@ -25,6 +25,9 @@ pub struct CatchRegion {
     pub handler: BlockId,
     /// Frame-local slot for the caught error value.
     pub error_local: Local,
+    /// Whether any catch arm explicitly names a panic type.
+    /// When `false`, the VM skips this handler for runtime panics.
+    pub catches_panics: bool,
 }
 
 /// The bytecode body of a MIR function — blocks, locals, and associated data.
