@@ -83,3 +83,6 @@ pub const ALL: &[BuiltinFile] = &[
     // // --- baml_std/env/ ---
     // builtin!("env", "env.baml"),
 ];
+
+mod adt;
+pub use adt::*;

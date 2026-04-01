@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use baml_base::MediaKind;
-use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 use serde::Serialize;
 
 // ============================================================================
@@ -255,7 +255,7 @@ fn audio_format_from_mime(mime: &str) -> String {
 mod tests {
     use std::sync::Arc;
 
-    use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+    use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 
     use super::*;
 

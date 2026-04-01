@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use baml_builtins::{PromptAst, PromptAstSimple};
+use baml_builtins2::{PromptAst, PromptAstSimple};
 use bex_external_types::BexExternalValue;
 use indexmap::IndexMap;
 use minijinja::Environment;

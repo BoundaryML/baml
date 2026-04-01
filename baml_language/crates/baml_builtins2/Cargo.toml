@@ -14,5 +14,9 @@ description = "Builtin .baml stub files for the compiler2 pipeline"
 [lib]
 doctest = false
 
+[dependencies]
+baml_base = { workspace = true }
+serde_json = { workspace = true }
+
 [lints]
 workspace = true

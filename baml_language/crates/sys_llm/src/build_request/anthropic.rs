@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use baml_base::MediaKind;
-use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 use serde::Serialize;
 
 // ============================================================================
@@ -260,7 +260,7 @@ fn content_to_media_source(
 mod tests {
     use std::sync::Arc;
 
-    use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+    use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
     use bex_external_types::{AsBexExternalValue, BexExternalValue};
     use indexmap::IndexMap;
 

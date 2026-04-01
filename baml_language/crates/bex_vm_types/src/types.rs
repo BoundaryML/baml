@@ -585,10 +585,10 @@ impl ConstValue {
 ///
 /// Kept as a type alias for compatibility with downstream crates that still use it.
 /// Within `bex_vm`, media is now stored as `Object::Instance` with a `$rust_type` `_data` field.
-pub type MediaValue = std::sync::Arc<baml_builtins::MediaValue>;
+pub type MediaValue = std::sync::Arc<baml_builtins2::MediaValue>;
 
 /// Prompt AST tree node.
-pub type PromptAst = std::sync::Arc<baml_builtins::PromptAst>;
+pub type PromptAst = std::sync::Arc<baml_builtins2::PromptAst>;
 
 /// Opaque handle to a `Collector` object from `bex_events`.
 ///
