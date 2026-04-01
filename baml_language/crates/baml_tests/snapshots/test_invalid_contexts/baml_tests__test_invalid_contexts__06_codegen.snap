@@ -1,0 +1,40 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.$init_test(registry: testing.Registry) -> null {
+    load_const "top level is fine"
+    make_closure .<lambda($init_test, 0)>, 0
+    load_const null
+    call assert.is_true
+    pop 1
+    load_const "top level set is fine"
+    make_closure .<lambda($init_test, 1)>, 0
+    load_const null
+    load_var registry
+    load_const "register_test_set"
+    load_map_element
+    call_indirect
+    pop 1
+    load_const null
+    return
+}
+
+function user.another() -> null {
+    load_const "missing statement"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}
+
+function user.helper() -> null {
+    load_const "missing statement"
+    call baml.sys.panic
+    pop 1
+    jump L0
+
+  L0:
+    unreachable
+}

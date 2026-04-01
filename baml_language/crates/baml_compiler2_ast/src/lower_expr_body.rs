@@ -309,12 +309,22 @@ impl LoweringContext {
                             self.alloc_stmt(Stmt::Continue, node.text_range())
                         }
                         SyntaxKind::TEST_EXPR_DEF => {
-                            let expr_id = self.lower_test_expr_as_register_call(node);
-                            self.alloc_stmt(Stmt::Expr(expr_id), node.text_range())
+                            if self.testset_collector_var.is_some() {
+                                let expr_id = self.lower_test_expr_as_register_call(node);
+                                self.alloc_stmt(Stmt::Expr(expr_id), node.text_range())
+                            } else {
+                                // Invalid context — parser already emitted a diagnostic
+                                self.alloc_stmt(Stmt::Missing, node.text_range())
+                            }
                         }
                         SyntaxKind::TESTSET_DEF => {
-                            let expr_id = self.lower_testset_as_register_call(node);
-                            self.alloc_stmt(Stmt::Expr(expr_id), node.text_range())
+                            if self.testset_collector_var.is_some() {
+                                let expr_id = self.lower_testset_as_register_call(node);
+                                self.alloc_stmt(Stmt::Expr(expr_id), node.text_range())
+                            } else {
+                                // Invalid context — parser already emitted a diagnostic
+                                self.alloc_stmt(Stmt::Missing, node.text_range())
+                            }
                         }
                         _ => self.alloc_stmt(Stmt::Missing, node.text_range()),
                     };

@@ -1,0 +1,13 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.$init_test(registry: testing.Registry) -> ?  [expr] {
+  { registry.register_test("top level is fine", () -> { {  } assert.is_true(true) }, null); registry.register_test_set("top level set is ...", (testset: testing.TestSetCollector) -> { { testset.register_test("nested is fine", () -> { {  } assert.is_true(true) }, null) } null }, null) } null
+}
+function user.another() -> null  [expr] {
+  { <missing stmt> }
+}
+function user.helper() -> null  [expr] {
+  { <missing stmt> }
+}

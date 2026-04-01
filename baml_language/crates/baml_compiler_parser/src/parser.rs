@@ -183,6 +183,9 @@ pub(crate) struct Parser<'a> {
     /// Managed by [`Self::parse_expr_bp_no_catch`]; prefer that helper over
     /// manually incrementing/decrementing this counter.
     suppress_catch_depth: u32,
+    /// Track nesting depth inside testset bodies where `test`/`testset` statements
+    /// are valid. Incremented by `parse_testset_body`, checked by `parse_stmt`.
+    testset_body_depth: u32,
 }
 
 impl<'a> Parser<'a> {
@@ -195,6 +198,7 @@ impl<'a> Parser<'a> {
             pending_greater_span: None,
             type_args_depth: 0,
             suppress_catch_depth: 0,
+            testset_body_depth: 0,
         }
     }
 
@@ -2627,20 +2631,33 @@ impl<'a> Parser<'a> {
             self.parse_continue_stmt();
         } else if self.at(TokenKind::Throw) {
             self.parse_throw_stmt();
-        } else if self.at(TokenKind::Test) {
-            // `test` keyword in statement position — valid inside testset bodies,
-            // for loops, and if blocks for dynamic test generation.
-            if self.looks_like_test_expr_body() {
+        } else if self.at(TokenKind::Test) && self.looks_like_test_expr_body() {
+            if self.testset_body_depth > 0 {
                 self.parse_test_expr();
             } else {
-                self.error_unexpected_token(
-                    "expression-body test (use string literal name)".to_string(),
+                let span = self.current().map(|t| t.span).unwrap_or_else(|| {
+                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
+                });
+                self.error(
+                    "test blocks are only allowed at the top level or inside a testset".to_string(),
+                    span,
                 );
-                self.bump();
+                self.parse_test_expr(); // still parse to recover
             }
         } else if self.at(TokenKind::TestSet) {
-            // `testset` keyword in statement position — valid for nested testsets.
-            self.parse_testset();
+            if self.testset_body_depth > 0 {
+                self.parse_testset();
+            } else {
+                let span = self.current().map(|t| t.span).unwrap_or_else(|| {
+                    baml_base::Span::new(baml_base::FileId::new(0), TextRange::default())
+                });
+                self.error(
+                    "testset blocks are only allowed at the top level or inside a testset"
+                        .to_string(),
+                    span,
+                );
+                self.parse_testset(); // still parse to recover
+            }
         } else {
             // Expression statement
             self.parse_expr_stmt();
@@ -4648,27 +4665,9 @@ impl<'a> Parser<'a> {
     /// Parse the body of a testset block.
     /// Allows statements (let, for) and nested test/testset declarations.
     fn parse_testset_body(&mut self) {
-        self.with_node(SyntaxKind::BLOCK_EXPR, |p| {
-            p.expect(TokenKind::LBrace);
-            while !p.at(TokenKind::RBrace) && !p.at_end() {
-                if p.at(TokenKind::Test) {
-                    if p.looks_like_test_expr_body() {
-                        p.parse_test_expr();
-                    } else {
-                        p.error_unexpected_token(
-                            "expression-body test (use string literal name)".to_string(),
-                        );
-                        p.bump();
-                    }
-                } else if p.at(TokenKind::TestSet) {
-                    p.parse_testset();
-                } else {
-                    // Regular statements: let, for, etc.
-                    p.parse_stmt();
-                }
-            }
-            p.expect(TokenKind::RBrace);
-        });
+        self.testset_body_depth += 1;
+        self.parse_block_expr();
+        self.testset_body_depth -= 1;
     }
 
     // ============ Retry Policy Parsing ============
