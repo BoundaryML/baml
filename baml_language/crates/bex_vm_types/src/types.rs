@@ -513,6 +513,10 @@ impl std::fmt::Display for Value {
     }
 }
 
+// Panic class / instance enums — generated from `panics.baml` class definitions.
+// PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
+include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
+
 // ============================================================================
 // Test Cases
 // ============================================================================

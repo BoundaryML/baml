@@ -576,7 +576,7 @@ fn namespace_dispatch_name(name: &str) -> String {
 /// - `BexVm` type
 /// - `Value`, `IndexMap`, `MediaValue` from `bex_vm_types`
 /// - `NativeFunctionResult`, `NativeFunction` type aliases
-/// - `VmError`, `InternalError`, `RuntimeError` from `crate::errors`
+/// - `VmError`, `VmPanic` from `crate::errors`
 /// - `Type` from `bex_vm_types`
 /// - `MediaKind` from `baml_type`
 pub fn generate_native_trait(builtins: &[NativeBuiltin], class_defs: &[NativeClassDef]) -> String {
@@ -1056,13 +1056,13 @@ fn extraction_expr(val: &str, ty: &BamlType, is_mut: bool) -> String {
             }
         }
         BamlType::Int => format!(
-            "match {val} {{ Value::Int(i) => *i, other => return Err(InternalError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
+            "match {val} {{ Value::Int(i) => *i, other => return Err(VmError::TypeError {{ expected: Type::Int, got: vm.type_of(other) }}.into()) }}"
         ),
         BamlType::Float => format!(
-            "match {val} {{ Value::Float(f) => *f, other => return Err(InternalError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
+            "match {val} {{ Value::Float(f) => *f, other => return Err(VmError::TypeError {{ expected: Type::Float, got: vm.type_of(other) }}.into()) }}"
         ),
         BamlType::Bool => format!(
-            "match {val} {{ Value::Bool(b) => *b, other => return Err(InternalError::TypeError {{ expected: Type::Bool, got: vm.type_of(other) }}.into()) }}"
+            "match {val} {{ Value::Bool(b) => *b, other => return Err(VmError::TypeError {{ expected: Type::Bool, got: vm.type_of(other) }}.into()) }}"
         ),
         BamlType::List(_) => {
             if is_mut {

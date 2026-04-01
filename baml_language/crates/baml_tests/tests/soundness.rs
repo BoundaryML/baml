@@ -308,5 +308,5 @@ async fn multiple_defs_preserve_side_effects() {
         return
     }
     ");
-    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"VM error: assertion failed");
+    insta::assert_snapshot!(output.result.unwrap_err().to_string(), @"VM error: uncaught throw: <baml.panics.AssertionFailed instance>");
 }

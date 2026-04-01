@@ -1063,10 +1063,10 @@ async fn virtual_multiple_defs_preserve_side_effects() {
     }
     ");
 
-    assert_eq!(
+    assert!(matches!(
         output.result,
         Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::AssertionError)
+            bex_vm::errors::VmError::UnhandledThrow { .. }
         ))
-    );
+    ));
 }

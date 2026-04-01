@@ -244,9 +244,6 @@ pub enum EngineError {
     #[error("VM error: {0}")]
     VmError(#[from] bex_vm::errors::VmError),
 
-    #[error("Internal VM error: {0}")]
-    InternalVmError(#[from] bex_vm::InternalError),
-
     #[error("Cannot convert object of type {type_name}")]
     CannotConvert { type_name: String },
 

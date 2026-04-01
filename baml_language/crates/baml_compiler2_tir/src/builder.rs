@@ -1416,7 +1416,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // Don't flag as unreachable if:
                 // - the throw set is unknown (empty) — panics are always possible
                 // - the arm explicitly names a panic type
-                let is_explicit_panic = Self::is_panic_type_pattern(arm.pattern, body);
+                let is_explicit_panic = self.is_panic_type_pattern(arm.pattern, body);
+                // Record arm pattern type in bindings so MIR can check catches_panics.
+                if is_explicit_panic {
+                    if let Some(ty) = self.resolve_catch_arm_pattern_ty(arm.pattern, body) {
+                        self.bindings.insert(arm.pattern, ty);
+                    }
+                }
                 if matches.may_match.is_empty() && throw_set_is_known && !is_explicit_panic {
                     self.context
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
@@ -1688,7 +1694,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     ) -> Ty {
         match &body.patterns[pattern_id] {
             baml_compiler2_ast::Pattern::Binding(name) => {
-                if let Some(prim_ty) = Self::bare_type_sugar_to_ty(name) {
+                if let Some(prim_ty) = self.bare_type_sugar_to_ty(name) {
                     prim_ty
                 } else if self.is_bare_type_sugar_binding(name) {
                     self.lower_pattern_type_expr(
@@ -1767,38 +1773,34 @@ impl<'db> TypeInferenceBuilder<'db> {
         }
     }
 
-    /// Map a bare type sugar name to a `Ty` for primitive and media types.
+    /// Check if a catch arm pattern resolves to a `baml.panics.*` type.
     ///
-    /// Returns `Some(Ty)` for names like `int`, `string`, `image`, etc.
-    /// Returns `None` for class/enum names that need full resolution.
-    /// Check if a catch arm pattern names a `root.panics.*` class.
+    /// Uses the resolution context to look up the name in dep interfaces
+    /// rather than a hardcoded list, so adding a new panic class to
+    /// `panics.baml` is sufficient.
     fn is_panic_type_pattern(
+        &self,
         pattern_id: baml_compiler2_ast::PatId,
         body: &baml_compiler2_ast::ExprBody,
     ) -> bool {
-        const PANIC_NAMES: &[&str] = &[
-            "DivisionByZero",
-            "IndexOutOfBounds",
-            "NegativeIndex",
-            "KeyNotFound",
-            "StackOverflow",
-            "AssertionFailed",
-            "Unreachable",
-            "Panic",
-        ];
         match &body.patterns[pattern_id] {
-            baml_compiler2_ast::Pattern::Binding(name) => PANIC_NAMES.contains(&name.as_str()),
+            baml_compiler2_ast::Pattern::Binding(name) => self.panic_class_ty(name).is_some(),
             baml_compiler2_ast::Pattern::TypedBinding {
                 ty: baml_compiler2_ast::TypeExpr::Path { segments, .. },
                 ..
             } => segments
                 .last()
-                .is_some_and(|s| PANIC_NAMES.contains(&s.as_str())),
+                .is_some_and(|s| self.panic_class_ty(s).is_some()),
             _ => false,
         }
     }
 
-    fn bare_type_sugar_to_ty(name: &Name) -> Option<Ty> {
+    /// Map a bare type sugar name to a `Ty` for primitive and media types.
+    ///
+    /// Returns `Some(Ty)` for names like `int`, `string`, `image`, etc.
+    /// Falls back to panic class lookup for names in `baml.panics.*`.
+    /// Returns `None` for class/enum names that need full resolution.
+    fn bare_type_sugar_to_ty(&self, name: &Name) -> Option<Ty> {
         match name.as_str() {
             "int" => Some(Ty::Primitive(PrimitiveType::Int, TyAttr::default())),
             "float" => Some(Ty::Primitive(PrimitiveType::Float, TyAttr::default())),
@@ -1809,37 +1811,39 @@ impl<'db> TypeInferenceBuilder<'db> {
             "audio" => Some(Ty::Primitive(PrimitiveType::Audio, TyAttr::default())),
             "video" => Some(Ty::Primitive(PrimitiveType::Video, TyAttr::default())),
             "pdf" => Some(Ty::Primitive(PrimitiveType::Pdf, TyAttr::default())),
-            _ => Self::panic_class_ty(name),
+            _ => self.panic_class_ty(name),
         }
     }
 
-    /// If `name` matches a `root.panics.*` class, return its `Ty::Class`.
-    fn panic_class_ty(name: &Name) -> Option<Ty> {
-        const PANIC_CLASSES: &[&str] = &[
-            "DivisionByZero",
-            "IndexOutOfBounds",
-            "NegativeIndex",
-            "KeyNotFound",
-            "StackOverflow",
-            "AssertionFailed",
-            "Unreachable",
-        ];
-        if PANIC_CLASSES.contains(&name.as_str()) {
-            Some(Ty::Class(
-                crate::ty::QualifiedTypeName::new(
-                    Name::new("baml"),
-                    vec![Name::new("panics")],
-                    name.clone(),
-                ),
-                TyAttr::default(),
-            ))
-        } else {
-            None
+    /// If `name` resolves to a class or type alias in the `baml.panics`
+    /// namespace, return its `Ty`. Queries dependency interfaces (or own
+    /// items when compiling the `baml` package itself) so that adding a
+    /// new panic class to `panics.baml` is sufficient.
+    fn panic_class_ty(&self, name: &Name) -> Option<Ty> {
+        let path = [Name::new("panics"), name.clone()];
+        self.res_ctx
+            .resolve_type(self.context.db(), &path, &[])
+            .map(|(_source, ty)| ty)
+    }
+
+    /// Resolve the type of a catch arm pattern (for recording in bindings).
+    fn resolve_catch_arm_pattern_ty(
+        &self,
+        pattern_id: PatId,
+        body: &ExprBody,
+    ) -> Option<Ty> {
+        match &body.patterns[pattern_id] {
+            baml_compiler2_ast::Pattern::Binding(name) => self.panic_class_ty(name),
+            baml_compiler2_ast::Pattern::TypedBinding {
+                ty: TypeExpr::Path { segments, .. },
+                ..
+            } => segments.last().and_then(|s| self.panic_class_ty(s)),
+            _ => None,
         }
     }
 
     fn is_bare_type_sugar_binding(&self, name: &Name) -> bool {
-        Self::bare_type_sugar_to_ty(name).is_some()
+        self.bare_type_sugar_to_ty(name).is_some()
             || self
                 .package_items
                 .lookup_type(&self.ns_context, name)
@@ -1930,7 +1934,7 @@ impl<'db> TypeInferenceBuilder<'db> {
         match pattern {
             baml_compiler2_ast::Pattern::Binding(name) => {
                 if self.is_bare_type_sugar_binding(name) {
-                    let lowered = if let Some(prim_ty) = Self::bare_type_sugar_to_ty(name) {
+                    let lowered = if let Some(prim_ty) = self.bare_type_sugar_to_ty(name) {
                         prim_ty
                     } else {
                         self.lower_pattern_type_expr(

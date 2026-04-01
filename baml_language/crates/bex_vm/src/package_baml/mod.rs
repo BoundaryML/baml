@@ -28,7 +28,7 @@ use indexmap::IndexMap;
 
 use crate::{
     BexVm,
-    errors::{InternalError, RuntimeError, VmError},
+    errors::VmError,
 };
 
 /// Result type for native functions.
@@ -72,10 +72,10 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
                     let Some(native_function) =
                         PackageBamlImpl::get_native_fn(function.name.as_str())
                     else {
-                        return Err(VmError::RuntimeError(RuntimeError::Other(format!(
+                        return Err(VmError::Other(format!(
                             "Native function '{}' not found",
                             function.name
-                        ))));
+                        )));
                     };
                     bex_vm_types::FunctionKind::Native(native_function as *const ())
                 }

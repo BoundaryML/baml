@@ -52,10 +52,12 @@ async fn assert_not_ok() {
     }
     ");
 
-    assert_eq!(
+    // Uncaught assertion failures are now allocated as baml.panics.AssertionFailed
+    // instances before unwinding, so they surface as UnhandledThrow.
+    assert!(matches!(
         output.result,
         Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::AssertionError)
+            bex_vm::errors::VmError::UnhandledThrow { .. }
         ))
-    );
+    ));
 }

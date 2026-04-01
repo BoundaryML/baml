@@ -418,9 +418,9 @@ async fn unhandled_throw_fails_predictably() {
     assert_eq!(
         output.result,
         Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::UnhandledThrow {
+            bex_vm::errors::VmError::UnhandledThrow {
                 value: "42".to_string(),
-            })
+            }
         ))
     );
 }
@@ -445,9 +445,9 @@ async fn unhandled_throw_string_shows_value() {
     assert_eq!(
         output.result,
         Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::UnhandledThrow {
+            bex_vm::errors::VmError::UnhandledThrow {
                 value: "something went wrong".to_string(),
-            })
+            }
         ))
     );
 }
@@ -477,9 +477,9 @@ async fn unhandled_throw_string_in_match_shows_value() {
     assert_eq!(
         output.result,
         Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::UnhandledThrow {
+            bex_vm::errors::VmError::UnhandledThrow {
                 value: "oops".to_string(),
-            })
+            }
         ))
     );
 }
@@ -524,9 +524,9 @@ async fn throw_in_non_matching_match_arm_propagates() {
     assert_eq!(
         output.result,
         Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::RuntimeError(bex_vm::errors::RuntimeError::UnhandledThrow {
+            bex_vm::errors::VmError::UnhandledThrow {
                 value: "boom".to_string(),
-            })
+            }
         ))
     );
 }

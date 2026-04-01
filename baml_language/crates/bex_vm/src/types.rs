@@ -3,12 +3,12 @@ use bex_vm_types::{
     types::{Function, FunctionType, ObjectType},
 };
 
-use crate::{InternalError, errors::VmError};
+use crate::errors::VmError;
 
 pub trait ObjectTrait {
     fn as_function(&self) -> Result<&Function, VmError>;
-    fn as_string(&self) -> Result<&String, InternalError>;
-    fn as_string_mut(&mut self) -> Result<&mut String, InternalError>;
+    fn as_string(&self) -> Result<&String, VmError>;
+    fn as_string_mut(&mut self) -> Result<&mut String, VmError>;
 }
 
 impl ObjectTrait for Object {
@@ -20,17 +20,16 @@ impl ObjectTrait for Object {
     fn as_function(&self) -> Result<&Function, VmError> {
         match self {
             Object::Function(function) => Ok(function),
-            _ => Err(InternalError::TypeError {
+            _ => Err(VmError::TypeError {
                 expected: FunctionType::Any.into(),
                 got: ObjectType::of(self).into(),
-            }
-            .into()),
+            }),
         }
     }
 
-    fn as_string(&self) -> Result<&String, InternalError> {
+    fn as_string(&self) -> Result<&String, VmError> {
         let Self::String(str) = self else {
-            return Err(InternalError::TypeError {
+            return Err(VmError::TypeError {
                 expected: ObjectType::String.into(),
                 got: ObjectType::of(self).into(),
             });
@@ -39,9 +38,9 @@ impl ObjectTrait for Object {
         Ok(str)
     }
 
-    fn as_string_mut(&mut self) -> Result<&mut String, InternalError> {
+    fn as_string_mut(&mut self) -> Result<&mut String, VmError> {
         let Self::String(str) = self else {
-            return Err(InternalError::TypeError {
+            return Err(VmError::TypeError {
                 expected: ObjectType::String.into(),
                 got: ObjectType::of(self).into(),
             });

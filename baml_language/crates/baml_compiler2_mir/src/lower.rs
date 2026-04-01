@@ -3325,7 +3325,7 @@ impl LoweringContext<'_> {
         let catches_panics = clauses.iter().any(|clause| {
             clause.arms.iter().any(|&arm_id| {
                 let arm = &self.body.catch_arms[arm_id];
-                Self::pattern_names_panic_type(arm.pattern, &self.body)
+                self.pattern_is_panic_type(arm.pattern)
             })
         });
 
@@ -3382,34 +3382,25 @@ impl LoweringContext<'_> {
         self.builder.set_current_block(bb_join);
     }
 
-    /// Check if a pattern names a `root.panics.*` class.
-    fn pattern_names_panic_type(
-        pat_id: baml_compiler2_ast::PatId,
-        body: &baml_compiler2_ast::ExprBody,
-    ) -> bool {
-        use baml_compiler2_ast::Pattern;
-        const PANIC_NAMES: &[&str] = &[
-            "DivisionByZero",
-            "IndexOutOfBounds",
-            "NegativeIndex",
-            "KeyNotFound",
-            "StackOverflow",
-            "AssertionFailed",
-            "Unreachable",
-            "Panic",
-        ];
-        match &body.patterns[pat_id] {
-            Pattern::Binding(name) => PANIC_NAMES.contains(&name.as_str()),
-            Pattern::TypedBinding {
-                ty: baml_compiler2_ast::TypeExpr::Path { segments, .. },
-                ..
-            } => segments
-                .last()
-                .is_some_and(|s| PANIC_NAMES.contains(&s.as_str())),
-            Pattern::TypedBinding { .. } => false,
-            Pattern::Union(pats) => pats
-                .iter()
-                .any(|p| Self::pattern_names_panic_type(*p, body)),
+    /// Check if a pattern's resolved type is a `baml.panics.*` class (or the
+    /// `Panic` type alias). Uses the TIR-resolved type instead of hardcoded
+    /// string lists, so adding a new panic class to `panics.baml` is sufficient.
+    fn pattern_is_panic_type(&self, pat_id: AstPatId) -> bool {
+        if let Some(ty) = self.pat_types.get(&(self.current_scope, pat_id)) {
+            Self::tir_ty_is_panic(ty)
+        } else {
+            false
+        }
+    }
+
+    fn tir_ty_is_panic(ty: &Tir2Ty) -> bool {
+        match ty {
+            Tir2Ty::Class(qtn, _) | Tir2Ty::TypeAlias(qtn, _) => {
+                qtn.package().as_str() == "baml"
+                    && qtn.namespace().len() == 1
+                    && qtn.namespace()[0].as_str() == "panics"
+            }
+            Tir2Ty::Union(members, _) => members.iter().any(|m| Self::tir_ty_is_panic(m)),
             _ => false,
         }
     }
