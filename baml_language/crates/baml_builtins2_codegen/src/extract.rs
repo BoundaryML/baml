@@ -260,7 +260,7 @@ fn extract_from_class(
 
 /// Extract field definitions from a class, producing a `NativeClassDef`.
 ///
-/// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String)
+/// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String, Uint8Array)
 /// since they don't use `Object::Instance`.
 fn extract_class_fields(
     class_def: &ClassDef,
@@ -271,7 +271,7 @@ fn extract_class_fields(
 
     // Skip classes with dedicated Object variants — they are not Instance-based.
     match class_name {
-        "Array" | "Map" | "String" => return None,
+        "Array" | "Map" | "String" | "Uint8Array" => return None,
         _ => {}
     }
 
@@ -492,6 +492,8 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             };
             BamlType::Media(name.to_string())
         }
+
+        TypeExpr::Uint8Array { .. } => BamlType::Uint8Array,
 
         TypeExpr::Optional { inner, .. } => {
             BamlType::Optional(Box::new(type_expr_to_baml_type(inner, generics)))

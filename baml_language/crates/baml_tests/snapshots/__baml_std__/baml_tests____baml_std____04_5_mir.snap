@@ -1541,3 +1541,9 @@ fn baml.String.toLowerCase = builtin(vm)
 fn baml.String.toUpperCase = builtin(vm)
 
 fn baml.String.trim = builtin(vm)
+
+fn baml.Uint8Array.at = builtin(vm)
+
+fn baml.Uint8Array.length = builtin(vm)
+
+fn baml.Uint8Array.zeroes = builtin(vm)

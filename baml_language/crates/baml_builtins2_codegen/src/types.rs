@@ -92,6 +92,8 @@ pub enum BamlType {
     Optional(Box<BamlType>),
     /// A generic type parameter like `T`, `K`, `V`.
     Generic(String),
+    /// `Uint8Array` (binary data) type.
+    Uint8Array,
     /// A named media class: `"Pdf"`, `"Audio"`, `"Image"`, `"Video"`.
     Media(String),
     /// Some other named type (class reference, path type).

@@ -408,6 +408,7 @@ fn value_type_tag(value: &Value) -> i64 {
             let obj = unsafe { ptr.get() };
             match obj {
                 Object::String(_) => type_tags::STRING,
+                Object::Uint8Array(_) => type_tags::UINT8ARRAY,
                 Object::Variant(_) => type_tags::ENUM,
                 Object::Array(_) => type_tags::LIST,
                 Object::Map(_) => type_tags::MAP,
@@ -539,6 +540,31 @@ impl BexVm {
     pub fn as_string(&self, value: &Value) -> Result<&String, InternalError> {
         let ptr = self.as_object_ptr(value, ObjectType::String)?;
         self.get_object(ptr).as_string()
+    }
+
+    /// Get uint8array from a Value.
+    pub fn as_uint8array(&self, value: &Value) -> Result<&Vec<u8>, InternalError> {
+        let ptr = self.as_object_ptr(value, ObjectType::Uint8Array)?;
+        let obj = self.get_object(ptr);
+        match obj {
+            Object::Uint8Array(bytes) => Ok(bytes),
+            _ => Err(InternalError::TypeError {
+                expected: ObjectType::Uint8Array.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// Get mutable uint8array from a Value.
+    pub fn as_uint8array_mut(&mut self, value: &Value) -> Result<&mut Vec<u8>, InternalError> {
+        let ptr = self.as_object_ptr(value, ObjectType::Uint8Array)?;
+        match self.get_object_mut(ptr) {
+            Object::Uint8Array(bytes) => Ok(bytes),
+            other => Err(InternalError::TypeError {
+                expected: ObjectType::Uint8Array.into(),
+                got: ObjectType::of(other).into(),
+            }),
+        }
     }
 
     /// Get type of a value.
@@ -764,6 +790,10 @@ impl BexVm {
 
     pub fn alloc_string(&mut self, s: String) -> Value {
         Value::Object(self.tlab.alloc(Object::String(s)))
+    }
+
+    pub fn alloc_uint8array(&mut self, data: Vec<u8>) -> Value {
+        Value::Object(self.tlab.alloc(Object::Uint8Array(data)))
     }
 
     /// TODO: Seems to low level for an embedder, provide an API that takes
@@ -2140,22 +2170,37 @@ impl BexVm {
 
                         // Extract the array element before pushing to stack
                         let element = {
-                            let Object::Array(array) = self.get_object(array_obj_index) else {
-                                return Err(VmError::from(InternalError::TypeError {
-                                    expected: ObjectType::Array.into(),
-                                    got: ObjectType::of(self.get_object(array_obj_index)).into(),
-                                }));
-                            };
-
-                            // Check bounds
-                            if index >= array.len() {
-                                return Err(VmError::from(InternalError::ArrayIndexOutOfBounds {
-                                    index,
-                                    length: array.len(),
-                                }));
+                            match self.get_object(array_obj_index) {
+                                Object::Array(array) => {
+                                    if index >= array.len() {
+                                        return Err(VmError::from(
+                                            InternalError::ArrayIndexOutOfBounds {
+                                                index,
+                                                length: array.len(),
+                                            },
+                                        ));
+                                    }
+                                    array[index]
+                                }
+                                Object::Uint8Array(bytes) => {
+                                    if index >= bytes.len() {
+                                        return Err(VmError::from(
+                                            InternalError::ArrayIndexOutOfBounds {
+                                                index,
+                                                length: bytes.len(),
+                                            },
+                                        ));
+                                    }
+                                    Value::Int(i64::from(bytes[index]))
+                                }
+                                _ => {
+                                    return Err(VmError::from(InternalError::TypeError {
+                                        expected: ObjectType::Array.into(),
+                                        got: ObjectType::of(self.get_object(array_obj_index))
+                                            .into(),
+                                    }));
+                                }
                             }
-
-                            array[index]
                         };
 
                         // Push the element onto the stack
@@ -2244,7 +2289,17 @@ impl BexVm {
 
                                 array[index]
                             }
-
+                            Object::Uint8Array(bytes) => {
+                                if index >= bytes.len() {
+                                    return Err(VmError::from(
+                                        InternalError::ArrayIndexOutOfBounds {
+                                            index,
+                                            length: bytes.len(),
+                                        },
+                                    ));
+                                }
+                                Value::Int(i64::from(bytes[index]))
+                            }
                             other => {
                                 return Err(VmError::from(InternalError::TypeError {
                                     expected: ObjectType::Array.into(),
@@ -2263,8 +2318,29 @@ impl BexVm {
                         );
 
                         // Set the new value.
-                        if let Object::Array(array) = self.get_object_mut(array_object_index) {
-                            array[index] = new_value;
+                        match self.get_object_mut(array_object_index) {
+                            Object::Array(array) => {
+                                array[index] = new_value;
+                            }
+                            Object::Uint8Array(bytes) => {
+                                let Value::Int(i) = new_value else {
+                                    return Err(VmError::from(InternalError::TypeError {
+                                        expected: Type::Int,
+                                        got: self.type_of(&new_value),
+                                    }));
+                                };
+                                let Ok(i) = u8::try_from(i) else {
+                                    return Err(VmError::from(RuntimeError::Other(format!(
+                                        "uint8array store: value {i} out of range 0..=255"
+                                    ))));
+                                };
+                                bytes[index] = i;
+                            }
+                            _ => {
+                                unreachable!(
+                                    "We already checked earlier that we are operating on an array-like type"
+                                );
+                            }
                         }
 
                         let notifications = self.process_notifications(watched_node)?;

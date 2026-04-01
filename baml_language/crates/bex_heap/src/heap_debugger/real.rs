@@ -358,6 +358,7 @@ impl BexHeap {
             | Object::Class(_)
             | Object::Enum(_)
             | Object::String(_)
+            | Object::Uint8Array(_)
             | Object::RustData(_)
             | Object::Collector(_)
             | Object::Type(_) => {}

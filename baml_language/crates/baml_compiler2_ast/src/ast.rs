@@ -62,6 +62,10 @@ pub enum TypeExpr {
     Never {
         attrs: Vec<RawAttribute>,
     },
+    /// `Uint8Array` (binary data) type
+    Uint8Array {
+        attrs: Vec<RawAttribute>,
+    },
     /// Media types
     Media {
         kind: baml_base::MediaKind,
@@ -132,6 +136,7 @@ impl TypeExpr {
             | Self::Bool { attrs }
             | Self::Null { attrs }
             | Self::Never { attrs }
+            | Self::Uint8Array { attrs }
             | Self::Media { attrs, .. }
             | Self::Optional { attrs, .. }
             | Self::List { attrs, .. }
@@ -157,6 +162,7 @@ impl TypeExpr {
             | Self::Bool { attrs }
             | Self::Null { attrs }
             | Self::Never { attrs }
+            | Self::Uint8Array { attrs }
             | Self::Media { attrs, .. }
             | Self::Optional { attrs, .. }
             | Self::List { attrs, .. }

@@ -308,3 +308,10 @@ function baml.substring(self: ?, start: int, end: int) -> string  [builtin]
 function baml.toLowerCase(self: ?) -> string  [builtin]
 function baml.toUpperCase(self: ?) -> string  [builtin]
 function baml.trim(self: ?) -> string  [builtin]
+
+--- <builtin>/baml/uint8array.baml ---
+class baml.Uint8Array {
+}
+function baml.at(self: ?, index: int) -> int?  [builtin]
+function baml.length(self: ?) -> int  [builtin]
+function baml.zeroes(size: int) -> uint8array  [builtin]

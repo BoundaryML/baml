@@ -2027,6 +2027,7 @@ impl PullSink for StackifyCodegen<'_, '_> {
             Ty::List(..) => Some(baml_type::typetag::LIST),
             Ty::Map { .. } => Some(baml_type::typetag::MAP),
             Ty::Function { .. } => Some(baml_type::typetag::FUNCTION),
+            Ty::Uint8Array { .. } => Some(baml_type::typetag::UINT8ARRAY),
             Ty::Literal(lit, _) => Some(match lit {
                 baml_base::Literal::Int(_) => baml_type::typetag::INT,
                 baml_base::Literal::Float(_) => baml_type::typetag::FLOAT,

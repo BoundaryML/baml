@@ -1100,6 +1100,7 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::TypeExpr::Bool { .. } => "bool".to_string(),
             ast::TypeExpr::Null { .. } => "null".to_string(),
             ast::TypeExpr::Never { .. } => "never".to_string(),
+            ast::TypeExpr::Uint8Array { .. } => "uint8array".to_string(),
             ast::TypeExpr::Media { kind, .. } => kind.to_string(),
             ast::TypeExpr::Optional { inner, .. } => format!("{}?", Self::render_type_expr(inner)),
             ast::TypeExpr::List { inner, .. } => format!("{}[]", Self::render_type_expr(inner)),

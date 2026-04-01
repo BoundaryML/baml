@@ -58,6 +58,7 @@ pub(crate) mod support {
             TypeExpr::Bool { .. } => "bool".into(),
             TypeExpr::Null { .. } => "null".into(),
             TypeExpr::Never { .. } => "never".into(),
+            TypeExpr::Uint8Array { .. } => "uint8array".into(),
             TypeExpr::Media { kind: k, .. } => format!("{:?}", k).to_lowercase(),
             TypeExpr::Optional { inner, .. } => {
                 let s = type_expr_to_string(inner);
@@ -1193,6 +1194,7 @@ pub(crate) mod support {
                 baml_compiler2_ast::TypeExpr::Bool { .. } => "bool".into(),
                 baml_compiler2_ast::TypeExpr::Null { .. } => "null".into(),
                 baml_compiler2_ast::TypeExpr::Never { .. } => "never".into(),
+                baml_compiler2_ast::TypeExpr::Uint8Array { .. } => "uint8array".into(),
                 baml_compiler2_ast::TypeExpr::Media { kind: k, .. } => {
                     format!("{:?}", k).to_lowercase()
                 }

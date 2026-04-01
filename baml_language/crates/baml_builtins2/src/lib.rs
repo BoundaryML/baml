@@ -68,6 +68,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "containers.baml"),
     builtin!("baml", "core.baml"),
     builtin!("baml", "string.baml"),
+    builtin!("baml", "uint8array.baml"),
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
     builtin!("baml", "ns_env/env.baml"),

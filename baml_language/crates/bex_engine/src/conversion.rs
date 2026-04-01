@@ -195,6 +195,7 @@ impl BexEngine {
             }),
             Object::Collector(c) => Ok(BexExternalValue::Adt(BexExternalAdt::Collector(c.clone()))),
             Object::Type(ty) => Ok(BexExternalValue::Adt(BexExternalAdt::Type(ty.clone()))),
+            Object::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
             Object::RustData(arc) => {
                 bex_external_types::try_convert_rust_data(arc).ok_or_else(|| {
                     EngineError::CannotConvert {
@@ -253,6 +254,7 @@ impl BexEngine {
                     .collect();
                 vm.alloc_map(values)
             }
+            BexExternalValue::Uint8Array(bytes) => vm.alloc_uint8array(bytes),
             BexExternalValue::RustData(data) => vm.alloc_rust_data(data),
             // Allocate instance by looking up class and converting fields
             BexExternalValue::Instance { class_name, fields } => {
@@ -437,6 +439,7 @@ fn value_matches_type(value: &BexExternalValue, ty: &Ty) -> bool {
         // Literal types match their corresponding runtime values
         (BexExternalValue::Int(_), Ty::Literal(Literal::Int(_), _)) => true,
         (BexExternalValue::Float(_), Ty::Literal(Literal::Float(_), _)) => true,
+        (BexExternalValue::Uint8Array(_), Ty::Uint8Array { .. }) => true,
         (BexExternalValue::String(_), Ty::Literal(Literal::String(_), _)) => true,
         (BexExternalValue::Bool(_), Ty::Literal(Literal::Bool(_), _)) => true,
         (BexExternalValue::Array { .. }, Ty::List(_, _)) => true,
