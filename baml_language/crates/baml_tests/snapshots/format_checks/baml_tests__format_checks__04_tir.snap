@@ -1259,8 +1259,8 @@ function user.LoopStmts(items: int[], flag: bool) -> int throws never {
     let another_extremely_long_variable_name = a Mul a Add result Mul result Add a Mul result Add a Add result Add a Mul a Mul a Add result Mul result Mul result Add a Mul result Mul a Add result Mul a Mul result : int
     return result : int
   }
-  !! 12080..12107: unreachable code: 1 statement(s) after diverging statement
-  !! 12187..12217: unreachable code: 1 statement(s) after diverging statement
+  ?? 12080..12107: unreachable code: 1 statement(s) after diverging statement
+  ?? 12187..12217: unreachable code: 1 statement(s) after diverging statement
 }
 function user.AssertStmts(x: int, y: int) -> int throws never {
   { : int

@@ -1,6 +1,162 @@
 ---
 source: crates/baml_tests/tests/bytecode_format/main.rs
 ---
+function assert.contains(haystack: string, needle: string) -> null {
+    load_var haystack
+    load_var needle
+    call baml.String.includes
+    unary_op !
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: string does not contain expected substring"
+    dispatch_future baml.sys.panic
+    await
+
+  L2:
+    return
+}
+
+function assert.equal(actual: unknown, expected: unknown) -> null {
+    load_var actual
+    load_var expected
+    cmp_op !=
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: expected equal values"
+    dispatch_future baml.sys.panic
+    await
+
+  L2:
+    return
+}
+
+function assert.is_true(condition: bool) -> null {
+    load_var condition
+    unary_op !
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: expected true"
+    dispatch_future baml.sys.panic
+    await
+
+  L2:
+    return
+}
+
+function assert.not_null(value: unknown?) -> null {
+    load_var value
+    load_const null
+    cmp_op ==
+    pop_jump_if_false L0
+    jump L1
+
+  L0:
+    load_const null
+    jump L2
+
+  L1:
+    load_const "assertion failed: expected non-null value"
+    dispatch_future baml.sys.panic
+    await
+
+  L2:
+    return
+}
+
+function testing.Registry.register_test(self: null, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
+    load_var self
+    load_field .tests
+    alloc_instance TestRegistration
+    copy 0
+    load_var name
+    store_field .name
+    copy 0
+    load_var body
+    store_field .body
+    copy 0
+    load_var runner
+    store_field .runner
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
+}
+
+function testing.Registry.register_test_set(self: null, name: string, collector: (testing.TestSetCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+    load_var self
+    load_field .testsets
+    alloc_instance TestSetRegistration
+    copy 0
+    load_var name
+    store_field .name
+    copy 0
+    load_var collector
+    store_field .collector
+    copy 0
+    load_var runner
+    store_field .runner
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
+}
+
+function testing.TestSetCollector.register_test(self: null, name: string, body: () -> null, runner: (() -> testing.TestReport) -> () -> testing.TestReport?) -> null {
+    load_var self
+    load_field .tests
+    alloc_instance TestRegistration
+    copy 0
+    load_var name
+    store_field .name
+    copy 0
+    load_var body
+    store_field .body
+    copy 0
+    load_var runner
+    store_field .runner
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
+}
+
+function testing.TestSetCollector.register_test_set(self: null, name: string, collector: (testing.TestSetCollector) -> null, runner: (() -> testing.TestSetReport) -> () -> testing.TestSetReport?) -> null {
+    load_var self
+    load_field .testsets
+    alloc_instance TestSetRegistration
+    copy 0
+    load_var name
+    store_field .name
+    copy 0
+    load_var collector
+    store_field .collector
+    copy 0
+    load_var runner
+    store_field .runner
+    call baml.Array.push
+    pop 1
+    load_const null
+    return
+}
+
 function user.User.promote(self: null, bonus: int) -> Report {
     load_var self
     load_var self

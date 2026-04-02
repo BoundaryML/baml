@@ -456,6 +456,19 @@ impl<'db> InferContext<'db> {
             });
     }
 
+    /// Report a warning-level diagnostic at a specific statement.
+    pub fn report_warning_at_stmt(&self, error: TirTypeError, at: StmtId) {
+        self.diagnostics
+            .borrow_mut()
+            .diagnostics
+            .push(TirDiagnostic {
+                error,
+                severity: DiagnosticSeverity::Warning,
+                primary: DiagnosticLocation::Stmt(at),
+                related: Vec::new(),
+            });
+    }
+
     /// Report a warning-level diagnostic at an expression.
     pub fn report_warning_simple(&self, error: TirTypeError, at: ExprId) {
         self.diagnostics

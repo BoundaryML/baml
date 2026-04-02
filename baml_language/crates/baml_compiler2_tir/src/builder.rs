@@ -287,7 +287,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 if let Some((div_idx, div_stmt)) = diverged_at {
                     let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
-                        self.context.report_at_stmt(
+                        self.context.report_warning_at_stmt(
                             crate::infer_context::TirTypeError::DeadCode {
                                 after: div_stmt,
                                 unreachable_count: remaining,
@@ -500,7 +500,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let ty = if let Some((div_idx, div_stmt)) = diverged_at {
                     let remaining = stmts.len() - div_idx - 1 + usize::from(tail_expr.is_some());
                     if remaining > 0 {
-                        self.context.report_at_stmt(
+                        self.context.report_warning_at_stmt(
                             crate::infer_context::TirTypeError::DeadCode {
                                 after: div_stmt,
                                 unreachable_count: remaining,

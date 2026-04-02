@@ -90,5 +90,5 @@ function user.UnreachableTailStillChecked() -> string throws never {
       x.missing : unknown
     }
   }
-  !! 1900..1922: unreachable code: 2 statement(s) after diverging statement
+  ?? 1900..1922: unreachable code: 2 statement(s) after diverging statement
 }

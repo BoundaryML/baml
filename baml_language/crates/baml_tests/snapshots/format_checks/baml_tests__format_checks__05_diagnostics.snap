@@ -550,7 +550,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │           Note: Error code: E0012
 ─────╯
 
-  [type] Error: unreachable code: 1 statement(s) after diverging statement
+  [type] Warning: unreachable code: 1 statement(s) after diverging statement
      ╭─[ loop_stmts.baml:402:23 ]
      │
  402 │ ╭─▶                 0 => {
@@ -561,7 +561,7 @@ source: crates/baml_tests/src/generated_tests.rs
      │     Note: Error code: E0001
 ─────╯
 
-  [type] Error: unreachable code: 1 statement(s) after diverging statement
+  [type] Warning: unreachable code: 1 statement(s) after diverging statement
      ╭─[ loop_stmts.baml:406:39 ]
      │
  406 │ ╭─▶                 n: int if n > 100 => {

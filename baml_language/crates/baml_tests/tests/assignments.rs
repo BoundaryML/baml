@@ -1045,7 +1045,21 @@ async fn virtual_multiple_defs_preserve_side_effects() {
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @"");
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fail() -> int {
+        load_const "fail"
+        throw
+    }
+
+    function main() -> int {
+        call user.fail
+        store_var x
+        load_const 2
+        store_var x
+        load_var x
+        return
+    }
+    "#);
 
     assert!(output.result.is_err());
 }

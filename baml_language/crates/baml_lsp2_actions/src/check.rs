@@ -245,8 +245,15 @@ fn tir_rendered_to_diagnostic(
         file_id,
         range: rendered.range,
     };
-    Diagnostic::error(DiagnosticId::TypeMismatch, rendered.message)
-        .with_primary_span(span)
+    let diag = match rendered.severity {
+        baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning => {
+            Diagnostic::warning(DiagnosticId::TypeMismatch, rendered.message)
+        }
+        baml_compiler2_tir::infer_context::DiagnosticSeverity::Error => {
+            Diagnostic::error(DiagnosticId::TypeMismatch, rendered.message)
+        }
+    };
+    diag.with_primary_span(span)
         .with_phase(DiagnosticPhase::Type)
 }
 
