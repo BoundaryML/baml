@@ -1061,6 +1061,7 @@ name = "baml_cli"
 version = "0.0.0-beta"
 dependencies = [
  "anyhow",
+ "baml_codegen_python",
  "baml_db",
  "baml_fmt",
  "baml_lsp_server",
@@ -1385,6 +1386,7 @@ name = "baml_project"
 version = "0.0.0-beta"
 dependencies = [
  "baml_builtins2",
+ "baml_codegen_types",
  "baml_compiler2_ast",
  "baml_compiler2_emit",
  "baml_compiler2_hir",
