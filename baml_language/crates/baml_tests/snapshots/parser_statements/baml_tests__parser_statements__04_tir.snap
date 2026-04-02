@@ -36,14 +36,14 @@ function user.multi_assign() -> int throws never {
     let b = 2 : 2 -> int
     a = 10 : 10
     b = 20 : 20
-    return a Add b : int
+    return a + b : int
   }
 }
 function user.assign_in_loop() -> int throws never {
   { : never
     let sum = 0 : 0 -> int
     let i = 0 : 0 -> int
-    while i Lt 5
+    while i < 5
       { : void
         sum Add= i : int
         i Add= 1 : int
@@ -57,7 +57,7 @@ function user.block_with_tail() -> int throws never {
       { : int
         let y = 1 : 1 -> int
         let z = 2 : 2 -> int
-        y Add z : int
+        y + z : int
       }
     return x : int
   }
@@ -84,7 +84,7 @@ function user.break_in_for() -> int throws never {
   { : never
     { : void
       let i = 0 : 0 -> int
-      while i Lt 10
+      while i < 10
         { : never
           break
         }
@@ -96,7 +96,7 @@ function user.continue_in_for() -> int throws never {
   { : never
     { : void
       let i = 0 : 0 -> int
-      while i Lt 10
+      while i < 10
         { : never
           continue
         }
@@ -150,7 +150,7 @@ function user.c_style_for_loop() -> int throws never {
     let result = 0 : 0 -> int
     { : void
       let i = 0 : 0 -> int
-      while i Lt 10
+      while i < 10
         { : void
           result Add= i : int
         }
@@ -175,7 +175,7 @@ function user.nested_for_loop() -> int throws never {
       { : void
         for j in [4, 5, 6]
           { : void
-            result Add= i Mul j : int
+            result Add= i * j : int
           }
       }
     return result : int
@@ -183,12 +183,12 @@ function user.nested_for_loop() -> int throws never {
 }
 function user.ConditionalLogic(age: int) -> string throws never {
   { : never
-    if (age Lt 18 : bool) : never
+    if (age < 18 : bool) : never
       { : never
         return "minor" : "minor"
       }
     else
-      if (age Lt 65 : bool) : never
+      if (age < 65 : bool) : never
         { : never
           return "adult" : "adult"
         }
@@ -204,7 +204,7 @@ function user.let_statements() -> int throws never {
     let y = 2 : 2
     let z = [1, 2, 3] : int[]
     let point = Point { x: 1, y: 2 } : user.Point
-    return point.x Add point.y : int
+    return point.x + point.y : int
   }
 }
 class user.Point {
@@ -218,9 +218,9 @@ class user.Point$stream {
 function user.simple_while_loop() -> int throws never {
   { : never
     let i = 0 : 0 -> int
-    while i Lt 10
+    while i < 10
       { : void
-        i = i Add 1 : int
+        i = i + 1 : int
       }
     return i : int
   }
@@ -228,12 +228,12 @@ function user.simple_while_loop() -> int throws never {
 function user.nested_while_loop() -> int throws never {
   { : never
     let i = 0 : 0 -> int
-    while i Lt 10
+    while i < 10
       { : void
         let j = 0 : 0 -> int
-        while j Lt 10
+        while j < 10
           { : void
-            j = j Add 1 : int
+            j = j + 1 : int
           }
       }
     return i : int

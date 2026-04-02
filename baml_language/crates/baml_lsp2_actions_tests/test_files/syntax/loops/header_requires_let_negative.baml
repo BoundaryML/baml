@@ -102,15 +102,6 @@ function MissingLetAfter() -> int {
 //    │ Note: Error code: E0010
 // ───╯
 // Error: unresolved name: i
-//    ╭─[ loops_header_requires_let_negative.baml:4:7 ]
-//    │
-//  4 │     for (i = 0; i < 3; i += 1) {
-//    │          ┬  
-//    │          ╰── unresolved name: i
-//    │ 
-//    │ Note: Error code: E0001
-// ───╯
-// Error: unresolved name: i
 //    ╭─[ loops_header_requires_let_negative.baml:4:21 ]
 //    │
 //  4 │     for (i = 0; i < 3; i += 1) {

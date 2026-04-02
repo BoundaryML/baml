@@ -80,7 +80,7 @@ fn unresolved_field() {
       { : never
         return x.missing : unknown
       }
-      !! 66..73: unresolved member: user.Foo.missing
+      !! 66..73: type `user.Foo` has no member `missing`
     }
     class user.Foo$stream {
       name: null | string
@@ -111,7 +111,7 @@ function f(data: Data) -> string {
       { : never
         return data.inner.foo : unknown
       }
-      !! 78..83: unresolved member: user.Data.inner
+      !! 78..83: type `user.Data` has no member `inner`
     }
     class user.Data$stream {
       name: null | string
@@ -142,7 +142,7 @@ function f(s: Sentiment) -> string {
       { : never
         return s.feelin : unknown
       }
-      !! 85..91: unresolved member: user.Sentiment.feelin
+      !! 85..91: type `user.Sentiment` has no member `feelin`
     }
     class user.Sentiment$stream {
       feeling: null | string
@@ -160,7 +160,7 @@ fn binary_op_int_add() {
     insta::assert_snapshot!(render_tir(&db, file), @r"
     function user.f(a: int, b: int) -> int throws never {
       { : never
-        return a Add b : int
+        return a + b : int
       }
     }
     ");

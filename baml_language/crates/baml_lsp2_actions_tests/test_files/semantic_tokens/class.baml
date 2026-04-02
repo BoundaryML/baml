@@ -53,75 +53,75 @@ function fo() -> int {
 
 //----
 //- diagnostics
-// Error: unresolved member: user.Color.get_re
+// Error: type `user.Color` has no member `get_re`
 //     ╭─[ class.baml:44:29 ]
 //     │
 //  44 │   let first_red = colors[0].get_re();
 //     │                             ───┬──  
-//     │                                ╰──── unresolved member: user.Color.get_re
+//     │                                ╰──── type `user.Color` has no member `get_re`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved member: user.Color.gree
+// Error: type `user.Color` has no member `gree`
 //     ╭─[ class.baml:45:32 ]
 //     │
 //  45 │   let second_green = colors[1].gree;
 //     │                                ──┬─  
-//     │                                  ╰─── unresolved member: user.Color.gree
+//     │                                  ╰─── type `user.Color` has no member `gree`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved member: user.Color.re
+// Error: type `user.Color` has no member `re`
 //     ╭─[ class.baml:47:23 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
 //     │                       ─┬  
-//     │                        ╰── unresolved member: user.Color.re
+//     │                        ╰── type `user.Color` has no member `re`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved member: user.Color.gree
+// Error: type `user.Color` has no member `gree`
 //     ╭─[ class.baml:47:38 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
 //     │                                      ──┬─  
-//     │                                        ╰─── unresolved member: user.Color.gree
+//     │                                        ╰─── type `user.Color` has no member `gree`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved member: user.Color.blu
+// Error: type `user.Color` has no member `blu`
 //     ╭─[ class.baml:47:55 ]
 //     │
 //  47 │   let sum = colors[0].re + colors[1].gree + colors[2].blu;
 //     │                                                       ─┬─  
-//     │                                                        ╰─── unresolved member: user.Color.blu
+//     │                                                        ╰─── type `user.Color` has no member `blu`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved member: user.Color.get_re
+// Error: type `user.Color` has no member `get_re`
 //     ╭─[ class.baml:49:27 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
 //     │                           ───┬──  
-//     │                              ╰──── unresolved member: user.Color.get_re
+//     │                              ╰──── type `user.Color` has no member `get_re`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved member: user.Color.get_gree
+// Error: type `user.Color` has no member `get_gree`
 //     ╭─[ class.baml:49:47 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
 //     │                                               ────┬───  
-//     │                                                   ╰───── unresolved member: user.Color.get_gree
+//     │                                                   ╰───── type `user.Color` has no member `get_gree`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯
-// Error: unresolved member: user.Color.get_blu
+// Error: type `user.Color` has no member `get_blu`
 //     ╭─[ class.baml:49:69 ]
 //     │
 //  49 │   let nested = [colors[0].get_re(), colors[1].get_gree(), colors[2].get_blu()];
 //     │                                                                     ───┬───  
-//     │                                                                        ╰───── unresolved member: user.Color.get_blu
+//     │                                                                        ╰───── type `user.Color` has no member `get_blu`
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

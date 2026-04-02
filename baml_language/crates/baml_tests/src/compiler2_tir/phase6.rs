@@ -364,8 +364,8 @@ fn image_missing_method_produces_unresolved_member() {
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("unresolved member"),
-        "Expected 'unresolved member' in output, got:\n{output}"
+        output.contains("has no member"),
+        "Expected 'has no member' in output, got:\n{output}"
     );
 }
 
@@ -447,8 +447,8 @@ fn array_missing_method_produces_unresolved_member() {
     let output = render_tir(&db, file);
     // Should produce an UnresolvedMember diagnostic
     assert!(
-        output.contains("unresolved member"),
-        "Expected 'unresolved member' in output, got:\n{output}"
+        output.contains("has no member"),
+        "Expected 'has no member' in output, got:\n{output}"
     );
 }
 
@@ -461,8 +461,8 @@ fn map_missing_method_produces_unresolved_member() {
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("unresolved member"),
-        "Expected 'unresolved member' in output, got:\n{output}"
+        output.contains("has no member"),
+        "Expected 'has no member' in output, got:\n{output}"
     );
 }
 
@@ -475,8 +475,8 @@ fn string_missing_method_produces_unresolved_member() {
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("unresolved member"),
-        "Expected 'unresolved member' in output, got:\n{output}"
+        output.contains("has no member"),
+        "Expected 'has no member' in output, got:\n{output}"
     );
 }
 

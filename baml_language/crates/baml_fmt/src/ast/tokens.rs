@@ -173,6 +173,8 @@ define_punctuation_tokens! {
     "*" => SyntaxKind::STAR => Star;
     "/" => SyntaxKind::SLASH => Slash;
     "%" => SyntaxKind::PERCENT => Percent;
+    "?." => SyntaxKind::QUESTION_DOT => QuestionDot;
+    "??" => SyntaxKind::QUESTION_QUESTION => QuestionQuestion;
 }
 
 #[derive(Debug)]
@@ -222,6 +224,7 @@ pub enum BinaryOp {
     CaretEquals(CaretEquals),
     LessLessEquals(LessLessEquals),
     GreaterGreaterEquals(GreaterGreaterEquals),
+    QuestionQuestion(QuestionQuestion),
 }
 
 impl BinaryOp {
@@ -258,6 +261,7 @@ impl BinaryOp {
             BinaryOp::CaretEquals(t) => t.span(),
             BinaryOp::LessLessEquals(t) => t.span(),
             BinaryOp::GreaterGreaterEquals(t) => t.span(),
+            BinaryOp::QuestionQuestion(t) => t.span(),
         }
     }
 }
@@ -335,6 +339,9 @@ impl FromCST for BinaryOp {
             SyntaxKind::GREATER_GREATER_EQUALS => Ok(BinaryOp::GreaterGreaterEquals(
                 GreaterGreaterEquals::new_from_span(token.text_range()),
             )),
+            SyntaxKind::QUESTION_QUESTION => Ok(BinaryOp::QuestionQuestion(
+                QuestionQuestion::new_from_span(token.text_range()),
+            )),
             _ => Err(StrongAstError::UnexpectedKindDesc {
                 expected_desc: "binary operator".into(),
                 found: token.kind(),
@@ -377,6 +384,7 @@ impl Printable for BinaryOp {
             BinaryOp::CaretEquals(t) => printer.print_raw_token(t),
             BinaryOp::LessLessEquals(t) => printer.print_raw_token(t),
             BinaryOp::GreaterGreaterEquals(t) => printer.print_raw_token(t),
+            BinaryOp::QuestionQuestion(t) => printer.print_raw_token(t),
         }
         PrintInfo::default_single_line()
     }
