@@ -26,10 +26,7 @@ mod unstable;
 use bex_vm_types::types::{Instance, Object, Type, Value};
 use indexmap::IndexMap;
 
-use crate::{
-    BexVm,
-    errors::VmError,
-};
+use crate::{BexVm, errors::VmError};
 
 /// Result type for native functions.
 pub type NativeFunctionResult = Result<Value, VmError>;

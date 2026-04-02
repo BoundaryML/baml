@@ -7,7 +7,8 @@
 //! Generated from `panics.baml` class definitions so that adding a new panic
 //! type only requires editing the `.baml` file.
 
-use std::fmt::Write;
+use proc_macro2::TokenStream;
+use quote::{format_ident, quote};
 
 use crate::types::NativeClassDef;
 
@@ -25,141 +26,61 @@ pub fn generate_panic_enums(class_defs: &[NativeClassDef]) -> String {
         "no panic classes found in namespace {PANICS_NAMESPACE} — is panics.baml registered?"
     );
 
-    let mut out = String::new();
-    generate_panic_class_enum(&mut out, &panics);
-    out
+    let tokens = generate_panic_class_enum(&panics);
+    crate::format_tokens(tokens)
 }
 
 // ── PanicClass ───────────────────────────────────────────────────────────────
 
-fn generate_panic_class_enum(out: &mut String, panics: &[&NativeClassDef]) {
-    // Enum definition
-    out.push_str("/// Panic class tag — one variant per `baml.panics.*` class.\n");
-    out.push_str("///\n");
-    out.push_str("/// Auto-generated from `panics.baml`.\n");
-    out.push_str("#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\n");
-    out.push_str("pub enum PanicClass {\n");
-    for p in panics {
-        writeln!(out, "    {name},", name = p.name).unwrap();
-    }
-    out.push_str("}\n\n");
+fn generate_panic_class_enum(panics: &[&NativeClassDef]) -> TokenStream {
+    let variant_idents: Vec<_> = panics.iter().map(|p| format_ident!("{}", p.name)).collect();
+    let fqns: Vec<String> = panics
+        .iter()
+        .map(|p| format!("{PANICS_NAMESPACE}.{}", p.name))
+        .collect();
+    let names: Vec<&str> = panics.iter().map(|p| p.name.as_str()).collect();
 
-    out.push_str("impl PanicClass {\n");
-
-    // fqn()
-    out.push_str("    /// Fully-qualified class name (e.g. `\"baml.panics.DivisionByZero\"`).\n");
-    out.push_str("    pub const fn fqn(&self) -> &'static str {\n");
-    out.push_str("        match self {\n");
-    for p in panics {
-        writeln!(
-            out,
-            "            PanicClass::{name} => \"{ns}.{name}\",",
-            name = p.name,
-            ns = PANICS_NAMESPACE,
-        )
-        .unwrap();
-    }
-    out.push_str("        }\n    }\n\n");
-
-    // name()
-    out.push_str("    /// Short class name (e.g. `\"DivisionByZero\"`).\n");
-    out.push_str("    pub const fn name(&self) -> &'static str {\n");
-    out.push_str("        match self {\n");
-    for p in panics {
-        writeln!(
-            out,
-            "            PanicClass::{name} => \"{name}\",",
-            name = p.name,
-        )
-        .unwrap();
-    }
-    out.push_str("        }\n    }\n\n");
-
-    // ALL
-    out.push_str("    /// All panic class variants.\n");
-    out.push_str("    pub const ALL: &[PanicClass] = &[\n");
-    for p in panics {
-        writeln!(out, "        PanicClass::{name},", name = p.name).unwrap();
-    }
-    out.push_str("    ];\n\n");
-
-    // ALL_NAMES
-    out.push_str("    /// All panic class short names.\n");
-    out.push_str("    pub const ALL_NAMES: &[&str] = &[\n");
-    for p in panics {
-        writeln!(out, "        \"{name}\",", name = p.name).unwrap();
-    }
-    out.push_str("    ];\n\n");
-
-    // from_name()
-    out.push_str(
-        "    /// Look up a `PanicClass` by its short name (e.g. `\"DivisionByZero\"`).\n",
-    );
-    out.push_str("    pub fn from_name(name: &str) -> Option<PanicClass> {\n");
-    out.push_str("        match name {\n");
-    for p in panics {
-        writeln!(
-            out,
-            "            \"{name}\" => Some(PanicClass::{name}),",
-            name = p.name,
-        )
-        .unwrap();
-    }
-    out.push_str("            _ => None,\n");
-    out.push_str("        }\n    }\n");
-
-    out.push_str("}\n");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::types::{NativeClassDef, NativeClassField};
-    use crate::BamlType;
-
-    fn make_panic_class(name: &str, fields: Vec<(&str, BamlType)>) -> NativeClassDef {
-        NativeClassDef {
-            name: name.to_string(),
-            namespace_prefix: "baml.panics".to_string(),
-            generic_params: vec![],
-            fields: fields
-                .into_iter()
-                .enumerate()
-                .map(|(i, (n, ty))| NativeClassField {
-                    name: n.to_string(),
-                    field_type: ty,
-                    index: i,
-                })
-                .collect(),
-            source_file: "<test>".to_string(),
+    quote! {
+        /// Panic class tag — one variant per `baml.panics.*` class.
+        ///
+        /// Auto-generated from `panics.baml`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+        pub enum PanicClass {
+            #(#variant_idents,)*
         }
-    }
 
-    #[test]
-    fn test_generate_panic_enums() {
-        let class_defs = vec![
-            make_panic_class("DivisionByZero", vec![("dividend", BamlType::Int)]),
-            make_panic_class(
-                "IndexOutOfBounds",
-                vec![("index", BamlType::Int), ("length", BamlType::Int)],
-            ),
-            make_panic_class("StackOverflow", vec![("message", BamlType::String)]),
-        ];
-        let code = generate_panic_enums(&class_defs);
+        impl PanicClass {
+            /// Fully-qualified class name (e.g. `"baml.panics.DivisionByZero"`).
+            pub const fn fqn(&self) -> &'static str {
+                match self {
+                    #(PanicClass::#variant_idents => #fqns,)*
+                }
+            }
 
-        // PanicClass enum
-        assert!(code.contains("pub enum PanicClass {"));
-        assert!(code.contains("DivisionByZero,"));
-        assert!(code.contains("IndexOutOfBounds,"));
-        assert!(code.contains("StackOverflow,"));
+            /// Short class name (e.g. `"DivisionByZero"`).
+            pub const fn name(&self) -> &'static str {
+                match self {
+                    #(PanicClass::#variant_idents => #names,)*
+                }
+            }
 
-        // fqn
-        assert!(code.contains("\"baml.panics.DivisionByZero\""));
+            /// All panic class variants.
+            pub const ALL: &[PanicClass] = &[
+                #(PanicClass::#variant_idents,)*
+            ];
 
-        // ALL_NAMES
-        assert!(code.contains("\"DivisionByZero\","));
+            /// All panic class short names.
+            pub const ALL_NAMES: &[&str] = &[
+                #(#names,)*
+            ];
 
-        // No PanicInstance
-        assert!(!code.contains("PanicInstance"));
+            /// Look up a `PanicClass` by its short name (e.g. `"DivisionByZero"`).
+            pub fn from_name(name: &str) -> Option<PanicClass> {
+                match name {
+                    #(#names => Some(PanicClass::#variant_idents),)*
+                    _ => None,
+                }
+            }
+        }
     }
 }

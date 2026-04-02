@@ -30,9 +30,7 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
         Value::Object(obj_idx) => match vm.get_object(*obj_idx) {
             Object::Instance(instance) => {
                 let Object::Class(class) = vm.get_object(instance.class) else {
-                    return Err(VmError::Other(
-                        "Invalid class reference".to_string(),
-                    ));
+                    return Err(VmError::Other("Invalid class reference".to_string()));
                 };
 
                 let class_name = class.name.clone();
@@ -94,9 +92,7 @@ fn format_value_recursive(vm: &mut BexVm, value: &Value, depth: usize) -> Result
             Object::Enum(e) => Ok(e.name.display_name.to_string()),
             Object::Variant(variant) => {
                 let Object::Enum(enm) = vm.get_object(variant.enm) else {
-                    return Err(VmError::Other(
-                        "Invalid enum reference".to_string(),
-                    ));
+                    return Err(VmError::Other("Invalid enum reference".to_string()));
                 };
 
                 let variant_name = match enm.variants.get(variant.index) {

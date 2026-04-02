@@ -11,3 +11,10 @@ pub use extract::{ExtractNativeBuiltinsError, extract_native_builtins};
 pub use types::{
     BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
 };
+
+/// Format a `TokenStream` into a pretty-printed Rust source string.
+fn format_tokens(tokens: proc_macro2::TokenStream) -> String {
+    let code_string = tokens.to_string();
+    let syntax_tree = syn::parse_file(&code_string).expect("Failed to parse generated code");
+    prettyplease::unparse(&syntax_tree)
+}

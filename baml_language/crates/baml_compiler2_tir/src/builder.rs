@@ -1827,11 +1827,7 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     /// Resolve the type of a catch arm pattern (for recording in bindings).
-    fn resolve_catch_arm_pattern_ty(
-        &self,
-        pattern_id: PatId,
-        body: &ExprBody,
-    ) -> Option<Ty> {
+    fn resolve_catch_arm_pattern_ty(&self, pattern_id: PatId, body: &ExprBody) -> Option<Ty> {
         match &body.patterns[pattern_id] {
             baml_compiler2_ast::Pattern::Binding(name) => self.panic_class_ty(name),
             baml_compiler2_ast::Pattern::TypedBinding {
