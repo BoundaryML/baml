@@ -1065,8 +1065,6 @@ async fn virtual_multiple_defs_preserve_side_effects() {
 
     assert!(matches!(
         output.result,
-        Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::UnhandledThrow { .. }
-        ))
+        Err(bex_engine::EngineError::UnhandledThrow { .. })
     ));
 }

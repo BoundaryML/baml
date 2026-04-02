@@ -76,9 +76,7 @@ async fn access_no_key() {
 
     assert!(matches!(
         output.result,
-        Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::UnhandledThrow { .. }
-        ))
+        Err(bex_engine::EngineError::UnhandledThrow { .. })
     ));
 }
 

@@ -68,8 +68,8 @@ pub enum VmError {
     InvalidJump,
 
     // ── Terminal errors ─────────────────────────────────────────────────
-    #[error("uncaught throw: {value}")]
-    UnhandledThrow { value: String },
+    #[error("uncaught throw: {value:?}")]
+    UnhandledThrow { value: Value },
 
     #[error("internal error: {0}")]
     InternalError(String),

@@ -1022,9 +1022,9 @@ impl BexVm {
 
     fn unhandled_exception_error(exception: &VmException) -> VmError {
         match exception {
-            VmException::Thrown(value) | VmException::Panic(value) => VmError::UnhandledThrow {
-                value: crate::debug::display_value(value),
-            },
+            VmException::Thrown(value) | VmException::Panic(value) => {
+                VmError::UnhandledThrow { value: *value }
+            }
         }
     }
 

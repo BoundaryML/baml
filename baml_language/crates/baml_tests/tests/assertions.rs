@@ -56,8 +56,6 @@ async fn assert_not_ok() {
     // instances before unwinding, so they surface as UnhandledThrow.
     assert!(matches!(
         output.result,
-        Err(bex_engine::EngineError::VmError(
-            bex_vm::errors::VmError::UnhandledThrow { .. }
-        ))
+        Err(bex_engine::EngineError::UnhandledThrow { .. })
     ));
 }

@@ -478,6 +478,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
             },
             param_names: Vec::new(),
             param_types: Vec::new(),
+            throws_type: None,
             body_meta: None,
             trace: false,
         }

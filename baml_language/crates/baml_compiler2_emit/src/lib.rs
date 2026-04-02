@@ -434,6 +434,7 @@ pub fn generate_project_bytecode(
                         },
                         param_names: Vec::new(),
                         param_types: Vec::new(),
+                        throws_type: None,
                         body_meta: None,
                         trace: false,
                     }
@@ -454,6 +455,7 @@ pub fn generate_project_bytecode(
                     },
                     param_names: Vec::new(),
                     param_types: Vec::new(),
+                    throws_type: None,
                     body_meta: None,
                     trace: false,
                 },
@@ -465,6 +467,9 @@ pub fn generate_project_bytecode(
             compiled_fn.return_type = return_type;
             compiled_fn.param_names = param_names;
             compiled_fn.param_types = param_types;
+
+            // Set inferred throws type from TIR throw inference
+            compiled_fn.throws_type = compute_throws_type(db, *file, &func_data.name);
 
             // Set LLM-specific body_meta if this is an LLM function
             if let Some(baml_compiler2_ast::DeclarativeMeta::Llm(llm_meta)) =
@@ -691,6 +696,58 @@ fn convert_test_arg_value(
                 entries: converted,
             }
         }
+    }
+}
+
+/// Compute the inferred throws type for a function by querying TIR throw inference.
+///
+/// Returns `Some(ty)` if the function (or its callees) may throw, `None` otherwise.
+fn compute_throws_type(
+    db: &dyn baml_compiler2_mir::Db,
+    file: baml_base::SourceFile,
+    func_name: &baml_base::Name,
+) -> Option<baml_type::Ty> {
+    let pkg_info = file_package(db, file);
+    let pkg_id = PackageId::new(db, pkg_info.package);
+    let pkg_items = package_items(db, pkg_id);
+    let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
+
+    // Build the same key as throw_inference::function_key
+    let key = if pkg_info.namespace_path.is_empty() {
+        func_name.clone()
+    } else {
+        let mut parts: Vec<String> = pkg_info
+            .namespace_path
+            .iter()
+            .map(|n| n.as_str().to_string())
+            .collect();
+        parts.push(func_name.as_str().to_string());
+        baml_base::Name::new(parts.join("."))
+    };
+
+    let facts = throw_sets.transitive_for(&key)?;
+    if facts.is_empty() {
+        return None;
+    }
+
+    // Convert TIR Ty set → single baml_type::Ty (union if multiple)
+    let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+    let recursive_aliases = baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
+
+    let converted: Vec<baml_type::Ty> = facts
+        .iter()
+        .map(|tir_ty| {
+            baml_compiler2_mir::convert_tir2_ty(tir_ty, &type_aliases, &recursive_aliases)
+        })
+        .collect();
+
+    if converted.len() == 1 {
+        Some(converted.into_iter().next().unwrap())
+    } else {
+        Some(baml_type::Ty::Union(
+            converted,
+            baml_type::TyAttr::default(),
+        ))
     }
 }
 
@@ -1047,6 +1104,7 @@ fn compile_init_function<'db>(
                     },
                     param_names: Vec::new(),
                     param_types: Vec::new(),
+                    throws_type: None,
                     body_meta: None,
                     trace: false,
                 }
@@ -1098,6 +1156,7 @@ fn compile_init_function<'db>(
         },
         param_names: Vec::new(),
         param_types: Vec::new(),
+        throws_type: None,
         body_meta: None,
         trace: false,
     })

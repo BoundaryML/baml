@@ -242,7 +242,10 @@ pub enum EngineError {
     FutureChannelClosed,
 
     #[error("VM error: {0}")]
-    VmError(#[from] bex_vm::errors::VmError),
+    VmError(bex_vm::errors::VmError),
+
+    #[error("uncaught throw: {value:?}")]
+    UnhandledThrow { value: Box<BexExternalValue> },
 
     #[error("Cannot convert object of type {type_name}")]
     CannotConvert { type_name: String },
@@ -265,6 +268,15 @@ pub enum EngineError {
 
     #[error("Package initialization failed: {0}")]
     InitFailed(String),
+}
+
+impl From<bex_vm::errors::VmError> for EngineError {
+    fn from(err: bex_vm::errors::VmError) -> Self {
+        // UnhandledThrow should be intercepted and converted with
+        // vm_value_to_owned() before reaching here. If it slips through
+        // (e.g. from init_globals), wrap it as a generic VmError.
+        EngineError::VmError(err)
+    }
 }
 
 // ============================================================================
@@ -860,6 +872,7 @@ impl BexEngine {
             .unwrap_or(Ty::Null {
                 attr: baml_type::TyAttr::default(),
             });
+        let throws_type = self.function_throws_type(function_name);
 
         // Register with current epoch
         let my_epoch = self.current_epoch.load(Ordering::Acquire);
@@ -962,6 +975,7 @@ impl BexEngine {
         let result = self
             .run_event_loop_with_epoch(
                 return_type,
+                throws_type,
                 &mut vm,
                 my_epoch,
                 call_id,
@@ -1048,6 +1062,18 @@ impl BexEngine {
         let obj = unsafe { ptr.get() };
         match obj {
             Object::Function(func) => Some(func.return_type.clone()),
+            _ => None,
+        }
+    }
+
+    /// Get the inferred throws type for a function by dereferencing its heap object.
+    fn function_throws_type(&self, name: &str) -> Option<Ty> {
+        let resolved = self.resolve_function_name(name)?;
+        let (ptr, _kind) = self.resolved_function_names.get(resolved)?;
+        // SAFETY: ptr is from resolved_function_names, a compile-time object
+        let obj = unsafe { ptr.get() };
+        match obj {
+            Object::Function(func) => func.throws_type.clone(),
             _ => None,
         }
     }
@@ -1176,9 +1202,11 @@ impl BexEngine {
     ///
     /// The `my_epoch` parameter is used to check if GC has been requested
     /// (epoch advanced). VMs from old epochs will park at yield points.
+    #[allow(clippy::too_many_arguments)]
     async fn run_event_loop_with_epoch(
         self: &Arc<Self>,
         return_type: Ty,
+        throws_type: Option<Ty>,
         vm: &mut BexVm,
         my_epoch: u64,
         call_id: CallId,
@@ -1210,7 +1238,27 @@ impl BexEngine {
         'vm_exec: loop {
             Self::cancellation_safepoint(cancel, &abort_handles)?;
 
-            match vm.exec()? {
+            let exec_result = match vm.exec() {
+                Ok(state) => state,
+                Err(bex_vm::errors::VmError::UnhandledThrow { value }) => {
+                    let external = if let Some(ref ty) = throws_type {
+                        self.heap.with_gc_protection(|protected| {
+                            self.convert_vm_value_to_external_with_type(
+                                &value,
+                                ty,
+                                &protected.epoch_guard(),
+                            )
+                        })?
+                    } else {
+                        self.vm_value_to_owned(&value)
+                    };
+                    return Err(EngineError::UnhandledThrow {
+                        value: Box::new(external),
+                    });
+                }
+                Err(other) => return Err(other.into()),
+            };
+            match exec_result {
                 VmExecState::Complete(value) => {
                     // "Cancel wins" semantics: if cancellation races with a
                     // completed VM step, report `Cancelled` rather than
