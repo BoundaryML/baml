@@ -127,7 +127,6 @@ ouroboros = "0.18.5"
 parking_lot = { version = "0.12", features = [ "deadlock_detection" ] }
 paste = "1.0"
 percent-encoding = "2.3"
-web-sys = { version = "0.3", features = [ "Crypto", "CryptoKey", "SubtleCrypto", "Window" ] }
 pretty_assertions = { version = "1.4" }
 prettyplease = { version = "0.2" }
 proc-macro2 = { version = "1" }
@@ -191,6 +190,9 @@ wiremock = "0.6"
 vfs = "0.12"
 wasm-logger = "0.2.0"
 web-time = "1.1.0"
+getrandom = { version = "0.2" }
+rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
+sha2 = { version = "0.10", features = [ "oid" ] }
 
 [workspace.lints.rust]
 unsafe_code = "warn"
