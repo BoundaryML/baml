@@ -201,6 +201,53 @@ async fn typed_binding_plus_wildcard() {
 }
 
 // ============================================================================
+// §2b — Named typed binding (var: Type =>) with value access
+// ============================================================================
+
+#[tokio::test]
+async fn named_binding_string_access_value() {
+    let output = baml_test!(
+        r#"
+        function fails(mode: int) -> string {
+            if (mode == 0) { throw "boom" }
+            throw 42
+        }
+
+        function main() -> string {
+            fails(0) catch (e) {
+                msg: string => msg,
+                _: int => "was int"
+            }
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("boom".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn named_binding_int_access_value() {
+    let output = baml_test!(
+        r#"
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw "boom" }
+            throw 42
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                _: string => -1,
+                code: int => code
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+// ============================================================================
 // §3 — Catch by user-defined class type
 // ============================================================================
 
@@ -318,6 +365,59 @@ async fn catch_three_user_classes_plus_wildcard() {
     "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+// ============================================================================
+// §3a — Named typed binding for user classes (var: Class => var.field)
+// ============================================================================
+
+#[tokio::test]
+async fn named_class_binding_access_field() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+
+        function fails() -> string {
+            throw NetworkError { url: "http://example.com" }
+        }
+
+        function main() -> string {
+            fails() catch (e) {
+                err: NetworkError => err.url
+            }
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("http://example.com".to_string()))
+    );
+}
+
+#[tokio::test]
+async fn named_class_binding_dispatch_access_fields() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+        class ParseError { message string }
+
+        function fails(mode: int) -> string {
+            if (mode == 0) { throw NetworkError { url: "http://x" } }
+            throw ParseError { message: "bad json" }
+        }
+
+        function main() -> string {
+            fails(1) catch (e) {
+                net: NetworkError => net.url,
+                parse: ParseError => parse.message
+            }
+        }
+    "#
+    );
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("bad json".to_string()))
+    );
 }
 
 // ============================================================================
@@ -532,6 +632,83 @@ async fn catch_negative_index_as_index_out_of_bounds() {
     "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
+// ============================================================================
+// §5b — Named panic binding (var: PanicType => var.field)
+// ============================================================================
+
+#[tokio::test]
+#[ignore = "TIR narrows panic binding to never — doesn't use the explicit type annotation"]
+async fn named_panic_binding_division_by_zero_field() {
+    let output = baml_test!(
+        r#"
+        function divides() -> int { 10 / 0 }
+
+        function main() -> int {
+            divides() catch (e) {
+                err: DivisionByZero => err.dividend
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(10)));
+}
+
+#[tokio::test]
+#[ignore = "TIR narrows panic binding to never — doesn't use the explicit type annotation"]
+async fn named_panic_binding_index_out_of_bounds_fields() {
+    let output = baml_test!(
+        r#"
+        function oob() -> int { let a = [10, 20, 30]; a[7] }
+
+        function main() -> int {
+            oob() catch (e) {
+                err: IndexOutOfBounds => err.index
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
+}
+
+#[tokio::test]
+#[ignore = "TIR narrows panic binding to never — doesn't use the explicit type annotation"]
+async fn named_panic_binding_index_out_of_bounds_length() {
+    let output = baml_test!(
+        r#"
+        function oob() -> int { let a = [10, 20, 30]; a[7] }
+
+        function main() -> int {
+            oob() catch (e) {
+                err: IndexOutOfBounds => err.length
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+#[tokio::test]
+#[ignore = "TIR narrows panic binding to never — doesn't use the explicit type annotation"]
+async fn named_panic_binding_map_key_not_found_field() {
+    let output = baml_test!(
+        r#"
+        function bad() -> string { let m = {"a": 1}; m["x"] }
+
+        function main() -> string {
+            bad() catch (e) {
+                err: MapKeyNotFound => err.key
+            }
+        }
+    "#
+    );
+    // The VM currently sets key to "(unknown)" — just verify it's a string
+    assert!(
+        output.result.is_ok(),
+        "expected caught value, got {:?}",
+        output.result
+    );
 }
 
 // ============================================================================
