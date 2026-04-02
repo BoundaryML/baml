@@ -41,16 +41,14 @@ pub(crate) async fn build_request(
         )),
     }?;
 
-    // Append query params to the URL.
+    // Append query params to the URL (percent-encoded via the `url` crate).
     if !client.options.query_params.is_empty() {
-        let separator = if request.url.contains('?') { '&' } else { '?' };
-        let params: Vec<String> = client
-            .options
-            .query_params
-            .iter()
-            .map(|(k, v)| format!("{k}={v}"))
-            .collect();
-        request.url = format!("{}{separator}{}", request.url, params.join("&"));
+        let mut parsed = url::Url::parse(&request.url)
+            .map_err(|e| BuildRequestError::Other(format!("invalid URL '{}': {e}", request.url)))?;
+        for (k, v) in &client.options.query_params {
+            parsed.query_pairs_mut().append_pair(k, v);
+        }
+        request.url = parsed.to_string();
     }
 
     // Auth is applied after body construction. Eventually this can be promoted
@@ -537,6 +535,7 @@ mod tests {
         let client = make_client(
             "openai",
             crate::baml_std::PrimitiveClientOptions {
+                base_url: Some("https://api.openai.com/v1".to_string()),
                 model: Some("gpt-4o".to_string()),
                 query_params: IndexMap::from([
                     ("foo".to_string(), "bar".to_string()),
@@ -548,8 +547,33 @@ mod tests {
         let prompt = msg("user", "hello");
         let result = build_request(&client, prompt, None).await.unwrap();
         assert!(
-            result.url.contains("?foo=bar&baz=qux") || result.url.contains("?baz=qux&foo=bar"),
+            result.url.contains("foo=bar") && result.url.contains("baz=qux"),
             "URL should contain query params: {}",
+            result.url
+        );
+    }
+
+    #[tokio::test]
+    async fn test_query_params_percent_encoded() {
+        let client = make_client(
+            "openai",
+            crate::baml_std::PrimitiveClientOptions {
+                base_url: Some("https://api.openai.com/v1".to_string()),
+                model: Some("gpt-4o".to_string()),
+                query_params: IndexMap::from([(
+                    "key".to_string(),
+                    "value with spaces & special=chars".to_string(),
+                )]),
+                ..crate::baml_std::PrimitiveClientOptions::default()
+            },
+        );
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, prompt, None).await.unwrap();
+        assert!(
+            result
+                .url
+                .contains("key=value+with+spaces+%26+special%3Dchars"),
+            "Query param values should be percent-encoded: {}",
             result.url
         );
     }
@@ -559,6 +583,7 @@ mod tests {
         let client = make_client(
             "openai",
             crate::baml_std::PrimitiveClientOptions {
+                base_url: Some("https://api.openai.com/v1".to_string()),
                 model: Some("gpt-4o".to_string()),
                 ..crate::baml_std::PrimitiveClientOptions::default()
             },

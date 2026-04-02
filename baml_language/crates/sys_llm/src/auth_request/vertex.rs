@@ -27,10 +27,7 @@ pub(crate) async fn auth_vertex(
     client: &PrimitiveClient,
     callbacks: Option<&BuildRequestCallbacks>,
 ) -> Result<(), BuildRequestError> {
-    if request.headers.contains_key("authorization") {
-        return Ok(());
-    }
-
+    // If an API key is provided as a query param, skip token-based auth.
     if client.options.query_params.contains_key("key") {
         return Ok(());
     }
@@ -229,6 +226,7 @@ mod native {
                 method: method.to_string(),
                 url,
                 headers,
+                // Safe: this adapter is only used for OAuth2 token requests (JSON/form-encoded).
                 body: String::from_utf8_lossy(&request.body).into_owned(),
             };
 
@@ -815,21 +813,6 @@ mod tests {
             headers: indexmap::IndexMap::new(),
             body: r#"{"contents":[]}"#.to_string(),
         }
-    }
-
-    #[tokio::test]
-    async fn skips_auth_when_authorization_header_present() {
-        let client = make_client("vertex-ai");
-        let mut req = fake_request();
-        req.headers.insert(
-            "authorization".to_string(),
-            "Bearer manual-token".to_string(),
-        );
-        auth_vertex(&mut req, &client, None).await.unwrap();
-        assert_eq!(
-            req.headers.get("authorization").unwrap(),
-            "Bearer manual-token"
-        );
     }
 
     #[tokio::test]

@@ -7239,6 +7239,7 @@ dependencies = [
  "sys_types",
  "thiserror 2.0.18",
  "tokio",
+ "url",
  "web-time",
 ]
 
