@@ -312,6 +312,38 @@ class BedrockOptions {
   top_p float | null
 }
 
+class StreamAccumulator {
+  _handle $rust_type
+
+  function add_events(self, events: string) -> null throws root.errors.LlmClient {
+    $rust_io_function
+  }
+
+  function content(self) -> string throws root.errors.LlmClient {
+    $rust_io_function
+  }
+
+  function is_done(self) -> bool throws root.errors.LlmClient {
+    $rust_io_function
+  }
+
+  function model(self) -> string? throws root.errors.LlmClient {
+    $rust_io_function
+  }
+
+  function finish_reason(self) -> string? throws root.errors.LlmClient {
+    $rust_io_function
+  }
+
+  function input_tokens(self) -> int? throws root.errors.LlmClient {
+    $rust_io_function
+  }
+
+  function output_tokens(self) -> int? throws root.errors.LlmClient {
+    $rust_io_function
+  }
+}
+
 class PrimitiveClient {
   name string
   provider string

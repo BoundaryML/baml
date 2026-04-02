@@ -219,6 +219,23 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
                 .map_err(OpErrorKind::from),
         )
     }
+
+    fn new_stream_accumulator(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::StreamAccumulator> {
+        match sys_llm::stream_accumulator::new_accumulator(&client.provider) {
+            Ok(handle) => {
+                let handle: std::sync::Arc<dyn std::any::Any + Send + Sync> =
+                    std::sync::Arc::new(handle);
+                SysOpOutput::ok(io::owned::llm::StreamAccumulator { _handle: handle })
+            }
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
 }
 
 /// Look up an LLM function by name, trying the bare name first then "user.{name}".
@@ -229,6 +246,157 @@ fn lookup_llm_function<'a>(
     llm_functions
         .get(function_name)
         .or_else(|| llm_functions.get(&format!("user.{function_name}")))
+}
+
+/// Blanket impl — all types get real `StreamAccumulator` behavior via `sys_llm` delegation.
+impl<T> io::IoClassLlmStreamAccumulator for T {
+    fn add_events(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        events: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::add_events(&handle, &events) {
+            Ok(()) => SysOpOutput::ok(()),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn content(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_content(&handle) {
+            Ok(content) => SysOpOutput::ok(content),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn is_done(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::is_done(&handle) {
+            Ok(done) => SysOpOutput::ok(done),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn model(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_model(&handle) {
+            Ok(model) => SysOpOutput::ok(model),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn finish_reason(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_finish_reason(&handle) {
+            Ok(reason) => SysOpOutput::ok(reason),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn input_tokens(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_input_tokens(&handle) {
+            Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
+
+    fn output_tokens(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        accumulator: io::owned::llm::StreamAccumulator,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<i64>> {
+        let Ok(handle) = accumulator
+            ._handle
+            .downcast::<bex_resource_types::ResourceHandle>()
+        else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid stream accumulator handle".into(),
+            ));
+        };
+        match sys_llm::stream_accumulator::get_output_tokens(&handle) {
+            Ok(tokens) => SysOpOutput::ok(tokens.map(u64::cast_signed)),
+            Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
+        }
+    }
 }
 
 impl<T> io::IoNamespaceLlm for T {

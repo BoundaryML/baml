@@ -16,6 +16,7 @@ mod provider;
 mod render_prompt;
 pub(crate) mod resolve_media;
 mod specialize_prompt;
+pub mod stream_accumulator;
 pub(crate) mod types;
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod wasm;
