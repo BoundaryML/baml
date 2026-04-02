@@ -48,15 +48,14 @@ tokio = { workspace = true, features = [ "rt-multi-thread" ] }
 aws-config = { workspace = true }
 futures-timer = { workspace = true }
 getrandom = { workspace = true, features = [ "js" ] }
-rsa = { workspace = true }
+rsa = { workspace = true, features = [ "sha2" ] }
 sha2 = { workspace = true }
 web-time = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-rsa = { workspace = true, features = [ "sha2" ] }
-sha2 = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "macros" ] }
+wasm-bindgen-test = { workspace = true }
 
 [lints]
 workspace = true

@@ -492,6 +492,8 @@ mod wasm {
     mod tests {
         use std::sync::Arc;
 
+        use wasm_bindgen_test::wasm_bindgen_test;
+
         use super::*;
 
         const TEST_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDUvaOLol62IQRN\nztnkgePa11sFelJ2MbLXcop/0zTyuuY0ZCcF2/Lr/WoSBP1ScH8p4Bc5i/6mX6Qe\nAkpbOpQjIy0bK6kv+7tZauJnqT8KIwyxI/uNt9g8dYO0R1MWP8k0wR9ZTHiZ7YJc\ny7v8xdRxYdQUfSZsDj/DiXbXubzGy8RbJ2OiNKJQhhcQqTUZs3ZwUdjqZW4h6zRS\nzXC1E+s4sWyu4BDLi2nrR/5s7yk9r90tiqYcBBtl/5vRR90NQsQQpel30hEqDhND\nf0mMW5LHCbTEtXd8ohzykahpRWuyGaxrXA9mxVdhHMEwRtLPWb+fNhouCpUY9hxz\n5AmIj1QXAgMBAAECggEACEmO6myb1ep5WXKaaF1q++ZxxEfcmIAdIGl03b/jiyUe\nvKG+J2tHDkxj6mnJWIHLYl05amN6uw50vTqHnQAuLyQ6qJlN0PG0fao9QZ6FNybg\nYrItJXso8En/pHE22mIHu4deakMhW5W2A1lobFNkkDooYdfyPDld4IclWwgAQ5ow\nQ/O4A2UElR4vRl3sm4Tte1RfXmmHkYXQvmMehjAkJ73A82V/hTcrb6fLd6cLkObL\njPTIFSES2ud0w8ysp46Zgw+MYxs0H6U8QeY9c4EFfuf6inZNxiixYi9Vhx1SMlnP\n3EsBhUm98LnC+r5IjO/GcZf0Sjjmk0KR5GN37hs9AQKBgQD7C4WH05su5xCJcWe5\nEQtkblZZYlDoahkzegmPEnw0h/XxP/K/ux8ywgmyY6MdFHUKzdtBLkrvf1dR+iuG\n3N0WKXI0nAN9OkSBx9tl7qKaB5H8Uu6gR0mWws1P4CFxR8XVOwhWKccGWj4UW8aS\nSCmFUsHEiEJU9crDS4EIvvrHgQKBgQDY8JLr1utG4GhgvoV5FNYYmZyRmj1vpwk6\nSJWp87988bgajaqK2c3q3rdqeY2BL7YdGlzDslhokbGlqnHTNS9S42KwroYoKDSr\nvcVyIaLPpIvuWQZKYIRjzgcoQkMIL5Di6QulJ2h75bV9849Dg6Vo/UxWO0WdE0+7\nh+lwVb8nlwKBgB5uHxl/xOfCinaekHwWXNMnrL/Y8wW5FqTuvgnhq7ySXnWH0tz6\nyaVVb+d3vGXh/O36VgFooxy0ytjdAjmuu/3buEQ4RRQA5Bz3JNkOPBd/o2p6gwJa\nocjshAaSnHsmwAxAw5nuJnnWpn/BQCirJp1KksJH4gJ6aMGTfWiZ/bwBAoGBAMl0\nZktB8oyH+gXVBueQ1NxVUdLYU7Lqf6QzIWCIbMsfQOLPqY51gkZYeiUTKbfM0aYn\nA/vrEzRQD5MTO85xtjeX1t7Rwt1psLfHa6J339RJLnSxESliha6U9YqKNetVGIvO\n9DRy6xEbGLYUxnZguutLRWdSdWvPMhyosrvRtMiTAoGBAMs/Z/KLnVffZaU5LAlV\nIR5WlJ0MyQojG9w5iBiJEYcs/xtS9fraXmhgzpnjIa7xNrSHP8b2HF9gnj9RnK1P\nxJcNFKVyi0gDpRPt5Cy4McHQ2kFPmdzeEcIClJO2Mgw7r8lUFbkZqs1jfM7kVv6o\no2RMFg65EnEU9EsYPZKkZlZr\n-----END PRIVATE KEY-----\n";
@@ -537,7 +539,7 @@ mod wasm {
             })
         }
 
-        #[test]
+        #[wasm_bindgen_test]
         fn sign_jwt_produces_valid_three_part_token() {
             let sa: ServiceAccount = serde_json::from_str(&test_sa_json()).unwrap();
             let jwt = sign_jwt(&sa).unwrap();
@@ -545,7 +547,7 @@ mod wasm {
             assert_eq!(parts.len(), 3, "JWT should have header.claims.sig");
         }
 
-        #[test]
+        #[wasm_bindgen_test]
         fn sign_jwt_header_is_rs256() {
             use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 
@@ -558,7 +560,7 @@ mod wasm {
             assert_eq!(header["typ"], "JWT");
         }
 
-        #[test]
+        #[wasm_bindgen_test]
         fn sign_jwt_claims_have_expected_fields() {
             use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 
@@ -577,7 +579,7 @@ mod wasm {
             assert!(claims["exp"].is_number());
         }
 
-        #[test]
+        #[wasm_bindgen_test]
         fn sign_jwt_signature_verifies() {
             use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
             use rsa::signature::Verifier;
@@ -597,7 +599,7 @@ mod wasm {
                 .expect("JWT signature should verify");
         }
 
-        #[test]
+        #[wasm_bindgen_test]
         fn sign_jwt_rejects_invalid_pem() {
             let sa = ServiceAccount {
                 token_uri: "https://oauth2.googleapis.com/token".into(),
@@ -608,7 +610,7 @@ mod wasm {
             assert!(sign_jwt(&sa).is_err());
         }
 
-        #[tokio::test]
+        #[wasm_bindgen_test]
         async fn exchange_jwt_rejects_non_200() {
             let cb = mock_callbacks(Arc::new(|_req| {
                 Box::pin(async {
@@ -629,7 +631,7 @@ mod wasm {
             assert!(err.contains("401"), "should mention status: {err}");
         }
 
-        #[tokio::test]
+        #[wasm_bindgen_test]
         async fn exchange_jwt_rejects_missing_access_token() {
             let cb = mock_callbacks(Arc::new(|_req| {
                 Box::pin(async {
@@ -653,7 +655,7 @@ mod wasm {
             );
         }
 
-        #[tokio::test]
+        #[wasm_bindgen_test]
         async fn exchange_jwt_sends_correct_request() {
             use std::sync::Mutex;
 
@@ -695,7 +697,7 @@ mod wasm {
             assert!(req.body.contains("assertion="), "body: {}", req.body);
         }
 
-        #[tokio::test]
+        #[wasm_bindgen_test]
         async fn service_account_token_full_flow() {
             use std::sync::Mutex;
 
@@ -741,14 +743,14 @@ mod wasm {
             assert_eq!(parts.len(), 3, "assertion should be a 3-part JWT");
         }
 
-        #[tokio::test]
+        #[wasm_bindgen_test]
         async fn service_account_token_rejects_bad_json() {
             let cb = mock_callbacks(mock_token_http());
             let result = service_account_token("not json", Some(&cb)).await;
             assert!(result.is_err());
         }
 
-        #[tokio::test]
+        #[wasm_bindgen_test]
         async fn exchange_jwt_requires_callbacks() {
             let result =
                 exchange_jwt_for_token("https://oauth2.googleapis.com/token", "fake.jwt", None)
@@ -1008,110 +1010,6 @@ mod tests {
             .await
             .unwrap();
         assert!(!req.headers.contains_key("authorization"));
-    }
-
-    // -----------------------------------------------------------------------
-    // JWT signing tests (exercises the same pure-Rust rsa+sha2 logic used
-    // on WASM, run on native to verify correctness).
-    // -----------------------------------------------------------------------
-
-    /// Build a signed JWT from test credentials using rsa+sha2 (same as WASM path).
-    fn sign_jwt_with_rsa(sa_json: &str) -> String {
-        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-        use rsa::{
-            pkcs8::DecodePrivateKey,
-            signature::{SignatureEncoding, Signer},
-        };
-
-        #[derive(serde::Deserialize)]
-        struct Sa {
-            token_uri: String,
-            client_email: String,
-            private_key: String,
-        }
-        let sa: Sa = serde_json::from_str(sa_json).unwrap();
-
-        let header = serde_json::json!({"alg": "RS256", "typ": "JWT"});
-        let claims = serde_json::json!({
-            "iss": sa.client_email,
-            "scope": "https://www.googleapis.com/auth/cloud-platform",
-            "aud": sa.token_uri,
-            "iat": 1_000_000,
-            "exp": 1_003_600,
-        });
-
-        let header_b64 = URL_SAFE_NO_PAD.encode(header.to_string());
-        let claims_b64 = URL_SAFE_NO_PAD.encode(claims.to_string());
-        let signing_input = format!("{header_b64}.{claims_b64}");
-
-        let private_key = rsa::RsaPrivateKey::from_pkcs8_pem(&sa.private_key).unwrap();
-        let signing_key = rsa::pkcs1v15::SigningKey::<sha2::Sha256>::new(private_key);
-        let signature = signing_key.sign(signing_input.as_bytes());
-        let sig_b64 = URL_SAFE_NO_PAD.encode(signature.to_bytes());
-
-        format!("{signing_input}.{sig_b64}")
-    }
-
-    #[test]
-    fn jwt_has_three_dot_separated_parts() {
-        let jwt = sign_jwt_with_rsa(&test_service_account_json());
-        let parts: Vec<&str> = jwt.split('.').collect();
-        assert_eq!(parts.len(), 3, "JWT should have 3 parts: {jwt}");
-    }
-
-    #[test]
-    fn jwt_header_is_rs256() {
-        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-
-        let jwt = sign_jwt_with_rsa(&test_service_account_json());
-        let header_b64 = jwt.split('.').next().unwrap();
-        let header_bytes = URL_SAFE_NO_PAD.decode(header_b64).unwrap();
-        let header: serde_json::Value = serde_json::from_slice(&header_bytes).unwrap();
-        assert_eq!(header["alg"], "RS256");
-        assert_eq!(header["typ"], "JWT");
-    }
-
-    #[test]
-    fn jwt_claims_contain_expected_fields() {
-        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-
-        let jwt = sign_jwt_with_rsa(&test_service_account_json());
-        let claims_b64 = jwt.split('.').nth(1).unwrap();
-        let claims_bytes = URL_SAFE_NO_PAD.decode(claims_b64).unwrap();
-        let claims: serde_json::Value = serde_json::from_slice(&claims_bytes).unwrap();
-        assert_eq!(claims["iss"], "test@test-project.iam.gserviceaccount.com");
-        assert_eq!(
-            claims["scope"],
-            "https://www.googleapis.com/auth/cloud-platform"
-        );
-        assert_eq!(claims["aud"], "https://oauth2.googleapis.com/token");
-    }
-
-    #[test]
-    fn jwt_signature_is_valid() {
-        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-        use rsa::{pkcs8::DecodePrivateKey, signature::Verifier};
-
-        let jwt = sign_jwt_with_rsa(&test_service_account_json());
-        let parts: Vec<&str> = jwt.split('.').collect();
-        let signing_input = format!("{}.{}", parts[0], parts[1]);
-        let sig_bytes = URL_SAFE_NO_PAD.decode(parts[2]).unwrap();
-
-        let private_key = rsa::RsaPrivateKey::from_pkcs8_pem(TEST_PRIVATE_KEY).unwrap();
-        let public_key = private_key.to_public_key();
-        let verifying_key = rsa::pkcs1v15::VerifyingKey::<sha2::Sha256>::new(public_key);
-        let signature = rsa::pkcs1v15::Signature::try_from(sig_bytes.as_slice()).unwrap();
-
-        verifying_key
-            .verify(signing_input.as_bytes(), &signature)
-            .expect("JWT signature verification failed");
-    }
-
-    #[test]
-    fn jwt_sign_rejects_invalid_pem() {
-        use rsa::pkcs8::DecodePrivateKey;
-        let result = rsa::RsaPrivateKey::from_pkcs8_pem("not-a-real-pem");
-        assert!(result.is_err());
     }
 
     /// Confirms that the injected env/fs/http providers are actually used
