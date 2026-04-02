@@ -34,7 +34,7 @@ tokio = { workspace = true, features = [ "sync", "rt", "macros" ] }
 wasm-bindgen-futures = { workspace = true }
 
 [dev-dependencies]
-baml_builtins = { workspace = true }
+baml_builtins2 = { workspace = true }
 baml_tests = { workspace = true }
 sys_llm = { workspace = true }
 sys_native = { workspace = true, features = [ "bundle-http" ] }

@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use baml_base::MediaKind;
-use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
 use serde::Serialize;
 
 // ============================================================================
@@ -316,7 +316,7 @@ fn audio_format_from_mime(mime: &str) -> Result<String, crate::build_request::Bu
 mod tests {
     use std::sync::Arc;
 
-    use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+    use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
     use bex_external_types::{AsBexExternalValue, BexExternalValue};
     use indexmap::IndexMap;
 

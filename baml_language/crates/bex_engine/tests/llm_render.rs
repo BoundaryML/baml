@@ -5,7 +5,7 @@
 //! 2. `get_client` returns the correct client chain
 //! 3. `render_prompt` correctly renders templates with arguments
 
-use baml_builtins::{PromptAst as BuiltinPromptAst, PromptAstSimple};
+use baml_builtins2::{PromptAst as BuiltinPromptAst, PromptAstSimple};
 use baml_type::TyAttr;
 use bex_engine::{FunctionCallContextBuilder, Ty};
 use bex_heap::BexExternalValue;

@@ -15,22 +15,22 @@ use crate::BexVm;
 #[allow(clippy::used_underscore_items)]
 impl BamlClassMediaPdf for PackageBamlImpl {
     fn url(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = pdf._data(vm);
+        let media: &baml_builtins2::MediaValue = pdf._data(vm);
         media_url(media)
     }
 
     fn file(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = pdf._data(vm);
+        let media: &baml_builtins2::MediaValue = pdf._data(vm);
         media_file(media)
     }
 
     fn base64(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> String {
-        let media: &baml_builtins::MediaValue = pdf._data(vm);
+        let media: &baml_builtins2::MediaValue = pdf._data(vm);
         media_base64(media)
     }
 
     fn mime_type(vm: &BexVm, pdf: &view::media::Pdf<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = pdf._data(vm);
+        let media: &baml_builtins2::MediaValue = pdf._data(vm);
         media.mime_type.clone()
     }
 
@@ -60,22 +60,22 @@ impl BamlClassMediaPdf for PackageBamlImpl {
 #[allow(clippy::used_underscore_items)]
 impl BamlClassMediaAudio for PackageBamlImpl {
     fn url(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = audio._data(vm);
+        let media: &baml_builtins2::MediaValue = audio._data(vm);
         media_url(media)
     }
 
     fn file(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = audio._data(vm);
+        let media: &baml_builtins2::MediaValue = audio._data(vm);
         media_file(media)
     }
 
     fn base64(vm: &BexVm, audio: &view::media::Audio<'_>) -> String {
-        let media: &baml_builtins::MediaValue = audio._data(vm);
+        let media: &baml_builtins2::MediaValue = audio._data(vm);
         media_base64(media)
     }
 
     fn mime_type(vm: &BexVm, audio: &view::media::Audio<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = audio._data(vm);
+        let media: &baml_builtins2::MediaValue = audio._data(vm);
         media.mime_type.clone()
     }
 
@@ -105,22 +105,22 @@ impl BamlClassMediaAudio for PackageBamlImpl {
 #[allow(clippy::used_underscore_items)]
 impl BamlClassMediaVideo for PackageBamlImpl {
     fn url(vm: &BexVm, video: &view::media::Video<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = video._data(vm);
+        let media: &baml_builtins2::MediaValue = video._data(vm);
         media_url(media)
     }
 
     fn file(vm: &BexVm, video: &view::media::Video<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = video._data(vm);
+        let media: &baml_builtins2::MediaValue = video._data(vm);
         media_file(media)
     }
 
     fn base64(vm: &BexVm, video: &view::media::Video<'_>) -> String {
-        let media: &baml_builtins::MediaValue = video._data(vm);
+        let media: &baml_builtins2::MediaValue = video._data(vm);
         media_base64(media)
     }
 
     fn mime_type(vm: &BexVm, video: &view::media::Video<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = video._data(vm);
+        let media: &baml_builtins2::MediaValue = video._data(vm);
         media.mime_type.clone()
     }
 
@@ -150,22 +150,22 @@ impl BamlClassMediaVideo for PackageBamlImpl {
 #[allow(clippy::used_underscore_items)]
 impl BamlClassMediaImage for PackageBamlImpl {
     fn url(vm: &BexVm, image: &view::media::Image<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = image._data(vm);
+        let media: &baml_builtins2::MediaValue = image._data(vm);
         media_url(media)
     }
 
     fn file(vm: &BexVm, image: &view::media::Image<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = image._data(vm);
+        let media: &baml_builtins2::MediaValue = image._data(vm);
         media_file(media)
     }
 
     fn base64(vm: &BexVm, image: &view::media::Image<'_>) -> String {
-        let media: &baml_builtins::MediaValue = image._data(vm);
+        let media: &baml_builtins2::MediaValue = image._data(vm);
         media_base64(media)
     }
 
     fn mime_type(vm: &BexVm, image: &view::media::Image<'_>) -> Option<String> {
-        let media: &baml_builtins::MediaValue = image._data(vm);
+        let media: &baml_builtins2::MediaValue = image._data(vm);
         media.mime_type.clone()
     }
 
@@ -195,28 +195,28 @@ impl BamlNamespaceMedia for PackageBamlImpl {}
 // Shared helpers
 // =========================================================================
 
-fn media_url(media: &baml_builtins::MediaValue) -> Option<String> {
+fn media_url(media: &baml_builtins2::MediaValue) -> Option<String> {
     #[allow(unsafe_code)]
     unsafe {
         media.read_content_unguarded(|content| match content {
-            baml_builtins::MediaContent::Url { url, .. } => Some(url.clone()),
+            baml_builtins2::MediaContent::Url { url, .. } => Some(url.clone()),
             _ => None,
         })
     }
 }
 
-fn media_file(media: &baml_builtins::MediaValue) -> Option<String> {
+fn media_file(media: &baml_builtins2::MediaValue) -> Option<String> {
     #[allow(unsafe_code)]
     unsafe {
         media.read_content_unguarded(|content| match content {
-            baml_builtins::MediaContent::File { file, .. } => Some(file.clone()),
+            baml_builtins2::MediaContent::File { file, .. } => Some(file.clone()),
             _ => None,
         })
     }
 }
 
-fn media_base64(media: &baml_builtins::MediaValue) -> String {
-    use baml_builtins::MediaContent;
+fn media_base64(media: &baml_builtins2::MediaValue) -> String {
+    use baml_builtins2::MediaContent;
     media.read_content(|content| match content {
         MediaContent::Base64 { base64_data, .. } => base64_data.clone(),
         MediaContent::File {
@@ -235,10 +235,10 @@ fn media_from_url(
     kind: MediaKind,
     url: &str,
     mime_type: Option<&str>,
-) -> baml_builtins::MediaValue {
-    baml_builtins::MediaValue::new(
+) -> baml_builtins2::MediaValue {
+    baml_builtins2::MediaValue::new(
         kind,
-        baml_builtins::MediaContent::Url {
+        baml_builtins2::MediaContent::Url {
             url: url.to_string(),
             base64_data: None,
         },
@@ -250,10 +250,10 @@ fn media_from_file(
     kind: MediaKind,
     file: &str,
     mime_type: Option<&str>,
-) -> baml_builtins::MediaValue {
-    baml_builtins::MediaValue::new(
+) -> baml_builtins2::MediaValue {
+    baml_builtins2::MediaValue::new(
         kind,
-        baml_builtins::MediaContent::File {
+        baml_builtins2::MediaContent::File {
             file: file.to_string(),
             base64_data: None,
         },
@@ -265,10 +265,10 @@ fn media_from_base64(
     kind: MediaKind,
     base64: &str,
     mime_type: Option<&str>,
-) -> baml_builtins::MediaValue {
-    baml_builtins::MediaValue::new(
+) -> baml_builtins2::MediaValue {
+    baml_builtins2::MediaValue::new(
         kind,
-        baml_builtins::MediaContent::Base64 {
+        baml_builtins2::MediaContent::Base64 {
             base64_data: base64.to_string(),
         },
         mime_type.map(std::string::ToString::to_string),
