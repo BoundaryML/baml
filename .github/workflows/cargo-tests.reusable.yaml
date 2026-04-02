@@ -426,7 +426,9 @@ jobs:
 
   cargo-build-msrv:
     name: "cargo build (msrv)"
-    runs-on: ubuntu-latest
+    # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
+    # this overkill runner until we can root-cause and right-size.
+    runs-on: ubuntu-32gb
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
@@ -452,8 +454,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: "baml_language -> target"
-          # Share cache across Linux MSRV jobs
-          shared-key: "linux-msrv"
+          # Share cache across Linux MSRV jobs (32gb runner)
+          shared-key: "linux-msrv-32gb"
 
       - name: "Build with MSRV"
         env:
