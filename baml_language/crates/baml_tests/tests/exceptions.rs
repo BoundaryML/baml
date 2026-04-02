@@ -1,29 +1,25 @@
 //! Exception handling tests: catch/throw/panic semantics.
 //!
-//! Progression from simple to complex:
-//!   §1  Single arm: wildcard catches user throw
-//!   §2  Single arm: typed binding catches matching throw
-//!   §3  Multi-arm: typed bindings dispatch by throw type
-//!   §4  Unhandled throws propagate
-//!   §5  Single arm: explicit panic pattern catches
-//!   §6  Single arm: wildcard does NOT catch panics
-//!   §7  Multi-arm: multiple panic patterns dispatch
-//!   §8  Multi-arm: panic pattern + wildcard (errors + panics)
-//!   §9  Three-arm: two panics + wildcard (full combinatoric)
-//!   §10 Unmatched panic propagates past catch
-//!   §11 Panic type alias
-//!   §12 Nested catch, rethrow, sequential
-//!   §13 Special cases
+//! Progression from simple to complex, covering all catch arm pattern types:
+//!   - Literal value patterns: "string" =>, 42 =>
+//!   - Typed bindings: _: string =>, _: MyClass =>
+//!   - Bare type sugar: DivisionByZero =>
+//!   - Wildcard: _ =>
+//!   - User-defined error classes
+//!   - Multi-arm dispatch with mixed pattern types
+//!   - Panics vs user throws
+//!   - Nested, rethrow, sequential
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
 // ============================================================================
-// §1 — Single arm: wildcard catches user throw
+// §1 — Catch by literal value
 // ============================================================================
 
 #[tokio::test]
-async fn wildcard_catches_thrown_string() {
+#[ignore = "TIR throw inference: literal patterns not recognized as matching throw type"]
+async fn catch_literal_string_match() {
     let output = baml_test!(
         r#"
         function fails() -> int {
@@ -32,16 +28,38 @@ async fn wildcard_catches_thrown_string() {
 
         function main() -> int {
             fails() catch (e) {
-                _ => -1
+                "boom" => 1,
+                _ => 2
             }
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
 #[tokio::test]
-async fn wildcard_catches_thrown_int() {
+#[ignore = "TIR throw inference: literal patterns not recognized as matching throw type"]
+async fn catch_literal_string_no_match_falls_to_wildcard() {
+    let output = baml_test!(
+        r#"
+        function fails() -> int {
+            throw "other";
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                "boom" => 1,
+                _ => 2
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+#[tokio::test]
+#[ignore = "TIR throw inference: literal patterns not recognized as matching throw type"]
+async fn catch_literal_int_match() {
     let output = baml_test!(
         r#"
         function fails() -> int {
@@ -50,20 +68,44 @@ async fn wildcard_catches_thrown_int() {
 
         function main() -> int {
             fails() catch (e) {
-                _ => -1
+                42 => 1,
+                _ => 2
             }
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+#[ignore = "TIR throw inference: literal patterns not recognized as matching throw type"]
+async fn catch_multiple_literals_dispatch() {
+    let output = baml_test!(
+        r#"
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw "alpha" }
+            if (mode == 1) { throw "beta" }
+            throw "gamma"
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                "alpha" => 1,
+                "beta" => 2,
+                _ => 3
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
 // ============================================================================
-// §2 — Single arm: typed binding catches matching throw
+// §2 — Catch by typed binding (_: Type =>)
 // ============================================================================
 
 #[tokio::test]
-async fn typed_binding_catches_string_throw() {
+async fn typed_binding_string() {
     let output = baml_test!(
         r#"
         function fails() -> int {
@@ -72,16 +114,16 @@ async fn typed_binding_catches_string_throw() {
 
         function main() -> int {
             fails() catch (e) {
-                _: string => -1
+                _: string => 1
             }
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
 #[tokio::test]
-async fn typed_binding_catches_int_throw() {
+async fn typed_binding_int() {
     let output = baml_test!(
         r#"
         function fails() -> int {
@@ -90,21 +132,16 @@ async fn typed_binding_catches_int_throw() {
 
         function main() -> int {
             fails() catch (e) {
-                _: int => -1
+                _: int => 1
             }
         }
     "#
     );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
-// ============================================================================
-// §3 — Multi-arm: typed bindings dispatch by throw type
-// ============================================================================
-
 #[tokio::test]
-async fn two_typed_arms_string_fires() {
-    // Callee can throw string or int, so both arms are reachable.
+async fn typed_binding_dispatch_string_vs_int() {
     let output = baml_test!(
         r#"
         function fails(mode: int) -> int {
@@ -124,7 +161,7 @@ async fn two_typed_arms_string_fires() {
 }
 
 #[tokio::test]
-async fn two_typed_arms_int_fires() {
+async fn typed_binding_dispatch_int_vs_string() {
     let output = baml_test!(
         r#"
         function fails(mode: int) -> int {
@@ -144,27 +181,7 @@ async fn two_typed_arms_int_fires() {
 }
 
 #[tokio::test]
-async fn typed_arm_plus_wildcard_typed_matches() {
-    let output = baml_test!(
-        r#"
-        function fails(mode: int) -> int {
-            if (mode == 0) { throw "boom" }
-            throw 42
-        }
-
-        function main() -> int {
-            fails(0) catch (e) {
-                _: string => 1,
-                _ => 2
-            }
-        }
-    "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
-}
-
-#[tokio::test]
-async fn typed_arm_plus_wildcard_wildcard_matches() {
+async fn typed_binding_plus_wildcard() {
     let output = baml_test!(
         r#"
         function fails(mode: int) -> int {
@@ -184,7 +201,243 @@ async fn typed_arm_plus_wildcard_wildcard_matches() {
 }
 
 // ============================================================================
-// §4 — Unhandled throws propagate with correct values
+// §3 — Catch by user-defined class type
+// ============================================================================
+
+#[tokio::test]
+async fn catch_user_class_single_arm() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+
+        function fails() -> int {
+            throw NetworkError { url: "http://example.com" }
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                _: NetworkError => 1
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn catch_two_user_classes_dispatch_first() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+        class ParseError { message string }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw NetworkError { url: "http://x" } }
+            throw ParseError { message: "bad json" }
+        }
+
+        function main() -> int {
+            fails(0) catch (e) {
+                _: NetworkError => 1,
+                _: ParseError => 2
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn catch_two_user_classes_dispatch_second() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+        class ParseError { message string }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw NetworkError { url: "http://x" } }
+            throw ParseError { message: "bad json" }
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                _: NetworkError => 1,
+                _: ParseError => 2
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+#[tokio::test]
+async fn catch_user_class_plus_wildcard() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw NetworkError { url: "http://x" } }
+            throw "plain string error"
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                _: NetworkError => 1,
+                _ => 2
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+#[tokio::test]
+async fn catch_three_user_classes_plus_wildcard() {
+    let output = baml_test!(
+        r#"
+        class AuthError { reason string }
+        class NotFound { path string }
+        class RateLimit { retryAfter int }
+
+        function api(mode: int) -> int {
+            if (mode == 0) { throw AuthError { reason: "expired" } }
+            if (mode == 1) { throw NotFound { path: "/users" } }
+            if (mode == 2) { throw RateLimit { retryAfter: 30 } }
+            throw "unknown"
+        }
+
+        function main() -> int {
+            api(2) catch (e) {
+                _: AuthError => 1,
+                _: NotFound => 2,
+                _: RateLimit => 3,
+                _ => 4
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+// ============================================================================
+// §3b — Catch by bare class name (MyClass => without _: binding)
+// ============================================================================
+
+#[tokio::test]
+async fn bare_class_single_arm() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+
+        function fails() -> int {
+            throw NetworkError { url: "http://example.com" }
+        }
+
+        function main() -> int {
+            fails() catch (e) {
+                NetworkError => 1
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+async fn bare_class_dispatch_first() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+        class ParseError { message string }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw NetworkError { url: "http://x" } }
+            throw ParseError { message: "bad" }
+        }
+
+        function main() -> int {
+            fails(0) catch (e) {
+                NetworkError => 1,
+                ParseError => 2
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
+async fn bare_class_dispatch_second() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+        class ParseError { message string }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw NetworkError { url: "http://x" } }
+            throw ParseError { message: "bad" }
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                NetworkError => 1,
+                ParseError => 2
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+#[tokio::test]
+async fn bare_class_plus_wildcard() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw NetworkError { url: "http://x" } }
+            throw "plain string"
+        }
+
+        function main() -> int {
+            fails(0) catch (e) {
+                NetworkError => 1,
+                _ => 2
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
+async fn bare_class_plus_wildcard_wildcard_fires() {
+    let output = baml_test!(
+        r#"
+        class NetworkError { url string }
+
+        function fails(mode: int) -> int {
+            if (mode == 0) { throw NetworkError { url: "http://x" } }
+            throw "plain string"
+        }
+
+        function main() -> int {
+            fails(1) catch (e) {
+                NetworkError => 1,
+                _ => 2
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+// ============================================================================
+// §4 — Unhandled throws propagate
 // ============================================================================
 
 #[tokio::test]
@@ -222,7 +475,7 @@ async fn unhandled_throw_int() {
 }
 
 // ============================================================================
-// §5 — Single arm: explicit panic pattern catches
+// §5 — Panic patterns: single arm per panic type
 // ============================================================================
 
 #[tokio::test]
@@ -232,9 +485,7 @@ async fn catch_division_by_zero() {
         function divides() -> int { 1 / 0 }
 
         function main() -> int {
-            divides() catch (e) {
-                DivisionByZero => -1
-            }
+            divides() catch (e) { DivisionByZero => -1 }
         }
     "#
     );
@@ -248,9 +499,7 @@ async fn catch_index_out_of_bounds() {
         function oob() -> int { let a = [1, 2]; a[5] }
 
         function main() -> int {
-            oob() catch (e) {
-                IndexOutOfBounds => -1
-            }
+            oob() catch (e) { IndexOutOfBounds => -1 }
         }
     "#
     );
@@ -264,9 +513,7 @@ async fn catch_map_key_not_found() {
         function bad() -> int { let m = {"a": 1}; m["x"] }
 
         function main() -> int {
-            bad() catch (e) {
-                MapKeyNotFound => -1
-            }
+            bad() catch (e) { MapKeyNotFound => -1 }
         }
     "#
     );
@@ -280,9 +527,7 @@ async fn catch_negative_index_as_index_out_of_bounds() {
         function bad() -> int { let a = [1, 2]; a[-1] }
 
         function main() -> int {
-            bad() catch (e) {
-                IndexOutOfBounds => -1
-            }
+            bad() catch (e) { IndexOutOfBounds => -1 }
         }
     "#
     );
@@ -290,96 +535,50 @@ async fn catch_negative_index_as_index_out_of_bounds() {
 }
 
 // ============================================================================
-// §6 — Single arm: wildcard does NOT catch panics
+// §6 — Wildcard does NOT catch panics
 // ============================================================================
 
 #[tokio::test]
 async fn wildcard_skips_division_by_zero() {
-    // divides() has a throw path so _ is reachable. At runtime x=0
-    // hits the panic path; _ does not catch panics.
     let output = baml_test!(
         r#"
-        function divides(x: int) -> int {
+        function risky(x: int) -> int {
             if (x > 100) { throw "too big" }
             1 / x
         }
 
         function main() -> int {
-            divides(0) catch (e) {
-                _ => -1
-            }
+            risky(0) catch (e) { _ => -1 }
         }
     "#
     );
-    assert!(output.result.is_err(), "expected panic to propagate past _");
+    assert!(output.result.is_err(), "panic should propagate past _");
 }
 
 #[tokio::test]
 async fn wildcard_skips_index_out_of_bounds() {
     let output = baml_test!(
         r#"
-        function oob(x: int) -> int {
+        function risky(x: int) -> int {
             if (x > 100) { throw "too big" }
             let a = [1, 2, 3];
             a[x]
         }
 
         function main() -> int {
-            oob(99) catch (e) {
-                _ => -1
-            }
+            risky(99) catch (e) { _ => -1 }
         }
     "#
     );
-    assert!(output.result.is_err(), "expected panic to propagate past _");
+    assert!(output.result.is_err(), "panic should propagate past _");
 }
 
 // ============================================================================
-// §7 — Multi-arm: multiple panic patterns dispatch to correct arm
-// ============================================================================
-
-#[tokio::test]
-async fn two_panics_first_arm_matches() {
-    let output = baml_test!(
-        r#"
-        function divides() -> int { 1 / 0 }
-
-        function main() -> int {
-            divides() catch (e) {
-                DivisionByZero => 1,
-                IndexOutOfBounds => 2
-            }
-        }
-    "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
-}
-
-#[tokio::test]
-#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
-async fn two_panics_second_arm_matches() {
-    let output = baml_test!(
-        r#"
-        function oob() -> int { let a = [1]; a[5] }
-
-        function main() -> int {
-            oob() catch (e) {
-                DivisionByZero => 1,
-                IndexOutOfBounds => 2
-            }
-        }
-    "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
-}
-
-// ============================================================================
-// §8 — Multi-arm: panic pattern + wildcard (panics + user errors)
+// §7 — Multi-arm: panics + user errors in same catch
 // ============================================================================
 
 #[tokio::test]
 async fn panic_arm_plus_wildcard_panic_fires() {
-    // x=0 → DivisionByZero → explicit arm catches.
     let output = baml_test!(
         r#"
         function risky(x: int) -> int {
@@ -401,7 +600,6 @@ async fn panic_arm_plus_wildcard_panic_fires() {
 #[tokio::test]
 #[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
 async fn panic_arm_plus_wildcard_user_error_fires() {
-    // x=999 → throw "too big" → wildcard catches.
     let output = baml_test!(
         r#"
         function risky(x: int) -> int {
@@ -422,7 +620,6 @@ async fn panic_arm_plus_wildcard_user_error_fires() {
 
 #[tokio::test]
 async fn panic_arm_plus_wildcard_no_error() {
-    // x=5 → no error → returns normal value, catch never fires.
     let output = baml_test!(
         r#"
         function risky(x: int) -> int {
@@ -442,31 +639,25 @@ async fn panic_arm_plus_wildcard_no_error() {
 }
 
 // ============================================================================
-// §9 — Three-arm: two panics + wildcard (full combinatoric)
-//
-// A single callee that can: succeed, throw a user error, panic with
-// DivisionByZero, or panic with IndexOutOfBounds.
+// §8 — Multi-arm: user class + panic + wildcard
 // ============================================================================
 
 #[tokio::test]
-async fn three_arms_division_by_zero_fires() {
+async fn user_class_plus_panic_plus_wildcard_class_fires() {
     let output = baml_test!(
         r#"
-        function panic_div() -> int { 1 / 0 }
-        function panic_oob() -> int { let a = [1]; a[5] }
-        function throw_str() -> int { throw "fail" }
+        class AppError { code int }
 
         function risky(mode: int) -> int {
-            if (mode == 0) { return panic_div() }
-            if (mode == 1) { return panic_oob() }
-            if (mode == 2) { return throw_str() }
-            99
+            if (mode == 0) { throw AppError { code: 500 } }
+            if (mode == 1) { 1 / 0 }
+            throw "fallback"
         }
 
         function main() -> int {
             risky(0) catch (e) {
-                DivisionByZero => 1,
-                IndexOutOfBounds => 2,
+                _: AppError => 1,
+                DivisionByZero => 2,
                 _ => 3
             }
         }
@@ -476,25 +667,23 @@ async fn three_arms_division_by_zero_fires() {
 }
 
 #[tokio::test]
-#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
-async fn three_arms_index_out_of_bounds_fires() {
+async fn user_class_plus_panic_plus_wildcard_panic_fires() {
     let output = baml_test!(
         r#"
-        function panic_div() -> int { 1 / 0 }
-        function panic_oob() -> int { let a = [1]; a[5] }
-        function throw_str() -> int { throw "fail" }
+        class AppError { code int }
+
+        function do_div() -> int { 1 / 0 }
 
         function risky(mode: int) -> int {
-            if (mode == 0) { return panic_div() }
-            if (mode == 1) { return panic_oob() }
-            if (mode == 2) { return throw_str() }
-            99
+            if (mode == 0) { throw AppError { code: 500 } }
+            if (mode == 1) { return do_div() }
+            throw "fallback"
         }
 
         function main() -> int {
             risky(1) catch (e) {
-                DivisionByZero => 1,
-                IndexOutOfBounds => 2,
+                _: AppError => 1,
+                DivisionByZero => 2,
                 _ => 3
             }
         }
@@ -505,24 +694,23 @@ async fn three_arms_index_out_of_bounds_fires() {
 
 #[tokio::test]
 #[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
-async fn three_arms_user_error_fires() {
+async fn user_class_plus_panic_plus_wildcard_string_fires() {
     let output = baml_test!(
         r#"
-        function panic_div() -> int { 1 / 0 }
-        function panic_oob() -> int { let a = [1]; a[5] }
-        function throw_str() -> int { throw "fail" }
+        class AppError { code int }
+
+        function do_div() -> int { 1 / 0 }
 
         function risky(mode: int) -> int {
-            if (mode == 0) { return panic_div() }
-            if (mode == 1) { return panic_oob() }
-            if (mode == 2) { return throw_str() }
-            99
+            if (mode == 0) { throw AppError { code: 500 } }
+            if (mode == 1) { return do_div() }
+            throw "fallback"
         }
 
         function main() -> int {
             risky(2) catch (e) {
-                DivisionByZero => 1,
-                IndexOutOfBounds => 2,
+                _: AppError => 1,
+                DivisionByZero => 2,
                 _ => 3
             }
         }
@@ -531,26 +719,147 @@ async fn three_arms_user_error_fires() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
+// ============================================================================
+// §9 — Four-arm: two panics + user class + wildcard
+// ============================================================================
+
 #[tokio::test]
-async fn three_arms_no_error() {
+async fn four_arms_division_by_zero_fires() {
     let output = baml_test!(
         r#"
-        function panic_div() -> int { 1 / 0 }
-        function panic_oob() -> int { let a = [1]; a[5] }
-        function throw_str() -> int { throw "fail" }
+        class AppError { code int }
+        function do_div() -> int { 1 / 0 }
+        function do_oob() -> int { let a = [1]; a[5] }
 
         function risky(mode: int) -> int {
-            if (mode == 0) { return panic_div() }
-            if (mode == 1) { return panic_oob() }
-            if (mode == 2) { return throw_str() }
-            99
+            if (mode == 0) { return do_div() }
+            if (mode == 1) { return do_oob() }
+            if (mode == 2) { throw AppError { code: 404 } }
+            throw "unknown"
+        }
+
+        function main() -> int {
+            risky(0) catch (e) {
+                DivisionByZero => 1,
+                IndexOutOfBounds => 2,
+                _: AppError => 3,
+                _ => 4
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
+async fn four_arms_index_out_of_bounds_fires() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+        function do_div() -> int { 1 / 0 }
+        function do_oob() -> int { let a = [1]; a[5] }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { return do_div() }
+            if (mode == 1) { return do_oob() }
+            if (mode == 2) { throw AppError { code: 404 } }
+            throw "unknown"
+        }
+
+        function main() -> int {
+            risky(1) catch (e) {
+                DivisionByZero => 1,
+                IndexOutOfBounds => 2,
+                _: AppError => 3,
+                _ => 4
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+#[tokio::test]
+#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
+async fn four_arms_user_class_fires() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+        function do_div() -> int { 1 / 0 }
+        function do_oob() -> int { let a = [1]; a[5] }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { return do_div() }
+            if (mode == 1) { return do_oob() }
+            if (mode == 2) { throw AppError { code: 404 } }
+            throw "unknown"
+        }
+
+        function main() -> int {
+            risky(2) catch (e) {
+                DivisionByZero => 1,
+                IndexOutOfBounds => 2,
+                _: AppError => 3,
+                _ => 4
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
+}
+
+#[tokio::test]
+#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
+async fn four_arms_wildcard_fires() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+        function do_div() -> int { 1 / 0 }
+        function do_oob() -> int { let a = [1]; a[5] }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { return do_div() }
+            if (mode == 1) { return do_oob() }
+            if (mode == 2) { throw AppError { code: 404 } }
+            throw "unknown"
         }
 
         function main() -> int {
             risky(3) catch (e) {
                 DivisionByZero => 1,
                 IndexOutOfBounds => 2,
-                _ => 3
+                _: AppError => 3,
+                _ => 4
+            }
+        }
+    "#
+    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(4)));
+}
+
+#[tokio::test]
+async fn four_arms_no_error() {
+    let output = baml_test!(
+        r#"
+        class AppError { code int }
+        function do_div() -> int { 1 / 0 }
+        function do_oob() -> int { let a = [1]; a[5] }
+
+        function risky(mode: int) -> int {
+            if (mode == 0) { return do_div() }
+            if (mode == 1) { return do_oob() }
+            if (mode == 2) { throw AppError { code: 404 } }
+            if (mode == 3) { throw "unknown" }
+            99
+        }
+
+        function main() -> int {
+            risky(4) catch (e) {
+                DivisionByZero => 1,
+                IndexOutOfBounds => 2,
+                _: AppError => 3,
+                _ => 4
             }
         }
     "#
@@ -559,8 +868,20 @@ async fn three_arms_no_error() {
 }
 
 // ============================================================================
-// §10 — Unmatched panic propagates past catch
+// §10 — Uncaught panics propagate
 // ============================================================================
+
+#[tokio::test]
+async fn uncaught_division_by_zero() {
+    let output = baml_test!(r#" function main() -> int { 1 / 0 } "#);
+    assert!(output.result.is_err());
+}
+
+#[tokio::test]
+async fn uncaught_index_out_of_bounds() {
+    let output = baml_test!(r#" function main() -> int { let a = [1]; a[5] } "#);
+    assert!(output.result.is_err());
+}
 
 #[tokio::test]
 #[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
@@ -570,53 +891,29 @@ async fn wrong_panic_pattern_propagates() {
         function divides() -> int { 1 / 0 }
 
         function main() -> int {
-            divides() catch (e) {
-                IndexOutOfBounds => -1
-            }
+            divides() catch (e) { IndexOutOfBounds => -1 }
         }
     "#
     );
     assert!(
         output.result.is_err(),
-        "expected DivisionByZero to propagate past IndexOutOfBounds arm"
+        "DivisionByZero should propagate past IndexOutOfBounds arm"
     );
-}
-
-#[tokio::test]
-async fn uncaught_division_by_zero() {
-    let output = baml_test!(
-        r#"
-        function main() -> int { 1 / 0 }
-    "#
-    );
-    assert!(output.result.is_err());
-}
-
-#[tokio::test]
-async fn uncaught_index_out_of_bounds() {
-    let output = baml_test!(
-        r#"
-        function main() -> int { let a = [1]; a[5] }
-    "#
-    );
-    assert!(output.result.is_err());
 }
 
 // ============================================================================
-// §11 — Panic type alias catches all panics
+// §11 — Panic type alias (union of all panics)
 // ============================================================================
 
 #[tokio::test]
 #[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
-async fn panic_alias_catches_division_by_zero() {
+async fn panic_alias_catches_any_panic() {
     let output = baml_test!(
         r#"
         function divides() -> int { 1 / 0 }
 
         function main() -> int {
-            divides() catch (e) {
-                Panic => -1
-            }
+            divides() catch (e) { Panic => -1 }
         }
     "#
     );
@@ -625,7 +922,7 @@ async fn panic_alias_catches_division_by_zero() {
 
 #[tokio::test]
 #[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
-async fn panic_alias_plus_wildcard_panic_fires() {
+async fn panic_alias_plus_wildcard_dispatch() {
     let output = baml_test!(
         r#"
         function risky(x: int) -> int {
@@ -642,27 +939,6 @@ async fn panic_alias_plus_wildcard_panic_fires() {
     "#
     );
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
-}
-
-#[tokio::test]
-#[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
-async fn panic_alias_plus_wildcard_user_error_fires() {
-    let output = baml_test!(
-        r#"
-        function risky(x: int) -> int {
-            if (x > 100) { throw "too big" }
-            1 / x
-        }
-
-        function main() -> int {
-            risky(999) catch (e) {
-                Panic => 1,
-                _ => 2
-            }
-        }
-    "#
-    );
-    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
 // ============================================================================
@@ -694,9 +970,7 @@ async fn nested_inner_catches_panic_outer_catches_rethrow() {
         function divides() -> int { 1 / 0 }
 
         function middle() -> int {
-            let x = divides() catch (e) {
-                DivisionByZero => -1
-            };
+            let x = divides() catch (e) { DivisionByZero => -1 };
             throw "recovered but failing"
         }
 
@@ -715,9 +989,7 @@ async fn rethrow_propagates_to_outer() {
         function inner() -> int { throw "original" }
 
         function middle() -> int {
-            inner() catch (e) {
-                _ => throw "rethrown"
-            }
+            inner() catch (e) { _ => throw "rethrown" }
         }
 
         function main() -> int {
@@ -790,9 +1062,7 @@ async fn caught_panic_has_accessible_fields() {
         function oob() -> int { let a = [10, 20, 30]; a[7] }
 
         function main() -> int {
-            oob() catch (e) {
-                IndexOutOfBounds => e.index
-            }
+            oob() catch (e) { IndexOutOfBounds => e.index }
         }
     "#
     );
