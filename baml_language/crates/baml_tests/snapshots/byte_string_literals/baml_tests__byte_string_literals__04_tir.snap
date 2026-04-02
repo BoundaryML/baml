@@ -32,3 +32,32 @@ function user.ByteStringIndexAccess() -> int? throws never {
     data.at(0) : int?
   }
 }
+function user.ByteStringInCondition() -> int throws never {
+  { : 1 | 0
+    if (b"<3 bytes>".length() Gt 0 : bool) : 1 | 0
+      { : 1
+        1 : 1
+      }
+    else
+      { : 0
+        0 : 0
+      }
+  }
+}
+function user.ByteStringEquality() -> bool throws never {
+  { : bool
+    b"<3 bytes>" Eq b"<3 bytes>" : bool
+  }
+}
+function user.ByteStringPassAndReturn(data: uint8array) -> int throws never {
+  { : int
+    data.length() : int
+  }
+}
+function user.ByteStringMutate() -> int? throws never {
+  { : int?
+    let data = b"<3 bytes>" : uint8array
+    data[0] = 42 : 42
+    data.at(0) : int?
+  }
+}

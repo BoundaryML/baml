@@ -700,6 +700,54 @@ impl Printable for RawString {
     }
 }
 
+#[derive(Debug)]
+pub struct ByteString {
+    pub token_span: TextRange,
+}
+impl FromCST for ByteString {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::BYTE_STRING_LITERAL)?;
+
+        // Find the `b` prefix word token to strip preceding trivia.
+        let start = node
+            .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::WORD)
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, node.text_range()))?;
+
+        Ok(ByteString {
+            token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
+        })
+    }
+}
+impl Token for ByteString {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for ByteString {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BYTE_STRING_LITERAL
+    }
+}
+impl Printable for ByteString {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(self);
+        PrintInfo { multi_lined: false }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.start(),
+            self.token_span.start() + TextSize::from(1),
+        )
+    }
+    fn rightmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.end() - TextSize::from(1),
+            self.token_span.end(),
+        )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct HeaderComment {
     pub token_span: TextRange,

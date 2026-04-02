@@ -27,3 +27,28 @@ function ByteStringIndexAccess() -> int? {
     let data = b"\x41\x42\x43";
     data.at(0)
 }
+
+// Byte strings in expressions
+function ByteStringInCondition() -> int {
+    if (b"abc".length() > 0) {
+        1
+    } else {
+        0
+    }
+}
+
+function ByteStringEquality() -> bool {
+    b"abc" == b"abc"
+}
+
+// Byte string as function argument
+function ByteStringPassAndReturn(data: uint8array) -> int {
+    data.length()
+}
+
+// Byte string index write (mutable)
+function ByteStringMutate() -> int? {
+    let data = b"\x00\x00\x00";
+    data[0] = 42;
+    data.at(0)
+}
