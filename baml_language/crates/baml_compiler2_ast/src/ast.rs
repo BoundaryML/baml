@@ -216,6 +216,80 @@ pub struct ExprBody {
     pub root_expr: Option<ExprId>,
 }
 
+impl ExprBody {
+    /// Render a short, human-readable representation of an expression.
+    /// Used in diagnostic messages to show the user what they wrote.
+    pub fn display_expr(&self, id: ExprId) -> String {
+        self.display_expr_inner(id, 0)
+    }
+
+    fn display_expr_inner(&self, id: ExprId, depth: usize) -> String {
+        if depth > 10 {
+            return "...".to_string();
+        }
+        match &self.exprs[id] {
+            Expr::Path(segments) => segments
+                .iter()
+                .map(smol_str::SmolStr::as_str)
+                .collect::<Vec<_>>()
+                .join("."),
+            Expr::FieldAccess { base, field } => {
+                format!("{}.{field}", self.display_expr_inner(*base, depth + 1))
+            }
+            Expr::OptionalFieldAccess { base, field } => {
+                format!("{}?.{field}", self.display_expr_inner(*base, depth + 1))
+            }
+            Expr::Index { base, index } => {
+                format!(
+                    "{}[{}]",
+                    self.display_expr_inner(*base, depth + 1),
+                    self.display_expr_inner(*index, depth + 1)
+                )
+            }
+            Expr::OptionalIndex { base, index } => {
+                format!(
+                    "{}?.[{}]",
+                    self.display_expr_inner(*base, depth + 1),
+                    self.display_expr_inner(*index, depth + 1)
+                )
+            }
+            Expr::Call { callee, args } => {
+                let args_str: Vec<_> = args
+                    .iter()
+                    .map(|a| self.display_expr_inner(*a, depth + 1))
+                    .collect();
+                format!(
+                    "{}({})",
+                    self.display_expr_inner(*callee, depth + 1),
+                    args_str.join(", ")
+                )
+            }
+            Expr::OptionalCall { callee, args } => {
+                let args_str: Vec<_> = args
+                    .iter()
+                    .map(|a| self.display_expr_inner(*a, depth + 1))
+                    .collect();
+                format!(
+                    "{}?.({})",
+                    self.display_expr_inner(*callee, depth + 1),
+                    args_str.join(", ")
+                )
+            }
+            Expr::Binary { op, lhs, rhs } => {
+                format!(
+                    "{} {op} {}",
+                    self.display_expr_inner(*lhs, depth + 1),
+                    self.display_expr_inner(*rhs, depth + 1)
+                )
+            }
+            Expr::OptionalChain { expr } => self.display_expr_inner(*expr, depth + 1),
+            Expr::Literal(lit) => lit.to_string(),
+            Expr::Null => "null".to_string(),
+            _ => "...".to_string(),
+        }
+    }
+}
+
 /// Parallel span storage for an `ExprBody` — maps arena IDs to source ranges.
 /// Separated so semantic queries (type checking) can ignore spans and get
 /// Salsa early-cutoff on whitespace changes.
@@ -382,6 +456,11 @@ pub enum Expr {
         base: ExprId,
         field: Name,
     },
+    /// Optional field access: `obj?.field` — short-circuits to null if base is null.
+    OptionalFieldAccess {
+        base: ExprId,
+        field: Name,
+    },
     Index {
         base: ExprId,
         index: ExprId,
@@ -390,6 +469,22 @@ pub enum Expr {
     /// Reuses `FunctionDef` with synthetic name `"<anonymous function>"`.
     /// The lambda's body gets its own `ExprBody` via `FunctionBodyDef::Expr`.
     Lambda(Box<FunctionDef>),
+    /// Optional index: `obj?.[expr]` — short-circuits to null if base is null.
+    OptionalIndex {
+        base: ExprId,
+        index: ExprId,
+    },
+    /// Optional call: `func?.(args)` — short-circuits to null if callee is null.
+    OptionalCall {
+        callee: ExprId,
+        args: Vec<ExprId>,
+    },
+    /// Wraps an expression chain containing `?.` operators.
+    /// Delimits the scope of null short-circuiting.
+    /// If any `?.` inside encounters null, the entire `OptionalChain` evaluates to null.
+    OptionalChain {
+        expr: ExprId,
+    },
     Missing,
 }
 
@@ -534,6 +629,36 @@ pub enum BinaryOp {
     Shl,
     Shr,
     Instanceof,
+    /// Null coalescing: `a ?? b` — returns `a` if non-null, else `b`.
+    NullCoalesce,
+}
+
+impl std::fmt::Display for BinaryOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            BinaryOp::Add => "+",
+            BinaryOp::Sub => "-",
+            BinaryOp::Mul => "*",
+            BinaryOp::Div => "/",
+            BinaryOp::Mod => "%",
+            BinaryOp::Eq => "==",
+            BinaryOp::Ne => "!=",
+            BinaryOp::Lt => "<",
+            BinaryOp::Le => "<=",
+            BinaryOp::Gt => ">",
+            BinaryOp::Ge => ">=",
+            BinaryOp::And => "&&",
+            BinaryOp::Or => "||",
+            BinaryOp::BitAnd => "&",
+            BinaryOp::BitOr => "|",
+            BinaryOp::BitXor => "^",
+            BinaryOp::Shl => "<<",
+            BinaryOp::Shr => ">>",
+            BinaryOp::Instanceof => "instanceof",
+            BinaryOp::NullCoalesce => "??",
+        };
+        write!(f, "{s}")
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

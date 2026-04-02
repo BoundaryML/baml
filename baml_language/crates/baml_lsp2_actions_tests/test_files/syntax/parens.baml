@@ -659,33 +659,6 @@ function foo() -> int {
 //     │       Note: Error code: E0012
 // ────╯
 // Error: unresolved name: i
-//     ╭─[ parens.baml:35:11 ]
-//     │
-//  35 │    for (;;i += x) {}
-//     │           ┬  
-//     │           ╰── unresolved name: i
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: x
-//     ╭─[ parens.baml:35:16 ]
-//     │
-//  35 │    for (;;i += x) {}
-//     │                ┬  
-//     │                ╰── unresolved name: x
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: i
-//     ╭─[ parens.baml:37:11 ]
-//     │
-//  37 │    for (;;i += x {}
-//     │           ┬  
-//     │           ╰── unresolved name: i
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: i
 //     ╭─[ parens.baml:39:10 ]
 //     │
 //  39 │    for ;;i += x) {}
@@ -709,33 +682,6 @@ function foo() -> int {
 //  41 │    for ;;i += x {}
 //     │          ┬  
 //     │          ╰── unresolved name: i
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: i
-//     ╭─[ parens.baml:45:11 ]
-//     │
-//  45 │    for (;;i = x) {}
-//     │           ┬  
-//     │           ╰── unresolved name: i
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: x
-//     ╭─[ parens.baml:45:15 ]
-//     │
-//  45 │    for (;;i = x) {}
-//     │               ┬  
-//     │               ╰── unresolved name: x
-//     │ 
-//     │ Note: Error code: E0001
-// ────╯
-// Error: unresolved name: i
-//     ╭─[ parens.baml:47:11 ]
-//     │
-//  47 │    for (;;i = x {}
-//     │           ┬  
-//     │           ╰── unresolved name: i
 //     │ 
 //     │ Note: Error code: E0001
 // ────╯

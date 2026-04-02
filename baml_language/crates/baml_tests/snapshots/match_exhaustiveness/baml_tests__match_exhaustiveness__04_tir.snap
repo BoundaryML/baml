@@ -48,23 +48,23 @@ function user.ExhaustiveWithNamedCatchAll(x: int) -> int throws never {
       1 =>
         100 : 100
       other =>
-        other Add 1 : int
+        other + 1 : int
   }
 }
 function user.GuardedOnlyNonExhaustive(x: int) -> int throws never {
   { : int
     match (x : int) : int
-      n: int if n Gt 0 =>
-        n Mul 2 : int
-      n: int if n Lt 0 =>
-        n Mul Neg 1 : int
+      n: int if n > 0 =>
+        n * 2 : int
+      n: int if n < 0 =>
+        n * Neg 1 : int
   }
 }
 function user.GuardedWithFallback(x: int) -> int throws never {
   { : int | 0
     match (x : int) : int | 0
-      n: int if n Gt 0 =>
-        n Mul 2 : int
+      n: int if n > 0 =>
+        n * 2 : int
       _ =>
         0 : 0
   }
@@ -383,7 +383,7 @@ function user.MixedPatterns(x: int) -> string throws never {
         "zero" : "zero"
       1 =>
         "one" : "one"
-      n: int if n Gt 0 =>
+      n: int if n > 0 =>
         "positive" : "positive"
       _ =>
         "negative" : "negative"
@@ -809,7 +809,7 @@ function user.MatchFunctionCallScrutinee() -> string throws never {
 }
 function user.MatchArithmeticScrutinee(a: int, b: int) -> string throws never {
   { : "zero" | "one" | "other"
-    match (a Add b : int) : "zero" | "one" | "other"
+    match (a + b : int) : "zero" | "one" | "other"
       0 =>
         "zero" : "zero"
       1 =>
@@ -820,7 +820,7 @@ function user.MatchArithmeticScrutinee(a: int, b: int) -> string throws never {
 }
 function user.MatchComplexScrutinee(x: int) -> string throws never {
   { : "x was 0" | "x was 1" | "other"
-    match (x Mul 2 Add 1 : int) : "x was 0" | "x was 1" | "other"
+    match (x * 2 + 1 : int) : "x was 0" | "x was 1" | "other"
       1 =>
         "x was 0" : "x was 0"
       3 =>

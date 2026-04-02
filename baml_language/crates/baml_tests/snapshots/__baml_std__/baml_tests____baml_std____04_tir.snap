@@ -31,9 +31,9 @@ class baml.Map$stream {
 function baml.env.get_or_panic(key: string) -> string throws never {
   { : "" | string
     let val = get(key) : string?
-    if (val Eq null : bool) : "" | string
+    if (val == null : bool) : "" | string
       { : ""
-        root.sys.panic("env var not found: " Add key) : null
+        root.sys.panic("env var not found: " + key) : null
         "" : ""
       }
     else
@@ -130,7 +130,7 @@ class baml.http.Response {
 }
 function baml.http.Response.ok(self: baml.http.Response) -> bool throws never {
   { : bool
-    self.status_code Ge 200 And self.status_code Lt 300 : bool
+    self.status_code >= 200 && self.status_code < 300 : bool
   }
 }
 class baml.http.Request$stream {
@@ -168,7 +168,7 @@ function baml.llm.PlannerState.rr_local_offset(self: baml.llm.PlannerState, clie
     let offset = 0 : 0 -> int
     for seen_name in self.rr_client_names
       { : void
-        if (seen_name Eq client_name : bool) : void
+        if (seen_name == client_name : bool) : void
           { : void
             offset Add= 1 : int
           }
@@ -180,7 +180,7 @@ function baml.llm.PlannerState.rr_pick_index(self: baml.llm.PlannerState, client
   { : int
     let local_offset = self.rr_local_offset(client_name) : int
     self.rr_client_names.push(client_name) : int
-    counter Add local_offset Mod sub_client_count : int
+    counter + local_offset % sub_client_count : int
   }
 }
 function baml.llm.render_prompt(client: baml.llm.Client, function_name: string, args: map<string, unknown>) -> baml.llm.PromptAst throws never {
@@ -252,7 +252,7 @@ function baml.llm.Client.to_primitive_client(self: baml.llm.Client) -> baml.llm.
   { : baml.llm.PrimitiveClient
     if (self.name.includes("/") : bool) : baml.llm.PrimitiveClient
       { : never
-        throw InvalidArgument { message: "Invalid short han..." Add self.name } : unknown
+        throw InvalidArgument { message: "Invalid short han..." + self.name } : unknown
       }
     else
       { : baml.llm.PrimitiveClient
@@ -289,7 +289,7 @@ function baml.llm.Client.build_attempt_with_state(self: baml.llm.Client, planner
         }
       ClientType.RoundRobin =>
         { : never[] | baml.llm.OrchestrationStep[]
-          if (self.sub_clients.length() Eq 0 : bool) : never[] | baml.llm.OrchestrationStep[]
+          if (self.sub_clients.length() == 0 : bool) : never[] | baml.llm.OrchestrationStep[]
             { : never[]
               [] : never[]
             }
@@ -313,19 +313,19 @@ function baml.llm.Client.build_plan_with_state(self: baml.llm.Client, planner_st
       r: RetryPolicy =>
         { : baml.llm.OrchestrationStep[]
           let result = [] : baml.llm.OrchestrationStep[]
-          let current_delay = r.initial_delay_ms Add 0.0 : float
+          let current_delay = r.initial_delay_ms + 0.0 : float
           { : void
             let attempt = 0 : 0 -> int
-            while attempt Le r.max_retries
+            while attempt <= r.max_retries
               { : void
                 let delay = 0 : 0 -> int
-                if (attempt Gt 0 : bool) : void
+                if (attempt > 0 : bool) : void
                   { : void
                     delay = root.math.trunc(current_delay) : int
-                    let next = current_delay Mul r.multiplier : float
-                    if (next Gt r.max_delay_ms Add 0.0 : bool) : void
+                    let next = current_delay * r.multiplier : float
+                    if (next > r.max_delay_ms + 0.0 : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms Add 0.0 : float
+                        current_delay = r.max_delay_ms + 0.0 : float
                       }
                     else
                       { : void
@@ -350,26 +350,26 @@ function baml.llm.Client.execute<T>(self: baml.llm.Client, context: baml.llm.Exe
     match (self.retry : baml.llm.RetryPolicy?) : never
       r: RetryPolicy =>
         { : never
-          let current_delay = r.initial_delay_ms Add 0.0 : float
+          let current_delay = r.initial_delay_ms + 0.0 : float
           { : void
             let attempt = 0 : 0 -> int
-            while attempt Le r.max_retries
+            while attempt <= r.max_retries
               { : never
                 let attempt_delay = inherited_delay_ms : int
-                if (attempt Gt 0 : bool) : void
+                if (attempt > 0 : bool) : void
                   { : void
                     attempt_delay = root.math.trunc(current_delay) : int
-                    let next = current_delay Mul r.multiplier : float
-                    if (next Gt r.max_delay_ms Add 0.0 : bool) : void
+                    let next = current_delay * r.multiplier : float
+                    if (next > r.max_delay_ms + 0.0 : bool) : void
                       { : void
-                        current_delay = r.max_delay_ms Add 0.0 : float
+                        current_delay = r.max_delay_ms + 0.0 : float
                       }
                     else
                       { : void
                         current_delay = next : float
                       }
                   }
-                if (attempt Eq r.max_retries : bool) : void
+                if (attempt == r.max_retries : bool) : void
                   { : void
                     attempt_delay = inherited_delay_ms : int
                   }
@@ -412,7 +412,7 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
                   catch (e)
                     _ =>
                       { : never
-                        if (active_delay_ms Gt 0 : bool) : void
+                        if (active_delay_ms > 0 : bool) : void
                           { : null
                             root.sys.sleep(active_delay_ms) : null
                           }
@@ -442,7 +442,7 @@ function baml.llm.Client.execute_once<T>(self: baml.llm.Client, context: baml.ll
         }
       ClientType.RoundRobin =>
         { : never
-          let idx = self.counter Mod self.sub_clients.length() : int
+          let idx = self.counter % self.sub_clients.length() : int
           self.counter Add= 1 : int
           let result3 = self.sub_clients[idx].execute<T>(context, active_delay_ms) : T
           return result3 : T

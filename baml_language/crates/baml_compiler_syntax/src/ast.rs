@@ -2295,7 +2295,10 @@ impl LetStmt {
                     | SyntaxKind::CALL_EXPR
                     | SyntaxKind::PATH_EXPR
                     | SyntaxKind::FIELD_ACCESS_EXPR
+                    | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                     | SyntaxKind::INDEX_EXPR
+                    | SyntaxKind::OPTIONAL_INDEX_EXPR
+                    | SyntaxKind::OPTIONAL_CALL_EXPR
                     | SyntaxKind::IF_EXPR
                     | SyntaxKind::MATCH_EXPR
                     | SyntaxKind::CATCH_EXPR
@@ -2476,8 +2479,11 @@ impl BlockExpr {
                         | SyntaxKind::BLOCK_EXPR
                         | SyntaxKind::PATH_EXPR
                         | SyntaxKind::FIELD_ACCESS_EXPR
+                        | SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR
                         | SyntaxKind::ENV_ACCESS_EXPR
                         | SyntaxKind::INDEX_EXPR
+                        | SyntaxKind::OPTIONAL_INDEX_EXPR
+                        | SyntaxKind::OPTIONAL_CALL_EXPR
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::ARRAY_LITERAL
                         | SyntaxKind::OBJECT_LITERAL

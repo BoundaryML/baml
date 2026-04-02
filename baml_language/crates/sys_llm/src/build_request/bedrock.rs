@@ -12,7 +12,7 @@ use std::sync::Arc;
 use aws_credential_types::Credentials;
 use aws_sdk_bedrockruntime as bedrock;
 use baml_base::MediaKind;
-use baml_builtins::{PromptAst, PromptAstSimple};
+use baml_builtins2::{PromptAst, PromptAstSimple};
 use bedrock::types::{
     ContentBlock, ConversationRole, DocumentBlock, DocumentFormat, DocumentSource, ImageBlock,
     ImageFormat, ImageSource, InferenceConfiguration, Message, SystemContentBlock, VideoBlock,
@@ -313,12 +313,12 @@ enum ResolvedMedia {
 }
 
 fn resolve_media_source(
-    content: &baml_builtins::MediaContent,
+    content: &baml_builtins2::MediaContent,
     kind_label: &str,
 ) -> Result<ResolvedMedia, BuildRequestError> {
     use base64::Engine;
     match content {
-        baml_builtins::MediaContent::Url {
+        baml_builtins2::MediaContent::Url {
             url,
             base64_data: None,
         } => {
@@ -330,12 +330,12 @@ fn resolve_media_source(
                 )))
             }
         }
-        baml_builtins::MediaContent::Base64 { base64_data, .. }
-        | baml_builtins::MediaContent::Url {
+        baml_builtins2::MediaContent::Base64 { base64_data, .. }
+        | baml_builtins2::MediaContent::Url {
             base64_data: Some(base64_data),
             ..
         }
-        | baml_builtins::MediaContent::File {
+        | baml_builtins2::MediaContent::File {
             base64_data: Some(base64_data),
             ..
         } => {
@@ -348,7 +348,7 @@ fn resolve_media_source(
                 })?;
             Ok(ResolvedMedia::Bytes(bytes))
         }
-        baml_builtins::MediaContent::File {
+        baml_builtins2::MediaContent::File {
             base64_data: None, ..
         } => Err(BuildRequestError::FileNotResolved(format!(
             "{kind_label} file content was not resolved properly"
@@ -405,8 +405,8 @@ fn s3_location(uri: String) -> bedrock::types::S3Location {
 }
 
 fn media_to_content_block(
-    media: &baml_builtins::MediaValue,
-    content: &baml_builtins::MediaContent,
+    media: &baml_builtins2::MediaValue,
+    content: &baml_builtins2::MediaContent,
 ) -> Result<Vec<ContentBlock>, BuildRequestError> {
     let mime = super::mime_type_as_ok(media)?;
     let kind_label = media.kind.to_string();
@@ -599,7 +599,7 @@ fn json_value_to_document(value: &serde_json::Value) -> Option<aws_smithy_types:
 mod tests {
     use std::sync::Arc;
 
-    use baml_builtins::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
+    use baml_builtins2::{MediaContent, MediaValue, PromptAst, PromptAstSimple};
     use bex_external_types::AsBexExternalValue;
 
     use super::*;

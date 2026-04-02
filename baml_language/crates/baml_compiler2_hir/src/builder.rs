@@ -646,7 +646,7 @@ impl<'db> SemanticIndexBuilder<'db> {
     }
 
     fn lower_generator(&mut self, g: &ast::GeneratorDef) {
-        let local_id = self.item_tree.alloc_generator(&g.name);
+        let local_id = self.item_tree.alloc_generator(g);
         let loc = GeneratorLoc::new(self.db, self.file, local_id);
         self.value_contributions.push((
             g.name.clone(),

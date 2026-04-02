@@ -13,7 +13,7 @@ mod common;
 
 use std::sync::Arc;
 
-use baml_builtins::{MediaContent, MediaValue};
+use baml_builtins2::{MediaContent, MediaValue};
 use baml_type::MediaKind;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_external_types::BexExternalAdt;

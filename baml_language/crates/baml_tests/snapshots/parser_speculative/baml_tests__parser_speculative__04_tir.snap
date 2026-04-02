@@ -38,8 +38,8 @@ class user.JsonData {
 }
 function user.ProcessData(data: user.JsonData) -> string throws never {
   { : never
-    let result = data.field1 Add data.field2 : int
-    if (result Gt 100 : bool) : void
+    let result = data.field1 + data.field2 : int
+    if (result > 100 : bool) : void
       { : never
         return "high" : "high"
       }
@@ -88,23 +88,23 @@ class user.Analysis {
 function user.ProcessAnalysis(analysis: user.Analysis) -> string throws never {
   { : never
     let score = analysis.score : float
-    if (score Gt 0.8 : bool) : never
+    if (score > 0.8 : bool) : never
       { : never
-        return "Very positive: " Add analysis.sentiment : string
+        return "Very positive: " + analysis.sentiment : string
       }
     else
-      if (score Gt 0.5 : bool) : never
+      if (score > 0.5 : bool) : never
         { : never
-          return "Positive: " Add analysis.sentiment : string
+          return "Positive: " + analysis.sentiment : string
         }
       else
-        if (score Gt 0.2 : bool) : never
+        if (score > 0.2 : bool) : never
           { : never
-            return "Neutral: " Add analysis.sentiment : string
+            return "Neutral: " + analysis.sentiment : string
           }
         else
           { : never
-            return "Negative: " Add analysis.sentiment : string
+            return "Negative: " + analysis.sentiment : string
           }
   }
 }
@@ -125,7 +125,7 @@ function user.ChainedProcess$parse(json: string) -> string throws never {
 }
 function user.SimpleCalc(a: int, b: int) -> int throws never {
   { : never
-    return a Add b Mul 2 : int
+    return a + b * 2 : int
   }
 }
 class user.Analysis$stream {

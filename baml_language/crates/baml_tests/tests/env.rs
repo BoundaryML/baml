@@ -3,7 +3,7 @@
 #![allow(unsafe_code)]
 
 use baml_tests::baml_test;
-use bex_engine::{BexExternalValue, Ty};
+use bex_engine::BexExternalValue;
 
 #[tokio::test]
 async fn env_get_or_panic_existing_var() {
@@ -71,10 +71,7 @@ async fn env_get_existing_var() {
     "#);
     assert_eq!(
         output.result,
-        Ok(BexExternalValue::optional(
-            BexExternalValue::String("hello_env".to_string()),
-            Ty::string()
-        ))
+        Ok(BexExternalValue::String("hello_env".to_string()))
     );
 }
 
@@ -97,13 +94,7 @@ async fn env_get_missing_var_returns_null() {
         return
     }
     "#);
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::optional(
-            BexExternalValue::Null,
-            Ty::string()
-        ))
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::Null));
 }
 
 #[tokio::test]

@@ -396,19 +396,14 @@ pub(crate) fn maybe_wrap_union(
                 metadata,
             })
         }
-        Ty::Optional(inner, opt_attr) => {
-            let selected = if matches!(value, BexExternalValue::Null) {
-                Ty::Null {
-                    attr: opt_attr.clone(),
-                }
+        Ty::Optional(inner, _opt_attr) => {
+            // Optional is just T | null. If the value is null, return Null directly.
+            // If non-null, recurse into the inner type to preserve union metadata.
+            if matches!(value, BexExternalValue::Null) {
+                Ok(BexExternalValue::Null)
             } else {
-                (**inner).clone()
-            };
-            let metadata = UnionMetadata::new(declared_type.clone(), selected);
-            Ok(BexExternalValue::Union {
-                value: Box::new(value),
-                metadata,
-            })
+                maybe_wrap_union(value, inner)
+            }
         }
         _ => Ok(value),
     }

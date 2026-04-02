@@ -85,6 +85,7 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::At => SyntaxKind::AT,
         TokenKind::AtAt => SyntaxKind::AT_AT,
         TokenKind::Pipe => SyntaxKind::PIPE,
+        TokenKind::QuestionDot => SyntaxKind::QUESTION_DOT,
         TokenKind::Question => SyntaxKind::QUESTION,
 
         // Assignment operators
@@ -3331,6 +3332,23 @@ impl<'a> Parser<'a> {
                 self.finish_node();
                 // Continue to potentially parse function call
                 continue;
+            } else if op == TokenKind::Question
+                && self.peek(1).map(|t| t.kind) == Some(TokenKind::Question)
+            {
+                // Null coalescing operator `??`
+                // Lexed as two Question tokens to avoid ambiguity with `int??` (double optional).
+                // Binding power: below ||/&& (6/8), above assignment (2).
+                let left_bp = 4u8;
+                if left_bp < min_bp {
+                    break;
+                }
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                // Consume both ? tokens, emitting a single QUESTION_QUESTION node
+                self.bump(); // first ?
+                self.bump(); // second ?
+                self.parse_expr_bp(5); // right_bp = 5 (left associative)
+                self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
+                self.finish_node();
             } else if op == TokenKind::LParen {
                 // Function call
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
@@ -3345,6 +3363,36 @@ impl<'a> Parser<'a> {
                 self.parse_expr();
                 self.expect(TokenKind::RBracket);
                 self.finish_node();
+            } else if op == TokenKind::QuestionDot {
+                // Optional chaining: obj?.field, obj?.[expr], obj?.(args)
+                let lhs_start = self.find_previous_expr_start_after(expr_start);
+                if self.peek_after_question_dot() == Some(TokenKind::LParen) {
+                    // obj?.(args) — optional call
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_CALL_EXPR);
+                    self.bump(); // ?.
+                    self.parse_call_args();
+                    self.finish_node();
+                } else if self.peek_after_question_dot() == Some(TokenKind::LBracket) {
+                    // obj?.[expr] — optional index
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_INDEX_EXPR);
+                    self.bump(); // ?.
+                    self.bump(); // [
+                    self.parse_expr();
+                    self.expect(TokenKind::RBracket);
+                    self.finish_node();
+                } else {
+                    // obj?.field — optional field access
+                    self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_FIELD_ACCESS_EXPR);
+                    self.bump(); // ?.
+                    if self.at(TokenKind::Word) {
+                        self.bump();
+                    } else {
+                        self.error_unexpected_token(
+                            "Expected field name, '[', or '(' after '?.'".to_string(),
+                        );
+                    }
+                    self.finish_node();
+                }
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
                 // Field access on a complex expression.
                 //
@@ -3441,6 +3489,12 @@ impl<'a> Parser<'a> {
         }
 
         min_index
+    }
+
+    /// Peek at the next non-trivia token after the current `?.` token.
+    /// Used to disambiguate `?.field` vs `?.[expr]` vs `?.(args)`.
+    fn peek_after_question_dot(&self) -> Option<TokenKind> {
+        self.peek(1).map(|t| t.kind)
     }
 
     /// Check if the most recent expression looks like a constructor/type name
@@ -4109,34 +4163,34 @@ impl<'a> Parser<'a> {
             }
 
             // Logical OR (left associative)
-            OrOr => (3, 4),
+            OrOr => (6, 7),
 
             // Logical AND (left associative)
-            AndAnd => (5, 6),
+            AndAnd => (8, 9),
 
             // Bitwise OR (left associative)
-            Pipe => (7, 8),
+            Pipe => (10, 11),
 
             // Bitwise XOR (left associative)
-            Caret => (9, 10),
+            Caret => (12, 13),
 
             // Bitwise AND (left associative)
-            And => (11, 12),
+            And => (14, 15),
 
             // Equality (left associative)
-            EqualsEquals | NotEquals => (13, 14),
+            EqualsEquals | NotEquals => (16, 17),
 
             // Comparison (left associative) - includes instanceof
-            Less | Greater | LessEquals | GreaterEquals | Instanceof => (15, 16),
+            Less | Greater | LessEquals | GreaterEquals | Instanceof => (18, 19),
 
             // Bitwise shift (left associative)
-            LessLess | GreaterGreater => (17, 18),
+            LessLess | GreaterGreater => (20, 21),
 
             // Addition/Subtraction (left associative)
-            Plus | Minus => (19, 20),
+            Plus | Minus => (22, 23),
 
             // Multiplication/Division/Modulo (left associative)
-            Star | Slash | Percent => (21, 22),
+            Star | Slash | Percent => (24, 25),
 
             _ => return None,
         })
