@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.$init_test(registry: testing.Registry) -> null {
+    load_const "with as field"
+    make_closure .<lambda($init_test, 0)>, 0
+    load_const null
+    load_var registry
+    load_const "register_test"
+    load_map_element
+    call_indirect
+    pop 1
+    load_const null
+    return
+}
+
+function user.make_foo() -> Foo {
+    alloc_instance Foo
+    copy 0
+    load_const 1
+    store_field .x
+    return
+}
+
+function user.use_with_as_var() -> int {
+    load_const 42
+    return
+}

@@ -7,7 +7,7 @@ SOURCE_FILE
     KW_TESTSET "testset"
     STRING_LITERAL "with shared setup"
       QUOTE """
-      KW_WITH "with"
+      WORD "with"
       WORD "shared"
       WORD "setup"
       QUOTE """

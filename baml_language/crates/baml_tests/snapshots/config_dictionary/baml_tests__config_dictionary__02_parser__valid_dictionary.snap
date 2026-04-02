@@ -113,7 +113,7 @@ SOURCE_FILE
               STRING_LITERAL "value with spaces"
                 QUOTE """
                 WORD "value"
-                KW_WITH "with"
+                WORD "with"
                 WORD "spaces"
                 QUOTE """
           CONFIG_ITEM

@@ -50,7 +50,6 @@ fn token_kind_to_syntax_kind(kind: TokenKind) -> SyntaxKind {
         TokenKind::Watch => SyntaxKind::KW_WATCH,
         TokenKind::Instanceof => SyntaxKind::KW_INSTANCEOF,
         TokenKind::Dynamic => SyntaxKind::KW_DYNAMIC,
-        TokenKind::With => SyntaxKind::KW_WITH,
         TokenKind::Match => SyntaxKind::KW_MATCH,
         TokenKind::Catch => SyntaxKind::KW_CATCH,
         TokenKind::CatchAll => SyntaxKind::KW_CATCH_ALL,
@@ -307,6 +306,40 @@ impl<'a> Parser<'a> {
     /// Use this inside string parsing where // should not be treated as comment start.
     fn at_raw(&self, kind: TokenKind) -> bool {
         self.current_raw().map(|t| t.kind == kind).unwrap_or(false)
+    }
+
+    /// Check if the current token is a `Word` with the given text.
+    /// Used for contextual keywords like `with` that should not be reserved globally.
+    fn at_contextual_kw(&self, kw: &str) -> bool {
+        self.current()
+            .map(|t| t.kind == TokenKind::Word && t.text == kw)
+            .unwrap_or(false)
+    }
+
+    /// Consume the current `Word("with")` token, re-labelling it as `KW_WITH`
+    /// in the syntax tree. Handles leading trivia just like [`Self::bump`].
+    fn bump_contextual_with(&mut self) {
+        // Emit leading trivia tokens (whitespace/newlines) before the keyword.
+        while self.current < self.tokens.len() {
+            let token = &self.tokens[self.current];
+            if matches!(token.kind, TokenKind::Whitespace | TokenKind::Newline) {
+                self.events.push(Event::Token {
+                    kind: token_kind_to_syntax_kind(token.kind),
+                    text: token.text.clone(),
+                });
+                self.current += 1;
+                continue;
+            }
+            break;
+        }
+        // Emit the Word("with") token as KW_WITH
+        if self.current < self.tokens.len() {
+            self.events.push(Event::Token {
+                kind: SyntaxKind::KW_WITH,
+                text: self.tokens[self.current].text.clone(),
+            });
+            self.current += 1;
+        }
     }
 
     /// Check if the current token can start a type expression.
@@ -3490,6 +3523,16 @@ impl<'a> Parser<'a> {
     /// - Function calls (e.g., `func()`)
     /// - Any other complex expression
     fn looks_like_object_constructor(&self) -> bool {
+        // Two conditions must hold:
+        // 1. The preceding expression looks like a type name (Word, PATH_EXPR, etc.)
+        // 2. The content after `{` looks like `<word> :` (field initializer),
+        //    not arbitrary statements. This prevents `Name { body_code }` from
+        //    being mis-parsed as an object literal.
+
+        if !self.brace_content_looks_like_fields() {
+            return false;
+        }
+
         // Walk backward to find the most recent complete expression
         let mut depth = 0;
         for event in self.events.iter().rev() {
@@ -3518,6 +3561,68 @@ impl<'a> Parser<'a> {
             }
         }
         false
+    }
+
+    /// Peek past the current `{` token to check if the brace content starts with
+    /// `<word> :` or `...` (spread), which indicates an object literal / constructor.
+    /// If it starts with something else (e.g. a statement, keyword, or expression),
+    /// the `{` is more likely a block body.
+    fn brace_content_looks_like_fields(&self) -> bool {
+        // current token is `{` — peek past it and any trivia
+        let mut i = 1;
+        loop {
+            match self.peek(i) {
+                Some(t) if matches!(t.kind, TokenKind::Whitespace | TokenKind::Newline) => {
+                    i += 1;
+                }
+                Some(t) if t.kind == TokenKind::Slash => {
+                    // Could be start of a `//` comment — skip to end of line
+                    i += 1;
+                    loop {
+                        match self.peek(i) {
+                            Some(t) if t.kind == TokenKind::Newline => {
+                                i += 1;
+                                break;
+                            }
+                            Some(_) => i += 1,
+                            None => return false,
+                        }
+                    }
+                }
+                Some(t) => {
+                    // Spread operator: `{ ...expr }` is an object literal
+                    if t.kind == TokenKind::DotDotDot {
+                        return true;
+                    }
+                    // `{ }` — empty braces, treat as object literal
+                    if t.kind == TokenKind::RBrace {
+                        return true;
+                    }
+                    // Check for `<word> :` pattern
+                    if t.kind == TokenKind::Word {
+                        // Peek one more past trivia for `:`
+                        let mut j = i + 1;
+                        loop {
+                            match self.peek(j) {
+                                Some(t)
+                                    if matches!(
+                                        t.kind,
+                                        TokenKind::Whitespace | TokenKind::Newline
+                                    ) =>
+                                {
+                                    j += 1;
+                                }
+                                Some(t) => return t.kind == TokenKind::Colon,
+                                None => return false,
+                            }
+                        }
+                    }
+                    // Anything else (keyword, literal, operator) → not a field list
+                    return false;
+                }
+                None => return false,
+            }
+        }
     }
 
     /// Wrap events from `start_index` onwards in a new node
@@ -4621,9 +4726,9 @@ impl<'a> Parser<'a> {
             }
 
             // Optional `with` clause for test runner
-            if p.at(TokenKind::With) {
-                p.bump(); // consume 'with'
-                p.parse_expr(); // runner expression (e.g., testing.Quorum(5, 3))
+            if p.at_contextual_kw("with") {
+                p.bump_contextual_with();
+                p.parse_expr();
             }
 
             // Block body — reuse existing expression body parsing
@@ -4648,9 +4753,9 @@ impl<'a> Parser<'a> {
             }
 
             // Optional `with` clause for testset runner
-            if p.at(TokenKind::With) {
-                p.bump(); // consume 'with'
-                p.parse_expr(); // runner expression (e.g., testing.PassRate(0.7))
+            if p.at_contextual_kw("with") {
+                p.bump_contextual_with();
+                p.parse_expr();
             }
 
             // Block body — parse as a block containing statements + nested test/testset

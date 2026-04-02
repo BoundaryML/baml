@@ -390,7 +390,6 @@ impl SyntaxKind {
                 | Self::KW_WATCH
                 | Self::KW_INSTANCEOF
                 | Self::KW_DYNAMIC
-                | Self::KW_WITH
         )
     }
 }

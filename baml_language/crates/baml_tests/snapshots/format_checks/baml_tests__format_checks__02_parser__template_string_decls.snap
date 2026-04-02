@@ -43,7 +43,7 @@ SOURCE_FILE
         WORD "A"
         WORD "static"
         WORD "template"
-        KW_WITH "with"
+        WORD "with"
         WORD "no"
         WORD "parameters"
         DOT "."

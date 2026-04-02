@@ -95,8 +95,6 @@ pub enum TokenKind {
     Instanceof,
     #[token("dynamic")]
     Dynamic,
-    #[token("with")]
-    With,
 
     // ============ Identifiers and Literals ============
     /// Any identifier-like word (non-keyword)
@@ -291,7 +289,6 @@ impl std::fmt::Display for TokenKind {
             TokenKind::Watch => "watch",
             TokenKind::Instanceof => "instanceof",
             TokenKind::Dynamic => "dynamic",
-            TokenKind::With => "with",
 
             // Identifiers and literals
             TokenKind::Word => "identifier",

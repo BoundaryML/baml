@@ -373,7 +373,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [parse] Error: Expected top-level declaration, found identifier
 
-  [parse] Error: Expected top-level declaration, found with
+  [parse] Error: Expected top-level declaration, found identifier
 
   [parse] Error: Expected top-level declaration, found identifier
 

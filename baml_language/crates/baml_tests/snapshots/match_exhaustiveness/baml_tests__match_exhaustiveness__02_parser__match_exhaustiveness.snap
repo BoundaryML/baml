@@ -1843,7 +1843,7 @@ SOURCE_FILE
             STRING_LITERAL "success with body"
               QUOTE """
               WORD "success"
-              KW_WITH "with"
+              WORD "with"
               WORD "body"
               QUOTE """
             COMMA ","

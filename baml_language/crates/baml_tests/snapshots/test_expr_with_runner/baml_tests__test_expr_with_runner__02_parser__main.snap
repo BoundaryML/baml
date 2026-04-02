@@ -7,7 +7,7 @@ SOURCE_FILE
     KW_TEST "test"
     STRING_LITERAL "with quorum"
       QUOTE """
-      KW_WITH "with"
+      WORD "with"
       WORD "quorum"
       QUOTE """
     KW_WITH "with"

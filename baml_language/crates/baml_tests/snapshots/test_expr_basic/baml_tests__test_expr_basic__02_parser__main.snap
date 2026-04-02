@@ -36,7 +36,7 @@ SOURCE_FILE
     KW_TEST "test"
     STRING_LITERAL "with not_null"
       QUOTE """
-      KW_WITH "with"
+      WORD "with"
       WORD "not_null"
       QUOTE """
     BLOCK_EXPR

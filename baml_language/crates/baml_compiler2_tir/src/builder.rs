@@ -2351,6 +2351,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     | "errors"
                     | "unstable"
             );
+            // Don't report "unresolved name" for dependency package names —
+            // they'll be resolved by the parent FieldAccess expression.
+            let is_dep_package = self.res_ctx.dep_interfaces.iter().any(|(n, _)| n == name);
             if matches!(ty, Ty::Unknown { .. })
                 && !self.locals.contains_key(name)
                 && self
@@ -2362,6 +2365,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .lookup_type(&self.ns_context, name)
                     .is_none()
                 && !is_baml_ns_shorthand
+                && !is_dep_package
             {
                 self.context
                     .report_simple(TirTypeError::UnresolvedName { name: name.clone() }, expr_id);
@@ -3250,7 +3254,22 @@ impl<'db> TypeInferenceBuilder<'db> {
             .chain(std::iter::once(member))
             .cloned()
             .collect();
-        self.resolve_package_item(pkg_items, &full_path, at)
+        let result = self.resolve_package_item(pkg_items, &full_path, at);
+        if result.is_none() {
+            // Package was found but the member doesn't exist — report a clear error
+            // with the full dotted path as context (e.g. "unresolved member: testing.Quorum").
+            let base_path = segments.join(".");
+            self.context.report_simple(
+                TirTypeError::UnresolvedName {
+                    name: Name::new(format!("{base_path}.{member}")),
+                },
+                at,
+            );
+            return Some(Ty::Unknown {
+                attr: TyAttr::default(),
+            });
+        }
+        result
     }
 
     fn try_primitive_static_access(

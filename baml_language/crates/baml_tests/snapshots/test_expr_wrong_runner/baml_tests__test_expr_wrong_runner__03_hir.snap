@@ -1,0 +1,7 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.$init_test(registry: testing.Registry) -> ?  [expr] {
+  { registry.register_test("wrong runner type", () -> { {  } assert.is_true(true) }, 42); registry.register_test("string as runner", () -> { {  } assert.is_true(true) }, "not a runner"); registry.register_test_set("wrong testset runner", (testset: testing.TestSetCollector) -> { { testset.register_test("inner", () -> { {  } assert.is_true(true) }, null) } null }, 42) } null
+}

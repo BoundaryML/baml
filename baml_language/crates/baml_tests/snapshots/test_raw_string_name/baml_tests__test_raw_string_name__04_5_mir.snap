@@ -1,0 +1,128 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.$init_test(registry: testing.Registry) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.Registry // registry // param
+    let _2: void
+    let _3: null
+    let _4: void
+    let _5: void
+    let _6: string
+    let _7: void
+    let _8: void
+    let _9: void
+    let _10: string
+    let _11: void
+
+    bb0: {
+        _3 = make_closure lambda[0]();
+        _2 = call const fn assert.is_true(const "raw string name", copy _3, const null) -> [bb1];
+    }
+
+    bb1: {
+        _6 = const "register_test";
+        _5 = copy _1[_6];
+        _7 = make_closure lambda[1]();
+        _4 = call copy _5(const "has \"quotes\" inside", copy _7, const null) -> [bb2];
+    }
+
+    bb2: {
+        _10 = const "register_test_set";
+        _9 = copy _1[_10];
+        _11 = make_closure lambda[2]();
+        _8 = call copy _9(const "raw testset name", copy _11, const null) -> [bb3];
+    }
+
+    bb3: {
+        _0 = const null;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda($init_test, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = call const fn assert.is_true(const true) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[1]
+fn .<lambda($init_test, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = call const fn assert.is_true(const true) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[2]
+fn .<lambda($init_test, 2)>(testset: testing.TestSetCollector) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.TestSetCollector // testset // param
+    let _2: void
+    let _3: void
+    let _4: string
+    let _5: void
+
+    bb0: {
+        _4 = const "register_test";
+        _3 = copy _1[_4];
+        _5 = make_closure lambda[0]();
+        _2 = call copy _3(const "nested raw name", copy _5, const null) -> [bb1];
+    }
+
+    bb1: {
+        _0 = const null;
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[0]
+fn .<lambda(<lambda($init_test, 2)>, 3)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = call const fn assert.is_true(const true) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}

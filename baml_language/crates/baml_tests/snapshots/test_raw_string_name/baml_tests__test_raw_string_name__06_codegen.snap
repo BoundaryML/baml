@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.$init_test(registry: testing.Registry) -> null {
+    load_const "raw string name"
+    make_closure .<lambda($init_test, 0)>, 0
+    load_const null
+    call assert.is_true
+    pop 1
+    load_const "has "quotes" inside"
+    make_closure .<lambda($init_test, 1)>, 0
+    load_const null
+    load_var registry
+    load_const "register_test"
+    load_map_element
+    call_indirect
+    pop 1
+    load_const "raw testset name"
+    make_closure .<lambda($init_test, 2)>, 0
+    load_const null
+    load_var registry
+    load_const "register_test_set"
+    load_map_element
+    call_indirect
+    pop 1
+    load_const null
+    return
+}

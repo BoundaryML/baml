@@ -99,6 +99,77 @@ pub(crate) fn lower_testset_block_node(
     ctx.finish(root_expr)
 }
 
+/// Lower a runner `SyntaxElement` (node or token) into an `ExprId` within the given context.
+///
+/// If the element is a node (e.g. `CALL_EXPR`, `OBJECT_LITERAL`), delegates to `lower_expr`.
+/// If the element is a bare token (e.g. `INTEGER_LITERAL`, `WORD`), lowers inline.
+pub(crate) fn lower_runner_element(
+    ctx: &mut InitTestContext,
+    element: &baml_compiler_syntax::SyntaxElement,
+) -> ExprId {
+    let span = element.text_range();
+    match element {
+        rowan::NodeOrToken::Node(node) => {
+            // Full expression node — use the standard lowering
+            ctx.inner.lower_expr(node)
+        }
+        rowan::NodeOrToken::Token(token) => {
+            let kind = token.kind();
+            let text = token.text().to_string();
+            let expr = match kind {
+                SyntaxKind::INTEGER_LITERAL => {
+                    if let Ok(v) = text.parse::<i64>() {
+                        Expr::Literal(Literal::Int(v))
+                    } else {
+                        Expr::Missing
+                    }
+                }
+                SyntaxKind::FLOAT_LITERAL => Expr::Literal(Literal::String(text)),
+                SyntaxKind::WORD => match text.as_str() {
+                    "null" => Expr::Null,
+                    "true" => Expr::Literal(Literal::Bool(true)),
+                    "false" => Expr::Literal(Literal::Bool(false)),
+                    _ => Expr::Path(vec![Name::new(&text)]),
+                },
+                _ => Expr::Missing,
+            };
+            ctx.inner.alloc_expr(expr, span)
+        }
+    }
+}
+
+/// Context for building the `$init_test` function body.
+///
+/// Wraps a `LoweringContext` so that runner expressions can be lowered
+/// directly into the same arena (no IIFE indirection needed).
+pub(crate) struct InitTestContext {
+    inner: LoweringContext,
+}
+
+impl InitTestContext {
+    pub(crate) fn new() -> Self {
+        let mut inner = LoweringContext::new();
+        inner.names_in_scope.insert("registry".to_string());
+        Self { inner }
+    }
+
+    pub(crate) fn alloc_expr(&mut self, expr: Expr, span: text_size::TextRange) -> ExprId {
+        self.inner.alloc_expr(expr, span)
+    }
+
+    pub(crate) fn alloc_stmt(
+        &mut self,
+        stmt: Stmt,
+        span: text_size::TextRange,
+    ) -> crate::ast::StmtId {
+        self.inner.alloc_stmt(stmt, span)
+    }
+
+    pub(crate) fn finish(self, root_expr: Option<ExprId>) -> (ExprBody, AstSourceMap) {
+        self.inner.finish(root_expr)
+    }
+}
+
 /// Helper enum for building pattern elements during lowering.
 enum PatternElement {
     /// Accumulated dotted path segments.
@@ -2418,7 +2489,7 @@ impl LoweringContext {
             name_span: span,
         };
 
-        // <collector>.register_test(name_expr, lambda, null)
+        // <collector>.register_test(name_expr, lambda, runner_or_null)
         let collector_ref = self.alloc_expr(Expr::Path(vec![collector_name]), span);
         let method_target = self.alloc_expr(
             Expr::FieldAccess {
@@ -2428,7 +2499,31 @@ impl LoweringContext {
             span,
         );
         let lambda_arg = self.alloc_expr(Expr::Lambda(Box::new(lambda_def)), span);
-        let runner_arg = self.alloc_expr(Expr::Null, span);
+        let runner_arg = match crate::lower_cst::extract_runner_element(node) {
+            Some(rowan::NodeOrToken::Node(runner_node)) => self.lower_expr(&runner_node),
+            Some(rowan::NodeOrToken::Token(token)) => {
+                // For bare tokens (e.g. integer literals), lower inline
+                let text = token.text().to_string();
+                let expr = match token.kind() {
+                    SyntaxKind::INTEGER_LITERAL => {
+                        if let Ok(v) = text.parse::<i64>() {
+                            Expr::Literal(Literal::Int(v))
+                        } else {
+                            Expr::Missing
+                        }
+                    }
+                    SyntaxKind::WORD => match text.as_str() {
+                        "null" => Expr::Null,
+                        "true" => Expr::Literal(Literal::Bool(true)),
+                        "false" => Expr::Literal(Literal::Bool(false)),
+                        _ => Expr::Path(vec![Name::new(&text)]),
+                    },
+                    _ => Expr::Missing,
+                };
+                self.alloc_expr(expr, span)
+            }
+            None => self.alloc_expr(Expr::Null, span),
+        };
 
         self.alloc_expr(
             Expr::Call {
@@ -2494,7 +2589,7 @@ impl LoweringContext {
             name_span: span,
         };
 
-        // <collector>.register_test_set(name_expr, sub_collector_lambda, null)
+        // <collector>.register_test_set(name_expr, sub_collector_lambda, runner_or_null)
         let collector_ref = self.alloc_expr(Expr::Path(vec![collector_name]), span);
         let method_target = self.alloc_expr(
             Expr::FieldAccess {
@@ -2504,7 +2599,31 @@ impl LoweringContext {
             span,
         );
         let sub_collector_arg = self.alloc_expr(Expr::Lambda(Box::new(sub_collector_def)), span);
-        let runner_arg = self.alloc_expr(Expr::Null, span);
+        let runner_arg = match crate::lower_cst::extract_runner_element(node) {
+            Some(rowan::NodeOrToken::Node(runner_node)) => self.lower_expr(&runner_node),
+            Some(rowan::NodeOrToken::Token(token)) => {
+                // For bare tokens (e.g. integer literals), lower inline
+                let text = token.text().to_string();
+                let expr = match token.kind() {
+                    SyntaxKind::INTEGER_LITERAL => {
+                        if let Ok(v) = text.parse::<i64>() {
+                            Expr::Literal(Literal::Int(v))
+                        } else {
+                            Expr::Missing
+                        }
+                    }
+                    SyntaxKind::WORD => match text.as_str() {
+                        "null" => Expr::Null,
+                        "true" => Expr::Literal(Literal::Bool(true)),
+                        "false" => Expr::Literal(Literal::Bool(false)),
+                        _ => Expr::Path(vec![Name::new(&text)]),
+                    },
+                    _ => Expr::Missing,
+                };
+                self.alloc_expr(expr, span)
+            }
+            None => self.alloc_expr(Expr::Null, span),
+        };
 
         self.alloc_expr(
             Expr::Call {

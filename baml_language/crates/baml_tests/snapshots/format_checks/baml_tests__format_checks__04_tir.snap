@@ -1282,14 +1282,6 @@ function user.AssertStmts(x: int, y: int) -> int throws never {
     x Gt 0 And x Lt 100 And y Gt 0 And y Lt 100 And x Ne y And x Add y Lt 150 And x Mul y Gt 10 And x Sub y Ne 42 And x Mod 7 Eq 0 : bool
     x : int
   }
-  !! 17672..17678: unresolved name: assert
-  !! 17690..17696: unresolved name: assert
-  !! 17795..17801: unresolved name: assert
-  !! 18015..18021: unresolved name: assert
-  !! 18216..18222: unresolved name: assert
-  !! 18400..18406: unresolved name: assert
-  !! 18665..18671: unresolved name: assert
-  !! 19002..19008: unresolved name: assert
 }
 class user.MatchSuccess {
   data: string

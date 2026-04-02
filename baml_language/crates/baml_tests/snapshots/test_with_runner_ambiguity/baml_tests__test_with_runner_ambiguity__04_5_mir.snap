@@ -1,0 +1,81 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== MIR2 ===
+fn user.$init_test(registry: testing.Registry) -> null {
+    // Locals:
+    let _0: null // _0 // return
+    let _1: testing.Registry // registry // param
+    let _2: void
+    let _3: null
+    let _4: string
+    let _5: null
+
+    bb0: {
+        _3 = make_closure lambda[0]();
+        _2 = call const fn assert.is_true(const "simple runner", copy _3, const null) -> [bb1];
+    }
+
+    bb1: {
+        _4 = const "register_test";
+        _5 = call const fn baml.sys.panic(const "unresolved name: testing") -> [bb2];
+    }
+
+    bb2: {
+        unreachable;
+    }
+}
+
+// lambda[0]
+fn .<lambda($init_test, 0)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = call const fn assert.is_true(const true) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[1]
+fn .<lambda($init_test, 1)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = call const fn assert.is_true(const true) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
+
+// lambda[2]
+fn .<lambda($init_test, 2)>() -> null {
+    // Locals:
+    let _0: null // _0 // return
+
+    bb0: {
+        _0 = call const fn assert.is_true(const true) -> [bb1];
+    }
+
+    bb1: {
+        goto -> bb2;
+    }
+
+    bb2: {
+        return;
+    }
+}
