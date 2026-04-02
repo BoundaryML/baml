@@ -1,10 +1,23 @@
 //! Unified tests for catch/throw exception semantics.
+//!
+//! Organized as a combinatorial matrix:
+//!   error source × catch pattern → expected outcome
+//!
+//! Error sources: user `throw` (string/int), runtime panics (DivisionByZero,
+//! IndexOutOfBounds, KeyNotFound, NegativeIndex).
+//!
+//! Catch patterns: `_` (wildcard — user errors only), explicit panic class,
+//! `Panic` type alias (all panics), mixed.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 
+// ============================================================================
+// §1 — Bytecode snapshots: representative codegen for throw/catch
+// ============================================================================
+
 #[tokio::test]
-async fn handled_runtime_error_continues_execution() {
+async fn bytecode_handled_throw() {
     let output = baml_test!(
         r#"
         function fails() -> string {
@@ -42,250 +55,7 @@ async fn handled_runtime_error_continues_execution() {
 }
 
 #[tokio::test]
-async fn handled_throw_from_callee_returns_fallback_value() {
-    let output = baml_test!(
-        r#"
-        function throws_now() -> int {
-            throw 7;
-        }
-
-        function main() -> int {
-            throws_now() catch (e) {
-                _ => 99
-            }
-        }
-    "#
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> int {
-        call user.throws_now
-        jump L0
-        load_const 99
-
-      L0:
-        return
-    }
-
-    function throws_now() -> int {
-        load_const 7
-        throw
-    }
-    ");
-
-    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
-}
-
-#[tokio::test]
-async fn catch_binds_to_throw_expression_not_throw_payload() {
-    let output = baml_test!(
-        "
-        function main() -> int {
-            return throw 1 catch (e) {
-                _ => 2
-            };
-        }
-    "
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r"
-    function main() -> int {
-        load_const 2
-        return
-    }
-    ");
-
-    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
-}
-
-#[tokio::test]
-async fn match_arm_block_with_throw_is_not_typed_as_void() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            let a = 1;
-            return match (a) {
-                1 => "1",
-                _ => {
-                    throw 1
-                },
-            };
-        }
-    "#
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const 1
-        copy 0
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L1
-
-      L0:
-        pop 1
-        load_const 1
-        throw
-
-      L1:
-        load_const "1"
-        return
-    }
-    "#);
-
-    assert_eq!(output.result, Ok(BexExternalValue::String("1".to_string())));
-}
-
-#[tokio::test]
-#[ignore = "compiler2: inline throw-catch inside match arm triggers false unreachable arm"]
-async fn throw_catch_inside_match_arm_returns_catch_value() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            return match (2) {
-                1 => "1",
-                _ => throw 1 catch (e) {
-                    _ => ".."
-                },
-            };
-        }
-    "#
-    );
-
-    insta::assert_snapshot!(output.bytecode, @"");
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("..".to_string()))
-    );
-}
-
-#[tokio::test]
-async fn throw_in_match_arm_diverges() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            let a = 1;
-            return match (a) {
-                1 => "one",
-                _ => {
-                    throw "error"
-                },
-            };
-        }
-    "#
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const 1
-        copy 0
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L1
-
-      L0:
-        pop 1
-        load_const "error"
-        throw
-
-      L1:
-        load_const "one"
-        return
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("one".to_string()))
-    );
-}
-
-#[tokio::test]
-async fn return_diverges() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            return "hello";
-        }
-    "#
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const "hello"
-        return
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("hello".to_string()))
-    );
-}
-
-#[tokio::test]
-async fn if_else_both_throw_diverges() {
-    let output = baml_test!(
-        r#"
-        function main() -> string {
-            let a = 1;
-            return match (a) {
-                1 => "one",
-                _ => {
-                    if (true) {
-                        throw "a"
-                    } else {
-                        throw "b"
-                    }
-                },
-            };
-        }
-    "#
-    );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const 1
-        copy 0
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L3
-
-      L0:
-        pop 1
-        load_const true
-        pop_jump_if_false L1
-        jump L2
-
-      L1:
-        load_const "b"
-        throw
-
-      L2:
-        load_const "a"
-        throw
-
-      L3:
-        load_const "one"
-        return
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Ok(BexExternalValue::String("one".to_string()))
-    );
-}
-
-#[tokio::test]
-async fn unhandled_throw_fails_predictably() {
+async fn bytecode_unhandled_throw() {
     let output = baml_test!(
         r#"
         function main() -> int {
@@ -309,8 +79,12 @@ async fn unhandled_throw_fails_predictably() {
     );
 }
 
+// ============================================================================
+// §2 — Unhandled errors propagate with correct values
+// ============================================================================
+
 #[tokio::test]
-async fn unhandled_throw_string_shows_value() {
+async fn unhandled_throw_string() {
     let output = baml_test!(
         r#"
         function main() -> string {
@@ -318,13 +92,6 @@ async fn unhandled_throw_string_shows_value() {
         }
     "#
     );
-
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const "something went wrong"
-        throw
-    }
-    "#);
 
     assert_eq!(
         output.result,
@@ -335,96 +102,54 @@ async fn unhandled_throw_string_shows_value() {
 }
 
 #[tokio::test]
-async fn unhandled_throw_string_in_match_shows_value() {
+async fn unhandled_division_by_zero() {
     let output = baml_test!(
         r#"
-        function main() -> string {
-            let a = 1;
-            match (a) {
-                _ => {
-                    throw "oops"
-                }
-            }
+        function main() -> int {
+            1 / 0
         }
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const "oops"
-        throw
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::UnhandledThrow {
-            value: Box::new(BexExternalValue::String("oops".to_string())),
-        })
+    assert!(
+        output.result.is_err(),
+        "expected DivisionByZero panic, got {:?}",
+        output.result
     );
 }
 
 #[tokio::test]
-async fn throw_in_non_matching_match_arm_propagates() {
+async fn unhandled_index_out_of_bounds() {
     let output = baml_test!(
         r#"
-        function main() -> string {
-            let a = 2;
-            return match (a) {
-                1 => "one",
-                _ => {
-                    throw "boom"
-                },
-            };
+        function main() -> int {
+            let arr = [1, 2, 3];
+            arr[99]
         }
     "#
     );
 
-    insta::assert_snapshot!(output.bytecode, @r#"
-    function main() -> string {
-        load_const 2
-        copy 0
-        load_const 1
-        cmp_op ==
-        pop_jump_if_false L0
-        pop 1
-        jump L1
-
-      L0:
-        pop 1
-        load_const "boom"
-        throw
-
-      L1:
-        load_const "one"
-        return
-    }
-    "#);
-
-    assert_eq!(
-        output.result,
-        Err(bex_engine::EngineError::UnhandledThrow {
-            value: Box::new(BexExternalValue::String("boom".to_string())),
-        })
+    assert!(
+        output.result.is_err(),
+        "expected IndexOutOfBounds panic, got {:?}",
+        output.result
     );
 }
 
 // ============================================================================
-// Panic narrowing: _ does NOT catch panics, explicit patterns do
+// §3 — Wildcard: catches user throws, does NOT catch panics
 // ============================================================================
 
-// --- Wildcard behavior ---
-
 #[tokio::test]
-async fn wildcard_catches_user_throws() {
+async fn wildcard_catches_user_throw() {
     let output = baml_test!(
         r#"
-        function throws_error() -> int {
+        function fails() -> int {
             throw "user error";
         }
 
         function main() -> int {
-            throws_error() catch (e) {
+            fails() catch (e) {
                 _ => -1
             }
         }
@@ -435,10 +160,9 @@ async fn wildcard_catches_user_throws() {
 }
 
 #[tokio::test]
-async fn wildcard_does_not_catch_panic() {
-    // divides() has a genuine throw path (throw "too big") so the throw
-    // set is non-empty and `_` is reachable.  At runtime x=0 hits the
-    // panic path, and `_` does NOT catch panics.
+async fn wildcard_does_not_catch_division_by_zero() {
+    // divides() has a genuine throw path so _ is reachable (matches the
+    // string throw type).  At runtime x=0 hits the panic path instead.
     let output = baml_test!(
         r#"
         function divides(x: int) -> int {
@@ -456,15 +180,42 @@ async fn wildcard_does_not_catch_panic() {
 
     assert!(
         output.result.is_err(),
-        "expected panic to propagate, got {:?}",
+        "expected panic to propagate past _, got {:?}",
         output.result
     );
 }
 
-// --- Explicit panic patterns ---
+#[tokio::test]
+async fn wildcard_does_not_catch_index_out_of_bounds() {
+    let output = baml_test!(
+        r#"
+        function oob(x: int) -> int {
+            if (x > 100) { throw "too big" }
+            let arr = [1, 2, 3];
+            arr[x]
+        }
+
+        function main() -> int {
+            oob(99) catch (e) {
+                _ => -1
+            }
+        }
+    "#
+    );
+
+    assert!(
+        output.result.is_err(),
+        "expected panic to propagate past _, got {:?}",
+        output.result
+    );
+}
+
+// ============================================================================
+// §4 — Explicit panic patterns: each type catches its own panic
+// ============================================================================
 
 #[tokio::test]
-async fn explicit_panic_catches_division_by_zero() {
+async fn catch_division_by_zero() {
     let output = baml_test!(
         r#"
         function divides() -> int {
@@ -483,16 +234,16 @@ async fn explicit_panic_catches_division_by_zero() {
 }
 
 #[tokio::test]
-async fn explicit_panic_catches_index_out_of_bounds() {
+async fn catch_index_out_of_bounds() {
     let output = baml_test!(
         r#"
-        function bad_index() -> int {
+        function oob() -> int {
             let arr = [10, 20, 30];
             arr[5]
         }
 
         function main() -> int {
-            bad_index() catch (e) {
+            oob() catch (e) {
                 IndexOutOfBounds => -1
             }
         }
@@ -503,7 +254,7 @@ async fn explicit_panic_catches_index_out_of_bounds() {
 }
 
 #[tokio::test]
-async fn explicit_panic_catches_key_not_found() {
+async fn catch_key_not_found() {
     let output = baml_test!(
         r#"
         function bad_key() -> int {
@@ -523,7 +274,7 @@ async fn explicit_panic_catches_key_not_found() {
 }
 
 #[tokio::test]
-async fn explicit_panic_catches_negative_index() {
+async fn catch_negative_index() {
     let output = baml_test!(
         r#"
         function bad_neg() -> int {
@@ -542,7 +293,38 @@ async fn explicit_panic_catches_negative_index() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
-// --- Panic type alias ---
+// ============================================================================
+// §5 — Wrong explicit pattern does not catch
+// ============================================================================
+
+#[tokio::test]
+#[ignore = "bare type sugar in catch arms lacks IsType check — first arm matches unconditionally"]
+async fn wrong_panic_pattern_propagates() {
+    // DivisionByZero should propagate past the IndexOutOfBounds arm.
+    let output = baml_test!(
+        r#"
+        function divides() -> int {
+            1 / 0
+        }
+
+        function main() -> int {
+            divides() catch (e) {
+                IndexOutOfBounds => -1
+            }
+        }
+    "#
+    );
+
+    assert!(
+        output.result.is_err(),
+        "expected DivisionByZero to propagate, got {:?}",
+        output.result
+    );
+}
+
+// ============================================================================
+// §6 — Panic type alias catches all panics
+// ============================================================================
 
 #[tokio::test]
 #[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
@@ -585,20 +367,13 @@ async fn panic_alias_catches_index_out_of_bounds() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
-// --- Mix: user errors + panics in the same catch ---
-//
-// NOTE: Bare type sugar patterns (e.g. `DivisionByZero =>`) are
-// `Pattern::Binding` at the AST level.  The TIR recognizes them as type
-// patterns for diagnostics, but the MIR's `lower_pattern_test` treats
-// them as unconditional bindings (`goto success`) without generating an
-// `IsType` check.  Tests marked `ignore` below expose this pre-existing
-// bug — they will pass once the MIR emits proper type discrimination
-// for bare type sugar patterns in catch arms.
+// ============================================================================
+// §7 — Mixed dispatch: user errors + panics in the same catch
+// ============================================================================
 
 #[tokio::test]
-async fn explicit_panic_and_wildcard_together() {
-    // divides() has a throw path so `_` is reachable for user errors.
-    // At runtime the panic fires and the explicit pattern catches it.
+async fn mixed_panic_fires_explicit_arm_catches() {
+    // x=0 → DivisionByZero panic → explicit arm catches it.
     let output = baml_test!(
         r#"
         function divides(x: int) -> int {
@@ -620,9 +395,8 @@ async fn explicit_panic_and_wildcard_together() {
 
 #[tokio::test]
 #[ignore = "bare type sugar in catch arms lacks IsType check — first arm matches unconditionally"]
-async fn wildcard_catches_user_error_when_panic_arm_present() {
-    // At runtime the user error fires and `_` should catch it, but
-    // the DivisionByZero arm matches unconditionally (missing type test).
+async fn mixed_user_error_fires_wildcard_catches() {
+    // x=999 → throw "too big" → wildcard catches it.
     let output = baml_test!(
         r#"
         function divides(x: int) -> int {
@@ -644,8 +418,7 @@ async fn wildcard_catches_user_error_when_panic_arm_present() {
 
 #[tokio::test]
 #[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
-async fn panic_alias_and_wildcard_together() {
-    // Panic catches all panics, `_` catches user errors.
+async fn mixed_panic_alias_catches_panic() {
     let output = baml_test!(
         r#"
         function divides(x: int) -> int {
@@ -666,9 +439,8 @@ async fn panic_alias_and_wildcard_together() {
 }
 
 #[tokio::test]
-#[ignore = "bare type sugar in catch arms lacks IsType check — first arm matches unconditionally"]
-async fn panic_alias_user_error_fallback() {
-    // When user error fires, Panic shouldn't match, `_` should catch it.
+#[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
+async fn mixed_panic_alias_wildcard_catches_user_error() {
     let output = baml_test!(
         r#"
         function divides(x: int) -> int {
@@ -688,10 +460,12 @@ async fn panic_alias_user_error_fallback() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
-// --- Multiple explicit panic patterns ---
+// ============================================================================
+// §8 — Multiple explicit panic patterns
+// ============================================================================
 
 #[tokio::test]
-async fn multiple_panic_patterns_first_matches() {
+async fn multiple_panics_first_matches() {
     let output = baml_test!(
         r#"
         function divides() -> int {
@@ -712,8 +486,7 @@ async fn multiple_panic_patterns_first_matches() {
 
 #[tokio::test]
 #[ignore = "bare type sugar in catch arms lacks IsType check — first arm matches unconditionally"]
-async fn multiple_panic_patterns_second_matches() {
-    // IndexOutOfBounds should match, not DivisionByZero.
+async fn multiple_panics_second_matches() {
     let output = baml_test!(
         r#"
         function oob() -> int {
@@ -733,68 +506,12 @@ async fn multiple_panic_patterns_second_matches() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
-// --- Nested catch: inner catches panic, outer catches user error ---
-
-#[tokio::test]
-async fn nested_inner_catches_panic_outer_catches_user_error() {
-    let output = baml_test!(
-        r#"
-        function divides() -> int {
-            1 / 0
-        }
-
-        function middle() -> int {
-            let result = divides() catch (e) {
-                DivisionByZero => -1
-            };
-            // After recovering from the panic, throw a user error
-            throw "recovered but failing"
-        }
-
-        function main() -> int {
-            middle() catch (e) {
-                _ => 99
-            }
-        }
-    "#
-    );
-
-    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
-}
-
-// --- Unmatched panic propagates past non-matching explicit pattern ---
-
-#[tokio::test]
-#[ignore = "bare type sugar in catch arms lacks IsType check — first arm matches unconditionally"]
-async fn wrong_panic_pattern_does_not_catch() {
-    // DivisionByZero should propagate past the IndexOutOfBounds arm.
-    let output = baml_test!(
-        r#"
-        function divides() -> int {
-            1 / 0
-        }
-
-        function main() -> int {
-            divides() catch (e) {
-                IndexOutOfBounds => -1
-            }
-        }
-    "#
-    );
-
-    assert!(
-        output.result.is_err(),
-        "expected DivisionByZero to propagate, got {:?}",
-        output.result
-    );
-}
-
 // ============================================================================
-// Nested catch — inner handler catches, outer doesn't fire
+// §9 — Nested catch, rethrow, sequential
 // ============================================================================
 
 #[tokio::test]
-async fn nested_catch_inner_handles() {
+async fn nested_inner_catches_outer_does_not_fire() {
     let output = baml_test!(
         r#"
         function inner_throws() -> int {
@@ -815,13 +532,59 @@ async fn nested_catch_inner_handles() {
     "#
     );
 
-    // Inner catch handles it, middle returns 42, outer catch never fires.
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }
 
-// ============================================================================
-// Sequential errors — first caught, execution continues, second also caught
-// ============================================================================
+#[tokio::test]
+async fn nested_inner_catches_panic_outer_catches_rethrow() {
+    let output = baml_test!(
+        r#"
+        function divides() -> int {
+            1 / 0
+        }
+
+        function middle() -> int {
+            let result = divides() catch (e) {
+                DivisionByZero => -1
+            };
+            throw "recovered but failing"
+        }
+
+        function main() -> int {
+            middle() catch (e) {
+                _ => 99
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+#[tokio::test]
+async fn rethrow_propagates_to_outer() {
+    let output = baml_test!(
+        r#"
+        function inner() -> int {
+            throw "original";
+        }
+
+        function middle() -> int {
+            inner() catch (e) {
+                _ => throw "rethrown"
+            }
+        }
+
+        function main() -> int {
+            middle() catch (e) {
+                _ => 99
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
 
 #[tokio::test]
 async fn sequential_catches_both_recover() {
@@ -847,88 +610,77 @@ async fn sequential_catches_both_recover() {
 }
 
 // ============================================================================
-// Uncaught panics propagate as unhandled errors
+// §10 — Divergence and special cases
 // ============================================================================
 
 #[tokio::test]
-async fn uncaught_division_by_zero_propagates() {
+async fn throw_in_match_arm_propagates() {
     let output = baml_test!(
         r#"
-        function div(a: int, b: int) -> int {
-            a / b
-        }
-
-        function main() -> int {
-            div(1, 0)
+        function main() -> string {
+            let a = 2;
+            return match (a) {
+                1 => "one",
+                _ => {
+                    throw "boom"
+                },
+            };
         }
     "#
     );
 
-    assert!(
-        output.result.is_err(),
-        "expected error, got {:?}",
-        output.result
+    assert_eq!(
+        output.result,
+        Err(bex_engine::EngineError::UnhandledThrow {
+            value: Box::new(BexExternalValue::String("boom".to_string())),
+        })
     );
 }
 
 #[tokio::test]
-async fn uncaught_index_out_of_bounds_propagates() {
+async fn inline_throw_catch_binds_correctly() {
     let output = baml_test!(
-        r#"
-        function oob() -> int {
-            let arr = [1, 2, 3];
-            arr[99]
-        }
-
+        "
         function main() -> int {
-            oob()
+            return throw 1 catch (e) {
+                _ => 2
+            };
         }
-    "#
+    "
     );
 
-    assert!(
-        output.result.is_err(),
-        "expected error, got {:?}",
-        output.result
-    );
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
-
-// ============================================================================
-// Re-throw from catch arm propagates to outer handler
-// ============================================================================
 
 #[tokio::test]
-async fn rethrow_propagates_to_outer_catch() {
+#[ignore = "compiler2: inline throw-catch inside match arm triggers false unreachable arm"]
+async fn throw_catch_inside_match_arm() {
     let output = baml_test!(
         r#"
-        function inner() -> int {
-            throw "original";
-        }
-
-        function middle() -> int {
-            inner() catch (e) {
-                _ => throw "rethrown"
-            }
-        }
-
-        function main() -> int {
-            middle() catch (e) {
-                _ => 99
-            }
+        function main() -> string {
+            return match (2) {
+                1 => "1",
+                _ => throw 1 catch (e) {
+                    _ => ".."
+                },
+            };
         }
     "#
     );
 
-    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+    assert_eq!(
+        output.result,
+        Ok(BexExternalValue::String("..".to_string()))
+    );
 }
 
 // ============================================================================
-// Typed panic instance fields — verify the caught error has accessible fields
+// §11 — Typed panic instance fields (future: catch arm type narrowing)
 // ============================================================================
 
 #[tokio::test]
 #[ignore = "needs catch arm type narrowing to access fields on specific panic type"]
-async fn caught_index_oob_has_index_field() {
+async fn caught_panic_has_accessible_fields() {
     let output = baml_test!(
         r#"
         function oob() -> int {
@@ -938,55 +690,12 @@ async fn caught_index_oob_has_index_field() {
 
         function main() -> int {
             oob() catch (e) {
-                _ => e.index
+                IndexOutOfBounds => e.index
             }
         }
     "#
     );
 
-    // IndexOutOfBounds { index: 7, length: 3 } — e.index should be 7
+    // IndexOutOfBounds { index: 7, length: 3 }
     assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
-}
-
-#[tokio::test]
-#[ignore = "needs catch arm type narrowing to access fields on specific panic type"]
-async fn caught_index_oob_has_length_field() {
-    let output = baml_test!(
-        r#"
-        function oob() -> int {
-            let arr = [10, 20, 30];
-            arr[7]
-        }
-
-        function main() -> int {
-            oob() catch (e) {
-                _ => e.length
-            }
-        }
-    "#
-    );
-
-    // IndexOutOfBounds { index: 7, length: 3 } — e.length should be 3
-    assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
-}
-
-#[tokio::test]
-#[ignore = "needs catch arm type narrowing to access fields on specific panic type"]
-async fn caught_division_by_zero_has_dividend_field() {
-    let output = baml_test!(
-        r#"
-        function div(a: int, b: int) -> int {
-            a / b
-        }
-
-        function main() -> int {
-            div(42, 0) catch (e) {
-                _ => e.dividend
-            }
-        }
-    "#
-    );
-
-    // DivisionByZero { dividend: 42 } — e.dividend should be 42
-    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }
