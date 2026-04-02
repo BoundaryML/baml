@@ -9,104 +9,104 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "simple"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          RAW_STRING_LITERAL
-            HASH "#"
-            QUOTE """
-            PROMPT_TEXT "raw string"
-              WORD "raw"
-              WORD "string"
-            QUOTE """
-            HASH "#"
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            RAW_STRING_LITERAL
+              HASH "#"
+              QUOTE """
+              PROMPT_TEXT "raw string"
+                WORD "raw"
+                WORD "string"
+              QUOTE """
+              HASH "#"
+            R_PAREN ")"
     FIELD
       WORD "with_quotes"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          RAW_STRING_LITERAL
-            HASH "#"
-            QUOTE """
-            PROMPT_TEXT "contains "quotes" easily"
-              WORD "contains"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            RAW_STRING_LITERAL
+              HASH "#"
               QUOTE """
-              WORD "quotes"
+              PROMPT_TEXT "contains "quotes" easily"
+                WORD "contains"
+                QUOTE """
+                WORD "quotes"
+                QUOTE """
+                WORD "easily"
               QUOTE """
-              WORD "easily"
-            QUOTE """
-            HASH "#"
-          R_PAREN ")"
+              HASH "#"
+            R_PAREN ")"
     FIELD
       WORD "multi_hash"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          RAW_STRING_LITERAL
-            HASH "#"
-            HASH "#"
-            QUOTE """
-            PROMPT_TEXT "contains #"hash"# inside"
-              WORD "contains"
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            RAW_STRING_LITERAL
+              HASH "#"
               HASH "#"
               QUOTE """
-              WORD "hash"
+              PROMPT_TEXT "contains #"hash"# inside"
+                WORD "contains"
+                HASH "#"
+                QUOTE """
+                WORD "hash"
+                QUOTE """
+                HASH "#"
+                WORD "inside"
               QUOTE """
               HASH "#"
-              WORD "inside"
-            QUOTE """
-            HASH "#"
-            HASH "#"
-          R_PAREN ")"
+              HASH "#"
+            R_PAREN ")"
     FIELD
       WORD "multiline"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "description"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          RAW_STRING_LITERAL
-            HASH "#"
-            HASH "#"
-            HASH "#"
-            QUOTE """
-            PROMPT_TEXT "This is a multiline
+        ATTRIBUTE
+          AT "@"
+          WORD "description"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            RAW_STRING_LITERAL
+              HASH "#"
+              HASH "#"
+              HASH "#"
+              QUOTE """
+              PROMPT_TEXT "This is a multiline
     raw string with "quotes"
     and #hashes#"
-              WORD "This"
-              WORD "is"
-              WORD "a"
-              WORD "multiline"
-              WORD "raw"
-              WORD "string"
-              WORD "with"
+                WORD "This"
+                WORD "is"
+                WORD "a"
+                WORD "multiline"
+                WORD "raw"
+                WORD "string"
+                WORD "with"
+                QUOTE """
+                WORD "quotes"
+                QUOTE """
+                WORD "and"
+                HASH "#"
+                WORD "hashes"
+                HASH "#"
               QUOTE """
-              WORD "quotes"
-              QUOTE """
-              WORD "and"
               HASH "#"
-              WORD "hashes"
               HASH "#"
-            QUOTE """
-            HASH "#"
-            HASH "#"
-            HASH "#"
-          R_PAREN ")"
+              HASH "#"
+            R_PAREN ")"
     R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"

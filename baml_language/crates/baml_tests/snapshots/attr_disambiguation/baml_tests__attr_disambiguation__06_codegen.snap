@@ -1,7 +1,9 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.E5(x: EFoo) -> null {
+function user.E5(x: EFoo) -> string {
+    load_const "hello"
+    return
 }
 
 function user.E6(x: EFoo) -> string {
@@ -10,6 +12,11 @@ function user.E6(x: EFoo) -> string {
 }
 
 function user.E7() -> EFoo {
+    alloc_instance EFoo
+    copy 0
+    load_const 1
+    store_field .x
+    return
 }
 
 function user.E8() -> EFoo {

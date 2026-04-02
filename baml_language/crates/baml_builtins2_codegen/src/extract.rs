@@ -72,8 +72,8 @@ pub fn extract_native_builtins()
 
         // Lower CST → AST items.
         let (items, diags) = baml_compiler2_ast::lower_file(&cst_root);
-        for hir in &diags {
-            let d = hir.to_diagnostic();
+        for ld in &diags {
+            let d = ld.to_diagnostic(FileId::new(0));
             diagnostic_lines.push(format!("  {path}: [{}] {}", d.id.code(), d.message));
         }
         if !diags.is_empty() {
