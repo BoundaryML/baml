@@ -16,6 +16,6 @@ TEST_INSTRUCTIONS.md
 # Type simplification test cases
 crates/baml_type/tests/simplify_sap_tests.md
 
-# Architechture
+# Architecture
 ARCHITECTURE_MINI.md
 ARCHITECTURE.md
