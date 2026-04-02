@@ -9,12 +9,11 @@
 //! all of that moves downstream.
 
 use baml_base::Name;
-use baml_compiler_diagnostics::HirDiagnostic;
 use baml_compiler_syntax::{SyntaxKind, SyntaxNode, ast};
 use rowan::ast::AstNode;
 
 use crate::{
-    DeclarativeMeta,
+    DeclarativeMeta, LoweringDiagnostic,
     ast::{
         AstSourceMap, BuiltinKind, ConfigItemDef, EnumDef, Expr, ExprBody, ExprId, FieldDef,
         FunctionBodyDef, FunctionDef, GeneratorDef, Interpolation, Item, LetDef, LetOrigin,
@@ -57,46 +56,47 @@ enum TestRegistrationItem {
 ///
 /// After this returns, the CST is no longer needed — all structural content
 /// is owned by the returned `Item`s.
-pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<HirDiagnostic>) {
+///
+/// All diagnostics (structural lowering issues, client validation,
+/// field-attr-in-wrong-position) are returned as `LoweringDiagnostic` variants.
+pub fn lower_file(root: &SyntaxNode) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
     lower_file_with_file_id(root, baml_base::FileId::sentinel())
 }
 
 pub fn lower_file_with_file_id(
     root: &SyntaxNode,
     file_id: baml_base::FileId,
-) -> (Vec<Item>, Vec<HirDiagnostic>) {
+) -> (Vec<Item>, Vec<LoweringDiagnostic>) {
+    let mut diags = Vec::new();
     let mut items = Vec::new();
-    let mut diagnostics = Vec::new();
     let mut test_registrations: Vec<TestRegistrationItem> = Vec::new();
 
     for child in root.children() {
         match child.kind() {
             baml_compiler_syntax::SyntaxKind::FUNCTION_DEF => {
-                if let Some(func) = lower_function(&child) {
+                if let Some(func) = lower_function(&child, &mut diags) {
                     let companions = expand_companions(&func);
                     items.push(Item::Function(func));
                     items.extend(companions.into_iter().map(Item::Function));
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLASS_DEF => {
-                if let Some(class) = lower_class(&child) {
+                if let Some(class) = lower_class(&child, &mut diags) {
                     items.push(Item::Class(class));
                 }
             }
             baml_compiler_syntax::SyntaxKind::ENUM_DEF => {
-                if let Some(e) = lower_enum(&child) {
+                if let Some(e) = lower_enum(&child, &mut diags) {
                     items.push(Item::Enum(e));
                 }
             }
             baml_compiler_syntax::SyntaxKind::TYPE_ALIAS_DEF => {
-                if let Some(ta) = lower_type_alias(&child) {
+                if let Some(ta) = lower_type_alias(&child, &mut diags) {
                     items.push(Item::TypeAlias(ta));
                 }
             }
             baml_compiler_syntax::SyntaxKind::CLIENT_DEF => {
-                if let Some((let_item, companion)) =
-                    synthesize_client_items(&child, file_id, &mut diagnostics)
-                {
+                if let Some((let_item, companion)) = synthesize_client_items(&child, &mut diags) {
                     items.push(let_item);
                     if let Some(func) = companion {
                         items.push(Item::Function(func));
@@ -104,7 +104,7 @@ pub fn lower_file_with_file_id(
                 }
             }
             baml_compiler_syntax::SyntaxKind::TEST_DEF => {
-                if let Some(t) = lower_test(&child) {
+                if let Some(t) = lower_test(&child, &mut diags) {
                     items.push(Item::Test(t));
                 }
             }
@@ -119,17 +119,17 @@ pub fn lower_file_with_file_id(
                 }
             }
             baml_compiler_syntax::SyntaxKind::GENERATOR_DEF => {
-                if let Some(g) = lower_generator(&child) {
+                if let Some(g) = lower_generator(&child, &mut diags) {
                     items.push(Item::Generator(g));
                 }
             }
             baml_compiler_syntax::SyntaxKind::TEMPLATE_STRING_DEF => {
-                if let Some(ts) = lower_template_string(&child) {
+                if let Some(ts) = lower_template_string(&child, &mut diags) {
                     items.push(Item::TemplateString(ts));
                 }
             }
             baml_compiler_syntax::SyntaxKind::RETRY_POLICY_DEF => {
-                if let Some(let_item) = synthesize_retry_policy_let(&child) {
+                if let Some(let_item) = synthesize_retry_policy_let(&child, &mut diags) {
                     items.push(let_item);
                 }
             }
@@ -144,14 +144,39 @@ pub fn lower_file_with_file_id(
         items.push(Item::Function(init_fn));
     }
 
-    (items, diagnostics)
+    // Post-lowering validation: reject field attrs in invalid type positions.
+    let field_attr_errors = crate::disambiguate::validate_field_attrs(&items);
+    for (attr_name, span) in field_attr_errors {
+        diags.push(LoweringDiagnostic::FieldAttributeInTypePosition { attr_name, span });
+    }
+
+    (items, diags)
+}
+
+/// Check if a just-lowered type expression contains `TypeExpr::Unknown` at the root.
+/// If so, emit an `UnparseableType` diagnostic.
+fn check_unknown_type(
+    type_expr: &crate::ast::TypeExpr,
+    context: String,
+    span: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) {
+    if matches!(type_expr, crate::ast::TypeExpr::Unknown { .. }) {
+        diags.push(LoweringDiagnostic::UnparseableType { context, span });
+    }
 }
 
 // ── Per-item lowering ───────────────────────────────────────────
 
-fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
+fn lower_function(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<FunctionDef> {
     let func = ast::FunctionDef::cast(node.clone())?;
-    let name_token = func.name()?;
+    let Some(name_token) = func.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "function",
+            span: node.text_range(),
+        });
+        return None;
+    };
     let name = Name::new(name_token.text());
     let name_span = name_token.text_range();
 
@@ -159,12 +184,17 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
 
     let params = func
         .param_list()
-        .map(|pl| lower_params(&pl))
+        .map(|pl| lower_params(&pl, name.as_str(), diags))
         .unwrap_or_default();
 
-    let return_type = func.return_type().map(|te| SpannedTypeExpr {
-        expr: lower_type_expr::lower_type_expr_node(&te),
-        span: te.syntax().text_range(),
+    let return_type = func.return_type().map(|te| {
+        let expr = lower_type_expr::lower_type_expr_node(&te);
+        let te_span = te.syntax().text_range();
+        check_unknown_type(&expr, format!("return type of `{name}`"), te_span, diags);
+        SpannedTypeExpr {
+            expr,
+            span: te_span,
+        }
     });
 
     let throws = func
@@ -196,7 +226,7 @@ fn lower_function(node: &SyntaxNode) -> Option<FunctionDef> {
             (Some(FunctionBodyDef::Builtin(builtin_kind)), None)
         } else {
             let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
-            let (expr_body, source_map) = lower_expr_body::lower(&expr, &param_names);
+            let (expr_body, source_map) = lower_expr_body::lower(&expr, &param_names, diags);
             (Some(FunctionBodyDef::Expr(expr_body, source_map)), None)
         }
     } else {
@@ -248,17 +278,44 @@ fn check_builtin_body(expr_body_node: &SyntaxNode) -> Option<BuiltinKind> {
     None
 }
 
-pub(crate) fn lower_params(pl: &ast::ParameterList) -> Vec<Param> {
-    pl.params().filter_map(|p| lower_param(&p)).collect()
+pub(crate) fn lower_params(
+    pl: &ast::ParameterList,
+    function_name: &str,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Vec<Param> {
+    pl.params()
+        .filter_map(|p| lower_param(&p, function_name, diags))
+        .collect()
 }
 
-pub(crate) fn lower_param(param: &ast::Parameter) -> Option<Param> {
-    let name_token = param.name()?;
+pub(crate) fn lower_param(
+    param: &ast::Parameter,
+    function_name: &str,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<Param> {
+    let Some(name_token) = param.name() else {
+        diags.push(LoweringDiagnostic::MissingParamName {
+            function_name: function_name.to_string(),
+            span: param.syntax().text_range(),
+        });
+        return None;
+    };
+    let param_name_str = name_token.text().to_string();
     Some(Param {
-        name: Name::new(name_token.text()),
-        type_expr: param.ty().map(|te| SpannedTypeExpr {
-            expr: lower_type_expr::lower_type_expr_node(&te),
-            span: te.syntax().text_range(),
+        name: Name::new(&param_name_str),
+        type_expr: param.ty().map(|te| {
+            let expr = lower_type_expr::lower_type_expr_node(&te);
+            let te_span = te.syntax().text_range();
+            check_unknown_type(
+                &expr,
+                format!("parameter `{param_name_str}` in `{function_name}`"),
+                te_span,
+                diags,
+            );
+            SpannedTypeExpr {
+                expr,
+                span: te_span,
+            }
         }),
         span: param.syntax().text_range(),
         name_span: name_token.text_range(),
@@ -515,23 +572,72 @@ fn lower_raw_prompt(raw_string: &ast::RawStringLiteral) -> RawPrompt {
     }
 }
 
-fn lower_class(node: &SyntaxNode) -> Option<crate::ast::ClassDef> {
+fn lower_class(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<crate::ast::ClassDef> {
     let class = ast::ClassDef::cast(node.clone())?;
-    let name_token = class.name()?;
+    let Some(name_token) = class.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "class",
+            span: node.text_range(),
+        });
+        return None;
+    };
 
     let generic_params = extract_generic_params(node);
+    let class_name = name_token.text().to_string();
 
     let fields = class
         .fields()
         .filter_map(|f| {
-            let fname = f.name()?;
+            let Some(fname) = f.name() else {
+                diags.push(LoweringDiagnostic::MissingFieldName {
+                    class_name: class_name.clone(),
+                    span: f.syntax().text_range(),
+                });
+                return None;
+            };
+            let field_name_str = fname.text().to_string();
+            let mut hoisted_field_attrs = Vec::new();
+            let type_expr = f.ty().map(|te| {
+                let mut expr = lower_type_expr::lower_type_expr_node(&te);
+                let te_span = te.syntax().text_range();
+                check_unknown_type(
+                    &expr,
+                    format!("field `{class_name}.{field_name_str}`"),
+                    te_span,
+                    diags,
+                );
+
+                // Hoist field attrs from the outermost TypeExpr to FieldDef.
+                // Only attrs that are direct ATTRIBUTE children of the outermost
+                // CST TYPE_EXPR are hoistable — attrs nested inside parens or
+                // generics are not (and will be flagged by validate_field_attrs).
+                let direct_attr_spans: std::collections::HashSet<text_size::TextRange> = te
+                    .syntax()
+                    .children()
+                    .filter_map(ast::Attribute::cast)
+                    .map(|a| a.syntax().text_range())
+                    .collect();
+
+                let all_outer_attrs = std::mem::take(expr.attrs_mut());
+                let (hoist, keep): (Vec<_>, Vec<_>) = all_outer_attrs.into_iter().partition(|a| {
+                    crate::disambiguate::is_field_attr(a.name.as_str())
+                        && direct_attr_spans.contains(&a.span)
+                });
+                *expr.attrs_mut() = keep;
+                hoisted_field_attrs = hoist;
+
+                SpannedTypeExpr {
+                    expr,
+                    span: te_span,
+                }
+            });
             Some(FieldDef {
-                name: Name::new(fname.text()),
-                type_expr: f.ty().map(|te| SpannedTypeExpr {
-                    expr: lower_type_expr::lower_type_expr_node(&te),
-                    span: te.syntax().text_range(),
-                }),
-                attributes: lower_field_attributes(&f),
+                name: Name::new(&field_name_str),
+                type_expr,
+                attributes: hoisted_field_attrs,
                 span: f.syntax().text_range(),
                 name_span: fname.text_range(),
             })
@@ -540,7 +646,7 @@ fn lower_class(node: &SyntaxNode) -> Option<crate::ast::ClassDef> {
 
     let methods = class
         .methods()
-        .filter_map(|f| lower_function(f.syntax()))
+        .filter_map(|f| lower_function(f.syntax(), diags))
         .flat_map(|func| {
             let companions = expand_companions(&func);
             std::iter::once(func).chain(companions)
@@ -587,14 +693,27 @@ pub(crate) fn extract_generic_params(node: &SyntaxNode) -> Vec<Name> {
     params
 }
 
-fn lower_enum(node: &SyntaxNode) -> Option<EnumDef> {
+fn lower_enum(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<EnumDef> {
     let enum_def = ast::EnumDef::cast(node.clone())?;
-    let name_token = enum_def.name()?;
+    let Some(name_token) = enum_def.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "enum",
+            span: node.text_range(),
+        });
+        return None;
+    };
+    let enum_name = name_token.text().to_string();
 
     let variants = enum_def
         .variants()
         .filter_map(|v| {
-            let vname = v.name()?;
+            let Some(vname) = v.name() else {
+                diags.push(LoweringDiagnostic::MissingVariantName {
+                    enum_name: enum_name.clone(),
+                    span: v.syntax().text_range(),
+                });
+                return None;
+            };
             Some(VariantDef {
                 name: Name::new(vname.text()),
                 attributes: lower_variant_attributes(&v),
@@ -613,32 +732,54 @@ fn lower_enum(node: &SyntaxNode) -> Option<EnumDef> {
     })
 }
 
-fn lower_type_alias(node: &SyntaxNode) -> Option<TypeAliasDef> {
+fn lower_type_alias(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<TypeAliasDef> {
     let alias = ast::TypeAliasDef::cast(node.clone())?;
-    let name_token = alias.name()?;
+    let Some(name_token) = alias.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "type alias",
+            span: node.text_range(),
+        });
+        return None;
+    };
 
+    let alias_name = name_token.text().to_string();
     Some(TypeAliasDef {
-        name: Name::new(name_token.text()),
-        type_expr: alias.ty().map(|te| SpannedTypeExpr {
-            expr: lower_type_expr::lower_type_expr_node(&te),
-            span: te.syntax().text_range(),
+        name: Name::new(&alias_name),
+        type_expr: alias.ty().map(|te| {
+            let expr = lower_type_expr::lower_type_expr_node(&te);
+            let te_span = te.syntax().text_range();
+            check_unknown_type(&expr, format!("type alias `{alias_name}`"), te_span, diags);
+            SpannedTypeExpr {
+                expr,
+                span: te_span,
+            }
         }),
         span: node.text_range(),
         name_span: name_token.text_range(),
     })
 }
 
-fn lower_test(node: &SyntaxNode) -> Option<TestDef> {
+fn lower_test(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<TestDef> {
     let test = ast::TestDef::cast(node.clone())?;
-    let name_token = test.name()?;
+    let Some(name_token) = test.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "test",
+            span: node.text_range(),
+        });
+        return None;
+    };
 
+    let test_name = name_token.text().to_string();
     let config_items = test
         .config_block()
-        .map(|cb| lower_config_block(&cb))
+        .map(|cb| lower_config_block(&cb, "test", &test_name, diags))
         .unwrap_or_default();
 
     Some(TestDef {
-        name: Name::new(name_token.text()),
+        name: Name::new(&test_name),
         config_items,
         span: node.text_range(),
         name_span: name_token.text_range(),
@@ -800,7 +941,7 @@ fn synthesize_init_test_function(
         span,
     );
 
-    let (body, source_map) = ctx.finish(Some(block_expr));
+    let (body, source_map, _diags) = ctx.finish(Some(block_expr));
 
     // The single parameter: `registry: testing.Registry`
     let registry_param = Param {
@@ -844,7 +985,7 @@ fn synthesize_register_call(
             runner_element,
         } => {
             // Lower the test block body into a fresh ExprBody (lambda body)
-            let (lambda_body, lambda_source_map) =
+            let (lambda_body, lambda_source_map, _lambda_diags) =
                 lower_expr_body::lower_block_node(body_node, &[Name::new("registry")]);
 
             let lambda_def = FunctionDef {
@@ -889,11 +1030,12 @@ fn synthesize_register_call(
             runner_element,
         } => {
             // Lower the testset body into a collector lambda using the full testset lowering.
-            let (collector_exprs, collector_source_map) = lower_expr_body::lower_testset_block_node(
-                body_node,
-                &Name::new("testset"),
-                &[Name::new("registry")],
-            );
+            let (collector_exprs, collector_source_map, _collector_diags) =
+                lower_expr_body::lower_testset_block_node(
+                    body_node,
+                    &Name::new("testset"),
+                    &[Name::new("registry")],
+                );
 
             // Collector lambda parameter: `testset`
             let testset_param = Param {
@@ -963,30 +1105,47 @@ fn lower_runner_element(
     }
 }
 
-fn lower_generator(node: &SyntaxNode) -> Option<GeneratorDef> {
+fn lower_generator(node: &SyntaxNode, diags: &mut Vec<LoweringDiagnostic>) -> Option<GeneratorDef> {
     let generator = ast::GeneratorDef::cast(node.clone())?;
-    let name_token = generator.name()?;
+    let Some(name_token) = generator.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "generator",
+            span: node.text_range(),
+        });
+        return None;
+    };
 
+    let gen_name = name_token.text().to_string();
     let config_items = generator
         .config_block()
-        .map(|cb| lower_config_block(&cb))
+        .map(|cb| lower_config_block(&cb, "generator", &gen_name, diags))
         .unwrap_or_default();
 
     Some(GeneratorDef {
-        name: Name::new(name_token.text()),
+        name: Name::new(&gen_name),
         config_items,
         span: node.text_range(),
         name_span: name_token.text_range(),
     })
 }
 
-fn lower_template_string(node: &SyntaxNode) -> Option<TemplateStringDef> {
+fn lower_template_string(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<TemplateStringDef> {
     let ts = ast::TemplateStringDef::cast(node.clone())?;
-    let name_token = ts.name()?;
+    let Some(name_token) = ts.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "template_string",
+            span: node.text_range(),
+        });
+        return None;
+    };
 
+    let ts_name = name_token.text().to_string();
     let params = ts
         .param_list()
-        .map(|pl| lower_params(&pl))
+        .map(|pl| lower_params(&pl, &ts_name, diags))
         .unwrap_or_default();
 
     let body = ts.raw_string().map(|rs| lower_raw_prompt(&rs));
@@ -1006,11 +1165,28 @@ fn lower_template_string(node: &SyntaxNode) -> Option<TemplateStringDef> {
 ///
 /// Each config field is lowered generically via `lower_config_item::lower_config_value`,
 /// then wrapped in a typed `Expr::Object`.
-fn synthesize_retry_policy_let(node: &SyntaxNode) -> Option<Item> {
+fn synthesize_retry_policy_let(
+    node: &SyntaxNode,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Option<Item> {
     let rp = ast::RetryPolicyDef::cast(node.clone())?;
-    let name_token = rp.name()?;
+    let Some(name_token) = rp.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "retry_policy",
+            span: node.text_range(),
+        });
+        return None;
+    };
     let span = node.text_range();
-    let config_block = rp.config_block()?;
+    let rp_name = name_token.text().to_string();
+    let Some(config_block) = rp.config_block() else {
+        diags.push(LoweringDiagnostic::MissingConfigBlock {
+            block_kind: "retry_policy",
+            block_name: rp_name,
+            span,
+        });
+        return None;
+    };
 
     let mut exprs: la_arena::Arena<Expr> = la_arena::Arena::new();
     let mut expr_spans: la_arena::Arena<text_size::TextRange> = la_arena::Arena::new();
@@ -1024,7 +1200,14 @@ fn synthesize_retry_policy_let(node: &SyntaxNode) -> Option<Item> {
     let fields: Vec<(Name, ExprId)> = config_block
         .items()
         .filter_map(|item| {
-            let key = item.key()?;
+            let Some(key) = item.key() else {
+                diags.push(LoweringDiagnostic::MissingConfigKey {
+                    block_kind: "retry_policy",
+                    block_name: rp_name.clone(),
+                    span: item.syntax().text_range(),
+                });
+                return None;
+            };
             let value = crate::lower_config_item::lower_config_value(&item, &mut alloc);
             Some((Name::new(key.text()), value))
         })
@@ -1072,14 +1255,26 @@ fn synthesize_retry_policy_let(node: &SyntaxNode) -> Option<Item> {
 ///   constructs `PrimitiveClient { name, provider, options }`.
 fn synthesize_client_items(
     node: &SyntaxNode,
-    file_id: baml_base::FileId,
-    diagnostics: &mut Vec<HirDiagnostic>,
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> Option<(Item, Option<FunctionDef>)> {
     let client = ast::ClientDef::cast(node.clone())?;
-    let name_token = client.name()?;
+    let Some(name_token) = client.name() else {
+        diags.push(LoweringDiagnostic::MissingItemName {
+            item_kind: "client",
+            span: node.text_range(),
+        });
+        return None;
+    };
     let client_name = name_token.text().to_string();
     let span = node.text_range();
-    let config_block = client.config_block()?;
+    let Some(config_block) = client.config_block() else {
+        diags.push(LoweringDiagnostic::MissingConfigBlock {
+            block_kind: "client",
+            block_name: client_name,
+            span,
+        });
+        return None;
+    };
 
     // Determine provider
     let provider: Option<String> = config_block.items().find_map(|item| {
@@ -1097,10 +1292,10 @@ fn synthesize_client_items(
     // Validate provider name.
     if let Some(p) = &provider {
         if !VALID_PROVIDERS.contains(&p.as_str()) {
-            diagnostics.push(HirDiagnostic::UnknownProvider {
+            diags.push(LoweringDiagnostic::UnknownProvider {
                 client_name: client_name.clone(),
                 provider: p.clone(),
-                span: baml_base::Span::new(file_id, span),
+                span,
             });
         }
     }
@@ -1127,8 +1322,7 @@ fn synthesize_client_items(
             &name_token,
             &config_block,
             provider.as_ref(),
-            file_id,
-            diagnostics,
+            diags,
         ))
     } else {
         None
@@ -1322,8 +1516,7 @@ fn synthesize_client_new_companion(
     name_token: &rowan::SyntaxToken<baml_compiler_syntax::BamlLanguage>,
     config_block: &ast::ConfigBlock,
     provider: Option<&String>,
-    file_id: baml_base::FileId,
-    diagnostics: &mut Vec<HirDiagnostic>,
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> FunctionDef {
     use baml_base::Literal;
 
@@ -1449,8 +1642,8 @@ fn synthesize_client_new_companion(
             has_base_url,
             &prov_index,
             &prov_vals,
-            baml_base::Span::new(file_id, options_span),
-            diagnostics,
+            options_span,
+            diags,
         );
     }
 
@@ -1691,8 +1884,8 @@ fn validate_client_options(
     has_base_url: bool,
     prov_index: &std::collections::HashMap<&str, usize>,
     prov_vals: &[Option<ExprId>],
-    span: baml_base::Span,
-    diagnostics: &mut Vec<HirDiagnostic>,
+    span: text_size::TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
 ) {
     let has_prov = |name: &str| -> bool {
         prov_index
@@ -1710,7 +1903,7 @@ fn validate_client_options(
             (true, false) => "deployment_id",
             (true, true) => unreachable!(),
         };
-        diagnostics.push(HirDiagnostic::MissingClientOptions {
+        diags.push(LoweringDiagnostic::MissingClientOptions {
             client_name: client_name.to_string(),
             message: format!(
                 "azure-openai requires either base_url or both resource_name and deployment_id (missing: {missing})"
@@ -1720,10 +1913,22 @@ fn validate_client_options(
     }
 }
 
-fn lower_config_block(cb: &ast::ConfigBlock) -> Vec<ConfigItemDef> {
+fn lower_config_block(
+    cb: &ast::ConfigBlock,
+    block_kind: &'static str,
+    block_name: &str,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> Vec<ConfigItemDef> {
     cb.items()
         .filter_map(|item| {
-            let key_token = item.key()?;
+            let Some(key_token) = item.key() else {
+                diags.push(LoweringDiagnostic::MissingConfigKey {
+                    block_kind,
+                    block_name: block_name.to_string(),
+                    span: item.syntax().text_range(),
+                });
+                return None;
+            };
             let value = item.value_str().unwrap_or_default();
             Some(ConfigItemDef {
                 key: Name::new(key_token.text()),
@@ -1731,14 +1936,6 @@ fn lower_config_block(cb: &ast::ConfigBlock) -> Vec<ConfigItemDef> {
                 span: item.syntax().text_range(),
             })
         })
-        .collect()
-}
-
-/// Lower field-level attributes (single @) from a `Field` node.
-fn lower_field_attributes(field: &ast::Field) -> Vec<RawAttribute> {
-    field
-        .attributes()
-        .filter_map(|attr| lower_attribute(&attr))
         .collect()
 }
 

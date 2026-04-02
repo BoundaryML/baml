@@ -49,6 +49,15 @@ function FooBar(arg) -> bar {
 //    │ 
 //    │ Note: Error code: E0010
 // ───╯
+// Error: could not parse type expression for return type of `Foo`
+//    ╭─[ functions_v2_invalid.baml:1:18 ]
+//    │
+//  1 │ function Foo() -> {
+//    │                  │ 
+//    │                  ╰─ unparseable type
+//    │ 
+//    │ Note: Error code: E0108
+// ───╯
 // Error: unresolved name: Bar
 //    ╭─[ functions_v2_invalid.baml:1:18 ]
 //    │

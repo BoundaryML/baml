@@ -10,11 +10,14 @@ use la_arena::Arena;
 use rowan::ast::AstNode;
 use text_size::{TextRange, TextSize};
 
-use crate::ast::{
-    AssignOp, AstSourceMap, BinaryOp, CatchArm, CatchArmId, CatchClause, CatchClauseKind, Expr,
-    ExprBody, ExprId, FunctionBodyDef, FunctionDef, LetOrigin, Literal, LoopOrigin, MatchArm,
-    MatchArmId, Param, PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId,
-    TypeExpr, UnaryOp,
+use crate::{
+    LoweringDiagnostic,
+    ast::{
+        AssignOp, AstSourceMap, BinaryOp, CatchArm, CatchArmId, CatchClause, CatchClauseKind, Expr,
+        ExprBody, ExprId, FunctionBodyDef, FunctionDef, LetOrigin, Literal, LoopOrigin, MatchArm,
+        MatchArmId, Param, PatId, Pattern, SpannedTypeExpr, SpreadField, Stmt, StmtId, TypeAnnotId,
+        TypeExpr, UnaryOp,
+    },
 };
 
 /// Returns true if `kind` can serve as an identifier token in expression position.
@@ -31,6 +34,7 @@ fn is_ident_token(kind: SyntaxKind) -> bool {
 pub(crate) fn lower(
     expr_body: &baml_compiler_syntax::ast::ExprFunctionBody,
     param_names: &[Name],
+    diags: &mut Vec<LoweringDiagnostic>,
 ) -> (ExprBody, AstSourceMap) {
     let mut ctx = LoweringContext::new();
 
@@ -46,7 +50,9 @@ pub(crate) fn lower(
         .find_map(baml_compiler_syntax::ast::BlockExpr::cast)
         .map(|block| ctx.lower_block_expr(&block));
 
-    ctx.finish(root_expr)
+    let (body, source_map, ctx_diags) = ctx.finish(root_expr);
+    diags.extend(ctx_diags);
+    (body, source_map)
 }
 
 /// Lower a `BLOCK_EXPR` node directly to an owned `ExprBody` + parallel `AstSourceMap`.
@@ -56,7 +62,7 @@ pub(crate) fn lower(
 pub(crate) fn lower_block_node(
     block_node: &SyntaxNode,
     param_names: &[Name],
-) -> (ExprBody, AstSourceMap) {
+) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
     let mut ctx = LoweringContext::new();
     for name in param_names {
         ctx.names_in_scope.insert(name.to_string());
@@ -82,7 +88,7 @@ pub(crate) fn lower_testset_block_node(
     block_node: &SyntaxNode,
     collector_var: &Name,
     param_names: &[Name],
-) -> (ExprBody, AstSourceMap) {
+) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
     let mut ctx = LoweringContext::new_testset_collector(collector_var.clone());
     ctx.names_in_scope.insert(collector_var.to_string());
     for name in param_names {
@@ -166,7 +172,10 @@ impl InitTestContext {
         self.inner.alloc_stmt(stmt, span)
     }
 
-    pub(crate) fn finish(self, root_expr: Option<ExprId>) -> (ExprBody, AstSourceMap) {
+    pub(crate) fn finish(
+        self,
+        root_expr: Option<ExprId>,
+    ) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
         self.inner.finish(root_expr)
     }
 }
@@ -197,6 +206,8 @@ struct LoweringContext {
     /// calls using this variable name. This supports dynamic test generation inside
     /// `for`/`if` blocks inside a testset body.
     testset_collector_var: Option<Name>,
+    /// Diagnostics accumulated during lowering.
+    diags: Vec<LoweringDiagnostic>,
 }
 
 impl LoweringContext {
@@ -211,6 +222,7 @@ impl LoweringContext {
             source_map: AstSourceMap::new(),
             names_in_scope: std::collections::HashSet::new(),
             testset_collector_var: None,
+            diags: Vec::new(),
         }
     }
 
@@ -344,7 +356,10 @@ impl LoweringContext {
         }
     }
 
-    fn finish(self, root_expr: Option<ExprId>) -> (ExprBody, AstSourceMap) {
+    fn finish(
+        self,
+        root_expr: Option<ExprId>,
+    ) -> (ExprBody, AstSourceMap, Vec<LoweringDiagnostic>) {
         let body = ExprBody {
             exprs: self.exprs,
             stmts: self.stmts,
@@ -354,7 +369,7 @@ impl LoweringContext {
             type_annotations: self.type_annotations,
             root_expr,
         };
-        (body, self.source_map)
+        (body, self.source_map, self.diags)
     }
 
     fn lower_block_expr(&mut self, block: &baml_compiler_syntax::ast::BlockExpr) -> ExprId {
@@ -1877,7 +1892,7 @@ impl LoweringContext {
             .children()
             .find(|n| n.kind() == SyntaxKind::PARAMETER_LIST)
             .and_then(ast::ParameterList::cast)
-            .map(|pl| crate::lower_cst::lower_params(&pl))
+            .map(|pl| crate::lower_cst::lower_params(&pl, "<lambda>", &mut self.diags))
             .unwrap_or_default();
 
         let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
@@ -1932,7 +1947,8 @@ impl LoweringContext {
                     lambda_ctx.names_in_scope.insert(name.to_string());
                 }
                 let root_expr = lambda_ctx.lower_block_expr(&block);
-                let (body, source_map) = lambda_ctx.finish(Some(root_expr));
+                let (body, source_map, lambda_diags) = lambda_ctx.finish(Some(root_expr));
+                self.diags.extend(lambda_diags);
                 FunctionBodyDef::Expr(body, source_map)
             });
 
@@ -2462,20 +2478,19 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the test body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let lambda_body = if let Some(body_node) = body_node_opt {
+        let (lambda_body, lambda_source_map, _lambda_diags) = if let Some(body_node) = body_node_opt
+        {
             // Lower the body using a fresh context (no collector var — test bodies don't nest)
-            let (body, source_map) = crate::lower_expr_body::lower_block_node(
+            crate::lower_expr_body::lower_block_node(
                 &body_node,
                 std::slice::from_ref(&collector_name),
-            );
-            (body, source_map)
+            )
         } else {
             // Empty body: produce null
             let mut sub_ctx = LoweringContext::new();
             let null_expr = sub_ctx.alloc_expr(Expr::Null, span);
             sub_ctx.finish(Some(null_expr))
         };
-        let (lambda_body, lambda_source_map) = lambda_body;
 
         let lambda_def = FunctionDef {
             name: Name::new("<test body>"),
@@ -2535,7 +2550,7 @@ impl LoweringContext {
         // Find the BLOCK_EXPR child (the testset body)
         let body_node_opt = node.children().find(|c| c.kind() == SyntaxKind::BLOCK_EXPR);
 
-        let (sub_body, sub_source_map) = if let Some(body_node) = body_node_opt {
+        let (sub_body, sub_source_map, _sub_diags) = if let Some(body_node) = body_node_opt {
             crate::lower_expr_body::lower_testset_block_node(
                 &body_node,
                 &Name::new("testset"),

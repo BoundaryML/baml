@@ -9,39 +9,39 @@ SOURCE_FILE
     L_BRACE "{"
     FIELD
       WORD "field1"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "closed string"
-            QUOTE """
-            WORD "closed"
-            WORD "string"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "closed string"
+              QUOTE """
+              WORD "closed"
+              WORD "string"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "field2"
-      TYPE_EXPR "string"
+      TYPE_EXPR
         WORD "string"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "unclosed string
-  field3 string @alias("
-            QUOTE """
-            WORD "unclosed"
-            WORD "string"
-            WORD "field3"
-            WORD "string"
-            AT "@"
-            WORD "alias"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
             L_PAREN "("
-            QUOTE """
+            STRING_LITERAL "unclosed string
+  field3 string @alias("
+              QUOTE """
+              WORD "unclosed"
+              WORD "string"
+              WORD "field3"
+              WORD "string"
+              AT "@"
+              WORD "alias"
+              L_PAREN "("
+              QUOTE """
     FIELD
       WORD "another"
       TYPE_EXPR "closed"

@@ -75,84 +75,81 @@ SOURCE_FILE
         WORD "UC"
     FIELD
       WORD "b4"
-      TYPE_EXPR "UA | UB | UC"
+      TYPE_EXPR
         WORD "UA"
         PIPE "|"
         WORD "UB"
         PIPE "|"
         WORD "UC"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "b4_alias"
-            QUOTE """
-            WORD "b4_alias"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "b4_alias"
+              QUOTE """
+              WORD "b4_alias"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "b5"
-      TYPE_EXPR "UA | UB"
+      TYPE_EXPR
         WORD "UA"
         PIPE "|"
         WORD "UB"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "b5_alias"
-            QUOTE """
-            WORD "b5_alias"
-            QUOTE """
-          R_PAREN ")"
-    PIPE "|"
-    FIELD "UC"
-      WORD "UC"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "b5_alias"
+              QUOTE """
+              WORD "b5_alias"
+              QUOTE """
+            R_PAREN ")"
+        PIPE "|"
+        WORD "UC"
     FIELD
       WORD "b6"
-      TYPE_EXPR "UA"
+      TYPE_EXPR
         WORD "UA"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "b6_alias"
-            QUOTE """
-            WORD "b6_alias"
-            QUOTE """
-          R_PAREN ")"
-    PIPE "|"
-    FIELD "UB"
-      WORD "UB"
-    PIPE "|"
-    FIELD "UC"
-      WORD "UC"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "b6_alias"
+              QUOTE """
+              WORD "b6_alias"
+              QUOTE """
+            R_PAREN ")"
+        PIPE "|"
+        WORD "UB"
+        PIPE "|"
+        WORD "UC"
     FIELD
       WORD "b7"
-      TYPE_EXPR "UA | UB | UC"
+      TYPE_EXPR
         WORD "UA"
         PIPE "|"
         WORD "UB"
         PIPE "|"
         WORD "UC"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "b7_alias"
-            QUOTE """
-            WORD "b7_alias"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE "@stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "b7_alias"
+              QUOTE """
+              WORD "b7_alias"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
     FIELD
       WORD "b8"
       TYPE_EXPR
@@ -166,16 +163,16 @@ SOURCE_FILE
           WORD "done"
         PIPE "|"
         WORD "UC"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "b8_alias"
-            QUOTE """
-            WORD "b8_alias"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "b8_alias"
+              QUOTE """
+              WORD "b8_alias"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "b9"
       TYPE_EXPR
@@ -201,21 +198,21 @@ SOURCE_FILE
             PIPE "|"
             WORD "UB"
         R_PAREN ")"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "b10_alias"
-            QUOTE """
-            WORD "b10_alias"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE "@stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "b10_alias"
+              QUOTE """
+              WORD "b10_alias"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
     FIELD
       WORD "b11"
       TYPE_EXPR
@@ -226,16 +223,16 @@ SOURCE_FILE
             PIPE "|"
             WORD "UB"
         R_PAREN ")"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "b11_alias"
-            QUOTE """
-            WORD "b11_alias"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "b11_alias"
+              QUOTE """
+              WORD "b11_alias"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "b12"
       TYPE_EXPR
@@ -251,16 +248,16 @@ SOURCE_FILE
           WORD "stream"
           DOT "."
           WORD "done"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "b12_alias"
-            QUOTE """
-            WORD "b12_alias"
-            QUOTE """
-          R_PAREN ")"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "b12_alias"
+              QUOTE """
+              WORD "b12_alias"
+              QUOTE """
+            R_PAREN ")"
     FIELD
       WORD "b13"
       TYPE_EXPR
@@ -268,104 +265,40 @@ SOURCE_FILE
         PIPE "|"
         L_PAREN "("
         FUNCTION_TYPE_PARAM
-          TYPE_EXPR "UB"
+          TYPE_EXPR
             WORD "UB"
-        AT "@"
-        WORD "alias"
-        L_PAREN "("
-        QUOTE """
-        WORD "b13_alias"
-        QUOTE """
-        R_PAREN ")"
+            ATTRIBUTE
+              AT "@"
+              WORD "alias"
+              ATTRIBUTE_ARGS
+                L_PAREN "("
+                STRING_LITERAL "b13_alias"
+                  QUOTE """
+                  WORD "b13_alias"
+                  QUOTE """
+                R_PAREN ")"
         R_PAREN ")"
     FIELD
       WORD "b14"
       TYPE_EXPR
         L_PAREN "("
         FUNCTION_TYPE_PARAM
-          TYPE_EXPR "UA | UB"
+          TYPE_EXPR
             WORD "UA"
             PIPE "|"
             WORD "UB"
-        AT "@"
-        WORD "alias"
-        L_PAREN "("
-        QUOTE """
-        WORD "b14_alias"
-        QUOTE """
-        R_PAREN ")"
+            ATTRIBUTE
+              AT "@"
+              WORD "alias"
+              ATTRIBUTE_ARGS
+                L_PAREN "("
+                STRING_LITERAL "b14_alias"
+                  QUOTE """
+                  WORD "b14_alias"
+                  QUOTE """
+                R_PAREN ")"
         R_PAREN ")"
     R_BRACE "}"
 
 === ERRORS ===
-Error: Expected Unexpected token in class body, found '|'
-    ╭─[ unions.baml:24:3 ]
-    │
- 24 │   // B6: field attr on first member — ERROR
-    │   ┬  
-    │   ╰── Expected Unexpected token in class body, found '|'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: field 'UC' is missing a type annotation
-    ╭─[ unions.baml:24:5 ]
-    │
- 24 │   // B6: field attr on first member — ERROR
-    │     ─┬  
-    │      ╰── field 'UC' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected Unexpected token in class body, found '|'
-    ╭─[ unions.baml:26:1 ]
-    │
- 26 │ 
-    │ ┬  
-    │ ╰── Expected Unexpected token in class body, found '|'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: field 'UB' is missing a type annotation
-    ╭─[ unions.baml:27:2 ]
-    │
- 27 │   // B7: mixed attrs after full union — valid
-    │  ─┬  
-    │   ╰── field 'UB' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected Unexpected token in class body, found '|'
-    ╭─[ unions.baml:27:5 ]
-    │
- 27 │   // B7: mixed attrs after full union — valid
-    │     ┬  
-    │     ╰── Expected Unexpected token in class body, found '|'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: field 'UC' is missing a type annotation
-    ╭─[ unions.baml:27:7 ]
-    │
- 27 │   // B7: mixed attrs after full union — valid
-    │       ─┬  
-    │        ╰── field 'UC' is missing a type annotation
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Unexpected '@' in type expression
-    ╭─[ unions.baml:50:3 ]
-    │
- 50 │   // B14: field attr inside parens on non-last member — ERROR
-    │   ┬  
-    │   ╰── Unexpected '@' in type expression
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Unexpected '@' in type expression
+None

@@ -28,24 +28,24 @@ SOURCE_FILE
           WORD "done"
     FIELD
       WORD "c2"
-      TYPE_EXPR "MFoo?"
+      TYPE_EXPR
         WORD "MFoo"
         QUESTION "?"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "c2_alias"
-            QUOTE """
-            WORD "c2_alias"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE "@stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "c2_alias"
+              QUOTE """
+              WORD "c2_alias"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
     FIELD
       WORD "c3"
       TYPE_EXPR
@@ -59,47 +59,47 @@ SOURCE_FILE
           WORD "done"
     FIELD
       WORD "c4"
-      TYPE_EXPR "MFoo[]"
+      TYPE_EXPR
         WORD "MFoo"
         L_BRACKET "["
         R_BRACKET "]"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "c4_alias"
-            QUOTE """
-            WORD "c4_alias"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE "@stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "c4_alias"
+              QUOTE """
+              WORD "c4_alias"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
     FIELD
       WORD "c5"
-      TYPE_EXPR "MFoo[]?"
+      TYPE_EXPR
         WORD "MFoo"
         L_BRACKET "["
         R_BRACKET "]"
         QUESTION "?"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "c5_alias"
-            QUOTE """
-            WORD "c5_alias"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE "@stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "c5_alias"
+              QUOTE """
+              WORD "c5_alias"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
     FIELD
       WORD "c6"
       TYPE_EXPR
@@ -112,21 +112,21 @@ SOURCE_FILE
           TYPE_EXPR "MFoo"
             WORD "MFoo"
           GREATER ">"
-      ATTRIBUTE
-        AT "@"
-        WORD "alias"
-        ATTRIBUTE_ARGS
-          L_PAREN "("
-          STRING_LITERAL "c6_alias"
-            QUOTE """
-            WORD "c6_alias"
-            QUOTE """
-          R_PAREN ")"
-      ATTRIBUTE "@stream.done"
-        AT "@"
-        WORD "stream"
-        DOT "."
-        WORD "done"
+        ATTRIBUTE
+          AT "@"
+          WORD "alias"
+          ATTRIBUTE_ARGS
+            L_PAREN "("
+            STRING_LITERAL "c6_alias"
+              QUOTE """
+              WORD "c6_alias"
+              QUOTE """
+            R_PAREN ")"
+        ATTRIBUTE "@stream.done"
+          AT "@"
+          WORD "stream"
+          DOT "."
+          WORD "done"
     R_BRACE "}"
 
 === ERRORS ===

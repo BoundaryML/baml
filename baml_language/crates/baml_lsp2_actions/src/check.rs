@@ -53,6 +53,11 @@ pub fn check_file(db: &dyn Db, file: SourceFile) -> Vec<Diagnostic> {
     // pay for iteration when there are diagnostics.
     let index = file_semantic_index(db, file);
     if let Some(extra) = &index.extra {
+        // 2a. Lowering diagnostics (CST → AST structural errors)
+        for ld in &extra.lowering_diagnostics {
+            diagnostics.push(ld.to_diagnostic(file_id));
+        }
+        // 2b. HIR2 semantic diagnostics (duplicate definitions, etc.)
         for hir_diag in &extra.diagnostics {
             diagnostics.push(hir_diag.to_diagnostic(file_id));
         }

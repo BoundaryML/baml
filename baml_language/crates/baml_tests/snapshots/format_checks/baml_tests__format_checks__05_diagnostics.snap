@@ -244,6 +244,26 @@ source: crates/baml_tests/src/generated_tests.rs
      │ Note: Error code: E0001
 ─────╯
 
+  [hir] Error: Unknown attribute `@stream.not_null`
+    ╭─[ class_decls.baml:33:74 ]
+    │
+ 33 │     summary string? @description("A summary") @alias("sum") @stream.done @stream.not_null
+    │                                                                          ────────┬───────  
+    │                                                                                  ╰───────── unknown attribute
+    │ 
+    │ Note: Error code: E0015
+────╯
+
+  [hir] Error: Unknown attribute `@stream.not_null`
+     ╭─[ class_decls.baml:291:14 ]
+     │
+ 291 │     e string @stream.not_null
+     │              ────────┬───────  
+     │                      ╰───────── unknown attribute
+     │ 
+     │ Note: Error code: E0015
+─────╯
+
   [type] Error: unresolved name: MyRetryPolicy
     ╭─[ config_decls.baml:10:2 ]
     │

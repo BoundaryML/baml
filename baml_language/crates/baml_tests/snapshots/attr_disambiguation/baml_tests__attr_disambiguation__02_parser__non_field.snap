@@ -43,18 +43,18 @@ SOURCE_FILE
     WORD "type"
     WORD "E1"
     EQUALS "="
-    TYPE_EXPR "EFoo"
+    TYPE_EXPR
       WORD "EFoo"
-    ATTRIBUTE
-      AT "@"
-      WORD "alias"
-      ATTRIBUTE_ARGS
-        L_PAREN "("
-        STRING_LITERAL "e1_alias"
-          QUOTE """
-          WORD "e1_alias"
-          QUOTE """
-        R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "e1_alias"
+            QUOTE """
+            WORD "e1_alias"
+            QUOTE """
+          R_PAREN ")"
   TYPE_ALIAS_DEF
     WORD "type"
     WORD "E2"
@@ -70,43 +70,43 @@ SOURCE_FILE
     WORD "type"
     WORD "E3"
     EQUALS "="
-    TYPE_EXPR "EFoo"
+    TYPE_EXPR
       WORD "EFoo"
-    ATTRIBUTE
-      AT "@"
-      WORD "alias"
-      ATTRIBUTE_ARGS
-        L_PAREN "("
-        STRING_LITERAL "e3_alias"
-          QUOTE """
-          WORD "e3_alias"
-          QUOTE """
-        R_PAREN ")"
-    ATTRIBUTE "@stream.done"
-      AT "@"
-      WORD "stream"
-      DOT "."
-      WORD "done"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "e3_alias"
+            QUOTE """
+            WORD "e3_alias"
+            QUOTE """
+          R_PAREN ")"
+      ATTRIBUTE "@stream.done"
+        AT "@"
+        WORD "stream"
+        DOT "."
+        WORD "done"
   TYPE_ALIAS_DEF
     WORD "type"
     WORD "E4"
     EQUALS "="
-    TYPE_EXPR "EA | EB | EC"
+    TYPE_EXPR
       WORD "EA"
       PIPE "|"
       WORD "EB"
       PIPE "|"
       WORD "EC"
-    ATTRIBUTE
-      AT "@"
-      WORD "alias"
-      ATTRIBUTE_ARGS
-        L_PAREN "("
-        STRING_LITERAL "e4_alias"
-          QUOTE """
-          WORD "e4_alias"
-          QUOTE """
-        R_PAREN ")"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "e4_alias"
+            QUOTE """
+            WORD "e4_alias"
+            QUOTE """
+          R_PAREN ")"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "E5"
@@ -115,23 +115,30 @@ SOURCE_FILE
       PARAMETER
         WORD "x"
         COLON ":"
-        TYPE_EXPR "EFoo"
+        TYPE_EXPR
           WORD "EFoo"
-  AT "@"
-  WORD "alias"
-  L_PAREN "("
-  QUOTE """
-  WORD "e5_alias"
-  QUOTE """
-  R_PAREN ")"
-  R_PAREN ")"
-  ARROW "->"
-  WORD "string"
-  L_BRACE "{"
-  QUOTE """
-  WORD "hello"
-  QUOTE """
-  R_BRACE "}"
+          ATTRIBUTE
+            AT "@"
+            WORD "alias"
+            ATTRIBUTE_ARGS
+              L_PAREN "("
+              STRING_LITERAL "e5_alias"
+                QUOTE """
+                WORD "e5_alias"
+                QUOTE """
+              R_PAREN ")"
+      R_PAREN ")"
+    ARROW "->"
+    TYPE_EXPR "string"
+      WORD "string"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        STRING_LITERAL "hello"
+          QUOTE """
+          WORD "hello"
+          QUOTE """
+        R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "E6"
@@ -166,23 +173,30 @@ SOURCE_FILE
       L_PAREN "("
       R_PAREN ")"
     ARROW "->"
-    TYPE_EXPR "EFoo"
+    TYPE_EXPR
       WORD "EFoo"
-  AT "@"
-  WORD "alias"
-  L_PAREN "("
-  QUOTE """
-  WORD "e7_alias"
-  QUOTE """
-  R_PAREN ")"
-  L_BRACE "{"
-  WORD "EFoo"
-  L_BRACE "{"
-  WORD "x"
-  COLON ":"
-  INTEGER_LITERAL "1"
-  R_BRACE "}"
-  R_BRACE "}"
+      ATTRIBUTE
+        AT "@"
+        WORD "alias"
+        ATTRIBUTE_ARGS
+          L_PAREN "("
+          STRING_LITERAL "e7_alias"
+            QUOTE """
+            WORD "e7_alias"
+            QUOTE """
+          R_PAREN ")"
+    EXPR_FUNCTION_BODY
+      BLOCK_EXPR
+        L_BRACE "{"
+        OBJECT_LITERAL
+          WORD "EFoo"
+          L_BRACE "{"
+          OBJECT_FIELD "x: 1"
+            WORD "x"
+            COLON ":"
+            INTEGER_LITERAL "1"
+          R_BRACE "}"
+        R_BRACE "}"
   FUNCTION_DEF
     KW_FUNCTION "function"
     WORD "E8"
@@ -211,344 +225,4 @@ SOURCE_FILE
         R_BRACE "}"
 
 === ERRORS ===
-Error: Expected ')', found '@'
-    ╭─[ non_field.baml:22:31 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                               ┬  
-    │                               ╰── Expected ')', found '@'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected return type (->), found '@'
-    ╭─[ non_field.baml:22:31 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                               ┬  
-    │                               ╰── Expected return type (->), found '@'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected function body, found '@'
-    ╭─[ non_field.baml:22:31 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                               ┬  
-    │                               ╰── Expected function body, found '@'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '@'
-    ╭─[ non_field.baml:22:31 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                               ┬  
-    │                               ╰── Expected top-level declaration, found '@'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found identifier
-    ╭─[ non_field.baml:22:32 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                                ──┬──  
-    │                                  ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '('
-    ╭─[ non_field.baml:22:37 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                                     ┬  
-    │                                     ╰── Expected top-level declaration, found '('
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '"'
-    ╭─[ non_field.baml:22:38 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                                      ┬  
-    │                                      ╰── Expected top-level declaration, found '"'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found identifier
-    ╭─[ non_field.baml:22:39 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                                       ────┬───  
-    │                                           ╰───── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '"'
-    ╭─[ non_field.baml:22:47 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                                               ┬  
-    │                                               ╰── Expected top-level declaration, found '"'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found ')'
-    ╭─[ non_field.baml:22:48 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                                                ┬  
-    │                                                ╰── Expected top-level declaration, found ')'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found ')'
-    ╭─[ non_field.baml:22:49 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                                                 ┬  
-    │                                                 ╰── Expected top-level declaration, found ')'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '->'
-    ╭─[ non_field.baml:22:51 ]
-    │
- 22 │ function E5(x: EFoo @alias("e5_alias")) -> string {
-    │                                                   ─┬  
-    │                                                    ╰── Expected top-level declaration, found '->'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found identifier
-    ╭─[ non_field.baml:23:2 ]
-    │
- 23 │   "hello"
-    │  ───┬──  
-    │     ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '{'
-    ╭─[ non_field.baml:23:9 ]
-    │
- 23 │   "hello"
-    │         ┬  
-    │         ╰── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '"'
-    ╭─[ non_field.baml:25:1 ]
-    │
- 25 │ 
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '"'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found identifier
-    ╭─[ non_field.baml:26:1 ]
-    │
- 26 │ // E6: function param with type attr — valid
-    │ ──┬──  
-    │   ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '"'
-    ╭─[ non_field.baml:26:6 ]
-    │
- 26 │ // E6: function param with type attr — valid
-    │      ┬  
-    │      ╰── Expected top-level declaration, found '"'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ non_field.baml:26:8 ]
-    │
- 26 │ // E6: function param with type attr — valid
-    │        ┬  
-    │        ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected function body, found '@'
-    ╭─[ non_field.baml:32:37 ]
-    │
- 32 │ function E7() -> EFoo @alias("e7_alias") {
-    │                                     ┬  
-    │                                     ╰── Expected function body, found '@'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '@'
-    ╭─[ non_field.baml:32:37 ]
-    │
- 32 │ function E7() -> EFoo @alias("e7_alias") {
-    │                                     ┬  
-    │                                     ╰── Expected top-level declaration, found '@'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found identifier
-    ╭─[ non_field.baml:32:38 ]
-    │
- 32 │ function E7() -> EFoo @alias("e7_alias") {
-    │                                      ──┬──  
-    │                                        ╰──── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '('
-    ╭─[ non_field.baml:32:43 ]
-    │
- 32 │ function E7() -> EFoo @alias("e7_alias") {
-    │                                           ┬  
-    │                                           ╰── Expected top-level declaration, found '('
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '"'
-    ╭─[ non_field.baml:33:1 ]
-    │
- 33 │   EFoo { x: 1 }
-    │ ┬  
-    │ ╰── Expected top-level declaration, found '"'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found identifier
-    ╭─[ non_field.baml:33:2 ]
-    │
- 33 │   EFoo { x: 1 }
-    │  ────┬───  
-    │      ╰───── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '"'
-    ╭─[ non_field.baml:33:10 ]
-    │
- 33 │   EFoo { x: 1 }
-    │          ┬  
-    │          ╰── Expected top-level declaration, found '"'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found ')'
-    ╭─[ non_field.baml:33:11 ]
-    │
- 33 │   EFoo { x: 1 }
-    │           ┬  
-    │           ╰── Expected top-level declaration, found ')'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '{'
-    ╭─[ non_field.baml:33:13 ]
-    │
- 33 │   EFoo { x: 1 }
-    │             ┬  
-    │             ╰── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found identifier
-    ╭─[ non_field.baml:34:1 ]
-    │
- 34 │ ╭─▶ }
-    ┆ ┆   
- 36 │ ├─▶ // E8: function return type with type attr — valid
-    │ │                                                        
-    │ ╰──────────────────────────────────────────────────────── Expected top-level declaration, found identifier
-    │     
-    │     Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '{'
-    ╭─[ non_field.baml:36:3 ]
-    │
- 36 │ // E8: function return type with type attr — valid
-    │   ┬  
-    │   ╰── Expected top-level declaration, found '{'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found identifier
-    ╭─[ non_field.baml:36:5 ]
-    │
- 36 │ // E8: function return type with type attr — valid
-    │     ┬  
-    │     ╰── Expected top-level declaration, found identifier
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found ':'
-    ╭─[ non_field.baml:36:6 ]
-    │
- 36 │ // E8: function return type with type attr — valid
-    │      ┬  
-    │      ╰── Expected top-level declaration, found ':'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found integer
-    ╭─[ non_field.baml:36:8 ]
-    │
- 36 │ // E8: function return type with type attr — valid
-    │        ┬  
-    │        ╰── Expected top-level declaration, found integer
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ non_field.baml:36:10 ]
-    │
- 36 │ // E8: function return type with type attr — valid
-    │          ┬  
-    │          ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
-
-Error: Expected top-level declaration, found '}'
-    ╭─[ non_field.baml:36:12 ]
-    │
- 36 │ // E8: function return type with type attr — valid
-    │            ┬  
-    │            ╰── Expected top-level declaration, found '}'
-    │ 
-    │ Note: Error code: E0010
-────╯
+None
