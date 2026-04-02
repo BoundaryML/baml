@@ -33,6 +33,32 @@ async fn catch_literal_string_match() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var _1
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 2
+        jump L2
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -52,6 +78,32 @@ async fn catch_literal_string_no_match_falls_to_wildcard() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const "other"
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var _1
+        load_const "boom"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 2
+        jump L2
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -71,6 +123,32 @@ async fn catch_literal_int_match() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function fails() -> int {
+        load_const 42
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var _1
+        load_const 42
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 2
+        jump L2
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -93,6 +171,66 @@ async fn catch_multiple_literals_dispatch() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_const "gamma"
+        throw
+
+      L2:
+        load_const "beta"
+        throw
+
+      L3:
+        load_const "alpha"
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L4
+        load_var _1
+        load_const "alpha"
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        load_const "beta"
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_const 3
+        jump L4
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -115,6 +253,33 @@ async fn typed_binding_string() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var _1
+        type_tag
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -133,6 +298,33 @@ async fn typed_binding_int() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function fails() -> int {
+        load_const 42
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var _1
+        type_tag
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -153,6 +345,57 @@ async fn typed_binding_dispatch_string_vs_int() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 42
+        throw
+
+      L1:
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        load_const 0
+        call user.fails
+        jump L4
+        load_var _1
+        type_tag
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        type_tag
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var _1
+        throw
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -173,6 +416,57 @@ async fn typed_binding_dispatch_int_vs_string() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 42
+        throw
+
+      L1:
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L4
+        load_var _1
+        type_tag
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        type_tag
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var _1
+        throw
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -193,6 +487,45 @@ async fn typed_binding_plus_wildcard() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 42
+        throw
+
+      L1:
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L2
+        load_var _1
+        type_tag
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 2
+        jump L2
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -217,6 +550,57 @@ async fn named_binding_string_access_value() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> string {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 42
+        throw
+
+      L1:
+        load_const "boom"
+        throw
+    }
+
+    function main() -> string {
+        load_const 0
+        call user.fails
+        jump L4
+        load_var _1
+        type_tag
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        type_tag
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var _1
+        throw
+
+      L2:
+        load_const "was int"
+        jump L4
+
+      L3:
+        load_var _1
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("boom".to_string()))
@@ -240,6 +624,58 @@ async fn named_binding_int_access_value() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 42
+        throw
+
+      L1:
+        load_const "boom"
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L4
+        load_var _1
+        type_tag
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        type_tag
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var _1
+        throw
+
+      L2:
+        load_var _1
+        jump L4
+
+      L3:
+        load_const 1
+        unary_op -
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }
 
@@ -264,6 +700,35 @@ async fn catch_user_class_single_arm() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://example.com"
+        store_field .url
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -287,6 +752,61 @@ async fn catch_two_user_classes_dispatch_first() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        alloc_instance ParseError
+        copy 0
+        load_const "bad json"
+        store_field .message
+        throw
+
+      L1:
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://x"
+        store_field .url
+        throw
+    }
+
+    function main() -> int {
+        load_const 0
+        call user.fails
+        jump L4
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        load_const ParseError
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var _1
+        throw
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -310,6 +830,61 @@ async fn catch_two_user_classes_dispatch_second() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        alloc_instance ParseError
+        copy 0
+        load_const "bad json"
+        store_field .message
+        throw
+
+      L1:
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://x"
+        store_field .url
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L4
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        load_const ParseError
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var _1
+        throw
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -332,6 +907,47 @@ async fn catch_user_class_plus_wildcard() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const "plain string error"
+        throw
+
+      L1:
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://x"
+        store_field .url
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L2
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 2
+        jump L2
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -360,6 +976,97 @@ async fn catch_three_user_classes_plus_wildcard() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function api(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const "unknown"
+        throw
+
+      L3:
+        alloc_instance RateLimit
+        copy 0
+        load_const 30
+        store_field .retryAfter
+        throw
+
+      L4:
+        alloc_instance NotFound
+        copy 0
+        load_const "/users"
+        store_field .path
+        throw
+
+      L5:
+        alloc_instance AuthError
+        copy 0
+        load_const "expired"
+        store_field .reason
+        throw
+    }
+
+    function main() -> int {
+        load_const 2
+        call user.api
+        jump L6
+        load_var _1
+        load_const AuthError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var _1
+        load_const NotFound
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var _1
+        load_const RateLimit
+        cmp_op instanceof
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const 4
+        jump L6
+
+      L3:
+        load_const 3
+        jump L6
+
+      L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
@@ -384,6 +1091,36 @@ async fn named_class_binding_access_field() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> string {
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://example.com"
+        store_field .url
+        throw
+    }
+
+    function main() -> string {
+        call user.fails
+        jump L2
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_var _1
+        load_field .url
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("http://example.com".to_string()))
@@ -410,6 +1147,63 @@ async fn named_class_binding_dispatch_access_fields() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> string {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        alloc_instance ParseError
+        copy 0
+        load_const "bad json"
+        store_field .message
+        throw
+
+      L1:
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://x"
+        store_field .url
+        throw
+    }
+
+    function main() -> string {
+        load_const 1
+        call user.fails
+        jump L4
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        load_const ParseError
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var _1
+        throw
+
+      L2:
+        load_var _1
+        load_field .message
+        jump L4
+
+      L3:
+        load_var _1
+        load_field .url
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(
         output.result,
         Ok(BexExternalValue::String("bad json".to_string()))
@@ -437,6 +1231,35 @@ async fn bare_class_single_arm() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails() -> int {
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://example.com"
+        store_field .url
+        throw
+    }
+
+    function main() -> int {
+        call user.fails
+        jump L2
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -460,6 +1283,61 @@ async fn bare_class_dispatch_first() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        alloc_instance ParseError
+        copy 0
+        load_const "bad"
+        store_field .message
+        throw
+
+      L1:
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://x"
+        store_field .url
+        throw
+    }
+
+    function main() -> int {
+        load_const 0
+        call user.fails
+        jump L4
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        load_const ParseError
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var _1
+        throw
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -483,6 +1361,61 @@ async fn bare_class_dispatch_second() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        alloc_instance ParseError
+        copy 0
+        load_const "bad"
+        store_field .message
+        throw
+
+      L1:
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://x"
+        store_field .url
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L4
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        load_const ParseError
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_var _1
+        throw
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -505,6 +1438,47 @@ async fn bare_class_plus_wildcard() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const "plain string"
+        throw
+
+      L1:
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://x"
+        store_field .url
+        throw
+    }
+
+    function main() -> int {
+        load_const 0
+        call user.fails
+        jump L2
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 2
+        jump L2
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -527,6 +1501,47 @@ async fn bare_class_plus_wildcard_wildcard_fires() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function fails(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const "plain string"
+        throw
+
+      L1:
+        alloc_instance NetworkError
+        copy 0
+        load_const "http://x"
+        store_field .url
+        throw
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.fails
+        jump L2
+        load_var _1
+        load_const NetworkError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 2
+        jump L2
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -543,6 +1558,12 @@ async fn unhandled_throw_string() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        load_const "something went wrong"
+        throw
+    }
+    "#);
     assert_eq!(
         output.result,
         Err(bex_engine::EngineError::UnhandledThrow {
@@ -560,6 +1581,12 @@ async fn unhandled_throw_int() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> int {
+        load_const 42
+        throw
+    }
+    ");
     assert_eq!(
         output.result,
         Err(bex_engine::EngineError::UnhandledThrow {
@@ -583,6 +1610,35 @@ async fn catch_division_by_zero() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function divides() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function main() -> int {
+        call user.divides
+        jump L2
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_const 1
+        unary_op -
+
+      L2:
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
@@ -597,6 +1653,37 @@ async fn catch_index_out_of_bounds() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> int {
+        call user.oob
+        jump L2
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_const 1
+        unary_op -
+
+      L2:
+        return
+    }
+
+    function oob() -> int {
+        load_const 1
+        load_const 2
+        alloc_array 2
+        load_const 5
+        load_array_element
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
@@ -611,6 +1698,37 @@ async fn catch_map_key_not_found() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function bad() -> int {
+        load_const 1
+        load_const "a"
+        alloc_map 1
+        load_const "x"
+        load_map_element
+        return
+    }
+
+    function main() -> int {
+        call user.bad
+        jump L2
+        load_var _1
+        load_const baml.panics.MapKeyNotFound
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_const 1
+        unary_op -
+
+      L2:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
@@ -625,6 +1743,38 @@ async fn catch_negative_index_as_index_out_of_bounds() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function bad() -> int {
+        load_const 1
+        load_const 2
+        alloc_array 2
+        load_const 1
+        unary_op -
+        load_array_element
+        return
+    }
+
+    function main() -> int {
+        call user.bad
+        jump L2
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_const 1
+        unary_op -
+
+      L2:
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
@@ -645,6 +1795,35 @@ async fn named_panic_binding_division_by_zero_field() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function divides() -> int {
+        load_const 10
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function main() -> int {
+        call user.divides
+        jump L2
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_var _1
+        load_field .dividend
+
+      L2:
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(10)));
 }
 
@@ -661,6 +1840,38 @@ async fn named_panic_binding_index_out_of_bounds_fields() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> int {
+        call user.oob
+        jump L2
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_var _1
+        load_field .index
+
+      L2:
+        return
+    }
+
+    function oob() -> int {
+        load_const 10
+        load_const 20
+        load_const 30
+        alloc_array 3
+        load_const 7
+        load_array_element
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
 }
 
@@ -677,6 +1888,38 @@ async fn named_panic_binding_index_out_of_bounds_length() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> int {
+        call user.oob
+        jump L2
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_var _1
+        load_field .length
+
+      L2:
+        return
+    }
+
+    function oob() -> int {
+        load_const 10
+        load_const 20
+        load_const 30
+        alloc_array 3
+        load_const 7
+        load_array_element
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
@@ -693,6 +1936,37 @@ async fn named_panic_binding_map_key_not_found_field() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function bad() -> string {
+        load_const "one"
+        load_const "a"
+        alloc_map 1
+        load_const "x"
+        load_map_element
+        return
+    }
+
+    function main() -> string {
+        call user.bad
+        jump L2
+        load_var _1
+        load_const baml.panics.MapKeyNotFound
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_var _1
+        load_field .key
+
+      L2:
+        return
+    }
+    "#);
     // The VM currently sets key to "(unknown)" — just verify it's a string
     assert!(
         output.result.is_ok(),
@@ -719,6 +1993,36 @@ async fn wildcard_skips_division_by_zero() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 0
+        call user.risky
+        jump L0
+        load_const 1
+        unary_op -
+
+      L0:
+        return
+    }
+
+    function risky(x: int) -> int {
+        load_var x
+        load_const 100
+        cmp_op >
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 1
+        load_var x
+        bin_op /
+        return
+
+      L1:
+        load_const "too big"
+        throw
+    }
+    "#);
     assert!(output.result.is_err(), "panic should propagate past _");
 }
 
@@ -737,6 +2041,39 @@ async fn wildcard_skips_index_out_of_bounds() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 99
+        call user.risky
+        jump L0
+        load_const 1
+        unary_op -
+
+      L0:
+        return
+    }
+
+    function risky(x: int) -> int {
+        load_var x
+        load_const 100
+        cmp_op >
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 1
+        load_const 2
+        load_const 3
+        alloc_array 3
+        load_var x
+        load_array_element
+        return
+
+      L1:
+        load_const "too big"
+        throw
+    }
+    "#);
     assert!(output.result.is_err(), "panic should propagate past _");
 }
 
@@ -761,6 +2098,46 @@ async fn panic_arm_plus_wildcard_panic_fires() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 0
+        call user.risky
+        jump L2
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 2
+        jump L2
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+
+    function risky(x: int) -> int {
+        load_var x
+        load_const 100
+        cmp_op >
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 1
+        load_var x
+        bin_op /
+        return
+
+      L1:
+        load_const "too big"
+        throw
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -781,6 +2158,46 @@ async fn panic_arm_plus_wildcard_user_error_fires() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 999
+        call user.risky
+        jump L2
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 2
+        jump L2
+
+      L1:
+        load_const 1
+
+      L2:
+        return
+    }
+
+    function risky(x: int) -> int {
+        load_var x
+        load_const 100
+        cmp_op >
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 1
+        load_var x
+        bin_op /
+        return
+
+      L1:
+        load_const "too big"
+        throw
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -801,6 +2218,48 @@ async fn panic_arm_plus_wildcard_no_error() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 5
+        call user.risky
+        jump L2
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 2
+        unary_op -
+        jump L2
+
+      L1:
+        load_const 1
+        unary_op -
+
+      L2:
+        return
+    }
+
+    function risky(x: int) -> int {
+        load_var x
+        load_const 100
+        cmp_op >
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 1000
+        load_var x
+        bin_op /
+        return
+
+      L1:
+        load_const "too big"
+        throw
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(200)));
 }
 
@@ -829,6 +2288,64 @@ async fn user_class_plus_panic_plus_wildcard_class_fires() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 0
+        call user.risky
+        jump L4
+        load_var _1
+        load_const AppError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_const 3
+        jump L4
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L2
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+
+      L1:
+        load_const "fallback"
+        throw
+
+      L2:
+        alloc_instance AppError
+        copy 0
+        load_const 500
+        store_field .code
+        throw
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -855,6 +2372,76 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function do_div() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.risky
+        jump L4
+        load_var _1
+        load_const AppError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_const 3
+        jump L4
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_const "fallback"
+        throw
+
+      L2:
+        call user.do_div
+        return
+
+      L3:
+        alloc_instance AppError
+        copy 0
+        load_const 500
+        store_field .code
+        throw
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -881,6 +2468,76 @@ async fn user_class_plus_panic_plus_wildcard_string_fires() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function do_div() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function main() -> int {
+        load_const 2
+        call user.risky
+        jump L4
+        load_var _1
+        load_const AppError
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_const 3
+        jump L4
+
+      L2:
+        load_const 2
+        jump L4
+
+      L3:
+        load_const 1
+
+      L4:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L3
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L2
+
+      L1:
+        load_const "fallback"
+        throw
+
+      L2:
+        call user.do_div
+        return
+
+      L3:
+        alloc_instance AppError
+        copy 0
+        load_const 500
+        store_field .code
+        throw
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
@@ -913,6 +2570,108 @@ async fn four_arms_division_by_zero_fires() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function do_div() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function do_oob() -> int {
+        load_const 1
+        alloc_array 1
+        load_const 5
+        load_array_element
+        return
+    }
+
+    function main() -> int {
+        load_const 0
+        call user.risky
+        jump L6
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var _1
+        load_const AppError
+        cmp_op instanceof
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const 4
+        jump L6
+
+      L3:
+        load_const 3
+        jump L6
+
+      L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const "unknown"
+        throw
+
+      L3:
+        alloc_instance AppError
+        copy 0
+        load_const 404
+        store_field .code
+        throw
+
+      L4:
+        call user.do_oob
+        jump L6
+
+      L5:
+        call user.do_div
+
+      L6:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -941,6 +2700,108 @@ async fn four_arms_index_out_of_bounds_fires() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function do_div() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function do_oob() -> int {
+        load_const 1
+        alloc_array 1
+        load_const 5
+        load_array_element
+        return
+    }
+
+    function main() -> int {
+        load_const 1
+        call user.risky
+        jump L6
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var _1
+        load_const AppError
+        cmp_op instanceof
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const 4
+        jump L6
+
+      L3:
+        load_const 3
+        jump L6
+
+      L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const "unknown"
+        throw
+
+      L3:
+        alloc_instance AppError
+        copy 0
+        load_const 404
+        store_field .code
+        throw
+
+      L4:
+        call user.do_oob
+        jump L6
+
+      L5:
+        call user.do_div
+
+      L6:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -969,6 +2830,108 @@ async fn four_arms_user_class_fires() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function do_div() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function do_oob() -> int {
+        load_const 1
+        alloc_array 1
+        load_const 5
+        load_array_element
+        return
+    }
+
+    function main() -> int {
+        load_const 2
+        call user.risky
+        jump L6
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var _1
+        load_const AppError
+        cmp_op instanceof
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const 4
+        jump L6
+
+      L3:
+        load_const 3
+        jump L6
+
+      L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const "unknown"
+        throw
+
+      L3:
+        alloc_instance AppError
+        copy 0
+        load_const 404
+        store_field .code
+        throw
+
+      L4:
+        call user.do_oob
+        jump L6
+
+      L5:
+        call user.do_div
+
+      L6:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(3)));
 }
 
@@ -997,6 +2960,108 @@ async fn four_arms_wildcard_fires() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function do_div() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function do_oob() -> int {
+        load_const 1
+        alloc_array 1
+        load_const 5
+        load_array_element
+        return
+    }
+
+    function main() -> int {
+        load_const 3
+        call user.risky
+        jump L6
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var _1
+        load_const AppError
+        cmp_op instanceof
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const 4
+        jump L6
+
+      L3:
+        load_const 3
+        jump L6
+
+      L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const "unknown"
+        throw
+
+      L3:
+        alloc_instance AppError
+        copy 0
+        load_const 404
+        store_field .code
+        throw
+
+      L4:
+        call user.do_oob
+        jump L6
+
+      L5:
+        call user.do_div
+
+      L6:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(4)));
 }
 
@@ -1026,6 +3091,119 @@ async fn four_arms_no_error() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function do_div() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function do_oob() -> int {
+        load_const 1
+        alloc_array 1
+        load_const 5
+        load_array_element
+        return
+    }
+
+    function main() -> int {
+        load_const 4
+        call user.risky
+        jump L6
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L5
+
+      L0:
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L4
+
+      L1:
+        load_var _1
+        load_const AppError
+        cmp_op instanceof
+        pop_jump_if_false L2
+        jump L3
+
+      L2:
+        load_const 4
+        jump L6
+
+      L3:
+        load_const 3
+        jump L6
+
+      L4:
+        load_const 2
+        jump L6
+
+      L5:
+        load_const 1
+
+      L6:
+        return
+    }
+
+    function risky(mode: int) -> int {
+        load_var mode
+        load_const 0
+        cmp_op ==
+        pop_jump_if_false L0
+        jump L7
+
+      L0:
+        load_var mode
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var mode
+        load_const 2
+        cmp_op ==
+        pop_jump_if_false L2
+        jump L5
+
+      L2:
+        load_var mode
+        load_const 3
+        cmp_op ==
+        pop_jump_if_false L3
+        jump L4
+
+      L3:
+        load_const 99
+        jump L8
+
+      L4:
+        load_const "unknown"
+        throw
+
+      L5:
+        alloc_instance AppError
+        copy 0
+        load_const 404
+        store_field .code
+        throw
+
+      L6:
+        call user.do_oob
+        jump L8
+
+      L7:
+        call user.do_div
+
+      L8:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
 }
 
@@ -1036,12 +3214,29 @@ async fn four_arms_no_error() {
 #[tokio::test]
 async fn uncaught_division_by_zero() {
     let output = baml_test!(r#" function main() -> int { 1 / 0 } "#);
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+    ");
     assert!(output.result.is_err());
 }
 
 #[tokio::test]
 async fn uncaught_index_out_of_bounds() {
     let output = baml_test!(r#" function main() -> int { let a = [1]; a[5] } "#);
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> int {
+        load_const 1
+        alloc_array 1
+        load_const 5
+        load_array_element
+        return
+    }
+    ");
     assert!(output.result.is_err());
 }
 
@@ -1056,6 +3251,35 @@ async fn wrong_panic_pattern_propagates() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function divides() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function main() -> int {
+        call user.divides
+        jump L2
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_const 1
+        unary_op -
+
+      L2:
+        return
+    }
+    ");
     assert!(
         output.result.is_err(),
         "DivisionByZero should propagate past IndexOutOfBounds arm"
@@ -1077,6 +3301,70 @@ async fn panic_alias_catches_any_panic() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function divides() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function main() -> int {
+        call user.divides
+        jump L7
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L6
+
+      L0:
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var _1
+        load_const baml.panics.MapKeyNotFound
+        cmp_op instanceof
+        pop_jump_if_false L2
+        jump L6
+
+      L2:
+        load_var _1
+        load_const baml.panics.StackOverflow
+        cmp_op instanceof
+        pop_jump_if_false L3
+        jump L6
+
+      L3:
+        load_var _1
+        load_const baml.panics.AssertionFailed
+        cmp_op instanceof
+        pop_jump_if_false L4
+        jump L6
+
+      L4:
+        load_var _1
+        load_const baml.panics.Unreachable
+        cmp_op instanceof
+        pop_jump_if_false L5
+        jump L6
+
+      L5:
+        load_var _1
+        throw
+
+      L6:
+        load_const 1
+        unary_op -
+
+      L7:
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
@@ -1097,6 +3385,81 @@ async fn panic_alias_plus_wildcard_dispatch() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> int {
+        load_const 0
+        call user.risky
+        jump L7
+        load_var _1
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L6
+
+      L0:
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L1
+        jump L6
+
+      L1:
+        load_var _1
+        load_const baml.panics.MapKeyNotFound
+        cmp_op instanceof
+        pop_jump_if_false L2
+        jump L6
+
+      L2:
+        load_var _1
+        load_const baml.panics.StackOverflow
+        cmp_op instanceof
+        pop_jump_if_false L3
+        jump L6
+
+      L3:
+        load_var _1
+        load_const baml.panics.AssertionFailed
+        cmp_op instanceof
+        pop_jump_if_false L4
+        jump L6
+
+      L4:
+        load_var _1
+        load_const baml.panics.Unreachable
+        cmp_op instanceof
+        pop_jump_if_false L5
+        jump L6
+
+      L5:
+        load_const 2
+        jump L7
+
+      L6:
+        load_const 1
+
+      L7:
+        return
+    }
+
+    function risky(x: int) -> int {
+        load_var x
+        load_const 100
+        cmp_op >
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_const 1
+        load_var x
+        bin_op /
+        return
+
+      L1:
+        load_const "too big"
+        throw
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
 }
 
@@ -1119,6 +3482,31 @@ async fn nested_inner_catches_outer_does_not_fire() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function inner() -> int {
+        load_const "inner"
+        throw
+    }
+
+    function main() -> int {
+        call user.middle
+        jump L0
+        load_const 1
+        unary_op -
+
+      L0:
+        return
+    }
+
+    function middle() -> int {
+        call user.inner
+        jump L0
+        load_const 42
+
+      L0:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
 }
 
@@ -1138,6 +3526,47 @@ async fn nested_inner_catches_panic_outer_catches_rethrow() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function divides() -> int {
+        load_const 1
+        load_const 0
+        bin_op /
+        return
+    }
+
+    function main() -> int {
+        call user.middle
+        jump L0
+        load_const 99
+
+      L0:
+        return
+    }
+
+    function middle() -> int {
+        call user.divides
+        store_var x
+        jump L2
+        load_var _2
+        load_const baml.panics.DivisionByZero
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _2
+        throw
+
+      L1:
+        load_const 1
+        unary_op -
+        store_var x
+
+      L2:
+        load_const "recovered but failing"
+        throw
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
 }
 
@@ -1156,6 +3585,31 @@ async fn rethrow_propagates_to_outer() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function inner() -> int {
+        load_const "original"
+        throw
+    }
+
+    function main() -> int {
+        call user.middle
+        jump L0
+        load_const 99
+
+      L0:
+        return
+    }
+
+    function middle() -> int {
+        call user.inner
+        jump L0
+        load_const "rethrown"
+        throw
+
+      L0:
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
 }
 
@@ -1173,6 +3627,38 @@ async fn sequential_catches_both_recover() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function f1() -> int {
+        load_const "one"
+        throw
+    }
+
+    function f2() -> int {
+        load_const "two"
+        throw
+    }
+
+    function main() -> int {
+        call user.f1
+        store_var a
+        jump L0
+        load_const 10
+        store_var a
+
+      L0:
+        call user.f2
+        store_var b
+        jump L1
+        load_const 20
+        store_var b
+
+      L1:
+        load_var a
+        load_var b
+        bin_op +
+        return
+    }
+    "#);
     assert_eq!(output.result, Ok(BexExternalValue::Int(30)));
 }
 
@@ -1189,6 +3675,12 @@ async fn inline_throw_catch() {
         }
     "
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> int {
+        load_const 2
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
 }
 
@@ -1205,6 +3697,26 @@ async fn throw_in_match_arm_propagates() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @r#"
+    function main() -> string {
+        load_const 2
+        copy 0
+        load_const 1
+        cmp_op ==
+        pop_jump_if_false L0
+        pop 1
+        jump L1
+
+      L0:
+        pop 1
+        load_const "boom"
+        throw
+
+      L1:
+        load_const "one"
+        return
+    }
+    "#);
     assert_eq!(
         output.result,
         Err(bex_engine::EngineError::UnhandledThrow {
@@ -1224,5 +3736,37 @@ async fn caught_panic_has_accessible_fields() {
         }
     "#
     );
+    insta::assert_snapshot!(output.bytecode, @"
+    function main() -> int {
+        call user.oob
+        jump L2
+        load_var _1
+        load_const baml.panics.IndexOutOfBounds
+        cmp_op instanceof
+        pop_jump_if_false L0
+        jump L1
+
+      L0:
+        load_var _1
+        throw
+
+      L1:
+        load_var _1
+        load_field .index
+
+      L2:
+        return
+    }
+
+    function oob() -> int {
+        load_const 10
+        load_const 20
+        load_const 30
+        alloc_array 3
+        load_const 7
+        load_array_element
+        return
+    }
+    ");
     assert_eq!(output.result, Ok(BexExternalValue::Int(7)));
 }
