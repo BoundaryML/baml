@@ -97,7 +97,15 @@ pub(crate) fn bex_value_to_json(value: &BexExternalValue) -> Option<serde_json::
                 .collect();
             Some(serde_json::Value::Object(map))
         }
-        _ => None, // Skip non-serializable types (Resource, PromptAst, etc.)
+        // Binary data, opaque handles, and internal types have no JSON representation.
+        BexExternalValue::Uint8Array(_)
+        | BexExternalValue::RustData(_)
+        | BexExternalValue::Handle(_)
+        | BexExternalValue::FunctionRef { .. }
+        | BexExternalValue::Adt(_)
+        | BexExternalValue::Instance { .. }
+        | BexExternalValue::Variant { .. }
+        | BexExternalValue::Union { .. } => None,
     }
 }
 

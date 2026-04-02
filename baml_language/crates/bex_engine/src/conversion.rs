@@ -4,6 +4,7 @@
 //! between the VM representation (`Value`, `Object`) and the external
 //! representation (`BexValue`, `BexExternalValue`).
 
+use ::bex_vm_types::ObjectType;
 use baml_type::Literal;
 use bex_external_types::{BexExternalAdt, BexExternalValue, EpochGuard, Ty, UnionMetadata};
 use bex_heap::BexValue;
@@ -540,7 +541,21 @@ fn find_matching_union_member<'a>(value: &Value, members: &'a [Ty]) -> Option<&'
                     }
                 }
                 Object::Map(_) => members.iter().find(|m| matches!(m, Ty::Map { .. })),
-                _ => None,
+                Object::Uint8Array(_) => {
+                    members.iter().find(|m| matches!(m, Ty::Uint8Array { .. }))
+                }
+                // Types that don't participate in union discrimination.
+                Object::Function(_)
+                | Object::Closure(_)
+                | Object::Cell(_)
+                | Object::Class(_)
+                | Object::Enum(_)
+                | Object::Future(_)
+                | Object::RustData(_)
+                | Object::Collector(_)
+                | Object::Type(_) => None,
+                #[cfg(feature = "heap_debug")]
+                Object::Sentinel(_) => None,
             }
         }
     }
@@ -609,10 +624,40 @@ pub(crate) fn vm_arg_to_external(vm: &BexVm, value: &Value) -> BexExternalValue 
 
                     BexExternalValue::Instance { class_name, fields }
                 }
-                other => {
+                Object::Uint8Array(bytes) => BexExternalValue::Uint8Array(bytes.clone()),
+                Object::Variant(variant) => {
+                    let enum_obj = vm.get_object(variant.enm);
+                    let Object::Enum(enm) = enum_obj else {
+                        panic!("variant.enm doesn't point to an Enum");
+                    };
+                    let variant_name = enm
+                        .variants
+                        .get(variant.index)
+                        .map(|v| v.name.clone())
+                        .unwrap_or_else(|| format!("<variant {}>", variant.index));
+                    BexExternalValue::Variant {
+                        enum_name: enm.name.to_string(),
+                        variant_name,
+                    }
+                }
+                // These types should not appear as sys op arguments.
+                Object::Function(_)
+                | Object::Closure(_)
+                | Object::Cell(_)
+                | Object::Class(_)
+                | Object::Enum(_)
+                | Object::Future(_)
+                | Object::RustData(_)
+                | Object::Collector(_)
+                | Object::Type(_) => {
                     panic!(
-                        "Cannot convert object type to BexExternalValue for external op: {other:?}"
+                        "Cannot convert object type to BexExternalValue for sys op: {:?}",
+                        ObjectType::of(obj)
                     )
+                }
+                #[cfg(feature = "heap_debug")]
+                Object::Sentinel(_) => {
+                    panic!("Cannot convert sentinel to BexExternalValue")
                 }
             }
         }

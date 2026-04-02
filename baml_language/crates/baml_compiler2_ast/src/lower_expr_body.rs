@@ -1727,7 +1727,14 @@ impl LoweringContext {
             .unwrap_or("");
         match parse_byte_string_escapes(content) {
             Ok(bytes) => self.alloc_expr(Expr::ByteStringLiteral(bytes), node.text_range()),
-            Err(_) => self.alloc_expr(Expr::Missing, node.text_range()),
+            Err(message) => {
+                self.diags
+                    .push(LoweringDiagnostic::InvalidByteStringEscape {
+                        message,
+                        span: node.text_range(),
+                    });
+                self.alloc_expr(Expr::Missing, node.text_range())
+            }
         }
     }
 
