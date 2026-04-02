@@ -712,18 +712,8 @@ fn compute_throws_type(
     let pkg_items = package_items(db, pkg_id);
     let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
 
-    // Build the same key as throw_inference::function_key
-    let key = if pkg_info.namespace_path.is_empty() {
-        func_name.clone()
-    } else {
-        let mut parts: Vec<String> = pkg_info
-            .namespace_path
-            .iter()
-            .map(|n| n.as_str().to_string())
-            .collect();
-        parts.push(func_name.as_str().to_string());
-        baml_base::Name::new(parts.join("."))
-    };
+    let key =
+        baml_compiler2_tir::throw_inference::throw_set_key(&pkg_info.namespace_path, func_name);
 
     let facts = throw_sets.transitive_for(&key)?;
     if facts.is_empty() {
