@@ -179,6 +179,8 @@ pub struct Test {
     pub function_refs: Vec<Name>,
     /// Test arguments as key-value pairs.
     pub args: Vec<(Name, TestArgValue)>,
+    /// Pre-serialized JSON of args, built from the CST before structural info is lost.
+    pub raw_args_json: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -462,11 +464,11 @@ impl ItemTree {
                 // Values may be comma-separated or a single name
                 item.value
                     .split(',')
-                    .map(|s| Name::new(s.trim().trim_matches('"')))
+                    .map(|s| Name::new(s.trim().trim_matches(|c| c == '"' || c == '[' || c == ']').trim()))
                     .collect::<Vec<_>>()
             })
             .collect();
-        // Args come from config_items with key "args" — store raw; complex parsing skipped
+        // Structured args parsing skipped for now; use pre-serialized JSON from CST lowering.
         let args = Vec::new();
         self.tests.insert(
             id,
@@ -474,6 +476,7 @@ impl ItemTree {
                 name: t.name.clone(),
                 function_refs,
                 args,
+                raw_args_json: t.args_json.clone(),
             },
         );
         id

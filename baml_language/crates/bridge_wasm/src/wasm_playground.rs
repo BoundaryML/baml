@@ -13,6 +13,43 @@ pub struct FunctionInfo {
     pub kind: FunctionKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LlmCapabilities>,
+    pub params: Vec<ParamInfo>,
+}
+
+#[derive(Tsify, Serialize)]
+#[tsify(into_wasm_abi)]
+#[serde(rename_all = "camelCase")]
+pub struct ParamInfo {
+    pub name: String,
+    pub field_type: FieldType,
+}
+
+#[derive(Tsify, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum FieldType {
+    String,
+    Int,
+    Float,
+    Bool,
+    Null,
+    Enum { name: String, values: Vec<String> },
+    Class { name: String, fields: Vec<ParamInfo> },
+    List { item: Box<FieldType> },
+    Map { key: Box<FieldType>, value: Box<FieldType> },
+    Optional { inner: Box<FieldType> },
+    Union { variants: Vec<FieldType> },
+    Literal { value: LiteralValue },
+    RecursiveRef { name: String },
+    Any,
+    Media { media_type: String },
+}
+
+#[derive(Tsify, Serialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+pub enum LiteralValue {
+    String(String),
+    Int(i64),
+    Bool(bool),
 }
 
 #[derive(Tsify, Serialize)]
@@ -110,6 +147,7 @@ impl From<bex_project::PlaygroundNotification> for PlaygroundNotification {
                                     build_request: c.build_request,
                                     client_name: c.client_name,
                                 }),
+                                params: f.params.into_iter().map(convert_param_info).collect(),
                             })
                             .collect(),
                         tests: update
@@ -170,5 +208,50 @@ impl bex_project::PlaygroundSender for WasmPlaygroundSender {
         let wasm_notif: PlaygroundNotification = notification.into();
         let callback = self.callback.inner();
         let _ = callback.call1(&JsValue::NULL, &wasm_notif.into());
+    }
+}
+
+fn convert_param_info(p: bex_project::ParamInfo) -> ParamInfo {
+    ParamInfo {
+        name: p.name,
+        field_type: convert_field_type(p.field_type),
+    }
+}
+
+fn convert_field_type(ft: bex_project::FieldType) -> FieldType {
+    match ft {
+        bex_project::FieldType::String => FieldType::String,
+        bex_project::FieldType::Int => FieldType::Int,
+        bex_project::FieldType::Float => FieldType::Float,
+        bex_project::FieldType::Bool => FieldType::Bool,
+        bex_project::FieldType::Null => FieldType::Null,
+        bex_project::FieldType::Enum { name, values } => FieldType::Enum { name, values },
+        bex_project::FieldType::Class { name, fields } => FieldType::Class {
+            name,
+            fields: fields.into_iter().map(convert_param_info).collect(),
+        },
+        bex_project::FieldType::List { item } => FieldType::List {
+            item: Box::new(convert_field_type(*item)),
+        },
+        bex_project::FieldType::Map { key, value } => FieldType::Map {
+            key: Box::new(convert_field_type(*key)),
+            value: Box::new(convert_field_type(*value)),
+        },
+        bex_project::FieldType::Optional { inner } => FieldType::Optional {
+            inner: Box::new(convert_field_type(*inner)),
+        },
+        bex_project::FieldType::Union { variants } => FieldType::Union {
+            variants: variants.into_iter().map(convert_field_type).collect(),
+        },
+        bex_project::FieldType::Literal { value } => FieldType::Literal {
+            value: match value {
+                bex_project::LiteralValue::String(s) => LiteralValue::String(s),
+                bex_project::LiteralValue::Int(i) => LiteralValue::Int(i),
+                bex_project::LiteralValue::Bool(b) => LiteralValue::Bool(b),
+            },
+        },
+        bex_project::FieldType::RecursiveRef { name } => FieldType::RecursiveRef { name },
+        bex_project::FieldType::Any => FieldType::Any,
+        bex_project::FieldType::Media { media_type } => FieldType::Media { media_type },
     }
 }
