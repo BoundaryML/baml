@@ -2,4 +2,4 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === STRONG AST ERROR ===
-Expected token/node of kind STRING_LITERAL, but found RAW_STRING_LITERAL at main.baml:5:6
+Expected token/node of kind STRING_LITERAL, but found RAW_STRING_LITERAL at main.baml:3:6

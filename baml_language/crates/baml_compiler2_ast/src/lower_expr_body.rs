@@ -103,36 +103,37 @@ pub(crate) fn lower_testset_block_node(
 ///
 /// If the element is a node (e.g. `CALL_EXPR`, `OBJECT_LITERAL`), delegates to `lower_expr`.
 /// If the element is a bare token (e.g. `INTEGER_LITERAL`, `WORD`), lowers inline.
+/// Lower a bare token (not wrapped in a CST node) into an `Expr`.
+/// Used for runner expressions that are simple literals or identifiers.
+fn lower_bare_token_expr(kind: SyntaxKind, text: &str) -> Expr {
+    match kind {
+        SyntaxKind::INTEGER_LITERAL => {
+            if let Ok(v) = text.parse::<i64>() {
+                Expr::Literal(Literal::Int(v))
+            } else {
+                Expr::Missing
+            }
+        }
+        SyntaxKind::FLOAT_LITERAL => Expr::Literal(Literal::Float(text.to_string())),
+        k if is_ident_token(k) => match text {
+            "null" => Expr::Null,
+            "true" => Expr::Literal(Literal::Bool(true)),
+            "false" => Expr::Literal(Literal::Bool(false)),
+            _ => Expr::Path(vec![Name::new(text)]),
+        },
+        _ => Expr::Missing,
+    }
+}
+
 pub(crate) fn lower_runner_element(
     ctx: &mut InitTestContext,
     element: &baml_compiler_syntax::SyntaxElement,
 ) -> ExprId {
     let span = element.text_range();
     match element {
-        rowan::NodeOrToken::Node(node) => {
-            // Full expression node — use the standard lowering
-            ctx.inner.lower_expr(node)
-        }
+        rowan::NodeOrToken::Node(node) => ctx.inner.lower_expr(node),
         rowan::NodeOrToken::Token(token) => {
-            let kind = token.kind();
-            let text = token.text().to_string();
-            let expr = match kind {
-                SyntaxKind::INTEGER_LITERAL => {
-                    if let Ok(v) = text.parse::<i64>() {
-                        Expr::Literal(Literal::Int(v))
-                    } else {
-                        Expr::Missing
-                    }
-                }
-                SyntaxKind::FLOAT_LITERAL => Expr::Literal(Literal::String(text)),
-                SyntaxKind::WORD => match text.as_str() {
-                    "null" => Expr::Null,
-                    "true" => Expr::Literal(Literal::Bool(true)),
-                    "false" => Expr::Literal(Literal::Bool(false)),
-                    _ => Expr::Path(vec![Name::new(&text)]),
-                },
-                _ => Expr::Missing,
-            };
+            let expr = lower_bare_token_expr(token.kind(), token.text());
             ctx.inner.alloc_expr(expr, span)
         }
     }
@@ -2502,24 +2503,7 @@ impl LoweringContext {
         let runner_arg = match crate::lower_cst::extract_runner_element(node) {
             Some(rowan::NodeOrToken::Node(runner_node)) => self.lower_expr(&runner_node),
             Some(rowan::NodeOrToken::Token(token)) => {
-                // For bare tokens (e.g. integer literals), lower inline
-                let text = token.text().to_string();
-                let expr = match token.kind() {
-                    SyntaxKind::INTEGER_LITERAL => {
-                        if let Ok(v) = text.parse::<i64>() {
-                            Expr::Literal(Literal::Int(v))
-                        } else {
-                            Expr::Missing
-                        }
-                    }
-                    SyntaxKind::WORD => match text.as_str() {
-                        "null" => Expr::Null,
-                        "true" => Expr::Literal(Literal::Bool(true)),
-                        "false" => Expr::Literal(Literal::Bool(false)),
-                        _ => Expr::Path(vec![Name::new(&text)]),
-                    },
-                    _ => Expr::Missing,
-                };
+                let expr = lower_bare_token_expr(token.kind(), token.text());
                 self.alloc_expr(expr, span)
             }
             None => self.alloc_expr(Expr::Null, span),
@@ -2602,24 +2586,7 @@ impl LoweringContext {
         let runner_arg = match crate::lower_cst::extract_runner_element(node) {
             Some(rowan::NodeOrToken::Node(runner_node)) => self.lower_expr(&runner_node),
             Some(rowan::NodeOrToken::Token(token)) => {
-                // For bare tokens (e.g. integer literals), lower inline
-                let text = token.text().to_string();
-                let expr = match token.kind() {
-                    SyntaxKind::INTEGER_LITERAL => {
-                        if let Ok(v) = text.parse::<i64>() {
-                            Expr::Literal(Literal::Int(v))
-                        } else {
-                            Expr::Missing
-                        }
-                    }
-                    SyntaxKind::WORD => match text.as_str() {
-                        "null" => Expr::Null,
-                        "true" => Expr::Literal(Literal::Bool(true)),
-                        "false" => Expr::Literal(Literal::Bool(false)),
-                        _ => Expr::Path(vec![Name::new(&text)]),
-                    },
-                    _ => Expr::Missing,
-                };
+                let expr = lower_bare_token_expr(token.kind(), token.text());
                 self.alloc_expr(expr, span)
             }
             None => self.alloc_expr(Expr::Null, span),

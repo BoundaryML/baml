@@ -14,7 +14,7 @@ function user.another() -> null throws never {
   }
   !! 178..273: missing return: expected `null`
 }
-function user.$init_test(registry: testing.Registry) -> ? throws never {
+function user.$init_test_17(registry: testing.Registry) -> ? throws never {
   { : null
     registry.register_test("top level is fine", () -> { ... }, null) : null
       () -> { ... } : () -> null
@@ -30,9 +30,9 @@ function user.$init_test(registry: testing.Registry) -> ? throws never {
     null : null
   }
 }
-lambda user.$init_test {
+lambda user.$init_test_17 {
 }
-lambda user.$init_test {
+lambda user.$init_test_17 {
 }
-lambda user.$init_test {
+lambda user.$init_test_17 {
 }

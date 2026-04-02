@@ -319,10 +319,19 @@ impl<'a> Parser<'a> {
     /// Consume the current `Word("with")` token, re-labelling it as `KW_WITH`
     /// in the syntax tree. Handles leading trivia just like [`Self::bump`].
     fn bump_contextual_with(&mut self) {
-        // Emit leading trivia tokens (whitespace/newlines) before the keyword.
+        // Emit leading trivia (whitespace, newlines, comments) before the keyword,
+        // matching the same pattern as `bump_impl`.
         while self.current < self.tokens.len() {
+            if self.at_line_comment_start() {
+                self.consume_line_comment();
+                continue;
+            }
+            if self.at_block_comment_start() {
+                self.consume_block_comment();
+                continue;
+            }
             let token = &self.tokens[self.current];
-            if matches!(token.kind, TokenKind::Whitespace | TokenKind::Newline) {
+            if self.is_basic_trivia(token.kind) {
                 self.events.push(Event::Token {
                     kind: token_kind_to_syntax_kind(token.kind),
                     text: token.text.clone(),
@@ -3568,60 +3577,18 @@ impl<'a> Parser<'a> {
     /// If it starts with something else (e.g. a statement, keyword, or expression),
     /// the `{` is more likely a block body.
     fn brace_content_looks_like_fields(&self) -> bool {
-        // current token is `{` — peek past it and any trivia
-        let mut i = 1;
-        loop {
-            match self.peek(i) {
-                Some(t) if matches!(t.kind, TokenKind::Whitespace | TokenKind::Newline) => {
-                    i += 1;
-                }
-                Some(t) if t.kind == TokenKind::Slash => {
-                    // Could be start of a `//` comment — skip to end of line
-                    i += 1;
-                    loop {
-                        match self.peek(i) {
-                            Some(t) if t.kind == TokenKind::Newline => {
-                                i += 1;
-                                break;
-                            }
-                            Some(_) => i += 1,
-                            None => return false,
-                        }
-                    }
-                }
-                Some(t) => {
-                    // Spread operator: `{ ...expr }` is an object literal
-                    if t.kind == TokenKind::DotDotDot {
-                        return true;
-                    }
-                    // `{ }` — empty braces, treat as object literal
-                    if t.kind == TokenKind::RBrace {
-                        return true;
-                    }
-                    // Check for `<word> :` pattern
-                    if t.kind == TokenKind::Word {
-                        // Peek one more past trivia for `:`
-                        let mut j = i + 1;
-                        loop {
-                            match self.peek(j) {
-                                Some(t)
-                                    if matches!(
-                                        t.kind,
-                                        TokenKind::Whitespace | TokenKind::Newline
-                                    ) =>
-                                {
-                                    j += 1;
-                                }
-                                Some(t) => return t.kind == TokenKind::Colon,
-                                None => return false,
-                            }
-                        }
-                    }
-                    // Anything else (keyword, literal, operator) → not a field list
-                    return false;
-                }
-                None => return false,
+        // peek() already skips trivia (whitespace, newlines, comments),
+        // so peek(1) is the first content token after `{`.
+        match self.peek(1) {
+            Some(t) if t.kind == TokenKind::DotDotDot => true, // spread
+            Some(t) if t.kind == TokenKind::RBrace => true,    // empty braces
+            Some(t) if t.kind == TokenKind::Word => {
+                // Check for `<word> :` pattern
+                self.peek(2)
+                    .map(|t| t.kind == TokenKind::Colon)
+                    .unwrap_or(false)
             }
+            _ => false,
         }
     }
 

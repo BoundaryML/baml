@@ -1,10 +1,10 @@
 ---
 source: crates/baml_tests/src/generated_tests.rs
 ---
-function user.$init_test(registry: testing.Registry) -> null {
+function user.$init_test_17(registry: testing.Registry) -> null {
     load_var registry
     load_const "basic group"
-    make_closure .<lambda($init_test, 0)>, 0
+    make_closure .<lambda($init_test_17, 0)>, 0
     load_const null
     call assert.is_true
     pop 1

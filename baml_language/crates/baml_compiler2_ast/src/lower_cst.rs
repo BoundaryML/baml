@@ -30,7 +30,7 @@ use crate::{
 /// Intermediate representation of a test/testset block before synthesis.
 ///
 /// Collected during file lowering, then passed to `synthesize_init_test_function`
-/// which emits a single `$init_test_for__<id>` function containing
+/// which emits a per-file `$init_test_<file_id>` function containing
 /// `registry.register_test(...)` / `registry.register_test_set(...)` calls.
 enum TestRegistrationItem {
     Test {
@@ -137,9 +137,10 @@ pub fn lower_file_with_file_id(
         }
     }
 
-    // Synthesize a single $init_test function for all collected test/testset registrations.
+    // Synthesize a per-file $init_test function for all collected test/testset registrations.
+    // The file_id suffix ensures uniqueness when multiple files contain tests.
     if !test_registrations.is_empty() {
-        let init_fn = synthesize_init_test_function(&test_registrations);
+        let init_fn = synthesize_init_test_function(&test_registrations, file_id);
         items.push(Item::Function(init_fn));
     }
 
@@ -764,11 +765,18 @@ fn lower_testset(node: &SyntaxNode) -> Option<TestRegistrationItem> {
 ///
 /// Lambda bodies are lowered from the original CST `BLOCK_EXPR` nodes.
 ///
-/// The function is named `"$init_test"` — stable and file-content-based so it
-/// matches between PPIR (which calls `lower_file` with sentinel `FileId`) and HIR
-/// (which calls `lower_file_with_file_id` with the real `FileId`).
-fn synthesize_init_test_function(registrations: &[TestRegistrationItem]) -> FunctionDef {
-    let fn_name = "$init_test";
+/// The function is named `"$init_test_<file_id>"` to avoid collisions when
+/// multiple files contain tests. For the sentinel `FileId` (PPIR), uses plain
+/// `"$init_test"` since PPIR processes files individually.
+fn synthesize_init_test_function(
+    registrations: &[TestRegistrationItem],
+    file_id: baml_base::FileId,
+) -> FunctionDef {
+    let fn_name = if file_id == baml_base::FileId::sentinel() {
+        "$init_test".to_string()
+    } else {
+        format!("$init_test_{}", file_id.as_u32())
+    };
     let span = text_size::TextRange::default();
 
     let mut ctx = lower_expr_body::InitTestContext::new();
@@ -809,7 +817,7 @@ fn synthesize_init_test_function(registrations: &[TestRegistrationItem]) -> Func
     };
 
     FunctionDef {
-        name: Name::new(fn_name),
+        name: Name::new(&fn_name),
         generic_params: vec![],
         params: vec![registry_param],
         return_type: None,

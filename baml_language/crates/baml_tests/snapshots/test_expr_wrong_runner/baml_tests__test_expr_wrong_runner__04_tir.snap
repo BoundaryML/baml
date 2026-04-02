@@ -2,7 +2,7 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === TIR2 ===
-function user.$init_test(registry: testing.Registry) -> ? throws never {
+function user.$init_test_17(registry: testing.Registry) -> ? throws never {
   { : null
     registry.register_test("wrong runner type", () -> { ... }, 42) : null
       () -> { ... } : () -> null
@@ -22,15 +22,15 @@ function user.$init_test(registry: testing.Registry) -> ? throws never {
         }
     null : null
   }
-  !! 313..315: type mismatch: expected testing.TestRunner?, got 42
-  !! 373..387: type mismatch: expected testing.TestRunner?, got "not a runner"
-  !! 452..454: type mismatch: expected testing.TestSetRunner?, got 42
+  !! 177..179: type mismatch: expected testing.TestRunner?, got 42
+  !! 237..251: type mismatch: expected testing.TestRunner?, got "not a runner"
+  !! 316..318: type mismatch: expected testing.TestSetRunner?, got 42
 }
-lambda user.$init_test {
+lambda user.$init_test_17 {
 }
-lambda user.$init_test {
+lambda user.$init_test_17 {
 }
-lambda user.$init_test {
+lambda user.$init_test_17 {
 }
-lambda user.$init_test {
+lambda user.$init_test_17 {
 }
