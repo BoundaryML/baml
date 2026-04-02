@@ -246,7 +246,7 @@ jobs:
         with:
           workspaces: "baml_language -> target"
           # Share cache across similar Linux jobs for better hit rates
-          shared-key: "linux-cargo"
+          shared-key: "linux-cargo-32gb"
 
       - name: "Install cargo-binstall"
         run: |
