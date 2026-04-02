@@ -1,361 +1,633 @@
-# Compiler2 Architecture
+# compiler2: Architecture Reference
 
-This document covers the compiler2 pipeline end-to-end: the stages a `.baml` file passes through from source text to executable bytecode, the Salsa incremental compilation model, the TypeScript-inspired bidirectional type checker, the package system (including `baml_std` as a native package), LLM function desugaring, scopes, recursive types, and testing infrastructure.
-
-**Audience**: Team members who will read and modify the compiler2 code. Assumes familiarity with Rust and basic compiler concepts. Includes concrete file paths and code references throughout.
-
-**How to use**: Read linearly for a full walkthrough, or jump to a specific section via the table of contents. The [Pipeline Overview](#pipeline-overview) gives the 30-second picture; the [Layer Reference](#layer-reference) goes deep on each stage; the remaining sections cover cross-cutting concerns.
+> **Audience:** All engineers on the BAML team and coding agents operating in the `baml_language/` workspace.
+>
+> **Purpose:** This document explains the design, pipeline stages, invariants, and decision framework of the compiler2 system. It is the authoritative reference for understanding where new features should be implemented, what each layer is responsible for, and why specific boundaries exist.
 
 ---
 
 ## Table of Contents
 
 1. [Pipeline Overview](#pipeline-overview)
-2. [Layer Reference](#layer-reference)
-   - [Parser](#layer-0-parser)
-   - [AST](#layer-1-ast)
-   - [HIR](#layer-2-hir)
-   - [PPIR](#layer-3-ppir)
-   - [TIR](#layer-4-tir)
-   - [MIR](#layer-5-mir)
-   - [Emit](#layer-6-emit)
-3. [Salsa: Incremental Compilation](#salsa-incremental-compilation)
-4. [The Bidirectional Type Checker](#the-bidirectional-type-checker)
-5. [Unions in Type Checking](#unions-in-type-checking)
-6. [Recursive Types](#recursive-types)
-7. [LLM Function Desugaring](#llm-function-desugaring)
-8. [The Scope System](#the-scope-system)
-9. [The `baml_std` Builtins Pipeline](#the-baml_std-builtins-pipeline)
-10. [Testing Infrastructure](#testing-infrastructure)
-11. [Code References](#code-references)
+2. [The Cardinal Rule: Upstream Over Downstream](#the-cardinal-rule-upstream-over-downstream)
+3. [Layer-by-Layer Reference](#layer-by-layer-reference)
+   - [Parser (Lexer + CST)](#parser-lexer--cst)
+   - [AST (Abstract Syntax Tree)](#ast-abstract-syntax-tree)
+   - [HIR (High-level Intermediate Representation)](#hir-high-level-intermediate-representation)
+   - [PPIR (Post-Process IR / Stream Type Expansion)](#ppir-post-process-ir--stream-type-expansion)
+   - [TIR (Typed Intermediate Representation)](#tir-typed-intermediate-representation)
+   - [MIR (Mid-level Intermediate Representation)](#mir-mid-level-intermediate-representation)
+   - [Emit (Bytecode Generation)](#emit-bytecode-generation)
+4. [Query-Based Architecture (Salsa)](#query-based-architecture-salsa)
+5. [Packages and Name Resolution](#packages-and-name-resolution)
+6. [Scopes](#scopes)
+7. [CST-to-AST Desugaring: Detailed Examples](#cst-to-ast-desugaring-detailed-examples)
+   - [Companion Functions](#companion-functions)
+   - [Client Desugaring](#client-desugaring)
+   - [Lambda Expression Bodies](#lambda-expression-bodies)
+8. [Global Let Bindings and Initialization Order](#global-let-bindings-and-initialization-order)
+9. [The Type System: Key Concepts](#the-type-system-key-concepts)
+   - [Freshness and Widening](#freshness-and-widening)
+   - [Unknown, Missing, and Error Types](#unknown-missing-and-error-types)
+10. [Loop Desugaring and Diagnostic Preservation](#loop-desugaring-and-diagnostic-preservation)
+11. [Span Preservation](#span-preservation)
+12. [The Standard Library](#the-standard-library)
+13. [Debugging and Snapshot Tests](#debugging-and-snapshot-tests)
+14. [Rules for Adding Spans to Data Structures](#rules-for-adding-spans-to-data-structures)
+15. [Mutability](#mutability)
+16. [Bidirectional Type Checking](#bidirectional-type-checking)
+17. [Unions in Type Checking](#unions-in-type-checking)
+18. [Recursive Types](#recursive-types)
+19. [Salsa Early Cutoff: How Edits Stay Local](#salsa-early-cutoff-how-edits-stay-local)
+20. [The Standard Library: Dual Pipeline](#the-standard-library-dual-pipeline)
+21. [Testing Infrastructure: Phases and Incrementality](#testing-infrastructure-phases-and-incrementality)
+22. [Decision Framework Summary](#decision-framework-summary)
 
 ---
 
 ## Pipeline Overview
 
-```
-Source (.baml file)
-    | baml_compiler_parser::syntax_tree  [Salsa tracked]
-    v
-CST (Concrete Syntax Tree -- lossless, with trivia)
-    | baml_compiler2_ast::lower_file()  [no Salsa; owned data]
-    |   |-- LLM functions -> synthesize_llm_builtin_call
-    |   |-- Companion functions -> expand_companions
-    |   \-- Client blocks -> synthesize_client_items
-    v
-Vec<ast::Item> (span-separated AST: ExprBody + AstSourceMap)
-    | SemanticIndexBuilder::build()  [builds scope tree, item tree]
-    v
-FileSemanticIndex (HIR per file)
-    | namespace_items() -> package_items()  [Salsa, with PartialEq early cutoff]
-    v
-Merged package symbol tables
-    | baml_compiler2_ppir  [stream expansion, synthesis of stream_* items]
-    v
-Augmented HIR
-    | infer_scope_types() per scope  [Salsa tracked, per-scope granularity]
-    v
-ScopeInference (TIR -- fully typed expressions, resolved names)
-    | lower_function() / lower_let_body()
-    v
-MirFunction (CFG of BasicBlocks)
-    | cleanup -> analysis -> stack-carry -> emit
-    v
-bex_vm_types::Program (stack-machine bytecode)
-```
-
-Each arrow is a dependency edge. Changes propagate only as far as Salsa's early-cutoff allows.
-
-### Layer Summary
-
-| Layer | Question it answers | Salsa? | Key output |
-|---|---|---|---|
-| **Parser** | What tokens/syntax? | Yes (1 query) | `SyntaxNode` (CST) |
-| **AST** | What items after desugaring? | No | `Vec<Item>` |
-| **HIR** | What scopes/names/contributions? | Yes (8 queries) | `FileSemanticIndex`, `PackageItems` |
-| **PPIR** | What with stream types expanded? | No (passthrough) | Same as HIR (will diverge) |
-| **TIR** | What type is everything? | Yes (6 queries) | `ScopeInference`, `PackageInterface` |
-| **MIR** | What is the control flow? | No | `MirFunction` |
-| **Emit** | What is the bytecode? | No | `Program` |
-
-The Salsa boundary is at HIR and TIR -- these are the layers with incremental caching. AST, MIR, and Emit are pure transformations that re-run from scratch when their inputs change. The critical early-cutoff points are `namespace_items` (prevents file-edit cascades across files) and `infer_scope_types` (prevents body-edit cascades across scopes).
-
----
-
-## Layer Reference
-
-### Layer 0: Parser
-
-**Crate**: `baml_compiler_parser`
-**Question**: *"What are the tokens and syntactic structure of this file?"*
-
-Produces a lossless CST (Concrete Syntax Tree) including whitespace and comments. Supports incremental reparsing -- on a text edit, only the changed portion of the tree is rebuilt.
-
-| Query | Signature | Description |
-|---|---|---|
-| `syntax_tree` | `#[salsa::tracked] fn(db, SourceFile) -> Parse` | Returns the full CST parse result for a file |
-
-**Output**: `SyntaxNode` -- a green/red tree (rowan) where every token and trivia node is preserved. Downstream layers never re-lex or re-parse; they consume this tree.
-
-**When to modify**: You're adding new syntax to the language (new keywords, new expression forms, new block types). If you're changing what a construct *means* rather than how it's *written*, you probably want AST or HIR instead.
-
----
-
-### Layer 1: AST
-
-**Crate**: `baml_compiler2_ast`
-**Question**: *"What items did the user declare, and what do their expression bodies look like after desugaring?"*
-
-Converts the CST into clean, owned Rust data structures. Performs all syntactic desugaring: LLM functions become calls to `baml.llm.call_llm_function`, client blocks become let bindings, companion functions are generated. After this layer, there is no distinction between "declarative" and "imperative" function bodies -- everything is an expression tree.
-
-| Function | Signature | Description |
-|---|---|---|
-| `lower_file` | `fn(root: &SyntaxNode) -> (Vec<Item>, Vec<Diagnostic>)` | The sole entry point; not a Salsa query (pure function) |
-
-**Output**: `Vec<Item>` -- a flat list of `FunctionDef`, `ClassDef`, `EnumDef`, `TypeAliasDef`, `LetDef`, etc. Each function body is an `ExprBody` (arena of `Expr`/`Stmt`/`Pattern` nodes) paired with a separate `AstSourceMap` (arena of `TextRange`s). The span/semantic separation is physical from the start.
-
-**Key types consumed downstream**: `Item`, `ExprBody`, `AstSourceMap`, `Expr` (15 variants), `Stmt` (12 variants), `TypeExpr` (recursive type syntax), `FunctionDef`, `ClassDef`, `DeclarativeMeta::Llm`.
-
-**When to modify**: You're changing how a syntactic construct desugars into the core expression language. Examples: adding a new desugaring (like LLM functions -> builtin calls), adding a new `Expr` or `Stmt` variant, changing what companion functions are generated, or changing how client/retry blocks are lowered. If the new feature doesn't need new syntax but needs new desugaring, this is likely your layer. If you need to change name resolution or type checking, look at HIR or TIR instead.
-
----
-
-### Layer 2: HIR
-
-**Crate**: `baml_compiler2_hir`
-**Question**: *"What scopes exist, what names are visible in each scope, and what items does each file/namespace/package contribute?"*
-
-Builds the semantic index for each file -- the scope tree, item tree, and symbol contributions. Merges contributions across files into namespace-level and package-level symbol tables. This is where Salsa enters the picture: every query here is either `#[salsa::tracked]` or carefully designed for early cutoff.
-
-**Db trait**: `pub trait Db: baml_workspace::Db` -- adds `compiler2_extra_files()` for builtin stubs.
-
-| Query | Key | Returns | Description |
-|---|---|---|---|
-| `file_semantic_index` | `SourceFile` | `&FileSemanticIndex` | Salsa tracked (`no_eq`); builds scope tree + item tree from AST |
-| `namespace_items` | `NamespaceId` | `&NamespaceItems` | Salsa tracked; merges all files in a namespace; `PartialEq` early cutoff |
-| `package_items` | `PackageId` | `&PackageItems` | Salsa tracked; aggregates all namespaces in a package |
-| `package_dependencies` | `PackageId` | `Vec<PackageId>` | Salsa tracked; returns dependency list (currently hardcoded) |
-| `function_signature` | `FunctionLoc` | `Arc<FunctionSignature>` | Salsa tracked; span-free param names + `TypeExpr`s |
-| `function_body` | `FunctionLoc` | `Arc<FunctionBody>` | Salsa tracked; span-free `ExprBody` or `Builtin(Vm|Io)` |
-| `function_signature_source_map` | `FunctionLoc` | `SignatureSourceMap` | Salsa tracked; spans only -- decoupled from semantic data |
-| `function_body_source_map` | `FunctionLoc` | `Option<AstSourceMap>` | Salsa tracked; spans only |
-| `let_body` | `LetLoc` | `Arc<LetBody>` | Salsa tracked; span-free let initializer body |
-| `scope_bindings_query` | `ScopeId` | `ScopeBindings` | Plain function; returns bindings for a scope |
-| `file_item_tree` | `SourceFile` | `Arc<ItemTree>` | Plain function; extracts item tree from semantic index |
-| `file_symbol_contributions` | `SourceFile` | `Arc<FileSymbolContributions>` | Plain function; extracts contributions from semantic index |
-
-**Output**: `FileSemanticIndex` containing: `scopes` (DFS pre-order scope tree), `scope_bindings` (per-scope let/param bindings), `item_tree` (position-independent item storage keyed by name-hash `LocalItemId`), `symbol_contributions` (names this file contributes to its namespace). `PackageItems` provides `lookup_type(path)` and `lookup_value(path)` for downstream name resolution.
-
-**When to modify**: You're changing how names are organized, resolved, or contributed across files and packages. Examples: adding a new item kind (so it appears in the `ItemTree`), changing how scopes are built (e.g. adding a new `ScopeKind`), modifying cross-file or cross-package name resolution, adding a new Salsa query for a new per-item data extraction, or changing what constitutes a "symbol contribution" to a namespace. Also modify HIR if you need to change how `Compiler2ExtraFiles` (builtins) are injected. If your change is about *what type* something has rather than *what name* it has, look at TIR.
-
----
-
-### Layer 3: PPIR
-
-**Crate**: `baml_compiler2_ppir`
-**Question**: *"What does the program look like with streaming types expanded?"*
-
-Sits between HIR and TIR. Performs stream expansion: for each class/type-alias with `@stream.*` annotations, synthesizes `stream_*` variants with SAP (Streaming Appearance Protocol) attributes. Currently implemented as a passthrough scaffold -- all queries delegate to HIR.
-
-**Db trait**: `pub trait Db: baml_compiler2_hir::Db`
-
-TIR calls `baml_compiler2_ppir::package_items` (not HIR's directly), so when PPIR adds stream-expansion logic, TIR picks it up automatically.
-
-**When to modify**: You're working on streaming support. This layer is currently a passthrough scaffold, but it's where stream-type expansion (`@stream.*` annotations -> synthetic `stream_*` types) will live. If you're adding or changing streaming behavior, this is your layer.
-
----
-
-### Layer 4: TIR
-
-**Crate**: `baml_compiler2_tir`
-**Question**: *"What is the type of every expression, and does the program type-check?"*
-
-Runs bidirectional type inference per scope. Resolves all name references to fully qualified types. Checks subtyping, validates generics, performs control-flow narrowing, infers throw sets, detects recursive type cycles, and exports fully-resolved package interfaces for cross-package consumption.
-
-**Db trait**: `pub trait Db: baml_compiler2_ppir::Db`
-
-| Query | Key | Returns | Description |
-|---|---|---|---|
-| `infer_scope_types` | `ScopeId` | `&ScopeInference` | **Core query** -- maps `ExprId -> Ty`, `PatId -> Ty`, resolves method calls, tracks match exhaustiveness |
-| `resolve_class_fields` | `ClassLoc` | `Arc<ResolvedClassFields>` | Resolves field `TypeExpr -> Ty` for one class |
-| `resolve_type_alias` | `TypeAliasLoc` | `Arc<ResolvedTypeAlias>` | Resolves the body of one type alias |
-| `package_interface` | `PackageId` | `&PackageInterface` | Fully-resolved typed API surface of a package (types, functions, throw sets) |
-| `package_resolution_context` | `PackageId` | `&PackageResolutionContext` | Bundles own items + dependency interfaces for cross-package lookups |
-| `function_throw_sets` | `PackageId` | `&FunctionThrowSets` | Per-function direct and transitive throw sets via call-graph analysis |
-| `collect_file_diagnostics` | `SourceFile` | `TypeCheckDiagnostics` | Gathers all TIR diagnostics for one file |
-
-**Output**: `ScopeInference` -- per-scope maps of `ExprId -> Ty` (expression types), `PatId -> Ty` (binding types), `ExprId -> MethodResolution` (resolved call targets), and an exhaustive-match set. `PackageInterface` -- the fully-resolved typed export surface consumed by dependent packages.
-
-**When to modify**: You're changing type-checking rules, adding new type constructs, or modifying how expressions get their types. Examples: adding a new `Ty` variant, changing subtype rules (e.g. making a new type coercible to another), adding new control-flow narrowing patterns, changing how generics are instantiated, adding new diagnostic errors for type mismatches, changing how throw sets are computed, or modifying the `PackageInterface` for cross-package type resolution. If your change is about *what code gets generated* rather than *what types things have*, look at MIR or Emit.
-
----
-
-### Layer 5: MIR
-
-**Crate**: `baml_compiler2_mir`
-**Question**: *"What is the control flow graph for each function, with typed locals and explicit branching?"*
-
-Lowers the AST expression tree (with TIR type annotations) into a control flow graph of basic blocks. Each block contains typed statements and ends with a terminator (goto, branch, switch, call, return, throw, dispatch-future, await). Runs four cleanup passes: dead block elimination, copy propagation, dead local elimination, RPO reordering.
-
-**Db trait**: `pub trait Db: baml_compiler2_tir::Db`
-
-All plain functions (no Salsa tracking):
-
-| Function | Args | Returns | Description |
-|---|---|---|---|
-| `lower_function` | `db, FunctionLoc` | `MirFunction` | Lowers one function into a CFG with typed locals |
-| `lower_let_body` | `db, LetLoc` | `Option<MirFunctionBody>` | Lowers a top-level let initializer into a CFG body |
-| `convert_tir2_ty` | `ty, aliases, recursive_aliases` | `Ty` | Converts TIR `Ty` to MIR's `baml_type::Ty`, resolving aliases with recursion guard |
-| `def_to_item_ref` | `db, Definition` | `ItemRef` | Converts an HIR `Definition` to a fully-qualified `ItemRef` |
-
-**Output**: `MirFunction` -- either `Bytecode(MirFunctionBody)` or `Builtin(BuiltinKind)`. A `MirFunctionBody` contains `blocks: Vec<BasicBlock>`, `locals: Vec<LocalDecl>` (where `_0` = return place, `_1..=_arity` = parameters), and `entry: BlockId`.
-
-**When to modify**: You're adding new control flow constructs, changing how expressions lower to basic blocks, or adding new MIR optimization passes. Examples: adding a new `Terminator` variant (e.g. a new kind of branch/call), adding a new cleanup pass, changing how pattern matching compiles to switches, or adding a new `Statement` kind. If you're adding a new expression form, you likely need changes in both AST (to parse it) and MIR (to lower it to a CFG). If the change is about how the CFG maps to bytecode instructions, look at Emit instead.
-
----
-
-### Layer 6: Emit
-
-**Crate**: `baml_compiler2_emit`
-**Question**: *"What is the complete executable bytecode program?"*
-
-Compiles MIR into stack-machine bytecode. Runs local classification analysis (parameter/real/virtual/phi-like/dead), register allocation via stack-carry simulation, and emits `bex_vm_types::Program`.
-
-| Function | Args | Returns | Description |
-|---|---|---|---|
-| `generate_project_bytecode` | `db, options` | `Result<Program, LoweringError>` | Multi-pass driver; assigns global slots, builds class/enum tables, compiles all functions, synthesizes `$init` per package |
-
-**Output**: `bex_vm_types::Program` -- the complete executable program containing: function table (bytecode + metadata), class table (field layouts + type tags), enum table (variant maps), global slot assignments, and test case metadata.
-
-**When to modify**: You're changing how MIR maps to bytecode, adding new VM instructions, or changing the structure of the compiled `Program`. Examples: adding a new bytecode instruction, changing register allocation strategy, modifying how global slots are assigned, changing the class/enum table layout, or adding new metadata to compiled functions (like the `FunctionMeta::Llm` sidecar). If you're changing the VM instruction set itself (what instructions exist and what they do), you're likely changing both Emit and `bex_vm_types`.
-
----
-
-## Salsa: Incremental Compilation
-
-Salsa is the foundation of the pipeline. Understanding it is necessary to understand everything else.
-
-### The core idea
-
-You declare **inputs** (mutable data the outside world provides) and **tracked queries** (pure functions of the database). Salsa records which queries read which inputs. On the next compilation cycle, it only re-runs queries whose inputs actually changed -- and only propagates invalidation further if the recomputed result is actually *different* from the cached one ("early cutoff").
-
-### Inputs
-
-There are two primary inputs:
-
-- **`SourceFile`** (`baml_base/src/files.rs:14`): Each `.baml` file. Has `text: String`, `path: PathBuf`, `file_id: FileId`. When the user edits a file, the LSP calls `file.set_text(db).to(new_text)`.
-- **`Project`** (`baml_workspace/src/lib.rs:50`): The list of all `SourceFile`s. Changed when files are added/removed.
-
-### The `Db` trait chain
-
-Each pipeline crate defines a `Db` trait extending the previous:
+The compiler2 pipeline processes BAML source through a series of representations. There are exactly **three transformations** that produce new data structures, and several **query layers** that answer questions about those structures without transforming them:
 
 ```
-baml_workspace::Db              <-- provides project() -> Project
-  \-- baml_compiler2_hir::Db      <-- adds compiler2_extra_files()
-        \-- baml_compiler2_ppir::Db   <-- pure passthrough (no additions)
-              \-- baml_compiler2_tir::Db    <-- no additional methods
+Source Text
+    |
+    v
+ [Lexer] ──> Tokens
+    |
+    v
+ [Parser] ──> CST (Concrete Syntax Tree)
+    |
+    |  ← transformation: CST → AST
+    v
+  AST (Abstract Syntax Tree)
+    |
+    |  ← query layer (no transformation)
+    v
+  HIR (names, scopes)
+    |
+    |  ← expansion: synthesizes stream types, feeds back into HIR
+    v
+  PPIR (stream type expansion)
+    |
+    |  ← query layer (no transformation)
+    v
+  TIR (types)
+    |
+    |  ← transformation: AST → MIR
+    v
+  MIR (control flow graph)
+    |
+    |  ← transformation: MIR → bytecode
+    v
+  Emit (bytecode for BexVM)
 ```
 
-A single concrete `ProjectDatabase` struct implements all four. When a TIR query calls an HIR query, it passes the same `db` reference. Salsa sees one continuous dependency graph -- no manual cache wiring between crate boundaries.
+**Critical distinction:** The stages above the AST (Parser, CST→AST lowering) are about *producing* the AST. The stages below it (HIR, PPIR, TIR) are about *answering questions* about the AST. They do not produce new syntax trees. The MIR is the second transformation — it converts human-friendly BAML into a machine-friendly control flow graph. The Emit stage is the third transformation — it compiles MIR to bytecode.
 
-### Tracked queries
-
-A `#[salsa::tracked]` function is Salsa's memoization unit. The first call executes the body and records all `db.` reads as dependencies. Subsequent calls check: are all dependencies up-to-date? If yes, return cached. If not, re-execute and compare with the old result.
-
-Key tracked queries:
-
-| Query | Key | What it does |
-|---|---|---|
-| `file_semantic_index` | `SourceFile` | Builds scope tree + item tree from AST |
-| `namespace_items` | `NamespaceId` | Merges contributions from all files in a namespace |
-| `package_items` | `PackageId` | Aggregates all namespaces in a package |
-| `function_signature` | `FunctionLoc` | Extracts signature (span-free) |
-| `function_body` | `FunctionLoc` | Extracts body (span-free) |
-| `infer_scope_types` | `ScopeId` | Runs type inference for one scope |
-| `resolve_class_fields` | `ClassLoc` | Resolves field types for one class |
-
-### Early cutoff: how whitespace edits don't cascade
-
-The key optimization. When a tracked query re-runs but produces the same result, Salsa stops propagating invalidation.
-
-**Concrete trace**: User adds `// comment` to `file_a.baml`. File B is untouched.
-
-1. `file_a.text` is marked changed
-2. `file_semantic_index(file_a)` re-runs (it uses `no_eq`, so always reports "changed")
-3. `namespace_items(user_root)` re-runs -- re-collects contributions from all files. But the result is identical: same names, same definition handles. Its `PartialEq` returns `true`. **Early cutoff fires.** (`namespace.rs:130-146`)
-4. `package_items` -- NOT re-run (its dependency `namespace_items` didn't change)
-5. `infer_scope_types` for any scope -- NOT re-run
-6. `file_semantic_index(file_b)` -- NOT re-run (its input `file_b.text` is unchanged)
-
-Result: a comment addition re-runs the lexer and HIR for that one file, then stops.
-
-### The span/semantic split
-
-Every item has **two** tracked queries: one for semantic data (span-free), one for source maps (spans only).
-
-- `function_signature(db, loc)` -> `Arc<FunctionSignature>` -- names and `TypeExpr`s, no `TextRange`
-- `function_signature_source_map(db, loc)` -> spans only
-
-`infer_scope_types` reads `function_signature` but never reads `function_signature_source_map`. A whitespace edit shifts spans but leaves `TypeExpr` trees identical -> `function_signature` early-cuts -> type inference stays cached. (`signature.rs:93-113`)
-
-### Position-independent IDs
-
-`LocalItemId<T>` (`ids.rs:43-76`) is a 32-bit packed value: upper 16 bits = hash of the item's name, lower 16 bits = collision index. Adding a blank line before `function Greet(...)` doesn't change `hash("Greet")`. The `FunctionLoc(file, hash_id)` -- the Salsa query key -- stays the same, so cached per-function results survive.
-
-### Interned types
-
-`#[salsa::interned]` types are deduplicated stable identity keys. `FunctionLoc::new(db, file, id)` with the same arguments always returns the same handle. Nine `*Loc` types exist (`loc.rs:19-77`): `FunctionLoc`, `ClassLoc`, `EnumLoc`, `TypeAliasLoc`, `LetLoc`, `ClientLoc`, `TestLoc`, `GeneratorLoc`, `RetryPolicyLoc`.
+This is fundamentally different from the compiler1 architecture, which was a strict linear pipeline where each layer copied and enriched the previous layer's data. In compiler2, each layer is a **query on top of the AST** (at least until MIR), which gives us Salsa-powered incremental compilation for free.
 
 ---
 
-## The Bidirectional Type Checker
+## The Cardinal Rule: Upstream Over Downstream
 
-The TIR type checker implements **bidirectional type checking** -- it switches between two modes at well-defined boundaries.
+When deciding where to implement a feature, always ask: **what is the earliest layer at which I can do this?**
 
-### Two modes
+| Situation | Rule |
+|---|---|
+| Adding a feature | Put it in the **highest** (earliest) layer possible. Most features belong in the **AST** layer. |
+| Changing AST | Relatively forgiving — this is where most work happens. |
+| Changing HIR | Discuss with at least one person who works in HIR. |
+| Changing TIR | Discuss with at least one person who works in TIR. |
+| Changing MIR or Emit | Discuss with at least two people. You are almost certainly making a mistake unless you have a very specific reason. |
+| Adding a new layer | Requires explicit approval from the tech lead and a senior contributor. No new layers without significant deliberation. |
 
-**Synthesis (bottom-up)**: `infer_expr(expr_id, body) -> Ty` (`builder.rs:227`). No expectation from the caller. The type is computed purely from the expression's structure. Used for: literals, variable references, field access, untyped calls.
+**The lower you go, the more scrutiny is required.** Changes to downstream layers cascade into every code path on the team's surface area. Keeping boundaries clean means fewer bugs and fewer accidental coupling problems.
 
-**Checking (top-down)**: `check_expr(expr_id, body, expected: &Ty) -> Ty` (`builder.rs:391`). The caller knows what type it wants and passes that expectation down. For most expression forms, checking falls through to synthesis + a subtype assertion. But for specific forms, the expected type changes the result (contextual typing).
+---
+
+## Layer-by-Layer Reference
+
+### Parser (Lexer + CST)
+
+**Crate:** `baml_compiler_lexer`, `baml_compiler_parser`, `baml_compiler_syntax`
+
+**Responsibility:** Grammar only. The parser answers the question *"is this syntactically valid BAML?"* It knows about keywords, punctuation, delimiters, and the structural grammar of the language. It makes no semantic decisions.
+
+**What lives here:**
+- Token definitions (keywords, operators, punctuation)
+- Grammar rules for all syntactic constructs
+- Error-tolerant parsing (the parser produces a tree even for malformed input)
+- The distinction between LLM function bodies, regular function bodies, and config blocks
+
+**What does NOT live here:**
+- Any understanding of what names mean
+- Any understanding of types
+- Any semantic validation
+
+The parser produces a **CST** (Concrete Syntax Tree), which is a lossless, error-tolerant representation of the source text. It uses a green/red tree architecture (similar to rust-analyzer's `rowan`).
+
+**Key Salsa query:** `syntax_tree(db, file) -> CST`
+
+---
+
+### AST (Abstract Syntax Tree)
+
+**Crate:** `baml_compiler2_ast`
+
+**Responsibility:** Desugaring. The AST takes the CST and produces a well-formed, semantically-oriented syntax tree. This is where most features live.
+
+**What lives here:**
+- **Companion function expansion** — LLM functions are expanded into the base function plus generated companions (`render_prompt`, `build_request`, `parse`).
+- **Client desugaring** — `client<llm>` blocks are desugared into a top-level `Let` binding (the `Client` object) plus an optional `$new` companion function (the `PrimitiveClient` constructor).
+- **Lambda expression body extraction** — Lambda bodies are lifted into their own scope-addressable units for downstream analysis.
+- **LLM function normalization** — There is no concept of "LLM function" downstream. LLM functions become regular functions with declarative metadata attached.
+- **Type expression lowering** — Source-level type syntax is converted to `TypeExpr` nodes.
+- **Config item lowering** — Config block syntax (used in clients, generators, etc.) is lowered to AST expressions.
+
+**What does NOT live here:**
+- Anything that requires knowing the *name* of something (that's HIR).
+- Anything that requires knowing the *type* of something (that's TIR).
+- Anything that requires knowing whether something is a class, enum, or alias (that might be PPIR or TIR).
+
+**Key design principle:** One CST node can produce *multiple* AST nodes. For example, a single `client<llm> MyClient { ... }` definition produces two AST items: a `Let` and a `Function`. Conversely, some CST constructs collapse or transform substantially. The AST is the **final syntactic form** of the program.
+
+**The AST is a pure structural lowering.** It uses no Salsa queries. It does not validate names or detect duplicates. It simply converts CST shapes into AST shapes.
+
+---
+
+### HIR (High-level Intermediate Representation)
+
+**Crate:** `baml_compiler2_hir`
+
+**Responsibility:** Names and scopes. The HIR's sole job is to answer the question *"what are the names of things, and where are they declared?"*
+
+**What lives here:**
+- **Scope tree construction** — Every block of code gets a scope. Scopes are allocated in DFS pre-order and form a tree.
+- **Name resolution** — Given a name at a position, the HIR walks up the scope tree to find where that name was declared.
+- **Duplicate name detection** — Names are checked for conflicts within their scope.
+- **Shadowing rules** — The HIR decides where shadowing is allowed (e.g., a match arm variable may shadow a function parameter).
+- **Lambda capture analysis** — Which variables a lambda captures is determined here. You don't need to know the type to know *what* is captured, only what names are in scope.
+- **Package and namespace aggregation** — Cross-file symbol merging happens here.
+
+**What does NOT live here:**
+- Node transformations. The HIR should NOT construct new AST nodes. If you find yourself doing that, the work belongs in the AST layer.
+- Type information of any kind. If you need to know whether something is a class or an enum, that is a downstream concern.
+
+**Key design decision — Lambda captures:** Captures are determined in HIR because you only need name information, not type information, to decide what is captured. The HIR records that a lambda captures variable `a` from the enclosing scope. It does *not* determine whether `a` is a direct capture or a transitive capture — that distinction only matters for the MIR (which builds the control flow graph and needs to understand transitive dependencies). The concept of a "cell" (an indirection pointer for mutable captured variables) also does NOT belong in HIR or TIR. From the TIR's perspective, a captured `int` is still an `int` — the indirection is purely a MIR/VM implementation detail.
+
+**Key Salsa queries:**
+- `file_semantic_index(db, file)` — Per-file scope tree with all bindings
+- `namespace_items(db, namespace_id)` — Items contributed to a namespace
+- `package_items(db, package_id)` — Package-level symbol table (merges all namespaces)
+
+---
+
+### PPIR (Post-Process IR / Stream Type Expansion)
+
+**Crate:** `baml_compiler2_ppir`
+
+**Responsibility:** Stream type generation. This layer exists because streaming types require type-aware code generation that cannot be done in the AST layer but must happen before the TIR.
+
+**Why this must be its own layer:**
+- To decide how to expand a streaming type, you need to know whether a type expression refers to a class, an enum, a union, or a type alias. Different kinds produce different stream expansions.
+- You cannot answer those questions in the AST layer because the AST does not have name resolution.
+- You cannot defer this to the TIR because the TIR needs the stream types to already exist in order to type-check streaming code.
+- The PPIR does not perform the full type inference that the TIR does. It performs a narrow, purpose-specific form of type classification sufficient for stream expansion.
+
+**What lives here:**
+- Synthesis of `*$stream` variants for classes and type aliases
+- Stream expansion logic (`stream_expand`, `expand_partial`)
+- SAP (streaming attribute propagation) attributes
+- Canonical queries that merge original items with synthetic stream items
+
+**How it works:** The PPIR generates synthetic AST items (the stream variants) and feeds them **back into the HIR**. This means the flow is actually: HIR → PPIR → back to HIR (with expanded symbols) → TIR. The TIR then consumes the enriched HIR index that includes both original and stream-expanded items.
+
+**Key Salsa query:** `ppir_expansion_items(db, file)` — Synthetic stream items per file
+
+---
+
+### TIR (Typed Intermediate Representation)
+
+**Crate:** `baml_compiler2_tir`
+
+**Responsibility:** Types only. The TIR answers the question *"what is the type of this expression?"* and validates type correctness.
+
+**What lives here:**
+- **Type inference** — Per-scope expression type maps.
+- **Type checking** — Is this assignment valid? Is this function call well-typed?
+- **Type narrowing** — After a type guard (e.g., `match`, `instanceof`), the type is narrowed.
+- **Exhaustiveness checking** — Are all match arms covered?
+- **Generic instantiation** — Resolving type parameters.
+- **Type normalization** — Simplifying complex types.
+- **Cycle detection** — Detecting recursive types.
+- **Package interface generation** — Producing the fully-resolved type interface for each package.
+
+**What does NOT live here:**
+- Constructing new statements or expressions. The TIR is purely **informative** — it annotates existing AST nodes with type information.
+- Syntax transformations of any kind.
+
+**How type resolution works for local variables:** When you ask "what is the type of `x` on line 10?":
+
+1. The TIR takes the expression ID from the current scope.
+2. It asks the HIR: "where was this expression declared?" (This is an HIR question — the HIR knows where every expression is declared.)
+3. The HIR returns the declaration site (e.g., line 5).
+4. The TIR then asks: "what is the type of the expression at line 5 in that scope?"
+5. This recursively resolves until a leaf type is reached.
+
+**Key Salsa queries:**
+- `infer_scope_types(db, scope_id)` — Per-scope type inference. This is the main query. It returns types for a single scope, NOT a monolithic per-function result. This gives fine-grained incrementality: editing a lambda body only recomputes that lambda's types, not the enclosing function's.
+- `resolve_name_at(db, file, offset, name)` — On-demand name resolution with type information.
+
+---
+
+### MIR (Mid-level Intermediate Representation)
+
+**Crate:** `baml_compiler2_mir`
+
+**Responsibility:** Control flow graph construction. The MIR is the **first layer that performs a full walk of the AST** and produces a fundamentally different representation. It converts human-friendly BAML code into machine-friendly control flow graphs.
+
+**What lives here:**
+- **CFG (Control Flow Graph) construction** — Basic blocks, terminators, branching.
+- **Loop unification** — All loop variants (C-style `for`, iterator `for`, `while`) become a single loop construct in MIR. The three source-level forms exist in the AST only for diagnostic quality (see [Loop Desugaring and Diagnostic Preservation](#loop-desugaring-and-diagnostic-preservation)).
+- **Transitive capture analysis** — The MIR determines whether a capture is direct or transitive (does the outer lambda also need to capture `a` because the inner lambda captures it?).
+- **Cell (indirection) introduction** — Mutable captured variables become cells (indirect references) in MIR.
+- **Lambda naming** — Lambdas get debug names based on their definition order and nesting depth (e.g., `anonymous_function_0`, `anonymous_function_0_1` for a lambda inside a lambda).
+
+**Data structures:**
+- `MirFunctionBody` — Basic blocks, entry block, local declarations, unwind handlers.
+- `BasicBlock` — A sequence of statements plus a terminator.
+- `MirFunctionKind::Bytecode(body)` — Functions with BAML code.
+- `MirFunctionKind::Builtin(kind)` — Rust-bound builtins (SysOp for I/O, NativeUnresolved for VM intrinsics).
+
+**Readability:** The MIR pretty-printer (`pretty.rs`) has been carefully designed to be readable for debugging. If you add a feature that touches MIR, you are responsible for maintaining the same level of readability. This is critical because MIR is the most bug-prone layer due to the complexity of the CFG transformation.
+
+**Key Salsa queries:**
+- `lower_function(db, ...)` — Lower a function to MIR.
+- `lower_let_body(db, ...)` — Lower a let binding's initializer to MIR.
+
+---
+
+### Emit (Bytecode Generation)
+
+**Crate:** `baml_compiler2_emit`
+
+**Responsibility:** Compiles MIR to bytecode for the BexVM using stackification.
+
+**You should almost never need to touch this layer.** Changes here should be very small and very well justified. The emit layer is straightforward in concept — it walks the MIR CFG and emits VM instructions — and bugs here are relatively rare compared to the MIR layer.
+
+**What lives here:**
+- Bytecode emission from MIR basic blocks
+- Global slot allocation
+- Package init function compilation (see [Global Let Bindings](#global-let-bindings-and-initialization-order))
+- Optimization levels (`OptLevel`)
+- Bytecode verification
+
+---
+
+## Query-Based Architecture (Salsa)
+
+The compiler2 uses the [Salsa](https://salsa-rs.github.io/salsa/) incremental computation framework. The key idea is that each layer is defined as a set of **tracked queries** that depend on other queries. When a source file changes, Salsa automatically recomputes only the queries whose inputs changed.
+
+**Database hierarchy (each layer extends the previous):**
+
+```
+salsa::Database
+  └─ baml_workspace::Db        (project root, file list)
+      └─ baml_compiler_parser::Db  (syntax_tree query)
+          └─ baml_compiler2_hir::Db  (file_semantic_index, namespace_items, package_items)
+              └─ baml_compiler2_ppir::Db  (ppir_expansion_items, canonical queries)
+                  └─ baml_compiler2_tir::Db  (infer_scope_types, resolve_name_at)
+                      └─ baml_compiler2_mir::Db
+                          └─ baml_compiler2_emit::Db
+```
+
+The design goal: **before the AST, produce the AST. After the AST, answer questions about the AST.** The only layers that do production (create new data structures) are:
+1. Parser → CST
+2. CST → AST (including PPIR feeding synthetic items back)
+3. AST → MIR
+4. MIR → bytecode
+
+Everything else is a query.
+
+---
+
+## Packages and Name Resolution
+
+### Package Resolution Order
+
+Packages are resolved in **topological order** based on their dependency graph. The resolution order is inferred from declared dependencies, not hardcoded.
+
+```
+baml (standard library) ← resolved first, no dependencies
+    |
+    v
+testing, insert, etc.   ← depend on baml, resolved next
+    |
+    v
+user                     ← depends on baml (and possibly others), resolved last
+```
+
+**Packages must form an acyclic DAG.** Recursive package dependencies are not allowed.
+
+**Why this matters for incremental compilation:** The standard library, testing, and other non-user packages are resolved once and cached. Only the user's package changes during editing, so only it needs to be recomputed in the editor.
+
+### Package Resolution Context
+
+The `PackageResolutionContext` is the **single point of entry** for all name resolution from the TIR. It handles three cases:
+
+| Syntax | Resolution Strategy |
+|---|---|
+| `root.SomeName` | Look in the current package's root namespace |
+| `SomeName` (unqualified) | Look in the current local scope, then walk up scopes |
+| `some_package.SomeName` | Look in the external package's interface |
+
+**Important invariant:** If you find code that accesses type system information outside of the package resolution context, that is a bug. Fix it and route through the resolution context to maintain a single point of entry.
+
+### Package Interface
+
+Every package exposes a `PackageInterface` — a fully resolved type interface that lists every name, every type, and full structural information. This is what other packages consume when they depend on you.
+
+---
+
+## Scopes
+
+Scopes are constructed at **HIR time** (not AST time) because you cannot determine scope boundaries without name resolution. Consider: `Foo.Bar.baz` — is `Foo` a namespace, a class, or a variable? You need name resolution to answer that, so scopes and name resolution are co-determined in the HIR.
+
+### Scope Hierarchy
+
+```
+Project (root)
+  └─ Package
+      └─ Namespace (can be nested, can span multiple files)
+          └─ File
+              └─ Top-level items: Function, Class, Enum, TypeAlias, Item (client/test/etc.), Let
+                  └─ Block (curly-brace blocks with let bindings)
+                      └─ Lambda
+                      └─ MatchArm (pattern bindings visible to arm body and guard)
+                      └─ CatchClause → CatchArm
+```
+
+### How Name Resolution Works
+
+When resolving a name, the system walks **up** the scope tree:
+
+1. Check the current scope's bindings (let bindings, parameters).
+2. Check parent scopes, walking up until the file scope.
+3. Check the package's namespace items.
+4. Check the `baml` builtin package.
+
+Shadowing rules are scope-kind-dependent. For example, a match arm can shadow a function parameter, but two parameters in the same function cannot shadow each other. The HIR decides where shadowing is allowed.
+
+### Scope IDs
+
+`ScopeId<'db>` is a Salsa tracked struct pairing a `SourceFile` with a `FileScopeId`. It is the key for per-scope queries like `infer_scope_types(db, scope_id)`. Scopes are allocated in DFS pre-order within each file.
+
+---
+
+## CST-to-AST Desugaring: Detailed Examples
+
+### Companion Functions
+
+When the AST layer encounters an LLM function, it expands it into the original function plus up to three **companion functions**:
+
+| Companion | Name Pattern | Parameters | Return Type | Purpose |
+|---|---|---|---|---|
+| `render_prompt` | `FuncName$render_prompt` | Same as parent | `baml.llm.PromptAst` | Renders the prompt AST |
+| `build_request` | `FuncName$build_request` | Same as parent | `baml.http.Request` | Builds the HTTP request |
+| `parse` | `FuncName$parse` | `json: string` | Same as parent | Parses the JSON response |
+
+**Implementation** (`baml_compiler2_ast/src/companions.rs`):
+
+Companion expanders are pure functions of type `fn(&FunctionDef) -> Option<FunctionDef>`, stored in a const array `COMPANIONS`. Each expander inspects the function's `declarative_meta` — if it's an LLM function, it produces a companion; otherwise, it returns `None`.
+
+Companion functions are **complete, self-contained AST items**. They flow through HIR → TIR → MIR → emit with zero special-casing. Downstream layers have no idea they were generated.
+
+**Implication for duplicate name detection:** If you have two LLM functions `Foo` and `Foo` (a duplicate), each produces four AST items (itself + three companions). All eight items will trigger duplicate-name errors in the HIR. To prevent cascading duplicate errors, the HIR must be aware that companion-derived errors should not produce additional diagnostics beyond the root duplicate.
+
+### Client Desugaring
+
+A `client<llm>` block desugars into **two AST items**:
+
+1. **A top-level `Let` binding** — Creates a `Client` object (defined in `baml_std`) with:
+   - `name: string` — the client's name
+   - `client_type: ClientType` — `Primitive`, `Fallback`, or `RoundRobin`
+   - `sub_clients: Client[]` — for composite clients, references to sub-clients (as `Expr::Path` references enabling TIR name validation and topological dependency ordering)
+   - `retry: RetryPolicy?` — optional retry policy (also an `Expr::Path` reference)
+   - `counter: int` — for round-robin clients, the starting index
+
+2. **An optional `$new` companion function** (primitive clients only) — A function `ClientName$new` that constructs a `PrimitiveClient` from the provider and options. This function is called at runtime to create the actual LLM-capable client.
+
+**There is no `Client` type in the AST or compiler type system.** The `Client` and `PrimitiveClient` types are regular structs defined in the BAML standard library (`baml_std/baml/ns_llm/llm_types.baml`). The compiler synthesizes constructor expressions that instantiate these standard library types. This means client type-checking happens for free through the normal TIR — no special type-checking code is needed for clients.
+
+**How `Client` resolves to `PrimitiveClient` at runtime:**
+1. The `Client` object has a `get_constructor()` method that returns a Rust function pointer.
+2. This function pointer is looked up by the client's name at runtime and returns a closure that constructs a `PrimitiveClient`.
+3. The `PrimitiveClient` is the actual object that can render prompts, build requests, and parse responses.
+4. The `PrimitiveClient` is constructed every time an LLM function is called (no caching currently — this is a known optimization opportunity).
+
+**What about expressions in client definitions?** Because clients desugar to regular AST expressions, users can use arbitrary expressions in client option values. For example, a variable reference as the model name works automatically. The config block syntax uses colon-delimited key-value pairs which are parsed as a special form in the CST and lowered to expressions in the AST.
+
+### Lambda Expression Bodies
+
+Lambda bodies are extracted into their own scope-addressable AST units during CST→AST lowering. This is necessary because:
+- Lambdas need their own scope for per-scope incremental inference.
+- Capture analysis (which happens in HIR) needs each lambda to be a distinct scope.
+
+---
+
+## Global Let Bindings and Initialization Order
+
+BAML has a special challenge: names can be referenced across files. This means global variables (like clients) have cross-file dependencies that must be resolved in a specific order.
+
+### How it works
+
+1. **Collection:** Every package's top-level `Let` bindings are collected.
+2. **Topological sort of packages:** Packages are sorted by their dependency graph (e.g., `baml` before `user`).
+3. **Topological sort of lets within each package:** Within each package, `Let` bindings are topologically sorted by their dependency edges (derived from `Expr::Path` references in their initializers). If a cyclic dependency is detected, the compiler emits an error.
+4. **Init function compilation:** For each package, a `$init` function is compiled that evaluates the `Let` bindings in topological order, storing each result in a global slot.
+5. **Package init order:** The VM receives a `package_init_order` list and calls each package's `$init` function in order during startup.
+
+This is exactly how Go handles global variable initialization: topological sort across the dependency graph, then evaluate in order.
+
+**Important:** Top-level `let` is **not** available in user-facing syntax (the lexer disallows it). It exists only in the AST layer for compiler-generated constructs like client desugaring.
+
+---
+
+## The Type System: Key Concepts
+
+### Freshness and Widening
+
+When you write `let x = 42`, you don't want `x` to have type `literal 42` — you want it to have type `int`. This is handled through **freshness** and **widening**, a concept borrowed from TypeScript:
+
+- A literal on the right-hand side of an assignment is considered **fresh**.
+- When a fresh literal is **assigned** to a variable (bound), it is **widened** to its base type: `literal 42` → `int`, `literal "hello"` → `string`.
+- If a variable is explicitly typed as a literal type (e.g., `let x: 42 = 42`), the literal is already bound to a regular literal type and does not widen.
+- Widening also applies when collecting into containers: an array of fresh literals becomes an array of the widened type.
+
+### Unknown, Missing, and Error Types
+
+The TIR uses three distinct "failure" types internally:
+
+| Type | Meaning |
+|---|---|
+| `BuiltinUnknown` | A type that genuinely represents "unknown" in user code (e.g., a function parameter typed as `unknown`). |
+| `Missing` | The type checker could not determine the type — this represents a **typing hole** and is almost certainly a bug if encountered unexpectedly. |
+| `Error` | A type error was detected and recorded. |
+
+**Known serialization issue:** The snapshot printer currently renders all three of `Missing`, `Error`, and `BuiltinUnknown` as the string `unknown`. This is a serialization bug (not a representation bug). Internally they are distinct. When debugging, if you see `unknown` in snapshot output, investigate which variant it actually is.
+
+**Debugging heuristic:** In snapshot test output, search for `unknown`. If the code has no compilation errors, every `unknown` should correspond to a genuine `BuiltinUnknown` (e.g., from a standard library function that intentionally accepts `unknown`). Any unexpected `unknown` is a bug that needs investigation.
+
+---
+
+## Loop Desugaring and Diagnostic Preservation
+
+BAML has three loop forms: C-style `for`, iterator-style `for`, and `while`. In the MIR, all three become a single loop construct — there is no difference at the CFG level.
+
+**Why they remain separate in the AST:** Consider what happens if you desugar a C-style `for (let i = 0; i < arr.length(); i++)` into an iterator-style `for (let item in arr)` at the AST level. You would synthesize an imaginary iterator variable. If the iteration target is non-iterable, the type error would reference this synthesized variable that the user never wrote. The error message would be confusing and unhelpful.
+
+By keeping three distinct AST forms, each loop variant can produce type errors that reference the actual user-written syntax. The MIR then unifies them after diagnostics have been emitted.
+
+**General principle:** Before desugaring any construct, ask yourself: *"What error messages does each form produce? Do those error messages still make sense after desugaring?"* If desugaring would produce confusing diagnostics, keep the forms separate in the AST and unify in the MIR.
+
+---
+
+## Span Preservation
+
+When performing CST→AST desugaring, **you must preserve span information** on every generated node. Every synthesized AST node must carry the source span of the CST construct it was derived from.
+
+If you fail to do this:
+- Error messages will point to the wrong location (or no location).
+- Users will see confusing diagnostics.
+- Coding agents will have difficulty diagnosing issues from snapshot output.
+
+**If you find yourself hacking in incorrect spans** (e.g., using a dummy span or the wrong source location), stop and ask another team member whether the approach is correct. Incorrect spans are a persistent source of subtle bugs.
+
+---
+
+## The Standard Library
+
+**Crate:** `baml_builtins2`
+**Source:** `baml_builtins2/baml_std/baml/`
+
+The BAML standard library is written in BAML itself (with some Rust-backed builtins marked with `$rust_type` and `$rust_io_function`). It defines core types, container types, LLM infrastructure, HTTP types, error types, math/string/net utilities, and more.
+
+**Key files:**
+- `core.baml` — Core types
+- `containers.baml` — Generic `Array<T>`, `Map<K,V>`, etc.
+- `ns_llm/llm.baml` — LLM types and client infrastructure
+- `ns_llm/llm_types.baml` — `Client`, `PrimitiveClient`, `PrimitiveClientOptions`, `RetryPolicy`, etc.
+- `ns_http/http.baml` — `Request`, `Response`
+- `ns_errors/errors.baml` — Error types
+
+**Adding to the standard library:** If you want to make new functions or types available to users, the standard library is the primary mechanism. You add BAML source files, and they compile through the normal pipeline. The standard library package (`baml`) is resolved first and is available to all other packages.
+
+**Caution:** Standard library additions pollute the user's namespace. Be deliberate about what you add. Prefer putting things in sub-namespaces (e.g., `baml.llm`, `baml.http`) rather than at the root.
+
+**For agents:** When implementing new language features, prefer adding new types and functions to the standard library rather than introducing new compiler-internal types. The type system should not be impacted unless something is truly unrepresentable with existing types.
+
+---
+
+## Debugging and Snapshot Tests
+
+**Crate:** `baml_tests`
+
+The snapshot test infrastructure is the primary debugging tool for the compiler2 pipeline. Each pipeline stage has its own snapshot format:
+
+| Stage | What the snapshot shows |
+|---|---|
+| HIR | Scope tree, name bindings, declarations, capture information, lambda definitions |
+| TIR | Every expression annotated with its inferred type (similar to IDE inlay hints) |
+| MIR | Control flow graph with basic blocks, statements, terminators, local declarations |
+| Emit | Bytecode disassembly |
+
+**How to use snapshots for debugging:**
+
+1. Write a BAML test case using the `baml_test!` macro.
+2. Run `cargo test` — the snapshot is generated/updated.
+3. Read the snapshot output for the relevant layer.
+4. For TIR: search for `unknown` — any unexpected `unknown` is a bug.
+5. For MIR: read the pretty-printed CFG — it shows basic blocks, terminators, and local types.
+
+**This debugging loop is highly effective for coding agents.** Agents can write test cases, read snapshot output, identify issues, and iterate. The snapshot format was designed specifically to be readable by both humans and LLMs.
+
+**Test macro:**
+```rust
+baml_test!("baml source code here")
+
+// Or with options:
+baml_test! {
+    baml: "source",
+    entry: "func_name",
+    args: { "x" => val },
+    opt: OptLevel::Zero,
+}
+```
+
+---
+
+## Rules for Adding Spans to Data Structures
+
+**Do not add `TextRange` or span fields to your data structures.** There is a dedicated mechanism for associating spans with nodes. If you add `TextRange` directly to a data structure, you break Salsa incrementality for everything downstream — a change to whitespace (which changes spans but not semantics) will unnecessarily invalidate all dependent queries.
+
+Use expression IDs and the span lookup infrastructure instead. If you're unsure how to associate span information with a new construct, ask before implementing.
+
+---
+
+## Mutability
+
+BAML supports mutable variables. You can reassign variables (`x = newValue`), use compound assignment operators (`i += 1`, `x -= 1`, etc.), and mutate data structures via methods like `.push()`. The MIR models this through `Assign` and `AssignOp` statements, and mutable variables captured by lambdas are wrapped in cells (indirection pointers) so that inner and outer scopes can mutate the same value.
+
+---
+
+## Bidirectional Type Checking
+
+The TIR implements **bidirectional type checking**, which means it switches between two modes at well-defined boundaries.
+
+### Synthesis (bottom-up)
+
+No expectation from the caller. The type is computed purely from the expression's structure. Used for: literals, variable references, field access, untyped calls. You give the type checker an expression and it tells you what type it is.
+
+### Checking (top-down)
+
+The caller knows what type it wants and passes that expectation down. For most expression forms, checking falls through to synthesis plus a subtype assertion. But for specific forms, the expected type changes the result — this is called **contextual typing**.
 
 ### When modes switch
 
 | Site | What happens |
 |---|---|
-| `let x: Foo = <init>` | Annotation -> `check_expr(init, &Foo)` (top-down) |
-| `let x = <init>` (no annotation) | `infer_expr(init)` then `widen_fresh().make_evolving()` (bottom-up) |
-| Function call arguments | If param type is fully concrete -> `check_expr(arg, &param_ty)`. If param has unresolved TypeVars -> `infer_expr(arg)` |
-| `return <expr>` | If declared return type exists -> `check_expr(expr, &return_ty)` |
-| Array literal where `expected = List(E)` | Each element -> `check_expr(element, &E)` |
-| Map literal where `expected = Map(K,V)` | Each key -> `check_expr(key, &K)`, each value -> `check_expr(val, &V)` |
-| Object literal where `expected = Class(C)` | Expression gets `Class(C)` type directly; field values use synthesis |
+| `let x: Foo = <init>` | Annotation provides expected type → check `init` against `Foo` (top-down) |
+| `let x = <init>` (no annotation) | Synthesize the type of `init`, then widen fresh literals (bottom-up) |
+| Function call arguments | If param type is fully concrete → check arg against it. If param has unresolved type vars → synthesize |
+| `return <expr>` | If declared return type exists → check `expr` against it |
+| Array literal where expected = `T[]` | Each element is checked against `T` |
+| Map literal where expected = `map<K,V>` | Each key checked against `K`, each value against `V` |
+| Object literal where expected = `SomeClass` | Expression gets `SomeClass` type directly; field values use synthesis |
 
-**Concrete example**: `let x: Foo = { field: 42 }`
-1. `Stmt::Let` fires at `builder.rs:695`
-2. Annotation present -> `ann_ty = Ty::Class(Foo)` computed
-3. `check_expr(init, &Ty::Class(Foo))` called
-4. Object literal matches `Expr::Object` in checking mode -> expression typed as `Class(Foo)` directly
-5. The integer literal `42` inside the field is *synthesized* bottom-up -> `Ty::Literal(42, Fresh)`
+**Concrete example:** `let x: Foo = { field: 42 }`
 
-### Fresh literals and widening
+1. The `let` statement sees an annotation → expected type is `Foo`.
+2. The initializer is checked against `Foo` (top-down).
+3. The object literal matches in checking mode → typed as `Foo` directly.
+4. The integer `42` inside the field is *synthesized* bottom-up → starts as `Literal(42, Fresh)`.
 
-Every literal starts as `Ty::Literal(value, Freshness::Fresh)` -- modeled after TypeScript's literal widening.
+### Narrowing
 
-- `let x = 42` -> infer -> `Literal(42, Fresh)` -> `widen_fresh()` -> `Primitive(Int)` -> `make_evolving()` -> stored as `Int`
-- `let x: 42 = 42` -> check against `Literal(42, Regular)` -> freshness stripped -> stays `Literal(42, Regular)`
+TypeScript-style control-flow narrowing. The type checker recognizes patterns like `x != null`, `x == null`, `!expr`, and truthiness on nullable types.
 
-`widen_fresh()` converts `Literal(_, Fresh)` -> `Primitive`. Only called at unannotated `let` sites. (`ty.rs:289`)
+For `if (x != null) { ... } else { ... }`:
+1. In the then-branch, `x` is narrowed to remove `null`.
+2. In the else-branch, `x` is narrowed to `null`.
+3. After the if-expression, the original type is restored.
 
-### `join_types` -- combining branch types
-
-When an if-expression has both branches, `join_types(then_ty, else_ty)` produces the result type. If the types differ, it produces `Ty::Union(vec![then_ty, else_ty])` with flat deduplication (unions of unions are flattened, exact duplicates removed). `Never` is absorbed: `join(Never, T) = T`. (`builder.rs:3317-3356`)
+**Guard clause pattern:** After `if (x == null) { return; }`, the then-branch diverges (type `never`). The type checker permanently applies the else narrowing for the rest of the block — so `x` is non-nullable from that point forward.
 
 ### TypeScript features present vs absent
 
-**Present**: fresh/regular literal types, `never` as bottom, `unknown` as top, structural typing, union types, `void`, equirecursive recursive types, control-flow narrowing, bidirectional checking
+**Present:** fresh/regular literal types, `never` as bottom, `unknown` as top, structural typing, union types, `void`, equirecursive recursive types, control-flow narrowing, bidirectional checking.
 
-**Absent**: intersection types, conditional types (`T extends U ? A : B`), mapped types, `infer` keyword, discriminated union contextual decomposition (checking against a union doesn't pick a member to check against -- it just synthesizes and subtype-checks)
+**Absent:** intersection types, conditional types (`T extends U ? A : B`), mapped types, `infer` keyword, discriminated union contextual decomposition (checking against a union doesn't pick a member to check against — it synthesizes and subtype-checks).
 
 ---
 
@@ -363,30 +635,31 @@ When an if-expression has both branches, `join_types(then_ty, else_ty)` produces
 
 ### Representation
 
-`Ty::Union(Vec<Ty>)` -- a plain vector, no deduplication or sorting at construction. (`ty.rs:109`)
+Unions are represented as `Ty::Union(Vec<Ty>)` — a plain vector with no deduplication or sorting at construction.
 
 `Ty::Optional(Box<Ty>)` is a **separate variant** from `Union`. They are not auto-rewritten into each other. The relationship is defined only at the subtype level.
 
 ### Subtype rules
 
-Both types are first normalized to `StructuralTy` (all aliases expanded), then structural subtyping runs. (`normalize.rs:18`)
+Both types are first normalized (all aliases expanded), then structural subtyping runs:
 
-- **`T <: Union(A, B, ...)`** -- the "right union" rule (`normalize.rs:177-179`): A type is a subtype of a union if it's a subtype of **any** member.
-- **`Union(T1, T2) <: U`** -- the "left union" rule (`normalize.rs:182-184`): A union is a subtype of something if **all** members are subtypes of it.
-- **`Optional(T) <: Union(types)`** (`normalize.rs:171-174`): Requires `Null in types` AND `T <: some member`.
-- Other: `Null <: Optional(T)`, `T <: Optional(T)`, `Never` is bottom, `BuiltinUnknown` is top, `Int <: Float`, `EnumVariant(E,V) <: Enum(E)`, list/map covariant, function contravariant in params.
+- **`T <: Union(A, B, ...)`** (the "right union" rule): A type is a subtype of a union if it's a subtype of **any** member.
+- **`Union(T1, T2) <: U`** (the "left union" rule): A union is a subtype of something if **all** members are subtypes of it.
+- **`Optional(T) <: Union(types)`**: Requires `null` to be in the union AND `T` to be a subtype of some member.
+- Other rules: `null <: Optional(T)`, `T <: Optional(T)`, `never` is bottom, `unknown` is top, `int <: float`, enum variants are subtypes of their enum, list/map are covariant, functions are contravariant in parameters.
 
 ### Unions are never simplified automatically
 
-`join_types` does flat deduplication only. No simplification of `Union(T, Never)`, no removal of subtypes (e.g., `Union(int, float)` stays as-is). Normalization to `StructuralTy` happens on-demand at subtype-check time and does not write back.
+When combining branch types (e.g., if/else), the type checker does flat deduplication only. No simplification of `Union(T, never)`, no removal of subtypes (e.g., `Union(int, float)` stays as-is). Normalization happens on-demand at subtype-check time and does not write back.
 
 ### Match exhaustiveness with unions
 
-`infer_match_expr` (`builder.rs:980`) tracks coverage:
-1. `required_match_cases(scrutinee_ty)` computes the required set: `Bool -> {"true","false"}`, `Enum(E) -> {all variants}`, `Optional(T) -> required(T) + {"null"}`, `Union(members) -> union of all members' required cases`
-2. Each arm's pattern covers some cases; after all arms, `missing = required - covered`
-3. Non-empty `missing` -> `NonExhaustiveMatch` error. Full coverage -> inserted into `exhaustive_matches` set
-4. Per-arm narrowing: the scrutinee variable is temporarily set to the narrowed type inside each arm body
+When type-checking a `match` expression:
+
+1. The type checker computes the set of **required cases** from the scrutinee type: booleans require `true`/`false`, enums require all variants, optionals require the inner type's cases plus `null`, unions require the union of all members' required cases.
+2. Each arm covers some cases. After all arms, the uncovered set is computed.
+3. Non-empty uncovered set → `NonExhaustiveMatch` error. Full coverage → the match is marked as exhaustive.
+4. Per-arm narrowing: inside each arm body, the scrutinee variable is temporarily set to the narrowed type.
 
 ---
 
@@ -394,23 +667,23 @@ Both types are first normalized to `StructuralTy` (all aliases expanded), then s
 
 ### The problem
 
-A user writes `type JSON = string | int | bool | null | JSON[] | map<string, JSON>`. The type's body references itself. The compiler must detect the cycle, decide if it's valid (has a base case) or invalid (infinite expansion), and perform subtype checking without infinite loops.
+A user writes `type JSON = string | int | bool | null | JSON[] | map<string, JSON>`. The type's body references itself. The compiler must detect the cycle, decide if it's valid, and perform subtype checking without infinite loops.
 
-### HIR: raw name references
+### How it works
 
-The HIR stores `TypeExpr` with raw name references. `type JSON = ... | JSON[]` stores `TypeExpr::List(TypeExpr::Path(["JSON"]))`. No attempt to resolve or detect cycles. (`item_tree.rs:86-90`)
+**At HIR time**, type aliases store raw name references. `type JSON = ... | JSON[]` stores a `TypeExpr` with a path reference to `"JSON"`. No attempt to resolve or detect cycles.
 
-### TIR: lazy expansion via `Ty::TypeAlias`
+**At TIR time**, the path reference becomes an opaque `Ty::TypeAlias` — never automatically expanded. The alias body still references itself via this opaque handle.
 
-`lower_type_expr` converts `TypeExpr::Path(["JSON"])` -> `Ty::TypeAlias(QualifiedTypeName { pkg: "user", name: "JSON" })`. This is **opaque** -- never automatically expanded. The alias body still references itself via `Ty::TypeAlias`. (`lower_type_expr.rs:44`)
+### Cycle detection: structural vs non-structural edges
 
-### Cycle detection: two passes
+The type checker runs two passes:
 
-**Pass 1 -- Which aliases are recursive?** `find_recursive_aliases` (`normalize.rs:26`) runs DFS over the alias map, walking through all type constructors. Returns `HashSet<QualifiedTypeName>` of all aliases in any cycle.
+**Pass 1 — Which aliases are recursive?** A DFS walks through the alias map, following all type constructors. Any alias found in a cycle is marked recursive.
 
-**Pass 2 -- Which cycles are valid vs invalid?** `find_invalid_alias_cycles` (`normalize.rs:461`) builds a dependency graph where edges are classified as **structural** (through `List` or `Map`) vs **non-structural** (through `Optional`, `Union`, or direct). Runs Tarjan SCC. For each SCC, if any intra-SCC edge is structural -> valid. If no structural edges -> invalid.
+**Pass 2 — Which cycles are valid?** The dependency graph is analyzed where edges are classified as **structural** (through `List` or `Map`) or **non-structural** (through `Optional`, `Union`, or direct reference). For each strongly connected component, if any intra-SCC edge is structural, the cycle is valid. If no structural edges exist, the cycle is invalid.
 
-The structural/non-structural distinction: `List` and `Map` provide a construction base case (empty container). `Optional` does not -- `type A = A?` expands to `A | null`, and `A` still needs to be constructed.
+The intuition: `List` and `Map` provide a construction base case (an empty container). `Optional` does not — `type A = A?` expands to `A | null`, and `A` still needs to be constructed.
 
 | Definition | Valid? | Why |
 |---|---|---|
@@ -419,373 +692,133 @@ The structural/non-structural distinction: `List` and `Map` provide a constructi
 | `type A = A \| string` | Invalid | Union is not structural |
 | `type A = A[]` | Valid | Goes through List (structural) |
 | `type JSON = string \| int \| JSON[] \| map<string, JSON>` | Valid | Both back-edges go through List and Map |
-| `type A = B[], type B = A` | Valid | `A->B` goes through List (structural) |
-| `type A = B?, type B = A` | Invalid | `A->B` goes through Optional (not structural) |
+| `type A = B[], type B = A` | Valid | `A→B` goes through List (structural) |
+| `type A = B?, type B = A` | Invalid | `A→B` goes through Optional (not structural) |
 
-Class cycles (`find_invalid_class_cycles`, `normalize.rs:740`): uses the same Tarjan approach but only adds a dependency edge when a field is **not** behind Optional/List/Map. Any SCC found is unconditionally invalid.
+Class cycles use the same approach: a dependency edge is added when a field is **not** behind Optional/List/Map. Any SCC found is unconditionally invalid.
 
 ### Mu types and equirecursive subtyping
 
-When subtype checking encounters a recursive alias, `normalize_impl` (`normalize.rs:304`) produces:
+When subtype checking encounters a recursive alias, the normalizer produces a **mu type**: `Mu { var: "JSON", body: Union([String, Int, ..., List(TyVar("JSON"))]) }`. This is the standard type-theory mu-binder — "the type where `var` in `body` stands for this whole type."
 
-```
-StructuralTy::Mu { var: "user.JSON", body: Union([String, Int, ..., List(TyVar("user.JSON"))]) }
-```
+Subtype checking uses **equirecursive co-induction**: before recursing into a pair `(sub, sup)`, the pair is inserted into an assumptions set. If the same pair is encountered again during recursive checking, it returns `true` immediately (the co-inductive assumption). If the overall check succeeds, the assumption is validated. Mu types are unfolded by substituting every `TyVar(var)` with the full Mu type, then continuing the check.
 
-`Mu { var, body }` is the standard type-theory mu-binder: "the type where `var` in `body` stands for this whole type." `TyVar` is the back-reference inside the body.
-
-**Subtype checking** (`normalize.rs:94`) uses **equirecursive co-induction**: before recursing, the current pair `(sub, sup)` is inserted into an `assumptions: HashSet`. If during recursive checking the same pair is encountered again, it returns `true` immediately (the co-inductive assumption). If the overall check succeeds, the assumption is validated.
-
-`Mu` types are unfolded via `substitute(body, var, self)` at `normalize.rs:149-157` -- replacing every `TyVar(var)` with the full `Mu` type, then continuing the subtype check.
-
-**Why equirecursive (not isorecursive)?** In isorecursive typing, `mu X.T` and its unfolding `T[X := mu X.T]` are different types requiring explicit fold/unfold coercions. Since BAML users write types naturally and expect transparent alias expansion, equirecursive is the practical choice.
+**Why equirecursive (not isorecursive)?** In isorecursive typing, `mu X.T` and its unfolding are different types requiring explicit fold/unfold coercions. Since BAML users write types naturally and expect transparent alias expansion, equirecursive is the practical choice.
 
 ---
 
-## LLM Function Desugaring
+## Salsa Early Cutoff: How Edits Stay Local
 
-### What the user writes
+The Salsa query model has one critical optimization beyond basic memoization: **early cutoff**. When a tracked query re-runs but produces the same result as before, Salsa stops propagating invalidation to downstream dependents.
 
-```baml
-function ExtractUser(text: string) -> User {
-    client "MyClient"
-    prompt #"Extract a user from: {{ text }}"#
-}
-```
+### How it works in practice
 
-### What the compiler sees after desugaring
+Every item is physically split into **two** tracked queries: one for semantic data (span-free), one for source maps (spans only). For example, `function_signature` returns names and `TypeExpr`s with no `TextRange`, while `function_signature_source_map` returns only spans. The type checker reads the semantic query but never the source map query.
 
-The CST->AST pass (`lower_cst.rs:99-167`) does three things:
+Items are keyed by **position-independent IDs** — a hash of the item's name, not its position in the file. Adding a blank line before `function Greet(...)` doesn't change the hash of `"Greet"`, so the Salsa query key stays the same and cached results survive.
 
-**1. Detects the LLM body** (`lower_cst.rs:125`): `func.llm_body()` returns `Some(...)` when the body is `{ client ...; prompt ... }` (declarative) rather than `{ expr }` (imperative).
+### Concrete trace: adding a comment to a file
 
-**2. Synthesizes a builtin call** (`lower_cst.rs:247-354`):
-```
-Expr::Call {
-    callee: Path(["baml", "llm", "call_llm_function"]),
-    args: [
-        Path(["MyClient"]),              // client (resolves to let binding)
-        Literal(String("ExtractUser")),  // function name
-        Map { "text" => Path(["text"]) } // argument map
-    ]
-}
-```
+User adds `// comment` to `file_a.baml`. File B is untouched.
 
-The prompt template and client name are stored in a sidecar: `DeclarativeMeta::Llm(LlmBodyDef { client, prompt, span })` on the `FunctionDef` (`ast.rs:467-512`).
+1. `file_a.text` is marked changed.
+2. `file_semantic_index(file_a)` re-runs (it's marked `no_eq`, so always reports "changed").
+3. `namespace_items(user_root)` re-runs — re-collects contributions from all files. But the result is identical: same names, same definition handles. Its `PartialEq` returns `true`. **Early cutoff fires.**
+4. `package_items` — NOT re-run (its dependency didn't change).
+5. `infer_scope_types` for any scope — NOT re-run.
+6. `file_semantic_index(file_b)` — NOT re-run (its input `file_b.text` is unchanged).
 
-**3. Generates companion functions** (`companions.rs:25-91`): Two companions for every LLM function:
-
-- `ExtractUser$render_prompt(text: string) -> baml.llm.PromptAst` -- calls `baml.llm.render_prompt(...)`
-- `ExtractUser$build_request(text: string) -> baml.http.Request` -- calls `baml.llm.build_request(...)`
-
-Companions have identical parameter lists to the parent. They carry `declarative_meta: None` -- only the original has the `LlmBodyDef`.
-
-### How they flow through the pipeline
-
-**HIR**: All three functions are registered as ordinary `Item::Function` entries. They get separate entries in `ItemTree::functions`, separate `FunctionLoc`s, separate namespace contributions. (`builder.rs:350-381`)
-
-**TIR**: Type-checked like any expression-body function. The generic `call_llm_function<T>` resolves `T` against the parent's declared return type. Companions type-check against their declared return types (`PromptAst`, `http.Request`).
-
-**MIR**: Standard CFG per function. The client reference becomes `const fn user.MyClient` -- a reference to the client's let-binding global.
-
-**Emit** (`lib.rs:353-363`): After bytecode compilation, only the original function (which has `DeclarativeMeta::Llm`) gets `body_meta = FunctionMeta::Llm { prompt_template, client }`. Companions get `body_meta: None`.
-
-**Runtime**: `extract_llm_function_info` walks all functions with `FunctionMeta::Llm`, builds `LlmFunctionInfo { prompt_template, client_name, return_type }`. When `call_llm_function` executes, it calls `get_jinja_template(function_name)` to retrieve the template, then `client.execute(context)` to drive the retry/routing/HTTP loop.
-
-### Client block desugaring
-
-`client<llm> MyClient { provider openai; options { model gpt-4 } }` desugars into:
-1. `Item::Let("MyClient", LetOrigin::Client)` -- initializer is a `Client { name, client_type, sub_clients, retry, counter }` object. (`lower_cst.rs:696-843`)
-2. `Item::Function("MyClient$new")` -- zero-param function constructing `PrimitiveClient { provider, options }`. Called at runtime via `Client::get_constructor()`. (`lower_cst.rs:865-1064`)
+Result: a comment addition re-runs the lexer and HIR for that one file, then stops. A whitespace edit shifts spans but leaves `TypeExpr` trees identical → `function_signature` early-cuts → type inference stays cached.
 
 ---
 
-## The Scope System
+## The Standard Library: Dual Pipeline
 
-### Scope hierarchy
+The standard library (`baml_std`) uses two separate paths: one for the compiler and one for runtime. Understanding both is important because they share source files but consume them differently.
 
-Scopes are built at HIR time by `SemanticIndexBuilder`. Each file gets a scope tree in DFS pre-order:
+### Compiler path
 
-```
-Project
-  \-- Package ("user")
-        \-- Namespace (one per namespace segment)
-              \-- File ("test.baml")
-                    |-- Function "greet" (has params + body bindings)
-                    |     |-- MatchArm (pattern binding)
-                    |     |-- CatchClause (clause binding)
-                    |     |     \-- CatchArm (arm pattern binding)
-                    |     \-- ...
-                    |-- Class "User"
-                    |     \-- Function "method" (child of Class scope)
-                    |-- Enum "Status"
-                    |-- TypeAlias "MyStr"
-                    \-- Let "TOP_LEVEL_CONST"
-```
+The `.baml` stub files in `baml_builtins2/baml_std/baml/` are embedded at compile time via `include_str!`. They are injected into the compiler as a Salsa input (`Compiler2ExtraFiles`), separate from the `Project` input that carries user files. The HIR query `compiler2_all_files` unions user files with builtin files. From that point on, builtin functions are type-checked, lowered, and compiled exactly like user-written functions — no special-casing.
 
-**`ScopeKind`** (`scope.rs:52-83`): `Project`, `Package`, `Namespace`, `File`, `Class`, `Enum`, `Function`, `TypeAlias`, `Block`, `Lambda`, `Item`, `MatchArm`, `CatchClause`, `CatchArm`, `Let`. Note: `Block` and `Lambda` exist in the enum but are **not currently emitted** by the builder.
+### Runtime path
 
-**`ScopeId`** (`scope.rs:44`): A `#[salsa::tracked]` struct pairing `SourceFile` + `FileScopeId`. This is the Salsa query key for `infer_scope_types`.
+At Rust build time (`build.rs`), the same `.baml` stub files are lexed, parsed, and lowered to AST. Every function with a `$rust_function` or `$rust_io_function` body is collected into a record. From these records, three things are generated:
 
-### What TIR does per scope
+- **Trait hierarchies** — One trait per class/namespace (e.g., `BamlClassArray` with a method per array builtin). These mirror the namespace structure.
+- **A `SysOp` enum** — One variant per I/O builtin, used for async dispatch.
+- **I/O traits** — For builtins that do async I/O.
 
-**`infer_scope_types(db, ScopeId) -> ScopeInference`** (`inference.rs:189`) dispatches on `ScopeKind`:
+A concrete struct (`PackageBamlImpl`) implements all generated traits. At program load time, the VM walks all functions in the compiled program. For each `NativeUnresolved` function, it calls `get_native_fn(name)` to look up the Rust function pointer. At call time, the VM invokes the function pointer directly.
 
-- **`Function`**: The primary case. Loads signature and body. Merges class generic params if this is a method inside a `Class` scope. Lowers parameter types, adds each as a local. Calls `builder.check_expr(root_expr, body, &return_ty)`. Runs `check_throws_contract`.
-- **`Class`**: Empty -- fields are handled by `resolve_class_fields`; methods by their own `Function` scope invocations.
-- **`Let`**: Loads let body, calls `builder.infer_expr(root_expr, body)`.
-- **`Lambda`**: Placeholder (not yet emitted).
-- **All others**: No-op.
+### Why this matters
 
-**Key insight**: inference runs per scope, not per function. Editing a lambda body would only invalidate that scope's Salsa query, not the enclosing function's.
+When you add a new builtin function to the standard library, you are touching both paths. The `.baml` file defines the signature and body marker. The compiler path type-checks it. The `build.rs` codegen path generates a trait method for it. And you must implement that trait method in Rust. The two paths share the same source of truth (the `.baml` files) but consume it independently.
 
-### The three local maps in `TypeInferenceBuilder`
+---
 
-Within one scope's inference run, the builder (`builder.rs:87`) maintains:
+## Testing Infrastructure: Phases and Incrementality
 
-| Map | Purpose | Modified by narrowing? |
+### Snapshot test phases
+
+The test infrastructure generates one snapshot per pipeline phase per test project. Each phase captures a different layer's output:
+
+| Phase | Name | What it snapshots |
 |---|---|---|
-| `locals` | Flow-sensitive current type of each variable | Yes |
-| `declared_types` | The annotated type, written once | No -- assignment checks validate against this |
-| `bindings` | The initial binding type (output to ScopeInference) | No |
+| `01` | lexer | Token stream |
+| `02` | parser | CST + parse errors |
+| `03` | hir | Scope tree, item tree, symbol contributions |
+| `04` | tir | Typed expressions, resolved names |
+| `04_5` | mir | Control flow graphs |
+| `05` | diagnostics | All diagnostics aggregated across phases |
+| `06` | codegen | Bytecode |
+| `10` | formatter | Formatter idempotency (format twice, assert identical) |
 
-`add_local(name, ty)` (`builder.rs:212`) writes to both `locals` and `declared_types` (using `entry().or_insert_with()` so narrowing restore cycles don't overwrite the original).
+Phases 01 and 02 run per-file. Phases 03–06 run per-project (loading all files together). Snapshots are stored alongside the test projects.
 
-### Narrowing
+### Adding a test case
 
-TypeScript-style control-flow narrowing (`narrowing.rs`). Recognizes: `x != null`, `x == null`, `!expr`, truthiness on nullable types.
-
-For `if (x != null) { ... } else { ... }`:
-1. `apply_then_narrowings`: saves originals, sets `locals["x"] = remove_null(ty)` (then-branch)
-2. Infer then-branch
-3. `restore_and_apply_else`: restores originals, sets `locals["x"] = Null` (else-branch)
-4. Infer else-branch
-5. `restore_narrowings`: restores originals
-
-**Guard clause pattern** (`builder.rs:877-962`): After `if (x == null) { return; }`, the then-branch diverges (`Ty::Never`). `apply_post_diverge_narrowings` permanently writes `else_type` into `locals` -- so `x` is `int` (not `int?`) for the rest of the block.
-
-### Name resolution across scopes
-
-`resolve_name_at(db, file, at_offset, name)` (`resolve.rs:45`) walks ancestor scopes from innermost to outermost:
-1. Check `bindings` in reverse source order, with a **position guard**: `binding_range.start() <= at_offset` (no forward references to let bindings)
-2. Check `params` (always visible within their scope)
-3. At `File`/`Package` scope: look up in `package_items` (own package then dependencies)
-4. Skip `Class` scopes when nested -- field names are not visible via bare lookup in methods
-
----
-
-## The `baml_std` Builtins Pipeline
-
-The builtin standard library (`baml_std`) uses a two-phase pipeline: the **compiler** sees `.baml` stub files as ordinary source; the **runtime** uses `build.rs` codegen to generate Rust trait hierarchies from those same stubs. This section traces both paths.
-
-### The `.baml` stub files
-
-**Location**: `crates/baml_builtins2/baml_std/baml/`
-
-Stubs are organized by namespace (`ns_*` subdirectories): `containers.baml`, `core.baml`, `string.baml` at the root; `ns_llm/llm.baml`, `ns_http/http.baml`, `ns_fs/fs.baml`, `ns_math/math.baml`, etc.
-
-Each stub uses two special body keywords:
-- `$rust_function` -- marks a synchronous VM builtin
-- `$rust_io_function` -- marks an async I/O builtin
-
-Behavioral directives are expressed as CST comments on the preceding line:
-- `//baml:mut_self` -- receiver is `&mut`
-- `//baml:vm` -- passes `vm: &BexVm` to the Rust impl
-- `//baml:mut_vm` -- passes `vm: &mut BexVm`
-
-All files are embedded at compile time via `include_str!` in `baml_builtins2/src/lib.rs:54-62`. The complete list is the constant `ALL: &[BuiltinFile]`.
-
-### Compiler path: injection via `Compiler2ExtraFiles`
-
-`Compiler2ExtraFiles` is a Salsa `#[salsa::input]` struct (`baml_workspace/src/lib.rs:70`) holding `files: Vec<SourceFile>`. It is separate from the `Project` input (which carries user files).
-
-During `ProjectDatabase::set_project_root` (`baml_project/src/db.rs:251`):
-1. `load_builtin_baml_files()` iterates `baml_builtins2::ALL`, registers each as a `SourceFile`
-2. `Compiler2ExtraFiles::new(self, builtin_files)` stores them as a Salsa input
-
-The HIR query `compiler2_all_files` (`baml_compiler2_hir/src/lib.rs:76`) unions user files with `compiler2_extra_files`, filtering out v1 builtins. All downstream queries (`namespace_items`, `package_items`, `file_semantic_index`) work from this combined view. Builtin functions type-check like any other function.
-
-### Runtime path: `build.rs` codegen
-
-Three crates run `extract_native_builtins()` (`baml_builtins2_codegen/src/extract.rs:51`) at build time. This function iterates `baml_builtins2::ALL`, lexes + parses + lowers each file to AST, then collects every function with a `$rust_function` or `$rust_io_function` body into `NativeBuiltin` records.
-
-Each crate generates different output:
-
-| Crate | Build script generates | Output |
-|---|---|---|
-| `bex_vm` | `generate_native_trait()` | `BamlClass*` / `BamlNamespace*` / `BamlPackageBaml` traits |
-| `bex_vm_types` | `generate_sys_op_enum()` | `SysOp` enum (one variant per I/O builtin) |
-| `sys_types` | `generate_io_traits()` | `IoClass*` / `IoNamespace*` / `IoPackageBaml` traits |
-
-The generated trait hierarchy mirrors the namespace structure. For example, `BamlClassArray` has one required method per array builtin (`length`, `push`, etc.), plus a `__dispatch_array(method)` method that routes string method names to function pointers. `BamlPackageBaml` is the root supertrait with `get_native_fn(path) -> Option<NativeFunction>`.
-
-### Runtime dispatch
-
-The zero-sized struct `PackageBamlImpl` (`bex_vm/src/package_baml/mod.rs:55`) implements all generated traits via submodules (`array.rs`, `map.rs`, `string.rs`, `math.rs`, etc.).
-
-At program load time, `attach_builtins` (`mod.rs:65`) iterates all functions in the compiled `Program`. For each `FunctionKind::NativeUnresolved`, it calls `PackageBamlImpl::get_native_fn(name)` and stores the resolved function pointer as `FunctionKind::Native(ptr)`.
-
-At call time, the VM transmutes the stored pointer back to `fn(&mut BexVm, &[Value]) -> NativeFunctionResult` and invokes it directly.
-
-### Data flow summary
-
-```
-.baml stubs (baml_builtins2/baml_std/)
-    |
-    |-- [Compiler path]
-    |     include_str! -> BuiltinFile -> Compiler2ExtraFiles (Salsa input)
-    |     -> compiler2_all_files() = user files + builtin files
-    |     -> HIR/TIR/MIR/Emit treat builtins as ordinary functions
-    |
-    \-- [Runtime path]
-          build.rs -> extract_native_builtins() -> lex/parse/lower -> NativeBuiltin records
-          -> generate_native_trait() -> BamlClass*/BamlNamespace* traits (OUT_DIR)
-          -> PackageBamlImpl impls all traits
-          -> attach_builtins() resolves NativeUnresolved -> Native(fn ptr)
-          -> VM calls fn ptr directly
-```
-
----
-
-## Testing Infrastructure
-
-### Snapshot tests: `crates/baml_tests/`
-
-The primary testing mechanism is a **build-time snapshot test generator**. `crates/baml_tests/build.rs` scans `projects/` directories and emits `src/generated_tests.rs` containing one Rust `mod` per project with one `#[test]` per compiler phase per file.
-
-#### Phase numbering
-
-| Phase | Name | Scope | What it snapshots |
-|---|---|---|---|
-| `01` | `lexer` | per-file | Token stream |
-| `02` | `parser` | per-file | CST + parse errors |
-| `03` | `hir` | per-project | HIR (scope tree, item tree, symbol contributions) |
-| `04` | `tir` | per-project | TIR (typed expressions, resolved names) |
-| `04_5` | `mir` | per-project | MIR (control flow graphs) |
-| `05` | `diagnostics` | per-project | All diagnostics aggregated across phases |
-| `06` | `codegen` | per-project | Bytecode (`compiler2_emit`) |
-| `10` | `formatter` | per-file | Formatter idempotency (format twice, assert identical) |
-
-Phases 01 and 02 generate one test per `.baml` file; phases 03-06 generate one test per project (loading all files). Snapshots are stored at `crates/baml_tests/snapshots/<project_name>/`.
-
-#### Adding a new test case
-
-1. Create `crates/baml_tests/projects/<new_name>/` with one or more `.baml` files
-2. Run `cargo test --package baml_tests <new_name>`
-3. Run `cargo insta accept --all` to commit initial snapshots
-4. The build script picks up new directories automatically
-
-#### Project categories
-
-Projects are organized by what they test: `parser_*` (parser-focused, also get incremental/node-reuse tests), `basic_types`, `type_aliases`, `generics` (type system), `control_flow`, `catch_throw` (control flow), `error_cases` (diagnostics), `stream_types` (streaming), etc.
-
-### Hand-written unit tests: `compiler2_tir/`
-
-The `crates/baml_tests/src/compiler2_tir/` directory contains targeted tests for specific type-checker behaviors:
-
-| Module | Tests |
-|---|---|
-| `inference.rs` | Core inference: literal types, widening, field access, mismatches |
-| `phase3a.rs` | 12 diagnostic categories: union normalization, `UnknownType`, `ArgumentCountMismatch`, etc. |
-| `phase3a_recursion.rs` | Cycle validation: direct self-ref, mutual recursion, structural vs non-structural edges |
-| `phase5.rs` | Builtin stdlib package loading verification |
-| `phase6.rs` | Generic method resolution for builtin types (`Array<T>`, `Map<K,V>`) |
-| `phase7.rs` | Type narrowing: null-check, truthiness, early-return divergence |
-| `phase8_exceptions.rs` | `catch`/`throw`/`throws` contract enforcement |
-| `stream_expansion.rs` | Stream type expansion |
-
-All tests use `support::make_db()` to create a `ProjectDatabase` with builtins loaded, and `support::render_tir(db, file)` to produce a human-readable snapshot of the typed IR.
+1. Create a directory with `.baml` files in the test projects area.
+2. Run `cargo test` — the build script picks up new directories automatically.
+3. Run `cargo insta accept --all` to commit initial snapshots.
 
 ### Incremental tests
 
-`crates/baml_tests/src/incremental/mod.rs` provides `IncrementalTestDb`, which wraps `ProjectDatabase` with a Salsa event log. It records `WillExecute` events to assert exact execution counts.
+Separate from snapshot tests, there are targeted incremental tests that verify Salsa's early-cutoff behavior. These wrap the project database with an event log that records `WillExecute` events, then assert exact execution counts. They verify things like:
 
-`incremental/scenarios.rs` has 8 tests verifying Salsa early-cutoff behavior:
-- Body edit forces re-lex but not cross-file invalidation
-- Rename forces item tree rebuild
-- Comment change re-runs lexer then stops
-- Editing one file doesn't affect another file's cached queries
-- Repeated identical queries hit zero re-executions
-- Whitespace-only changes still re-lex but early-cut at `namespace_items`
-
-### Running tests
-
-```sh
-# Run all snapshot tests (skip parser_stress for speed)
-cargo test --package baml_tests -- --skip parser_stress
-
-# Run a specific project's tests
-cargo test --package baml_tests <project_name>
-
-# Review/accept snapshot changes
-cargo insta review
-cargo insta accept --all
-
-# Run LSP tests with auto-update
-UPDATE_EXPECT=1 cargo test --package lsp_actions_tests
-```
-
-See `TEST_INSTRUCTIONS.md` for the full debugging workflow.
+- A body edit forces re-lex but not cross-file invalidation.
+- A rename forces item tree rebuild.
+- A comment change re-runs the lexer then stops.
+- Editing one file doesn't affect another file's cached queries.
+- Repeated identical queries hit zero re-executions.
 
 ---
 
-## Code References
+## Decision Framework Summary
 
-### Salsa Architecture
-- `baml_base/src/files.rs:14` -- `SourceFile` input
-- `baml_workspace/src/lib.rs:39` -- root `Db` trait, `Project` input
-- `baml_compiler2_hir/src/lib.rs:51` -- HIR `Db` trait, `file_semantic_index` (line 96, `no_eq`)
-- `baml_compiler2_hir/src/ids.rs:43` -- `LocalItemId<T>` name-hash packing
-- `baml_compiler2_hir/src/loc.rs:19` -- nine `#[salsa::interned]` `*Loc` types
-- `baml_compiler2_hir/src/namespace.rs:130` -- `namespace_items` `PartialEq` early cutoff
-- `baml_compiler2_hir/src/signature.rs:93` -- span/semantic split
-- `baml_compiler2_tir/src/inference.rs:189` -- `infer_scope_types` per-scope query
+When implementing a new feature, walk through these questions in order:
 
-### Type System
-- `baml_compiler2_tir/src/ty.rs:92` -- `Ty` enum (21 variants)
-- `baml_compiler2_tir/src/builder.rs:227` -- `infer_expr` (synthesis mode)
-- `baml_compiler2_tir/src/builder.rs:391` -- `check_expr` (checking mode)
-- `baml_compiler2_tir/src/builder.rs:3317` -- `join_types` (union construction)
-- `baml_compiler2_tir/src/normalize.rs:18` -- `is_subtype_of` (structural subtyping)
-- `baml_compiler2_tir/src/normalize.rs:94` -- `StructuralTy::is_subtype_of` (co-inductive)
-- `baml_compiler2_tir/src/generics.rs` -- generic instantiation and inference
+1. **Does it change the grammar?** → Parser (lexer/CST).
+2. **Does it introduce a new syntactic form that desugars to existing constructs?** → AST layer.
+3. **Does it need to know the name of something?** → It needs HIR, but the *implementation* might still live in the AST with the HIR providing the answer via queries.
+4. **Does it need to know the type of something?** → TIR.
+5. **Does it need to expand types before type-checking (e.g., stream types)?** → PPIR.
+6. **Does it change the control flow representation?** → MIR (with strong justification).
+7. **Does it change bytecode emission?** → Emit (very rare).
 
-### Recursive Types
-- `baml_compiler2_tir/src/normalize.rs:26` -- `find_recursive_aliases` (DFS cycle detection)
-- `baml_compiler2_tir/src/normalize.rs:461` -- `find_invalid_alias_cycles` (Tarjan + structural edge check)
-- `baml_compiler2_tir/src/normalize.rs:304` -- `normalize_impl` (Mu type construction)
-- `baml_compiler2_tir/src/normalize.rs:149` -- Mu unfolding in subtype check
-- `baml_compiler2_tir/src/normalize.rs:740` -- `find_invalid_class_cycles`
+**When in doubt:** put it in the AST layer. Most features live there. The AST is the workhorse of the compiler.
 
-### LLM Desugaring
-- `baml_compiler2_ast/src/lower_cst.rs:125` -- LLM body detection
-- `baml_compiler2_ast/src/lower_cst.rs:247` -- `synthesize_llm_builtin_call`
-- `baml_compiler2_ast/src/companions.rs:25` -- companion function generation
-- `baml_compiler2_ast/src/ast.rs:467` -- `DeclarativeMeta::Llm`, `LlmBodyDef`
-- `baml_compiler2_emit/src/lib.rs:353` -- `FunctionMeta::Llm` population at emit time
-- `baml_builtins2/baml_std/baml/llm.baml:52` -- `call_llm_function<T>` builtin
+**When talking to coding agents:** Tell the agent which layer to operate in. This dramatically improves one-shot accuracy. Agents that understand the layer boundaries produce correct code more reliably than agents given free rein to modify any layer.
 
-### Scopes
-- `baml_compiler2_hir/src/scope.rs:52` -- `ScopeKind` enum
-- `baml_compiler2_hir/src/builder.rs:350` -- `lower_function` scope creation
-- `baml_compiler2_tir/src/builder.rs:87` -- `TypeInferenceBuilder` (locals, declared_types, bindings)
-- `baml_compiler2_tir/src/narrowing.rs:60` -- `extract_narrowings`
-- `baml_compiler2_tir/src/resolve.rs:45` -- `resolve_name_at` scope-chain walk
+---
 
-### `baml_std` / Builtins
-- `baml_builtins2/src/lib.rs:54` -- `builtin!` macro, `ALL: &[BuiltinFile]`
-- `baml_builtins2_codegen/src/extract.rs:51` -- `extract_native_builtins()`
-- `baml_builtins2_codegen/src/codegen.rs:580` -- `generate_native_trait()`
-- `baml_workspace/src/lib.rs:70` -- `Compiler2ExtraFiles` Salsa input
-- `baml_project/src/db.rs:251` -- `set_project_root` loads builtins
-- `baml_compiler2_hir/src/lib.rs:76` -- `compiler2_all_files` unions user + builtin files
-- `bex_vm/src/package_baml/mod.rs:55` -- `PackageBamlImpl`
-- `bex_vm/src/package_baml/mod.rs:65` -- `attach_builtins`
+## Quick Reference: Layer Properties
 
-### Testing
-- `baml_tests/build.rs:24` -- snapshot test code generation
-- `baml_tests/projects/` -- test fixture directories
-- `baml_tests/snapshots/` -- snapshot files per project per phase
-- `baml_tests/src/compiler2_tir/mod.rs` -- `support::make_db()`, `support::render_tir()`
-- `baml_tests/src/incremental/mod.rs` -- `IncrementalTestDb`
-- `baml_tests/src/incremental/scenarios.rs` -- Salsa memoization scenario tests
+| Layer | Crate | Transforms? | Salsa Queries? | Can construct new nodes? |
+|---|---|---|---|---|
+| Parser/CST | `baml_compiler_parser` | Yes (text → CST) | `syntax_tree` | Yes |
+| AST | `baml_compiler2_ast` | Yes (CST → AST) | No (pure function) | Yes |
+| HIR | `baml_compiler2_hir` | No | `file_semantic_index`, `namespace_items`, `package_items` | No |
+| PPIR | `baml_compiler2_ppir` | Yes (synthesizes stream types, feeds back to HIR) | `ppir_expansion_items` | Yes (synthetic stream items only) |
+| TIR | `baml_compiler2_tir` | No | `infer_scope_types`, `resolve_name_at` | No |
+| MIR | `baml_compiler2_mir` | Yes (AST → CFG) | `lower_function`, `lower_let_body` | Yes |
+| Emit | `baml_compiler2_emit` | Yes (MIR → bytecode) | `generate_project_bytecode` | Yes (bytecode) |
