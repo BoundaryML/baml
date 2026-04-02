@@ -28,6 +28,8 @@ class SseStream {
   url string
   _handle $rust_type
 
+  /// Only returns `null` if the stream is done/closed.
+  /// Otherwise, waits until a new event is available.
   function next(self) -> string? throws root.errors.Io {
     $rust_io_function
   }

@@ -3,11 +3,6 @@ class OrchestrationStep {
   delay_ms int
 }
 
-class ExecutionResult {
-  ok bool
-  value unknown
-}
-
 class ExecutionContext {
   jinja_string string
   args map<string, unknown>
@@ -50,12 +45,15 @@ function build_request(client: Client, function_name: string, args: map<string, 
   primitive_client.build_request(specialized_prompt)
 }
 
-/// unsafe to call directly since we cannot guarantee that the return type is correct
+/// Used by LLM function companion functions.
+/// Only parses full responses, not partials.
 function parse<T>(function_name: string, json: string) -> T {
   let return_type = get_return_type(function_name);
-  __sap_parse(json, return_type)
+  let cache = StreamCache.new(return_type);
+  __sap_parse_final(json, cache)
 }
 
+/// Call an LLM function and return its full result.
 function call_llm_function<T>(client: Client, function_name: string, args: map<string, unknown>) -> T {
   let jinja_string = get_jinja_template(function_name);
 
@@ -65,6 +63,22 @@ function call_llm_function<T>(client: Client, function_name: string, args: map<s
     function_name: function_name,
   };
 
-  let result: T = client.execute(context, 0);
+  let result: T = client.execute_oneshot(context, 0);
   result
+}
+
+/// The streaming counterpart of `call_llm_function`.
+///
+/// Sends the request and returns a `Stream<T>` which can be used to consume the data as it arrives.
+function stream_llm_function<T>(client: Client, function_name: string, args: map<string, unknown>) -> Stream<T> {
+    let jinja_string = get_jinja_template(function_name);
+
+    let context = ExecutionContext {
+        jinja_string: jinja_string,
+        args: args,
+        function_name: function_name,
+    };
+
+    let result: Stream<T> = client.execute_stream(context, 0);
+    result
 }

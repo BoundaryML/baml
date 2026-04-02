@@ -220,6 +220,36 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
         )
     }
 
+    fn build_request_stream(
+        &self,
+        heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        prompt: io::owned::llm::PromptAst,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
+        let prompt_ast = unwrap_prompt_ast(&prompt);
+        let callbacks = build_io_callbacks(&ctx.io_callbacks, heap, ctx);
+        SysOpOutput::async_op(async move {
+            sys_llm::execute_build_request_stream_from_owned(&old_client, prompt_ast, &callbacks)
+                .await
+                .map(|req| {
+                    io::owned::http::Request {
+                        method: req.method,
+                        url: req.url,
+                        headers: req.headers,
+                        body: req.body,
+                    }
+                    .into_bex_external_value()
+                })
+                .map_err(OpErrorKind::from)
+        })
+    }
+
     fn new_stream_accumulator(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
@@ -235,6 +265,24 @@ impl<T> io::IoClassLlmPrimitiveClient for T {
             }
             Err(e) => SysOpOutput::err(OpErrorKind::from(e)),
         }
+    }
+
+    fn validate_finish_reason(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        client: io::owned::llm::PrimitiveClient,
+        finish_reason: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let old_client = match convert_io_primitive_client(&client) {
+            Ok(c) => c,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
+        SysOpOutput::Ready(
+            sys_llm::execute_validate_finish_reason(&old_client, &finish_reason)
+                .map_err(OpErrorKind::from),
+        )
     }
 }
 
@@ -436,17 +484,62 @@ impl<T> io::IoNamespaceLlm for T {
         SysOpOutput::ok(info.return_type.clone())
     }
 
-    fn __sap_parse(
+    fn new(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        target: baml_type::Ty,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::llm::StreamCache> {
+        let compiled = match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target) {
+            Ok(compiled) => compiled,
+            Err(e) => return SysOpOutput::err(OpErrorKind::Other(e.to_string())),
+        };
+        let sap = ::sys_llm::SapStreamCache::new(compiled);
+        let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
+        SysOpOutput::ok(io::owned::llm::StreamCache { _data: data })
+    }
+
+    fn __sap_parse_final(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         json: String,
-        ty: baml_type::Ty,
+        cache: io::owned::llm::StreamCache,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
+        let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid StreamCache: expected SapStreamCache".into(),
+            ));
+        };
         SysOpOutput::Ready(
-            sys_llm::execute_sap_parse(&json, &ty, ctx, true).map_err(OpErrorKind::from),
+            sys_llm::execute_sap_parse_final(&json, &sap, ctx).map_err(OpErrorKind::from),
         )
+    }
+
+    fn __sap_parse_partial(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        json: String,
+        cache: io::owned::llm::StreamCache,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        let Ok(sap) = cache._data.downcast::<::sys_llm::SapStreamCache>() else {
+            return SysOpOutput::err(OpErrorKind::Other(
+                "Invalid StreamCache: expected SapStreamCache".into(),
+            ));
+        };
+        let result = match sys_llm::execute_sap_parse_partial(&json, &sap, ctx) {
+            Ok(Some(value)) => Ok(value),
+            Ok(None) => Ok(BexExternalValue::instance(
+                "baml.stream.StreamNoYield",
+                ::indexmap::IndexMap::new(),
+            )),
+            Err(e) => Err(OpErrorKind::from(e)),
+        };
+        SysOpOutput::Ready(result)
     }
 }
 

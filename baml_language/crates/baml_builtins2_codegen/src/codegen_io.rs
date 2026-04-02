@@ -818,19 +818,96 @@ fn emit_view_struct(
 // Owned module
 // ============================================================================
 
+/// Compute the set of class names that cannot derive `Default`.
+///
+/// A class is non-defaultable if it directly contains a `$rust_type` field,
+/// or if any of its fields transitively references a non-defaultable class.
+///
+/// Both the fully-qualified name (`baml.llm.StreamAccumulator`) and the short
+/// name (`StreamAccumulator`) are stored, because field type references may use
+/// either form depending on whether the path was single- or multi-segment.
+fn compute_non_defaultable_classes(
+    class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
+) -> std::collections::HashSet<String> {
+    use crate::types::BamlType;
+
+    fn references_non_defaultable(
+        ty: &BamlType,
+        non_defaultable: &std::collections::HashSet<String>,
+    ) -> bool {
+        match ty {
+            BamlType::Named(name) => non_defaultable.contains(name),
+            BamlType::List(inner) | BamlType::Optional(inner) => {
+                references_non_defaultable(inner, non_defaultable)
+            }
+            BamlType::Map(k, v) => {
+                references_non_defaultable(k, non_defaultable)
+                    || references_non_defaultable(v, non_defaultable)
+            }
+            _ => false,
+        }
+    }
+
+    // Collect all classes with both name forms.
+    let all_classes: Vec<(&NativeClassDef, String)> = class_defs_by_ns
+        .values()
+        .flat_map(|classes| classes.iter().copied())
+        .map(|cd| (cd, format!("{}.{}", cd.namespace_prefix, cd.name)))
+        .collect();
+
+    // Seed: classes with direct $rust_type fields — insert both name forms.
+    let mut non_defaultable: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (cd, full_name) in &all_classes {
+        if cd
+            .fields
+            .iter()
+            .any(|f| matches!(f.field_type, BamlType::RustType))
+        {
+            non_defaultable.insert(full_name.clone());
+            non_defaultable.insert(cd.name.clone());
+        }
+    }
+
+    // Fixed-point: propagate through Named references until stable.
+    loop {
+        let mut changed = false;
+        for (cd, full_name) in &all_classes {
+            if non_defaultable.contains(full_name) {
+                continue;
+            }
+            if cd
+                .fields
+                .iter()
+                .any(|f| references_non_defaultable(&f.field_type, &non_defaultable))
+            {
+                non_defaultable.insert(full_name.clone());
+                non_defaultable.insert(cd.name.clone());
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    non_defaultable
+}
+
 fn emit_owned_module(
     _io_class_defs: &[&NativeClassDef],
     class_ns_map: &BTreeMap<String, String>,
     class_defs_by_ns: &BTreeMap<String, Vec<&NativeClassDef>>,
     paths: &CodegenPaths,
 ) -> TokenStream {
+    let non_defaultable = compute_non_defaultable_classes(class_defs_by_ns);
+
     let ns_modules: Vec<TokenStream> = class_defs_by_ns
         .iter()
         .map(|(ns, classes)| {
             let ns_ident = format_ident!("{}", ns);
             let structs: Vec<TokenStream> = classes
                 .iter()
-                .map(|cd| emit_owned_struct(cd, class_ns_map, ns, paths))
+                .map(|cd| emit_owned_struct(cd, class_ns_map, ns, paths, &non_defaultable))
                 .collect();
             quote! {
                 pub mod #ns_ident {
@@ -853,17 +930,14 @@ fn emit_owned_struct(
     class_ns_map: &BTreeMap<String, String>,
     _ns: &str,
     paths: &CodegenPaths,
+    non_defaultable: &std::collections::HashSet<String>,
 ) -> TokenStream {
     let name_ident = format_ident!("{}", cd.name);
     let full_path = format!("{}.{}", cd.namespace_prefix, cd.name);
     let source_comment = format!("Generated from `{}`", cd.source_file);
 
-    let has_rust_type = cd
-        .fields
-        .iter()
-        .any(|f| matches!(f.field_type, BamlType::RustType));
-
-    let derives = if has_rust_type {
+    // Struct definition
+    let derives = if non_defaultable.contains(&full_path) {
         quote! { #[derive(Clone, Debug)] }
     } else {
         quote! { #[derive(Clone, Debug, Default)] }

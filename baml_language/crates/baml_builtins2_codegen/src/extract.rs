@@ -18,6 +18,15 @@ use crate::types::{
     VmUsage,
 };
 
+/// Convert a byte offset in source text to a 1-based `(line, column)` pair.
+fn offset_to_line_col(source: &str, offset: u32) -> (usize, usize) {
+    let offset = (offset as usize).min(source.len());
+    let prefix = &source[..offset];
+    let line = prefix.matches('\n').count() + 1;
+    let col = offset - prefix.rfind('\n').map_or(0, |p| p + 1) + 1;
+    (line, col)
+}
+
 /// Returned when a builtin `.baml` file has parse errors or HIR lowering diagnostics.
 pub struct ExtractNativeBuiltinsError {
     message: String,
@@ -61,12 +70,27 @@ pub fn extract_native_builtins()
         .filter(|f| f.package == baml_builtins2::PACKAGE_BAML)
     {
         let path = builtin_file.virtual_path();
+        // Real filesystem path for diagnostic messages (clickable in editors).
+        let diag_path = format!(
+            "{}/{}/{}",
+            baml_builtins2::BAML_STD_DIR,
+            builtin_file.package,
+            builtin_file.relative_path
+        );
         // Lex and parse into a lossless CST.
         let tokens = baml_compiler_lexer::lex_lossless(builtin_file.contents, FileId::new(0));
         let (green, errors) = baml_compiler_parser::parse_file(&tokens);
         for e in &errors {
             let d = e.to_diagnostic();
-            diagnostic_lines.push(format!("  {path}: [{}] {}", d.id.code(), d.message));
+            let location = d
+                .primary_span()
+                .map(|span| {
+                    let (line, col) =
+                        offset_to_line_col(builtin_file.contents, span.range.start().into());
+                    format!("{diag_path}:{line}:{col}")
+                })
+                .unwrap_or_else(|| diag_path.clone());
+            diagnostic_lines.push(format!("  {location}: [{}] {}", d.id.code(), d.message));
         }
         if !errors.is_empty() {
             continue;
@@ -77,7 +101,15 @@ pub fn extract_native_builtins()
         let (items, diags) = baml_compiler2_ast::lower_file(&cst_root);
         for ld in &diags {
             let d = ld.to_diagnostic(FileId::new(0));
-            diagnostic_lines.push(format!("  {path}: [{}] {}", d.id.code(), d.message));
+            let location = d
+                .primary_span()
+                .map(|span| {
+                    let (line, col) =
+                        offset_to_line_col(builtin_file.contents, span.range.start().into());
+                    format!("{diag_path}:{line}:{col}")
+                })
+                .unwrap_or_else(|| diag_path.clone());
+            diagnostic_lines.push(format!("  {location}: [{}] {}", d.id.code(), d.message));
         }
         if !diags.is_empty() {
             continue;
