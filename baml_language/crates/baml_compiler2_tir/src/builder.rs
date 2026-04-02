@@ -1296,12 +1296,9 @@ impl<'db> TypeInferenceBuilder<'db> {
                     .insert(name.clone(), narrowed_scrutinee_ty.clone());
             }
 
-            if let Some((bind_name, bind_ty)) = self.pattern_binding_for_arm(
-                pattern_id,
-                &scrutinee_ty,
-                &narrowed_scrutinee_ty,
-                body,
-            ) {
+            if let Some((bind_name, bind_ty)) =
+                self.pattern_binding_for_arm(pattern_id, &scrutinee_ty, body, arm.body)
+            {
                 saved.push((bind_name.clone(), self.locals.get(&bind_name).cloned()));
                 self.locals.insert(bind_name, bind_ty);
             }
@@ -1414,10 +1411,13 @@ impl<'db> TypeInferenceBuilder<'db> {
                 // never unreachable — panics can occur in any expression at
                 // runtime regardless of the declared throw set.
                 let is_explicit_panic = self.is_panic_type_pattern(arm.pattern, body);
-                // Record resolved type for bare type sugar patterns so MIR
-                // can generate IsType checks (not just for panic types).
-                if let baml_compiler2_ast::Pattern::Binding(name) = &body.patterns[arm.pattern] {
-                    if name.as_str() != "_" && self.is_bare_type_sugar_binding(name) {
+                // Record resolved type for bare type sugar and typed binding
+                // patterns so MIR can generate IsType checks and determine
+                // catches_panics.
+                match &body.patterns[arm.pattern] {
+                    baml_compiler2_ast::Pattern::Binding(name)
+                        if name.as_str() != "_" && self.is_bare_type_sugar_binding(name) =>
+                    {
                         let ty = self.pattern_narrowed_type(
                             arm.pattern,
                             &clause_binding_ty,
@@ -1426,25 +1426,35 @@ impl<'db> TypeInferenceBuilder<'db> {
                         );
                         self.bindings.insert(arm.pattern, ty);
                     }
+                    baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
+                        let resolved = self.resolve_type_expr(ty, arm.body);
+                        self.bindings.insert(arm.pattern, resolved);
+                    }
+                    _ => {}
                 }
                 if matches.may_match.is_empty() && !is_explicit_panic {
                     self.context
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }
 
-                let narrowed_binding_ty = Self::facts_to_ty(&matches.may_match);
+                let mut narrowed_binding_ty = Self::facts_to_ty(&matches.may_match);
+                // When the arm matches a panic type, may_match is empty (panics
+                // aren't in the declared throw set) so narrowed_binding_ty is
+                // `never`.  Use the pattern's resolved type instead so the
+                // clause binding (e.g. `e`) is usable inside the arm body.
+                if matches!(narrowed_binding_ty, Ty::Never { .. }) && is_explicit_panic {
+                    narrowed_binding_ty =
+                        self.pattern_narrowed_type(arm.pattern, &clause_binding_ty, body, arm.body);
+                }
                 let mut saved = Vec::new();
                 if let Some(name) = &binding_name {
                     saved.push((name.clone(), self.locals.get(name).cloned()));
                     self.locals
                         .insert(name.clone(), narrowed_binding_ty.clone());
                 }
-                if let Some((arm_bind_name, arm_bind_ty)) = self.pattern_binding_for_arm(
-                    arm.pattern,
-                    &narrowed_binding_ty,
-                    &narrowed_binding_ty,
-                    body,
-                ) {
+                if let Some((arm_bind_name, arm_bind_ty)) =
+                    self.pattern_binding_for_arm(arm.pattern, &narrowed_binding_ty, body, arm.body)
+                {
                     saved.push((
                         arm_bind_name.clone(),
                         self.locals.get(&arm_bind_name).cloned(),
@@ -1668,11 +1678,11 @@ impl<'db> TypeInferenceBuilder<'db> {
     }
 
     fn pattern_binding_for_arm(
-        &self,
+        &mut self,
         pattern_id: PatId,
         scrutinee_ty: &Ty,
-        narrowed_ty: &Ty,
         body: &ExprBody,
+        at_expr: ExprId,
     ) -> Option<(Name, Ty)> {
         match &body.patterns[pattern_id] {
             baml_compiler2_ast::Pattern::Binding(name) => {
@@ -1682,11 +1692,25 @@ impl<'db> TypeInferenceBuilder<'db> {
                     Some((name.clone(), scrutinee_ty.clone()))
                 }
             }
-            baml_compiler2_ast::Pattern::TypedBinding { name, .. } => {
-                Some((name.clone(), narrowed_ty.clone()))
+            baml_compiler2_ast::Pattern::TypedBinding { name, ty } => {
+                Some((name.clone(), self.resolve_type_expr(ty, at_expr)))
             }
             _ => None,
         }
+    }
+
+    /// Resolve a `TypeExpr` to a `Ty`.  Tries `bare_type_sugar_to_ty` first
+    /// (handles `baml.panics.*` types and primitives), falls back to
+    /// `lower_pattern_type_expr` for user-defined types.
+    fn resolve_type_expr(&mut self, ty: &TypeExpr, at_expr: ExprId) -> Ty {
+        if let TypeExpr::Path { segments, .. } = ty {
+            if segments.len() == 1 {
+                if let Some(resolved) = self.bare_type_sugar_to_ty(&segments[0]) {
+                    return resolved;
+                }
+            }
+        }
+        self.lower_pattern_type_expr(ty, at_expr)
     }
 
     fn pattern_narrowed_type(
@@ -1713,7 +1737,7 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             baml_compiler2_ast::Pattern::TypedBinding { ty, .. } => {
-                self.lower_pattern_type_expr(ty, at_expr)
+                self.resolve_type_expr(ty, at_expr)
             }
             baml_compiler2_ast::Pattern::Literal(lit) => Ty::Literal(
                 lit.clone(),
@@ -1955,9 +1979,14 @@ impl<'db> TypeInferenceBuilder<'db> {
                 }
             }
             baml_compiler2_ast::Pattern::Literal(lit) => {
+                // A literal value pattern (e.g. "boom", 42) matches a subset of a
+                // primitive throw fact.  It can never *definitely* handle the whole
+                // type (other values of the same type would still escape), so we
+                // return MayMatch — keeping the throw fact in the residual for
+                // subsequent arms.
                 let lit_ty = Ty::Primitive(PrimitiveType::from_literal(lit), TyAttr::default());
                 if &lit_ty == throw_fact || is_unknown {
-                    PatternMatchStrength::DefiniteMatch
+                    PatternMatchStrength::MayMatch
                 } else {
                     PatternMatchStrength::NoMatch
                 }

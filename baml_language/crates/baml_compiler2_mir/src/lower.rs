@@ -537,7 +537,15 @@ impl<'db> LoweringContext<'db> {
         );
 
         // --- Build type alias maps for inline expansion ---
-        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+        let mut type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+        // Also include type aliases from dependency packages (e.g. Panic alias
+        // from baml.panics) so they can be expanded inline.
+        for &dep_id in package_dependencies(db, pkg_id) {
+            let dep_items = package_items(db, dep_id);
+            type_aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
+                db, dep_items,
+            ));
+        }
         let recursive_aliases =
             baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
 
@@ -713,7 +721,15 @@ impl<'db> LoweringContext<'db> {
         );
 
         // --- Build type alias maps for inline expansion ---
-        let type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+        let mut type_aliases = baml_compiler2_tir::inference::collect_type_aliases(db, pkg_items);
+        // Also include type aliases from dependency packages (e.g. Panic alias
+        // from baml.panics) so they can be expanded inline.
+        for &dep_id in package_dependencies(db, pkg_id) {
+            let dep_items = package_items(db, dep_id);
+            type_aliases.extend(baml_compiler2_tir::inference::collect_type_aliases(
+                db, dep_items,
+            ));
+        }
         let recursive_aliases =
             baml_compiler2_tir::normalize::find_recursive_aliases(&type_aliases);
 
@@ -3117,6 +3133,45 @@ impl LoweringContext<'_> {
         self.lower_match_chain(scrutinee, rest, dest, join);
     }
 
+    /// Emit an `IsType` check that handles union types by expanding them
+    /// into a chain: try each member, branch to `success` if any matches.
+    fn emit_is_type_branch(
+        &mut self,
+        scrutinee: Local,
+        ty: Ty,
+        success: BlockId,
+        failure: BlockId,
+    ) {
+        if let Ty::Union(members, _) = ty {
+            // For union A | B | C: check A → success, else check B → success,
+            // else check C → success, else failure.
+            let mut remaining = members.into_iter().peekable();
+            while let Some(member) = remaining.next() {
+                if remaining.peek().is_none() {
+                    // Last member: branch directly to success/failure.
+                    self.emit_is_type_branch(scrutinee, member, success, failure);
+                } else {
+                    // Not last: if this member matches, jump to success;
+                    // otherwise try the next member.
+                    let next_check = self.builder.create_block();
+                    self.emit_is_type_branch(scrutinee, member, success, next_check);
+                    self.builder.set_current_block(next_check);
+                }
+            }
+        } else {
+            let test = Rvalue::IsType {
+                operand: Operand::Copy(Place::Local(scrutinee)),
+                ty,
+            };
+            let test_local = self.builder.temp(Ty::Bool {
+                attr: TyAttr::default(),
+            });
+            self.builder.assign(Place::local(test_local), test);
+            self.builder
+                .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+        }
+    }
+
     fn lower_pattern_test(
         &mut self,
         scrutinee: Local,
@@ -3135,19 +3190,7 @@ impl LoweringContext<'_> {
                     {
                         let resolved =
                             convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases);
-                        let test = Rvalue::IsType {
-                            operand: Operand::Copy(Place::Local(scrutinee)),
-                            ty: resolved,
-                        };
-                        let test_local = self.builder.temp(Ty::Bool {
-                            attr: TyAttr::default(),
-                        });
-                        self.builder.assign(Place::local(test_local), test);
-                        self.builder.branch(
-                            Operand::Copy(Place::Local(test_local)),
-                            success,
-                            failure,
-                        );
+                        self.emit_is_type_branch(scrutinee, resolved, success, failure);
                         return;
                     }
                 }
@@ -3155,19 +3198,17 @@ impl LoweringContext<'_> {
                 self.builder.goto(success);
             }
             AstPattern::TypedBinding { ty, .. } => {
-                // Resolve the type annotation directly from the AST TypeExpr,
-                // since TIR may not populate bindings for catch/match arm patterns.
-                let annotation_ty = self.resolve_type_annotation(&ty);
-                let test = Rvalue::IsType {
-                    operand: Operand::Copy(Place::Local(scrutinee)),
-                    ty: annotation_ty,
-                };
-                let test_local = self.builder.temp(Ty::Bool {
-                    attr: TyAttr::default(),
-                });
-                self.builder.assign(Place::local(test_local), test);
-                self.builder
-                    .branch(Operand::Copy(Place::Local(test_local)), success, failure);
+                // Prefer the TIR-resolved type (handles panic types from
+                // baml.panics.* that resolve_type_annotation can't find in
+                // the user namespace), falling back to direct resolution.
+                let annotation_ty = self
+                    .pat_types
+                    .get(&(self.current_scope, pat_id))
+                    .map(|tir_ty| {
+                        convert_tir2_ty(tir_ty, &self.type_aliases, &self.recursive_aliases)
+                    })
+                    .unwrap_or_else(|| self.resolve_type_annotation(&ty));
+                self.emit_is_type_branch(scrutinee, annotation_ty, success, failure);
             }
             AstPattern::Literal(lit) => {
                 let constant = Self::lower_literal(&lit);

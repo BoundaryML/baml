@@ -18,7 +18,6 @@ use bex_engine::BexExternalValue;
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "TIR throw inference: literal patterns not recognized as matching throw type"]
 async fn catch_literal_string_match() {
     let output = baml_test!(
         r#"
@@ -38,7 +37,6 @@ async fn catch_literal_string_match() {
 }
 
 #[tokio::test]
-#[ignore = "TIR throw inference: literal patterns not recognized as matching throw type"]
 async fn catch_literal_string_no_match_falls_to_wildcard() {
     let output = baml_test!(
         r#"
@@ -58,7 +56,6 @@ async fn catch_literal_string_no_match_falls_to_wildcard() {
 }
 
 #[tokio::test]
-#[ignore = "TIR throw inference: literal patterns not recognized as matching throw type"]
 async fn catch_literal_int_match() {
     let output = baml_test!(
         r#"
@@ -78,7 +75,6 @@ async fn catch_literal_int_match() {
 }
 
 #[tokio::test]
-#[ignore = "TIR throw inference: literal patterns not recognized as matching throw type"]
 async fn catch_multiple_literals_dispatch() {
     let output = baml_test!(
         r#"
@@ -468,7 +464,6 @@ async fn bare_class_dispatch_first() {
 }
 
 #[tokio::test]
-#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
 async fn bare_class_dispatch_second() {
     let output = baml_test!(
         r#"
@@ -514,7 +509,6 @@ async fn bare_class_plus_wildcard() {
 }
 
 #[tokio::test]
-#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
 async fn bare_class_plus_wildcard_wildcard_fires() {
     let output = baml_test!(
         r#"
@@ -639,7 +633,6 @@ async fn catch_negative_index_as_index_out_of_bounds() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "TIR narrows panic binding to never — doesn't use the explicit type annotation"]
 async fn named_panic_binding_division_by_zero_field() {
     let output = baml_test!(
         r#"
@@ -656,7 +649,6 @@ async fn named_panic_binding_division_by_zero_field() {
 }
 
 #[tokio::test]
-#[ignore = "TIR narrows panic binding to never — doesn't use the explicit type annotation"]
 async fn named_panic_binding_index_out_of_bounds_fields() {
     let output = baml_test!(
         r#"
@@ -673,7 +665,6 @@ async fn named_panic_binding_index_out_of_bounds_fields() {
 }
 
 #[tokio::test]
-#[ignore = "TIR narrows panic binding to never — doesn't use the explicit type annotation"]
 async fn named_panic_binding_index_out_of_bounds_length() {
     let output = baml_test!(
         r#"
@@ -690,11 +681,10 @@ async fn named_panic_binding_index_out_of_bounds_length() {
 }
 
 #[tokio::test]
-#[ignore = "TIR narrows panic binding to never — doesn't use the explicit type annotation"]
 async fn named_panic_binding_map_key_not_found_field() {
     let output = baml_test!(
         r#"
-        function bad() -> string { let m = {"a": 1}; m["x"] }
+        function bad() -> string { let m = {"a": "one"}; m["x"] }
 
         function main() -> string {
             bad() catch (e) {
@@ -775,7 +765,6 @@ async fn panic_arm_plus_wildcard_panic_fires() {
 }
 
 #[tokio::test]
-#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
 async fn panic_arm_plus_wildcard_user_error_fires() {
     let output = baml_test!(
         r#"
@@ -870,7 +859,6 @@ async fn user_class_plus_panic_plus_wildcard_panic_fires() {
 }
 
 #[tokio::test]
-#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
 async fn user_class_plus_panic_plus_wildcard_string_fires() {
     let output = baml_test!(
         r#"
@@ -929,7 +917,6 @@ async fn four_arms_division_by_zero_fires() {
 }
 
 #[tokio::test]
-#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
 async fn four_arms_index_out_of_bounds_fires() {
     let output = baml_test!(
         r#"
@@ -958,7 +945,6 @@ async fn four_arms_index_out_of_bounds_fires() {
 }
 
 #[tokio::test]
-#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
 async fn four_arms_user_class_fires() {
     let output = baml_test!(
         r#"
@@ -987,7 +973,6 @@ async fn four_arms_user_class_fires() {
 }
 
 #[tokio::test]
-#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
 async fn four_arms_wildcard_fires() {
     let output = baml_test!(
         r#"
@@ -1061,7 +1046,6 @@ async fn uncaught_index_out_of_bounds() {
 }
 
 #[tokio::test]
-#[ignore = "bare type sugar: first arm matches unconditionally (no IsType discrimination)"]
 async fn wrong_panic_pattern_propagates() {
     let output = baml_test!(
         r#"
@@ -1083,7 +1067,6 @@ async fn wrong_panic_pattern_propagates() {
 // ============================================================================
 
 #[tokio::test]
-#[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
 async fn panic_alias_catches_any_panic() {
     let output = baml_test!(
         r#"
@@ -1098,7 +1081,6 @@ async fn panic_alias_catches_any_panic() {
 }
 
 #[tokio::test]
-#[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
 async fn panic_alias_plus_wildcard_dispatch() {
     let output = baml_test!(
         r#"
@@ -1232,7 +1214,6 @@ async fn throw_in_match_arm_propagates() {
 }
 
 #[tokio::test]
-#[ignore = "needs catch arm type narrowing to access fields on specific panic type"]
 async fn caught_panic_has_accessible_fields() {
     let output = baml_test!(
         r#"
