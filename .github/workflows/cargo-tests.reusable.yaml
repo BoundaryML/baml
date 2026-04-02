@@ -23,7 +23,9 @@ env:
 jobs:
   cargo-test-linux:
     name: "cargo test (linux)"
-    runs-on: ubuntu-latest
+    # Bumped to ubuntu-32gb: ubuntu-latest was hitting resource issues, using
+    # this overkill runner until we can root-cause and right-size.
+    runs-on: ubuntu-32gb
     if: ${{ inputs.code_changed == 'true' || inputs.run_all }}
     timeout-minutes: 25
     steps:
