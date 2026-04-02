@@ -4,7 +4,7 @@
 //!   error source × catch pattern → expected outcome
 //!
 //! Error sources: user `throw` (string/int), runtime panics (DivisionByZero,
-//! IndexOutOfBounds, KeyNotFound, NegativeIndex).
+//! IndexOutOfBounds, MapKeyNotFound).
 //!
 //! Catch patterns: `_` (wildcard — user errors only), explicit panic class,
 //! `Panic` type alias (all panics), mixed.
@@ -254,7 +254,7 @@ async fn catch_index_out_of_bounds() {
 }
 
 #[tokio::test]
-async fn catch_key_not_found() {
+async fn catch_map_key_not_found() {
     let output = baml_test!(
         r#"
         function bad_key() -> int {
@@ -264,7 +264,7 @@ async fn catch_key_not_found() {
 
         function main() -> int {
             bad_key() catch (e) {
-                KeyNotFound => -1
+                MapKeyNotFound => -1
             }
         }
     "#
@@ -274,7 +274,7 @@ async fn catch_key_not_found() {
 }
 
 #[tokio::test]
-async fn catch_negative_index() {
+async fn catch_negative_index_as_out_of_bounds() {
     let output = baml_test!(
         r#"
         function bad_neg() -> int {
@@ -284,7 +284,7 @@ async fn catch_negative_index() {
 
         function main() -> int {
             bad_neg() catch (e) {
-                NegativeIndex => -1
+                IndexOutOfBounds => -1
             }
         }
     "#

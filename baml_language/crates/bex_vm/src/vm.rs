@@ -979,13 +979,12 @@ impl BexVm {
                 #[allow(clippy::cast_possible_wrap)]
                 (
                     PanicClass::IndexOutOfBounds,
-                    vec![Value::Int(*index as i64), Value::Int(*length as i64)],
+                    vec![Value::Int(*index), Value::Int(*length as i64)],
                 )
             }
-            VmPanic::NegativeIndex(index) => (PanicClass::NegativeIndex, vec![Value::Int(*index)]),
-            VmPanic::KeyNotFound => {
+            VmPanic::MapKeyNotFound => {
                 let key = self.alloc_string("(unknown)".to_string());
-                (PanicClass::KeyNotFound, vec![key])
+                (PanicClass::MapKeyNotFound, vec![key])
             }
             VmPanic::StackOverflow => {
                 let msg = self.alloc_string("stack overflow".to_string());
@@ -1489,9 +1488,10 @@ impl BexVm {
                             _ => unreachable!("matched on viz instruction"),
                         };
 
+                        #[allow(clippy::cast_possible_wrap)]
                         let node = function.viz_nodes.get(index).ok_or({
                             VmPanic::IndexOutOfBounds {
-                                index,
+                                index: index as i64,
                                 length: function.viz_nodes.len(),
                             }
                         })?;
@@ -2077,13 +2077,28 @@ impl BexVm {
                         let array_obj_index =
                             self.as_object_ptr(&array_value, ObjectType::Array)?;
 
+                        // Get the array length for bounds checking.
+                        let array_len = {
+                            let Object::Array(arr) = self.get_object(array_obj_index) else {
+                                return Err(VmError::TypeError {
+                                    expected: ObjectType::Array.into(),
+                                    got: ObjectType::of(self.get_object(array_obj_index)).into(),
+                                });
+                            };
+                            arr.len()
+                        };
+
                         // Get the index
                         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                         // bounds checked below
                         let index = match index_value {
                             Value::Int(i) => {
-                                if i < 0 {
-                                    return Err(VmPanic::NegativeIndex(i).into());
+                                if i < 0 || i as usize >= array_len {
+                                    return Err(VmPanic::IndexOutOfBounds {
+                                        index: i,
+                                        length: array_len,
+                                    }
+                                    .into());
                                 }
                                 i as usize
                             }
@@ -2103,14 +2118,6 @@ impl BexVm {
                                     got: ObjectType::of(self.get_object(array_obj_index)).into(),
                                 });
                             };
-
-                            // Check bounds
-                            if index >= array.len() {
-                                return Err(VmError::from(VmPanic::IndexOutOfBounds {
-                                    index,
-                                    length: array.len(),
-                                }));
-                            }
 
                             array[index]
                         };
@@ -2154,7 +2161,7 @@ impl BexVm {
                         let key = self.get_object(key_index).as_string()?;
 
                         // Look up the value in the map
-                        let value = map.get(key).copied().ok_or(VmPanic::KeyNotFound)?;
+                        let value = map.get(key).copied().ok_or(VmPanic::MapKeyNotFound)?;
 
                         // Push the value onto the stack
                         self.stack.push(value);
@@ -2168,13 +2175,28 @@ impl BexVm {
                         let array_object_index =
                             self.as_object_ptr(&array_value, ObjectType::Array)?;
 
+                        // Get the array length for bounds checking.
+                        let array_len = match self.get_object(array_object_index) {
+                            Object::Array(arr) => arr.len(),
+                            other => {
+                                return Err(VmError::TypeError {
+                                    expected: ObjectType::Array.into(),
+                                    got: ObjectType::of(other).into(),
+                                });
+                            }
+                        };
+
                         // Verify index.
                         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                         // bounds checked below
                         let index = match index_value {
                             Value::Int(i) => {
-                                if i < 0 {
-                                    return Err(VmPanic::NegativeIndex(i).into());
+                                if i < 0 || i as usize >= array_len {
+                                    return Err(VmPanic::IndexOutOfBounds {
+                                        index: i,
+                                        length: array_len,
+                                    }
+                                    .into());
                                 }
                                 i as usize
                             }
@@ -2188,17 +2210,7 @@ impl BexVm {
 
                         // Read old value (and typecheck).
                         let old_value = match self.get_object(array_object_index) {
-                            Object::Array(array) => {
-                                // Check bounds.
-                                if index >= array.len() {
-                                    return Err(VmError::from(VmPanic::IndexOutOfBounds {
-                                        index,
-                                        length: array.len(),
-                                    }));
-                                }
-
-                                array[index]
-                            }
+                            Object::Array(array) => array[index],
 
                             other => {
                                 return Err(VmError::TypeError {
@@ -2331,21 +2343,20 @@ impl BexVm {
                             });
                         };
 
-                        if variant_index < 0 {
-                            return Err(VmPanic::NegativeIndex(variant_index).into());
+                        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                        // Safe: we check variant_index < 0 first, so the cast
+                        // only executes for non-negative values.
+                        if variant_index < 0 || variant_index as usize >= variant_count {
+                            return Err(VmPanic::IndexOutOfBounds {
+                                index: variant_index,
+                                length: variant_count,
+                            }
+                            .into());
                         }
 
                         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                         // checked non-negative above
                         let variant_usize = variant_index as usize;
-
-                        if variant_usize >= variant_count {
-                            return Err(VmPanic::IndexOutOfBounds {
-                                index: variant_usize,
-                                length: variant_count,
-                            }
-                            .into());
-                        }
 
                         let variant_ptr = self.tlab.alloc(Object::Variant(Variant {
                             enm: enum_ptr,

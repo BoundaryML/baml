@@ -12,13 +12,10 @@ pub enum VmPanic {
     DivisionByZero { left: Value, right: Value },
 
     #[error("array index out of bounds: {index} of {length}")]
-    IndexOutOfBounds { index: usize, length: usize },
-
-    #[error("array index is negative: {0}")]
-    NegativeIndex(i64),
+    IndexOutOfBounds { index: i64, length: usize },
 
     #[error("key not found in map")]
-    KeyNotFound,
+    MapKeyNotFound,
 
     #[error("stack overflow")]
     StackOverflow,

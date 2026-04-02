@@ -7,11 +7,7 @@ class IndexOutOfBounds {
   length int
 }
 
-class NegativeIndex {
-  index int
-}
-
-class KeyNotFound {
+class MapKeyNotFound {
   key string
 }
 
@@ -27,4 +23,4 @@ class Unreachable {
   message string
 }
 
-type Panic = DivisionByZero | IndexOutOfBounds | NegativeIndex | KeyNotFound | StackOverflow | AssertionFailed | Unreachable
+type Panic = DivisionByZero | IndexOutOfBounds | MapKeyNotFound | StackOverflow | AssertionFailed | Unreachable

@@ -294,11 +294,8 @@ class baml.panics.IndexOutOfBounds {
   index: int
   length: int
 }
-class baml.panics.KeyNotFound {
+class baml.panics.MapKeyNotFound {
   key: string
-}
-class baml.panics.NegativeIndex {
-  index: int
 }
 class baml.panics.StackOverflow {
   message: string
@@ -306,7 +303,7 @@ class baml.panics.StackOverflow {
 class baml.panics.Unreachable {
   message: string
 }
-type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.NegativeIndex | baml.panics.KeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable
+type baml.panics.Panic = baml.panics.DivisionByZero | baml.panics.IndexOutOfBounds | baml.panics.MapKeyNotFound | baml.panics.StackOverflow | baml.panics.AssertionFailed | baml.panics.Unreachable
 
 --- <builtin>/baml/ns_sys/sys.baml ---
 function baml.sys.panic(message: string) -> null  [builtin]
