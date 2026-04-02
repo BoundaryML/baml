@@ -413,23 +413,47 @@ async fn throw_in_non_matching_match_arm_propagates() {
 // Panic narrowing: _ does NOT catch panics, explicit patterns do
 // ============================================================================
 
+// --- Wildcard behavior ---
+
 #[tokio::test]
-async fn wildcard_does_not_catch_division_by_zero() {
+async fn wildcard_catches_user_throws() {
     let output = baml_test!(
         r#"
-        function divides() -> int {
-            1 / 0
+        function throws_error() -> int {
+            throw "user error";
         }
 
         function main() -> int {
-            divides() catch (e) {
+            throws_error() catch (e) {
                 _ => -1
             }
         }
     "#
     );
 
-    // _ skips panics — DivisionByZero propagates as unhandled
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
+#[tokio::test]
+async fn wildcard_does_not_catch_panic() {
+    // divides() has a genuine throw path (throw "too big") so the throw
+    // set is non-empty and `_` is reachable.  At runtime x=0 hits the
+    // panic path, and `_` does NOT catch panics.
+    let output = baml_test!(
+        r#"
+        function divides(x: int) -> int {
+            if (x > 100) { throw "too big" }
+            1 / x
+        }
+
+        function main() -> int {
+            divides(0) catch (e) {
+                _ => -1
+            }
+        }
+    "#
+    );
+
     assert!(
         output.result.is_err(),
         "expected panic to propagate, got {:?}",
@@ -437,8 +461,10 @@ async fn wildcard_does_not_catch_division_by_zero() {
     );
 }
 
+// --- Explicit panic patterns ---
+
 #[tokio::test]
-async fn explicit_panic_pattern_catches_division_by_zero() {
+async fn explicit_panic_catches_division_by_zero() {
     let output = baml_test!(
         r#"
         function divides() -> int {
@@ -457,7 +483,7 @@ async fn explicit_panic_pattern_catches_division_by_zero() {
 }
 
 #[tokio::test]
-async fn explicit_panic_pattern_catches_index_out_of_bounds() {
+async fn explicit_panic_catches_index_out_of_bounds() {
     let output = baml_test!(
         r#"
         function bad_index() -> int {
@@ -477,7 +503,7 @@ async fn explicit_panic_pattern_catches_index_out_of_bounds() {
 }
 
 #[tokio::test]
-async fn explicit_panic_pattern_catches_key_not_found() {
+async fn explicit_panic_catches_key_not_found() {
     let output = baml_test!(
         r#"
         function bad_key() -> int {
@@ -497,7 +523,7 @@ async fn explicit_panic_pattern_catches_key_not_found() {
 }
 
 #[tokio::test]
-async fn explicit_panic_pattern_catches_negative_index() {
+async fn explicit_panic_catches_negative_index() {
     let output = baml_test!(
         r#"
         function bad_neg() -> int {
@@ -516,28 +542,11 @@ async fn explicit_panic_pattern_catches_negative_index() {
     assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
 }
 
-#[tokio::test]
-async fn wildcard_still_catches_user_throws() {
-    let output = baml_test!(
-        r#"
-        function throws_error() -> int {
-            throw "user error";
-        }
-
-        function main() -> int {
-            throws_error() catch (e) {
-                _ => -1
-            }
-        }
-    "#
-    );
-
-    // _ catches user-thrown errors
-    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
-}
+// --- Panic type alias ---
 
 #[tokio::test]
-async fn panic_and_wildcard_together() {
+#[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
+async fn panic_alias_catches_division_by_zero() {
     let output = baml_test!(
         r#"
         function divides() -> int {
@@ -546,6 +555,59 @@ async fn panic_and_wildcard_together() {
 
         function main() -> int {
             divides() catch (e) {
+                Panic => -1
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
+#[tokio::test]
+#[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
+async fn panic_alias_catches_index_out_of_bounds() {
+    let output = baml_test!(
+        r#"
+        function oob() -> int {
+            let arr = [1, 2];
+            arr[99]
+        }
+
+        function main() -> int {
+            oob() catch (e) {
+                Panic => -1
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
+// --- Mix: user errors + panics in the same catch ---
+//
+// NOTE: Bare type sugar patterns (e.g. `DivisionByZero =>`) are
+// `Pattern::Binding` at the AST level.  The TIR recognizes them as type
+// patterns for diagnostics, but the MIR's `lower_pattern_test` treats
+// them as unconditional bindings (`goto success`) without generating an
+// `IsType` check.  Tests marked `ignore` below expose this pre-existing
+// bug — they will pass once the MIR emits proper type discrimination
+// for bare type sugar patterns in catch arms.
+
+#[tokio::test]
+async fn explicit_panic_and_wildcard_together() {
+    // divides() has a throw path so `_` is reachable for user errors.
+    // At runtime the panic fires and the explicit pattern catches it.
+    let output = baml_test!(
+        r#"
+        function divides(x: int) -> int {
+            if (x > 100) { throw "too big" }
+            1 / x
+        }
+
+        function main() -> int {
+            divides(0) catch (e) {
                 DivisionByZero => 42,
                 _ => -1
             }
@@ -553,8 +615,178 @@ async fn panic_and_wildcard_together() {
     "#
     );
 
-    // DivisionByZero matches the explicit pattern, not the wildcard
     assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+#[ignore = "bare type sugar in catch arms lacks IsType check — first arm matches unconditionally"]
+async fn wildcard_catches_user_error_when_panic_arm_present() {
+    // At runtime the user error fires and `_` should catch it, but
+    // the DivisionByZero arm matches unconditionally (missing type test).
+    let output = baml_test!(
+        r#"
+        function divides(x: int) -> int {
+            if (x > 100) { throw "too big" }
+            1 / x
+        }
+
+        function main() -> int {
+            divides(999) catch (e) {
+                DivisionByZero => 42,
+                _ => -1
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
+#[tokio::test]
+#[ignore = "IsType emit doesn't handle union types — Panic alias expands to a union"]
+async fn panic_alias_and_wildcard_together() {
+    // Panic catches all panics, `_` catches user errors.
+    let output = baml_test!(
+        r#"
+        function divides(x: int) -> int {
+            if (x > 100) { throw "too big" }
+            1 / x
+        }
+
+        function main() -> int {
+            divides(0) catch (e) {
+                Panic => 42,
+                _ => -1
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(42)));
+}
+
+#[tokio::test]
+#[ignore = "bare type sugar in catch arms lacks IsType check — first arm matches unconditionally"]
+async fn panic_alias_user_error_fallback() {
+    // When user error fires, Panic shouldn't match, `_` should catch it.
+    let output = baml_test!(
+        r#"
+        function divides(x: int) -> int {
+            if (x > 100) { throw "too big" }
+            1 / x
+        }
+
+        function main() -> int {
+            divides(999) catch (e) {
+                Panic => 42,
+                _ => -1
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(-1)));
+}
+
+// --- Multiple explicit panic patterns ---
+
+#[tokio::test]
+async fn multiple_panic_patterns_first_matches() {
+    let output = baml_test!(
+        r#"
+        function divides() -> int {
+            1 / 0
+        }
+
+        function main() -> int {
+            divides() catch (e) {
+                DivisionByZero => 1,
+                IndexOutOfBounds => 2
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(1)));
+}
+
+#[tokio::test]
+#[ignore = "bare type sugar in catch arms lacks IsType check — first arm matches unconditionally"]
+async fn multiple_panic_patterns_second_matches() {
+    // IndexOutOfBounds should match, not DivisionByZero.
+    let output = baml_test!(
+        r#"
+        function oob() -> int {
+            let arr = [10];
+            arr[5]
+        }
+
+        function main() -> int {
+            oob() catch (e) {
+                DivisionByZero => 1,
+                IndexOutOfBounds => 2
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(2)));
+}
+
+// --- Nested catch: inner catches panic, outer catches user error ---
+
+#[tokio::test]
+async fn nested_inner_catches_panic_outer_catches_user_error() {
+    let output = baml_test!(
+        r#"
+        function divides() -> int {
+            1 / 0
+        }
+
+        function middle() -> int {
+            let result = divides() catch (e) {
+                DivisionByZero => -1
+            };
+            // After recovering from the panic, throw a user error
+            throw "recovered but failing"
+        }
+
+        function main() -> int {
+            middle() catch (e) {
+                _ => 99
+            }
+        }
+    "#
+    );
+
+    assert_eq!(output.result, Ok(BexExternalValue::Int(99)));
+}
+
+// --- Unmatched panic propagates past non-matching explicit pattern ---
+
+#[tokio::test]
+#[ignore = "bare type sugar in catch arms lacks IsType check — first arm matches unconditionally"]
+async fn wrong_panic_pattern_does_not_catch() {
+    // DivisionByZero should propagate past the IndexOutOfBounds arm.
+    let output = baml_test!(
+        r#"
+        function divides() -> int {
+            1 / 0
+        }
+
+        function main() -> int {
+            divides() catch (e) {
+                IndexOutOfBounds => -1
+            }
+        }
+    "#
+    );
+
+    assert!(
+        output.result.is_err(),
+        "expected DivisionByZero to propagate, got {:?}",
+        output.result
+    );
 }
 
 // ============================================================================

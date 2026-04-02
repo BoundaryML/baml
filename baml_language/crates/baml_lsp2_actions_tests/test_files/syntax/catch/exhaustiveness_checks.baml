@@ -32,4 +32,25 @@ function NonExhaustiveMatchInsideCatch(x: int, pet: Pet) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//     ╭─[ catch_exhaustiveness_checks.baml:17:9 ]
+//     │
+//  17 │ ╭─▶     _ => match (pet) {
+//     ┆ ┆   
+//  21 │ ├─▶     }
+//     │ │           
+//     │ ╰─────────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
+// ────╯
+// Error: unreachable arm
+//     ╭─[ catch_exhaustiveness_checks.baml:27:9 ]
+//     │
+//  27 │ ╭─▶     _ => match (pet) {
+//     ┆ ┆   
+//  29 │ ├─▶     }
+//     │ │           
+//     │ ╰─────────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
+// ────╯

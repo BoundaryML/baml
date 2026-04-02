@@ -1375,10 +1375,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         };
         let mut result_members = vec![base_ty];
         let mut residual = self.catch_base_throw_types(base_expr_id, body);
-        // When the inferred throw set is empty (no declared/inferred throws),
-        // don't flag catch arms as unreachable — runtime panics are always
-        // possible and can be caught with explicit panic type patterns.
-        let throw_set_is_known = !residual.is_empty();
 
         for clause in clauses {
             // Compute the clause-level binding type from the current residual throw set.
@@ -1391,7 +1387,8 @@ impl<'db> TypeInferenceBuilder<'db> {
                 Self::facts_to_ty(&residual)
             };
             // Record the clause binding type in the bindings map so MIR can read it.
-            self.bindings.insert(clause.binding, clause_binding_ty);
+            self.bindings
+                .insert(clause.binding, clause_binding_ty.clone());
 
             let binding_name = match &body.patterns[clause.binding] {
                 baml_compiler2_ast::Pattern::Binding(name) => Some(name.clone()),
@@ -1413,17 +1410,24 @@ impl<'db> TypeInferenceBuilder<'db> {
                 let arm = &body.catch_arms[arm_id];
                 let matches =
                     self.match_throw_types_for_pattern(arm.pattern, &residual, body, arm.body);
-                // Don't flag as unreachable if:
-                // - the throw set is unknown (empty) — panics are always possible
-                // - the arm explicitly names a panic type
+                // Explicit panic type patterns (e.g. DivisionByZero =>) are
+                // never unreachable — panics can occur in any expression at
+                // runtime regardless of the declared throw set.
                 let is_explicit_panic = self.is_panic_type_pattern(arm.pattern, body);
-                // Record arm pattern type in bindings so MIR can check catches_panics.
-                if is_explicit_panic {
-                    if let Some(ty) = self.resolve_catch_arm_pattern_ty(arm.pattern, body) {
+                // Record resolved type for bare type sugar patterns so MIR
+                // can generate IsType checks (not just for panic types).
+                if let baml_compiler2_ast::Pattern::Binding(name) = &body.patterns[arm.pattern] {
+                    if name.as_str() != "_" && self.is_bare_type_sugar_binding(name) {
+                        let ty = self.pattern_narrowed_type(
+                            arm.pattern,
+                            &clause_binding_ty,
+                            body,
+                            arm.body,
+                        );
                         self.bindings.insert(arm.pattern, ty);
                     }
                 }
-                if matches.may_match.is_empty() && throw_set_is_known && !is_explicit_panic {
+                if matches.may_match.is_empty() && !is_explicit_panic {
                     self.context
                         .report_warning_simple(TirTypeError::UnreachableArm, arm.body);
                 }
@@ -1824,18 +1828,6 @@ impl<'db> TypeInferenceBuilder<'db> {
         self.res_ctx
             .resolve_type(self.context.db(), &path, &[])
             .map(|(_source, ty)| ty)
-    }
-
-    /// Resolve the type of a catch arm pattern (for recording in bindings).
-    fn resolve_catch_arm_pattern_ty(&self, pattern_id: PatId, body: &ExprBody) -> Option<Ty> {
-        match &body.patterns[pattern_id] {
-            baml_compiler2_ast::Pattern::Binding(name) => self.panic_class_ty(name),
-            baml_compiler2_ast::Pattern::TypedBinding {
-                ty: TypeExpr::Path { segments, .. },
-                ..
-            } => segments.last().and_then(|s| self.panic_class_ty(s)),
-            _ => None,
-        }
     }
 
     fn is_bare_type_sugar_binding(&self, name: &Name) -> bool {

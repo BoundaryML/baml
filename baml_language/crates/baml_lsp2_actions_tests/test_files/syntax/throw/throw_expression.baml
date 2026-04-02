@@ -29,4 +29,13 @@ function ThrowExpressionInCatch(x: int) -> string {
 
 //----
 //- diagnostics
-// <no-diagnostics-expected>
+// Error: unreachable arm
+//     ╭─[ throw_throw_expression.baml:26:11 ]
+//     │
+//  26 │ ╭─▶     _ => throw "re-throw as expression"
+//  27 │ ├─▶   }
+//     │ │         
+//     │ ╰───────── unreachable arm
+//     │     
+//     │     Note: Error code: E0001
+// ────╯

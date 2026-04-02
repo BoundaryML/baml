@@ -3126,8 +3126,32 @@ impl LoweringContext<'_> {
     ) {
         let pat = self.body.patterns[pat_id].clone();
         match pat {
-            AstPattern::Binding(_) => {
-                // Always matches
+            AstPattern::Binding(ref name) => {
+                // Bare type sugar: the TIR resolved this binding name to a
+                // type (e.g. `DivisionByZero =>` resolves to a class).
+                // Generate an IsType test instead of an unconditional match.
+                if name.as_str() != "_" {
+                    if let Some(tir_ty) = self.pat_types.get(&(self.current_scope, pat_id)).cloned()
+                    {
+                        let resolved =
+                            convert_tir2_ty(&tir_ty, &self.type_aliases, &self.recursive_aliases);
+                        let test = Rvalue::IsType {
+                            operand: Operand::Copy(Place::Local(scrutinee)),
+                            ty: resolved,
+                        };
+                        let test_local = self.builder.temp(Ty::Bool {
+                            attr: TyAttr::default(),
+                        });
+                        self.builder.assign(Place::local(test_local), test);
+                        self.builder.branch(
+                            Operand::Copy(Place::Local(test_local)),
+                            success,
+                            failure,
+                        );
+                        return;
+                    }
+                }
+                // Regular binding — always matches
                 self.builder.goto(success);
             }
             AstPattern::TypedBinding { ty, .. } => {
