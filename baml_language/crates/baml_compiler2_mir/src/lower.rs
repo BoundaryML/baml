@@ -7,7 +7,7 @@ use indexmap::IndexMap;
 
 use crate::{
     builder::MirBuilder,
-    cleanup,
+    optimize,
     ir::{
         AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, ItemRef,
         Local, LocalDecl, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue,
@@ -988,7 +988,7 @@ impl LoweringContext<'_> {
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut mir = builder.build();
-        cleanup::cleanup_function(&mut mir);
+        optimize::optimize_function(&mut mir);
 
         // Drain any lambda functions lowered during this function's body into the
         // MirFunction's lambdas list.  The lambda_idx values in MakeClosure rvalues
@@ -1042,7 +1042,7 @@ impl LoweringContext<'_> {
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let builder = std::mem::replace(&mut self.builder, dummy);
         let mut body = builder.build_body();
-        cleanup::cleanup_function_body(&mut body);
+        optimize::optimize_function_body(&mut body);
         body
     }
 
@@ -1248,7 +1248,7 @@ impl LoweringContext<'_> {
         let dummy = MirBuilder::new(Name::new("_dummy"), 0);
         let lambda_builder = std::mem::replace(&mut self.builder, dummy);
         let mut lambda_mir = lambda_builder.build();
-        cleanup::cleanup_function(&mut lambda_mir);
+        optimize::optimize_function(&mut lambda_mir);
         // Override item_ref with the synthetic name.
         lambda_mir.item_ref = ItemRef::Free {
             package: Name::new(""),

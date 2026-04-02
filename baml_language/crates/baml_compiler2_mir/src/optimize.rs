@@ -1,9 +1,9 @@
-//! Post-lowering cleanup pass for MIR functions.
+//! Post-lowering MIR optimization passes.
 //!
 //! Runs after `MirBuilder::build()` and performs:
 //! 1. Dead block elimination (reachability-based)
 //! 2. Copy propagation + dead local elimination
-//! 3. RPO block reordering (Phase 3)
+//! 3. RPO block reordering
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -14,8 +14,8 @@ use crate::{
     Terminator,
 };
 
-/// Run all cleanup phases on a MIR function.
-pub(crate) fn cleanup_function(func: &mut MirFunction) {
+/// Run all optimization passes on a MIR function.
+pub(crate) fn optimize_function(func: &mut MirFunction) {
     let MirFunctionKind::Bytecode(body) = &mut func.kind else {
         return; // nothing to clean up on builtins
     };
@@ -32,7 +32,7 @@ pub(crate) fn cleanup_function(func: &mut MirFunction) {
 ///
 /// Used for let-binding initializers, which are lowered as bodies without
 /// the enclosing `MirFunction` wrapper (arity = 0).
-pub(crate) fn cleanup_function_body(body: &mut MirFunctionBody) {
+pub(crate) fn optimize_function_body(body: &mut MirFunctionBody) {
     eliminate_dead_blocks(body);
     propagate_copies(body, 0);
     eliminate_dead_locals(body, 0);
@@ -937,12 +937,12 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
 }
 
 // ============================================================================
-// Phase 4: Post-cleanup MIR validation (debug only)
+// Phase 4: Post-optimization MIR validation (debug only)
 // ============================================================================
 
-/// Verify MIR structural invariants after cleanup.
+/// Verify MIR structural invariants after optimization.
 ///
-/// Debug-only — catches invariant drift between lowering, cleanup, and
+/// Debug-only — catches invariant drift between lowering, optimization, and
 /// downstream consumers. Modeled after V1's `verifier.rs`.
 #[cfg(debug_assertions)]
 fn verify_mir(body: &MirFunctionBody, name: &crate::ItemRef) {

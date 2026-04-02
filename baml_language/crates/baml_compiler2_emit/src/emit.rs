@@ -1114,7 +1114,7 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 args,
                 destination,
                 target,
-                unwind,
+                unwind: _,
             } => {
                 let func_name = pull_semantics::resolve_constant_function_name(
                     callee,
@@ -1138,10 +1138,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                     ));
                     self.emit(Instruction::CallIndirect);
                 }
-
-                // unwind edge is handled by the exception table, not by
-                // PushUnwind/PopUnwind instructions.
-                let _ = unwind;
 
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -1189,13 +1185,10 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 future,
                 destination,
                 target,
-                unwind,
+                unwind: _,
             } => {
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
                 self.emit(Instruction::Await);
-
-                // unwind edge is handled by the exception table.
-                let _ = unwind;
 
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);

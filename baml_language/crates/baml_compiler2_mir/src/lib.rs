@@ -1,5 +1,5 @@
 mod builder;
-mod cleanup;
+mod optimize;
 mod ir;
 mod lower;
 pub mod pretty;
