@@ -22,7 +22,14 @@ use crate::types::{BamlType, NativeBuiltin, NativeClassDef, Receiver, VmUsage};
 /// Returns `true` if the clean trait method for this path should return
 /// `Result<T, VmError>` instead of plain `T`.
 fn is_fallible(path: &str) -> bool {
-    path.starts_with("baml.unstable.") || path == "baml.Uint8Array.zeroes"
+    path.starts_with("baml.unstable.")
+        || matches!(
+            path,
+            "baml.Uint8Array.zeroes"
+                | "baml.Uint8Array.from_array"
+                | "baml.Uint8Array.from_hex"
+                | "baml.Uint8Array.from_base64"
+        )
 }
 
 // ============================================================================

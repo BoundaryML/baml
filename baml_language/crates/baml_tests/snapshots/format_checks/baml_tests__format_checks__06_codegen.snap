@@ -3,32 +3,6 @@ source: crates/baml_tests/src/generated_tests.rs
 ---
 function $init() -> null {
     call ?
-    store_global ?196
-    call ?
-    store_global ?197
-    call ?
-    store_global ?198
-    call ?
-    store_global ?199
-    call ?
-    store_global ?200
-    call ?
-    store_global ?201
-    call ?
-    store_global ?202
-    call ?
-    store_global ?203
-    call ?
-    store_global ?204
-    call ?
-    store_global ?205
-    call ?
-    store_global ?206
-    call ?
-    store_global ?207
-    call ?
-    store_global ?208
-    call ?
     store_global ?209
     call ?
     store_global ?210
@@ -70,6 +44,32 @@ function $init() -> null {
     store_global ?228
     call ?
     store_global ?229
+    call ?
+    store_global ?230
+    call ?
+    store_global ?231
+    call ?
+    store_global ?232
+    call ?
+    store_global ?233
+    call ?
+    store_global ?234
+    call ?
+    store_global ?235
+    call ?
+    store_global ?236
+    call ?
+    store_global ?237
+    call ?
+    store_global ?238
+    call ?
+    store_global ?239
+    call ?
+    store_global ?240
+    call ?
+    store_global ?241
+    call ?
+    store_global ?242
     load_const ?
     return
 }
