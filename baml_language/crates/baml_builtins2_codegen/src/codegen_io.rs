@@ -254,7 +254,7 @@ fn view_accessor_body(field_name: &str, ty: &BamlType) -> TokenStream {
 /// Generate a Rust expression that converts a `BexExternalValue` (`val_expr`)
 /// into the owned Rust type for `ty`, returning `Result<T, AccessError>`.
 fn external_to_typed_expr(
-    val_expr: TokenStream,
+    val_expr: &TokenStream,
     ty: &BamlType,
     class_ns_map: &BTreeMap<String, String>,
     paths: &CodegenPaths,
@@ -306,7 +306,7 @@ fn external_to_typed_expr(
             }
         },
         BamlType::List(inner) => {
-            let inner_conv = external_to_typed_expr(quote! { __v }, inner, class_ns_map, paths);
+            let inner_conv = external_to_typed_expr(&quote! { __v }, inner, class_ns_map, paths);
             quote! {
                 match #val_expr {
                     BexExternalValue::Array { items, .. } => {
@@ -322,7 +322,7 @@ fn external_to_typed_expr(
             }
         }
         BamlType::Map(_k, v) => {
-            let v_conv = external_to_typed_expr(quote! { __v }, v, class_ns_map, paths);
+            let v_conv = external_to_typed_expr(&quote! { __v }, v, class_ns_map, paths);
             quote! {
                 match #val_expr {
                     BexExternalValue::Map { entries, .. } => {
@@ -338,7 +338,7 @@ fn external_to_typed_expr(
             }
         }
         BamlType::Optional(inner) => {
-            let inner_conv = external_to_typed_expr(quote! { __v }, inner, class_ns_map, paths);
+            let inner_conv = external_to_typed_expr(&quote! { __v }, inner, class_ns_map, paths);
             quote! {
                 match #val_expr {
                     BexExternalValue::Null => Ok(None),
@@ -373,12 +373,12 @@ fn into_owned_expr(
         BamlType::RustType => quote! { self.#field_ident(heap)? },
         BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { self.#field_ident(heap)? };
-            let conv = external_to_typed_expr(val, ty, class_ns_map, paths);
+            let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
         BamlType::Named(name) if class_ns_map.contains_key(name.as_str()) => {
             let val = quote! { self.#field_ident(heap)? };
-            let conv = external_to_typed_expr(val, ty, class_ns_map, paths);
+            let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
         _ => quote! { self.#field_ident(heap)? },
@@ -388,7 +388,7 @@ fn into_owned_expr(
 /// Generate the `BexExternalValue` conversion expression for an owned field.
 #[allow(clippy::only_used_in_recursion)]
 fn owned_to_external_expr(
-    field_expr: TokenStream,
+    field_expr: &TokenStream,
     ty: &BamlType,
     class_ns_map: &BTreeMap<String, String>,
 ) -> TokenStream {
@@ -400,7 +400,7 @@ fn owned_to_external_expr(
         BamlType::RustType => quote! { BexExternalValue::RustData(#field_expr) },
         BamlType::Null => quote! { BexExternalValue::Null },
         BamlType::List(inner) => {
-            let inner_conv = owned_to_external_expr(quote! { __v }, inner, class_ns_map);
+            let inner_conv = owned_to_external_expr(&quote! { __v }, inner, class_ns_map);
             quote! {
                 BexExternalValue::Array {
                     element_type: baml_type::Ty::unknown(),
@@ -409,7 +409,7 @@ fn owned_to_external_expr(
             }
         }
         BamlType::Map(_k, v) => {
-            let v_conv = owned_to_external_expr(quote! { __v }, v, class_ns_map);
+            let v_conv = owned_to_external_expr(&quote! { __v }, v, class_ns_map);
             quote! {
                 BexExternalValue::Map {
                     key_type: baml_type::Ty::string(),
@@ -419,7 +419,7 @@ fn owned_to_external_expr(
             }
         }
         BamlType::Optional(inner) => {
-            let inner_conv = owned_to_external_expr(quote! { __v }, inner, class_ns_map);
+            let inner_conv = owned_to_external_expr(&quote! { __v }, inner, class_ns_map);
             quote! { #field_expr.map(|__v| #inner_conv).unwrap_or(BexExternalValue::Null) }
         }
         BamlType::Named(_name) => {
@@ -508,7 +508,7 @@ fn glue_extract_expr(
         BamlType::RustType => quote! { #arg_ident.as_rust_data(&__p)? },
         BamlType::List(_) | BamlType::Map(_, _) | BamlType::Optional(_) => {
             let val = quote! { #arg_ident.as_owned_but_very_slow(&__p)? };
-            let conv = external_to_typed_expr(val, ty, class_ns_map, paths);
+            let conv = external_to_typed_expr(&val, ty, class_ns_map, paths);
             quote! { (#conv)? }
         }
         _ => quote! { #arg_ident.as_owned_but_very_slow(&__p)? },
@@ -624,7 +624,7 @@ pub fn generate_sys_op_enum(io_builtins: &[NativeBuiltin]) -> String {
         }
     };
 
-    crate::format_tokens(tokens)
+    crate::format_tokens(&tokens)
 }
 
 // ============================================================================
@@ -649,7 +649,7 @@ pub fn generate_io_structs(io_builtins: &[NativeBuiltin], class_defs: &[NativeCl
         #owned_mod
     };
 
-    crate::format_tokens(tokens)
+    crate::format_tokens(&tokens)
 }
 
 /// Generate IO trait hierarchy and `SysOps` dispatch struct.
@@ -694,7 +694,7 @@ pub fn generate_io_traits(
         #sys_ops
     };
 
-    crate::format_tokens(tokens)
+    crate::format_tokens(&tokens)
 }
 
 // ============================================================================
@@ -886,7 +886,7 @@ fn emit_owned_struct(
             let field_name_str = &field.name;
             let field_ident = format_ident!("{}", field.name);
             let conv = owned_to_external_expr(
-                quote! { self.#field_ident },
+                &quote! { self.#field_ident },
                 &field.field_type,
                 class_ns_map,
             );
@@ -904,7 +904,7 @@ fn emit_owned_struct(
             let field_val = quote! {
                 fields.swap_remove(#field_name_str).unwrap_or(BexExternalValue::Null)
             };
-            let conv = external_to_typed_expr(field_val, &field.field_type, class_ns_map, paths);
+            let conv = external_to_typed_expr(&field_val, &field.field_type, class_ns_map, paths);
             quote! { #field_ident: (#conv)? }
         })
         .collect();

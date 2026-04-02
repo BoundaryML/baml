@@ -69,7 +69,7 @@ pub fn attach_builtins(object: Object) -> Result<Object, VmError> {
                     let Some(native_function) =
                         PackageBamlImpl::get_native_fn(function.name.as_str())
                     else {
-                        return Err(VmError::Other(format!(
+                        return Err(VmError::InternalError(format!(
                             "Native function '{}' not found",
                             function.name
                         )));

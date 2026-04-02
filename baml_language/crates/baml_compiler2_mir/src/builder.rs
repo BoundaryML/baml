@@ -54,6 +54,7 @@ pub(crate) struct MirBuilder {
     pub(crate) catch_regions: Vec<CatchRegion>,
 }
 
+// Some builder utilities are not yet used but will be needed as MIR 2 matures.
 #[allow(dead_code)]
 impl MirBuilder {
     /// Create a new MIR builder for a function.
@@ -491,15 +492,5 @@ impl MirBuilder {
         let idx = self.viz_nodes.len();
         self.viz_nodes.push(node);
         idx
-    }
-
-    /// Emit a `VizEnter` statement for the given node index.
-    pub(crate) fn viz_enter(&mut self, node_idx: usize) {
-        self.push_statement(StatementKind::VizEnter(node_idx), None);
-    }
-
-    /// Emit a `VizExit` statement for the given node index.
-    pub(crate) fn viz_exit(&mut self, node_idx: usize) {
-        self.push_statement(StatementKind::VizExit(node_idx), None);
     }
 }

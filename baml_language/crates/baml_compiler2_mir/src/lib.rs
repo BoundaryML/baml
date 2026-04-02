@@ -1,7 +1,7 @@
 mod builder;
-mod optimize;
 mod ir;
 mod lower;
+mod optimize;
 pub mod pretty;
 
 pub use ir::*;

@@ -1,32 +1,28 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_base::Name;
-use baml_compiler2_ast::ExprId;
 use baml_type::{MediaKind, Ty, TyAttr, TypeName};
 use indexmap::IndexMap;
 
 use crate::{
     builder::MirBuilder,
-    optimize,
     ir::{
         AggregateKind, BasicBlock, BinOp, BlockId, CatchRegion, Constant, IndexKind, ItemRef,
         Local, LocalDecl, MirFunction, MirFunctionBody, MirFunctionKind, Operand, Place, Rvalue,
         StatementKind, Terminator,
     },
+    optimize,
 };
 
-// --- Helper enums carried forward from old code ---
-
-#[allow(dead_code)]
-enum FieldSource {
-    Named(ExprId),
-    Spread(Local, usize),
-}
-
-#[allow(dead_code)]
+/// Classifies what kind of switch a match expression lowers to.
+///
+/// `Integer` and `EnumDiscriminant` are currently implemented.
+/// `TypeTag` (union-type dispatch via runtime type tags) is not yet ported
+/// from MIR 1 — it will use `class_type_tags` when implemented.
 enum SwitchKind {
     Integer,
     EnumDiscriminant(Name),
+    #[allow(dead_code)]
     TypeTag,
 }
 
@@ -39,33 +35,6 @@ struct LoopContext {
 struct CatchContext {
     unwind_target: BlockId,
     error_local: Local,
-}
-
-#[allow(dead_code)]
-struct PendingHeader {
-    name: String,
-}
-
-struct VizContext {
-    #[allow(dead_code)]
-    function_name: String,
-    #[allow(dead_code)]
-    next_node_id: u32,
-    #[allow(dead_code)]
-    parent_keys: Vec<String>,
-    #[allow(dead_code)]
-    ordinal_counters: Vec<u32>,
-}
-
-impl VizContext {
-    fn new(function_name: String) -> Self {
-        Self {
-            function_name,
-            next_node_id: 0,
-            parent_keys: Vec::new(),
-            ordinal_counters: Vec::new(),
-        }
-    }
 }
 
 // ─── Type conversion: TIR Ty → baml_type::Ty ────────────────────────────────
@@ -364,6 +333,8 @@ struct LoweringContext<'db> {
     // enum's package at each match site.
     class_fields: IndexMap<TypeName, IndexMap<String, usize>>,
     enum_variants: IndexMap<Name, IndexMap<String, usize>>,
+    // Pre-computed type tags for class types — will be used by SwitchKind::TypeTag
+    // when union-type switch optimization is ported from MIR 1.
     #[allow(dead_code)]
     class_type_tags: IndexMap<TypeName, i64>,
 
@@ -371,12 +342,7 @@ struct LoweringContext<'db> {
     type_aliases: HashMap<QualifiedTypeName, Tir2Ty>,
     recursive_aliases: HashSet<QualifiedTypeName>,
 
-    // Watch/viz state (carried forward as-is)
     watched_locals_stack: Vec<Local>,
-    #[allow(dead_code)]
-    viz_context: VizContext,
-    #[allow(dead_code)]
-    pending_header: Option<PendingHeader>,
 
     // Counter for generating unique synthetic variable names (e.g. __for_idx, __for_idx_1)
     synthetic_name_counts: HashMap<String, usize>,
@@ -627,8 +593,6 @@ impl<'db> LoweringContext<'db> {
             type_aliases,
             recursive_aliases,
             watched_locals_stack: Vec::new(),
-            viz_context: VizContext::new(func_data.name.to_string()),
-            pending_header: None,
             synthetic_name_counts: HashMap::new(),
         }
     }
@@ -769,15 +733,13 @@ impl<'db> LoweringContext<'db> {
             source_map,
             file,
             func_loc: None,
-            scope_func_name: Some(let_name.clone()),
+            scope_func_name: Some(let_name),
             class_fields,
             enum_variants,
             class_type_tags,
             type_aliases,
             recursive_aliases,
             watched_locals_stack: Vec::new(),
-            viz_context: VizContext::new(let_name.to_string()),
-            pending_header: None,
             synthetic_name_counts: HashMap::new(),
             pending_lambdas: Vec::new(),
             capture_indices: None,
@@ -2896,12 +2858,7 @@ impl LoweringContext<'_> {
 
         // Classify arms: collect (i64_value, arm_index) for int literal or enum variant
         // patterns, and check for a trailing wildcard/binding.
-        //
-        // switch_kind tracks what kind of switch is being built:
-        //   None          = not yet determined
-        //   Some(None)    = integer literal switch
-        //   Some(Some(n)) = enum discriminant switch on enum named `n`
-        let mut switch_kind: Option<Option<Name>> = None;
+        let mut switch_kind: Option<SwitchKind> = None;
         let mut int_arms: Vec<(i64, usize)> = Vec::new();
         let mut otherwise_idx: Option<usize> = None;
         // Deduplicate discriminant values so union patterns don't produce duplicate switch arms.
@@ -2917,9 +2874,9 @@ impl LoweringContext<'_> {
                 AstPattern::Literal(Literal::Int(val)) => {
                     // Integer arm: verify kind consistency
                     match &switch_kind {
-                        None => switch_kind = Some(None),
-                        Some(None) => {}
-                        Some(Some(_)) => return false, // Mixed int + enum
+                        None => switch_kind = Some(SwitchKind::Integer),
+                        Some(SwitchKind::Integer) => {}
+                        Some(_) => return false, // Mixed int + enum
                     }
                     let v = *val;
                     if seen_values.insert(v) {
@@ -2931,8 +2888,8 @@ impl LoweringContext<'_> {
                     let enum_name = enum_name.clone();
                     let variant = variant.clone();
                     match &switch_kind {
-                        None => switch_kind = Some(Some(enum_name.clone())),
-                        Some(Some(n)) if *n == enum_name => {}
+                        None => switch_kind = Some(SwitchKind::EnumDiscriminant(enum_name.clone())),
+                        Some(SwitchKind::EnumDiscriminant(n)) if *n == enum_name => {}
                         _ => return false, // Different enum or mixed with int
                     }
                     // Look up variant index
@@ -2955,9 +2912,9 @@ impl LoweringContext<'_> {
                         match sub_pat {
                             AstPattern::Literal(Literal::Int(val)) => {
                                 match &switch_kind {
-                                    None => switch_kind = Some(None),
-                                    Some(None) => {}
-                                    Some(Some(_)) => return false,
+                                    None => switch_kind = Some(SwitchKind::Integer),
+                                    Some(SwitchKind::Integer) => {}
+                                    Some(_) => return false,
                                 }
                                 let v = *val;
                                 if seen_values.insert(v) {
@@ -2968,8 +2925,11 @@ impl LoweringContext<'_> {
                                 let enum_name = enum_name.clone();
                                 let variant = variant.clone();
                                 match &switch_kind {
-                                    None => switch_kind = Some(Some(enum_name.clone())),
-                                    Some(Some(n)) if *n == enum_name => {}
+                                    None => {
+                                        switch_kind =
+                                            Some(SwitchKind::EnumDiscriminant(enum_name.clone()));
+                                    }
+                                    Some(SwitchKind::EnumDiscriminant(n)) if *n == enum_name => {}
                                     _ => return false,
                                 }
                                 let idx = self
@@ -3013,7 +2973,7 @@ impl LoweringContext<'_> {
         // For enum switches, emit the discriminant extraction before building arm blocks.
         // We must do this before create_block() calls so the assignment goes into bb_entry.
         let switch_operand = match &switch_kind {
-            Some(Some(_enum_name)) => {
+            Some(SwitchKind::EnumDiscriminant(_)) => {
                 let disc = self.builder.temp(Ty::Int {
                     attr: TyAttr::default(),
                 });
@@ -3054,7 +3014,7 @@ impl LoweringContext<'_> {
         // Build arm_names: symbolic labels for the switch arms (debug metadata).
         // For enum switches: "EnumName.VariantName"; for int switches: the integer value.
         let arm_names: Vec<(i64, String)> = match &switch_kind {
-            Some(Some(enum_name)) => {
+            Some(SwitchKind::EnumDiscriminant(enum_name)) => {
                 if let Some(variants) = self.enum_variants.get(enum_name) {
                     // Build reverse map: variant_idx -> variant_name
                     let reverse: std::collections::HashMap<i64, &str> = variants
@@ -3395,12 +3355,8 @@ impl LoweringContext<'_> {
 
     fn tir_ty_is_panic(ty: &Tir2Ty) -> bool {
         match ty {
-            Tir2Ty::Class(qtn, _) | Tir2Ty::TypeAlias(qtn, _) => {
-                qtn.package().as_str() == "baml"
-                    && qtn.namespace().len() == 1
-                    && qtn.namespace()[0].as_str() == "panics"
-            }
-            Tir2Ty::Union(members, _) => members.iter().any(|m| Self::tir_ty_is_panic(m)),
+            Tir2Ty::Class(qtn, _) | Tir2Ty::TypeAlias(qtn, _) => qtn.is_panic_type(),
+            Tir2Ty::Union(members, _) => members.iter().any(Self::tir_ty_is_panic),
             _ => false,
         }
     }

@@ -606,9 +606,6 @@ pub enum Constant {
         /// The variant name within the enum.
         variant: Name,
     },
-    /// Placeholder for type info when needed.
-    #[allow(dead_code)]
-    Ty(Ty),
 }
 
 /// A structured reference to a named item (function, method, enum type).

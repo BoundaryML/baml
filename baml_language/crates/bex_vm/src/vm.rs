@@ -802,7 +802,7 @@ impl BexVm {
         let obj = self.get_object(ptr);
         match obj {
             Object::RustData(arc) => arc.downcast_ref::<T>().ok_or_else(|| {
-                VmError::Other("RustData downcast failed: wrong concrete type".to_string())
+                VmError::InternalError("RustData downcast failed: wrong concrete type".to_string())
             }),
             _ => Err(VmError::TypeError {
                 expected: Type::Object(ObjectType::RustData),
@@ -881,7 +881,7 @@ impl BexVm {
             })
             .collect::<Result<Vec<_>, VmError>>()
             .map_err(|e| {
-                VmError::Other(format!(
+                VmError::InternalError(format!(
                     "internal error: Vm::stack_trace() failed to build stack trace: {e}\n\noriginal error: {error}"
                 ))
             })
@@ -897,7 +897,9 @@ impl BexVm {
     /// then the previosly running bytecode resumes execution.
     fn interrupt(&mut self, function_ptr: HeapPtr, args: &[Value]) -> Result<VmExecState, VmError> {
         if !matches!(self.get_object(function_ptr), Object::Function(_)) {
-            return Err(VmError::Other("Invalid interrupt function".to_string()));
+            return Err(VmError::InternalError(
+                "Invalid interrupt function".to_string(),
+            ));
         }
 
         // Index of the frame that starts the interrupt code.
@@ -930,12 +932,14 @@ impl BexVm {
                 match func_obj {
                     Object::Function(f) => f.real_local_count,
                     _ => {
-                        return Err(VmError::Other("Invalid closure inner function".to_string()));
+                        return Err(VmError::InternalError(
+                            "Invalid closure inner function".to_string(),
+                        ));
                     }
                 }
             }
             _ => {
-                return Err(VmError::Other("Invalid frame function".to_string()));
+                return Err(VmError::InternalError("Invalid frame function".to_string()));
             }
         };
 
@@ -1016,10 +1020,10 @@ impl BexVm {
         }
     }
 
-    fn unhandled_exception_error(exception: VmException) -> VmError {
+    fn unhandled_exception_error(exception: &VmException) -> VmError {
         match exception {
             VmException::Thrown(value) | VmException::Panic(value) => VmError::UnhandledThrow {
-                value: crate::debug::display_value(&value),
+                value: crate::debug::display_value(value),
             },
         }
     }
@@ -1028,7 +1032,7 @@ impl BexVm {
         &mut self,
         frame_idx: &mut usize,
         function: &mut &'static Function,
-        exception: VmException,
+        exception: &VmException,
     ) -> Result<(), VmError> {
         let is_panic = matches!(exception, VmException::Panic(_));
 
@@ -1063,7 +1067,7 @@ impl BexVm {
                 self.stack.truncate(locals_end);
 
                 // Store the exception value in the designated error slot.
-                let exception_value = Self::exception_to_value(&exception);
+                let exception_value = Self::exception_to_value(exception);
                 let error_stack_slot =
                     Self::local_slot_stack_index(locals_offset, entry.error_slot);
                 self.stack[error_stack_slot] = exception_value;
@@ -1317,7 +1321,7 @@ impl BexVm {
                         }
 
                         other => {
-                            return Err(VmError::Other(format!(
+                            return Err(VmError::InternalError(format!(
                                 "Invalid filter function return: {other:?}"
                             )));
                         }
@@ -1705,11 +1709,8 @@ impl BexVm {
 
                     Instruction::Throw => {
                         let value = self.stack.ensure_pop()?;
-                        self.try_unwind_exception(
-                            &mut frame_idx,
-                            &mut function,
-                            VmException::Thrown(value),
-                        )?;
+                        let exception = VmException::Thrown(value);
+                        self.try_unwind_exception(&mut frame_idx, &mut function, &exception)?;
                     }
 
                     Instruction::BinOp(op) => {
@@ -1761,11 +1762,11 @@ impl BexVm {
                                     | BinOp::BitXor
                                     | BinOp::Shl
                                     | BinOp::Shr => {
-                                        return Err(VmError::from(VmError::CannotApplyBinOp {
+                                        return Err(VmError::CannotApplyBinOp {
                                             left: Type::Float,
                                             right: Type::Float,
                                             op,
-                                        }));
+                                        });
                                     }
                                 })
                             }
@@ -1794,11 +1795,11 @@ impl BexVm {
                                     | BinOp::BitXor
                                     | BinOp::Shl
                                     | BinOp::Shr => {
-                                        return Err(VmError::from(VmError::CannotApplyBinOp {
+                                        return Err(VmError::CannotApplyBinOp {
                                             left: Type::Int,
                                             right: Type::Float,
                                             op,
-                                        }));
+                                        });
                                     }
                                 })
                             }
@@ -1826,11 +1827,11 @@ impl BexVm {
                                     | BinOp::BitXor
                                     | BinOp::Shl
                                     | BinOp::Shr => {
-                                        return Err(VmError::from(VmError::CannotApplyBinOp {
+                                        return Err(VmError::CannotApplyBinOp {
                                             left: Type::Float,
                                             right: Type::Int,
                                             op,
-                                        }));
+                                        });
                                     }
                                 })
                             }
@@ -2450,11 +2451,13 @@ impl BexVm {
                                 Object::String(mode) if mode == "manual" => WatchFilter::Manual,
                                 Object::String(mode) if mode == "never" => WatchFilter::Paused,
                                 _ => {
-                                    return Err(VmError::Other("Invalid filter".to_string()));
+                                    return Err(VmError::InternalError(
+                                        "Invalid filter".to_string(),
+                                    ));
                                 }
                             },
                             _ => {
-                                return Err(VmError::Other("Invalid filter".to_string()));
+                                return Err(VmError::InternalError("Invalid filter".to_string()));
                             }
                         };
 
@@ -2535,7 +2538,9 @@ impl BexVm {
                         let notifications = self.watch.copy_roots_reaching(var_node);
 
                         if notifications.len() != 1 && notifications.first() != Some(&var_node) {
-                            return Err(VmError::Other("Invalid manual notify".to_string()));
+                            return Err(VmError::InternalError(
+                                "Invalid manual notify".to_string(),
+                            ));
                         }
 
                         return Ok(Some(VmExecState::Notify(WatchNotification::Variables(
@@ -2617,22 +2622,12 @@ impl BexVm {
                         // Return from interrupt.
                         if Some(self.frames.len()) == self.interrupt_frame {
                             self.interrupt_frame = None;
-                            return self
-                                .stack
-                                .ensure_pop()
-                                .map(VmExecState::Complete)
-                                .map(Some)
-                                .map_err(Into::into);
+                            return self.stack.ensure_pop().map(VmExecState::Complete).map(Some);
                         }
 
                         // If there are no more frames, we're done.
                         if self.frames.is_empty() {
-                            return self
-                                .stack
-                                .ensure_pop()
-                                .map(VmExecState::Complete)
-                                .map(Some)
-                                .map_err(Into::into);
+                            return self.stack.ensure_pop().map(VmExecState::Complete).map(Some);
                         }
 
                         // Yield FunctionExit for traced frames (with result value).
@@ -2924,7 +2919,7 @@ impl BexVm {
                 Ok(None) => {}
                 Err(error) => {
                     let exception = self.error_to_exception(error)?;
-                    self.try_unwind_exception(&mut frame_idx, &mut function, exception)?;
+                    self.try_unwind_exception(&mut frame_idx, &mut function, &exception)?;
                 }
             }
         }

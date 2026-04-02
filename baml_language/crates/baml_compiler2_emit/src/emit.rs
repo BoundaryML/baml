@@ -932,11 +932,6 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let inst = self.emit(Instruction::LoadGlobal(GlobalIndex::from_raw(*global_idx)));
                 self.set_operand(inst, OperandMeta::Global(name_str));
             }
-            Constant::Ty(_) => {
-                let idx = self.add_constant(ConstValue::Null);
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const("null".to_string()));
-            }
             Constant::EnumVariant { enum_ref, variant } => {
                 let enum_name_str = enum_ref.to_string();
                 // Gracefully handle undefined enum references (e.g. cross-package
@@ -1352,20 +1347,8 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 return;
             }
 
-            self.emit(Instruction::Copy(0));
-            let idx = self.add_constant(ConstValue::Int(*value));
-            let inst = self.emit(Instruction::LoadConst(idx));
-            let label = name_map
-                .get(value)
-                .map(|n| (*n).to_string())
-                .unwrap_or_else(|| value.to_string());
-            self.set_operand(inst, OperandMeta::Const(label));
-            self.emit(Instruction::CmpOp(CmpOp::Eq));
-            let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-            self.emit(Instruction::Pop(1));
-            self.emit_jump_unless_fallthrough(*target);
-            let skip_to = self.current_pc();
-            self.patch_jump_to(jump_idx, skip_to);
+            let label = Self::switch_label(*value, name_map);
+            self.emit_compare_and_branch(*value, *target, label);
         }
 
         self.emit(Instruction::Pop(1));
@@ -1461,45 +1444,16 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
         otherwise: BlockId,
         name_map: &std::collections::HashMap<i64, &str>,
     ) {
-        let label_for = |value: &i64| -> String {
-            name_map
-                .get(value)
-                .map(|n| (*n).to_string())
-                .unwrap_or_else(|| value.to_string())
-        };
-
         match arms.len() {
             0 => {
                 // No arms left - just fall through to otherwise
                 // (already handled by caller)
             }
-            1 => {
-                // Single arm - emit direct comparison
-                let (value, target) = &arms[0];
-                self.emit(Instruction::Copy(0));
-                let idx = self.add_constant(ConstValue::Int(*value));
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(label_for(value)));
-                self.emit(Instruction::CmpOp(CmpOp::Eq));
-                let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-                self.emit(Instruction::Pop(1));
-                self.emit_jump_unless_fallthrough(*target);
-                let skip_to = self.current_pc();
-                self.patch_jump_to(jump_idx, skip_to);
-            }
-            2 => {
-                // Two arms - emit both comparisons sequentially
+            1 | 2 => {
+                // One or two arms - emit direct comparisons sequentially
                 for (value, target) in arms {
-                    self.emit(Instruction::Copy(0));
-                    let idx = self.add_constant(ConstValue::Int(*value));
-                    let inst = self.emit(Instruction::LoadConst(idx));
-                    self.set_operand(inst, OperandMeta::Const(label_for(value)));
-                    self.emit(Instruction::CmpOp(CmpOp::Eq));
-                    let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
-                    self.emit(Instruction::Pop(1));
-                    self.emit_jump_unless_fallthrough(*target);
-                    let skip_to = self.current_pc();
-                    self.patch_jump_to(jump_idx, skip_to);
+                    let label = Self::switch_label(*value, name_map);
+                    self.emit_compare_and_branch(*value, *target, label);
                 }
             }
             _ => {
@@ -1509,24 +1463,15 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 let left = &arms[..mid];
                 let right = &arms[mid + 1..];
 
-                // Compare with pivot
-                self.emit(Instruction::Copy(0));
-                let idx = self.add_constant(ConstValue::Int(*value));
-                let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(label_for(value)));
-                self.emit(Instruction::CmpOp(CmpOp::Eq));
-                let eq_jump = self.emit(Instruction::PopJumpIfFalse(0));
-
-                // If equal, jump to target
-                self.emit(Instruction::Pop(1));
-                self.emit_jump_unless_fallthrough(*target);
-                let after_eq = self.current_pc();
-                self.patch_jump_to(eq_jump, after_eq);
+                // Compare with pivot — if equal, pop discriminant and jump
+                let label = Self::switch_label(*value, name_map);
+                self.emit_compare_and_branch(*value, *target, label.clone());
 
                 // Compare < pivot for left subtree
                 self.emit(Instruction::Copy(0));
+                let idx = self.add_constant(ConstValue::Int(*value));
                 let inst = self.emit(Instruction::LoadConst(idx));
-                self.set_operand(inst, OperandMeta::Const(label_for(value)));
+                self.set_operand(inst, OperandMeta::Const(label));
                 self.emit(Instruction::CmpOp(CmpOp::Lt));
                 let lt_jump = self.emit(Instruction::PopJumpIfFalse(0));
 
@@ -1540,6 +1485,34 @@ impl<'ctx, 'obj> StackifyCodegen<'ctx, 'obj> {
                 self.emit_binary_search_node(right, otherwise, name_map);
             }
         }
+    }
+
+    // ========================================================================
+    // Switch helpers
+    // ========================================================================
+
+    /// Resolve a label for a switch arm value from the name map,
+    /// falling back to the integer's string representation.
+    fn switch_label(value: i64, name_map: &std::collections::HashMap<i64, &str>) -> String {
+        name_map
+            .get(&value)
+            .map(|n| (*n).to_string())
+            .unwrap_or_else(|| value.to_string())
+    }
+
+    /// Emit: copy TOS, compare with `value` for equality; if equal, pop
+    /// discriminant and jump to `target`. On mismatch, fall through.
+    fn emit_compare_and_branch(&mut self, value: i64, target: BlockId, label: String) {
+        self.emit(Instruction::Copy(0));
+        let idx = self.add_constant(ConstValue::Int(value));
+        let inst = self.emit(Instruction::LoadConst(idx));
+        self.set_operand(inst, OperandMeta::Const(label));
+        self.emit(Instruction::CmpOp(CmpOp::Eq));
+        let jump_idx = self.emit(Instruction::PopJumpIfFalse(0));
+        self.emit(Instruction::Pop(1));
+        self.emit_jump_unless_fallthrough(target);
+        let skip_to = self.current_pc();
+        self.patch_jump_to(jump_idx, skip_to);
     }
 
     // ========================================================================

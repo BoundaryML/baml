@@ -71,8 +71,8 @@ pub enum VmError {
     #[error("uncaught throw: {value}")]
     UnhandledThrow { value: String },
 
-    #[error("{0}")]
-    Other(String),
+    #[error("internal error: {0}")]
+    InternalError(String),
 }
 
 #[derive(Debug, Clone)]

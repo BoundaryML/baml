@@ -27,7 +27,7 @@ pub fn generate_panic_enums(class_defs: &[NativeClassDef]) -> String {
     );
 
     let tokens = generate_panic_class_enum(&panics);
-    crate::format_tokens(tokens)
+    crate::format_tokens(&tokens)
 }
 
 // ── PanicClass ───────────────────────────────────────────────────────────────

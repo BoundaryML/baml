@@ -54,6 +54,14 @@ impl QualifiedTypeName {
         &self.name
     }
 
+    /// Returns `true` if this type lives in the `baml.panics` namespace
+    /// (i.e. it is a panic class or the `Panic` type alias).
+    pub fn is_panic_type(&self) -> bool {
+        self.pkg.as_str() == "baml"
+            && self.namespace.len() == 1
+            && self.namespace[0].as_str() == "panics"
+    }
+
     pub fn to_path_in_package(&self) -> Vec<Name> {
         self.namespace
             .iter()
