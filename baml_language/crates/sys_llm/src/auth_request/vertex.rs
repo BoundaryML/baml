@@ -565,7 +565,12 @@ mod native {
             ))
         })?;
 
-        let mut builder = google_cloud_auth::credentials::service_account::Builder::new(json_value);
+        let mut builder = google_cloud_auth::credentials::service_account::Builder::new(json_value)
+            .with_access_specifier(
+                google_cloud_auth::credentials::service_account::AccessSpecifier::from_scopes([
+                    "https://www.googleapis.com/auth/cloud-platform",
+                ]),
+            );
 
         if let Some(cb) = callbacks {
             builder = builder.with_http_client_provider(BexHttpClientProvider {

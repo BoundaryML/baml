@@ -758,6 +758,18 @@ mod tests {
     }
 
     #[test]
+    fn test_display_optional_union_parenthesized() {
+        let ty = Ty::optional(Ty::union([ty_int(), ty_string()]));
+        assert_eq!(ty.to_string(), "(int | string)?");
+    }
+
+    #[test]
+    fn test_display_list_union_parenthesized() {
+        let ty = Ty::list(Ty::union([ty_int(), ty_string()]));
+        assert_eq!(ty.to_string(), "(int | string)[]");
+    }
+
+    #[test]
     fn test_validate_runtime_rejects_compiler_types() {
         assert!(
             (Ty::Void {

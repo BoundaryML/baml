@@ -747,8 +747,12 @@ fn build_io_callbacks(
                     .map_err(|e| {
                         sys_llm::LlmOpError::Other(format!("http.send response parse error: {e:?}"))
                     })?;
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let status_code = response.status_code as u16;
+                let status_code = u16::try_from(response.status_code).map_err(|_| {
+                    sys_llm::LlmOpError::Other(format!(
+                        "http.send returned invalid status_code: {}",
+                        response.status_code
+                    ))
+                })?;
                 let headers = response.headers;
 
                 // Call http.Response.text() to get the body

@@ -368,6 +368,31 @@ mod tests {
         );
     }
 
+    #[test]
+    fn vertex_ai_url_from_location_and_project_id() {
+        let mut client = make_client(
+            "vertex-ai",
+            crate::baml_std::PrimitiveClientOptions {
+                model: Some("gemini-2.0-flash".to_string()),
+                ..Default::default()
+            },
+        );
+        client.provider_options = Some(crate::baml_std::ProviderOptions::VertexAi(
+            crate::baml_std::VertexAiOptions {
+                location: Some("europe-west4".to_string()),
+                project_id: Some("my-project".to_string()),
+                credentials: None,
+                credentials_content: None,
+            },
+        ));
+        let prompt = msg("user", "hello");
+        let result = build_request(&client, &prompt, LlmProvider::VertexAi).unwrap();
+        assert_eq!(
+            result.url,
+            "https://europe-west4-aiplatform.googleapis.com/v1/projects/my-project/locations/europe-west4/publishers/google/models/gemini-2.0-flash:generateContent"
+        );
+    }
+
     // ========================================================================
     // Basic message tests
     // ========================================================================

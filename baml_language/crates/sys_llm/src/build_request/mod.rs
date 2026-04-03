@@ -45,7 +45,7 @@ pub(crate) async fn build_request(
 
     // Apply user-configured headers on top of provider defaults.
     for (k, v) in &client.options.headers {
-        request.headers.insert(k.clone(), v.clone());
+        request.headers.insert(k.to_ascii_lowercase(), v.clone());
     }
 
     // Append query params to the URL (percent-encoded via the `url` crate).
