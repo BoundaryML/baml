@@ -319,6 +319,7 @@ fn write_rvalue(f: &mut impl Write, rvalue: &Rvalue) -> fmt::Result {
             }
             write!(f, "]")
         }
+        Rvalue::Uint8Array(bytes) => write!(f, "b\"<{} bytes>\"", bytes.len()),
         Rvalue::Map(entries) => {
             write!(f, "{{ ")?;
             for (i, (key, value)) in entries.iter().enumerate() {

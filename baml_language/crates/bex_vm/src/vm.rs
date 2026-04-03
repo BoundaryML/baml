@@ -2040,6 +2040,31 @@ impl BexVm {
                                 })
                             }
 
+                            // Uint8Array comparison: compare by content
+                            (Value::Object(left_index), Value::Object(right_index))
+                                if matches!(self.get_object(left_index), Object::Uint8Array(_))
+                                    && matches!(
+                                        self.get_object(right_index),
+                                        Object::Uint8Array(_)
+                                    ) =>
+                            {
+                                let left = self.as_uint8array(&left)?;
+                                let right = self.as_uint8array(&right)?;
+
+                                Value::Bool(match op {
+                                    CmpOp::Eq => left == right,
+                                    CmpOp::NotEq => left != right,
+                                    _ => {
+                                        return Err(InternalError::CannotApplyCmpOp {
+                                            left: Type::Object(ObjectType::Uint8Array),
+                                            right: Type::Object(ObjectType::Uint8Array),
+                                            op,
+                                        }
+                                        .into());
+                                    }
+                                })
+                            }
+
                             // Variant comparison: compare by enum type and variant index
                             (Value::Object(left_index), Value::Object(right_index))
                                 if matches!(self.get_object(left_index), Object::Variant(_))

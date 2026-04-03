@@ -232,6 +232,7 @@ fn convert_tir_leaf(ty: &TirTy) -> cg::Ty {
         TirTy::Primitive(PrimitiveType::String, _) => cg::Ty::String,
         TirTy::Primitive(PrimitiveType::Bool, _) => cg::Ty::Bool,
         TirTy::Primitive(PrimitiveType::Null, _) => cg::Ty::Null,
+        TirTy::Primitive(PrimitiveType::Uint8Array, _) => cg::Ty::Uint8Array,
         TirTy::Primitive(PrimitiveType::Image, _) => cg::Ty::Media(baml_db::MediaKind::Image),
         TirTy::Primitive(PrimitiveType::Audio, _) => cg::Ty::Media(baml_db::MediaKind::Audio),
         TirTy::Primitive(PrimitiveType::Video, _) => cg::Ty::Media(baml_db::MediaKind::Video),

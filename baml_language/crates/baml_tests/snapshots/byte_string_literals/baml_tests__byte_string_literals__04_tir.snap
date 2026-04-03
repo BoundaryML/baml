@@ -1,0 +1,34 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== TIR2 ===
+function user.ByteStringBasic() -> int throws never {
+  { : int
+    let data = b"<5 bytes>" : uint8array
+    data.length() : int
+  }
+}
+function user.ByteStringEmpty() -> int throws never {
+  { : int
+    let data = b"<0 bytes>" : uint8array
+    data.length() : int
+  }
+}
+function user.ByteStringHexEscapes() -> int throws never {
+  { : int
+    let data = b"<5 bytes>" : uint8array
+    data.length() : int
+  }
+}
+function user.ByteStringStandardEscapes() -> int throws never {
+  { : int
+    let data = b"<6 bytes>" : uint8array
+    data.length() : int
+  }
+}
+function user.ByteStringIndexAccess() -> int? throws never {
+  { : int?
+    let data = b"<3 bytes>" : uint8array
+    data.at(0) : int?
+  }
+}

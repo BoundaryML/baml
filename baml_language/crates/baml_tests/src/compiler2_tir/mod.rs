@@ -249,6 +249,7 @@ pub(crate) mod support {
             Expr::Index { base, index } => {
                 format!("{}[{}]", expr_desc(*base, body), expr_desc(*index, body))
             }
+            Expr::ByteStringLiteral(bytes) => format!("b\"<{} bytes>\"", bytes.len()),
             Expr::Lambda(func_def) => format_lambda_signature(func_def),
             Expr::OptionalIndex { base, index } => {
                 format!("{}?.[{}]", expr_desc(*base, body), expr_desc(*index, body))
@@ -1484,6 +1485,7 @@ pub(crate) mod support {
                 Expr::OptionalChain { expr } => {
                     expr_desc_hir(*expr, body, prefix, local_type_names)
                 }
+                Expr::ByteStringLiteral(bytes) => format!("b\"<{} bytes>\"", bytes.len()),
                 Expr::Missing => "<missing>".into(),
             }
         }

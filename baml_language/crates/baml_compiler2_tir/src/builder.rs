@@ -234,6 +234,9 @@ impl<'db> TypeInferenceBuilder<'db> {
         let expr = &body.exprs[expr_id];
         let ty = match expr {
             Expr::Literal(lit) => Self::infer_literal(lit),
+            Expr::ByteStringLiteral(_) => {
+                Ty::Primitive(PrimitiveType::Uint8Array, TyAttr::default())
+            }
             Expr::Null => Ty::Primitive(PrimitiveType::Null, TyAttr::default()),
             Expr::Path(segments) => self.infer_path(segments.as_slice(), body, expr_id),
             Expr::If {
@@ -2358,7 +2361,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::OptionalChain { expr } => {
                 self.collect_effective_throws_from_expr(*expr, body, out);
             }
-            Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
+            Expr::Lambda(_)
+            | Expr::Literal(_)
+            | Expr::ByteStringLiteral(_)
+            | Expr::Null
+            | Expr::Path(_)
+            | Expr::Missing => {}
         }
     }
 
@@ -2517,7 +2525,12 @@ impl<'db> TypeInferenceBuilder<'db> {
             Expr::OptionalChain { expr } => {
                 self.collect_throw_facts_from_expr(*expr, body, out);
             }
-            Expr::Lambda(_) | Expr::Literal(_) | Expr::Null | Expr::Path(_) | Expr::Missing => {}
+            Expr::Lambda(_)
+            | Expr::Literal(_)
+            | Expr::ByteStringLiteral(_)
+            | Expr::Null
+            | Expr::Path(_)
+            | Expr::Missing => {}
         }
     }
 

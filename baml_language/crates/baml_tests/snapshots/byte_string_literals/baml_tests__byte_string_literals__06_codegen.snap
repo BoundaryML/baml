@@ -1,0 +1,38 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+function user.ByteStringBasic() -> int {
+    load_const b"\x68\x65\x6c\x6c\x6f"
+    call baml.deep_copy
+    call baml.Uint8Array.length
+    return
+}
+
+function user.ByteStringEmpty() -> int {
+    load_const b""
+    call baml.deep_copy
+    call baml.Uint8Array.length
+    return
+}
+
+function user.ByteStringHexEscapes() -> int {
+    load_const b"\x48\x65\x6c\x6c\x6f"
+    call baml.deep_copy
+    call baml.Uint8Array.length
+    return
+}
+
+function user.ByteStringIndexAccess() -> int? {
+    load_const b"\x41\x42\x43"
+    call baml.deep_copy
+    load_const 0
+    call baml.Uint8Array.at
+    return
+}
+
+function user.ByteStringStandardEscapes() -> int {
+    load_const b"\x0a\x09\x0d\x00\x5c\x22"
+    call baml.deep_copy
+    call baml.Uint8Array.length
+    return
+}

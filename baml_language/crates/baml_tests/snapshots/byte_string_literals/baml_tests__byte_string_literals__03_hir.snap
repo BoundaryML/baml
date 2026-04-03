@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== HIR2 ===
+function user.ByteStringBasic() -> int  [expr] {
+  { let data = b"<5 bytes>" } data.length()
+}
+function user.ByteStringEmpty() -> int  [expr] {
+  { let data = b"<0 bytes>" } data.length()
+}
+function user.ByteStringHexEscapes() -> int  [expr] {
+  { let data = b"<5 bytes>" } data.length()
+}
+function user.ByteStringIndexAccess() -> int?  [expr] {
+  { let data = b"<3 bytes>" } data.at(0)
+}
+function user.ByteStringStandardEscapes() -> int  [expr] {
+  { let data = b"<6 bytes>" } data.length()
+}

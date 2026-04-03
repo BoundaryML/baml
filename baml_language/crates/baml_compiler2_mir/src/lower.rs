@@ -1368,6 +1368,10 @@ impl LoweringContext<'_> {
                     .assign(dest, Rvalue::Use(Operand::Constant(constant)));
             }
 
+            AstExpr::ByteStringLiteral(bytes) => {
+                self.builder.assign(dest, Rvalue::Uint8Array(bytes));
+            }
+
             AstExpr::Null => {
                 self.builder
                     .assign(dest, Rvalue::Use(Operand::Constant(Constant::Null)));
@@ -2630,7 +2634,7 @@ impl LoweringContext<'_> {
             _ => &base_ty,
         };
 
-        let kind = if matches!(unwrapped_ty, Ty::List(..)) {
+        let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
             IndexKind::Array
         } else {
             IndexKind::Map
@@ -3156,7 +3160,7 @@ impl LoweringContext<'_> {
                     Ty::Optional(inner, _) => inner.as_ref(),
                     _ => &base_ty,
                 };
-                let kind = if matches!(unwrapped_ty, Ty::List(..)) {
+                let kind = if matches!(unwrapped_ty, Ty::List(..) | Ty::Uint8Array { .. }) {
                     IndexKind::Array
                 } else {
                     IndexKind::Map

@@ -407,6 +407,9 @@ impl Default for AstSourceMap {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     Literal(Literal),
+    /// Byte string literal: `b"hello"`, `b"\x00\xFF"`.
+    /// Stores the fully-resolved bytes (escape sequences already processed).
+    ByteStringLiteral(Vec<u8>),
     Null,
     /// Path expression: `x`, `user.name`, `Status.Active`
     Path(Vec<Name>),

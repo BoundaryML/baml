@@ -678,6 +678,7 @@ fn walk_rvalue_locals(rvalue: &Rvalue, f: &mut impl FnMut(Local)) {
                 walk_operand_locals(elem, f);
             }
         }
+        Rvalue::Uint8Array(_) => {}
         Rvalue::Map(entries) => {
             for (key, value) in entries {
                 walk_operand_locals(key, f);
@@ -1360,6 +1361,7 @@ fn rvalue_has_projection_reads(rvalue: &Rvalue) -> bool {
         }
         Rvalue::UnaryOp { operand, .. } => operand_has_projection(operand),
         Rvalue::Array(elements) => elements.iter().any(operand_has_projection),
+        Rvalue::Uint8Array(_) => false,
         Rvalue::Map(entries) => entries
             .iter()
             .any(|(key, value)| operand_has_projection(key) || operand_has_projection(value)),

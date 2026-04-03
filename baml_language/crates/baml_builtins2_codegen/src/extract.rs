@@ -260,7 +260,7 @@ fn extract_from_class(
 
 /// Extract field definitions from a class, producing a `NativeClassDef`.
 ///
-/// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String, Uint8Array)
+/// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String, `Uint8Array`)
 /// since they don't use `Object::Instance`.
 fn extract_class_fields(
     class_def: &ClassDef,

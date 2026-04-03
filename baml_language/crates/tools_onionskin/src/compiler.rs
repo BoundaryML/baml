@@ -637,6 +637,9 @@ fn expr_desc_spans<'db>(
             spans.push(DetailSpan::Code("throw ".into()));
             spans.extend(expr_desc_spans(*value, body, inference));
         }
+        Expr::ByteStringLiteral(bytes) => {
+            spans.push(DetailSpan::Code(format!("b\"<{} bytes>\"", bytes.len())));
+        }
         Expr::Lambda(_) => {
             spans.push(DetailSpan::Code("<lambda>".into()));
         }
@@ -2015,6 +2018,7 @@ impl CompilerRunner {
                     format!("{}?.{field}", expr_desc(*base, body))
                 }
                 Expr::Index { base, .. } => format!("{}[...]", expr_desc(*base, body)),
+                Expr::ByteStringLiteral(bytes) => format!("b\"<{} bytes>\"", bytes.len()),
                 Expr::Lambda(_) => "<lambda>".into(),
                 Expr::OptionalIndex { base, .. } => format!("{}?.[...]", expr_desc(*base, body)),
                 Expr::OptionalCall { callee, args } => {
